@@ -6,6 +6,7 @@ use crate::api::ws::connection::{
     MESSAGE_ABORT_MAP, add_partial_message_part, clear_partial_message, register_partial_message,
     ws_send,
 };
+use crate::core::model::ONE_MODEL;
 use crate::model::chats::ChatResponse;
 use crate::model::ws::{StreamError, StreamWebSocketError};
 use crate::{
@@ -330,7 +331,7 @@ pub async fn handle_send_chat_message(
             }
         })?;
     let is_first_message = chat.messages.is_empty();
-    let model = incoming_message.model;
+    let model = ONE_MODEL;
 
     let user_message_id =
         store_incoming_message(ctx.clone(), user_id, &chat, model, &incoming_message)
