@@ -1,0 +1,16 @@
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum AnthropicError {
+    /// An error sent by anthropic
+    #[error("Error returned from stream")]
+    StreamError(String),
+    /// Stream closed unexpectedly
+    #[error("Invalid json returned from stream")]
+    JsonDeserialize(serde_json::Error),
+    /// error from reqwest
+    #[error("http error")]
+    Reqwest(#[from] reqwest::Error),
+}
+
+pub type Result<T> = std::result::Result<T, AnthropicError>;
