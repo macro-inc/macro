@@ -5,9 +5,8 @@ use reqwest::header::{AUTHORIZATION, HeaderMap};
 use secrecy::{ExposeSecret, SecretBox, SecretString};
 
 lazy_static! {
-    static ref OPEN_ROUTER_CONFIG: OpenRouterConfig = try_from_env()
-        .context("Failed to load OpenRouter Config")
-        .unwrap();
+    static ref OPEN_ROUTER_CONFIG: OpenRouterConfig =
+        try_from_env().expect("Failed to load OpenRouter Config");
 }
 
 const OPEN_ROUTER_BASE_URL: &str = "https://openrouter.ai/api/v1";
