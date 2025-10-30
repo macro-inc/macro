@@ -17,13 +17,12 @@ use crate::tool::completion::tool_completion;
 use crate::tool::types::{AsyncToolSet, PartialToolCall, StreamPart, ToolCall, ToolResult};
 use crate::tool::types::{ChatCompletionStream, ToolResponse};
 
+use crate::types::Client;
 use crate::types::openai::message::convert_message;
 use crate::types::{
     ChatCompletionRequest, ChatMessage, ChatMessages, MessageBuilder, SystemPrompt,
 };
 use anyhow::Result;
-use async_openai::Client;
-use async_openai::config::Config;
 use async_openai::types::{
     ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessage,
     ChatCompletionRequestAssistantMessageContent, ChatCompletionRequestMessage,
@@ -36,7 +35,6 @@ use futures::stream::StreamExt;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::sync::Arc;
 
 struct ProcessedStream {
@@ -89,11 +87,10 @@ description: {}
         .join("\n")
 }
 
-pub struct Chained<C, T, I, R>
+pub struct Chained<I, T, R>
 where
-    C: Config + Send + Sync,
+    I: Client + Send + Sync,
     T: Clone + Send + Sync + 'static,
-    I: Deref<Target = Client<C>> + Send + Sync,
     R: Send + Sync + 'static,
 {
     inner: I,
@@ -106,14 +103,13 @@ where
     tool_call_count: usize,
 }
 
-impl<C, T, I, R> Chained<C, T, I, R>
+impl<I, T, R> Chained<I, T, R>
 where
-    C: Config + Send + Sync,
+    I: Client + Send + Sync,
     T: Clone + Send + Sync,
-    I: Deref<Target = Client<C>> + Send + Sync,
     R: Clone + Send + Sync,
 {
-    pub fn new(client: I, toolset: Arc<AsyncToolSet<T, R>>, context: T) -> Chained<C, T, I, R> {
+    pub fn new(client: I, toolset: Arc<AsyncToolSet<T, R>>, context: T) -> Chained<I, T, R> {
         Chained {
             inner: client,
             toolset,
@@ -429,8 +425,7 @@ where
         tracing::trace!("{:#?}", self.request);
 
         self.inner
-            .chat()
-            .create_stream(self.request.clone())
+            .chat_stream(self.request.clone(), None)
             .await
             .map_err(anyhow::Error::from)
     }

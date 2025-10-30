@@ -4,9 +4,8 @@ use crate::tool::types::{ChatCompletionStream, ToolResponse};
 
 use crate::types::openai::message::convert_message;
 use crate::types::{ChatCompletionRequest, ChatMessage, ChatMessages};
-use anyhow::{Context, Result};
-use async_openai::Client;
-use async_openai::config::Config;
+use crate::types::{Client, RequestExtensions};
+use anyhow::Result;
 use async_openai::types::{
     ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessage,
     ChatCompletionRequestAssistantMessageContent, ChatCompletionRequestMessage,
@@ -16,7 +15,6 @@ use async_openai::types::{
 use async_stream::stream;
 use futures::stream::StreamExt;
 use std::collections::HashMap;
-use std::ops::Deref;
 use std::sync::Arc;
 
 struct ProcessedStream {
@@ -24,11 +22,10 @@ struct ProcessedStream {
     pub tool_responses: Vec<ToolResponse>,
 }
 
-pub struct Chat<C, T, I, R>
+pub struct Chat<I, T, R>
 where
-    C: Config + Send + Sync,
+    I: Client + Send + Sync,
     T: Clone + Send + Sync + 'static,
-    I: Deref<Target = Client<C>> + Send + Sync,
     R: Send + Sync + 'static,
 {
     inner: I,
@@ -41,14 +38,13 @@ where
     user_id: String,
 }
 
-impl<C, T, I, R> Chat<C, T, I, R>
+impl<I, T, R> Chat<I, T, R>
 where
-    C: Config + Send + Sync,
+    I: Client + Send + Sync,
     T: Clone + Send + Sync,
-    I: Deref<Target = Client<C>> + Send + Sync,
     R: Clone + Send + Sync,
 {
-    pub fn new(client: I, toolset: Arc<AsyncToolSet<T, R>>, context: T) -> Chat<C, T, I, R> {
+    pub fn new(client: I, toolset: Arc<AsyncToolSet<T, R>>, context: T) -> Chat<I, T, R> {
         Chat {
             inner: client,
             toolset,
@@ -342,28 +338,23 @@ where
             include_usage: true,
         });
 
-        let mut request = serde_json::to_value(&self.request).context("jsonify request")?;
-
-        if let serde_json::Value::Object(ref mut r) = request {
-            r.insert(
-                "user".into(),
-                serde_json::Value::String(self.user_id.clone()),
-            );
-        }
+        let extensions = RequestExtensions::new(serde_json::json!(
+            {
+                "user": self.user_id.clone()
+            }
+        ))
+        .expect("invalid request extensions");
 
         self.inner
-            .chat()
-            .create_stream_byot(request)
+            .chat_stream(self.request.clone(), Some(extensions))
             .await
-            .map_err(anyhow::Error::from)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{AssistantMessagePart, ChatMessageContent, Role};
-    use async_openai::config::OpenAIConfig;
+    use crate::types::{AssistantMessagePart, ChatMessageContent, OpenRouterClient, Role};
     use async_openai::types::{
         ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessage,
         ChatCompletionRequestAssistantMessageContent, ChatCompletionRequestMessage,
@@ -372,8 +363,8 @@ mod tests {
     };
     use serde_json::json;
 
-    fn create_mock_chat() -> Chat<OpenAIConfig, String, Box<Client<OpenAIConfig>>, String> {
-        let client = Box::new(Client::new());
+    fn create_mock_chat() -> Chat<OpenRouterClient, String, String> {
+        let client = OpenRouterClient::new();
         let toolset = Arc::new(AsyncToolSet::new());
         Chat::new(client, toolset, "test_context".to_string())
     }

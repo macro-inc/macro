@@ -1,17 +1,14 @@
 use super::chained::Chained;
 use super::chat::Chat;
 use crate::tool::types::AsyncToolSet;
-use crate::types::{OpenRouterClient, openrouter::OpenRouterConfig};
-use async_openai::Client;
-use async_openai::config::Config;
-use std::ops::Deref;
+use crate::types::Client;
+use crate::types::OpenRouterClient;
 use std::sync::Arc;
 
-pub struct AiClient<C, T, I, R>
+pub struct AiClient<I, T, R>
 where
-    C: Config + Send + Sync,
+    I: Client + Clone + Send + Sync,
     T: Clone + Send + Sync,
-    I: Deref<Target = Client<C>> + Clone + Send + Sync,
     R: Clone + Send + Sync,
 {
     inner: I,
@@ -19,7 +16,7 @@ where
     toolset: Arc<AsyncToolSet<T, R>>,
 }
 
-impl<T, R> AiClient<OpenRouterConfig, T, OpenRouterClient, R>
+impl<T, R> AiClient<OpenRouterClient, T, R>
 where
     T: Clone + Send + Sync,
     R: Clone + Send + Sync,
@@ -35,14 +32,13 @@ where
     }
 }
 
-impl<C, T, I, R> AiClient<C, T, I, R>
+impl<I, T, R> AiClient<I, T, R>
 where
-    C: Config + Send + Sync,
+    I: Client + Clone + Send + Sync,
     T: Clone + Send + Sync,
-    I: Deref<Target = Client<C>> + Clone + Send + Sync,
     R: Clone + Send + Sync,
 {
-    pub fn chat(&self) -> Chat<C, T, I, R> {
+    pub fn chat(&self) -> Chat<I, T, R> {
         Chat::new(
             self.inner.clone(),
             self.toolset.clone(),
@@ -50,7 +46,7 @@ where
         )
     }
 
-    pub fn chained(&self) -> Chained<C, T, I, R> {
+    pub fn chained(&self) -> Chained<I, T, R> {
         Chained::new(
             self.inner.clone(),
             self.toolset.clone(),
