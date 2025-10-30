@@ -30,7 +30,7 @@ sha2 = { workspace = true }
 sqs_client = { path = "../sqs_client" }
 tempfile = "3.19.1"
 tokio = { workspace = true }
-tokio-stream = "0.1.17"
+tokio-stream = { workspace = true }
 tokio-util = { workspace = true }
 walkdir = "2.3.2"
 zip = { workspace = true }

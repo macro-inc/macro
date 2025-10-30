@@ -46,6 +46,7 @@ name = "ai"
 version = "0.1.0"
 dependencies = [
  "ai_format",
+ "anthropic",
  "anyhow",
  "async-openai",
  "async-stream",
@@ -195,6 +196,26 @@ dependencies = [
  "anstyle",
  "once_cell",
  "windows-sys 0.59.0",
+]
+
+[[package]]
+name = "anthropic"
+version = "0.1.0"
+dependencies = [
+ "async-openai",
+ "async-stream",
+ "chrono",
+ "futures",
+ "rand 0.9.0",
+ "reqwest",
+ "reqwest-eventsource",
+ "schemars",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.17",
+ "tokio",
+ "tokio-stream",
+ "tracing",
 ]
 
 [[package]]
