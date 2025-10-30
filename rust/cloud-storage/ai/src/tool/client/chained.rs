@@ -7,7 +7,7 @@
 /// (name, instructions). This tool call is then used to send a single
 /// tool to a secondary model that makes the tool call.
 ///
-/// This is done opaquely so the calls to the `ChainedTool` are not
+/// This is done transparently so the calls to the `ChainedTool` are not
 /// persisted to the database or presented to the frontend. This is
 /// intended to be a drop-in replacement for the `Chat` client
 ///

@@ -81,8 +81,16 @@ pub enum Model {
 
     #[serde(rename = "anthropic/claude-sonnet-4")]
     #[strum(serialize = "anthropic/claude-sonnet-4")]
-    #[default]
     Claude4Sonnet,
+
+    #[serde(rename = "anthropic/claude-sonnet-4.5")]
+    #[strum(serialize = "anthropic/claude-sonnet-4.5")]
+    Claude45Sonnet,
+
+    #[serde(rename = "anthropic/claude-haiku-4.5")]
+    #[strum(serialize = "anthropic/claude-haiku-4.5")]
+    #[default]
+    Claude45Haiku,
 }
 
 pub mod constants {
@@ -104,6 +112,8 @@ pub mod constants {
         pub const CLAUDE_35_SONNET: &str = "claude-3.5-sonnet";
         pub const CLAUDE_37_SONNET: &str = "claude-3.7-sonnet";
         pub const CLAUDE_4_SONNET: &str = "claude-sonnet-4";
+        pub const CLAUDE_45_SONNET: &str = "claude-4.5-sonnet";
+        pub const CLAUDE_45_HAIKU: &str = "claude-4.5-haiku";
     }
 
     /// String versions of providers
@@ -134,6 +144,8 @@ impl Model {
             Model::Claude35Sonnet => (ANTHROPIC, CLAUDE_35_SONNET),
             Model::Claude37Sonnet => (ANTHROPIC, CLAUDE_37_SONNET),
             Model::Claude4Sonnet => (ANTHROPIC, CLAUDE_4_SONNET),
+            Model::Claude45Sonnet => (ANTHROPIC, CLAUDE_45_SONNET),
+            Model::Claude45Haiku => (ANTHROPIC, CLAUDE_45_HAIKU),
         }
     }
     pub fn from_model_str(model: &str) -> Option<Self> {
@@ -152,7 +164,8 @@ impl Model {
             OPEN_AI_O3 => Model::OpenAIo3,
             CLAUDE_35_SONNET => Model::Claude35Sonnet,
             CLAUDE_37_SONNET => Model::Claude37Sonnet,
-            CLAUDE_4_SONNET => Model::Claude4Sonnet,
+            CLAUDE_45_SONNET => Model::Claude45Sonnet,
+            CLAUDE_45_HAIKU => Model::Claude45Haiku,
             _unknown => return None,
         })
     }
