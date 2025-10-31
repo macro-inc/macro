@@ -1,24 +1,23 @@
-use std::ops::Deref;
+use async_openai::config::Config;
 
 use super::config::AnthropicConfig;
-use async_openai::Client;
 
 #[derive(Clone)]
 pub struct AnthropicClient {
-    inner: Client<AnthropicConfig>,
+    config: AnthropicConfig,
+    inner: reqwest::Client,
 }
 
 impl AnthropicClient {
     pub fn new() -> Self {
+        let config = AnthropicConfig::new();
+        let client = reqwest::ClientBuilder::new()
+            .default_headers(config.headers())
+            .build()
+            .expect("failed to build anthropic client inner reqwest client");
         Self {
-            inner: Client::with_config(AnthropicConfig::new()),
+            inner: client,
+            config,
         }
-    }
-}
-
-impl Deref for AnthropicClient {
-    type Target = Client<AnthropicConfig>;
-    fn deref(&self) -> &Self::Target {
-        &self.inner
     }
 }

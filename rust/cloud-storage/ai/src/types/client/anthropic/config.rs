@@ -4,7 +4,7 @@ use lazy_static::lazy_static;
 use reqwest::header::HeaderMap;
 use secrecy::{ExposeSecret, SecretBox, SecretString};
 
-const ANTHROPIC_ROUTER_BASE_URL: &str = "https://api.anthropic.com/v1";
+const ANTHROPIC_ROUTER_BASE_URL: &str = "https://api.anthropic.com";
 const ANTHROPIC_API_KEY: &str = "ANTHROPIC_API_KEY";
 
 fn try_from_env() -> Result<AnthropicConfig> {
