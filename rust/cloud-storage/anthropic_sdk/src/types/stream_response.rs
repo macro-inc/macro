@@ -58,7 +58,8 @@ mod test {
     use serde_json::{Value, json};
 
     use super::*;
-    use crate::types::providers::anthropic::*;
+    use crate::types::request::*;
+    use crate::types::response::*;
 
     fn error() -> Value {
         json!(
