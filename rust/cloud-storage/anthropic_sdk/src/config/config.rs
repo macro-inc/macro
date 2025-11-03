@@ -1,20 +1,20 @@
 use super::constant::{ANTHROPIC_API_KEY, ANTHROPIC_ROUTER_BASE_URL};
-use crate::error::{Error, Result};
-use secrecy::SecretString;
+use reqwest::header::HeaderMap;
 
 #[derive(Debug, Clone, Default)]
 pub struct Config {
     pub api_base: String,
-    pub api_key: SecretString,
+    pub headers: HeaderMap,
 }
 
 impl Config {
-    pub fn try_from_env() -> Result<Self> {
-        Ok(Self {
+    pub fn dangrously_try_from_env() -> Self {
+        let api_key = std::env::var(ANTHROPIC_API_KEY).expect("api key");
+        let mut headers = HeaderMap::new();
+        headers.insert("x-api-key", api_key.parse().expect("good config"));
+        Self {
             api_base: ANTHROPIC_ROUTER_BASE_URL.into(),
-            api_key: std::env::var(ANTHROPIC_API_KEY)
-                .map_err(Error::Config)?
-                .into(),
-        })
+            headers,
+        }
     }
 }
