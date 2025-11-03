@@ -32,9 +32,30 @@ pub enum StreamEvent {
     }, // changes to top level message
     MessageStop,
     Ping,
-    Error {
-        error: Error,
-    },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type")]
+pub enum StreamResult {
+    #[serde(rename = "error")]
+    Err { error: StreamError },
+    #[serde(untagged)]
+    Ok(StreamEvent),
+}
+
+impl StreamResult {
+    pub fn into_result(self) -> Result<StreamEvent, StreamError> {
+        self.into()
+    }
+}
+
+impl Into<Result<StreamEvent, StreamError>> for StreamResult {
+    fn into(self) -> Result<StreamEvent, StreamError> {
+        match self {
+            Self::Err { error: e } => Err(e),
+            Self::Ok(o) => Ok(o),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
@@ -48,9 +69,15 @@ pub enum ContentDeltaEvent {
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum Error {
+pub enum StreamError {
     OverloadedError { message: String },
     OtherError { message: String },
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum StreamErrorWrapper {
+    Error(StreamError),
 }
 
 #[cfg(test)]
@@ -137,8 +164,8 @@ mod test {
 
     #[test]
     fn test_se_err() {
-        let se = serde_json::to_value(&StreamEvent::Error {
-            error: Error::OverloadedError {
+        let se = serde_json::to_value(StreamResult::Err {
+            error: StreamError::OverloadedError {
                 message: "Overloaded".into(),
             },
         })
@@ -150,16 +177,9 @@ mod test {
     #[test]
     fn test_de_error() {
         let de =
-            serde_json::from_str::<StreamEvent>(&serde_json::to_string(&error()).expect("str"))
+            serde_json::from_str::<StreamResult>(&serde_json::to_string(&error()).expect("str"))
                 .expect("deserialize_error");
-        assert!(
-            if let StreamEvent::Error { .. } = de {
-                true
-            } else {
-                false
-            },
-            "deserialize error"
-        );
+        assert!(de.into_result().is_err(), "deserialize error");
     }
 
     #[test]

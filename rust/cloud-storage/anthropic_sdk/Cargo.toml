@@ -5,15 +5,17 @@ publish = false
 version = "0.1.0"
 
 [dev-dependencies]
-tokio = { workspace = true }
 
 [dependencies]
+tokio = { workspace = true, features = ["sync"]}
 async-stream = { workspace = true }
 futures = { workspace = true }
 reqwest = { workspace = true }
+reqwest-eventsource = "0.6.0"
 schemars = { workspace = true }
 secrecy = "0.10.3"
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
+tokio-stream = "0.1.17"
