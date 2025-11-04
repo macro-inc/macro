@@ -3,21 +3,30 @@ use std::process::exit;
 
 use anthropic::client::Client;
 use anthropic::error::AnthropicError;
-use anthropic::types::request::{
-    CreateMessageRequestBody, InputContent, InputMessage, Role, SystemPrompt,
-};
 use anthropic::types::stream_response::{ContentDeltaEvent, StreamEvent};
+use async_openai::types::{
+    ChatCompletionRequestAssistantMessage, ChatCompletionRequestAssistantMessageContent,
+    ChatCompletionRequestMessage, ChatCompletionRequestSystemMessageArgs,
+    ChatCompletionRequestUserMessage, ChatCompletionRequestUserMessageContent,
+    CreateChatCompletionRequestArgs,
+};
 use futures::StreamExt;
 
 #[tokio::main]
 async fn main() {
     let client = Client::dangerously_try_from_env();
-    let mut request = CreateMessageRequestBody::default();
-    request.max_tokens = 1000;
-    request.system = Some(SystemPrompt::Text(
-        "You are donkey boy. You are to refer to yourself only as donkey boy".into(),
-    ));
-    request.model = "claude-haiku-4-5".into();
+
+    let mut request = CreateChatCompletionRequestArgs::default()
+        .model("claude-haiku-4-5")
+        .max_completion_tokens(1000_u32)
+        .messages([ChatCompletionRequestSystemMessageArgs::default()
+            .content("you are donkey boy. refer to yourself only as donkey boy")
+            .build()
+            .expect("system message")
+            .into()])
+        .build()
+        .expect("request");
+
     let mut out = std::io::stdout();
 
     loop {
@@ -26,10 +35,10 @@ async fn main() {
 
         let mut user_input = String::new();
         std::io::stdin().read_line(&mut user_input).expect("io");
-        let message = InputMessage {
-            role: Role::User,
-            content: InputContent::Text(user_input),
-        };
+        let message = ChatCompletionRequestMessage::User(ChatCompletionRequestUserMessage {
+            content: ChatCompletionRequestUserMessageContent::Text(user_input),
+            name: None,
+        });
         request.messages.push(message);
         let chat = client.chat();
         let mut stream = chat.create_stream(request.clone()).await;
@@ -70,11 +79,12 @@ async fn main() {
                 };
                 write!(out, "{}", response_text).expect("io");
                 out.flush().expect("io");
-                let response = InputMessage {
-                    role: Role::Assistant,
-                    content: InputContent::Text(response_text),
-                };
-                request.messages.push(response);
+
+                let mut response = ChatCompletionRequestAssistantMessage::default();
+                response.content = Some(ChatCompletionRequestAssistantMessageContent::Text(
+                    response_text,
+                ));
+                request.messages.push(response.into());
             }
         }
         writeln!(out).expect("io");

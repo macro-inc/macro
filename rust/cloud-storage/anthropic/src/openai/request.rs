@@ -47,7 +47,7 @@ impl From<CreateChatCompletionRequest> for request::CreateMessageRequestBody {
                 }
             }
         }
-
+        request.model = msg.model;
         request.stream = msg.stream;
         request.temperature = msg.temperature;
         request.tool_choice = msg.tool_choice.map(Into::into);

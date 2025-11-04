@@ -1,5 +1,6 @@
 use futures::Stream;
 use serde::{Serialize, de::DeserializeOwned};
+use std::fmt::Debug;
 use std::pin::Pin;
 
 use super::Client;
@@ -35,9 +36,10 @@ impl<'c> Chat<'c> {
         request: I,
     ) -> Pin<Box<dyn Stream<Item = Result<O, AnthropicError>> + Send>>
     where
-        I: Serialize,
+        I: Serialize + Debug,
         O: DeserializeOwned + Send + Sync + 'static,
     {
+        tracing::debug!("{:#?}", request);
         self.inner.post_stream("/v1/messages", request).await
     }
 }
