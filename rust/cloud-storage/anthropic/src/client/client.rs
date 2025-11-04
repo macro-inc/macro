@@ -6,9 +6,17 @@ use reqwest_eventsource::{Event, EventSource, RequestBuilderExt};
 use serde::{Serialize, de::DeserializeOwned};
 use std::pin::Pin;
 
+#[derive(Clone, Debug)]
 pub struct Client {
     http_client: RequestClient,
     config: Config,
+}
+
+impl Default for Client {
+    fn default() -> Self {
+        let config = Config::dangrously_try_from_env();
+        Self::with_config(config)
+    }
 }
 
 impl Client {
@@ -43,7 +51,7 @@ impl Client {
     {
         let event_source = self
             .http_client
-            .post(format!("{}/{}", self.config.api_base, path))
+            .post(format!("{}{}", self.config.api_base, path))
             .headers(self.config.headers.clone())
             .json(&request)
             .eventsource()
@@ -93,6 +101,5 @@ where
 
         event_source.close();
     });
-
     Box::pin(tokio_stream::wrappers::UnboundedReceiverStream::new(rx))
 }

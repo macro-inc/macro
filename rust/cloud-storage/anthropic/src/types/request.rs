@@ -62,6 +62,7 @@ pub struct McpServer;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Default, PartialEq)]
 pub struct Metadata {
+    /// An external identifier for the user who is associated with the request.
     pub user_id: Option<String>,
 }
 
@@ -80,6 +81,12 @@ pub enum SystemPrompt {
     Text(String),
 }
 
+impl Default for SystemPrompt {
+    fn default() -> Self {
+        SystemPrompt::Text("".into())
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct SystemContent {
     r#type: String,
@@ -96,7 +103,7 @@ pub enum Thinking {
     Disabled,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Default, Serialize, Deserialize, Clone, Debug, PartialEq)]
 #[serde(rename_all = "lowercase", tag = "type")]
 pub enum ToolChoice {
     Auto {
@@ -109,6 +116,7 @@ pub enum ToolChoice {
         name: String,
         disable_parallel_tool_use: bool,
     },
+    #[default]
     None,
 }
 
@@ -120,23 +128,59 @@ pub struct Tool {
     pub input_schema: serde_json::Value,
 }
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+#[derive(Default, Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct CreateMessageRequestBody {
+    /// The model that will complete your prompt.
+    /// https://docs.claude.com/en/docs/about-claude/models/overview
     pub model: String,
+    /// Input messages.
     pub messages: Vec<InputMessage>,
+    /// The maximum number of tokens to generate before stopping.
     pub max_tokens: u32,
+    /// !Not Implemented!
+    /// Container identifier for reuse across requests.
+    /// Container parameters with skills to be loaded.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub container: Option<String>,
+    /// !Not Implemented!
+    /// Context management configuration.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub context_management: Option<String>,
-    pub mcp_servers: Vec<McpServer>,
-    pub metadata: Metadata,
-    pub service_tier: ServiceTier,
-    pub stop_sequences: Vec<String>,
-    pub stream: bool,
-    pub system: SystemPrompt,
-    pub temperature: f32,
-    pub thinking: Thinking,
-    pub tool_choice: ToolChoice,
-    pub tools: Vec<Tool>,
-    pub top_k: u32,
-    pub top_p: u32,
+    /// !Not Implemented!
+    /// MCP servers to be utilized in this request
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mcp_servers: Option<Vec<McpServer>>,
+    /// An object describing metadata about the request.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadata: Option<Metadata>,
+    /// Determines whether to use priority capacity (if available) or standard capacity for this request.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub service_tier: Option<ServiceTier>,
+    /// Custom text sequences that will cause the model to stop generating.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stop_sequences: Option<Vec<String>>,
+    /// Whether to incrementally stream the response using server-sent events.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub stream: Option<bool>,
+    /// System prompt.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub system: Option<SystemPrompt>,
+    /// Amount of randomness injected into the response.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub temperature: Option<f32>,
+    /// Configuration for enabling Claude's extended thinking.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub thinking: Option<Thinking>,
+    /// How the model should use the provided tools. The model can use a specific tool, any available tool, decide by itself, or not use tools at all.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tool_choice: Option<ToolChoice>,
+    /// Definitions of tools that the model may use.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub tools: Option<Vec<Tool>>,
+    /// Only sample from the top K options for each subsequent token.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_k: Option<u32>,
+    /// Use nucleus sampling.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub top_p: Option<f32>,
 }

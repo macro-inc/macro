@@ -3,7 +3,7 @@ use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum AnthropicError {
-    /// An error sent by
+    /// An error sent by anthropic
     #[error("Error returned from stream")]
     StreamError(StreamError),
     /// Stream closed unexpectedly

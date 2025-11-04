@@ -1,5 +1,7 @@
-use super::constant::{ANTHROPIC_API_KEY, ANTHROPIC_ROUTER_BASE_URL};
 use reqwest::header::HeaderMap;
+
+const ANTHROPIC_ROUTER_BASE_URL: &str = "https://api.anthropic.com";
+const ANTHROPIC_API_KEY: &str = "ANTHROPIC_API_KEY";
 
 #[derive(Debug, Clone, Default)]
 pub struct Config {
@@ -12,6 +14,10 @@ impl Config {
         let api_key = std::env::var(ANTHROPIC_API_KEY).expect("api key");
         let mut headers = HeaderMap::new();
         headers.insert("x-api-key", api_key.parse().expect("good config"));
+        headers.insert(
+            "anthropic-version",
+            "2023-06-01".parse().expect("good version"),
+        );
         Self {
             api_base: ANTHROPIC_ROUTER_BASE_URL.into(),
             headers,

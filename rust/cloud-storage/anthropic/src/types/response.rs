@@ -84,19 +84,20 @@ pub struct Usage {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct MessageResponse {
-    /// unique message id
-    pub id: String,
-    /// always "messages" (for messages api)
-    pub r#type: String,
-    pub role: Role,
-    pub content: Content,
-    pub model: String,
-    // todo
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub r#type: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub id: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub role: Option<Role>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub content: Option<Content>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
     pub stop_reason: Option<StopReason>,
     pub stop_sequence: Option<String>,
-    // TODO
-    pub usage: Usage,
-    // TODO this actually looks useful probably should impl
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub context_management: Option<serde_json::Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
