@@ -4,7 +4,9 @@ name = "anthropic"
 publish = false
 version = "0.1.0"
 
-[dev-dependencies]
+[features]
+default = ["openai"]
+openai = ["dep:async-openai"]
 
 [dependencies]
 tokio = { workspace = true, features = ["sync"]}
@@ -19,3 +21,4 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 tokio-stream = "0.1.17"
+async-openai = { workspace = true, optional = true}

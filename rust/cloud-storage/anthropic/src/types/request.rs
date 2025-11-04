@@ -11,7 +11,7 @@ pub enum Role {
 #[serde(untagged, rename_all = "lowercase")]
 pub enum InputContent {
     Text(String),
-    Blocks(ContentKind),
+    Blocks(Vec<ContentKind>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
@@ -33,7 +33,7 @@ pub enum ContentKind {
     },
     ToolUse {
         id: String,
-        input: serde_json::Value,
+        input: String,
         name: String,
         cache_control: Option<CacheControl>,
     },
@@ -81,6 +81,24 @@ pub enum SystemPrompt {
     Text(String),
 }
 
+impl SystemPrompt {
+    pub fn push_text(&mut self, text: &str) {
+        match self {
+            Self::Blocks(parts) => {
+                parts.push(SystemContent {
+                    r#type: "text".into(),
+                    text: text.to_owned(),
+                    cache_control: None,
+                    citations: None,
+                });
+            }
+            Self::Text(prompt) => {
+                prompt.push_str(text);
+            }
+        }
+    }
+}
+
 impl Default for SystemPrompt {
     fn default() -> Self {
         SystemPrompt::Text("".into())
@@ -89,8 +107,13 @@ impl Default for SystemPrompt {
 
 #[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
 pub struct SystemContent {
-    r#type: String,
-    text: String,
+    /// type: "text"
+    pub r#type: String,
+    pub text: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub cache_control: Option<CacheControl>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub citations: Option<serde_json::Value>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, Default, PartialEq)]

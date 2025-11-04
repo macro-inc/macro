@@ -12,8 +12,8 @@ pub struct Client {
     config: Config,
 }
 
-impl Default for Client {
-    fn default() -> Self {
+impl Client {
+    pub fn dangerously_try_from_env() -> Self {
         let config = Config::dangrously_try_from_env();
         Self::with_config(config)
     }
