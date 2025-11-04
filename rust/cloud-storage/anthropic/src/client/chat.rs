@@ -18,10 +18,14 @@ impl Client {
 }
 
 impl<'c> Chat<'c> {
-    pub async fn create_stream(
+    pub async fn create_stream<I>(
         &self,
-        mut request: CreateMessageRequestBody,
-    ) -> Pin<Box<dyn Stream<Item = Result<StreamEvent, AnthropicError>> + Send>> {
+        request: I,
+    ) -> Pin<Box<dyn Stream<Item = Result<StreamEvent, AnthropicError>> + Send>>
+    where
+        I: Into<CreateMessageRequestBody>,
+    {
+        let mut request = request.into();
         request.stream = Some(true);
         self.create_stream_unchecked(request).await
     }

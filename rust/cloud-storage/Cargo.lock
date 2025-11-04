@@ -201,6 +201,7 @@ dependencies = [
 name = "anthropic"
 version = "0.1.0"
 dependencies = [
+ "async-openai",
  "async-stream",
  "futures",
  "reqwest",

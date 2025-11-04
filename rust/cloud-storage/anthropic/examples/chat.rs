@@ -11,7 +11,7 @@ use futures::StreamExt;
 
 #[tokio::main]
 async fn main() {
-    let client = Client::default();
+    let client = Client::dangerously_try_from_env();
     let mut request = CreateMessageRequestBody::default();
     request.max_tokens = 1000;
     request.system = Some(SystemPrompt::Text(
@@ -60,8 +60,8 @@ async fn main() {
                         _ => "other-block-delta\n".into(),
                     },
                     StreamEvent::ContentBlockStart { .. } => "content-block-start\n".into(),
-                    StreamEvent::ContentBlockStop { .. } => "content-block-stop\n".into(),
-                    StreamEvent::Ping => "ping\n".into(),
+                    StreamEvent::ContentBlockStop { .. } => "\ncontent-block-stop\n".into(),
+                    StreamEvent::Ping => "".into(),
                     StreamEvent::MessageStart { .. } => "message-start\n".into(),
                     StreamEvent::MessageStop { .. } => "message-stop\n".into(),
                 };
@@ -73,7 +73,7 @@ async fn main() {
                 };
                 request.messages.push(response);
             }
-            writeln!(out).expect("io");
         }
+        writeln!(out).expect("io");
     }
 }
