@@ -198,7 +198,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "anthropic_sdk"
+name = "anthropic"
 version = "0.1.0"
 dependencies = [
  "async-stream",
