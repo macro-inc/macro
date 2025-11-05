@@ -42,6 +42,7 @@ async fn main() {
         request.messages.push(message);
         let chat = client.chat();
         let mut stream = chat.create_stream(request.clone()).await;
+        let mut assistant_response = String::new();
 
         while let Some(event) = stream.next().await {
             if let Err(error) = event {
@@ -78,15 +79,15 @@ async fn main() {
                     StreamEvent::MessageStop { .. } => "message-stop\n".into(),
                 };
                 write!(out, "{}", response_text).expect("io");
+                assistant_response.push_str(&response_text);
                 out.flush().expect("io");
-
-                let mut response = ChatCompletionRequestAssistantMessage::default();
-                response.content = Some(ChatCompletionRequestAssistantMessageContent::Text(
-                    response_text,
-                ));
-                request.messages.push(response.into());
             }
         }
+        let mut response = ChatCompletionRequestAssistantMessage::default();
+        response.content = Some(ChatCompletionRequestAssistantMessageContent::Text(
+            assistant_response,
+        ));
+        request.messages.push(response.into());
         writeln!(out).expect("io");
     }
 }
