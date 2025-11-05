@@ -3,7 +3,7 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum ContentKind {
+pub enum ResponseContentKind {
     Text(TextResponse),
     Thinking(ThinkingResponse),
     ToolUse(ToolUse),
@@ -15,7 +15,7 @@ pub enum ContentKind {
 #[serde(rename_all = "snake_case", untagged)]
 pub enum Content {
     Text(String),
-    Array(Vec<ContentKind>),
+    Array(Vec<ResponseContentKind>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]

@@ -7,6 +7,7 @@ pub enum StreamEvent {
     MessageStart {
         message: MessageResponse,
     },
+    /// proceeds content block delta
     ContentBlockStart {
         index: u32,
         content_block: ContentDeltaEvent,
@@ -15,6 +16,7 @@ pub enum StreamEvent {
         index: u32,
         delta: ContentDeltaEvent,
     },
+    /// follows content block delta
     ContentBlockStop {
         index: u32,
     },
@@ -50,6 +52,8 @@ impl Into<Result<StreamEvent, StreamError>> for StreamResult {
     }
 }
 
+// data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_01T1x1fJ34qAmk2tNTrN7Up6","name":"get_weather","input":{}}}
+// https://docs.claude.com/en/docs/build-with-claude/streaming#full-http-stream-response
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum ContentDeltaEvent {
@@ -60,6 +64,13 @@ pub enum ContentDeltaEvent {
     TextDelta {
         text: String,
     },
+    /// proceeds input json dleta
+    ToolUse {
+        id: String,
+        name: String,
+        input: serde_json::Value,
+    },
+    /// partial json for a tool call
     InputJsonDelta {
         partial_json: String,
     },

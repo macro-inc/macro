@@ -62,7 +62,7 @@ impl From<CreateChatCompletionRequest> for request::CreateMessageRequestBody {
             .messages
             .into_iter()
             .filter_map(|message| {
-                let ant_msg = request::InputMessage::try_from(message);
+                let ant_msg = request::RequestMessage::try_from(message);
                 if let Err(MessageConversionError::DeveloperMessage(dev_msg)) = ant_msg {
                     dev_messages.push(dev_msg);
                     None
@@ -125,7 +125,7 @@ impl From<Vec<ChatCompletionRequestSystemMessage>> for request::SystemPrompt {
     }
 }
 
-impl TryFrom<ChatCompletionRequestMessage> for request::InputMessage {
+impl TryFrom<ChatCompletionRequestMessage> for request::RequestMessage {
     type Error = MessageConversionError;
     fn try_from(value: ChatCompletionRequestMessage) -> Result<Self, Self::Error> {
         match value {
@@ -146,10 +146,10 @@ impl TryFrom<ChatCompletionRequestMessage> for request::InputMessage {
 }
 
 /// openai:tool_result_message -> anthropic:user_message
-impl TryFrom<ChatCompletionRequestToolMessage> for request::InputMessage {
+impl TryFrom<ChatCompletionRequestToolMessage> for request::RequestMessage {
     type Error = MessageConversionError;
     fn try_from(tool_msg: ChatCompletionRequestToolMessage) -> Result<Self, Self::Error> {
-        let tool = request::ContentKind::ToolResponse {
+        let tool = request::RequestContentKind::ToolResponse {
             tool_use_id: tool_msg.tool_call_id,
             cache_control: None,
             content: match tool_msg.content {
@@ -168,57 +168,57 @@ impl TryFrom<ChatCompletionRequestToolMessage> for request::InputMessage {
         // ???
         Ok(Self {
             role: request::Role::User,
-            content: request::InputContent::Blocks(vec![tool]),
+            content: request::RequestContent::Blocks(vec![tool]),
         })
     }
 }
 
 /// openai::user_msg -> anthropic::user_msg
-impl TryFrom<ChatCompletionRequestUserMessage> for request::InputMessage {
+impl TryFrom<ChatCompletionRequestUserMessage> for request::RequestMessage {
     type Error = MessageConversionError;
     fn try_from(user: ChatCompletionRequestUserMessage) -> Result<Self, Self::Error> {
         match user.content {
             async_openai::types::ChatCompletionRequestUserMessageContent::Array(arr) => {
-                let content: Vec<request::ContentKind> = arr.into_iter()
+                let content: Vec<request::RequestContentKind> = arr.into_iter()
                     .filter_map(|part| {
                         match part {
                             async_openai::types::ChatCompletionRequestUserMessageContentPart::ImageUrl(url) => {
                                 Some(if is_url(&url.image_url.url)  {
-                                    request::ContentKind::Url { url: url.image_url.url }
+                                    request::RequestContentKind::Url { url: url.image_url.url }
                                 } else {
                                     let kind = media_type(&url.image_url.url);
-                                    request::ContentKind::Base64 { data: url.image_url.url, media_type: kind }
+                                    request::RequestContentKind::Base64 { data: url.image_url.url, media_type: kind }
                                 })
                             },
                             async_openai::types::ChatCompletionRequestUserMessageContentPart::Text(text) =>
-                            Some(request::ContentKind::Text { text: text.text, cache_control: None, citations: vec![] }),
+                            Some(request::RequestContentKind::Text { text: text.text, cache_control: None, citations: vec![] }),
                             // sound is unsupported and will fail silently
                             async_openai::types::ChatCompletionRequestUserMessageContentPart::InputAudio(_) => None
                         }
                     })
                     .collect();
-                Ok(request::InputMessage {
-                    content: request::InputContent::Blocks(content),
+                Ok(request::RequestMessage {
+                    content: request::RequestContent::Blocks(content),
                     role: request::Role::User,
                 })
             }
             async_openai::types::ChatCompletionRequestUserMessageContent::Text(text) => Ok(Self {
                 role: request::Role::User,
-                content: request::InputContent::Text(text),
+                content: request::RequestContent::Text(text),
             }),
         }
     }
 }
 
 /// openai::assistant_msg -> anthropci::assistant_msg
-impl TryFrom<ChatCompletionRequestAssistantMessage> for request::InputMessage {
+impl TryFrom<ChatCompletionRequestAssistantMessage> for request::RequestMessage {
     type Error = MessageConversionError;
     fn try_from(assistant_msg: ChatCompletionRequestAssistantMessage) -> Result<Self, Self::Error> {
         if let Some(content) = assistant_msg.content {
             match content {
                 async_openai::types::ChatCompletionRequestAssistantMessageContent::Text(text) => {
                     Ok(Self {
-                        content: request::InputContent::Text(text),
+                        content: request::RequestContent::Text(text),
                         role: request::Role::Assistant,
                     })
                 }
@@ -226,15 +226,15 @@ impl TryFrom<ChatCompletionRequestAssistantMessage> for request::InputMessage {
                     let parts = parts.into_iter()
                                         .map(|part| match part {
                                             async_openai::types::ChatCompletionRequestAssistantMessageContentPart::Text(text) => {
-                                                request::ContentKind::Text { text: text.text, cache_control: None, citations: vec![]}
+                                                request::RequestContentKind::Text { text: text.text, cache_control: None, citations: vec![]}
                                             }
                                             async_openai::types::ChatCompletionRequestAssistantMessageContentPart::Refusal(message) => {
-                                                request::ContentKind::Text { text: message.refusal, cache_control: None, citations: vec![] }
+                                                request::RequestContentKind::Text { text: message.refusal, cache_control: None, citations: vec![] }
                                             }
 
                                         }).collect();
                     Ok(Self {
-                        content: request::InputContent::Blocks(parts),
+                        content: request::RequestContent::Blocks(parts),
                         role: request::Role::Assistant,
                     })
                 }
@@ -244,7 +244,7 @@ impl TryFrom<ChatCompletionRequestAssistantMessage> for request::InputMessage {
         else if let Some(tools) = assistant_msg.tool_calls {
             let parts = tools
                 .into_iter()
-                .map(|tool_call| request::ContentKind::ToolUse {
+                .map(|tool_call| request::RequestContentKind::ToolUse {
                     id: tool_call.id,
                     input: tool_call.function.arguments,
                     name: tool_call.function.name,
@@ -252,7 +252,7 @@ impl TryFrom<ChatCompletionRequestAssistantMessage> for request::InputMessage {
                 })
                 .collect();
             Ok(Self {
-                content: request::InputContent::Blocks(parts),
+                content: request::RequestContent::Blocks(parts),
                 role: request::Role::Assistant,
             })
         } else {

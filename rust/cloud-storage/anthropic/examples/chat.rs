@@ -4,7 +4,7 @@ use std::process::exit;
 use anthropic::client::Client;
 use anthropic::error::AnthropicError;
 use anthropic::types::request::{
-    CreateMessageRequestBody, InputContent, InputMessage, Role, SystemPrompt,
+    CreateMessageRequestBody, RequestContent, RequestMessage, Role, SystemPrompt,
 };
 use anthropic::types::stream_response::{ContentDeltaEvent, StreamEvent};
 use futures::StreamExt;
@@ -26,13 +26,14 @@ async fn main() {
 
         let mut user_input = String::new();
         std::io::stdin().read_line(&mut user_input).expect("io");
-        let message = InputMessage {
+        let message = RequestMessage {
             role: Role::User,
-            content: InputContent::Text(user_input),
+            content: RequestContent::Text(user_input),
         };
         request.messages.push(message);
         let chat = client.chat();
         let mut stream = chat.create_stream(request.clone()).await;
+        let mut assistant_message = String::new();
 
         while let Some(event) = stream.next().await {
             if let Err(error) = event {
@@ -69,14 +70,15 @@ async fn main() {
                     StreamEvent::MessageStop { .. } => "message-stop\n".into(),
                 };
                 write!(out, "{}", response_text).expect("io");
+                assistant_message.push_str(&response_text);
                 out.flush().expect("io");
-                let response = InputMessage {
-                    role: Role::Assistant,
-                    content: InputContent::Text(response_text),
-                };
-                request.messages.push(response);
             }
         }
+        let response = RequestMessage {
+            role: Role::Assistant,
+            content: RequestContent::Text(assistant_message),
+        };
+        request.messages.push(response);
         writeln!(out).expect("io");
     }
 }

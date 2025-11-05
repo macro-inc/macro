@@ -9,14 +9,14 @@ pub enum Role {
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(untagged, rename_all = "lowercase")]
-pub enum InputContent {
+pub enum RequestContent {
     Text(String),
-    Blocks(Vec<ContentKind>),
+    Blocks(Vec<RequestContentKind>),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
-pub enum ContentKind {
+pub enum RequestContentKind {
     Text {
         text: String,
         cache_control: Option<CacheControl>,
@@ -51,9 +51,9 @@ pub enum ContentKind {
 pub struct CacheControl(serde_json::Value);
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct InputMessage {
+pub struct RequestMessage {
     pub role: Role,
-    pub content: InputContent,
+    pub content: RequestContent,
 }
 
 // unused
@@ -157,7 +157,7 @@ pub struct CreateMessageRequestBody {
     /// https://docs.claude.com/en/docs/about-claude/models/overview
     pub model: String,
     /// Input messages.
-    pub messages: Vec<InputMessage>,
+    pub messages: Vec<RequestMessage>,
     /// The maximum number of tokens to generate before stopping.
     pub max_tokens: u32,
     /// !Not Implemented!
