@@ -25,9 +25,11 @@ pub enum MessageConversionError {
 impl From<CreateChatCompletionRequest> for request::CreateMessageRequestBody {
     fn from(msg: CreateChatCompletionRequest) -> Self {
         let mut request = Self::default();
-        if let Some(tokens) = msg.max_completion_tokens {
-            request.max_tokens = tokens;
-        }
+        request.max_tokens = msg.max_completion_tokens.unwrap_or(
+            #[allow(deprecated)]
+            msg.max_tokens.unwrap_or(1024),
+        );
+
         if let Some(user) = msg.metadata.and_then(|meta| {
             meta.get("user_id")
                 .and_then(|user| user.as_str())
@@ -58,24 +60,21 @@ impl From<CreateChatCompletionRequest> for request::CreateMessageRequestBody {
 
         let mut prompt_messages = Vec::new();
         let mut dev_messages = Vec::new();
-        request.messages = msg
-            .messages
-            .into_iter()
-            .filter_map(|message| {
-                let ant_msg = request::RequestMessage::try_from(message);
-                if let Err(MessageConversionError::DeveloperMessage(dev_msg)) = ant_msg {
-                    dev_messages.push(dev_msg);
-                    None
-                } else if let Err(MessageConversionError::SystemPrompt(sys_msg)) = ant_msg {
-                    prompt_messages.push(sys_msg);
-                    None
-                } else if ant_msg.is_err() {
-                    None
-                } else {
-                    Some(ant_msg.unwrap())
-                }
-            })
-            .collect();
+        let messages = msg.messages.into_iter().filter_map(|message| {
+            let ant_msg = request::RequestMessage::try_from(message);
+            if let Err(MessageConversionError::DeveloperMessage(dev_msg)) = ant_msg {
+                dev_messages.push(dev_msg);
+                None
+            } else if let Err(MessageConversionError::SystemPrompt(sys_msg)) = ant_msg {
+                prompt_messages.push(sys_msg);
+                None
+            } else if ant_msg.is_err() {
+                None
+            } else {
+                Some(ant_msg.unwrap())
+            }
+        });
+        request.messages = aggregate_messages(messages);
         let mut system_prompt = SystemPrompt::from(prompt_messages);
         for msg in dev_messages {
             for text in developer_message_as_text_parts(&msg) {
@@ -84,6 +83,40 @@ impl From<CreateChatCompletionRequest> for request::CreateMessageRequestBody {
         }
         request.system = Some(system_prompt);
         request
+    }
+}
+
+pub fn aggregate_messages(
+    messages: impl IntoIterator<Item = request::RequestMessage>,
+) -> Vec<request::RequestMessage> {
+    let (mut msgs, last) = messages
+        .into_iter()
+        .fold((vec![], None), |(mut msgs, agg), current| {
+            match (
+                agg.as_ref().map(|a: &request::RequestMessage| &a.role),
+                &current.role,
+            ) {
+                // no aggregator
+                (None, _) => (msgs, Some(current)),
+                // same
+                (Some(request::Role::Assistant), request::Role::Assistant)
+                | (Some(request::Role::User), request::Role::User) => {
+                    let mut agg = agg.unwrap();
+                    agg.merge_message(current);
+                    (msgs, Some(agg))
+                }
+                // aggregator differs from current
+                _ => {
+                    msgs.push(agg.unwrap());
+                    (msgs, Some(current))
+                }
+            }
+        });
+    if let Some(last) = last {
+        msgs.push(last);
+        msgs
+    } else {
+        msgs
     }
 }
 
@@ -149,7 +182,7 @@ impl TryFrom<ChatCompletionRequestMessage> for request::RequestMessage {
 impl TryFrom<ChatCompletionRequestToolMessage> for request::RequestMessage {
     type Error = MessageConversionError;
     fn try_from(tool_msg: ChatCompletionRequestToolMessage) -> Result<Self, Self::Error> {
-        let tool = request::RequestContentKind::ToolResponse {
+        let tool = request::RequestContentKind::ToolResult {
             tool_use_id: tool_msg.tool_call_id,
             cache_control: None,
             content: match tool_msg.content {
@@ -163,7 +196,7 @@ impl TryFrom<ChatCompletionRequestToolMessage> for request::RequestMessage {
                     .collect::<String>(),
                 async_openai::types::ChatCompletionRequestToolMessageContent::Text(text) => text,
             },
-            is_err: false,
+            is_err: None,
         };
         // ???
         Ok(Self {
@@ -240,15 +273,21 @@ impl TryFrom<ChatCompletionRequestAssistantMessage> for request::RequestMessage 
                 }
             }
         }
-        // TODO. likely need to supporg both text and tool calls
+        // TODO. likely need to support both text and tool calls
         else if let Some(tools) = assistant_msg.tool_calls {
             let parts = tools
                 .into_iter()
-                .map(|tool_call| request::RequestContentKind::ToolUse {
-                    id: tool_call.id,
-                    input: tool_call.function.arguments,
-                    name: tool_call.function.name,
-                    cache_control: None,
+                // TODO handle errors better
+                // anthropic requries tool calls to be valid json, openai doesn't
+                .filter_map(|tool_call| {
+                    serde_json::from_str(&tool_call.function.arguments)
+                        .map(|good| request::RequestContentKind::ToolUse {
+                            id: tool_call.id,
+                            input: good,
+                            name: tool_call.function.name,
+                            cache_control: None,
+                        })
+                        .ok()
                 })
                 .collect();
             Ok(Self {

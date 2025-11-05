@@ -73,10 +73,13 @@ where
         while let Some(ev) = event_source.next().await {
             match ev {
                 Err(e) => {
-                    if let Err(_e) = tx.send(Err(AnthropicError::StreamClosed(e.to_string()))) {
-                        // rx dropped
-                        break;
+                    match e {
+                        reqwest_eventsource::Error::StreamEnded => break,
+                        other => {
+                            let _ = tx.send(Err(AnthropicError::StreamError(other.to_string())));
+                        }
                     }
+                    break;
                 }
                 Ok(event) => match event {
                     Event::Message(message) => {

@@ -2,7 +2,6 @@ use std::io::Write;
 use std::process::exit;
 
 use anthropic::client::Client;
-use anthropic::error::AnthropicError;
 use anthropic::types::stream_response::{ContentDeltaEvent, StreamEvent};
 use async_openai::types::{
     ChatCompletionRequestAssistantMessage, ChatCompletionRequestAssistantMessageContent,
@@ -47,10 +46,6 @@ async fn main() {
         while let Some(event) = stream.next().await {
             if let Err(error) = event {
                 match error {
-                    AnthropicError::StreamClosed(done) => {
-                        writeln!(out, "\nstream closed {:#?}", done).expect("io");
-                        break;
-                    }
                     other => {
                         writeln!(out, "\nerror: {:#?}", other).expect("io");
                         exit(1);
@@ -77,6 +72,7 @@ async fn main() {
                     StreamEvent::Ping => "".into(),
                     StreamEvent::MessageStart { .. } => "message-start\n".into(),
                     StreamEvent::MessageStop { .. } => "message-stop\n".into(),
+                    StreamEvent::Error { error } => format!("error: {:?}", error),
                 };
                 write!(out, "{}", response_text).expect("io");
                 assistant_response.push_str(&response_text);

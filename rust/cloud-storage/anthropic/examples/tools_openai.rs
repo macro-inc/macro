@@ -11,40 +11,25 @@ use std::io::Write;
 
 #[tokio::main]
 async fn main() {
-    // define tool (copy-pasted from openai playground)
-    let weather_tool_schema = json!(
-        {
-              "type": "object",
-              "properties": {
-                "location": {
-                  "type": "string",
-                  "description": "The city and state e.g. San Francisco, CA"
-                },
-                "unit": {
-                  "type": "string",
-                  "enum": [
-                    "c",
-                    "f"
-                  ]
-                }
-              },
-              "additionalProperties": false,
-              "required": [
-                "location",
-                "unit"
-              ]
-            }
-    );
-
     let weather_tool = ChatCompletionToolArgs::default()
         .r#type(ChatCompletionToolType::Function)
         .function(
             FunctionObjectArgs::default()
-                .name("check_weather")
-                .description("get the weather")
-                .parameters(weather_tool_schema)
+                .name("get_current_weather")
+                .description("Get the current weather in a given location")
+                .parameters(json!({
+                    "type": "object",
+                    "properties": {
+                        "location": {
+                            "type": "string",
+                            "description": "The city and state, e.g. San Francisco, CA",
+                        },
+                        "unit": { "type": "string", "enum": ["celsius", "fahrenheit"] },
+                    },
+                    "required": ["location"],
+                }))
                 .build()
-                .expect("function object"),
+                .unwrap(),
         )
         .build()
         .expect("tool");
@@ -69,25 +54,28 @@ async fn main() {
     let mut tool_json = String::new();
 
     while let Some(part) = stream.next().await {
+        writeln!(out, "{:#?}", part);
         if part.is_err() {
             writeln!(out, "{:?}", part).expect("io");
             break;
         }
         let part = part.unwrap();
         match part {
+            StreamEvent::ContentBlockStart { content_block, .. } => {}
             StreamEvent::ContentBlockDelta { delta, .. } => match delta {
                 ContentDeltaEvent::InputJsonDelta { partial_json } => {
-                    tool_json.push_str(&partial_json)
+                    tool_json.push_str(&partial_json);
+                    write!(out, "{}", partial_json).expect("ok good yes");
                 }
                 ContentDeltaEvent::TextDelta { text } => {
                     write!(out, "{}", text).expect("io");
                 }
-                _ => {}
+                other => writeln!(out, "{:?}", other).expect("io"),
             },
             StreamEvent::ContentBlockStop { .. } | StreamEvent::ContentBlockStart { .. } => {
                 writeln!(out).expect("io")
             }
-            _ => {}
+            event => writeln!(out, "{:?}", event).expect("io"),
         }
     }
 
