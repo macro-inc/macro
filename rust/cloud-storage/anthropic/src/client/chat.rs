@@ -8,8 +8,11 @@ use crate::error::AnthropicError;
 use crate::types::request::CreateMessageRequestBody;
 use crate::types::stream_response::StreamEvent;
 
+pub type MessageCompletionResponseStream =
+    Pin<Box<dyn Stream<Item = Result<StreamEvent, AnthropicError>> + Send>>;
+
 pub struct Chat<'c> {
-    inner: &'c Client,
+    pub(crate) inner: &'c Client,
 }
 
 impl Client {
@@ -19,10 +22,7 @@ impl Client {
 }
 
 impl<'c> Chat<'c> {
-    pub async fn create_stream<I>(
-        &self,
-        request: I,
-    ) -> Pin<Box<dyn Stream<Item = Result<StreamEvent, AnthropicError>> + Send>>
+    pub async fn create_stream<I>(&self, request: I) -> MessageCompletionResponseStream
     where
         I: Into<CreateMessageRequestBody>,
     {

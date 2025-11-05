@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq, Copy)]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
     Assistant,
@@ -33,16 +33,18 @@ pub enum RequestContentKind {
     },
     ToolUse {
         id: String,
-        input: String,
+        input: serde_json::Value,
         name: String,
         cache_control: Option<CacheControl>,
     },
-    ToolResponse {
+    ToolResult {
         tool_use_id: String,
-        cache_control: Option<CacheControl>,
         // his accepts more complete content input https://docs.claude.com/en/api/messages#tool-result
         content: String,
-        is_err: bool,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cache_control: Option<CacheControl>,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        is_err: Option<bool>,
     },
 }
 
@@ -79,24 +81,6 @@ pub enum ServiceTier {
 pub enum SystemPrompt {
     Blocks(Vec<SystemContent>),
     Text(String),
-}
-
-impl SystemPrompt {
-    pub fn push_text(&mut self, text: &str) {
-        match self {
-            Self::Blocks(parts) => {
-                parts.push(SystemContent {
-                    r#type: "text".into(),
-                    text: text.to_owned(),
-                    cache_control: None,
-                    citations: None,
-                });
-            }
-            Self::Text(prompt) => {
-                prompt.push_str(text);
-            }
-        }
-    }
 }
 
 impl Default for SystemPrompt {

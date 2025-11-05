@@ -56,17 +56,20 @@ async fn main() {
         match part {
             StreamEvent::ContentBlockDelta { delta, .. } => match delta {
                 ContentDeltaEvent::InputJsonDelta { partial_json } => {
-                    tool_json.push_str(&partial_json)
+                    tool_json.push_str(&partial_json);
+                    write!(out, "{}", partial_json).expect("ok good yes");
                 }
                 ContentDeltaEvent::TextDelta { text } => {
                     write!(out, "{}", text).expect("ok good yes");
                 }
-                _ => {}
+                other => {
+                    writeln!(out, "{:?}", other).expect("donkey");
+                }
             },
             StreamEvent::ContentBlockStop { .. } | StreamEvent::ContentBlockStart { .. } => {
                 writeln!(out).expect("io")
             }
-            _ => {}
+            event => writeln!(out, "{:?}", event).expect("io"),
         }
     }
     let tool_call = serde_json::from_str::<serde_json::Value>(&tool_json);
