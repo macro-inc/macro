@@ -1,0 +1,28 @@
+{
+  "name": "macro-api",
+  "version": "1.0.0",
+  "description": "Backend monorepo",
+  "private": true,
+  "workspaces": [
+    "service",
+    "workers/organizationWorker",
+    "workers/releaseEmailWorker",
+    "workers/notifyUsersWorker",
+    "workers/organizationCreationWorker"
+  ],
+  "scripts": {
+    "install:cdk": "cd infra/cdk && npm i",
+    "test": "cd service && yarn test"
+  },
+  "author": "Hutch",
+  "license": "ISC",
+  "packageManager": "yarn@3.2.2",
+  "devDependencies": {
+    "prisma": "6.12.0",
+    "prisma-dbml-generator": "^0.9.1"
+  },
+  "dependencies": {
+    "@prisma/client": "6.12.0",
+    "crypto": "^1.0.1"
+  }
+}
