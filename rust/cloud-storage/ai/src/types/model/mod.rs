@@ -21,74 +21,74 @@ pub use metadata::*;
 )]
 pub enum Model {
     // Google models  ------------------------------------------------------------ //
-    #[strum(serialize = "google/gemini-2.5-pro")]
-    #[serde(rename = "google/gemini-2.5-pro")]
+    #[strum(serialize = "gemini-2.5-pro")]
+    #[serde(rename = "gemini-2.5-pro")]
     Gemini25Pro,
 
-    #[strum(serialize = "google/gemini-2.0-flash-001")]
-    #[serde(rename = "google/gemini-2.0-flash-001")]
+    #[strum(serialize = "gemini-2.0-flash-001")]
+    #[serde(rename = "gemini-2.0-flash-001")]
     Gemini20Flash,
 
-    #[strum(serialize = "google/gemini-2.0-flash-lite-001")]
-    #[serde(rename = "google/gemini-2.0-flash-lite-001")]
+    #[strum(serialize = "gemini-2.0-flash-lite-001")]
+    #[serde(rename = "gemini-2.0-flash-lite-001")]
     Gemini20FlashLite,
 
-    #[serde(rename = "google/gemini-pro-1.5")]
-    #[strum(serialize = "google/gemini-pro-1.5")]
+    #[serde(rename = "gemini-pro-1.5")]
+    #[strum(serialize = "gemini-pro-1.5")]
     Gemini15Pro,
 
     // OpenAI models  ------------------------------------------------------------ //
-    #[serde(rename = "openai/gpt-5")]
-    #[strum(serialize = "openai/gpt-5")]
+    #[serde(rename = "gpt-5")]
+    #[strum(serialize = "gpt-5")]
     OpenAiGpt5,
 
-    #[serde(rename = "openai/gpt-4.1")]
-    #[strum(serialize = "openai/gpt-4.1")]
+    #[serde(rename = "gpt-4.1")]
+    #[strum(serialize = "gpt-4.1")]
     OpenAiGpt41,
 
-    #[strum(serialize = "openai/gpt-4o")]
-    #[serde(rename = "openai/gpt-4o")]
+    #[strum(serialize = "gpt-4o")]
+    #[serde(rename = "gpt-4o")]
     OpenAIGPT4o,
 
-    #[strum(serialize = "openai/gpt-4o-mini")]
-    #[serde(rename = "openai/gpt-4o-mini")]
+    #[strum(serialize = "gpt-4o-mini")]
+    #[serde(rename = "gpt-4o-mini")]
     OpenAIGPT4oMini,
 
-    #[strum(serialize = "openai/o1")]
-    #[serde(rename = "openai/o1")]
+    #[strum(serialize = "o1")]
+    #[serde(rename = "o1")]
     OpenAIo1,
 
-    #[strum(serialize = "openai/gpt-4o-search-preview")]
-    #[serde(rename = "openai/gpt-4o-search-preview")]
+    #[strum(serialize = "gpt-4o-search-preview")]
+    #[serde(rename = "gpt-4o-search-preview")]
     OpenAIGPT4oSearchPreview,
 
-    #[strum(serialize = "openai/gpt-4o-mini-search-preview")]
-    #[serde(rename = "openai/gpt-4o-mini-search-preview")]
+    #[strum(serialize = "gpt-4o-mini-search-preview")]
+    #[serde(rename = "gpt-4o-mini-search-preview")]
     // NB typo OpenAI**G**gpt
     OpenAIGgpt4oMiniSearchPreview,
 
-    #[strum(serialize = "openai/o3")]
-    #[serde(rename = "openai/o3")]
+    #[strum(serialize = "o3")]
+    #[serde(rename = "o3")]
     OpenAIo3,
 
-    #[serde(rename = "anthropic/claude-3.5-sonnet")]
-    #[strum(serialize = "anthropic/claude-3.5-sonnet")]
+    #[serde(rename = "claude-3-5-sonnet")]
+    #[strum(serialize = "claude-3-5-sonnet")]
     Claude35Sonnet,
 
-    #[serde(rename = "anthropic/claude-3.7-sonnet")]
-    #[strum(serialize = "anthropic/claude-3.7-sonnet")]
+    #[serde(rename = "claude-3-7-sonnet")]
+    #[strum(serialize = "claude-3-7-sonnet")]
     Claude37Sonnet,
 
-    #[serde(rename = "anthropic/claude-sonnet-4")]
-    #[strum(serialize = "anthropic/claude-sonnet-4")]
+    #[serde(rename = "claude-sonnet-4")]
+    #[strum(serialize = "claude-sonnet-4")]
     Claude4Sonnet,
 
-    #[serde(rename = "anthropic/claude-sonnet-4.5")]
-    #[strum(serialize = "anthropic/claude-sonnet-4.5")]
+    #[serde(rename = "claude-sonnet-4-5")]
+    #[strum(serialize = "claude-sonnet-4-5")]
     Claude45Sonnet,
 
-    #[serde(rename = "anthropic/claude-haiku-4.5")]
-    #[strum(serialize = "anthropic/claude-haiku-4.5")]
+    #[serde(rename = "claude-haiku-4-5")]
+    #[strum(serialize = "claude-haiku-4-5")]
     #[default]
     Claude45Haiku,
 }

@@ -1,8 +1,8 @@
 use super::chained::Chained;
 use super::chat::Chat;
 use crate::tool::types::AsyncToolSet;
+use crate::types::AnthropicClient;
 use crate::types::Client;
-use crate::types::OpenRouterClient;
 use std::sync::Arc;
 
 pub struct AiClient<I, T, R>
@@ -16,13 +16,13 @@ where
     toolset: Arc<AsyncToolSet<T, R>>,
 }
 
-impl<T, R> AiClient<OpenRouterClient, T, R>
+impl<T, R> AiClient<AnthropicClient, T, R>
 where
     T: Clone + Send + Sync,
     R: Clone + Send + Sync,
 {
     pub fn new(toolset: AsyncToolSet<T, R>, context: T) -> Self {
-        let client = OpenRouterClient::new();
+        let client = AnthropicClient::new();
         let toolset = Arc::new(toolset);
         Self {
             inner: client,
