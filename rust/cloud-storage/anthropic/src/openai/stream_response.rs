@@ -71,7 +71,7 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
                                 Ok(CreateChatCompletionStreamResponse {
                                     id: message_id.clone().unwrap_or_default(),
                                     choices: vec![ChatChoiceStream {
-                                        index: index as u32,
+                                        index,
                                         delta: ChatCompletionStreamResponseDelta {
                                             role: None,
                                             content: Some(text),
@@ -96,7 +96,7 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
                                 Ok(CreateChatCompletionStreamResponse {
                                     id: message_id.clone().unwrap_or_default(),
                                     choices: vec![ChatChoiceStream {
-                                        index: index as u32,
+                                        index,
                                         delta: ChatCompletionStreamResponseDelta {
                                             role: None,
                                             content: Some(format!("[Thinking] {}", thinking)),
@@ -121,12 +121,12 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
                                 Ok(CreateChatCompletionStreamResponse {
                                     id: message_id.clone().unwrap_or_default(),
                                     choices: vec![ChatChoiceStream {
-                                        index: index as u32,
+                                        index,
                                         delta: ChatCompletionStreamResponseDelta {
                                             role: None,
                                             content: None,
                                             tool_calls: Some(vec![ChatCompletionMessageToolCallChunk {
-                                                index: index as u32,
+                                                index,
                                                 id: Some(id),
                                                 r#type: Some(ChatCompletionToolType::Function),
                                                 function: Some(FunctionCallStream {
@@ -154,12 +154,12 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
                                 Ok(CreateChatCompletionStreamResponse {
                                     id: message_id.clone().unwrap_or_default(),
                                     choices: vec![ChatChoiceStream {
-                                        index: index as u32,
+                                        index,
                                         delta: ChatCompletionStreamResponseDelta {
                                             role: None,
                                             content: None,
                                             tool_calls: Some(vec![ChatCompletionMessageToolCallChunk {
-                                                index: index as u32,
+                                                index,
                                                 id: Some(streaming_tool_id.clone()),
                                                 r#type: None,
                                                 function: Some(FunctionCallStream {
