@@ -354,7 +354,8 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::{AssistantMessagePart, ChatMessageContent, OpenRouterClient, Role};
+    use crate::types::noop::NoOpClient;
+    use crate::types::{AssistantMessagePart, ChatMessageContent, Role};
     use async_openai::types::{
         ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessage,
         ChatCompletionRequestAssistantMessageContent, ChatCompletionRequestMessage,
@@ -363,8 +364,8 @@ mod tests {
     };
     use serde_json::json;
 
-    fn create_mock_chat() -> Chat<OpenRouterClient, String, String> {
-        let client = OpenRouterClient::new();
+    fn create_mock_chat() -> Chat<NoOpClient, String, String> {
+        let client = NoOpClient;
         let toolset = Arc::new(AsyncToolSet::new());
         Chat::new(client, toolset, "test_context".to_string())
     }
