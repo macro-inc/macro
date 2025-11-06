@@ -290,7 +290,7 @@ where
                                         .entry(call.index)
                                         .and_modify(|partial| {
                                             if let Some(n) = &function.name {
-                                                partial.name = format!("{}{}", partial.name, n);
+                                                partial.name = n.to_owned();
                                             }
                                             if let Some(a) = &function.arguments.clone() {
                                                 partial.json = format!("{}{}", partial.json, a);
