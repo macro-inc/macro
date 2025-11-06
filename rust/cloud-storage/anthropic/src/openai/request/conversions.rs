@@ -86,7 +86,7 @@ impl From<CreateChatCompletionRequest> for request::CreateMessageRequestBody {
     }
 }
 
-pub fn aggregate_messages(
+fn aggregate_messages(
     messages: impl IntoIterator<Item = request::RequestMessage>,
 ) -> Vec<request::RequestMessage> {
     let (mut msgs, last) = messages
@@ -101,8 +101,7 @@ pub fn aggregate_messages(
                 // same
                 (Some(request::Role::Assistant), request::Role::Assistant)
                 | (Some(request::Role::User), request::Role::User) => {
-                    let mut agg = agg.unwrap();
-                    agg.merge_message(current);
+                    let agg = agg.unwrap().merge_message(current);
                     (msgs, Some(agg))
                 }
                 // aggregator differs from current
