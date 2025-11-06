@@ -1,6 +1,6 @@
 pub mod anthropic;
-pub mod client;
 pub mod openrouter;
+pub mod traits;
 pub use anthropic::AnthropicClient;
-pub use client::{Client, RequestExtensions};
 pub use openrouter::OpenRouterClient;
+pub use traits::{Client, RequestExtensions};
