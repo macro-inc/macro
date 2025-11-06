@@ -12,6 +12,12 @@ impl AnthropicClient {
     }
 }
 
+impl Default for AnthropicClient {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Client for AnthropicClient {
     async fn chat_stream(
         &self,
