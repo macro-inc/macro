@@ -24,11 +24,13 @@ pub enum MessageConversionError {
 
 impl From<CreateChatCompletionRequest> for request::CreateMessageRequestBody {
     fn from(msg: CreateChatCompletionRequest) -> Self {
-        let mut request = Self::default();
-        request.max_tokens = msg.max_completion_tokens.unwrap_or(
-            #[allow(deprecated)]
-            msg.max_tokens.unwrap_or(32_000),
-        );
+        let mut request = Self {
+            max_tokens: msg.max_completion_tokens.unwrap_or(
+                #[allow(deprecated)]
+                msg.max_tokens.unwrap_or(32_000),
+            ),
+            ..Default::default()
+        };
 
         if let Some(user) = msg.metadata.and_then(|meta| {
             meta.get("user_id")
@@ -68,10 +70,8 @@ impl From<CreateChatCompletionRequest> for request::CreateMessageRequestBody {
             } else if let Err(MessageConversionError::SystemPrompt(sys_msg)) = ant_msg {
                 prompt_messages.push(sys_msg);
                 None
-            } else if ant_msg.is_err() {
-                None
             } else {
-                Some(ant_msg.unwrap())
+                ant_msg.ok()
             }
         });
         request.messages = aggregate_messages(messages);
@@ -270,7 +270,7 @@ impl From<ChatCompletionRequestAssistantMessage> for request::RequestMessage {
             request::RequestContent::Blocks(vec![])
         };
         let mut tools = if let Some(tools) = assistant_msg.tool_calls {
-            let parts = tools
+            tools
                 .into_iter()
                 // TODO handle errors better
                 // anthropic requries tool calls to be valid json, openai doesn't
@@ -284,8 +284,7 @@ impl From<ChatCompletionRequestAssistantMessage> for request::RequestMessage {
                         })
                         .ok()
                 })
-                .collect();
-            parts
+                .collect()
         } else {
             vec![]
         };

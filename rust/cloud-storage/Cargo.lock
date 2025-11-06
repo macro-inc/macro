@@ -210,7 +210,6 @@ dependencies = [
  "reqwest",
  "reqwest-eventsource",
  "schemars",
- "secrecy",
  "serde",
  "serde_json",
  "thiserror 2.0.17",
