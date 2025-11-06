@@ -1,5 +1,15 @@
 use super::request::*;
 
+impl RequestContentKind {
+    pub fn text(text: String) -> Self {
+        Self::Text {
+            text,
+            cache_control: None,
+            citations: vec![],
+        }
+    }
+}
+
 impl SystemPrompt {
     pub fn push_text(&mut self, text: &str) {
         match self {
@@ -19,42 +29,30 @@ impl SystemPrompt {
 }
 
 impl RequestMessage {
-    fn make_multipart(&mut self) {
-        match &self.content {
-            RequestContent::Blocks(_) => {}
-            RequestContent::Text(text) => {
-                (*self) = Self {
-                    content: RequestContent::Blocks(vec![RequestContentKind::Text {
-                        text: text.to_owned(),
-                        cache_control: None,
-                        citations: vec![],
-                    }]),
+    pub fn merge_message(self, other: Self) -> Self {
+        match (self.content, other.content) {
+            (RequestContent::Text(t), b) => Self {
+                role: self.role,
+                content: RequestContent::Blocks(vec![RequestContentKind::text(t)]),
+            }
+            .merge_message(Self {
+                role: other.role,
+                content: b,
+            }),
+            (RequestContent::Blocks(mut a), RequestContent::Blocks(mut b)) => {
+                a.append(&mut b);
+                Self {
                     role: self.role,
+                    content: RequestContent::Blocks(a),
+                }
+            }
+            (RequestContent::Blocks(mut a), RequestContent::Text(t)) => {
+                a.push(RequestContentKind::text(t));
+                Self {
+                    role: self.role,
+                    content: RequestContent::Blocks(a),
                 }
             }
         }
-    }
-
-    fn content_parts_mut(&mut self) -> &mut Vec<RequestContentKind> {
-        self.make_multipart();
-        if let RequestContent::Blocks(ref mut parts) = self.content {
-            parts
-        } else {
-            panic!("how did we get here?")
-        }
-    }
-
-    fn content_parts(&mut self) -> &[RequestContentKind] {
-        self.make_multipart();
-        if let RequestContent::Blocks(ref parts) = self.content {
-            parts.as_slice()
-        } else {
-            panic!("how did we get here?")
-        }
-    }
-
-    pub fn merge_message(&mut self, mut other: Self) {
-        let parts = self.content_parts_mut();
-        parts.extend_from_slice(other.content_parts());
     }
 }
