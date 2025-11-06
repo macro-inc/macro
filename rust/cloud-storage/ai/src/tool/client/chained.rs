@@ -424,9 +424,6 @@ where
 
         tracing::trace!("{:#?}", self.request);
 
-        self.inner
-            .chat_stream(self.request.clone(), None)
-            .await
-            .map_err(anyhow::Error::from)
+        self.inner.chat_stream(self.request.clone(), None).await
     }
 }
