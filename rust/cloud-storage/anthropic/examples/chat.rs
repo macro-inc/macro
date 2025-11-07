@@ -45,7 +45,7 @@ async fn main() {
             } else {
                 let event = event.unwrap();
                 let response_text = match event {
-                    StreamEvent::MessageDelta { delta } => match delta.content {
+                    StreamEvent::MessageDelta { delta, .. } => match delta.content {
                         Some(anthropic::types::response::Content::Text(txt)) => txt,
                         Some(anthropic::types::response::Content::Array(arr)) => {
                             format!("{:?}", arr)
