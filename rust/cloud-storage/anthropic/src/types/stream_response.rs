@@ -1,4 +1,5 @@
 use super::response::MessageResponse;
+use super::response::Usage;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -22,6 +23,8 @@ pub enum StreamEvent {
     },
     MessageDelta {
         delta: MessageResponse,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        usage: Option<Usage>,
     }, // changes to top level message
     Error {
         error: StreamError,
@@ -356,6 +359,7 @@ mod test {
                     service_tier: None,
                 }),
             },
+            usage: None,
         })
         .expect("se message_delta");
         assert_eq!(se, message_delta(), "message_delta");

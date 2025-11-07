@@ -1,6 +1,7 @@
 use crate::client::chat::MessageCompletionResponseStream;
 use crate::error::AnthropicError;
 use crate::types::response::StopReason;
+use crate::types::response::Usage;
 use crate::types::stream_response::{ContentDeltaEvent, StreamEvent};
 use crate::{client::chat::Chat, prelude::CreateMessageRequestBody};
 use async_openai::error::{ApiError, OpenAIError};
@@ -12,6 +13,99 @@ use async_openai::types::{
 use async_stream::stream;
 use futures::StreamExt;
 use serde::Serialize;
+
+// Helper functions to create stream responses
+fn create_response(
+    message_id: &str,
+    model: &str,
+    created: u32,
+    index: u32,
+    delta: ChatCompletionStreamResponseDelta,
+    finish_reason: Option<FinishReason>,
+    usage: Option<async_openai::types::CompletionUsage>,
+) -> CreateChatCompletionStreamResponse {
+    CreateChatCompletionStreamResponse {
+        id: message_id.to_string(),
+        choices: vec![ChatChoiceStream {
+            index,
+            delta,
+            finish_reason,
+            logprobs: None,
+        }],
+        created,
+        model: model.to_string(),
+        system_fingerprint: None,
+        object: "chat.completion.chunk".to_string(),
+        service_tier: None,
+        usage,
+    }
+}
+
+fn create_role_delta(role: Role) -> ChatCompletionStreamResponseDelta {
+    ChatCompletionStreamResponseDelta {
+        role: Some(role),
+        content: None,
+        tool_calls: None,
+        #[allow(deprecated)]
+        function_call: None,
+        refusal: None,
+    }
+}
+
+fn create_content_delta(content: String) -> ChatCompletionStreamResponseDelta {
+    ChatCompletionStreamResponseDelta {
+        role: None,
+        content: Some(content),
+        tool_calls: None,
+        #[allow(deprecated)]
+        function_call: None,
+        refusal: None,
+    }
+}
+
+fn create_tool_call_delta(
+    index: u32,
+    id: Option<String>,
+    type_: Option<ChatCompletionToolType>,
+    name: Option<String>,
+    arguments: Option<String>,
+) -> ChatCompletionStreamResponseDelta {
+    ChatCompletionStreamResponseDelta {
+        role: None,
+        content: None,
+        tool_calls: Some(vec![ChatCompletionMessageToolCallChunk {
+            index,
+            id,
+            r#type: type_,
+            function: Some(FunctionCallStream { name, arguments }),
+        }]),
+        #[allow(deprecated)]
+        function_call: None,
+        refusal: None,
+    }
+}
+
+fn create_empty_delta() -> ChatCompletionStreamResponseDelta {
+    ChatCompletionStreamResponseDelta {
+        role: None,
+        content: None,
+        tool_calls: None,
+        #[allow(deprecated)]
+        function_call: None,
+        refusal: None,
+    }
+}
+
+fn map_stop_reason(stop_reason: StopReason) -> FinishReason {
+    match stop_reason {
+        StopReason::EndTurn => FinishReason::Stop,
+        StopReason::MaxTokens => FinishReason::Length,
+        StopReason::StopSequence => FinishReason::Stop,
+        StopReason::ToolUse => FinishReason::ToolCalls,
+        StopReason::PausTurn => FinishReason::Stop,
+        StopReason::Refusal => FinishReason::ContentFilter,
+    }
+}
 
 pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletionResponseStream {
     Box::pin(stream! {
@@ -34,28 +128,15 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
                         message_id = message.id.clone();
                         model = message.model.clone();
 
-                        Ok(CreateChatCompletionStreamResponse {
-                            id: message_id.clone().unwrap_or_default(),
-                            choices: vec![ChatChoiceStream {
-                                index: 0,
-                                delta: ChatCompletionStreamResponseDelta {
-                                    role: Some(Role::Assistant),
-                                    content: None,
-                                    tool_calls: None,
-                                    #[allow(deprecated)]
-                                    function_call: None,
-                                    refusal: None,
-                                },
-                                finish_reason: None,
-                                logprobs: None,
-                            }],
-                            created: created as u32,
-                            model: model.clone().unwrap_or_default(),
-                            system_fingerprint: None,
-                            object: "chat.completion.chunk".to_string(),
-                            service_tier: None,
-                            usage: None,
-                        })
+                        Ok(create_response(
+                            &message_id.clone().unwrap_or_default(),
+                            &model.clone().unwrap_or_default(),
+                            created as u32,
+                            0,
+                            create_role_delta(Role::Assistant),
+                            None,
+                            None,
+                        ))
                     }
                     StreamEvent::ContentBlockStart { content_block, ..} => {
                         if let ContentDeltaEvent::ToolUse { name, id, .. } = content_block {
@@ -68,119 +149,63 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
                     StreamEvent::ContentBlockDelta { index, delta } => {
                         match delta {
                             ContentDeltaEvent::TextDelta { text } | ContentDeltaEvent::StartTextDelta { text } => {
-                                Ok(CreateChatCompletionStreamResponse {
-                                    id: message_id.clone().unwrap_or_default(),
-                                    choices: vec![ChatChoiceStream {
-                                        index,
-                                        delta: ChatCompletionStreamResponseDelta {
-                                            role: None,
-                                            content: Some(text),
-                                            tool_calls: None,
-                                            #[allow(deprecated)]
-                                            function_call: None,
-                                            refusal: None,
-                                        },
-                                        finish_reason: None,
-                                        logprobs: None,
-                                    }],
-                                    created: created as u32,
-                                    model: model.clone().unwrap_or_default(),
-                                    system_fingerprint: None,
-                                    object: "chat.completion.chunk".to_string(),
-                                    service_tier: None,
-                                    usage: None,
-                                })
+                                Ok(create_response(
+                                    &message_id.clone().unwrap_or_default(),
+                                    &model.clone().unwrap_or_default(),
+                                    created as u32,
+                                    index,
+                                    create_content_delta(text),
+                                    None,
+                                    None,
+                                ))
                             }
                             ContentDeltaEvent::ThinkingDelta { thinking } => {
                                 // OpenAI doesn't have thinking blocks, skip or include as content
-                                Ok(CreateChatCompletionStreamResponse {
-                                    id: message_id.clone().unwrap_or_default(),
-                                    choices: vec![ChatChoiceStream {
-                                        index,
-                                        delta: ChatCompletionStreamResponseDelta {
-                                            role: None,
-                                            content: Some(format!("[Thinking] {}", thinking)),
-                                            tool_calls: None,
-                                            #[allow(deprecated)]
-                                            function_call: None,
-                                            refusal: None,
-                                        },
-                                        finish_reason: None,
-                                        logprobs: None,
-                                    }],
-                                    created: created as u32,
-                                    model: model.clone().unwrap_or_default(),
-                                    system_fingerprint: None,
-                                    object: "chat.completion.chunk".to_string(),
-                                    service_tier: None,
-                                    usage: None,
-                                })
+                                Ok(create_response(
+                                    &message_id.clone().unwrap_or_default(),
+                                    &model.clone().unwrap_or_default(),
+                                    created as u32,
+                                    index,
+                                    create_content_delta(format!("[Thinking] {}", thinking)),
+                                    None,
+                                    None,
+                                ))
                             }
                             ContentDeltaEvent::ToolUse { id, name, input } => {
                                 // Map to OpenAI tool call
-                                Ok(CreateChatCompletionStreamResponse {
-                                    id: message_id.clone().unwrap_or_default(),
-                                    choices: vec![ChatChoiceStream {
+                                Ok(create_response(
+                                    &message_id.clone().unwrap_or_default(),
+                                    &model.clone().unwrap_or_default(),
+                                    created as u32,
+                                    index,
+                                    create_tool_call_delta(
                                         index,
-                                        delta: ChatCompletionStreamResponseDelta {
-                                            role: None,
-                                            content: None,
-                                            tool_calls: Some(vec![ChatCompletionMessageToolCallChunk {
-                                                index,
-                                                id: Some(id),
-                                                r#type: Some(ChatCompletionToolType::Function),
-                                                function: Some(FunctionCallStream {
-                                                    name: Some(name),
-                                                    arguments: Some(input.to_string()),
-                                                }),
-                                            }]),
-                                            #[allow(deprecated)]
-                                            function_call: None,
-                                            refusal: None,
-                                        },
-                                        finish_reason: None,
-                                        logprobs: None,
-                                    }],
-                                    created: created as u32,
-                                    model: model.clone().unwrap_or_default(),
-                                    system_fingerprint: None,
-                                    object: "chat.completion.chunk".to_string(),
-                                    service_tier: None,
-                                    usage: None,
-                                })
+                                        Some(id),
+                                        Some(ChatCompletionToolType::Function),
+                                        Some(name),
+                                        Some(input.to_string()),
+                                    ),
+                                    None,
+                                    None,
+                                ))
                             }
                             ContentDeltaEvent::InputJsonDelta { partial_json } => {
                                 // Stream partial JSON for tool call arguments
-                                Ok(CreateChatCompletionStreamResponse {
-                                    id: message_id.clone().unwrap_or_default(),
-                                    choices: vec![ChatChoiceStream {
+                                Ok(create_response(
+                                    &message_id.clone().unwrap_or_default(),
+                                    &model.clone().unwrap_or_default(),
+                                    created as u32,
+                                    index,
+                                    create_tool_call_delta(
                                         index,
-                                        delta: ChatCompletionStreamResponseDelta {
-                                            role: None,
-                                            content: None,
-                                            tool_calls: Some(vec![ChatCompletionMessageToolCallChunk {
-                                                index,
-                                                id: Some(streaming_tool_id.clone()),
-                                                r#type: None,
-                                                function: Some(FunctionCallStream {
-                                                    name: Some(streaming_tool_name.clone()),
-                                                    arguments: Some(partial_json),
-                                                }),
-                                            }]),
-                                            #[allow(deprecated)]
-                                            function_call: None,
-                                            refusal: None,
-                                        },
-                                        finish_reason: None,
-                                        logprobs: None,
-                                    }],
-                                    created: created as u32,
-                                    model: model.clone().unwrap_or_default(),
-                                    system_fingerprint: None,
-                                    object: "chat.completion.chunk".to_string(),
-                                    service_tier: None,
-                                    usage: None,
-                                })
+                                        Some(streaming_tool_id.clone()),
+                                        None,
+                                        Some(streaming_tool_name.clone()),
+                                        Some(partial_json),
+                                    ),
+                                    None,
+                                    None,
+                                ))
                             }
                             ContentDeltaEvent::SignatureDelta { .. } => {
                                 // Skip signature deltas as OpenAI doesn't have an equivalent
@@ -192,62 +217,29 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
                         // Skip content block stop events
                         continue;
                     }
-                    StreamEvent::MessageDelta { delta } => {
-                        let finish_reason = delta.stop_reason.map(|sr| match sr {
-                            StopReason::EndTurn => FinishReason::Stop,
-                            StopReason::MaxTokens => FinishReason::Length,
-                            StopReason::StopSequence => FinishReason::Stop,
-                            StopReason::ToolUse => FinishReason::ToolCalls,
-                            StopReason::PausTurn => FinishReason::Stop,
-                            StopReason::Refusal => FinishReason::ContentFilter,
-                        });
+                    StreamEvent::MessageDelta { delta , usage } => {
+                        let finish_reason = delta.stop_reason.map(map_stop_reason);
 
-                        Ok(CreateChatCompletionStreamResponse {
-                            id: message_id.clone().unwrap_or_default(),
-                            choices: vec![ChatChoiceStream {
-                                index: 0,
-                                delta: ChatCompletionStreamResponseDelta {
-                                    role: None,
-                                    content: None,
-                                    tool_calls: None,
-                                    #[allow(deprecated)]
-                                    function_call: None,
-                                    refusal: None,
-                                },
-                                finish_reason,
-                                logprobs: None,
-                            }],
-                            created: created as u32,
-                            model: model.clone().unwrap_or_default(),
-                            system_fingerprint: None,
-                            object: "chat.completion.chunk".to_string(),
-                            service_tier: None,
-                            usage: None,
-                        })
+                        Ok(create_response(
+                            &message_id.clone().unwrap_or_default(),
+                            &model.clone().unwrap_or_default(),
+                            created as u32,
+                            0,
+                            create_empty_delta(),
+                            finish_reason,
+                            usage.map(Into::into),
+                        ))
                     }
                     StreamEvent::MessageStop => {
-                        Ok(CreateChatCompletionStreamResponse {
-                            id: message_id.clone().unwrap_or_default(),
-                            choices: vec![ChatChoiceStream {
-                                index: 0,
-                                delta: ChatCompletionStreamResponseDelta {
-                                    role: None,
-                                    content: None,
-                                    tool_calls: None,
-                                    #[allow(deprecated)]
-                                    function_call: None,
-                                    refusal: None,
-                                },
-                                finish_reason: Some(FinishReason::Stop),
-                                logprobs: None,
-                            }],
-                            created: created as u32,
-                            model: model.clone().unwrap_or_default(),
-                            system_fingerprint: None,
-                            object: "chat.completion.chunk".to_string(),
-                            service_tier: None,
-                            usage: None,
-                        })
+                        Ok(create_response(
+                            &message_id.clone().unwrap_or_default(),
+                            &model.clone().unwrap_or_default(),
+                            created as u32,
+                            0,
+                            create_empty_delta(),
+                            Some(FinishReason::Stop),
+                            None,
+                        ))
                     }
                     StreamEvent::Ping => {
                         // Skip ping events
@@ -266,6 +258,18 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
             yield result;
         }
     })
+}
+
+impl From<Usage> for async_openai::types::CompletionUsage {
+    fn from(value: Usage) -> async_openai::types::CompletionUsage {
+        Self {
+            prompt_tokens: value.input_tokens,
+            completion_tokens: value.output_tokens,
+            total_tokens: value.input_tokens + value.output_tokens,
+            prompt_tokens_details: None,
+            completion_tokens_details: None,
+        }
+    }
 }
 
 impl<'c> Chat<'c> {
