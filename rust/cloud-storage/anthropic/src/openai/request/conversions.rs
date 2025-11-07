@@ -86,37 +86,30 @@ impl From<CreateChatCompletionRequest> for request::CreateMessageRequestBody {
     }
 }
 
-fn aggregate_messages(
+pub fn aggregate_messages(
     messages: impl IntoIterator<Item = request::RequestMessage>,
 ) -> Vec<request::RequestMessage> {
-    let (mut msgs, last) = messages
-        .into_iter()
-        .fold((vec![], None), |(mut msgs, agg), current| {
-            match (
-                agg.as_ref().map(|a: &request::RequestMessage| &a.role),
-                &current.role,
-            ) {
-                // no aggregator
-                (None, _) => (msgs, Some(current)),
-                // same
-                (Some(request::Role::Assistant), request::Role::Assistant)
-                | (Some(request::Role::User), request::Role::User) => {
-                    let agg = agg.unwrap().merge_message(current);
-                    (msgs, Some(agg))
-                }
-                // aggregator differs from current
-                _ => {
-                    msgs.push(agg.unwrap());
-                    (msgs, Some(current))
-                }
+    let mut result = Vec::new();
+    let mut accumulator: Option<request::RequestMessage> = None;
+    for current in messages {
+        match accumulator.take() {
+            None => {
+                accumulator = Some(current);
             }
-        });
-    if let Some(last) = last {
-        msgs.push(last);
-        msgs
-    } else {
-        msgs
+            Some(acc) if acc.role == current.role => {
+                let acc = acc.merge_message(current);
+                accumulator = Some(acc);
+            }
+            Some(acc) => {
+                result.push(acc);
+                accumulator = Some(current);
+            }
+        }
     }
+    if let Some(last) = accumulator {
+        result.push(last);
+    }
+    result
 }
 
 impl From<Vec<ChatCompletionRequestSystemMessage>> for request::SystemPrompt {
@@ -161,9 +154,9 @@ impl TryFrom<ChatCompletionRequestMessage> for request::RequestMessage {
     type Error = MessageConversionError;
     fn try_from(value: ChatCompletionRequestMessage) -> Result<Self, Self::Error> {
         match value {
-            ChatCompletionRequestMessage::User(user_msg) => Self::try_from(user_msg),
+            ChatCompletionRequestMessage::User(user_msg) => Ok(Self::from(user_msg)),
             ChatCompletionRequestMessage::Assistant(assistant_msg) => Ok(Self::from(assistant_msg)),
-            ChatCompletionRequestMessage::Tool(tool_msg) => Self::try_from(tool_msg),
+            ChatCompletionRequestMessage::Tool(tool_msg) => Ok(Self::from(tool_msg)),
             ChatCompletionRequestMessage::System(prompt) => {
                 Err(MessageConversionError::SystemPrompt(prompt))
             }
@@ -178,9 +171,8 @@ impl TryFrom<ChatCompletionRequestMessage> for request::RequestMessage {
 }
 
 /// openai:tool_result_message -> anthropic:user_message
-impl TryFrom<ChatCompletionRequestToolMessage> for request::RequestMessage {
-    type Error = MessageConversionError;
-    fn try_from(tool_msg: ChatCompletionRequestToolMessage) -> Result<Self, Self::Error> {
+impl From<ChatCompletionRequestToolMessage> for request::RequestMessage {
+    fn from(tool_msg: ChatCompletionRequestToolMessage) -> Self {
         let tool = request::RequestContentKind::ToolResult {
             tool_use_id: tool_msg.tool_call_id,
             cache_control: None,
@@ -197,18 +189,16 @@ impl TryFrom<ChatCompletionRequestToolMessage> for request::RequestMessage {
             },
             is_err: None,
         };
-        // ???
-        Ok(Self {
+        Self {
             role: request::Role::User,
             content: request::RequestContent::Blocks(vec![tool]),
-        })
+        }
     }
 }
 
 /// openai::user_msg -> anthropic::user_msg
-impl TryFrom<ChatCompletionRequestUserMessage> for request::RequestMessage {
-    type Error = MessageConversionError;
-    fn try_from(user: ChatCompletionRequestUserMessage) -> Result<Self, Self::Error> {
+impl From<ChatCompletionRequestUserMessage> for request::RequestMessage {
+    fn from(user: ChatCompletionRequestUserMessage) -> Self {
         match user.content {
             async_openai::types::ChatCompletionRequestUserMessageContent::Array(arr) => {
                 let content: Vec<request::RequestContentKind> = arr.into_iter()
@@ -229,15 +219,15 @@ impl TryFrom<ChatCompletionRequestUserMessage> for request::RequestMessage {
                         }
                     })
                     .collect();
-                Ok(request::RequestMessage {
+                request::RequestMessage {
                     content: request::RequestContent::Blocks(content),
                     role: request::Role::User,
-                })
+                }
             }
-            async_openai::types::ChatCompletionRequestUserMessageContent::Text(text) => Ok(Self {
+            async_openai::types::ChatCompletionRequestUserMessageContent::Text(text) => Self {
                 role: request::Role::User,
                 content: request::RequestContent::Text(text),
-            }),
+            },
         }
     }
 }
