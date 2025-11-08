@@ -1,0 +1,4 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  database-cleanup:macro_db_secret_key: macrodb-rds-proxy-dev
