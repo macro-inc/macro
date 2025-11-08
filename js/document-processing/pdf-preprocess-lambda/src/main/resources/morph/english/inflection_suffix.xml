@@ -1,0 +1,69 @@
+<morphology>
+    <verb>
+        <affix type="suffix" form="s" pos="ISZ" org_pos="VBZ">
+            <rule base_pos="VB" affix_form="ies" replacements="y" examples="studies"/>
+            <rule base_pos="VB" affix_form="es"  replacements=""  examples="pushes"/>
+            <rule base_pos="VB" affix_form="s"   replacements=""  examples="takes"/>
+        </affix>
+        
+        <affix type="suffix" form="ing" pos="ISG" org_pos="VBG">
+            <rule base_pos="VB" affix_form="ying" replacements="ie" examples="lying"/>
+            <rule base_pos="VB" affix_form="ing"  replacements=",e" examples="feeling, running, taking" doubleConsonants="true"/>
+        </affix>
+        
+        <affix type="suffix" form="d" pos="ISD" org_pos="VBD|VBN">
+            <rule base_pos="VB" affix_form="ied" replacements="y" examples="denied"/>
+            <rule base_pos="VB" affix_form="ed"  replacements=""  examples="entered, zipped" doubleConsonants="true"/>
+            <rule base_pos="VB" affix_form="d"   replacements=""  examples="heard"/>
+        </affix>
+        
+        <affix type="suffix" form="n" pos="ISD" org_pos="VBD|VBN">
+            <rule base_pos="VB" affix_form="n" replacements="" examples="drawn"/>
+        </affix>
+        
+        <affix type="suffix" form="u" pos="ISD" org_pos="VBD|VBN">
+            <rule base_pos="VB" affix_form="ung" replacements="ing" examples="clung"/>
+        </affix>
+    </verb>
+    <noun>
+        <affix type="suffix" form="s" pos="ISP" org_pos="NNS|NNPS">
+            <rule base_pos="NN" affix_form="ies"  replacements="y"    examples="studies"/>
+            <rule base_pos="NN" affix_form="es"   replacements=""     examples="crosses"/>
+            <rule base_pos="NN" affix_form="s"    replacements=""     examples="areas"/>
+        </affix>
+        
+        <affix type="suffix" form="e" pos="ISP" org_pos="NNS|NNPS">
+            <rule base_pos="NN" affix_form="men"  replacements="man"  examples="gentlemen"/>
+            <rule base_pos="NN" affix_form="ae"   replacements="a"    examples="vertebrae"/>
+            <rule base_pos="NN" affix_form="i"    replacements="us"   examples="foci"/>
+        </affix>
+        
+        <affix type="suffix" form="a" pos="ISP" org_pos="NNS|NNPS">
+            <rule base_pos="NN" affix_form="a"  replacements="um" examples="optima"/>
+        </affix>
+    </noun>
+    <adjective>
+        <affix type="suffix" form="er" pos="ISR" org_pos="JJR">
+            <rule base_pos="JJ" affix_form="ier" replacements="y" examples="easier"/>
+            <rule base_pos="JJ" affix_form="er"  replacements=""  examples="smaller, bigger" doubleConsonants="true"/>
+            <rule base_pos="JJ" affix_form="er"  replacements="e" examples="larger"/>
+        </affix>
+        
+        <affix type="suffix" form="est" pos="IST" org_pos="JJS">
+            <rule base_pos="JJ" affix_form="iest" replacements="y" examples="earliest"/>
+            <rule base_pos="JJ" affix_form="est"  replacements=""  examples="smallest, biggest" doubleConsonants="true"/>
+            <rule base_pos="JJ" affix_form="est"  replacements="e" examples="largest"/>
+        </affix>
+    </adjective>
+    <adverb>
+        <affix type="suffix" form="er" pos="ISR" org_pos="RBR">
+            <rule base_pos="RB" affix_form="ier" replacements="y"  examples="earlier"/>
+            <rule base_pos="RB" affix_form="er"  replacements=",e" examples="sooner, larger"/>
+        </affix>
+        
+        <affix type="suffix" form="est" pos="IST" org_pos="RBS">
+            <rule base_pos="RB" affix_form="iest" replacements="y"  examples="earliest"/>
+            <rule base_pos="RB" affix_form="est"  replacements=",e" examples="soonest, largest"/>
+        </affix>
+    </adverb>
+</morphology>

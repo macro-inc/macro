@@ -1,0 +1,9 @@
+*.js
+node_modules
+dist
+coverage
+.DS_Store
+!.eslintrc.js
+!.prettierrc.js
+!jest.setup.js
+!setup.tests.js

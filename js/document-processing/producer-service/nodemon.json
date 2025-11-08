@@ -1,0 +1,6 @@
+{
+  "verbose": true,
+  "ignore": [],
+  "watch": ["src/**/*.ts"],
+  "exec": "ts-node ./src/server.ts"
+}

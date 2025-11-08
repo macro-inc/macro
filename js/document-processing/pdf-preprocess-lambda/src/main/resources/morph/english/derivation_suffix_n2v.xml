@@ -1,0 +1,44 @@
+<morphology>
+    <noun>
+        <affix type="suffix" form="al" pos="DSN" org_pos="NN">
+            <rule base_pos="VB" affix_form="al" replacements="e" examples="arrival"/>
+        </affix>
+        
+        <affix type="suffix" form="ance" pos="DSN" org_pos="NN">
+            <rule base_pos="VB" affix_form="iance" replacements="y"      examples="defiance"/>
+            <rule base_pos="VB" affix_form="ance"  replacements=",e,ate" examples="annoyance, insurance, deviance"/>
+        </affix>
+        
+        <affix type="suffix" form="ant" pos="DSN" org_pos="NN">
+            <rule base_pos="VB" affix_form="ant" replacements=",e,ate" examples="assistant, servant, immigrant"/>
+            <rule base_pos="VB" affix_form="ent" replacements=",e"     examples="resident"/>
+        </affix>
+        
+        <affix type="suffix" form="er" pos="DSN" org_pos="NN">
+            <rule base_pos="VB" affix_form="ier" replacements="y"  examples="carrier"/>
+            <rule base_pos="VB" affix_form="er"  replacements=",e" examples="reader, writer"/>
+            <rule base_pos="VB" affix_form="ar"  replacements=",e" examples="beggar, liar"/>
+            <rule base_pos="VB" affix_form="or"  replacements=",e" examples="actor, abator"/>
+        </affix>
+        
+        <affix type="suffix" form="ism" pos="DSN" org_pos="NN">
+            <rule base_pos="VB" affix_form="ism" replacements="ise" examples="baptism"/>
+        </affix>
+        
+        <affix type="suffix" form="ment" pos="DSN" org_pos="NN">
+            <rule base_pos="VB" affix_form="ment" replacements="" examples="development"/>
+        </affix>
+
+        <affix type="suffix" form="sis" pos="DSN" org_pos="NN">
+            <rule base_pos="VB" affix_form="sis" replacements="se" examples="diagnosis"/>
+        </affix>
+        
+        <affix type="suffix" form="tion" pos="DSN" org_pos="NN">
+            <rule base_pos="VB" affix_form="unciation" replacements="ounce"     examples="pronunciation"/>
+            <rule base_pos="VB" affix_form="ication"   replacements="y"         examples="verification"/>
+            <rule base_pos="VB" affix_form="ation"     replacements=",e"        examples="flirtation, admiration"/>
+            <rule base_pos="VB" affix_form="tion"      replacements="e,t,te"    examples="introduction, resurrection, alienation"/>
+            <rule base_pos="VB" affix_form="sion"      replacements="s,t,de,se" examples="obsession, diversion, decision, illusion"/>
+        </affix>
+    </noun>
+</morphology>

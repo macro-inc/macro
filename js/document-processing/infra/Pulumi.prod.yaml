@@ -1,0 +1,8 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  document-processing:datadog_api_key:
+    secure: AAABABDVp3TnZ6e1TCg/JSKpVT0JVz9bRuPuJr8Tqbkb+vNZMhxLXt8qcMO7BSM9Yh2xbZHGqEmuG1K4VQlKvw==
+  document-processing:document_storage_service_auth_key: document-storage-service-auth-key-prod
+  document-processing:macro_db_secret_key: macro-db-prod
+  document-processing:macro_db_proxy_secret_key: macrodb-rds-proxy-prod

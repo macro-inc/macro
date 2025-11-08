@@ -1,0 +1,10 @@
+.github
+__tests__
+src
+jest.config.ts
+jest.config.js
+tsconfig.json
+coverage
+.npmrc
+setup.tests.js
+README.md

@@ -1,0 +1,8 @@
+jars/itext-2.1.7.jar filter=lfs diff=lfs merge=lfs -text
+jars/pdfbox-3.0.0-SNAPSHOT.jar filter=lfs diff=lfs merge=lfs -text
+jars/sfntly-javadoc.jar filter=lfs diff=lfs merge=lfs -text
+jars/DocuConverter.jar filter=lfs diff=lfs merge=lfs -text
+jars/FontVerter-1.2.22.jar filter=lfs diff=lfs merge=lfs -text
+jars/batik-all-1.11.jar filter=lfs diff=lfs merge=lfs -text
+jars/docs-to-pdf-converter-1.8.jar filter=lfs diff=lfs merge=lfs -text
+jars/fontbox-3.0.0-SNAPSHOT.jar filter=lfs diff=lfs merge=lfs -text

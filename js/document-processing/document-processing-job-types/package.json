@@ -1,0 +1,38 @@
+{
+  "name": "@macro-inc/document-processing-job-types",
+  "version": "0.2.0",
+  "description": "Stores all document processing job types and job validation",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "packageManager": "pnpm@9.15.4",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/coparse-inc/macro-api.git"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "engineStrict": true,
+  "scripts": {
+    "build": "rm -rf ./dist && tsc",
+    "test": "jest",
+    "test:coverage": "jest --collectCoverage=true",
+    "prepublish": "pnpm run build",
+    "publish:dev": "pnpm publish --tag dev --publish-branch dev",
+    "publish:latest": "pnpm publish --tag latest --publish-branch dev"
+  },
+  "keywords": [],
+  "author": "Hutch",
+  "license": "ISC",
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.12.7",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "zod": "^3.23.4"
+  }
+}

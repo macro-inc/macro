@@ -1,0 +1,14 @@
+{
+  "name": "document-processing-infra",
+  "main": "index.ts",
+  "packageManager": "pnpm@9.15.4",
+  "devDependencies": {
+    "@types/node": "^18"
+  },
+  "dependencies": {
+    "@pulumi/aws": "^6.0.0",
+    "@pulumi/aws-native": "^0.102.0",
+    "@pulumi/awsx": "^2.0.2",
+    "@pulumi/pulumi": "^3.0.0"
+  }
+}

@@ -1,0 +1,194 @@
+<morphology>
+    <verb>
+        <affix type="suffix" form="ify" pos="DSV" org_pos="VB">
+            <rule base_pos="NN" affix_form="ify" replacements=",y,or,ity" examples="fortify, glorify, terrify, qualify"/>
+            <rule base_pos="JJ" affix_form="ify" replacements="e,y"       examples="simplify, fancify"/>
+        </affix>
+        
+        <affix type="suffix" form="ize" pos="DSV" org_pos="VB">
+            <rule base_pos="NN" affix_form="ize" replacements="" examples="tyrannize"/>
+            <rule base_pos="JJ" affix_form="ize" replacements="" examples="crystallize"/>
+            <rule base_pos="NN" affix_form="ise" replacements="" examples="terrorise"/>
+            <rule base_pos="JJ" affix_form="ise" replacements="" examples="normalise"/>
+        </affix>
+    </verb>
+    
+    <noun>
+        <affix type="suffix" form="al" pos="DSN" org_pos="NN">
+            <rule base_pos="VB" affix_form="al" replacements="e" examples="arrival"/>
+        </affix>
+        
+        <affix type="suffix" form="ance" pos="DSN" org_pos="NN">
+            <rule base_pos="VB" affix_form="iance" replacements="y"      examples="defiance"/>
+            <rule base_pos="VB" affix_form="ance"  replacements=",e,ate" examples="annoyance, insurance, deviance"/>
+            <rule base_pos="JJ" affix_form="ance"  replacements="ant"    examples="relevance"/>
+            <rule base_pos="JJ" affix_form="ancy"  replacements="ant"    examples="pregnancy"/>
+            <rule base_pos="JJ" affix_form="ence"  replacements="ent"    examples="difference"/>
+            <rule base_pos="JJ" affix_form="ency"  replacements="ent"    examples="fluency"/>
+            <rule base_pos="JJ" affix_form="acy"   replacements="ate"    examples="accurate"/>
+        </affix>
+        
+        <affix type="suffix" form="ant" pos="DSN" org_pos="NN">
+            <rule base_pos="VB" affix_form="ant" replacements=",e,ate" examples="assistant, servant, immigrant"/>
+            <rule base_pos="VB" affix_form="ent" replacements=",e"     examples="resident"/>
+        </affix>
+        
+        <affix type="suffix" form="er" pos="DSN" org_pos="NN">
+            <rule base_pos="VB" affix_form="ier" replacements="y"  examples="carrier"/>
+            <rule base_pos="NN" affix_form="ier" replacements=",e" examples="cashier, financier"/>
+            <rule base_pos="VB" affix_form="er"  replacements=",e" examples="reader, writer"/>
+            <rule base_pos="VB" affix_form="ar"  replacements=",e" examples="beggar, liar"/>
+            <rule base_pos="VB" affix_form="or"  replacements=",e" examples="actor, abator"/>
+        </affix>
+        
+        <affix type="suffix" form="hood" pos="DSN" org_pos="NN">
+            <rule base_pos="NN" affix_form="hood" replacements="" examples="childhood"/>
+        </affix>
+        
+        <affix type="suffix" form="ism" pos="DSN" org_pos="NN">
+            <rule base_pos="VB" affix_form="ism" replacements="ise" examples="baptism"/>
+            <rule base_pos="NN" affix_form="ism" replacements=""    examples="capitalism"/>
+        </affix>
+        
+        <affix type="suffix" form="ist" pos="DSN" org_pos="NN">
+            <rule base_pos="NN" affix_form="ist" replacements=",y" examples="artist, agronomist"/>
+        </affix>
+        
+        <affix type="suffix" form="ity" pos="DSN" org_pos="NN">
+            <rule base_pos="JJ" affix_form="ility" replacements="le"     examples="readability"/>
+            <rule base_pos="JJ" affix_form="ity"   replacements=",e,ous" examples="normality, adversity, frivolity"/>
+        </affix>
+        
+        <affix type="suffix" form="man" pos="DSN" org_pos="NN">
+            <rule base_pos="NN" affix_form="woman" replacements="" examples="businesswoman"/>
+            <rule base_pos="NN" affix_form="man"   replacements="" examples="chairman"/>
+        </affix>
+        
+        <affix type="suffix" form="ment" pos="DSN" org_pos="NN">
+            <rule base_pos="VB" affix_form="ment" replacements="" examples="development"/>
+        </affix>
+        
+        <affix type="suffix" form="ness" pos="DSN" org_pos="NN">
+            <rule base_pos="JJ" affix_form="iness" replacements="y" examples="happiness"/>
+            <rule base_pos="JJ" affix_form="ness"  replacements=""  examples="usefulness"/>
+        </affix>
+        
+        <affix type="suffix" form="ship" pos="DSN" org_pos="NN">
+            <rule base_pos="NN" affix_form="ship" replacements="" examples="friendship"/>
+        </affix>
+        
+        <affix type="suffix" form="sis" pos="DSN" org_pos="NN">
+            <rule base_pos="VB" affix_form="sis" replacements="se" examples="diagnosis"/>
+        </affix>
+        
+        <affix type="suffix" form="tion" pos="DSN" org_pos="NN">
+            <rule base_pos="VB" affix_form="unciation" replacements="ounce"     examples="pronunciation"/>
+            <rule base_pos="VB" affix_form="ication"   replacements="y"         examples="verification"/>
+            <rule base_pos="VB" affix_form="ation"     replacements=",e"        examples="flirtation, admiration"/>
+            <rule base_pos="VB" affix_form="tion"      replacements="e,t,te"    examples="introduction, resurrection, alienation"/>
+            <rule base_pos="VB" affix_form="sion"      replacements="s,t,de,se" examples="obsession, diversion, decision, illusion"/>
+        </affix>
+        
+        <affix type="suffix" form="ware" pos="DSN" org_pos="NN">
+            <rule base_pos="NN" affix_form="ware" replacements="" examples="groupware"/>
+            <rule base_pos="JJ" affix_form="ware" replacements="" examples="freeware"/>
+        </affix>
+        
+        <affix type="suffix" form="ty" pos="DSN" org_pos="NN">
+            <rule base_pos="JJ" affix_form="ty" replacements="" examples="loyalty"/>
+        </affix>
+    </noun>
+
+    <adjective>
+        <affix type="suffix" form="able" pos="DSJ" org_pos="JJ">
+            <rule base_pos="VB" affix_form="iable" replacements="y"      examples="certifiable"/>
+            <rule base_pos="VB" affix_form="able"  replacements=",e,ate" examples="readable, writable, irritable"/>
+            <rule base_pos="NN" affix_form="able"  replacements=""       examples="fashionable"/>
+        </affix>
+        
+        <affix type="suffix" form="al" pos="DSJ" org_pos="JJ">
+            <rule base_pos="NN" affix_form="ical" replacements="y"          examples="academical"/>
+            <rule base_pos="NN" affix_form="ial"  replacements="y"          examples="colonial"/>
+            <rule base_pos="NN" affix_form="al"   replacements=",a,e,um,us" examples="accidental, visceral, universal, bacterial, focal"/>
+        </affix>
+        
+        <affix type="suffix" form="ant" pos="DSJ" org_pos="JJ">
+            <rule base_pos="VB" affix_form="ant" replacements=",e,ate" examples="relaxant, pleasant, dominant"/>
+            <rule base_pos="VB" affix_form="ent" replacements=",e"     examples="absorbent, abhorrent, adherent"/>
+        </affix>
+        
+        <affix type="suffix" form="ary" pos="DSJ" org_pos="JJ">
+            <rule base_pos="NN" affix_form="ary" replacements=",e" examples="cautionary, imaginary"/>
+        </affix>
+        
+        <affix type="suffix" form="ful" pos="DSJ" org_pos="JJ">
+            <rule base_pos="NN" affix_form="iful" replacements="y" examples="beautiful"/>
+            <rule base_pos="NN" affix_form="ful"  replacements=""  examples="useful"/>
+        </affix>
+        
+        <affix type="suffix" form="ic" pos="DSJ" org_pos="JJ">
+            <rule base_pos="NN" affix_form="tic" replacements="e,y" examples="diagnostic, fantastic"/>
+            <rule base_pos="JJ" affix_form="ic"  replacements=",y"  examples="alcoholic, academic"/>
+        </affix>
+        
+        <affix type="suffix" form="ish" pos="DSJ" org_pos="JJ">
+            <rule base_pos="VB" affix_form="ish" replacements=",e" examples="bearish, ticklish"/>
+            <rule base_pos="NN" affix_form="ish" replacements=",e" examples="boyish"/>
+            <rule base_pos="JJ" affix_form="ish" replacements=",e" examples="foolish, reddish, bluish"/>
+        </affix>
+        
+        <affix type="suffix" form="ive" pos="DSJ" org_pos="JJ">
+            <rule base_pos="VB" affix_form="ative" replacements=",ate" examples="talkative, adjudicative"/>
+            <rule base_pos="VB" affix_form="sive"  replacements="d,s"  examples="defensive, passive"/>
+        </affix>
+        
+        <affix type="suffix" form="less" pos="DSJ" org_pos="JJ">
+            <rule base_pos="NN" affix_form="less" replacements="" examples="useless"/>
+        </affix>
+        
+        <affix type="suffix" form="like" pos="DSJ" org_pos="JJ">
+            <rule base_pos="NN" affix_form="like" replacements="" examples="childlike"/>
+        </affix>
+        
+        <affix type="suffix" form="ly" pos="DSJ" org_pos="JJ">
+            <rule base_pos="NN" affix_form="ly" replacements="" examples="weekly"/>
+        </affix>
+        
+        <affix type="suffix" form="most" pos="DSJ" org_pos="JJ">
+            <rule base_pos="JJ" affix_form="most" replacements="" examples="innermost"/>
+        </affix>
+        
+        <affix type="suffix" form="ous" pos="DSJ" org_pos="JJ">
+            <rule base_pos="NN" affix_form="eous" replacements=""      examples="courteous"/>
+            <rule base_pos="NN" affix_form="ious" replacements="y"     examples="glorious"/>
+            <rule base_pos="NN" affix_form="rous" replacements="er"    examples="disastrous"/>
+            <rule base_pos="NN" affix_form="ous"  replacements=",y,on" examples="cancerous, analogous, religious"/>
+        </affix>
+        
+        <affix type="suffix" form="some" pos="DSJ" org_pos="JJ">
+            <rule base_pos="VB" affix_form="isome" replacements="y" examples="worrisome"/>
+            <rule base_pos="NN" affix_form="some"  replacements=""  examples="troublesome"/>
+            <rule base_pos="JJ" affix_form="some"  replacements=""  examples="wholesome, fulsome"/>
+        </affix>
+        
+        <affix type="suffix" form="tial" pos="DSJ" org_pos="JJ">
+            <rule base_pos="NN" affix_form="tial" replacements="ce" examples="influential"/>
+        </affix>
+        
+        <affix type="suffix" form="wise" pos="DSJ" org_pos="JJ">
+            <rule base_pos="NN" affix_form="wise" replacements="" examples="clockwise"/>
+        </affix>
+        
+        <affix type="suffix" form="y" pos="DSJ" org_pos="JJ">
+            <rule base_pos="NN" affix_form="y" replacements=",e" examples="easy, runny, messy"/>
+        </affix>
+    </adjective>
+    
+    <adverb>
+        <affix type="suffix" form="ly" pos="DSR" org_pos="RB">
+            <rule base_pos="JJ" affix_form="ally" replacements=""      examples="electronically"/>
+            <rule base_pos="JJ" affix_form="ily"  replacements="y"     examples="easily"/>
+            <rule base_pos="JJ" affix_form="ly"   replacements=",l,le" examples="sadly, fully, incredibly"/>
+        </affix>
+    </adverb>
+</morphology>
