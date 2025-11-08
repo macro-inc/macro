@@ -1,0 +1,127 @@
+version: '3.8'
+services:
+    macrodb:
+    image: postgres:16
+    container_name: macrodb
+    ports:
+      - '5432:5432'
+    expose:
+      - '5432'
+    environment:
+      - POSTGRES_USER=user
+      - POSTGRES_PASSWORD=password
+      - PGPASSWORD=password
+    volumes:
+      - db:/var/lib/postgresql/data
+      - ./database/Initiate.sql:/etc/Initiate.sql
+      - ./database/Clear.sql:/etc/Clear.sql
+    networks:
+      - macro_api_network
+
+  macrocache:
+    image: 'redis/redis-stack:latest'
+    container_name: macrocache
+    ports:
+      - '6379:6379' # Expose Redis on the default port
+      - '8001:8001' # Expose Redis Stack Server UI/tools
+    environment:
+      - ALLOW_EMPTY_PASSWORD=yes
+    volumes:
+      - cache:/data
+    networks:
+      - macro_api_network
+  redis-node-0:
+    image: bitnami/redis-cluster:7.0
+    environment:
+      - REDIS_PORT_NUMBER=6369
+      - REDIS_CLUSTER_PREFERRED_ENDPOINT_TYPE=hostname
+      - REDIS_CLUSTER_ANNOUNCE_HOSTNAME=redis-node-0
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_CLUSTER_CREATOR=yes
+      - REDIS_NODES=redis-node-0:6369,redis-node-1:6380,redis-node-2:6381, redis-node-3:6382,redis-node-4:6383, redis-node-5:6384
+    ports:
+      - '6369:6369'
+    depends_on: [redis-node-1, redis-node-2, redis-node-3, redis-node-4]
+    networks:
+      - macro_api_network
+
+  redis-node-1:
+    image: bitnami/redis-cluster:7.0
+    environment:
+      - REDIS_PORT_NUMBER=6380
+      - REDIS_CLUSTER_PREFERRED_ENDPOINT_TYPE=hostname
+      - REDIS_CLUSTER_ANNOUNCE_HOSTNAME=redis-node-1
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_NODES=redis-node-0:6369,redis-node-1:6380,redis-node-2:6381, redis-node-3:6382,redis-node-4:6383, redis-node-5:6384
+    ports:
+      - '6380:6380'
+    networks:
+      - macro_api_network
+
+  redis-node-2:
+    image: bitnami/redis-cluster:7.0
+    environment:
+      - REDIS_PORT_NUMBER=6381
+      - REDIS_CLUSTER_PREFERRED_ENDPOINT_TYPE=hostname
+      - REDIS_CLUSTER_ANNOUNCE_HOSTNAME=redis-node-2
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_NODES=redis-node-0:6369,redis-node-1:6380,redis-node-2:6381, redis-node-3:6382,redis-node-4:6383, redis-node-5:6384
+    ports:
+      - '6381:6381'
+    networks:
+      - macro_api_network
+
+  redis-node-3:
+    image: bitnami/redis-cluster:7.0
+    environment:
+      - REDIS_PORT_NUMBER=6382
+      - REDIS_CLUSTER_PREFERRED_ENDPOINT_TYPE=hostname
+      - REDIS_CLUSTER_ANNOUNCE_HOSTNAME=redis-node-3
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_NODES=redis-node-0:6369,redis-node-1:6380,redis-node-2:6381, redis-node-3:6382,redis-node-4:6383, redis-node-5:6384
+    ports:
+      - '6382:6382'
+    networks:
+      - macro_api_network
+
+  redis-node-4:
+    image: bitnami/redis-cluster:7.0
+    environment:
+      - REDIS_PORT_NUMBER=6383
+      - REDIS_CLUSTER_PREFERRED_ENDPOINT_TYPE=hostname
+      - REDIS_CLUSTER_ANNOUNCE_HOSTNAME=redis-node-4
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_NODES=redis-node-0:6369,redis-node-1:6380,redis-node-2:6381, redis-node-3:6382,redis-node-4:6383, redis-node-5:6384
+    ports:
+      - '6383:6383'
+    networks:
+      - macro_api_network
+
+  redis-node-5:
+    image: bitnami/redis-cluster:7.0
+    environment:
+      - REDIS_PORT_NUMBER=6384
+      - REDIS_CLUSTER_PREFERRED_ENDPOINT_TYPE=hostname
+      - REDIS_CLUSTER_ANNOUNCE_HOSTNAME=redis-node-5
+      - ALLOW_EMPTY_PASSWORD=yes
+      - REDIS_NODES=redis-node-0:6369,redis-node-1:6380,redis-node-2:6381, redis-node-3:6382,redis-node-4:6383, redis-node-5:6384
+    ports:
+      - '6384:6384'
+    networks:
+      - macro_api_network
+
+networks:
+  macro_api_network:
+    name: macro_api_network
+    driver: bridge
+  macro_fusion_network:
+    # external: true
+volumes:
+  db:
+    name: macro_db_volume
+    external: true
+    # driver: local
+  cache:
+    name: macro_cache_volume
+    # external: true
+    driver: local
