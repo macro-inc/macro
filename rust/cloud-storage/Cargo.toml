@@ -161,7 +161,7 @@ serde_json = { version = "1.0.132" }
 serde_repr = "0.1"
 serde_with = { version = "3.12.0", features = ["base64"] }
 sha2 = "0.10.8"
-sqlx = { version = "0.7.4", features = [
+sqlx = { version = "0.8.1", features = [
   "chrono",
   "postgres",
   "runtime-tokio-native-tls",
