@@ -1,0 +1,12 @@
+lambda_name := file_name(justfile_directory())
+
+mod ci '../ci.just'
+
+deploy-dev:
+    just ci::deploy-dev search-upload
+
+test:
+    cargo test --all-features
+
+build:
+    cargo lambda build --release --bin {{lambda_name}} --output-format zip

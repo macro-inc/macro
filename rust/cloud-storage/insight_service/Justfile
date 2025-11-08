@@ -1,0 +1,35 @@
+mod ci '../ci.just'
+
+deploy-dev:
+  just ci::deploy-dev insight-service
+
+run *args:
+  cargo run --features macro_middleware/local_auth {{args}}
+
+api *args:
+  cargo run --bin insight_service_api {{args}}
+
+create-localstack:
+  docker run -d --name localstack -p 4566:4566 -e SERVICES=sqs localstack/localstack
+
+create-queue:
+  AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
+    --queue-name insight-context-queue.fifo \
+    --attributes FifoQueue=true
+
+purge-queue:
+	AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
+		--queue-url http://localhost:4566/000000000000/insight-context-queue.fifo
+
+send-chat-context JSON_FILE:
+	AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs send-message \
+	  --queue-url http://localhost:4566/000000000000/insight-context-queue.fifo \
+	  --message-body file://{{JSON_FILE}} \
+	  --message-group-id chat \
+	  --message-deduplication-id $(uuidgen)
+
+prepare-test: 
+	rm -rf ./migrations && cp -r ../macro_db_client/migrations ./
+
+list-queues:
+	awslocal sqs list-queues

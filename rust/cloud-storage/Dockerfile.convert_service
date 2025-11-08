@@ -1,0 +1,72 @@
+FROM rust:latest AS chef 
+ENV SQLX_OFFLINE=true
+# We only pay the installation cost once, 
+# it will be cached from the second build onwards
+# Adding dependencies for bindgen
+RUN apt-get update && apt-get install -y \
+  llvm \
+  libclang-dev \
+  clang \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
+RUN cargo install cargo-chef cargo-strip 
+WORKDIR /app
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare  --recipe-path recipe.json --bin convert_service
+
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+# Build dependencies - this is the caching Docker layer!
+RUN cargo chef cook --release --recipe-path recipe.json --bin convert_service
+# Build application
+COPY . .
+RUN cargo build --release --bin convert_service && \
+  cargo strip && \
+  mv /app/target/release/convert_service /app/svc
+
+FROM debian:trixie-slim AS lok
+RUN : \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+  curl \
+  tar \
+  ca-certificates \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
+RUN curl -L -O https://github.com/CollaboraOnline/online/releases/download/for-code-assets/core-co-25.04-assets.tar.gz
+# This creates a folder include and instdir
+RUN tar -xvf core-co-25.04-assets.tar.gz
+
+FROM ubuntu:noble as base
+WORKDIR /app
+
+# Accept the Microsoft core fonts license
+RUN echo "ttf-mscorefonts-installer msttcorefonts/accepted-mscorefonts-eula select true" | debconf-set-selections
+
+RUN : \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+  libreoffice \
+  libreofficekit-dev \
+  ca-certificates \
+  openssl \
+  dumb-init \
+  libkrb5-3 \
+  ttf-mscorefonts-installer \
+  wget xfonts-utils \
+  cabextract \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
+
+# Refresh font cache
+RUN fc-cache -f -v
+
+COPY --from=builder /app/svc /app/svc
+COPY --from=lok /instdir /app/lok/instdir
+COPY --from=lok /include /app/lok/include
+RUN chmod +x svc
+ENV PORT=8080
+EXPOSE ${PORT}
+ENTRYPOINT ["dumb-init", "./svc"]

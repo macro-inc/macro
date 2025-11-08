@@ -1,0 +1,7 @@
+[package]
+edition = "2024"
+name = "macro_axum_utils"
+publish = false
+version = "0.1.0"
+
+[dependencies]

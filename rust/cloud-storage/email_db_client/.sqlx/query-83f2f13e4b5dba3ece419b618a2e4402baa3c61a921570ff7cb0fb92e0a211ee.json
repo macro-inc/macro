@@ -1,0 +1,33 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_messages (\n            id, provider_id, link_id, thread_id, provider_thread_id,\n            replying_to_id, subject, from_contact_id, sent_at,\n            has_attachments, is_read, is_starred, is_sent, is_draft,\n            body_text, body_html_sanitized, body_macro, headers_jsonb,\n            created_at, updated_at\n        )\n        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20)\n        ON CONFLICT (id) DO UPDATE SET\n            id = EXCLUDED.id,\n            provider_id = EXCLUDED.provider_id,\n            thread_id = EXCLUDED.thread_id,\n            provider_thread_id = EXCLUDED.provider_thread_id,\n            replying_to_id = EXCLUDED.replying_to_id,\n            provider_history_id = EXCLUDED.provider_history_id,\n            subject = EXCLUDED.subject,\n            from_contact_id = EXCLUDED.from_contact_id,\n            sent_at = EXCLUDED.sent_at,\n            has_attachments = EXCLUDED.has_attachments,\n            is_read = EXCLUDED.is_read,\n            is_starred = EXCLUDED.is_starred,\n            is_sent = EXCLUDED.is_sent,\n            is_draft = EXCLUDED.is_draft,\n            body_text = EXCLUDED.body_text,\n            body_html_sanitized = EXCLUDED.body_html_sanitized,\n            body_macro = EXCLUDED.body_macro,\n            headers_jsonb = EXCLUDED.headers_jsonb,\n            updated_at = NOW()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Timestamptz",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Text",
+        "Text",
+        "Text",
+        "Jsonb",
+        "Timestamptz",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "83f2f13e4b5dba3ece419b618a2e4402baa3c61a921570ff7cb0fb92e0a211ee"
+}

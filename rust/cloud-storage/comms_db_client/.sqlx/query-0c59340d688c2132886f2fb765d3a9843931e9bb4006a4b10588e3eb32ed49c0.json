@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE comms_channels\n        SET updated_at = $2 \n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0c59340d688c2132886f2fb765d3a9843931e9bb4006a4b10588e3eb32ed49c0"
+}

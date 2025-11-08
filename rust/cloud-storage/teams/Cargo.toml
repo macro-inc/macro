@@ -1,0 +1,25 @@
+[package]
+edition = "2024"
+name = "teams"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+async-stripe = { workspace = true, default-features = false, features = [
+  "billing",
+  "checkout",
+  "runtime-tokio-hyper",
+] }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+non_empty = { path = "../non_empty" }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+roles_and_permissions = { path = "../roles_and_permissions" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true }

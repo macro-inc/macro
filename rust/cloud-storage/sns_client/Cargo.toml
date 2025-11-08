@@ -1,0 +1,9 @@
+[package]
+edition = "2024"
+name = "sns_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-sns = { workspace = true }

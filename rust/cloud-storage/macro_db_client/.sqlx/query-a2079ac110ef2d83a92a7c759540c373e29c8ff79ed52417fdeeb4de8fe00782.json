@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"ChannelSharePermission\" (\"share_permission_id\", \"channel_id\", \"access_level\")\n        SELECT $1, channel_id, access_level::\"AccessLevel\"\n        FROM UNNEST($2::text[], $3::text[]) AS t(channel_id, access_level)\n        ON CONFLICT (\"share_permission_id\", \"channel_id\") \n        DO UPDATE SET \"access_level\" = EXCLUDED.\"access_level\"\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a2079ac110ef2d83a92a7c759540c373e29c8ff79ed52417fdeeb4de8fe00782"
+}

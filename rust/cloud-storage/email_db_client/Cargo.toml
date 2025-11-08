@@ -1,0 +1,22 @@
+[package]
+edition = "2024"
+name = "email_db_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+futures = { workspace = true }
+macro_uuid = { path = "../macro_uuid" }
+models_email = { path = "../models_email" }
+models_pagination = { path = "../models_pagination" }
+once_cell = { workspace = true }
+regex = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }

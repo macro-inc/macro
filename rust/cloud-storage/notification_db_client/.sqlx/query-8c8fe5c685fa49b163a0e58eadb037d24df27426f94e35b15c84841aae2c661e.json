@@ -1,0 +1,49 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            DISTINCT ON (un.user_id, n.event_item_id) un.user_id, n.event_item_id,\n            n.created_at,\n            n.event_item_type,\n            n.id\n        FROM user_notification un\n        JOIN notification n ON un.notification_id = n.id\n        WHERE un.sent = false AND un.done = false AND un.seen_at IS NULL AND n.notification_event_type = ANY($1)\n        AND un.created_at > NOW() - ($4 * interval '1 hour')\n        ORDER BY un.user_id, n.event_item_id, n.created_at DESC\n        LIMIT $2\n        OFFSET $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "event_item_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "created_at",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 3,
+        "name": "event_item_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Int8",
+        "Int8",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "8c8fe5c685fa49b163a0e58eadb037d24df27426f94e35b15c84841aae2c661e"
+}

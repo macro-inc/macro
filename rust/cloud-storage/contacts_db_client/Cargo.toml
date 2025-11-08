@@ -1,0 +1,11 @@
+[package]
+edition = "2024"
+name = "contacts_db_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+sqlx = { workspace = true }
+tracing = { workspace = true }

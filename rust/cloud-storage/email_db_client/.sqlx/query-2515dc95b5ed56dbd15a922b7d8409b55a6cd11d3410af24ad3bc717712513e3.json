@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM email_attachments_macro\n            WHERE id = ANY($1::uuid[])\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2515dc95b5ed56dbd15a922b7d8409b55a6cd11d3410af24ad3bc717712513e3"
+}

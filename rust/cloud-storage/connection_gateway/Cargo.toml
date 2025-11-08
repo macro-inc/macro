@@ -1,0 +1,68 @@
+[package]
+edition = "2024"
+name = "connection_gateway"
+publish = false
+version = "0.1.0"
+
+[features]
+local_auth = []
+
+[lib]
+name = "connection_gateway_client"
+path = "src/lib.rs"
+
+[[bin]]
+name = "connection_gateway_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "stale_connections"
+path = "scripts/stale_connections.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+aws-config = { workspace = true }
+aws-sdk-dynamodb = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+axum = { workspace = true, features = ["macros", "tower-log", "ws"] }
+chrono = { workspace = true }
+dashmap = { workspace = true }
+ensure_exists = { path = "../ensure_exists", features = ["dynamodb"] }
+frecency = { path = "../frecency", features = ["postgres"] }
+futures = { workspace = true }
+http-body-util = { workspace = true }
+itertools = "0.14.0"
+macro_auth = { path = "../macro_auth" }
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env = { path = "../macro_env" }
+macro_env_var = { path = "../macro_env_var" }
+macro_middleware = { path = "../macro_middleware", features = ["auth"] }
+mockall.workspace = true
+model = { path = "../model" }
+model-entity = { path = "../model-entity" }
+models_bulk_upload = { path = "../models_bulk_upload" }
+redis = { workspace = true, features = [
+  "aio",
+  "tokio-comp",
+  "tokio-native-tls-comp",
+] }
+reqwest.workspace = true
+secretsmanager_client = { path = "../secretsmanager_client" }
+serde = { workspace = true }
+serde_dynamo = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+strum_macros = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true, features = ["attributes"] }
+tungstenite = "0.27.0"
+url = { workspace = true }
+utoipa = { workspace = true, features = ["axum_extras"] }
+utoipa-swagger-ui = { workspace = true, features = ["axum"] }
+uuid = { workspace = true }
+
+[dev-dependencies]
+cool_asserts = "2"

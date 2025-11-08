@@ -1,0 +1,16 @@
+[package]
+edition = "2024"
+name = "local_stream_processor"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+aws-config = { workspace = true }
+aws-sdk-dynamodb = { workspace = true }
+aws-sdk-dynamodbstreams = "1.10"
+chrono = { workspace = true }
+macro_env_var = { path = "../macro_env_var" }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }

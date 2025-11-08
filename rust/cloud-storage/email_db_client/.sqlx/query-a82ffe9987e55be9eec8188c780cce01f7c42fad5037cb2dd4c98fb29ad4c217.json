@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT provider_id as \"provider_id!\"\n        FROM email_messages\n        WHERE provider_id = ANY($1) AND link_id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "provider_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      true
+    ]
+  },
+  "hash": "a82ffe9987e55be9eec8188c780cce01f7c42fad5037cb2dd4c98fb29ad4c217"
+}

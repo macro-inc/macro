@@ -1,0 +1,21 @@
+{
+  "Records": [
+    {
+      "messageId": "91ccd6d4-ea77-45a7-8951-faaa492961a8",
+      "receiptHandle": "AQEBhmGHyLbsQ6pS7yIM+t2p1I7KNcgwwM6Eh94ADlyKNj3XBnnisbL7WZxsfp5nBzbOPU3L/BGo6c5235TKPOlAEXDow4esJxPvmMjDc7//VPJBnXmOav4a9SCW4X8Udy5/yaMiVhM/UrgI5qSlECCQKpcj4nsk3+MrIu2E/PRQ6gawxOTax26zyt2RuEVSPnZvUDLmEcRzZWCAwnnLuQTLKBWynyLm7erMJ2Xg3aFbcCR+wK49PGxaMSr5qdP4pkMj3ACNN0qbbNW/ru64ss30bQ+a8czMqpnMudtAmcrH76l5S+mMdu0ri+4zs9gXiTee8EJ7fkNCfxgUmG1YS9cFCm2e2/MerkLWqqUrq2rnjPtji06d/0xf/K+DoDQtAmhzFCU99zU8zxxU42CCLY5I1w==",
+      "body": "{\"ExtractZip\":{\"upload_request_id\":\"d50676e2-0a12-4c62-bc07-4b1cb6d8e9bc\",\"key\":\"extract/d50676e2-0a12-4c62-bc07-4b1cb6d8e9bc\",\"user_id\":\"macro|user@user.com\",\"name\":\"Folder Name Override\"}}",
+      "md5OfBody": "60cb940e6637053d88b88b36366f9130",
+      "md5OfMessageAttributes": "705fb11e31dc5721b24901f9eb1d3305",
+      "attributes": {
+        "SenderId": "AROAYI7JX6QVLU33ZJRGA:upload_extractor_lambda_trigger-local",
+        "AWSTraceHeader": "Root=1-68000c91-1ec73e0e7008795d43aa75f1;Parent=2d3492cea7ac92c4;Sampled=0;Lineage=1:3f143d1d:0",
+        "SentTimestamp": "1744833681882",
+        "ApproximateFirstReceiveTimestamp": "1744833681892",
+        "ApproximateReceiveCount": "1"
+      },
+      "eventSourceArn": "arn:aws:sqs:us-east-1:569036502058:bulk-upload-queue-local",
+      "eventSource": "aws:sqs",
+      "awsRegion": "us-east-1"
+    }
+  ]
+}

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM user_notification un\n        USING notification n\n        WHERE n.id = un.notification_id\n            AND n.event_item_id = $2\n            AND un.user_id = $1\n            AND un.done = false\n        RETURNING un.notification_id;\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notification_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "534f8f00f4fd6f56cc5ff2a04aeafcda74e07ba48b68aca8b9c155596229544c"
+}

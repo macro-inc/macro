@@ -1,0 +1,13 @@
+[package]
+edition = "2024"
+name = "metering_service_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+models_metering = { path = "../models_metering" }
+reqwest = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

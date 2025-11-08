@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT c.id as comment_id\n        FROM \"Comment\" c\n        JOIN \"Thread\" t ON c.\"threadId\" = t.id\n        WHERE t.id = $1 AND c.\"deletedAt\" IS NULL\n        ORDER BY c.\"order\", c.\"createdAt\" ASC\n        LIMIT 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "comment_id",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "c2a48995144a813f912bbba9c9f5b91e1b413978e8262f7db56a6a27fa5ceaf0"
+}

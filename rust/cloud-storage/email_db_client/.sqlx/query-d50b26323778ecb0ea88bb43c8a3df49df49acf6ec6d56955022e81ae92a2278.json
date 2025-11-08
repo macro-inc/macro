@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH\n            -- Get all individual interactions with timestamps\n            LinkMessageTimestamps AS (\n                SELECT\n                    m.link_id,\n                    mr.contact_id AS contact_address_id,\n                    m.internal_date_ts\n                FROM\n                    email_messages m\n                JOIN\n                    email_message_recipients mr ON m.id = mr.message_id\n                WHERE\n                    m.link_id = $1\n                    AND m.is_sent = TRUE\n                    AND mr.contact_id IS NOT NULL\n            ),\n            -- Get the latest interaction timestamp for each contact_address_id\n            LatestContactInteractions AS (\n                SELECT\n                    lmt.link_id,\n                    lmt.contact_address_id,\n                    MAX(lmt.internal_date_ts) AS last_interaction_ts\n                FROM\n                    LinkMessageTimestamps lmt\n                WHERE\n                    lmt.contact_address_id IS NOT NULL\n                GROUP BY\n                    lmt.link_id,\n                    lmt.contact_address_id\n            )\n        -- Final SELECT to join with email_addresses and get details\n        SELECT\n            c.email_address as \"email_address!\",\n            c.name as \"name?\",\n            c.sfs_photo_url as \"photo_url?\",\n            lci.last_interaction_ts as \"last_interaction!\"\n        FROM\n            LatestContactInteractions lci\n        JOIN\n            email_contacts c ON lci.contact_address_id = c.id\n        ORDER BY\n            lci.last_interaction_ts DESC, c.email_address\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email_address!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 1,
+        "name": "name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "photo_url?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "last_interaction!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      null
+    ]
+  },
+  "hash": "d50b26323778ecb0ea88bb43c8a3df49df49acf6ec6d56955022e81ae92a2278"
+}

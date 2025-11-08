@@ -1,0 +1,45 @@
+FROM rust:latest AS chef 
+ENV SQLX_OFFLINE=true
+# We only pay the installation cost once, 
+# it will be cached from the second build onwards
+RUN cargo install cargo-chef cargo-strip 
+WORKDIR /app
+
+FROM chef AS planner
+COPY . .
+RUN cargo chef prepare  --recipe-path recipe.json --bin search_processing_service
+
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+# Build dependencies - this is the caching Docker layer!
+RUN cargo chef cook --release --recipe-path recipe.json --bin search_processing_service
+# Build application
+COPY . .
+RUN cargo build --release --bin search_processing_service && \
+  cargo strip && \
+  mv /app/target/release/search_processing_service /app/svc
+
+FROM debian:trixie-slim AS runner
+WORKDIR /app
+
+RUN : \
+  && apt-get update \
+  && apt-get install -y --no-install-recommends \
+  ca-certificates \
+  openssl \
+  dumb-init \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/svc /app/svc
+
+
+RUN mkdir -p /app/pdfium-lib/linux
+COPY --from=builder /app/search_processing_service/pdfium-lib/linux/libpdfium.so /app/pdfium-lib/linux/libpdfium.so
+
+RUN chmod +x svc
+
+ENV PORT=8080
+EXPOSE ${PORT}
+
+ENTRYPOINT ["dumb-init", "./svc"]

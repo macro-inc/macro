@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE \"EmailInsightsBackfillJob\"\n        SET \n            status = $2::\"insights_backfill_job_status\",\n            \"completedAt\" = $3,\n            \"updatedAt\" = $4\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        {
+          "Custom": {
+            "name": "insights_backfill_job_status",
+            "kind": {
+              "Enum": [
+                "Init",
+                "InProgress",
+                "Complete",
+                "Cancelled",
+                "Failed"
+              ]
+            }
+          }
+        },
+        "Timestamp",
+        "Timestamp"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "f8d2e1308363b6d79f351d8b03a0bc80c22da3074b2ce909d51cec1f8f5db0f1"
+}

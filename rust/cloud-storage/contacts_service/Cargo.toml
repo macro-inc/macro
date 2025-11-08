@@ -1,0 +1,44 @@
+[package]
+default-run = "contacts_service"
+edition = "2024"
+name = "contacts_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "contacts_service"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+aws-config = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+axum = { workspace = true }
+contacts_db_client = { path = "../contacts_db_client" }
+http-body-util = { workspace = true }
+macro_auth = { path = "../macro_auth" }
+macro_cors = { path = "../macro_cors" }
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env = { path = "../macro_env" }
+macro_middleware = { path = "../macro_middleware", default-features = false, features = [
+  "auth",
+] }
+model = { path = "../model" }
+secretsmanager_client = { path = "../secretsmanager_client" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+sqs_worker = { path = "../sqs_worker" }
+tokio = { workspace = true }
+tower = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+
+[features]
+mock = []
+
+[dev-dependencies]
+macro_auth = { path = "../macro_auth", features = ["testing"] }

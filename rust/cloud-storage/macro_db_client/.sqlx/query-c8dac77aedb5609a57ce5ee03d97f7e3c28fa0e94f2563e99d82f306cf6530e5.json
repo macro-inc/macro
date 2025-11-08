@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\nDELETE FROM \"PdfHighlightAnchor\" WHERE \"documentId\" = $1;\n",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c8dac77aedb5609a57ce5ee03d97f7e3c28fa0e94f2563e99d82f306cf6530e5"
+}

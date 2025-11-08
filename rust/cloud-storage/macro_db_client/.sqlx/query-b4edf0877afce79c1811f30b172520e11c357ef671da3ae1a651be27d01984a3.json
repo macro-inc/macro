@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        -- recursively finds all parent projects for the given project.\n        WITH RECURSIVE project_hierarchy AS (\n            -- Base case: Start with the provided project itself.\n            SELECT\n                p.id as project_id\n            FROM\n                \"Project\" p\n            WHERE\n                p.id = $1 AND p.\"deletedAt\" IS NULL\n\n            UNION ALL\n\n            -- Recursive case: Find the parent of the project from the previous step.\n            SELECT\n                parent.id as project_id\n            FROM\n                project_hierarchy ph\n            JOIN \"Project\" parent ON parent.id = (\n                SELECT \"parentId\" FROM \"Project\" WHERE id = ph.project_id AND \"parentId\" IS NOT NULL AND \"deletedAt\" IS NULL\n            )\n        )\n        -- The main query to select from UserItemAccess\n        SELECT\n            id,\n            user_id,\n            item_id,\n            item_type,\n            granted_from_channel_id,\n            access_level as \"access_level!: AccessLevel\",\n            created_at as \"created_at!: DateTime<Utc>\",\n            updated_at as \"updated_at!: DateTime<Utc>\"\n        FROM \"UserItemAccess\"\n        WHERE\n            -- Filter for the specific user we are interested in.\n            user_id = $2\n            -- Filter for items that are either the project itself or one of the projects in its hierarchy.\n            AND item_id IN (\n                SELECT project_id FROM project_hierarchy\n            )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "item_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "item_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "granted_from_channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "access_level!: AccessLevel",
+        "type_info": {
+          "Custom": {
+            "name": "AccessLevel",
+            "kind": {
+              "Enum": [
+                "view",
+                "comment",
+                "edit",
+                "owner"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at!: DateTime<Utc>",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at!: DateTime<Utc>",
+        "type_info": "Timestamp"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "b4edf0877afce79c1811f30b172520e11c357ef671da3ae1a651be27d01984a3"
+}

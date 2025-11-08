@@ -1,0 +1,22 @@
+[package]
+edition = "2024"
+name = "insight_service_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+ai_format = { path = "../ai_format" }
+anyhow.workspace = true
+async-trait.workspace = true
+aws-sdk-sqs.workspace = true
+chrono.workspace = true
+model = { path = "../model" }
+serde.workspace = true
+sqlx.workspace = true
+sqs_client = { path = "../sqs_client" }
+strum.workspace = true
+strum_macros = { workspace = true }
+tracing.workspace = true
+
+[dev-dependencies]
+tokio.workspace = true

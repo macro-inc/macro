@@ -1,0 +1,18 @@
+[package]
+edition = "2024"
+exclude = ["fixtures/", "migrations/", "tests/"]
+name = "dataloss_prevention_handler"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+aws-config = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+aws-sdk-sns = { workspace = true }
+aws_lambda_events = { workspace = true, features = ["s3"] }
+lambda_runtime = { workspace = true }
+macro_entrypoint = { path = "../macro_entrypoint" }
+s3_client = { path = "../s3_client" }
+sns_client = { path = "../sns_client" }
+tokio = { workspace = true }

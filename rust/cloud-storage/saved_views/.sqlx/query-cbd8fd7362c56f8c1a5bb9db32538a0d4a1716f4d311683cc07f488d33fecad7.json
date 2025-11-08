@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO excluded_default_view (id, user_id, default_view_id) \n         VALUES ($1, $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "cbd8fd7362c56f8c1a5bb9db32538a0d4a1716f4d311683cc07f488d33fecad7"
+}

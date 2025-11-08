@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT un.user_id, COUNT(*) as count\n        FROM user_notification un\n        JOIN notification n ON n.id = un.notification_id\n        WHERE un.user_id = ANY($1)\n            AND n.notification_event_type = $2\n            AND n.event_item_id =  $3\n            AND n.event_item_type = $4\n        GROUP BY un.user_id\n        ORDER BY un.user_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "218e37e12eb0d7f56bc9ba5627782e71f4fe01e3b5bb2d563b34901979995c23"
+}

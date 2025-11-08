@@ -1,0 +1,62 @@
+set dotenv-load := true
+
+mod ci '../ci.just'
+
+deploy-dev:
+    just ci::deploy-dev email-service
+
+run:
+    cargo run
+
+check:
+    SQLX_OFFLINE=true cargo check
+
+run-local:
+    cargo run --features macro_middleware/local_auth
+
+debug:
+    RUST_LOG=email_service=debug,info cargo run --features macro_middleware/local_auth
+
+create-localstack:
+    docker run -d --name localstack -p 4566:4566 -e SERVICES=sqs,s3 localstack/localstack
+
+start-localstack:
+    docker run -p 4566:4566 -e SERVICES=sqs localstack/localstack
+
+create-queues:
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
+    	--queue-name my-test-webhook-queue --attributes VisibilityTimeout=60
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
+    	--queue-name my-test-refresh-queue
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
+        --queue-name my-test-scheduled-queue.fifo \
+        --attributes FifoQueue=true,ContentBasedDeduplication=true
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
+    	--queue-name backfill-queue --attributes VisibilityTimeout=61
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
+        --queue-name search-queue
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
+        --queue-name insight-service-queue-dev.fifo \
+        --attributes FifoQueue=true,ContentBasedDeduplication=true
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue \
+        	--queue-name sfs-uploader-queue --attributes VisibilityTimeout=60
+
+purge-queues:
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
+    	--queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/backfill-queue
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
+        --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-test-webhook-queue
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
+        --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-test-refresh-queue
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
+            --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/my-test-scheduled-queue.fifo
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
+        --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/search-queue
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
+        --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/insight-service-queue-dev.fifo
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue \
+        --queue-url http://sqs.us-east-1.localhost.localstack.cloud:4566/000000000000/sfs-uploader-queue
+
+create-bucket:
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 s3 mb \
+        s3://my-test-bucket

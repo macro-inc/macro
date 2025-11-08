@@ -1,0 +1,137 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            pd.id,\n            pd.organization_id,\n            pd.user_id,\n            pd.display_name,\n            pd.data_type as \"data_type: DataType\",\n            pd.is_multi_select,\n            pd.specific_entity_type as \"specific_entity_type: Option<EntityType>\",\n            pd.created_at,\n            pd.updated_at,\n            po.id as \"option_id?\",\n            po.display_order as \"option_display_order?\",\n            po.number_value as option_number_value,\n            po.string_value as option_string_value,\n            po.created_at as \"option_created_at?\",\n            po.updated_at as \"option_updated_at?\"\n        FROM property_definitions pd\n        LEFT JOIN property_options po ON pd.id = po.property_definition_id\n        WHERE \n            ($1::int IS NOT NULL AND pd.organization_id = $1) \n            OR ($2::text IS NOT NULL AND pd.user_id = $2)\n        ORDER BY LOWER(pd.display_name), po.display_order, po.number_value, LOWER(po.string_value)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "organization_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "data_type: DataType",
+        "type_info": {
+          "Custom": {
+            "name": "property_data_type",
+            "kind": {
+              "Enum": [
+                "BOOLEAN",
+                "DATE",
+                "NUMBER",
+                "STRING",
+                "SELECT_NUMBER",
+                "SELECT_STRING",
+                "ENTITY",
+                "LINK"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "is_multi_select",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "specific_entity_type: Option<EntityType>",
+        "type_info": {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "option_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 10,
+        "name": "option_display_order?",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 11,
+        "name": "option_number_value",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 12,
+        "name": "option_string_value",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "option_created_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "option_updated_at?",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "3f99042ec859c30190f667c30fe1163b7574328dd2be7ce1113ee212812b3627"
+}

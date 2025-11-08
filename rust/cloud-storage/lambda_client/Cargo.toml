@@ -1,0 +1,13 @@
+[package]
+edition = "2024"
+name = "lambda_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-lambda = { workspace = true }
+aws-smithy-types = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }

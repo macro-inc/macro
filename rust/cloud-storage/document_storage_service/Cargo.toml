@@ -1,0 +1,116 @@
+[package]
+default-run = "document_storage_service"
+edition = "2024"
+name = "document_storage_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "document_storage_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "backfill_search"
+path = "src/bin/backfill_search.rs"
+
+[[bin]]
+name = "backfill_useritemaccess"
+path = "src/bin/backfill_useritemaccess/mod.rs"
+
+[features]
+disable_connection_gateway = []
+disable_location_check = []
+local = ["local_auth"]
+local_auth = ["macro_middleware/local_auth"]
+
+[dependencies]
+anyhow = { workspace = true }
+aws-config = { workspace = true }
+aws-sdk-dynamodb = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+axum = { workspace = true, features = ["macros", "multipart", "tower-log"] }
+base64 = { workspace = true }
+bytes = { workspace = true }
+bzip2 = { workspace = true, default-features = false, features = [
+  "libbz2-rs-sys",
+] }
+chrono = { workspace = true }
+clap = { workspace = true }
+cloudfront_sign = { workspace = true }
+comms_service_client = { path = "../comms_service_client" }
+connection_gateway = { path = "../connection_gateway" }
+dynamodb_client = { path = "../dynamodb_client" }
+email_service_client = { path = "../email_service_client" }
+frecency = { path = "../frecency", features = ["postgres"] }
+futures = { workspace = true }
+hex = { workspace = true }
+http-body-util = { workspace = true }
+jsonwebtoken = { workspace = true }
+lazy_static = { workspace = true }
+macro_auth = { path = "../macro_auth" }
+macro_axum_utils = { path = "../macro_axum_utils" }
+macro_cors = { path = "../macro_cors" }
+macro_db_client = { path = "../macro_db_client" }
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env = { path = "../macro_env" }
+macro_env_var = { path = "../macro_env_var" }
+macro_middleware = { path = "../macro_middleware", default-features = false, features = [
+  "auth",
+  "cloud_storage",
+  "user_permissions",
+] }
+macro_notify = { path = "../macro_notify" }
+macro_project_utils = { path = "../macro_project_utils" }
+macro_redis_cluster_client = { path = "../macro_redis_cluster_client" }
+macro_share_permissions = { path = "../macro_share_permissions" }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+mockall = { workspace = true }
+model = { path = "../model" }
+model-entity = { path = "../model-entity" }
+model_notifications = { path = "../model_notifications" }
+models_bulk_upload = { path = "../models_bulk_upload" }
+models_pagination = { path = "../models_pagination", features = ["axum"] }
+models_permissions = { path = "../models_permissions" }
+models_soup = { path = "../models_soup" }
+rayon = "1.10.0"
+redis = { workspace = true, features = [
+  "aio",
+  "cluster-async",
+  "tokio-native-tls-comp",
+] }
+regex = { workspace = true }
+reqwest = { workspace = true }
+saved_views = { path = "../saved_views" }
+schemars = { workspace = true }
+secretsmanager_client = { path = "../secretsmanager_client" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+soup = { path = "../soup", features = ["axum"] }
+sqlx = { workspace = true }
+sqs_client = { path = "../sqs_client", default-features = false, features = [
+  "document",
+  "search",
+] }
+sync_service_client = { path = "../sync_service_client" }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+urlencoding = { workspace = true }
+utoipa = { workspace = true, features = ["axum_extras"] }
+utoipa-swagger-ui = { workspace = true, features = ["axum"] }
+uuid = { workspace = true }
+zip = { workspace = true }
+
+[dev-dependencies]
+cool_asserts = "2"
+frecency = { path = "../frecency", features = ["mock"] }
+ordered-float = "5"
+
+
+[package.metadata.cargo-machete]
+ignored = ["comms_service", "connection_gateway"]

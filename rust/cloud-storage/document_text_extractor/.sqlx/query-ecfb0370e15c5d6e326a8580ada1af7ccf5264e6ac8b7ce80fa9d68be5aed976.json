@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"DocumentTextParts\" (id, reference, \"documentId\")\n        SELECT id, ref, $1\n        FROM UNNEST($2::text[], $3::text[])\n        AS t(id, ref)\n        ON CONFLICT (id) \n        DO UPDATE SET \n            reference = EXCLUDED.reference,\n            \"documentId\" = EXCLUDED.\"documentId\"\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ecfb0370e15c5d6e326a8580ada1af7ccf5264e6ac8b7ce80fa9d68be5aed976"
+}

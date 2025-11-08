@@ -1,0 +1,28 @@
+create-localstack:
+	docker run --name localstack -p 4566:4566 -e SERVICES=s3,sqs -e DEBUG=1 localstack/localstack
+
+start-localstack:
+	docker run -p 4566:4566 -e SERVICES=s3,sqs -e DEBUG=1 localstack/localstack
+
+create-bucket:
+	AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 s3 mb s3://test-bucket
+
+create-queue:
+	AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name my-test-queue
+
+list-buckets:
+	AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 s3 ls
+
+list-objects:
+	AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 s3 ls s3://test-bucket --recursive
+
+get-object ID OUT:
+	AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 s3 cp s3://test-bucket/file/{{ID}} {{OUT}}
+
+test-upload:
+	curl -X 'PUT' \
+	  'localhost:8089/api/file' \
+	  -H 'accept: application/json' \
+	  -H "Authorization: Bearer $(cat access_token)" \
+	  -H 'Content-Type: application/json' \
+	  -d '{ "content_type": "text/plain", "extension_data": "txt", "file_name": "localhost:8081/A.txt" }'

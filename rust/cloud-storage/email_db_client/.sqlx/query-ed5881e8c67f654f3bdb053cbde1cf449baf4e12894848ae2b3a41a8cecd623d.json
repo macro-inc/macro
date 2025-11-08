@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_backfill_jobs\n        SET\n            threads_processed_count = threads_processed_count + 1,\n            threads_failed_count = threads_failed_count + 1,\n            updated_at = now()\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ed5881e8c67f654f3bdb053cbde1cf449baf4e12894848ae2b3a41a8cecd623d"
+}

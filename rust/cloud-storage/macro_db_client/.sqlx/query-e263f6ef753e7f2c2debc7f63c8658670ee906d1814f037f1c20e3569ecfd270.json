@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE \"User\"\n        SET \"hasOnboardingDocuments\" = $1\n        WHERE id = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e263f6ef753e7f2c2debc7f63c8658670ee906d1814f037f1c20e3569ecfd270"
+}

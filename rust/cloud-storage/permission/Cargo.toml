@@ -1,0 +1,10 @@
+[package]
+edition = "2024"
+name = "permission"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+model = { path = "../model" }
+models_permissions = { path = "../models_permissions" }
+tracing = { workspace = true }

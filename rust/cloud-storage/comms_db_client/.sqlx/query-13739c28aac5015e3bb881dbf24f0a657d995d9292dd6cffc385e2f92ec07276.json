@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH message_channel AS (\n            SELECT channel_id FROM comms_messages WHERE id = $1\n        ),\n        mentions_to_insert AS (\n            SELECT t.entity_type, t.entity_id\n            FROM UNNEST($2::text[], $3::text[]) AS t(entity_type, entity_id)\n        ),\n        inserted_mentions AS (\n            INSERT INTO comms_entity_mentions (id, source_entity_type, source_entity_id, entity_type, entity_id, user_id)\n            SELECT gen_random_uuid(), 'message', $1::text, m.entity_type, m.entity_id, NULL\n            FROM mentions_to_insert m\n            WHERE NOT EXISTS (\n                SELECT 1 FROM comms_entity_mentions em \n                WHERE em.source_entity_type = 'message' \n                  AND em.source_entity_id = $1::text\n                  AND em.entity_type = m.entity_type \n                  AND em.entity_id = m.entity_id\n            )\n        )\n        SELECT DISTINCT cp.user_id\n        FROM mentions_to_insert m\n        CROSS JOIN message_channel mc\n        JOIN comms_channel_participants cp ON m.entity_id = cp.user_id\n        WHERE m.entity_type = 'user'\n        AND cp.channel_id = mc.channel_id\n        AND cp.left_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "13739c28aac5015e3bb881dbf24f0a657d995d9292dd6cffc385e2f92ec07276"
+}

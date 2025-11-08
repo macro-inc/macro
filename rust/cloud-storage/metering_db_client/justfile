@@ -1,0 +1,42 @@
+DATABASE_URL := "postgres://user:password@localhost:5432/metering"
+
+mod sqlx '../sqlx.just'
+
+create_db:
+    just sqlx::create_db {{ DATABASE_URL }}
+
+migrate_db:
+    just sqlx::migrate_db {{ DATABASE_URL }}
+
+prepare_db:
+    just sqlx::prepare_db {{ DATABASE_URL }}
+
+drop_db *FLAGS:
+    just sqlx::drop_db {{ DATABASE_URL }} {{ FLAGS }}
+
+setup:
+    just sqlx::setup {{ DATABASE_URL }}
+
+setup_prepare:
+    just sqlx::setup_prepare {{ DATABASE_URL }}
+
+reset_db:
+    just sqlx::reset_db {{ DATABASE_URL }}
+
+test $DATABASE_URL=DATABASE_URL:
+    cargo test
+
+migrate_db_dev:
+    DATABASE_URL=$(../scripts/rds_database_url.sh metering-db-dev metering-db-password-dev metering) sqlx migrate run
+
+migrate_db_prod:
+    #!/usr/bin/env bash
+    echo -e "\033[31mWARNING: You are about to run migrations on the PRODUCTION database!\033[0m"
+    echo -n "Are you sure you want to continue? [y/N] "
+    read -r response
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+        echo "Running production migrations..."
+        DATABASE_URL=$(../scripts/rds_database_url.sh metering-db-prod metering-db-password-prod metering) sqlx migrate run
+    else
+        echo "Migration cancelled."
+    fi

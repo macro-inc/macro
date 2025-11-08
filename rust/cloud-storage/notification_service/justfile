@@ -1,0 +1,32 @@
+set dotenv-load := true
+
+mod ci '../ci.just'
+
+deploy-dev:
+    just ci::deploy-dev notification-service
+
+run:
+    cargo run
+
+check:
+    SQLX_OFFLINE=true cargo check
+
+create_localstack:
+    docker run -d --name localstack -p 4566:4566 -e SERVICES=sqs localstack/localstack
+
+start_localstack:
+    docker run -p 4566:4566 -e SERVICES=sqs localstack/localstack
+
+purge_queues:
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue --queue-url http://localhost:4566/000000000000/notification-queue && \
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue --queue-url http://localhost:4566/000000000000/push-delivery-queue
+
+create_queues: purge_queues
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name notification-queue  && \
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name push-delivery-queue
+
+run_local:
+    cargo run --bin notification_service --features local
+
+run_notification_email_poller_worker:
+    cargo run --bin notification_email_poller_worker

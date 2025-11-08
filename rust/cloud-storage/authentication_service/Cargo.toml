@@ -1,0 +1,114 @@
+[package]
+default-run = "authentication_service"
+edition = "2024"
+name = "authentication_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "authentication_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "generate_keys"
+path = "src/bin/generate_keys.rs"
+
+[[bin]]
+name = "backfill_null_macro_user_id"
+path = "src/bin/backfill_null_macro_user_id.rs"
+
+[features]
+disable_rate_limit = []
+local = []
+
+[dependencies]
+anyhow = { workspace = true }
+async-stripe = { workspace = true, default-features = false, features = [
+  "billing",
+  "checkout",
+  "runtime-tokio-hyper",
+] }
+async-stripe-webhook = { version = "1.0.0-alpha.4", default-features = false }
+aws-config = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+aws-sdk-sesv2 = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+axum = { workspace = true, features = ["macros"] }
+base64 = { workspace = true }
+chrono = { workspace = true }
+comms_service_client = { path = "../comms_service_client" }
+cookie = { workspace = true }
+document_storage_service_client = { path = "../document_storage_service_client" }
+email_validator = { path = "../email_validator" }
+futures = { workspace = true }
+http-body-util = { workspace = true }
+jsonwebtoken = { workspace = true }
+macro_auth = { path = "../macro_auth" }
+macro_autoupdate_router = { path = "../macro_autoupdate_router" }
+macro_cache_client = { path = "../macro_cache_client", default-features = false, features = [
+  "auth",
+  "auth_rate_limit",
+  "login_code_rate_limit",
+  "verify_email_rate_limit",
+] }
+macro_cors = { path = "../macro_cors" }
+macro_db_client = { path = "../macro_db_client", default-features = false, features = [
+  "account_merge_request",
+  "team",
+] }
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env = { path = "../macro_env", features = ["frontend_url"] }
+macro_env_var = { path = "../macro_env_var" }
+macro_middleware = { path = "../macro_middleware", default-features = false, features = [
+  "auth",
+  "tracking",
+  "user_permissions",
+] }
+macro_notify = { path = "../macro_notify" }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+maud = { version = "0.27.0" }
+mockall = { workspace = true }
+model = { path = "../model" }
+model_notifications = { path = "../model_notifications" }
+models_team = { path = "../models_team" }
+non_empty = { path = "../non_empty" }
+notification_service_client = { path = "../notification_service_client" }
+openssl = { workspace = true }
+rand = { workspace = true }
+remote_env_var = { path = "../remote_env_var" }
+reqwest = { workspace = true }
+roles_and_permissions = { path = "../roles_and_permissions" }
+rsa = "0.9.8"
+secretsmanager_client = { path = "../secretsmanager_client" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_urlencoded = "0.7.1"
+serde_utils = { path = "../serde_utils", features = ["urlencode"] }
+ses_client = { path = "../ses_client" }
+sha1 = "0.10.6"
+sqlx = { workspace = true }
+sqs_client = { path = "../sqs_client", default-features = false, features = [
+  "search",
+] }
+teams = { path = "../teams" }
+thiserror = { workspace = true }
+time = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-cookies = { version = "0.10.0" }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+urlencoding = { workspace = true }
+user_quota = { path = "../user_quota" }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+uuid = { workspace = true }
+
+
+[dev-dependencies]
+cool_asserts = "2"
+
+[package.metadata.cargo-machete]
+ignored = ["async-stripe", "comms_service"]

@@ -1,0 +1,31 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH input_rows (id, link_id, email_address, name) AS (\n           SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::text[], $4::text[])\n           ORDER BY 3 -- Prevent deadlocks by using consistent ordering\n        )\n        INSERT INTO email_contacts (id, link_id, email_address, name)\n        SELECT id, link_id, email_address, name FROM input_rows\n        ON CONFLICT (link_id, email_address) DO UPDATE\n            -- Don't overwrite existing name with name from an email, as existing name will be\n            -- from the user's contacts list and thus will be more accurate.\n            SET name = CASE\n                WHEN email_contacts.name IS NULL AND EXCLUDED.name IS NOT NULL\n                THEN EXCLUDED.name\n                ELSE email_contacts.name\n                END,\n            updated_at = CASE\n                WHEN email_contacts.name IS NULL AND EXCLUDED.name IS NOT NULL\n                THEN NOW()\n                ELSE email_contacts.updated_at\n                END\n        RETURNING id, email_address\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email_address",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "6549ab93934af3c098957525a8b881d278f23b46c3fd0aab051c989cb0759577"
+}

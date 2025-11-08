@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en" xmlns:v="urn:schemas-microsoft-com:vml">
+
+<head>
+  <meta charset="utf-8" />
+  <meta name="x-apple-disable-message-reformatting" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="format-detection" content="telephone=no, date=no, address=no, email=no" />
+  <meta name="color-scheme" content="light dark" />
+  <meta name="supported-color-schemes" content="light dark" />
+  <!--[if mso]>
+      <noscript>
+        <xml>
+          <o:OfficeDocumentSettings
+            xmlns:o="urn:schemas-microsoft-com:office:office"
+          >
+            <o:PixelsPerInch>96</o:PixelsPerInch>
+          </o:OfficeDocumentSettings>
+        </xml>
+      </noscript>
+      <style>
+        td,
+        th,
+        p,
+        a,
+        h1,
+        h2,
+        h3,
+        h4,
+        h5,
+        h6 {
+          font-family: "Segoe UI", sans-serif;
+          mso-line-height-rule: exactly;
+        }
+      </style>
+    <![endif]-->
+  <title>Macro Channel Invite</title>
+  <style>
+    /* Base styles */
+    body {
+      margin: 0;
+      padding: 0;
+      width: 100%;
+      background-color: #f8f9fa;
+    }
+
+    /* Text styles */
+    .title {
+      font-size: 24px;
+      font-weight: 400;
+      color: #202124;
+      margin: 0;
+      padding: 0;
+      font-family: "Google Sans", Roboto, Arial, sans-serif;
+    }
+
+    .message {
+      font-size: 16px;
+      color: #202124;
+      line-height: 1.5;
+      font-family: "Google Sans", Roboto, Arial, sans-serif;
+    }
+
+    /* Button styles */
+    .button {
+      background-color: #1a73e8;
+      color: white;
+      text-decoration: none;
+      padding: 8px 24px;
+      border-radius: 24px;
+      font-weight: 500;
+      font-size: 14px;
+      font-family: "Google Sans", Roboto, Arial, sans-serif;
+      display: inline-block;
+    }
+
+    /* Item name styles */
+    .item-name {
+      font-weight: 500;
+      color: #202124;
+      font-family: "Google Sans", Roboto, Arial, sans-serif;
+    }
+
+    /* Footer styles */
+    .footer-text {
+      font-size: 12px;
+      color: #5f6368;
+      font-family: "Google Sans", Roboto, Arial, sans-serif;
+    }
+
+    /* Email action link styles */
+    .email-link {
+      color: #1a73e8;
+      text-decoration: none;
+    }
+
+    /* Logo styles */
+    .logo {
+      height: 32px;
+    }
+  </style>
+</head>
+
+<body style="
+      word-break: break-word;
+      -webkit-font-smoothing: antialiased;
+      margin: 0;
+      width: 100%;
+      background-color: #f8f9fa;
+      padding: 0;
+    ">
+  <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+    <tr>
+      <td align="center" style="padding: 24px 0">
+        <!-- Main Container -->
+        <table width="100%" style="max-width: 640px" cellpadding="0" cellspacing="0" border="0" role="presentation">
+          <!-- Header with Logo -->
+          <tr>
+            <td align="center" style="padding: 16px 0">
+              <img src="https://coparse-release-artifact-storage-bucket.s3.amazonaws.com/logos/logo.png" alt="Macro"
+                class="logo" height="32" />
+            </td>
+          </tr>
+          <!-- Main Content Card -->
+          <tr>
+            <td style="padding: 0 16px">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" style="
+                    background-color: #ffffff;
+                    border-radius: 8px;
+                    border: 1px solid #dadce0;
+                  " role="presentation">
+                <!-- Title -->
+                <tr>
+                  <td style="padding: 5px"></td>
+                </tr>
+
+                <!-- Message -->
+                <tr>
+                  <td style="padding: 24px 24px 16px 24px">
+                    <p class="message" style="
+                          font-size: 16px;
+                          color: #202124;
+                          line-height: 1.5;
+                          margin: 0;
+                          font-family: 'Google Sans', Roboto, Arial, sans-serif;
+                        ">
+                      <strong style="text-decoration: none">{{INVITED_BY}}</strong>
+                      {{INVITE_MESSAGE}}
+                    </p>
+                  </td>
+                </tr>
+
+                <!-- Item -->
+                <tr>
+                  <td style="padding: 0 24px 16px 24px">
+                    <table width="100%" cellpadding="0" cellspacing="0" border="0"
+                      style="background-color: #f8f9fa; border-radius: 4px" role="presentation">
+                      <tr>
+                        <td style="padding: 12px">
+                          <table cellpadding="0" cellspacing="0" border="0" role="presentation">
+                            <tr>
+                              <!-- Item Name -->
+                              <td style="vertical-align: middle">
+                                <span class="item-name" style="
+                                      font-weight: 500;
+                                      color: #202124;
+                                      font-family: 'Google Sans', Roboto, Arial,
+                                        sans-serif;
+                                    ">
+                                  {{CHANNEL_MESSAGE}}
+                                </span>
+                              </td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+
+                <!-- Button -->
+                <tr>
+                  <td style="padding: 0 24px 24px 24px; text-align: left">
+                    <table cellpadding="0" cellspacing="0" border="0" role="presentation">
+                      <tr>
+                        <td style="
+                              background-color: #1a73e8;
+                              border-radius: 24px;
+                            ">
+                          <a href="{{CHANNEL_URL}}" class="button" style="
+                                background-color: #1a73e8;
+                                color: white;
+                                text-decoration: none;
+                                padding: 8px 24px;
+                                border-radius: 24px;
+                                font-weight: 500;
+                                font-size: 14px;
+                                font-family: 'Google Sans', Roboto, Arial,
+                                  sans-serif;
+                                display: inline-block;
+                              ">
+                            Open
+                          </a>
+                        </td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- Footer -->
+          <tr>
+            <td style="padding: 24px 16px">
+              <table width="100%" cellpadding="0" cellspacing="0" border="0" role="presentation">
+                <tr>
+                  <td class="footer-text" style="
+                        font-size: 12px;
+                        color: #5f6368;
+                        font-family: 'Google Sans', Roboto, Arial, sans-serif;
+                        padding-bottom: 8px;
+                      ">
+                    Macro, Inc.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="footer-text" style="
+                        font-size: 12px;
+                        color: #5f6368;
+                        font-family: 'Google Sans', Roboto, Arial, sans-serif;
+                        padding-bottom: 8px;
+                      ">
+                    You have received this email because {{INVITED_BY}} has
+                    invited you to a channel in Macro.
+                  </td>
+                </tr>
+                <tr>
+                  <td class="footer-text" style="
+                        font-size: 12px;
+                        color: #5f6368;
+                        font-family: 'Google Sans', Roboto, Arial, sans-serif;
+                      ">
+                    Questions? Email us at
+                    <a href="mailto:support@macro.com" class="email-link"
+                      style="color: #1a73e8; text-decoration: none">support@macro.com</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+
+</html>

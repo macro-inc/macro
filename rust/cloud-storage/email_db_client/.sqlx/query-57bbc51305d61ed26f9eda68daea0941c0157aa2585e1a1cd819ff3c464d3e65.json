@@ -1,0 +1,41 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_backfill_threads\n        SET\n            messages_processed_count = messages_processed_count + 1,\n            messages_succeeded_count = messages_succeeded_count + 1,\n            updated_at = now()\n        WHERE backfill_job_id = $1\n        AND thread_provider_id = $2\n        RETURNING\n            messages_retrieved_count,\n            messages_processed_count,\n            messages_succeeded_count,\n            messages_failed_count\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "messages_retrieved_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "messages_processed_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "messages_succeeded_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "messages_failed_count",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "57bbc51305d61ed26f9eda68daea0941c0157aa2585e1a1cd819ff3c464d3e65"
+}

@@ -1,0 +1,42 @@
+[package]
+edition = "2024"
+name = "soup"
+publish = false
+version = "0.1.0"
+
+[features]
+axum = [
+  "dep:axum",
+  "dep:item_filters",
+  "dep:model-error-response",
+  "dep:model_user",
+  "dep:utoipa",
+]
+
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true, optional = true }
+either = { version = "1" }
+frecency = { path = "../frecency" }
+item_filters = { path = "../item_filters", optional = true }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+model-error-response = { path = "../model-error-response", optional = true }
+model_user = { path = "../model_user", optional = true, features = ["axum"] }
+models_pagination = { path = "../models_pagination" }
+models_soup = { path = "../models_soup" }
+serde = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+
+[dev-dependencies]
+chrono = { workspace = true }
+cool_asserts = "2"
+frecency = { path = "../frecency", features = ["mock"] }
+macro_db_migrator = { path = "../macro_db_migrator" }
+mockall = { workspace = true }
+ordered-float = "5"
+tokio = { workspace = true }

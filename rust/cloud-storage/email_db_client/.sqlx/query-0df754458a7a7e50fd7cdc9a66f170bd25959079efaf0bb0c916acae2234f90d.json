@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_messages m\n        SET\n            is_read = $1,\n            updated_at = NOW()\n        FROM email_links l\n        WHERE\n            m.id = $2\n            AND m.link_id = l.id\n            AND l.fusionauth_user_id = $3\n        RETURNING m.id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0df754458a7a7e50fd7cdc9a66f170bd25959079efaf0bb0c916acae2234f90d"
+}

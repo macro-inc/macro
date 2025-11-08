@@ -1,0 +1,20 @@
+{
+  "version": "0",
+  "id": "abc12345-6789-0abc-def0-1234567890ab",
+  "detail-type": "Object Created",
+  "source": "aws.s3",
+  "account": "123456789012",
+  "time": "2025-04-16T12:34:56Z",
+  "region": "us-east-1",
+  "resources": [
+    "arn:aws:s3:::bulk-upload-staging-local"
+  ],
+  "detail": {
+    "bucket": {
+      "name": "bulk-upload-staging-local"
+    },
+    "object": {
+      "key": "extract/d50676e2-0a12-4c62-bc07-4b1cb6d8e9bc"
+    }
+  }
+}
