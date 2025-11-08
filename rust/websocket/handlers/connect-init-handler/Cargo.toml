@@ -1,0 +1,17 @@
+[package]
+name = "connect-init-handler"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+job_types = { path = "../job_types" }
+lambda_http = "0.11.1"
+lazy_static = "1.4.0"
+tokio = { version = "1", features = ["macros"] }
+anyhow = "1.0.82"
+aws-sdk-dynamodb = "1.42.0"
+aws-config = "1.5.5"
+chrono = { version = "0.4.38", features = ["serde"]}
+serde_dynamo = { version = "4.2.14", features = ["aws-sdk-dynamodb+1"] }
+serde = {version = "1.0.208", features = ["derive"]}
+serde_json = "1.0.125"

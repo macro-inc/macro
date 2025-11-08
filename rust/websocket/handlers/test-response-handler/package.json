@@ -1,0 +1,8 @@
+{
+  "name": "test-response-handler",
+  "main": "index.js",
+  "type": "module",
+  "dependencies": {
+    "@aws-sdk/client-apigatewaymanagementapi": "^3.565.0"
+  }
+}

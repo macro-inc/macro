@@ -1,0 +1,20 @@
+{
+  "name": "websocket-connection-infra",
+  "main": "index.ts",
+  "scripts": {
+    "deploy": "npm run build --prefix ../../pulumi-shared-resources && pulumi up"
+  },
+  "devDependencies": {
+    "@types/node": "^18"
+  },
+  "dependencies": {
+    "@macro-inc/document-processing-job-types": "^0.1.1",
+    "@pulumi/archive": "^0.0.5",
+    "@pulumi/aws": "^6.0.0",
+    "@pulumi/aws-native": "^0.102.0",
+    "@pulumi/awsx": "^2.0.2",
+    "@pulumi/pulumi": "^3.0.0",
+    "@pulumi/std": "^1.6.2",
+    "pulumi-shared-resources": "file:../pulumi-shared-resources"
+  }
+}

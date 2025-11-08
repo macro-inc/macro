@@ -1,0 +1,29 @@
+{
+  "name": "pulumi-shared-resources",
+  "version": "1.0.0",
+  "description": "shared resources for other Pulumi programs.",
+  "main": "src/index.ts",
+  "scripts": {
+    "lint": "eslint . --ext js,jsx,ts,tsx",
+    "build": "tsc"
+  },
+  "devDependencies": {
+    "@types/node": "^18",
+    "@typescript-eslint/eslint-plugin": "^5.18.0",
+    "@typescript-eslint/parser": "^5.18.0",
+    "eslint": "^8.13.0",
+    "eslint-config-prettier": "^8.3.0",
+    "eslint-import-resolver-typescript": "^2.5.0",
+    "eslint-plugin-import": "^2.25.4",
+    "eslint-plugin-jest": "^26.5.3",
+    "eslint-plugin-prettier": "^4.0.0",
+    "prettier": "^2.5.1",
+    "typescript": "^5.4.5"
+  },
+  "dependencies": {
+    "@pulumi/archive": "^0.0.5",
+    "@pulumi/aws": "^6.0.0",
+    "@pulumi/pulumi": "^3.0.0",
+    "zod": "^3.23.5"
+  }
+}
