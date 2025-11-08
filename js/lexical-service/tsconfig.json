@@ -1,0 +1,29 @@
+{
+	"compilerOptions": {
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"forceConsistentCasingInFileNames": false,
+		"target": "es2022",
+		"verbatimModuleSyntax": false,
+		"allowJs": true,
+		"resolveJsonModule": true,
+		"moduleDetection": "force",
+		"downlevelIteration": true,
+		/* Strictness */
+		"noImplicitAny": false,
+		"noImplicitReturns": false,
+		"noImplicitThis": true,
+		"strictNullChecks": false,
+		"strictFunctionTypes": false,
+		"strictPropertyInitialization": false,
+		"strict": true,
+		"noUncheckedIndexedAccess": true,
+		"moduleResolution": "Bundler",
+		"module": "es2022",
+		"noEmit": true,
+		"lib": ["es2022", "dom"],
+		"types": ["./worker-configuration.d.ts", "@types/node"]
+	},
+	"exclude": ["node_modules", "dist", "tests"],
+	"include": ["src"]
+}

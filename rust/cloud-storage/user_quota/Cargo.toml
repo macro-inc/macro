@@ -1,0 +1,14 @@
+[package]
+edition = "2024"
+name = "user_quota"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+utoipa = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["openssl"]

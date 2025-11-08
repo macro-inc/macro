@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                p.id,\n                p.name,\n                p.\"userId\" as user_id, -- createor of the project\n                p.\"parentId\" as parent_id,\n                p.\"createdAt\"::timestamptz as created_at,\n                p.\"updatedAt\"::timestamptz as updated_at,\n                p.\"deletedAt\"::timestamptz as deleted_at\n            FROM \"UserHistory\" up\n            INNER JOIN \"Project\" p ON up.\"itemId\" = p.id AND up.\"itemType\" = 'project'\n            WHERE up.\"userId\" = $1 AND p.\"deletedAt\" IS NULL AND p.\"uploadPending\" = false\n            ORDER BY p.\"updatedAt\" DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "parent_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "c0b0f58e6b2129250821f51fcb1ebe9d876c2e251f04f0aa9b1c0942d73a4e0d"
+}

@@ -1,0 +1,10 @@
+mod ci '../ci.just'
+
+deploy-dev:
+  just ci::deploy-dev search-service
+
+check:
+  SQLX_OFFLINE=true cargo check
+
+run-local:  
+  cargo run --features macro_middleware/local_auth

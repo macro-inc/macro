@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_backfill_threads\n        SET messages_retrieved_count = $3, updated_at = NOW()\n        WHERE backfill_job_id = $1 AND thread_provider_id = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "783cfa4d140e45fc0df49929da288cdb955c8ebc4694074a58bd0e32b7fba36a"
+}

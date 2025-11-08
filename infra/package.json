@@ -1,0 +1,37 @@
+{
+  "name": "cloud-storage-infra",
+  "private": true,
+  "workspaces": [
+    "stacks/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "lint": "biome check .",
+    "format": "biome check --write ."
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.2.2",
+    "@types/node": "^20.8.10",
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "turbo": "latest",
+    "typescript": "^5.2.2"
+  },
+  "dependencies": {
+    "@pulumi/aws": "*",
+    "@pulumi/aws-native": "*",
+    "@pulumi/awsx": "*",
+    "@pulumi/datadog": "^4.51.0",
+    "@pulumi/docker-build": "^0.0.10",
+    "@pulumi/pulumi": "*",
+    "@pulumi/tls": "*",
+    "minimist": "^1.2.8"
+  },
+  "resolutions": {
+    "ts-node": "10.8.0"
+  },
+  "packageManager": "bun@1.2.0",
+  "engines": {
+    "node": ">=21"
+  }
+}

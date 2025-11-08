@@ -1,0 +1,16 @@
+[package]
+edition = "2024"
+name = "document_cognition_service_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+model = { path = "../model" }
+models_dcs = { path = "../models_dcs" }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

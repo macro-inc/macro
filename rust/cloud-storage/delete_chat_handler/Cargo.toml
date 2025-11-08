@@ -1,0 +1,17 @@
+[package]
+edition = "2024"
+name = "delete_chat_handler"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+aws_lambda_events = { workspace = true, features = ["sqs"] }
+lambda_runtime = { workspace = true }
+macro_entrypoint = { path = "../macro_entrypoint" }
+openssl = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["openssl"]

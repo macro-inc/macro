@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    INSERT INTO \"PdfHighlightRect\" (\"pdfHighlightAnchorId\", \"top\", \"left\", \"width\", \"height\")\n    SELECT *\n    FROM UNNEST(\n        $1::uuid[], \n        $2::double precision[], \n        $3::double precision[], \n        $4::double precision[], \n        $5::double precision[]\n    )\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Float8Array",
+        "Float8Array",
+        "Float8Array",
+        "Float8Array"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2f57ef816b974c70f46ed469ff98a316ee83b8e0b87a504a40ab4eb6f91c9bf6"
+}

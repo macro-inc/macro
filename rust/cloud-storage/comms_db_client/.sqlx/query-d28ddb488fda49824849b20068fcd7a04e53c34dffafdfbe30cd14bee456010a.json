@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT(m.sender_id) as id\n        FROM comms_channel_participants cp\n        JOIN comms_channels c ON c.id = cp.channel_id\n        JOIN comms_messages m ON m.channel_id = c.id \n        WHERE (m.id = $1 OR m.thread_id = $1) AND cp.left_at IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d28ddb488fda49824849b20068fcd7a04e53c34dffafdfbe30cd14bee456010a"
+}

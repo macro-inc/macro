@@ -1,0 +1,25 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO \"ChatMessage\" (\"chatId\", \"content\", \"role\", \"model\", \"isPartial\")\n            VALUES ($1, $2, $3, $4, true)\n            RETURNING id;\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Jsonb",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5734033c9efe4ba2019ffc42b20f0dfc31d6b64ceef358df575edca60717f705"
+}

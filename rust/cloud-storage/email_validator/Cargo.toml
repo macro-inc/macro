@@ -1,0 +1,9 @@
+[package]
+edition = "2024"
+name = "email_validator"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+lazy_static = { workspace = true }
+regex = { workspace = true }

@@ -1,0 +1,3 @@
+config:
+  aws:region: us-east-1
+  notification-email-poller:db-password-secret-key: notification-db-password-dev

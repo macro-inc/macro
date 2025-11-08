@@ -1,0 +1,1 @@
+export { EcrImage } from './ecr';

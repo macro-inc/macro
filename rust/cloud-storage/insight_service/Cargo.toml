@@ -1,0 +1,50 @@
+[package]
+edition = "2024"
+name = "insight_service"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+ai = { path = "../ai" }
+ai_format = { path = "../ai_format" }
+anyhow = { workspace = true }
+async-stream = { workspace = true }
+async-trait.workspace = true
+aws-config.workspace = true
+aws-sdk-secretsmanager.workspace = true
+aws-sdk-sqs.workspace = true
+axum.workspace = true
+chrono = { workspace = true }
+clap.workspace = true
+document_cognition_service_client = { path = "../document_cognition_service_client" }
+document_storage_service_client = { path = "../document_storage_service_client" }
+email_service_client = { path = "../email_service_client" }
+futures.workspace = true
+lexical_client = { path = "../lexical_client" }
+macro_auth = { path = "../macro_auth" }
+macro_cors = { path = "../macro_cors" }
+macro_db_client = { path = "../macro_db_client" }
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env = { path = "../macro_env" }
+macro_middleware = { path = "../macro_middleware" }
+model = { path = "../model" }
+models_dcs = { path = "../models_dcs" }
+models_email = { path = "../models_email" }
+reqwest = { workspace = true }
+schemars = { workspace = true }
+scribe = { path = "../scribe", features = ["dcs", "document", "email"] }
+secretsmanager_client = { path = "../secretsmanager_client" }
+serde.workspace = true
+serde_json.workspace = true
+sha2 = { workspace = true }
+sqlx = { workspace = true }
+sqs_worker = { path = "../sqs_worker" }
+strum = { workspace = true }
+strum_macros = { workspace = true }
+sync_service_client = { path = "../sync_service_client" }
+tokio = { workspace = true }
+tower-http.workspace = true
+tracing = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true, features = ["axum"] }
+uuid = { workspace = true }

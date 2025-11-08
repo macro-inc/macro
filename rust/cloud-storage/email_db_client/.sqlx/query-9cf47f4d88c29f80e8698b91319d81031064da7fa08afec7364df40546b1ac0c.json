@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_messages\n        SET\n            replying_to_id = update_data.new_replying_to_id,\n            updated_at = NOW()\n        FROM\n            UNNEST($1::uuid[], $2::uuid[])\n                AS update_data(message_id, new_replying_to_id)\n        WHERE\n            email_messages.id = update_data.message_id\n            AND email_messages.link_id = $3\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9cf47f4d88c29f80e8698b91319d81031064da7fa08afec7364df40546b1ac0c"
+}

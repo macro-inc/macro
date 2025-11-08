@@ -1,0 +1,16 @@
+lambda_name := file_name(justfile_directory())
+
+test:
+    cargo test --all-features
+
+build:
+	SQLX_OFFLINE=true cargo lambda build --release --bin {{lambda_name}} --output-format zip
+
+create-localstack:
+	docker run -d --name localstack -p 4566:4566 -e SERVICES=sqs localstack/localstack
+
+start-localstack:
+	docker run -p 4566:4566 -e SERVICES=sqs localstack/localstack
+
+create-queue:
+	AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name my-test-queue

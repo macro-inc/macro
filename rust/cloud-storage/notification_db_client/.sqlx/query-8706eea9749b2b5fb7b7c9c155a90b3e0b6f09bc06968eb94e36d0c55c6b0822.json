@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM notification_email_unsubscribe WHERE email = $1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8706eea9749b2b5fb7b7c9c155a90b3e0b6f09bc06968eb94e36d0c55c6b0822"
+}

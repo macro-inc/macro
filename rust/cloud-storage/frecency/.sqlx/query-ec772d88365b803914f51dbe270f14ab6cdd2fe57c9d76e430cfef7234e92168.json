@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO frecency_events (\n                user_id,\n                entity_type,\n                event_type,\n                timestamp,\n                connection_id,\n                entity_id,\n                was_processed\n            )\n            VALUES ($1, $2, $3, $4, $5, $6, $7)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ec772d88365b803914f51dbe270f14ab6cdd2fe57c9d76e430cfef7234e92168"
+}

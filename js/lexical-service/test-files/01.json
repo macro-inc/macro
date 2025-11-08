@@ -1,0 +1,756 @@
+{
+  "root": {
+    "children": [
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "user mention:",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "BdRGgOKy"
+            }
+          },
+          {
+            "type": "linebreak",
+            "version": 1,
+            "$": {
+              "id": "SJ2Wly5m"
+            }
+          },
+          {
+            "type": "user-mention",
+            "version": 1,
+            "$": {
+              "id": "FMA7dklV"
+            },
+            "userId": "macro|seamus@macro.com",
+            "email": "seamus@macro.com"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "hzEghima",
+          "searchText": "user mention:\nseamus@macro.com"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "document mention:",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "DV0ET3aA"
+            }
+          },
+          {
+            "type": "linebreak",
+            "version": 1,
+            "$": {
+              "id": "-jFL6qwR"
+            }
+          },
+          {
+            "type": "document-mention",
+            "version": 2,
+            "$": {
+              "id": "VPDkQZ6j"
+            },
+            "documentId": "16152a98-4cd8-4e73-80c2-b8331b4f224d",
+            "documentName": "✏️ Canvas Block Overview",
+            "blockName": "md",
+            "blockParams": {},
+            "collapsed": false
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "sM0KN__Y",
+          "searchText": "document mention:\n✏️ Canvas Block Overview"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "document mention with params:",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "PdcIX3_v"
+            }
+          },
+          {
+            "type": "linebreak",
+            "version": 1,
+            "$": {
+              "id": "lLc_zKor"
+            }
+          },
+          {
+            "type": "document-mention",
+            "version": 2,
+            "$": {
+              "id": "YRLAc-TX"
+            },
+            "documentId": "fe35af45-5d56-4e5d-8af1-edb5e1950b4c",
+            "documentName": "Business letter",
+            "blockName": "pdf",
+            "blockParams": {
+              "pdf_page_number": "2",
+              "pdf_page_y": "0"
+            },
+            "collapsed": false
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "h6ccVz-2",
+          "searchText": "document mention with params:\nBusiness letter"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "date mention:",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "i2G1U-CI"
+            }
+          },
+          {
+            "type": "linebreak",
+            "version": 1,
+            "$": {
+              "id": "cXztg-8x"
+            }
+          },
+          {
+            "type": "date-mention",
+            "version": 1,
+            "$": {
+              "id": "DQTVvpUv"
+            },
+            "date": "2025-10-02T00:00:00.000Z",
+            "displayFormat": "Thu, Oct 2"
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "eDZpj-s-",
+          "searchText": "date mention:\nThu, Oct 2"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "lists with nesting",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "feiZCPct"
+                }
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "$": {
+              "id": "3YVcwtuL"
+            },
+            "value": 1
+          },
+          {
+            "children": [
+              {
+                "children": [
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "nested list",
+                        "type": "text",
+                        "version": 1,
+                        "$": {
+                          "id": "Pk3-Im5S"
+                        }
+                      }
+                    ],
+                    "direction": "ltr",
+                    "format": "",
+                    "indent": 1,
+                    "type": "listitem",
+                    "version": 1,
+                    "$": {
+                      "id": "o-V7HfE7"
+                    },
+                    "value": 1
+                  },
+                  {
+                    "children": [
+                      {
+                        "detail": 0,
+                        "format": 0,
+                        "mode": "normal",
+                        "style": "",
+                        "text": "nested list 2",
+                        "type": "text",
+                        "version": 1,
+                        "$": {
+                          "id": "p1THzqMO"
+                        }
+                      }
+                    ],
+                    "direction": "ltr",
+                    "format": "",
+                    "indent": 1,
+                    "type": "listitem",
+                    "version": 1,
+                    "$": {
+                      "id": "p507b3sk"
+                    },
+                    "value": 2
+                  },
+                  {
+                    "children": [
+                      {
+                        "children": [
+                          {
+                            "children": [
+                              {
+                                "detail": 0,
+                                "format": 0,
+                                "mode": "normal",
+                                "style": "",
+                                "text": "nested list 3",
+                                "type": "text",
+                                "version": 1,
+                                "$": {
+                                  "id": "gxFr4zu2"
+                                }
+                              }
+                            ],
+                            "direction": "ltr",
+                            "format": "",
+                            "indent": 2,
+                            "type": "listitem",
+                            "version": 1,
+                            "$": {
+                              "id": "yr252VI2"
+                            },
+                            "value": 1
+                          }
+                        ],
+                        "direction": "ltr",
+                        "format": "",
+                        "indent": 0,
+                        "type": "list",
+                        "version": 1,
+                        "$": {
+                          "id": "YAsYylfH"
+                        },
+                        "listType": "bullet",
+                        "start": 1,
+                        "tag": "ul"
+                      }
+                    ],
+                    "direction": "ltr",
+                    "format": "",
+                    "indent": 1,
+                    "type": "listitem",
+                    "version": 1,
+                    "$": {
+                      "id": "j8IIJ91y"
+                    },
+                    "value": 3
+                  }
+                ],
+                "direction": "ltr",
+                "format": "",
+                "indent": 0,
+                "type": "list",
+                "version": 1,
+                "$": {
+                  "id": "7WbddlLi"
+                },
+                "listType": "bullet",
+                "start": 1,
+                "tag": "ul"
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "$": {
+              "id": "ZoPdElt0"
+            },
+            "value": 2
+          },
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "Lists of all types",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "aWA2PjEI"
+                }
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "$": {
+              "id": "W5vAksEO"
+            },
+            "value": 2
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "list",
+        "version": 1,
+        "$": {
+          "id": "nJMxhyJi",
+          "searchText": "lists with nesting\n\nnested list\n\nnested list 2\n\nnested list 3\n\nLists of all types"
+        },
+        "listType": "bullet",
+        "start": 1,
+        "tag": "ul"
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "nice",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "NzYnoPmo"
+                }
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "$": {
+              "id": "DMOa6OVK"
+            },
+            "value": 1
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "list",
+        "version": 1,
+        "$": {
+          "id": "KUGc0LWB",
+          "searchText": "nice"
+        },
+        "listType": "number",
+        "start": 1,
+        "tag": "ol"
+      },
+      {
+        "children": [
+          {
+            "children": [
+              {
+                "detail": 0,
+                "format": 0,
+                "mode": "normal",
+                "style": "",
+                "text": "checkmate",
+                "type": "text",
+                "version": 1,
+                "$": {
+                  "id": "dsDXt8G-"
+                }
+              }
+            ],
+            "direction": "ltr",
+            "format": "",
+            "indent": 0,
+            "type": "listitem",
+            "version": 1,
+            "$": {
+              "id": "xLg2Rk7V"
+            },
+            "checked": true,
+            "value": 1
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "list",
+        "version": 1,
+        "$": {
+          "id": "quw5UpfY",
+          "searchText": "checkmate"
+        },
+        "listType": "check",
+        "start": 1,
+        "tag": "ul"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "this is a paragraph that is double returned. should be like that",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "Cgl52vdy"
+            }
+          },
+          {
+            "detail": 0,
+            "format": 1,
+            "mode": "normal",
+            "style": "",
+            "text": ".",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "JINecNt6"
+            }
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "epsdjRbH",
+          "searchText": "this is a paragraph that is double returned. should be like that."
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 1,
+            "mode": "normal",
+            "style": "",
+            "text": "bold",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "XaJ7B-Zx"
+            }
+          },
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": " ",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "3ycSdim6"
+            }
+          },
+          {
+            "detail": 0,
+            "format": 2,
+            "mode": "normal",
+            "style": "",
+            "text": "italic",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "E0FNcb_f"
+            }
+          },
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": " ",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "vR5rhOXw"
+            }
+          },
+          {
+            "detail": 0,
+            "format": 3,
+            "mode": "normal",
+            "style": "",
+            "text": "bolditalic",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "VeQXrsvP"
+            }
+          },
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": " ",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "92hitkOr"
+            }
+          },
+          {
+            "detail": 0,
+            "format": 4,
+            "mode": "normal",
+            "style": "",
+            "text": "striiiiiiiike",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "pOYSXkNn"
+            }
+          },
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": " and finally ",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "1NxTJkuw"
+            }
+          },
+          {
+            "detail": 0,
+            "format": 16,
+            "mode": "normal",
+            "style": "",
+            "text": "code",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "qbY0fQiN"
+            }
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "paragraph",
+        "version": 1,
+        "$": {
+          "id": "KPHrH_UX",
+          "searchText": "bold italic bolditalic striiiiiiiike and finally code"
+        },
+        "textFormat": 0,
+        "textStyle": ""
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "H1",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "RozGv__c"
+            }
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "heading",
+        "version": 1,
+        "$": {
+          "id": "aYvDVE84",
+          "searchText": "H1"
+        },
+        "tag": "h1"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "H2",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "CCod3GV2"
+            }
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "heading",
+        "version": 1,
+        "$": {
+          "id": "1i8JsO0L",
+          "searchText": "H2"
+        },
+        "tag": "h2"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "H3",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "zuZZx11a"
+            }
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "heading",
+        "version": 1,
+        "$": {
+          "id": "VCOgJDib",
+          "searchText": "H3"
+        },
+        "tag": "h3"
+      },
+      {
+        "children": [
+          {
+            "detail": 0,
+            "format": 0,
+            "mode": "normal",
+            "style": "",
+            "text": "block quote asdlkasjdlkasjdlkasjdlaskjdalskj",
+            "type": "text",
+            "version": 1,
+            "$": {
+              "id": "hLEfTEPK"
+            }
+          }
+        ],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "quote",
+        "version": 1,
+        "$": {
+          "id": "GR_cGlQs",
+          "searchText": "block quote asdlkasjdlkasjdlkasjdlaskjdalskj"
+        }
+      },
+      {
+        "children": [],
+        "direction": "ltr",
+        "format": "",
+        "indent": 0,
+        "type": "custom-code",
+        "version": 1,
+        "$": {
+          "id": "XRVMF66H",
+          "searchText": "code block"
+        },
+        "language": "plaintext"
+      }
+    ],
+    "direction": "ltr",
+    "format": "",
+    "indent": 0,
+    "type": "root",
+    "version": 1,
+    "$": {
+      "id": "a8XO2hOy",
+      "documentMetadata": {
+        "version": 1
+      }
+    }
+  }
+}

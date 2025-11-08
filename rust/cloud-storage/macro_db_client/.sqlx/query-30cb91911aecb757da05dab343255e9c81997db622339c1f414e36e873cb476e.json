@@ -1,0 +1,32 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            u.id AS user_id,\n            u.email,\n            COUNT(d.id) AS document_count\n        FROM\n            \"User\" u\n        LEFT JOIN\n            \"Document\" d ON u.id = d.owner AND d.\"fileType\" IS DISTINCT FROM 'docx'\n        WHERE\n            u.id NOT LIKE 'macro|%'\n        GROUP BY\n            u.id, u.email\n        ORDER BY\n            document_count DESC;\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "document_count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": []
+    },
+    "nullable": [
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "30cb91911aecb757da05dab343255e9c81997db622339c1f414e36e873cb476e"
+}

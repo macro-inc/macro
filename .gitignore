@@ -1,0 +1,6 @@
+.direnv/*
+.envrc
+.env*
+**/.env
+.idea/
+**/.DS_Store

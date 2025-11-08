@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH TargetLabel AS (\n            SELECT\n                l.id AS label_id\n            FROM\n                email_labels l\n            WHERE\n                l.link_id = $2\n                AND l.provider_label_id = $3\n        )\n        SELECT\n            COUNT(m.id) AS \"message_count!\"\n        FROM\n            email_messages m\n        JOIN\n            email_message_labels ml ON m.id = ml.message_id\n        JOIN\n            TargetLabel tl ON ml.label_id = tl.label_id\n        WHERE\n            m.thread_id = $1\n            AND m.link_id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_count!",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3add5080fe15aecdecc080a138ec080500d95d12e31cba7f56bba7b7764de80f"
+}

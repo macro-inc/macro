@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    SELECT \n        bp.sha\n    FROM \"BomPart\" bp\n    WHERE bp.\"documentBomId\" = $1\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sha",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "cd98a8eb1ebdeb28951774b9daf0a9f05967d0adb106e93608b3b5a64adae02a"
+}

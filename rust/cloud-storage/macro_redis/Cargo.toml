@@ -1,0 +1,11 @@
+[package]
+edition = "2024"
+name = "macro_redis"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+redis = { workspace = true, features = ["tokio-native-tls-comp"] }
+tokio = { workspace = true }
+tracing = { workspace = true }

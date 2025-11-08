@@ -1,0 +1,11 @@
+[package]
+edition = "2024"
+name = "search_service_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+models_search = { path = "../models_search" }
+reqwest = { workspace = true }
+tracing = { workspace = true }

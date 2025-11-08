@@ -1,0 +1,4 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  opensearch:db-password-key: macro-opensearch-password-dev

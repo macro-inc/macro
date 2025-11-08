@@ -1,0 +1,209 @@
+[workspace]
+resolver = "2"
+
+members = [
+  "ai",
+  "ai_format",
+  "ai_tools",
+  "authentication_service",
+  "authentication_service_client",
+  "comms_db_client",
+  "comms_service",
+  "comms_service_client",
+  "connection_gateway",
+  "contacts_db_client",
+  "contacts_service",
+  "convert_service",
+  "dataloss_prevention_handler",
+  "delete_chat_handler",
+  "delete_document_worker",
+  "deleted_item_poller",
+  "document_cognition_service",
+  "document_cognition_service_client",
+  "document_storage_service",
+  "document_storage_service_client",
+  "document_text_extractor",
+  "docx_unzip_handler",
+  "dynamodb_client",
+  "email_db_client",
+  "email_refresh_handler",
+  "email_scheduled_handler",
+  "email_service",
+  "email_service_client",
+  "email_suppression_handler",
+  "email_validator",
+  "experiment_service",
+  "frecency",
+  "gmail_client",
+  "insight_service",
+  "insight_service_client",
+  "integration_tests/*",
+  "lambda_client",
+  "lexical_client",
+  "macro_auth",
+  "macro_cache_client",
+  "macro_client_errors",
+  "macro_cors",
+  "macro_db_client",
+  "macro_db_migrator",
+  "macro_env",
+  "macro_middleware",
+  "macro_notify",
+  "macro_project_utils",
+  "macro_redis",
+  "macro_redis_cluster_client",
+  "macro_service_client",
+  "macro_share_permissions",
+  "macro_uuid",
+  "mention_utils",
+  "metering_db_client",
+  "metering_service",
+  "metering_service_client",
+  "model",
+  "model_notifications", "model_user",
+  "models_dcs",
+  "models_email",
+  "models_metering",
+  "models_pagination",
+  "models_permissions",
+  "models_properties",
+  "models_search",
+  "models_sfs",
+  "models_soup",
+  "models_team",
+  "non_empty",
+  "notification_db_client",
+  "notification_service",
+  "notification_service_client",
+  "opensearch_client",
+  "organization_retention_handler",
+  "organization_retention_trigger",
+  "organization_service",
+  "organization_service_client",
+  "permission",
+  "properties_db_client",
+  "properties_service",
+  "properties_service_client",
+  "roles_and_permissions",
+  "s3_client",
+  "scribe",
+  "search_processing_service",
+  "search_service",
+  "search_service_client",
+  "search_upload_handler",
+  "secretsmanager_client",
+  "ses_client",
+  "sha_cleanup_worker",
+  "sha_ref_count_resetter",
+  "sns_client", "soup",
+  "sqs_client",
+  "sqs_worker",
+  "static_file_service",
+  "static_file_service_client",
+  "sync_service_client",
+  "teams",
+  "unfurl_service",
+  "upload_extractor_lambda_handler",
+  "upload_extractor_lambda_trigger",
+  "user_link_cleanup_handler",
+  "user_quota",
+  "worker_trigger",
+]
+
+[workspace.dependencies]
+anyhow = "1.0.93"
+async-openai = { version = "0.28.3", features = ["byot"] }
+async-stream = "0.3.6"
+async-trait = "0.1.86"
+aws-config = { version = "1.5.17", features = ["behavior-version-latest"] }
+aws-sdk-dynamodb = "1.66.0"
+aws-sdk-lambda = "1.69.0"
+aws-sdk-s3 = "1.77.0"
+aws-sdk-secretsmanager = "1.64.0"
+aws-sdk-sesv2 = "1.68.0"
+aws-sdk-sns = "1.61.0"
+aws-sdk-sqs = "1.60.0"
+aws-smithy-types = "1.2.13"
+aws_lambda_events = { version = "0.16.0", default-features = false }
+axum = { version = "0.7.9", features = [
+  "tower-log",
+] } # causes breaking changes to bump to 0.8.x
+axum-extra = { version = "0.9" }
+base64 = "0.22.1"
+cached = { version = "0.54.0", features = ["async_tokio_rt_multi_thread"] }
+chrono = { version = "0.4.39", features = ["serde"] }
+clap = { version = "4.5.20", features = ["derive"] }
+cloudfront_sign = "0.3.0"
+cookie = "0.18.1"
+dashmap = "6.1.0"
+dotenv = "0.15.0"
+ego-tree = "0.6.2"
+futures = "0.3.31"
+hex = "0.4.3"
+http-body-util = "0.1.2"
+jsonwebtoken = "9.3.1"
+lambda_runtime = "0.13.0"
+lazy_static = "1.5.0"
+log = "0.4.26"
+mockall = "0.13"
+nanoid = "0.4.0"
+nom = "8"
+openssl = { version = "0.10.71", features = ["vendored"] }
+pdfium-render = { version = "0.8.28" }
+rand = "0.9.0"
+redis = "0.29.0"
+regex = "1.11.1"
+reqwest = { version = "0.12.12", features = ["json"] }
+schemars = { version = "1.0.4", features = ["chrono04"] }
+serde = { version = "1.0.214", features = ["derive"] }
+serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
+serde_json = { version = "1.0.132" }
+serde_repr = "0.1"
+serde_with = { version = "3.12.0", features = ["base64"] }
+sha2 = "0.10.8"
+sqlx = { version = "0.7.4", features = [
+  "chrono",
+  "postgres",
+  "runtime-tokio-native-tls",
+  "uuid",
+] }
+strum = { version = "0.27.1", features = ["derive"] }
+thiserror = "2.0.0"
+time = "0.3.37"
+tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread"] }
+tokio-util = "0.7.13"
+tower = { version = "0.5.1", features = ["util"] }
+tower-http = { version = "0.6.1", features = [
+  "compression-gzip",
+  "cors",
+  "trace",
+] }
+tracing = "0.1.41"
+tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
+tracing-tree = "0.4.0"
+urlencoding = "2.1.3"
+utoipa = { version = "5.2.0", features = [
+  "axum_extras",
+  "chrono",
+  "repr",
+  "uuid",
+] }
+utoipa-swagger-ui = { version = "8.0.3", features = ["axum"] }
+uuid = { version = "1.15.1", features = ["fast-rng", "serde", "v4", "v7"] }
+# this is pinned to match axum 0.7.9 dependency requirements
+async-stripe = { version = "0.41", default-features = false, features = [
+  "billing",
+  "checkout",
+  "runtime-tokio-hyper",
+] }
+axum-macros = "0.4.2"
+bytes = "1.10.1"
+bzip2 = { version = "0.5.1", default-features = false, features = [
+  "libbz2-rs-sys",
+] }
+derive_builder = "0.20.2"
+once_cell = "1.21.3"
+scraper = "0.18"
+strum_macros = "0.27.1"
+url = "2.5.0"
+zip = "=2.4.2"

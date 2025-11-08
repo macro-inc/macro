@@ -1,0 +1,27 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"UserInsightBatch\" (\n            \"userId\", \n            \"insightIds\", \n            \"totalChars\", \n            \"estimatedTokens\", \n            \"expiresAt\",\n            \"rankingContext\"\n        )\n        VALUES ($1, $2, $3, $4, $5, $6)\n        ON CONFLICT (\"userId\") \n        DO UPDATE SET\n            \"insightIds\" = EXCLUDED.\"insightIds\",\n            \"totalChars\" = EXCLUDED.\"totalChars\",\n            \"estimatedTokens\" = EXCLUDED.\"estimatedTokens\",\n            \"expiresAt\" = EXCLUDED.\"expiresAt\",\n            \"rankingContext\" = EXCLUDED.\"rankingContext\",\n            \"version\" = \"UserInsightBatch\".\"version\" + 1,\n            \"createdAt\" = NOW()\n        RETURNING \"id\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Int4",
+        "Int4",
+        "Timestamp",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6b56c6a7b38085081264b04cc4f37441c32249d20e9b6244387a31910b70cc45"
+}

@@ -1,0 +1,38 @@
+[package]
+edition = "2024"
+name = "document_text_extractor"
+publish = false
+version = "0.1.0"
+
+[features]
+local = []
+local-extract = []
+macos = []
+
+[dependencies]
+ai = { path = "../ai" }
+anyhow = { workspace = true }
+aws-config = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+aws_lambda_events = { workspace = true, features = [
+  "eventbridge",
+  "s3",
+  "sqs",
+] }
+chrono = { workspace = true }
+lambda_runtime = { workspace = true }
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env_var = { path = "../macro_env_var" }
+mockall = { workspace = true }
+model = { path = "../model" }
+openssl = { workspace = true }
+pdfium-render = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+urlencoding = { workspace = true }
+uuid = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["openssl"]

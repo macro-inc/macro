@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            u.\"id\" as id\n            FROM \"Project\" p\n            INNER JOIN \"UserHistory\" uh ON uh.\"itemId\" = p.\"id\" AND uh.\"itemType\" = 'project'\n            INNER JOIN \"User\" u ON u.id = uh.\"userId\"\n            WHERE p.id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "aac44fedc7a698d155114e4b84cf3cf60de7edc46f5bd7d943873cf2809ade77"
+}

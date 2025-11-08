@@ -1,0 +1,15 @@
+[package]
+edition = "2024"
+name = "macro_project_utils"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+comms_service_client = { path = "../comms_service_client" }
+macro_db_client = { path = "../macro_db_client" }
+macro_notify = { path = "../macro_notify" }
+model = { path = "../model" }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

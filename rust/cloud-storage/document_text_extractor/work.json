@@ -1,0 +1,23 @@
+{
+  "Records": [
+    {
+      "messageId": "MessageID_1",
+      "receiptHandle": "MessageReceiptHandle",
+      "body": "Message Body",
+      "eventSourceARN": "arn:aws:sqs:us-east-1:123456789012:SQSQueue",
+      "eventSource": "aws:sqs",
+      "awsRegion": "us-east-1",
+      "attributes": {},
+      "messageAttributes": {
+        "key": {
+          "stringValue": "macro|eric.hayes@macro.com/c624bc32-709e-407c-a9d6-c25f69b90fcf/77727.pdf",
+          "dataType": "String"
+        },
+        "bucket": {
+          "stringValue": "doc-storage-dev",
+          "dataType": "String"
+        }
+      }
+    }
+  ]
+}

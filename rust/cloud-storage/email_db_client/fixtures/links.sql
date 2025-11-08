@@ -1,0 +1,15 @@
+INSERT INTO email_links (id,
+                         macro_id,
+                         fusionauth_user_id,
+                         email_address,
+                         provider)
+VALUES ('00000000-0000-0000-0000-000000000001',
+        'macro|user1@macro.com',
+        'fa_user1',
+        'user1@macro.com',
+        'GMAIL'),
+       ('00000000-0000-0000-0000-000000000002',
+        'macro|user2@macro.com',
+        'fa_user2',
+        'user2@macro.com',
+        'GMAIL');

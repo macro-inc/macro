@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_threads\n        SET\n            inbox_visible = $1,\n            updated_at = NOW()\n        WHERE\n            id = $2 AND\n            link_id = $3\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a2af7d24d1993fbdc8fc31149a376803fa1c00827bcb8f51c7d000c0a9adfa94"
+}

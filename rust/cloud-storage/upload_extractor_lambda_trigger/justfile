@@ -1,0 +1,14 @@
+lambda_name := file_name(justfile_directory())
+
+test:
+    cargo test --all-features
+
+build:
+	cargo lambda build --release --bin {{lambda_name}} --output-format zip
+
+watch:
+    cargo lambda watch
+
+# invoke the lambda locally after watch-local is running
+invoke:
+    cargo lambda invoke {{lambda_name}} --data-file event.json 

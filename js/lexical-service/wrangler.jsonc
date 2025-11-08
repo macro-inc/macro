@@ -1,0 +1,54 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ */
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "lexical-service",
+  "main": "src/index.ts",
+  "compatibility_date": "2025-07-22",
+  "observability": {
+    "enabled": true
+  },
+  "services": [
+    {
+      "binding": "SYNC_SERVICE",
+      "service": "sync-service-prod"
+    }
+  ],
+  "vars": {
+    "SYNC_SERVICE_URL": "https://sync-service-prod.macroverse.workers.dev",
+  },
+  "env": {
+    "local": {
+      "vars": {
+        "SYNC_SERVICE_URL": "https://sync-service-dev.macroverse.workers.dev",
+      }
+    },
+    "dev": {
+      "services": [
+        {
+          "binding": "SYNC_SERVICE",
+          "service": "sync-service-dev"
+        }
+      ],
+      "vars": {
+        "SYNC_SERVICE_URL": "https://sync-service-dev.macroverse.workers.dev",
+      }
+    },
+    "prod": {
+      "services": [
+        {
+          "binding": "SYNC_SERVICE",
+          "service": "sync-service-prod"
+        }
+      ],
+      "vars": {
+        "SYNC_SERVICE_URL": "https://sync-service-prod.macroverse.workers.dev",
+      }
+    }
+  },
+  "dev": {
+    "port": 8931,
+  }
+}

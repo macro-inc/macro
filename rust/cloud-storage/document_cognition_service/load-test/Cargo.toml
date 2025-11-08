@@ -1,0 +1,16 @@
+[package]
+edition = "2024"
+name = "load-test"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+futures = { workspace = true }
+http = "1.1.0"
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tokio-tungstenite = { version = "0.24.0", features = ["native-tls"] }
+tungstenite = { version = "0.24.0", features = ["url"] }

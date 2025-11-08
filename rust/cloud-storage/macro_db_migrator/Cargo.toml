@@ -1,0 +1,8 @@
+[package]
+edition = "2024"
+name = "macro_db_migrator"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+sqlx = { workspace = true, features = ["migrate"] }

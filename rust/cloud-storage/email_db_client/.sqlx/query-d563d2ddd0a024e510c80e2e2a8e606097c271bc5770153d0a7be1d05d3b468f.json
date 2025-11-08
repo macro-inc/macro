@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)\n        SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::email_recipient_type[])\n        ON CONFLICT (message_id, contact_id, recipient_type) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        {
+          "Custom": {
+            "name": "_email_recipient_type",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "email_recipient_type",
+                  "kind": {
+                    "Enum": [
+                      "TO",
+                      "CC",
+                      "BCC"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d563d2ddd0a024e510c80e2e2a8e606097c271bc5770153d0a7be1d05d3b468f"
+}

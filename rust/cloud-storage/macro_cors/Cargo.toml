@@ -1,0 +1,9 @@
+[package]
+edition = "2024"
+name = "macro_cors"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+axum = { workspace = true }
+tower-http = { workspace = true }

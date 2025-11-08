@@ -1,0 +1,90 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\nINSERT INTO usage_records (\n   used_open_router, provider, model, usage,  user_id, service_name, operation_type,  input_tokens, output_tokens\n) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)\nRETURNING id, used_open_router, provider, model, usage, user_id, service_name, operation_type, input_tokens, output_tokens,  created_at\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "used_open_router",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 3,
+        "name": "model",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "usage",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 5,
+        "name": "user_id",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 6,
+        "name": "service_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 7,
+        "name": "operation_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 8,
+        "name": "input_tokens",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 9,
+        "name": "output_tokens",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 10,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Bool",
+        "Varchar",
+        "Varchar",
+        "Jsonb",
+        "Varchar",
+        "Varchar",
+        "Varchar",
+        "Int4",
+        "Int4"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "28775a1530218b05ae21ec506f3a8b19eba4e31482505f760842ec4758f7aa25"
+}

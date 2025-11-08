@@ -1,0 +1,8 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  properties-service:macro_db_secret_key: macro-db-prod
+  properties-service:fusionauth_client_id: fusionauth-client-id-key-prod
+  properties-service:fusionauth_issuer: auth.macro.com
+  properties-service:internal_auth_key: document-storage-service-auth-key-prod
+  properties-service:jwt_secret_key: fusionauth-jwt-secret-prod

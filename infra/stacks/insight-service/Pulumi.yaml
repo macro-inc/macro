@@ -1,0 +1,3 @@
+name: insight-service
+runtime: nodejs
+description: Macro insight service

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE \"ChatMessage\"\n            SET \"content\" = $1, \"updatedAt\" = NOW(), \"isPartial\" = false\n            WHERE id = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Jsonb",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3618c9015853457f4a119e1e6e240b6d6f015002dfd06d6b4a131fb075bd5a7c"
+}

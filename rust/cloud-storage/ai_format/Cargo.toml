@@ -1,0 +1,8 @@
+[package]
+edition = "2024"
+name = "ai_format"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+chrono = { workspace = true }

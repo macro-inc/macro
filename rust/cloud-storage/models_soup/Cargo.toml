@@ -1,0 +1,14 @@
+[package]
+edition = "2024"
+name = "models_soup"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+model-entity = { path = "../model-entity" }
+models_pagination = { path = "../models_pagination" }
+serde = { workspace = true }
+strum = { workspace = true }
+utoipa = { workspace = true }

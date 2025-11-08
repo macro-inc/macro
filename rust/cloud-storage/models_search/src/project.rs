@@ -1,0 +1,128 @@
+use crate::{MatchType, SearchOn, SearchResponse, SearchResponseItem};
+use item_filters::ProjectFilters;
+use schemars::JsonSchema;
+use serde::{Deserialize, Serialize};
+use utoipa::ToSchema;
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ProjectSearchResult {
+    /// array of content matches for a project
+    pub content: Vec<String>,
+}
+
+/// Metadata associated with Project Search, to be used with SearchResponseItem
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ProjectSearchMetadata {
+    pub project_id: String,
+    pub owner_id: String,
+    pub updated_at: i64,
+    pub created_at: i64,
+    pub project_name: String,
+}
+
+/// A single response item, part of the ProjectSearchResponse object
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ProjectSearchResponseItem {
+    /// Standardized fields that all item types will share.
+    /// These field names are being aligned across all item types
+    /// for consistency in our data model.
+    pub id: String,
+    pub name: String,
+    pub owner_id: String,
+
+    pub updated_at: i64,
+    pub created_at: i64,
+    pub project_search_results: Vec<ProjectSearchResult>,
+}
+
+/// ProjectSearchResponseItem object with project metadata we fetch from macrodb. we don't store these
+/// timestamps in opensearch as they would require us to update the project record
+/// every time the project updates (specifically for updated_at and viewed_at)
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ProjectSearchResponseItemWithMetadata {
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub viewed_at: Option<i64>,
+    pub parent_project_id: Option<String>,
+    #[serde(flatten)]
+    pub extra: ProjectSearchResponseItem,
+}
+
+impl From<SearchResponseItem<ProjectSearchResult, ProjectSearchMetadata>>
+    for ProjectSearchResponseItem
+{
+    fn from(response: SearchResponseItem<ProjectSearchResult, ProjectSearchMetadata>) -> Self {
+        ProjectSearchResponseItem {
+            id: response.metadata.project_id,
+            name: response.metadata.project_name,
+            owner_id: response.metadata.owner_id,
+            updated_at: response.metadata.updated_at,
+            created_at: response.metadata.created_at,
+            project_search_results: response.results,
+        }
+    }
+}
+
+/// Project Search Response
+pub type ProjectSearchResponse = SearchResponse<ProjectSearchResponseItemWithMetadata>;
+
+#[derive(Serialize, Deserialize, Debug, ToSchema, JsonSchema)]
+pub struct ProjectSearchRequest {
+    /// The query to search for
+    pub query: Option<String>,
+    /// Multiple terms to search over
+    pub terms: Option<Vec<String>>,
+    /// The match type to use when searching
+    pub match_type: MatchType,
+    /// Search filters for chat
+    #[serde(flatten)]
+    pub filters: Option<ProjectFilters>,
+    /// Fields to search on (Name, Content, NameContent). Defaults to Content
+    #[serde(default)]
+    pub search_on: SearchOn,
+    /// If true, returns only 1 result per entity. False by default.
+    pub collapse: Option<bool>,
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema)]
+pub struct SimpleProjectSearchResponseBaseItem<T> {
+    /// The project id
+    pub project_id: String,
+    #[schema(inline)]
+    /// The time the project was last updated
+    pub updated_at: T,
+    #[schema(inline)]
+    /// The time the project was created
+    pub created_at: T,
+    /// The project name
+    pub project_name: String,
+    /// The id of the user who created the project
+    pub user_id: String,
+    /// The opensearch matches on the project
+    pub content: Option<Vec<String>>,
+}
+
+pub type SimpleProjectSearchResponseItem =
+    SimpleProjectSearchResponseBaseItem<crate::TimestampSeconds>;
+
+impl From<opensearch_client::search::projects::ProjectSearchResponse>
+    for SimpleProjectSearchResponseItem
+{
+    fn from(response: opensearch_client::search::projects::ProjectSearchResponse) -> Self {
+        Self {
+            project_id: response.project_id,
+            updated_at: response.updated_at.into(),
+            created_at: response.created_at.into(),
+            project_name: response.project_name,
+            user_id: response.user_id,
+            content: response.content,
+        }
+    }
+}
+
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct SimpleProjectSearchResponse {
+    /// List containing results from projects.
+    /// Each item in the list is for a specific project.
+    pub results: Vec<SimpleProjectSearchResponseItem>,
+}

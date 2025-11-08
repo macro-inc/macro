@@ -1,0 +1,11 @@
+# Ignore everything in target
+/target/*
+
+# But keep the lambda directory
+!/target/lambda/
+
+# And all files under lambda subdirectories
+!/target/lambda/**/bootstrap
+!/target/lambda/**/bootstrap.zip
+
+!*/**/.env.sample

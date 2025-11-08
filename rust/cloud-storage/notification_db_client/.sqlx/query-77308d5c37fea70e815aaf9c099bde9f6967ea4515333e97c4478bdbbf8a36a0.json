@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE user_notification un\n            SET seen_at = NOW()\n        FROM notification n\n        WHERE n.id = un.notification_id\n            AND n.event_item_id = $2\n            AND un.user_id = $1\n            AND un.seen_at IS NULL\n        RETURNING un.notification_id;\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notification_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "77308d5c37fea70e815aaf9c099bde9f6967ea4515333e97c4478bdbbf8a36a0"
+}

@@ -1,0 +1,6 @@
+{
+  "type": "context",
+  "provider_source": "chat",
+  "user_id": "fake|user.com",
+  "resource_id": "message_id"
+}
