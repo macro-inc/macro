@@ -1,0 +1,45 @@
+[package]
+edition = "2024"
+name = "sqs_client"
+publish = false
+version = "0.1.0"
+
+[features]
+chat = []
+contacts = ["model"]
+convert = ["model"]
+default = [
+  "chat",
+  "contacts",
+  "convert",
+  "document",
+  "document_text_extractor",
+  "email",
+  "gmail",
+  "insight_context",
+  "organization_retention",
+  "search",
+  "sfs_uploader",
+  "upload_extractor",
+]
+document = []
+document_text_extractor = []
+email = ["model", "models_email"]
+gmail = ["model", "uuid"]
+insight_context = ["model"]
+organization_retention = []
+search = ["chrono", "model"]
+sfs_uploader = []
+upload_extractor = []
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+chrono = { workspace = true, optional = true }
+model = { path = "../model", optional = true }
+models_email = { path = "../models_email", optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true, features = ["derive"] }
+tracing = { workspace = true }
+uuid = { workspace = true, optional = true }

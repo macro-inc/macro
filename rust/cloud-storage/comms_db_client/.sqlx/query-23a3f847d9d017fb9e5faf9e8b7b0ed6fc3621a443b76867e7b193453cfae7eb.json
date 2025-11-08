@@ -1,0 +1,76 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH user_channels AS (\n            SELECT DISTINCT c.*\n            FROM comms_channels c\n            INNER JOIN comms_channel_participants cp ON cp.channel_id = c.id\n            WHERE cp.user_id = $1 AND cp.left_at IS NULL\n        ),\n        channel_participants_json AS (\n            SELECT \n                uc.id as channel_id,\n                ARRAY_AGG(\n                    json_build_object(\n                        'channel_id', cp.channel_id,\n                        'user_id', cp.user_id,\n                        'role', cp.role,\n                        'joined_at', cp.joined_at,\n                        'left_at', cp.left_at\n                    )\n                ) as participants\n            FROM user_channels uc\n            JOIN comms_channel_participants cp ON cp.channel_id = uc.id\n            WHERE cp.left_at IS NULL\n            GROUP BY uc.id\n        )\n        SELECT \n            uc.id as \"id!\",\n            uc.name as \"name\",\n            uc.channel_type as \"channel_type!: ChannelType\",\n            uc.org_id,\n            uc.created_at as \"created_at!\",\n            uc.updated_at as \"updated_at!\",\n            uc.owner_id as \"owner_id!\",\n            cpj.participants as \"participants_json?\"\n        FROM user_channels uc\n        LEFT JOIN channel_participants_json cpj ON cpj.channel_id = uc.id\n        ORDER BY uc.created_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_type!: ChannelType",
+        "type_info": {
+          "Custom": {
+            "name": "comms_channel_type",
+            "kind": {
+              "Enum": [
+                "public",
+                "organization",
+                "private",
+                "direct_message"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "org_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "owner_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "participants_json?",
+        "type_info": "JsonArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      false,
+      false,
+      false,
+      null
+    ]
+  },
+  "hash": "23a3f847d9d017fb9e5faf9e8b7b0ed6fc3621a443b76867e7b193453cfae7eb"
+}

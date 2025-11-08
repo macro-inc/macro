@@ -1,0 +1,14 @@
+[package]
+edition = "2024"
+name = "ses_client"
+publish = false
+version = "0.1.0"
+
+[features]
+local = []
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-sesv2 = { workspace = true }
+mockall = { workspace = true }
+tracing = { workspace = true }

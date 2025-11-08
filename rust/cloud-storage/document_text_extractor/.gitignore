@@ -1,0 +1,7 @@
+/target/*
+!/target/lambda/
+!/target/lambda/document-text-extractor/
+!/target/lambda/document-text-extractor/bootstrap.zip
+!/pdfium-lib/linux/libpdfium.so
+!/pdfium-lib/macos/libpdfium.dylib
+.env*

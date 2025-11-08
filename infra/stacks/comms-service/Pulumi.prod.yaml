@@ -1,0 +1,12 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  comms-service:comms_db_password_key: comms-db-password-prod
+  comms-service:fusionauth_client_id: fusionauth-client-id-key-prod
+  comms-service:fusionauth_issuer: auth.macro.com
+  comms-service:internal_auth_key: document-storage-service-auth-key-prod
+  comms-service:jwt_secret_key: fusionauth-jwt-secret-prod
+  comms-service:legacy_jwt_secret_key: jwt-secret-prod
+  comms-service:macro_db_secret_key: macro-db-prod
+  comms-service:authentication_service_secret_key: authentication-service-internal-api-key-prod
+  comms-service:document_storage_permissions_key: document-storage-permissions-key-prod

@@ -1,0 +1,15 @@
+[package]
+edition = "2024"
+name = "ensure_exists"
+publish = false
+version = "0.1.0"
+
+[features]
+dynamodb = ["dep:aws-sdk-dynamodb", "dep:tokio"]
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-dynamodb = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"], optional = true }
+tracing = { workspace = true }

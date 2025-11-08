@@ -1,0 +1,16 @@
+[package]
+edition = "2024"
+name = "notification_db_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+macro_uuid = { path = "../macro_uuid" }
+model = { path = "../model" }
+model_notifications = { path = "../model_notifications" }
+models_pagination = { path = "../models_pagination" }
+serde = { workspace = true }
+sqlx = { workspace = true }
+tracing = { workspace = true }

@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            c.id as channel_id,\n            c.name as channel_name,\n            c.channel_type as \"channel_type: ChannelType\",\n            (\n                SELECT COUNT(*) \n                FROM comms_channel_participants cp_count \n                WHERE cp_count.channel_id = c.id \n                AND cp_count.left_at IS NULL\n            ) as \"participants!: i32\",\n            CASE WHEN (\n                c.channel_type = 'public'\n                OR\n                (c.channel_type = 'organization' AND $3::bigint IS NOT NULL AND c.org_id = $3)\n                OR\n                (c.channel_type IN ('private', 'direct_message') AND EXISTS (\n                    SELECT 1 FROM comms_channel_participants cp \n                    WHERE cp.channel_id = c.id \n                    AND cp.user_id = $2\n                    AND cp.left_at IS NULL\n                ))\n            ) THEN true ELSE false END as \"has_access!: bool\"\n        FROM\n            comms_channels c\n        WHERE\n            c.id::text = ANY($1)\n            AND (c.channel_type != 'organization' OR $3::bigint IS NOT NULL)\n        GROUP BY \n            c.id,\n            c.name,\n            c.channel_type,\n            c.org_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "channel_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_type: ChannelType",
+        "type_info": {
+          "Custom": {
+            "name": "comms_channel_type",
+            "kind": {
+              "Enum": [
+                "public",
+                "organization",
+                "private",
+                "direct_message"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 3,
+        "name": "participants!: i32",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 4,
+        "name": "has_access!: bool",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      null,
+      null
+    ]
+  },
+  "hash": "17432fef4e393db73e68309b6abb0f2e32f5d21a7b510741e4e5e57b7e4d8749"
+}

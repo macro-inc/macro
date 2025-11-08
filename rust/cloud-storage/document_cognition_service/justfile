@@ -1,0 +1,58 @@
+set dotenv-load := true
+
+DATABASE_URL := "postgres://user:password@localhost:5432/macrodb"
+
+mod sqlx '../sqlx.just'
+mod ci '../ci.just'
+
+deploy-dev:
+    just ci::deploy-dev document-cognition-service
+
+check:
+    SQLX_OFFLINE=true cargo check
+
+# # Prepare DB for offline cache for docker image
+# prepare_db:
+#     just sqlx::prepare_db {{ DATABASE_URL }}
+
+run:
+    cargo run --features macro_middleware/local_auth
+
+debug:
+    RUST_LOG=document_cognition_service=debug,ai=debug,ai_tools=debug,info cargo run --features macro_middleware/local_auth
+
+trace:
+    RUST_LOG=document_cognition_service=trace,ai=trace,ai_tools=debug,info cargo run --features macro_middleware/local_auth
+
+dev-lq:
+    cargo run --features macro_middleware/local_auth,local_queue
+
+create-localstack:
+    docker run -d --name localstack -p 4566:4566 -e SERVICES=sqs localstack/localstack
+
+create-queue:
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name my-test-queue
+
+purge-queue:
+    AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs purge-queue --queue-url http://localhost:4566/000000000000/my-test-queue
+
+prepare-test:
+	rm -rf ./migrations && cp -r ../macro_db_client/migrations ./
+
+init_local_db *user_id:
+    bash scripts/init-local-dcs.sh "{{ user_id }}"
+
+log since:
+    node scripts/loggington.js {{ since }}
+
+curl_openai *request_file:
+    curl https://api.openai.com/v1/chat/completions \
+        -H "Authorization: Bearer $OPENAI_API_KEY" \
+        -H "Content-Type: application/json" \
+        -d @{{ request_file }}
+
+curl_openrouter *request_file:
+    curl 'https://openrouter.ai/api/v1/chat/completions' \
+        -H "Authorization: Bearer $OPEN_ROUTER_API_KEY" \
+        -H "Content-Type: application/json" \
+        -d @{{ request_file }}

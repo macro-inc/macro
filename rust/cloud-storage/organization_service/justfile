@@ -1,0 +1,15 @@
+set dotenv-load := true
+
+mod ci '../ci.just'
+
+deploy-dev:
+    just ci::deploy-dev organization-service
+
+run:
+    cargo run
+
+check:
+    SQLX_OFFLINE=true cargo check
+
+run-local:
+    cargo run --features macro_middleware/local_auth

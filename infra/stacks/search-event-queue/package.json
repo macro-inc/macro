@@ -1,0 +1,6 @@
+{
+	"name": "search-event-queue-stack",
+	"version": "0.0.0",
+	"private": true,
+	"main": "index.ts"
+}

@@ -1,0 +1,28 @@
+config:
+  target: "https://convert-service-dev.macro.com"
+  processor: "./artillery-function.js"
+  phases:
+    - duration: 10
+      arrivalRate: 5
+      name: "warming up"
+  http:
+    timeout: 30000  # Timeout in milliseconds (30 seconds)
+  defaults:
+    headers:
+      Content-Type: "application/json"
+      Accept: "application/json"
+      x-internal-auth-key: ""
+
+scenarios:
+  - name: "convert item"
+    flow:
+      - function: "generateRandomData"
+      - post:
+          url: "/internal/convert"
+          json:
+            from_bucket: "doc-storage-dev"
+            to_bucket: "doc-storage-dev"
+            from_key: "{{ file_name }}"
+            to_key: "{{ output_file_name }}"
+          expect:
+            - statusCode: 200

@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO user_device_registration (id, user_id, device_token, device_endpoint, device_type)\n        VALUES ($1, $2, $3, $4, $5)\n        ON CONFLICT (device_endpoint) DO UPDATE SET user_id = $2, device_token = $3, device_type = $5, updated_at = NOW()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        {
+          "Custom": {
+            "name": "device_type_option",
+            "kind": {
+              "Enum": [
+                "ios",
+                "android"
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "24664715280fd1a05397a93d1e21c3e953b1523991bbe59186c0f423cc593c7a"
+}

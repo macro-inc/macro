@@ -1,0 +1,166 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.provider_history_id,\n            m.replying_to_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject,\n            m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,\n            m.body_text as body_text,\n            m.body_html_sanitized as body_html_sanitized,\n            NULL::TEXT as body_macro,\n            m.headers_jsonb, m.created_at, m.updated_at\n        FROM email_messages m\n        JOIN email_links l ON m.link_id = l.id\n        WHERE m.id = ANY($1)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "global_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "provider_thread_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "provider_history_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "replying_to_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "internal_date_ts",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "snippet",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "size_estimate",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "from_contact_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "sent_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "has_attachments",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 15,
+        "name": "is_read",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 16,
+        "name": "is_starred",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 17,
+        "name": "is_sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 18,
+        "name": "is_draft",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 19,
+        "name": "body_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "body_html_sanitized",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 21,
+        "name": "body_macro",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 22,
+        "name": "headers_jsonb",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 23,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 24,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      null,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "6b6f6735853f6fdfeb67ff6c8e4c32602b31f37a185509f183b20262582cdb34"
+}

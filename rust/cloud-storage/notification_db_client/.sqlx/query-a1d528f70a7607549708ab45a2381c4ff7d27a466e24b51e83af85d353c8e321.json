@@ -1,0 +1,104 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n    SELECT\n        un.user_id as owner_id,\n        un.notification_id,\n        n.event_item_id,\n        n.event_item_type,\n        un.sent,\n        un.done,\n        un.created_at::timestamptz,\n        un.seen_at::timestamptz as viewed_at,\n        un.created_at::timestamptz as updated_at,\n        un.deleted_at::timestamptz,\n        n.metadata as notification_metadata,\n        n.notification_event_type as notification_event_type,\n        n.sender_id as sender_id,\n        un.is_important_v0 as is_important_v0\n    FROM user_notification un\n    JOIN notification n ON n.id = un.notification_id\n    WHERE un.user_id = $1\n    AND n.event_item_id = ANY($2)\n    AND un.deleted_at IS NULL\n    AND un.done = false\n    AND (($4::timestamptz IS NULL)\n        OR (un.created_at, un.notification_id) < ($4, $5))\n    ORDER BY un.created_at DESC, un.notification_id DESC\n    LIMIT $3\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owner_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "notification_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "event_item_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "event_item_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "done",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "viewed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "notification_metadata",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 11,
+        "name": "notification_event_type",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 12,
+        "name": "sender_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 13,
+        "name": "is_important_v0",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "Int8",
+        "Timestamptz",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
+      null,
+      true,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "a1d528f70a7607549708ab45a2381c4ff7d27a466e24b51e83af85d353c8e321"
+}

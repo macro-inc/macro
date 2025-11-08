@@ -1,0 +1,14 @@
+connection-gateway.local.macro.com {
+    tls internal
+    reverse_proxy localhost:8080
+}
+
+notification-service.local.macro.com {
+    tls internal
+    reverse_proxy localhost:8086
+}
+
+comms-service.local.macro.com {
+    tls internal
+    reverse_proxy localhost:8087
+}

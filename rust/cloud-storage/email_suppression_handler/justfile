@@ -1,0 +1,15 @@
+lambda_name := file_name(justfile_directory())
+
+mod ci '../ci.just'
+
+deploy-dev:
+    just ci::deploy-dev email-suppression
+
+test:
+    cargo test --all-features
+
+build:
+    SQLX_OFFLINE=true cargo lambda build --release --bin {{lambda_name}} --output-format zip
+
+check:
+  SQLX_OFFLINE=true cargo check

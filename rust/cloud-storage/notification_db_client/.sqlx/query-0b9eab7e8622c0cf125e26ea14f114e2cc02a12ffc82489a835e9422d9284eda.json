@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_unsubscribe_code (email, code) VALUES ($1, $2)\n        ON CONFLICT (email) DO UPDATE \n        SET code = email_unsubscribe_code.code\n        RETURNING email_unsubscribe_code.code\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "code",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "0b9eab7e8622c0cf125e26ea14f114e2cc02a12ffc82489a835e9422d9284eda"
+}

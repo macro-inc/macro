@@ -1,0 +1,112 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            id,\n            \"insightsBackfillJobId\" as insights_backfill_job_id,\n            \"sqsMessageId\" as sqs_message_id,\n            \"threadIds\" as thread_ids,\n            \"totalThreads\" as total_threads,\n            status as \"status!: InsightsBackfillBatchStatus\",\n            \"insightsGeneratedCount\" as insights_generated_count,\n            \"insightIds\" as insight_ids,\n            \"errorMessage\" as error_message,\n            \"queuedAt\"::timestamptz as queued_at,\n            \"startedAt\"::timestamptz as started_at,\n            \"completedAt\"::timestamptz as completed_at,\n            \"createdAt\"::timestamptz as \"created_at!\",\n            \"updatedAt\"::timestamptz as \"updated_at!\"\n        FROM \"EmailInsightsBackfillBatch\"\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "insights_backfill_job_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "sqs_message_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "thread_ids",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 4,
+        "name": "total_threads",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 5,
+        "name": "status!: InsightsBackfillBatchStatus",
+        "type_info": {
+          "Custom": {
+            "name": "insights_backfill_batch_status",
+            "kind": {
+              "Enum": [
+                "Queued",
+                "InProgress",
+                "Complete",
+                "Failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 6,
+        "name": "insights_generated_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
+        "name": "insight_ids",
+        "type_info": "TextArray"
+      },
+      {
+        "ordinal": 8,
+        "name": "error_message",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "queued_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "started_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "completed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 12,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 13,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      true,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "715dbd2005cf827f430c9f1365554541bbd5d375c76c9d8ef022750bb306b9d8"
+}

@@ -1,0 +1,31 @@
+[package]
+edition = "2024"
+name = "ai"
+publish = false
+version = "0.1.0"
+
+[dev-dependencies]
+tokio = { workspace = true }
+
+[dependencies]
+ai_format = { path = "../ai_format" }
+anyhow = { workspace = true }
+async-openai = { workspace = true }
+async-stream = { workspace = true }
+async-trait = { workspace = true }
+chrono = { workspace = true }
+const_format = "0.2.34"
+futures = { workspace = true }
+lazy_static = { workspace = true }
+rand.workspace = true
+reqwest = { workspace = true }
+schemars = { workspace = true }
+secrecy = "0.10.3"
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tiktoken-rs = "0.5.9"
+tokio.workspace = true
+tracing = { workspace = true }
+utoipa = { workspace = true }

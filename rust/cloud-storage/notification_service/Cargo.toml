@@ -1,0 +1,87 @@
+[package]
+default-run = "notification_service"
+edition = "2024"
+name = "notification_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "notification_email_poller_worker"
+path = "src/notification_email_poller_worker.rs"
+
+[[bin]]
+name = "notification_service"
+path = "src/main.rs"
+
+[features]
+connection_gateway = ["notification_worker"]
+default = [
+  "connection_gateway",
+  "notification_worker",
+  "push_notification",
+  "push_notification_event_handler",
+  "send_email_notifications",
+]
+local_queue = []
+notification_worker = []
+push_notification = ["notification_worker"]
+push_notification_event_handler = []
+send_email_notifications = ["notification_worker"]
+
+[dependencies]
+anyhow = { workspace = true }
+aws-config = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+aws-sdk-sesv2 = { workspace = true }
+aws-sdk-sns = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+axum = { workspace = true }
+chrono = { workspace = true }
+connection_gateway = { path = "../connection_gateway" }
+document_cognition_service_client = { path = "../document_cognition_service_client" }
+document_storage_service_client = { path = "../document_storage_service_client" }
+email_validator = { path = "../email_validator" }
+futures = { workspace = true }
+http-body-util = { workspace = true }
+macro_auth = { path = "../macro_auth" }
+macro_cache_client = { path = "../macro_cache_client", default-features = false, features = [
+  "notification_rate_limit",
+] }
+macro_cors = { path = "../macro_cors" }
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env = { path = "../macro_env", features = ["frontend_url"] }
+macro_middleware = { path = "../macro_middleware", default-features = false, features = [
+  "auth",
+] }
+macro_uuid = { path = "../macro_uuid" }
+mention_utils = { path = "../mention_utils" }
+model = { path = "../model" }
+model-entity = { path = "../model-entity" }
+model_notifications = { path = "../model_notifications" }
+models_comms = { path = "../models_comms" }
+models_pagination = { path = "../models_pagination", features = ["axum"] }
+notification_db_client = { path = "../notification_db_client" }
+regex = { workspace = true }
+secretsmanager_client = { path = "../secretsmanager_client" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+ses_client = { path = "../ses_client" }
+sns_client = { path = "../sns_client" }
+sqlx = { workspace = true }
+sqs_worker = { path = "../sqs_worker" }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+
+
+[dev-dependencies]
+macro_auth = { path = "../macro_auth", features = ["testing"] }
+macro_notify = { path = "../macro_notify" }
+
+[package.metadata.cargo-machete]
+ignored = ["comms_service", "connection_gateway"]

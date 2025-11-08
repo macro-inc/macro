@@ -1,0 +1,3 @@
+config:
+  aws:region: us-east-1
+  bulk-upload:document_storage_service_auth_key: document-storage-service-auth-key-prod

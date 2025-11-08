@@ -1,0 +1,13 @@
+[package]
+edition = "2024"
+name = "macro_entrypoint"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+dotenv = { workspace = true }
+macro_env = { path = "../macro_env" }
+tracing = { workspace = true }
+tracing-panic = "0.1"
+tracing-subscriber = { workspace = true }
+tracing-tree = { workspace = true }

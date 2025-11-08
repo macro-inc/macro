@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"PdfHighlightAnchor\" (\n            \"uuid\", \"documentId\", \"owner\", \"threadId\", \"page\", \"red\", \"green\", \"blue\", \n            \"alpha\", \"type\", \"text\", \"pageViewportWidth\", \"pageViewportHeight\"\n        ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)\n        RETURNING uuid\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "uuid",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Int8",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Int4",
+        "Float8",
+        "Int4",
+        "Text",
+        "Float8",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "08896a23d1261be751853b5cf7553cbe0e8500e8f47233914c020d23d5a1b1b6"
+}

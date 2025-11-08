@@ -1,0 +1,87 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            mr.message_id,\n            c.id,\n            c.link_id,\n            c.email_address,\n            c.name,\n            c.original_photo_url,\n            c.sfs_photo_url,\n            c.created_at,\n            c.updated_at,\n            mr.recipient_type as \"recipient_type!: db::address::EmailRecipientType\"\n        FROM email_message_recipients mr\n        JOIN email_contacts c ON mr.contact_id = c.id\n        WHERE\n            mr.message_id = ANY($1)\n        ORDER BY mr.message_id, mr.recipient_type\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "email_address",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "original_photo_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "sfs_photo_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "recipient_type!: db::address::EmailRecipientType",
+        "type_info": {
+          "Custom": {
+            "name": "email_recipient_type",
+            "kind": {
+              "Enum": [
+                "TO",
+                "CC",
+                "BCC"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "c0ce1f91883933fcae0db4e33cdd019b9b081f07e3131e8f54e1dd456f9fe73e"
+}

@@ -1,0 +1,3 @@
+name: cloud-storage-sha-cleanup
+runtime: nodejs
+description: Cloud Storage SHA Cleanup

@@ -1,0 +1,7 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  static-file-service:jwt_secret_key: fusionauth-jwt-secret-prod
+  static-file-service:fusionauth_client_id: fusionauth-client-id-key-prod
+  static-file-service:fusionauth_issuer: auth.macro.com
+  static-file-service:internal_api_key: document-storage-service-auth-key-prod

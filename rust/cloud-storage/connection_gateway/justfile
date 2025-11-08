@@ -1,0 +1,27 @@
+export JWT_SECRET_KEY := env('JWT_SECRET_KEY', 'dummyval')
+export AUDIENCE := env('AUDIENCE', 'audience')
+export ISSUER := env('ISSUER', 'issuer')
+export CONNECTION_GATEWAY_TABLE := env('CONNECTION_GATEWAY_TABLE', 'my-table')
+export INTERNAL_API_SECRET_KEY := env('INTERNAL_API_SECRET_KEY', 'internal-api-secret-key')
+export REDIS_HOST := env('REDIS_HOST', 'redis://127.0.0.1:6379')
+export MACRO_API_TOKEN_PUBLIC_KEY := env('MACRO_API_TOKEN_PUBLIC_KEY', '123456789')
+export MACRO_API_TOKEN_ISSUER := env('MACRO_API_TOKEN_ISSER', '123456789')
+export ENVIRONMENT := env('ENVIRONMENT', 'local')
+export AWS_ENDPOINT_URL := env('AWS_ENDPOINT_URL', 'http://localhost:8000')
+export AWS_ACCESS_KEY_ID := env('AWS_ACCESS_KEY_ID', 'dummy')
+export AWS_SECRET_ACCESS_KEY := env('AWS_SECRET_ACCESS_KEY', 'dummy')
+export FRECENCY_TABLE_NAME := env('FRECENCY_TABLE_NAME', 'frecency')
+export PORT := env('PORT', '8085')
+
+
+mod ensure '../ensure.just'
+mod ci '../ci.just'
+
+deploy-dev:
+    just ci::deploy-dev connection-gateway
+
+run *FLAGS: ensure::ensure_dynamodb ensure::ensure_redis
+    cargo run --bin connection_gateway_service {{ FLAGS }}
+
+run_cleanup:
+    cargo run --bin stale_connections

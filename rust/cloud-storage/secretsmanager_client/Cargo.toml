@@ -1,0 +1,17 @@
+[package]
+edition = "2024"
+name = "secretsmanager_client"
+publish = false
+version = "0.1.0"
+
+[features]
+local = []
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+macro_env = { path = "../macro_env" }
+mockall = { workspace = true }
+remote_env_var = { path = "../remote_env_var" }
+thiserror = { workspace = true }
+tracing = { workspace = true }

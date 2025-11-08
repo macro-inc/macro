@@ -1,0 +1,3 @@
+name: document-storage-bucket-integrations
+runtime: nodejs
+description: Document Storage Bucket Integrations

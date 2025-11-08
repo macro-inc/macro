@@ -1,0 +1,6 @@
+config:
+  aws:region: us-east-1
+  search-processing-service:database_url_key: macro-db-prod
+  search-processing-service:opensearch_password_key: macro-opensearch-password-prod
+  search-processing-service:internal_auth_key: document-storage-service-auth-key-prod
+  search-processing-service:sync_service_auth_key: sync-service-key-prod

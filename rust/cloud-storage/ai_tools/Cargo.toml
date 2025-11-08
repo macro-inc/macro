@@ -1,0 +1,41 @@
+[package]
+edition = "2024"
+name = "ai_tools"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+ai = { path = "../ai" }
+anyhow.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+email_service_client = { path = "../email_service_client" }
+insight_service_client = { path = "../insight_service_client" }
+lazy_static.workspace = true
+macro_db_client = { path = "../macro_db_client" }
+model = { path = "../model" }
+models_dcs = { path = "../models_dcs" }
+models_email = { path = "../models_email" }
+models_pagination = { path = "../models_pagination" }
+models_permissions = { path = "../models_permissions" }
+models_search = { path = "../models_search" }
+rand.workspace = true
+schemars.workspace = true
+scribe = { path = "../scribe", features = [
+  "channel",
+  "dcs",
+  "document",
+  "email",
+  "static_file",
+] }
+search_service_client = { path = "../search_service_client" }
+serde.workspace = true
+serde_json.workspace = true
+strum.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+utoipa.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+cool_asserts = "2"

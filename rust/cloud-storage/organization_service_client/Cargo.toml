@@ -1,0 +1,10 @@
+[package]
+edition = "2024"
+name = "organization_service_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+macro_client_errors = { path = "../macro_client_errors" }
+reqwest = { workspace = true }
+serde = { workspace = true }

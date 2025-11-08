@@ -1,0 +1,17 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  authentication-service:macro_db_secret_key: macro-db-dev
+  authentication-service:fusionauth_api_key_secret_key: fusionauth-api-key-dev
+  authentication-service:authentication_service_internal_api_key: authentication-service-internal-api-key-dev
+  authentication-service:service_internal_auth_key: document-storage-service-auth-key-dev
+  authentication-service:fusionauth_client_secret_key: fusionauth-client-secret-dev
+  authentication-service:stripe_secret_key: stripe-dev
+  authentication-service:macro_cache_secret_key: macro-cache-dev
+  authentication-service:jwt_secret_key: fusionauth-jwt-secret-dev
+  authentication-service:fusionauth_client_id: fusionauth-client-id-key-dev
+  authentication-service:fusionauth_issuer: fusionauth-dev.macro.com
+  authentication-service:google_client_id: google-client-id-dev
+  authentication-service:google_client_secret_key: google-client-secret-dev
+  authentication-service:macro_api_token_private_secret_key: macro-api-token-private-key-dev
+  authentication-service:stripe_webhook_secret_key: stripe-webhook-secret-dev

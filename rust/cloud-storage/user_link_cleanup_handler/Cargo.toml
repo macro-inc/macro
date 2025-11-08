@@ -1,0 +1,22 @@
+[package]
+edition = "2024"
+name = "user_link_cleanup_handler"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+aws_lambda_events = { workspace = true, features = ["eventbridge"] }
+chrono = { workspace = true }
+futures = { workspace = true }
+lambda_runtime = { workspace = true }
+macro_db_client = { path = "../macro_db_client" }
+macro_entrypoint = { path = "../macro_entrypoint" }
+openssl = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+
+[package.metadata.cargo-machete]
+ignored = ["openssl"]

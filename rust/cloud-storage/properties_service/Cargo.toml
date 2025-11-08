@@ -1,0 +1,53 @@
+[package]
+default-run = "properties_service"
+edition = "2024"
+name = "properties_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "properties_service"
+path = "src/main.rs"
+required-features = []
+
+
+[features]
+local_auth = []
+tree_trace = []
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+aws-config = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+axum = { workspace = true, features = ["tower-log", "ws"] }
+chrono = { workspace = true }
+comms_service_client = { path = "../comms_service_client" }
+http-body-util = { workspace = true }
+macro_auth = { path = "../macro_auth" }
+macro_cors = { path = "../macro_cors" }
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env = { path = "../macro_env" }
+macro_middleware = { path = "../macro_middleware", default-features = false, features = [
+  "auth",
+  "cloud_storage",
+] }
+macro_uuid = { path = "../macro_uuid" }
+model = { path = "../model" }
+models_permissions = { path = "../models_permissions" }
+models_properties = { path = "../models_properties" }
+properties_db_client = { path = "../properties_db_client" }
+secretsmanager_client = { path = "../secretsmanager_client" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+serde_with = { workspace = true }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+tracing-tree = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true, features = ["axum"] }
+uuid = { workspace = true }

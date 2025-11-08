@@ -1,0 +1,18 @@
+{
+  "Records": [
+    {
+      "eventTime": "2019-10-16T00:00:00Z",
+      "userIdentity": {},
+      "requestParameters": {},
+      "responseElemnts": {},
+      "s3": {
+        "bucket": {
+          "name": "macro-logging-bucket"
+        },
+        "object": {
+          "key": "doc-storage-dev/2024-12-04-20-12-51-3326AF6C86EF885B"
+        }
+      }
+    }
+  ]
+}

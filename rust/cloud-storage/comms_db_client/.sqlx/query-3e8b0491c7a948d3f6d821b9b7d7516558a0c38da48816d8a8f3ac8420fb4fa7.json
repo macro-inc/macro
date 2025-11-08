@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT EXISTS (\n            SELECT 1 FROM comms_channel_participants\n            WHERE channel_id = $1\n            AND user_id = $2\n            AND role IN ('admin'::comms_participant_role, 'owner'::comms_participant_role)\n        ) as \"is_authorized!\"\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_authorized!",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3e8b0491c7a948d3f6d821b9b7d7516558a0c38da48816d8a8f3ac8420fb4fa7"
+}
