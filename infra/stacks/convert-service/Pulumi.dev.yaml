@@ -1,0 +1,7 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  convert-service:internal_api_key: document-storage-service-auth-key-dev
+  convert-service:datadog_api_key:
+    secure: AAABAEEdYyXX0mKcoaevfl+5Kp/AlzMoNfMKtBp5KT5OWox/TOlPIrp2CQQAyQX0+Wgzejk00M3qmTvlcjjfkQ==
+  convert-service:macro_db_secret_key: macro-db-dev

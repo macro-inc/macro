@@ -1,0 +1,4 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  fusion-auth:db-password-secret-key: fusionauth-db-password-dev

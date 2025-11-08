@@ -1,0 +1,10 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  contacts-service:db-password-secret-key: contacts-db-password-dev
+  contacts-service:datadog_api_key:
+    secure: AAABABY6sGZWjktOF79znytenaCfD9eZU7cmSg89aaoqCBdl6SqZQmIILi4IxLZQx/XH/p5tMNmVMYiQNFxwtQ==
+  contacts-service:fusionauth_client_id: eb75fe7a-0ef1-4186-96d9-cc62cfb1d10c
+  contacts-service:fusionauth_issuer: fusionauth-dev.macro.com
+  contacts-service:jwt_secret_key: fusionauth-jwt-secret-dev
+  contacts-service:internal_api_key: document-storage-service-auth-key-dev

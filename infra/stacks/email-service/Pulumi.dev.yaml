@@ -1,0 +1,21 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  email-service:authentication_service_internal_api_key: authentication-service-internal-api-key-dev
+  email-service:jwt_secret_key: fusionauth-jwt-secret-dev
+  email-service:fusionauth_client_id: eb75fe7a-0ef1-4186-96d9-cc62cfb1d10c
+  email-service:fusionauth_issuer: fusionauth-dev.macro.com
+  email-service:db_password_secret_key: email-db-password-dev
+  email-service:internal_auth_key: document-storage-service-auth-key-dev
+  email-service:cf_private_key: email-attachments-private-key-dev
+  email-service:notifications_enabled: true
+  email-service:redis_rate_limit_reqs: 14000
+  email-service:redis_rate_limit_window_secs: 60
+  email-service:backfill_queue_workers: 25
+  email-service:backfill_queue_max_messages: 1
+  email-service:webhook_queue_workers: 25
+  email-service:webhook_queue_max_messages: 1
+  email-service:sfs_uploader_workers: 3
+  email-service:presigned_url_ttl_secs: 3600
+  email-service:gmail_gcp_queue: projects/starry-core-441014-b5/topics/email-service-dev
+  email-service:macro_db_secret_key: macro-db-dev

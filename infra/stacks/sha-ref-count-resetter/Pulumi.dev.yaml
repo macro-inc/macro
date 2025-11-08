@@ -1,0 +1,4 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  sha-ref-count-resetter:macro_db_secret_key: macro-db-dev

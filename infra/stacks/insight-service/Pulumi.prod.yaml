@@ -1,0 +1,10 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  insight-service:macro_db_secret_key: macro-db-prod
+  insight-service:jwt_secret_key: fusionauth-jwt-secret-prod
+  insight-service:fusionauth_client_id: 75409999-7dc4-4241-b73b-a51818c3a71c
+  insight-service:fusionauth_issuer: auth.macro.com
+  insight-service:open-router-api-key: open-router-api-key-prod-v2
+  insight-service:sync_service_auth_key: sync-service-key-prod
+  insight-service:service_internal_auth_key: document-storage-service-auth-key-prod

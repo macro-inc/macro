@@ -1,0 +1,16 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  comms-service:comms_db_password_key: comms-db-password-dev
+  comms-service:database_url:
+    secure: AAABAEPHiaBd6hYHyq2iUu3GBoWIV8hwUbva2xXDAxwmQxwGhqIsLp5wJzoHX5mroCbGYHJ6FkytxEYmyxWl25bT2T6jYPGTldQWx6rMnEK49+8DTIR7pZApvJUuXW2Z3qGgcfM9SmrPn0EbyvuCLHhukjOBU6GvhRNeS4yUBc2JxCK/s7TXmmr4x5AYJM/I4F0u2fuj
+  comms-service:datadog_api_key:
+    secure: AAABAODxiIyAlgqaAntLgXGMp5LhxVtCUG0T0FE3Akdk+ovjCwbBGAhra9HL+IKKjISOyjBt/SLvPDh4+E1DGg==
+  comms-service:fusionauth_client_id: eb75fe7a-0ef1-4186-96d9-cc62cfb1d10c
+  comms-service:fusionauth_issuer: fusionauth-dev.macro.com
+  comms-service:internal_auth_key: document-storage-service-auth-key-dev
+  comms-service:jwt_secret_key: fusionauth-jwt-secret-dev
+  comms-service:legacy_jwt_secret_key: jwt-secret-dev
+  comms-service:macro_db_secret_key: macro-db-dev
+  comms-service:authentication_service_secret_key: authentication-service-internal-api-key-dev
+  comms-service:document_storage_permissions_key: document-storage-permissions-key-dev

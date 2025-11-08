@@ -1,0 +1,4 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  cloud-storage-sha-cleanup:macro_db_secret_key: macro-db-prod
