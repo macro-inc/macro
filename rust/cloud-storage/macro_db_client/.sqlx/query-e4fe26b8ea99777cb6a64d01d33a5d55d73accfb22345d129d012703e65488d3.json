@@ -1,0 +1,46 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT DISTINCT ON(\"document_id\") \n                \"id\" as \"id?\",\n                \"document_id\",\n                \"version_id\",\n                \"createdAt\" as \"created_at?: DateTime<Utc>\",\n                \"summary\"\n            FROM \"DocumentSummary\"\n            WHERE document_id = ANY($1)\n            ORDER BY \"document_id\", \"createdAt\" DESC\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "document_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "version_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "created_at?: DateTime<Utc>",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 4,
+        "name": "summary",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "e4fe26b8ea99777cb6a64d01d33a5d55d73accfb22345d129d012703e65488d3"
+}

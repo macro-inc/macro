@@ -1,0 +1,3 @@
+name: deleted-item-poller
+runtime: nodejs
+description: Deleted Item Poller

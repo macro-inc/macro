@@ -1,0 +1,13 @@
+[package]
+edition = "2024"
+name = "macro_env_var"
+publish = false
+version = "0.1.0"
+
+[features]
+test-comptime = []
+
+[dependencies]
+paste = "1"
+thiserror = { workspace = true }
+tracing = { workspace = true }

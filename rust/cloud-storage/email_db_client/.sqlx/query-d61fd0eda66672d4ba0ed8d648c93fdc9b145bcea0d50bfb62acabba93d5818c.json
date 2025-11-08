@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_scheduled_messages (\n            link_id, message_id, send_time, sent,\n            created_at, updated_at\n        )\n        VALUES ($1, $2, $3, $4, NOW(), NOW())\n        ON CONFLICT (link_id, message_id) DO UPDATE SET\n            send_time = EXCLUDED.send_time,\n            sent = EXCLUDED.sent,\n            updated_at = NOW()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Timestamptz",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "d61fd0eda66672d4ba0ed8d648c93fdc9b145bcea0d50bfb62acabba93d5818c"
+}

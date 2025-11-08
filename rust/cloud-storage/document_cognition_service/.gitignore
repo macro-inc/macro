@@ -1,0 +1,4 @@
+target/
+.env*
+!.env.sample
+migrations/**/*

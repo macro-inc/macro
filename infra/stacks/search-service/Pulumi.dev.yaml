@@ -1,0 +1,8 @@
+config:
+  aws:region: us-east-1
+  search-service:macro_db_secret_key: macro-db-dev
+  search-service:opensearch_password_key: macro-opensearch-password-dev
+  search-service:internal_auth_key: document-storage-service-auth-key-dev
+  search-service:fusionauth_client_id: fusionauth-client-id-key-dev
+  search-service:fusionauth_issuer: fusionauth-dev.macro.com
+  search-service:jwt_secret_key: fusionauth-jwt-secret-dev

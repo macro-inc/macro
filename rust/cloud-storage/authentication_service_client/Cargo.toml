@@ -1,0 +1,13 @@
+[package]
+edition = "2024"
+name = "authentication_service_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+model = { path = "../model" }
+reqwest = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

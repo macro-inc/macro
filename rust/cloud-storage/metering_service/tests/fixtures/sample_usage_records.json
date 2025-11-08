@@ -1,0 +1,56 @@
+[
+  {
+    "used_open_router": true,
+    "provider": "chatgpt",
+    "model": "o1",
+    "usage": {
+      "input_tokens": 1000,
+      "output_tokens": 500
+    },
+    "user_id": "macro|hello@macro.com",
+    "service_name": "ai_chat_service",
+    "operation_type": "chat_completion",
+    "input_tokens": 1000,
+    "output_tokens": 500,
+    "metadata": {
+      "temperature": 0.7,
+      "max_tokens": 2000,
+      "stream": false
+    }
+  },
+  {
+    "used_open_router": true,
+    "provider": "chatgpt",
+    "usage": {
+      "input_tokens": 600,
+      "output_tokens": 200
+    },
+    "model": "gpt-4o",
+    "user_id": "macro|42@macro.com",
+    "service_name": "ai_completion_service",
+    "operation_type": "text_completion",
+    "input_tokens": 600,
+    "output_tokens": 200,
+    "metadata": {
+      "temperature": 0.5,
+      "top_p": 0.9
+    }
+  },
+  {
+    "used_open_router": true,
+    "provider": "chatgpt",
+    "usage": {
+      "input_tokens": 200,
+      "output_tokens": null
+    },
+    "model": "gpt-4.1",
+    "user_id": "macro|jeves@macro.com",
+    "service_name": "ai_embedding_service",
+    "operation_type": "create_embedding",
+    "input_tokens": 200,
+    "output_tokens": 0,
+    "metadata": {
+      "dimensions": 1536
+    }
+  }
+]

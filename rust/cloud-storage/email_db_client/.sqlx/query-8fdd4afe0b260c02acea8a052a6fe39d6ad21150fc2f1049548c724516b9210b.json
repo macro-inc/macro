@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM email_message_labels\n        WHERE message_id = $1\n        AND label_id NOT IN (\n            SELECT UNNEST($2::uuid[])\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "8fdd4afe0b260c02acea8a052a6fe39d6ad21150fc2f1049548c724516b9210b"
+}

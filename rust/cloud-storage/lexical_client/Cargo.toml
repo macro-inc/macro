@@ -1,0 +1,16 @@
+[package]
+edition = "2024"
+name = "lexical_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+models_search = { path = "../models_search" }
+reqwest = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
+tokio = { workspace = true }

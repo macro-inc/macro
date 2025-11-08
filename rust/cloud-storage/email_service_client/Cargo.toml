@@ -1,0 +1,15 @@
+[package]
+edition = "2024"
+name = "email_service_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+model = { path = "../model" }
+models_email = { path = "../models_email" }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

@@ -1,0 +1,14 @@
+[package]
+edition = "2024"
+name = "item_filters"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+chrono = { workspace = true }
+non_empty = { path = "../non_empty" }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+strum = { workspace = true }
+utoipa = { workspace = true }

@@ -1,0 +1,17 @@
+[package]
+edition = "2024"
+name = "metering_db_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true }
+models_metering = { path = "../models_metering" }
+sqlx = { workspace = true, features = [
+  "chrono",
+  "postgres",
+  "runtime-tokio-rustls",
+  "uuid",
+] }
+uuid = { workspace = true }

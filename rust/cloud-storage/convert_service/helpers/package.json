@@ -1,0 +1,14 @@
+{
+  "name": "convert-helpers",
+  "version": "0.0.0",
+  "description": "",
+  "scripts": {
+    "backfill": "bun run backfill.ts",
+  },
+  "author": "Will Hutchinson",
+  "license": "ISC",
+  "dependencies": {
+    "@types/node": "^22.14.0",
+    "dotenv": "^16.5.0"
+  }
+}

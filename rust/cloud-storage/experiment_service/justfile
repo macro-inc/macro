@@ -1,0 +1,9 @@
+set dotenv-load := true
+
+mod ci '../ci.just'
+
+deploy-dev:
+    just ci::deploy-dev experiment-service
+
+run:
+    cargo run

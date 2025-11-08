@@ -1,0 +1,3 @@
+deploy-dev:
+	pulumi up --stack macro-inc/dev
+

@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM email_message_recipients\n        WHERE message_id = $1\n          AND (contact_id, recipient_type) NOT IN (\n              SELECT contact_id, recipient_type\n              FROM unnest($2::uuid[], $3::email_recipient_type[])\n              AS t(contact_id, recipient_type)\n          )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray",
+        {
+          "Custom": {
+            "name": "_email_recipient_type",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "email_recipient_type",
+                  "kind": {
+                    "Enum": [
+                      "TO",
+                      "CC",
+                      "BCC"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b8eb30360d1232b36214b17758d8c7d897251a93c7d56b310a2fc6f026fdbea9"
+}

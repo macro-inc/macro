@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_backfill_jobs\n        SET\n            threads_processed_count = threads_processed_count + 1,\n            threads_skipped_count = threads_skipped_count + 1,\n            updated_at = now()\n        WHERE id = $1\n        RETURNING total_threads, threads_processed_count\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "total_threads",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 1,
+        "name": "threads_processed_count",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "990807886a7d453a62aeae10489aff849e65cdb68a1a95b88ce7c38ef2e86053"
+}

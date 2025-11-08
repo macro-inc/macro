@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT c.owner, t.\"documentId\" as document_id\n        FROM \"Comment\" c\n        JOIN \"Thread\" t ON c.\"threadId\" = t.id\n        WHERE c.id = $1 and c.\"deletedAt\" IS NULL AND t.\"deletedAt\" IS NULL\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "owner",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "document_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "da15e17a523e1f2d4a3716f6d9c3f305cd7a9607209f65bb62acf6fce7e08284"
+}

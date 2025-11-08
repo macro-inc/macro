@@ -1,0 +1,8 @@
+.turbo
+*.js
+!.eslintrc.js
+!.prettierrc.js
+!library.js
+
+node_modules
+dist

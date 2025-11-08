@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"ItemLastAccessed\" (\"item_id\", \"item_type\", \"last_accessed\")\n        VALUES ($1, $2, NOW())\n        ON CONFLICT (\"item_id\", \"item_type\") DO UPDATE\n        SET \"last_accessed\" = NOW();\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "53d362deffc3fd04e6c80c24bfa856a5ccc917877036e5c7b3ab899f0812edf0"
+}

@@ -1,0 +1,16 @@
+lambda_name := file_name(justfile_directory())
+
+test:
+    cargo test --all-features
+
+build:
+    SQLX_OFFLINE=true cargo lambda build --release --bin {{lambda_name}} --output-format zip
+
+check:
+  SQLX_OFFLINE=true cargo check
+
+create-queues:
+	AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name my-test-refresh-queue
+
+prepare_db:
+	DATABASE_URL=postgres://user:password@localhost:5432/macrodb cargo sqlx prepare

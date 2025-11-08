@@ -1,0 +1,96 @@
+{
+	"compilerOptions": {
+		"module": "esnext",
+		"moduleResolution": "node",
+		"target": "ESNext",
+		"lib": [
+			"ESNext"
+		],
+		"strict": true,
+		"noImplicitAny": true,
+		"strictNullChecks": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noEmit": true,
+		"skipLibCheck": true,
+		"isolatedModules": true,
+		"resolveJsonModule": true,
+		"esModuleInterop": true,
+		"forceConsistentCasingInFileNames": true,
+		"types": [
+			"node",
+			"mocha"
+		],
+		"paths": {
+			"@shared": [
+				"./packages/shared/src/index"
+			],
+			"@lambda": [
+				"./packages/lambda/src/index"
+			],
+			"@resources": [
+				"./packages/resources/src/index"
+			],
+			"@service": [
+				"./packages/service/src/index"
+			],
+			"@vpc": [
+				"./packages/vpc/src/index"
+			],
+			"@stacks": [
+				"./stacks/index"
+			],
+			"@shared/*": [
+				"./packages/shared/src/*"
+			],
+			"@lambda/*": [
+				"./packages/lambda/src/*"
+			],
+			"@resources/*": [
+				"./packages/resources/src/*"
+			],
+			"@service/*": [
+				"./packages/service/src/*"
+			],
+			"@vpc/*": [
+				"./packages/vpc/src/*"
+			],
+			"@stacks/*": [
+				"./stacks/*"
+			]
+		},
+		"baseUrl": ".",
+	},
+	"references": [
+		{
+			"path": "./packages/shared"
+		},
+		{
+			"path": "./packages/lambda"
+		},
+		{
+			"path": "./packages/resources"
+		},
+		{
+			"path": "./packages/service"
+		},
+		{
+			"path": "./packages/vpc"
+		}
+	],
+	"include": [
+		"./stacks/**/*",
+		"./packages/**/*"
+	],
+	"ts-node": {
+		"require": [
+			"./scripts/tsconfig-paths.ts"
+		]
+	},
+	"exclude": [
+		"node_modules",
+		"**/*.test.ts",
+		".turbo",
+		"coverage"
+	]
+}

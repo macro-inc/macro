@@ -1,0 +1,3 @@
+name: document-text-extractor 
+runtime: nodejs
+description: Macro Document Text Extractor Lambda

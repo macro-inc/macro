@@ -1,0 +1,3 @@
+name: authentication-service
+runtime: nodejs
+description: Macro Authentication Service

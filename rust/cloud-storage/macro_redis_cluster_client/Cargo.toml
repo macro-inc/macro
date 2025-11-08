@@ -1,0 +1,19 @@
+[package]
+edition = "2024"
+name = "macro_redis_cluster_client"
+publish = false
+version = "0.1.0"
+
+[features]
+redis_cluster_test = []
+
+[dependencies]
+anyhow = { workspace = true }
+model = { path = "../model" }
+redis = { workspace = true, features = [
+  "aio",
+  "cluster-async",
+  "tokio-native-tls-comp",
+] }
+tokio = { workspace = true }
+tracing = { workspace = true }

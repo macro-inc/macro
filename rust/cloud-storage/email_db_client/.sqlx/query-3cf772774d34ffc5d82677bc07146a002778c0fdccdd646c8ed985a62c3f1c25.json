@@ -1,0 +1,111 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            t.id,\n            t.provider_id,\n            t.inbox_visible,\n            t.is_read,\n            t.effective_ts AS \"sort_ts!\",\n            t.created_at AS \"created_at!\",\n            t.updated_at AS \"updated_at!\",\n            t.viewed_at AS \"viewed_at?\",\n            lmp.subject AS \"name?\",\n            lmp.snippet AS \"snippet?\",\n            lmp.is_draft,\n            (\n                SELECT EXISTS (\n                    SELECT 1\n                    FROM email_messages m_imp\n                    JOIN email_message_labels ml ON m_imp.id = ml.message_id\n                    JOIN email_labels l ON ml.label_id = l.id\n                    WHERE m_imp.thread_id = t.id\n                      AND l.link_id = t.link_id\n                      AND l.name = 'IMPORTANT'\n                )\n            ) AS \"is_important!\",\n            c.email_address AS \"sender_email?\",\n            c.name AS \"sender_name?\",\n            c.sfs_photo_url as \"sender_photo_url?\"\n        FROM (\n            -- Step 1: Find the latest labeled message timestamp for each thread,\n            -- calculate the effective sort key, then sort and limit the results.\n            SELECT\n                t.id,\n                t.provider_id,\n                t.link_id,\n                t.inbox_visible,\n                t.is_read,\n                llpt.latest_labeled_ts AS created_at,\n                llpt.latest_labeled_ts AS updated_at,\n                uh.updated_at AS viewed_at,\n                CASE $6 -- sort_method_str\n                    WHEN 'viewed_at' THEN COALESCE(uh.\"updated_at\", '1970-01-01 00:00:00+00')\n                    WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, llpt.latest_labeled_ts)\n                    ELSE llpt.latest_labeled_ts\n                END AS effective_ts\n            FROM (\n                -- This sub-subquery efficiently finds the latest timestamp for every thread\n                -- that has at least one message with the specified label.\n                SELECT\n                    m.thread_id,\n                    MAX(m.internal_date_ts) as latest_labeled_ts\n                FROM email_messages m\n                JOIN email_message_labels ml ON m.id = ml.message_id\n                JOIN email_labels l ON ml.label_id = l.id\n                WHERE m.link_id = $1 AND l.name = $5\n                GROUP BY m.thread_id\n            ) llpt\n            JOIN email_threads t ON llpt.thread_id = t.id\n            LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = $1\n            WHERE\n                (($3::timestamptz IS NULL) OR (\n                    CASE $6 -- sort_method_str\n                        WHEN 'viewed_at' THEN COALESCE(uh.\"updated_at\", '1970-01-01 00:00:00+00')\n                        WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, llpt.latest_labeled_ts)\n                        ELSE llpt.latest_labeled_ts\n                    END, t.id\n                ) < ($3::timestamptz, $4::uuid))\n            ORDER BY effective_ts DESC, t.updated_at DESC\n            LIMIT $2\n        ) AS t\n        -- Step 2: For EACH of the limited threads from above, find the full details of its latest message with that specific label.\n        CROSS JOIN LATERAL (\n            SELECT\n                   m.subject,\n                   m.snippet,\n                   m.from_contact_id,\n                   m.is_draft\n            FROM email_messages m\n            JOIN email_message_labels ml ON m.id = ml.message_id\n            JOIN email_labels l ON ml.label_id = l.id\n            WHERE m.thread_id = t.id AND m.is_draft = FALSE AND l.link_id = t.link_id AND l.name = $5\n            ORDER BY m.internal_date_ts DESC\n            LIMIT 1\n        ) AS lmp\n        -- Step 3: Join to get the sender's details.\n        LEFT JOIN email_contacts c ON lmp.from_contact_id = c.id\n        ORDER BY t.effective_ts DESC, t.updated_at DESC\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "inbox_visible",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "is_read",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "sort_ts!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "viewed_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "snippet?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "is_draft",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 11,
+        "name": "is_important!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 12,
+        "name": "sender_email?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 13,
+        "name": "sender_name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 14,
+        "name": "sender_photo_url?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Timestamptz",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      false,
+      null,
+      null,
+      null,
+      false,
+      true,
+      true,
+      false,
+      null,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "3cf772774d34ffc5d82677bc07146a002778c0fdccdd646c8ed985a62c3f1c25"
+}

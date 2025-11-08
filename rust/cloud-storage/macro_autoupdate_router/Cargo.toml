@@ -1,0 +1,21 @@
+[package]
+edition = "2024"
+name = "macro_autoupdate_router"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+axum = { workspace = true, features = ["macros"] }
+macro_env = { path = "../macro_env", features = ["frontend_url"] }
+reqwest = { workspace = true }
+semver = { version = "1", features = ["serde"] }
+serde = { workspace = true, features = ["derive"] }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true, features = ["serde"] }
+
+[dev-dependencies]
+cool_asserts = "2"
+macro_env = { path = "../macro_env", features = ["strum"] }
+strum = { workspace = true, features = ["derive"] }
+tokio = { workspace = true, features = ["macros", "rt"] }

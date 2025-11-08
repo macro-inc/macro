@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_sync_tokens (link_id, contacts_sync_token, other_contacts_sync_token)\n        VALUES ($1, $2, $3)\n        ON CONFLICT (link_id)\n        DO UPDATE SET\n            contacts_sync_token = $2,\n            other_contacts_sync_token = $3\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b6a1865f89084a577115f8567ad657db1f0c4e2420a9f428d8d75defda053444"
+}

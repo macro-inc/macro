@@ -1,0 +1,15 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  notification-service:jwt_secret_key: fusionauth-jwt-secret-prod
+  notification-service:fusionauth_client_id: fusionauth-client-id-key-prod
+  notification-service:fusionauth_issuer: auth.macro.com
+  notification-service:internal_api_key: document-storage-service-auth-key-prod
+  notification-service:db-password-secret-key: notification-db-password-prod
+  notification-service:apple_team_id: apple-team-id
+  notification-service:apple_bundle_id: apple-bundle-id-prod
+  notification-service:apns_key_id: apns-key-id
+  notification-service:apns_private_key:
+    secure: AAABAKWe7JBlRN/BDxH4YFtm06Jry3kcv3jMudROKehPGxqEOEFsukTwQphhJm/+2dk3oFEHvqTDQEF4hOZmdNsa8Lz3f5jP+XgOEgcT2MBkH+QnvOwdYc97B72FRKPi6cmHLPz/9d4S05Jku0XCDhlGgMwYTc7K2vAzdPhCeC+KqAaKzcQmbm9hp5U4CEgo9FY9/GFZbgdHkdeLNC/U2rR8GSNmQoDQoCZEsvj9Btph5XURI6griy4Ou2iypKRRhcw+/jOLxVSOeRoVmKG3FGWsqsmlGC0AmvIKeD3bgrlFnMFUd1/EuP4tDsvhmi7/C7aeRcs+ryXWKFdIzWmnqyfPEu/otczlaMaTU0kiere3b1YsIO4sv8C/1i81FTvy/w==
+  notification-service:fcm_secret_key: fcm-credential-prod
+  notification-service:macro_cache_secret_key: macro-cache-prod

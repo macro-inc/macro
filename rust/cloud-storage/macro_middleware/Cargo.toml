@@ -1,0 +1,48 @@
+[package]
+edition = "2024"
+name = "macro_middleware"
+publish = false
+version = "0.1.0"
+
+[features]
+all = ["auth", "cloud_storage", "tracking", "user_permissions"]
+auth = ["dep:macro_auth", "dep:url"]
+cloud_storage = [
+  "dep:comms_service_client",
+  "dep:email_service_client",
+  "dep:macro_share_permissions",
+  "dep:permission",
+  "macro_db_client",
+]
+default = ["all"]
+local_auth = []
+macro_db_client = ["dep:macro_db_client", "dep:sqlx"]
+tracking = []
+user_permissions = ["dep:macro_user_id", "dep:user_quota", "macro_db_client"]
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true, features = ["macros"] }
+comms_service_client = { path = "../comms_service_client", optional = true }
+email_service_client = { path = "../email_service_client", optional = true }
+http-body-util = { workspace = true }
+macro_auth = { path = "../macro_auth", optional = true }
+macro_db_client = { path = "../macro_db_client", optional = true }
+macro_env_var = { path = "../macro_env_var" }
+macro_share_permissions = { path = "../macro_share_permissions", optional = true }
+macro_user_id = { path = "../macro_user_id", optional = true }
+macro_uuid = { path = "../macro_uuid" }
+model = { path = "../model" }
+models_permissions = { path = "../models_permissions" }
+permission = { path = "../permission", optional = true }
+remote_env_var = { path = "../remote_env_var" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true, optional = true }
+user_quota = { path = "../user_quota", optional = true }
+uuid = { workspace = true }

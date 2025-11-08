@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH label_lookup AS (\n            SELECT id FROM email_labels\n            WHERE link_id = $2 AND provider_label_id = $3\n        )\n        INSERT INTO email_message_labels (message_id, label_id)\n        SELECT $1, id FROM label_lookup\n        ON CONFLICT (message_id, label_id) DO NOTHING\n        RETURNING (SELECT COUNT(*) FROM label_lookup) AS label_found\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "label_found",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "18ce46c3571cde47b087eae1c4aa5fef86b1058e0b9ad16614fc06d02f4cf86f"
+}

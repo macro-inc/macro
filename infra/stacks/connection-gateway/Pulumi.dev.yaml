@@ -1,0 +1,9 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  connection-gateway:fusionauth_client_id: fusionauth-client-id-key-dev
+  connection-gateway:fusionauth_issuer: fusionauth-dev.macro.com
+  connection-gateway:internal_auth_key: document-storage-service-auth-key-dev
+  connection-gateway:jwt_secret_key: fusionauth-jwt-secret-dev
+  connection-gateway:legacy_jwt_secret_key: jwt-secret-dev
+  connection-gateway:macro_db_secret_key: macro-db-dev

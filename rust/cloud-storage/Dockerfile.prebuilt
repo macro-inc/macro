@@ -1,0 +1,19 @@
+FROM debian:trixie-slim AS runner
+ARG SERVICE_NAME
+WORKDIR /app
+
+RUN apt-get update \
+  && apt-get install -y --no-install-recommends \
+    ca-certificates \
+    openssl \
+    dumb-init \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
+
+# Copy the pre-built Linux binary from Docker build
+COPY --from=release ${SERVICE_NAME} /app/svc
+RUN chmod +x /app/svc
+
+ENV PORT=8080
+EXPOSE ${PORT}
+ENTRYPOINT ["dumb-init", "./svc"]

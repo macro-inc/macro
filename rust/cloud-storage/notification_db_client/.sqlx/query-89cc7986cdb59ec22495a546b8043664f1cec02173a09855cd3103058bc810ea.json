@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM user_notification un\n        WHERE un.user_id = $1\n        AND un.notification_id = ANY($2)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "89cc7986cdb59ec22495a546b8043664f1cec02173a09855cd3103058bc810ea"
+}

@@ -1,0 +1,30 @@
+set dotenv-load := true
+
+mod ci '../ci.just'
+
+deploy-dev:
+    just ci::deploy-dev properties-service
+
+run:
+    cargo run
+
+build:
+    SQLX_OFFLINE=true cargo build
+
+check:
+    SQLX_OFFLINE=true cargo check
+
+clippy:
+    SQLX_OFFLINE=true cargo clippy
+
+run-local:
+    ENVIRONMENT=local SQLX_OFFLINE=true cargo run --features macro_middleware/local_auth
+
+debug:
+    ENVIRONMENT=local RUST_LOG=properties_service=debug,info SQLX_OFFLINE=true cargo run --features macro_middleware/local_auth
+
+trace:
+    ENVIRONMENT=local RUST_LOG=properties_service=trace,info SQLX_OFFLINE=true cargo run --features macro_middleware/local_auth
+
+tree-trace:
+    ENVIRONMENT=local RUST_LOG=properties_service=trace,info SQLX_OFFLINE=true cargo run --features macro_middleware/local_auth,tree_trace

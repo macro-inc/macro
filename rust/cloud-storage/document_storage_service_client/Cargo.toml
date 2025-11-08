@@ -1,0 +1,16 @@
+[package]
+edition = "2024"
+name = "document_storage_service_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+model = { path = "../model" }
+models_bulk_upload = { path = "../models_bulk_upload" }
+models_permissions = { path = "../models_permissions" }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }

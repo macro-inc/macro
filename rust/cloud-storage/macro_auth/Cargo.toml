@@ -1,0 +1,25 @@
+[package]
+edition = "2024"
+exclude = ["examples/"]
+name = "macro_auth"
+publish = false
+version = "0.1.0"
+
+[features]
+testing = []
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true }
+cookie = { workspace = true }
+jsonwebtoken = { workspace = true }
+macro_env = { path = "../macro_env" }
+macro_env_var = { path = "../macro_env_var" }
+rand = { workspace = true }
+remote_env_var = { path = "../remote_env_var" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+tracing = { workspace = true }
+urlencoding = { workspace = true }

@@ -1,0 +1,5 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  dlp-handler:sns-topic-arn: arn:aws:sns:us-east-1:569036502058:document-storage-access-topic
+  dlp-handler:logging-bucket-arn: arn:aws:s3:::macro-logging-bucket

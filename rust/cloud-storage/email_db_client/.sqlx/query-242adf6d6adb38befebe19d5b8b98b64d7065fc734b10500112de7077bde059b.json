@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_messages (\n        id, provider_id, link_id, global_id, thread_id, provider_thread_id, replying_to_id, provider_history_id, internal_date_ts,\n            snippet, size_estimate, subject, from_contact_id, sent_at, has_attachments, is_read,\n            is_starred, is_sent, is_draft, body_text, body_html_sanitized, headers_jsonb\n        )\n    VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)\n        ON CONFLICT (link_id, provider_id) WHERE provider_id IS NOT NULL DO UPDATE SET\n            global_id = EXCLUDED.global_id,\n            provider_history_id = EXCLUDED.provider_history_id,\n            provider_thread_id = EXCLUDED.provider_thread_id,\n            replying_to_id = EXCLUDED.replying_to_id,\n            internal_date_ts = EXCLUDED.internal_date_ts,\n            snippet = EXCLUDED.snippet,\n            size_estimate = EXCLUDED.size_estimate,\n            subject = EXCLUDED.subject,\n            sent_at = EXCLUDED.sent_at,\n            is_read = EXCLUDED.is_read,\n            is_starred = EXCLUDED.is_starred,\n            is_sent = EXCLUDED.is_sent,\n            is_draft = EXCLUDED.is_draft,\n            headers_jsonb = EXCLUDED.headers_jsonb,\n            body_text = EXCLUDED.body_text,\n            body_html_sanitized = EXCLUDED.body_html_sanitized,\n            updated_at = NOW()\n        RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Int8",
+        "Text",
+        "Uuid",
+        "Timestamptz",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Bool",
+        "Text",
+        "Text",
+        "Jsonb"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "242adf6d6adb38befebe19d5b8b98b64d7065fc734b10500112de7077bde059b"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_backfill_threads (backfill_job_id, thread_provider_id, status)\n        VALUES ($1, $2, 'InProgress')\n        ON CONFLICT (backfill_job_id, thread_provider_id)\n        DO UPDATE SET \n            updated_at = NOW(),\n            retry_count = email_backfill_threads.retry_count + 1\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Varchar"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b25c594338bca2fe5e16576ed22a0941ae2199dc4f7d0b9e879b800c49ad86f5"
+}
