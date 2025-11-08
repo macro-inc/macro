@@ -1,0 +1,17 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  authentication-service:macro_db_secret_key: macro-db-prod
+  authentication-service:fusionauth_api_key_secret_key: fusionauth-api-key-prod
+  authentication-service:authentication_service_internal_api_key: authentication-service-internal-api-key-prod
+  authentication-service:fusionauth_client_secret_key: fusionauth-client-secret-prod
+  authentication-service:service_internal_auth_key: document-storage-service-auth-key-prod
+  authentication-service:stripe_secret_key: stripe-prod
+  authentication-service:macro_cache_secret_key: macro-cache-prod
+  authentication-service:jwt_secret_key: fusionauth-jwt-secret-prod
+  authentication-service:fusionauth_client_id: 75409999-7dc4-4241-b73b-a51818c3a71c
+  authentication-service:fusionauth_issuer: auth.macro.com
+  authentication-service:google_client_id: 1024168288732-i62dkuqhovuc3taiselo26fc9qj3ote6.apps.googleusercontent.com
+  authentication-service:google_client_secret_key: google-client-secret-prod
+  authentication-service:macro_api_token_private_secret_key: macro-api-token-private-key-prod
+  authentication-service:stripe_webhook_secret_key: stripe-webhook-secret-prod

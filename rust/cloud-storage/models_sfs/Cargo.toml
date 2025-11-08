@@ -1,0 +1,10 @@
+[package]
+edition = "2024"
+name = "models_sfs"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+serde = { workspace = true }
+serde_json = { workspace = true }
+utoipa = { workspace = true }

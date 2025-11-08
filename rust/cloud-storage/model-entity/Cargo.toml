@@ -1,0 +1,14 @@
+[package]
+edition = "2024"
+name = "model-entity"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+serde = { workspace = true, features = ["derive"] }
+strum = { workspace = true, features = ["derive"] }
+utoipa = { workspace = true }
+
+[dev-dependencies]
+cool_asserts = "2"
+serde_json = { workspace = true }

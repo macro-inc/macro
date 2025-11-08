@@ -1,0 +1,5 @@
+export AWS_ENDPOINT_URL := env('AWS_ENDPOINT_URL', 'http://localhost:8000')
+export POLL_INTERVAL_SECONDS := env('POLL_INTERVAL_SECONDS', '2')
+
+handle_stream $LAMBDA_ENDPOINT $TABLE_NAME:
+    cargo run

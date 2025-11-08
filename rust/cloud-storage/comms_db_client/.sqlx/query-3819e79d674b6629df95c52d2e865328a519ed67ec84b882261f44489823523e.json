@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT m.channel_id\n        FROM comms_entity_mentions em\n        JOIN comms_messages m ON m.id::text = em.source_entity_id AND em.source_entity_type = 'message'\n        JOIN comms_channels c ON c.id = m.channel_id\n        WHERE em.entity_id = $1 AND em.entity_type = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3819e79d674b6629df95c52d2e865328a519ed67ec84b882261f44489823523e"
+}

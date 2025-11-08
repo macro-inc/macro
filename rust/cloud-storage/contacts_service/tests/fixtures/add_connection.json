@@ -1,0 +1,7 @@
+{
+	"type": "add_connection",
+	"body": {
+		"users": ["zeus", "apollo", "athena"],
+		"connections": [[0, 1], [1, 2], [2, 0]]
+	}
+}

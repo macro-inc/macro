@@ -1,0 +1,110 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH ApplicableLabelIDs AS (\n            SELECT id\n            FROM email_labels\n            WHERE link_id = $1\n              AND (name = 'INBOX')\n        ),\n        QualifyingMessages AS (\n            SELECT m.thread_id,\n                   m.internal_date_ts,\n                   m.is_draft,\n                   m.subject,\n                   m.snippet,\n                   m.from_contact_id\n            FROM email_messages m\n            WHERE m.link_id = $1\n              AND EXISTS (\n                  SELECT 1\n                  FROM email_message_labels ml\n                  JOIN email_labels l ON ml.label_id = l.id\n                  WHERE ml.message_id = m.id\n                    AND l.name = 'IMPORTANT'\n              )\n              AND EXISTS (\n                  SELECT 1\n                  FROM email_message_labels ml\n                  JOIN ApplicableLabelIDs ali ON ml.label_id = ali.id\n                  WHERE ml.message_id = m.id\n              )\n\n            UNION ALL\n\n            SELECT m.thread_id,\n                   m.internal_date_ts,\n                   m.is_draft,\n                   m.subject,\n                   m.snippet,\n                   m.from_contact_id\n            FROM email_messages m\n            WHERE m.link_id = $1\n              AND m.is_draft = TRUE\n        ),\n        AllImportantThreads AS (\n            -- From all qualifying messages, get the single most recent one per thread.\n            SELECT DISTINCT ON (thread_id)\n                   thread_id,\n                   internal_date_ts,\n                   is_draft,\n                   subject,\n                   snippet,\n                   from_contact_id\n            FROM QualifyingMessages\n            ORDER BY thread_id, internal_date_ts DESC\n        ),\n        ImportantWithSortKey AS (\n            -- Join with user_history to calculate the final effective sort key.\n            SELECT\n                ait.thread_id,\n                ait.internal_date_ts,\n                ait.is_draft,\n                ait.subject,\n                ait.snippet,\n                ait.from_contact_id,\n                ait.internal_date_ts as created_at,\n                ait.internal_date_ts as updated_at,\n                uh.updated_at as viewed_at,\n                -- This CASE statement dynamically selects the correct timestamp for sorting.\n                -- For 'updated_at' and 'created_at', we use the important message timestamp\n                -- For 'viewed_at', we use the history timestamp.\n                -- For 'viewed_updated', we use the history timestamp if it exists, otherwise the important message timestamp.\n                CASE $5 -- sort_method_str\n                    WHEN 'viewed_at' THEN COALESCE(uh.\"updated_at\", '1970-01-01 00:00:00+00')\n                    WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, ait.internal_date_ts)\n                    ELSE ait.internal_date_ts\n                END AS effective_ts\n            FROM AllImportantThreads ait\n            -- This has to be a left join to support all sort methods.\n            LEFT JOIN email_user_history uh ON uh.thread_id = ait.thread_id AND uh.link_id = $1\n            -- user_history updated_at (aka last time opened) has to exist when viewed_at sort method is selected.\n            WHERE ait.is_draft = FALSE \n        )\n        SELECT\n               isk.thread_id as \"id!\",\n               t.provider_id,\n               t.inbox_visible,\n               t.is_read,\n               isk.effective_ts as \"sort_ts!\",\n               isk.created_at as \"created_at!\",\n               isk.updated_at as \"updated_at!\",\n               isk.viewed_at as \"viewed_at?\",\n               isk.is_draft as \"is_draft!\",\n               -- It's the important view - all threads here are important\n               true as \"is_important!\",\n               isk.subject as \"name?\",\n               isk.snippet as \"snippet?\",\n               c.email_address AS \"sender_email?\",\n               c.name AS \"sender_name?\",\n               c.sfs_photo_url as \"sender_photo_url?\"\n        FROM ImportantWithSortKey isk\n        JOIN email_threads t ON isk.thread_id = t.id\n        LEFT JOIN email_contacts c ON isk.from_contact_id = c.id\n        WHERE\n            ($3::timestamptz IS NULL) OR (isk.effective_ts, isk.thread_id) < ($3::timestamptz, $4::uuid)\n        ORDER BY isk.effective_ts DESC, isk.thread_id DESC\n        LIMIT $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "inbox_visible",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "is_read",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "sort_ts!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "viewed_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "is_draft!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_important!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 10,
+        "name": "name?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 11,
+        "name": "snippet?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "sender_email?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 13,
+        "name": "sender_name?",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 14,
+        "name": "sender_photo_url?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Timestamptz",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      true,
+      false,
+      false,
+      null,
+      null,
+      null,
+      false,
+      null,
+      null,
+      null,
+      null,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "829c2db98012d40c52a2cf134dd95cc0b7bfccc54ac7553f61317b008335a7e3"
+}

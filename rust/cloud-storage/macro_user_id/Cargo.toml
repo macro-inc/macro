@@ -1,0 +1,10 @@
+[package]
+edition = "2024"
+name = "macro_user_id"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+nom = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }

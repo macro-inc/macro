@@ -1,0 +1,17 @@
+[package]
+edition = "2024"
+name = "static_file_service_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+bytes = { workspace = true }
+models_sfs = { path = "../models_sfs" }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+tokio = { workspace = true }

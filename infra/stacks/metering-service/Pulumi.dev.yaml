@@ -1,0 +1,5 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  metering-service:db-password-secret-key: metering-db-password-dev
+  metering-service:internal_api_key: document-storage-service-auth-key-dev

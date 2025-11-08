@@ -1,0 +1,72 @@
+[package]
+default-run = "search_processing_service"
+edition = "2024"
+name = "search_processing_service"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["processing", "service"]
+processing = []
+service = ["macro_db_client"]
+
+[[bin]]
+name = "backfill_chat"
+path = "src/bin/backfill_chat.rs"
+required-features = ["service"]
+
+[[bin]]
+name = "backfill_project"
+path = "src/bin/backfill_project.rs"
+required-features = ["service"]
+
+[[bin]]
+name = "search_processing_service"
+path = "src/main.rs"
+required-features = ["processing", "service"]
+
+[dependencies]
+anyhow = { workspace = true }
+aws-config = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+axum = { workspace = true }
+chrono = { workspace = true }
+comms_service_client = { path = "../comms_service_client" }
+email_service_client = { path = "../email_service_client" }
+futures = { workspace = true }
+http-body-util = { workspace = true }
+lexical_client = { path = "../lexical_client" }
+macro_cors = { path = "../macro_cors" }
+macro_db_client = { path = "../macro_db_client", optional = true } # Make this optional
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env = { path = "../macro_env" }
+macro_middleware = { path = "../macro_middleware", default-features = false, features = [
+  "auth",
+] }
+macro_uuid = { path = "../macro_uuid" }
+mention_utils = { path = "../mention_utils" }
+model = { path = "../model" }
+models_search = { path = "../models_search" }
+nom = { workspace = true }
+opensearch_client = { path = "../opensearch_client" }
+pdfium-render = { workspace = true }
+rust-embed = "8.6.0"
+s3_client = { path = "../s3_client" }
+secretsmanager_client = { path = "../secretsmanager_client" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+sqs_client = { path = "../sqs_client", default-features = false, features = [
+  "search",
+] }
+sqs_worker = { path = "../sqs_worker" }
+strum = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+uuid = { workspace = true }

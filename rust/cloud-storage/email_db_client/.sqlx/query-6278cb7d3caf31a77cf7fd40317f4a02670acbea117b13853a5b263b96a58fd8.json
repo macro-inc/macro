@@ -1,0 +1,168 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            id,\n            provider_id,\n            global_id,\n            thread_id,\n            provider_thread_id,\n            replying_to_id,\n            link_id,\n            provider_history_id,\n            internal_date_ts,\n            snippet,\n            size_estimate,\n            subject,\n            from_contact_id,\n            sent_at,\n            has_attachments,\n            is_read,\n            is_starred,\n            is_sent,\n            is_draft,\n            body_text,\n            body_html_sanitized,\n            body_macro,\n            headers_jsonb,\n            created_at,\n            updated_at\n        FROM email_messages\n        WHERE thread_id = $1\n        ORDER BY internal_date_ts DESC\n        LIMIT $2 OFFSET $3\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "provider_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "global_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "provider_thread_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "replying_to_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 6,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "provider_history_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
+        "name": "internal_date_ts",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "snippet",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "size_estimate",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 11,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "from_contact_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 13,
+        "name": "sent_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 14,
+        "name": "has_attachments",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 15,
+        "name": "is_read",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 16,
+        "name": "is_starred",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 17,
+        "name": "is_sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 18,
+        "name": "is_draft",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 19,
+        "name": "body_text",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 20,
+        "name": "body_html_sanitized",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 21,
+        "name": "body_macro",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 22,
+        "name": "headers_jsonb",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 23,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 24,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "6278cb7d3caf31a77cf7fd40317f4a02670acbea117b13853a5b263b96a58fd8"
+}

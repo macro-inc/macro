@@ -1,0 +1,36 @@
+[package]
+edition = "2024"
+name = "frecency"
+publish = false
+version = "0.1.0"
+
+[features]
+mock = ["dep:mockall"]
+postgres = ["dep:serde_json", "dep:sqlx"]
+
+[dependencies]
+anyhow = { workspace = true }
+chrono = { workspace = true, features = ["serde"] }
+futures = { workspace = true }
+lambda_runtime = { workspace = true, optional = true, features = ["tracing"] }
+macro_env = { path = "../macro_env" }
+macro_env_var = { path = "../macro_env_var", optional = true }
+macro_user_id = { path = "../macro_user_id" }
+mockall = { workspace = true, optional = true }
+model-entity = { path = "../model-entity" }
+models_pagination = { path = "../models_pagination" }
+num-traits = { version = "0.2" }
+ordered-float = "5"
+serde = { workspace = true }
+serde_json = { workspace = true, optional = true }
+sqlx = { workspace = true, optional = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["sync", "time"] }
+tower = { workspace = true, optional = true }
+tracing = { workspace = true }
+
+[dev-dependencies]
+aws-config = { workspace = true }
+cool_asserts = "2"
+macro_db_migrator = { path = "../macro_db_migrator" }
+rand = { workspace = true }

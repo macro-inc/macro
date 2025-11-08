@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM notification\n            WHERE event_item_id = $1 AND event_item_type = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5ec52bf99ec6fbfa8759ae070b48113cdb5f9a4526c72be1fcce6b3bb2e88d2a"
+}

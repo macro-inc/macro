@@ -1,0 +1,65 @@
+MACRODB := "postgres://user:password@localhost:5432/macrodb"
+
+check:
+    RUSTFLAGS=-Dwarnings RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo check
+
+format:
+    SQLX_OFFLINE=true cargo fmt
+
+clean:
+    cargo clean
+    git restore target/lambda
+
+build:
+    SQLX_OFFLINE=true cargo build
+
+# Build all lambda functions
+build_lambdas:
+    #!/usr/bin/env -S parallel --shebang --ungroup --jobs {{ num_cpus() }}
+    just docx_unzip_handler/build
+    just delete_chat_handler/build
+    just organization_retention_handler/build
+    just organization_retention_trigger/build
+    just upload_extractor_lambda_trigger/build
+    just upload_extractor_lambda_handler/build
+    just worker_trigger/build
+    just dataloss_prevention_handler/build
+    just search_upload_handler/build
+    just document_text_extractor/build
+    just email_suppression_handler/build
+    just deleted_item_poller/build
+    just email_refresh_handler/build
+    just user_link_cleanup_handler/build
+
+# TESTING
+
+# Copies over necessary .env files for sqlx tests
+setup_test_envs:
+    echo "DATABASE_URL={{ MACRODB }}" >> ./document_cognition_service/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./document_text_extractor/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./organization_retention_handler/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./organization_retention_trigger/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./organization_retention_handler/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./sha_cleanup_worker/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./sha_ref_count_resetter/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./insight_service/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./metering_service/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./roles_and_permissions/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./teams/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./frecency/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./soup/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./properties_db_client/.env
+
+setup_macrodb:
+    just macro_db_client/migrate_db
+    just document_cognition_service/prepare-test
+
+initialize_dbs: setup_macrodb
+    # notificationdb
+    just notification_db_client/setup
+    # contactsdb
+    just contacts_db_client/setup
+    # insight integration
+    just insight_service/prepare-test
+    # metering db
+    just metering_db_client/setup

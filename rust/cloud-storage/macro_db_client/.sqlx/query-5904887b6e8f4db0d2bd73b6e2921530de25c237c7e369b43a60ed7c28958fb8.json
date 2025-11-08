@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                    SELECT\n                        sp.id as id\n                    FROM\n                        \"EmailThreadPermission\" tp\n                    JOIN \"SharePermission\" sp ON tp.\"sharePermissionId\" = sp.id\n                    WHERE\n                        tp.\"threadId\" = $1\n                ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "5904887b6e8f4db0d2bd73b6e2921530de25c237c7e369b43a60ed7c28958fb8"
+}

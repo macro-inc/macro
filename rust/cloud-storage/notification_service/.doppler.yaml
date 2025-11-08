@@ -1,0 +1,3 @@
+setup:
+  project: notification_service
+  config: lcl_personal

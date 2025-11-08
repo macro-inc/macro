@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO connections(user1, user2) VALUES($1, $2)\n         ON CONFLICT(user1, user2) DO NOTHING\n         RETURNING id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Int4"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "636180c7d485b139b74208674046173b3ba6eb0088499a0a172970d506c16498"
+}

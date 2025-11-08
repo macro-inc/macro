@@ -1,0 +1,16 @@
+[package]
+edition = "2024"
+name = "models_dcs"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+ai = { path = "../ai" }
+chrono = { workspace = true }
+model = { path = "../model" }
+models_permissions = { path = "../models_permissions" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+unfurl_service = { path = "../unfurl_service" }
+utoipa = { workspace = true }

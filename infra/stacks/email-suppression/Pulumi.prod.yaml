@@ -1,0 +1,5 @@
+config:
+  aws:region: us-east-1
+  email-suppression:macro_db_proxy_secret_key: macrodb-rds-proxy-prod
+  email-suppression:complaint_arn: arn:aws:sns:us-east-1:569036502058:macro-email-complaint
+  email-suppression:bounc_arn: arn:aws:sns:us-east-1:569036502058:macro-email-bounce

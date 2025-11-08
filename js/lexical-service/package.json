@@ -1,0 +1,48 @@
+{
+  "name": "lexical-service",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev --env local",
+    "start": "wrangler dev",
+    "gen-types": "wrangler types",
+    "test": "bun test/tests.ts",
+    "plaintext": "bash scripts/test-plaintext.sh",
+    "cognition": "bash scripts/test-cognition.sh",
+    "search": "bash scripts/test-search.sh",
+    "deploy-dev": "wrangler deploy --env dev",
+    "deploy-prod": "wrangler deploy --env prod",
+    "check": "tsc --noEmit",
+    "update-lex": "bun update @macro-inc/lexical-core --latest"
+  },
+  "dependencies": {
+    "@lexical/code": "0.32.1",
+    "@lexical/headless": "0.32.1",
+    "@lexical/history": "0.32.1",
+    "@lexical/html": "0.32.1",
+    "@lexical/link": "0.32.1",
+    "@lexical/list": "0.32.1",
+    "@lexical/mark": "0.32.1",
+    "@lexical/markdown": "0.32.1",
+    "@lexical/plain-text": "0.32.1",
+    "@lexical/rich-text": "0.32.1",
+    "@lexical/selection": "0.32.1",
+    "@lexical/table": "0.32.1",
+    "@lexical/utils": "0.32.1",
+    "@macro-inc/lexical-core": "~0.2.0",
+    "chanfana": "^2.6.3",
+    "hono": "^4.6.20",
+    "lexical": "0.32.1",
+    "nanoid": "^5.1.5",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.2.19",
+    "@types/node": "22.13.0",
+    "@types/service-worker-mock": "^2.0.4",
+    "tsx": "^4.20.3",
+    "wrangler": "^4.25.1"
+  }
+}

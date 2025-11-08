@@ -1,0 +1,18 @@
+[package]
+edition = "2024"
+name = "sha_ref_count_resetter"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env = { path = "../macro_env" }
+redis = { workspace = true, features = [
+  "aio",
+  "cluster-async",
+  "tokio-native-tls-comp",
+] }
+sqlx = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }

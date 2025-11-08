@@ -1,0 +1,26 @@
+[package]
+edition = "2024"
+name = "macro_cache_client"
+publish = false
+version = "0.1.0"
+
+[features]
+all = [
+  "auth",
+  "auth_rate_limit",
+  "login_code_rate_limit",
+  "notification_rate_limit",
+  "verify_email_rate_limit",
+]
+auth = []
+auth_rate_limit = ["dep:email_validator"]
+default = ["all"]
+login_code_rate_limit = ["dep:email_validator"]
+notification_rate_limit = ["dep:email_validator"]
+verify_email_rate_limit = ["dep:email_validator"]
+
+[dependencies]
+anyhow = { workspace = true }
+email_validator = { path = "../email_validator", optional = true }
+macro_redis = { path = "../macro_redis" }
+redis = { workspace = true, features = ["tokio-native-tls-comp"] }

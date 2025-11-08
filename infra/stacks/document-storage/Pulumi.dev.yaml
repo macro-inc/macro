@@ -1,0 +1,7 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  document-storage:database_url:
+    secure: AAABACf0R7GBVahUtoSTXJyVeB5NSHoycj3vP5KtjSlF9AxKhzWH0O0Zysaf+oh1LCHMXLg2WQDAUId2LAqW3LNJG2Hw7LqZ7TGQJpQp9x3Hk9MMXnapNmiQlW+/N1YGrcMMSK+78IT+YS3vkQ/pnVUfTzFP+xp7hXd7zkifXcBSOb8=
+  document-storage:document_storage_service_auth_key: document-storage-service-auth-key-dev
+  document-storage:jwt_secret_key: jwt-secret-dev

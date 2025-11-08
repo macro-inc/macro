@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            'item' as unsubscribe_type,\n            unsubscribe_item.item_id  as \"item_id!\",\n            unsubscribe_item.item_type as \"item_type!\"\n        FROM\n            user_notification_item_unsubscribe unsubscribe_item\n        WHERE\n            unsubscribe_item.user_id = $1\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "unsubscribe_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "item_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "item_type!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null,
+      false,
+      false
+    ]
+  },
+  "hash": "f6600a8a539ce77dbd8b5332ea8994e58da416d649dc4963c510b3f6906db5fd"
+}

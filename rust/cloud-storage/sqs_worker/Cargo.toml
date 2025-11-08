@@ -1,0 +1,10 @@
+[package]
+edition = "2024"
+name = "sqs_worker"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+tracing = { workspace = true }

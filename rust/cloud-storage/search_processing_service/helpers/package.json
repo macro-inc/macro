@@ -1,0 +1,22 @@
+{
+	"name": "search-processing-service-helpers",
+	"version": "0.0.0",
+	"description": "",
+	"scripts": {
+		"format": "biome format --write .",
+		"lint": "biome lint .",
+		"check": "biome check --apply .",
+		"health": "bun run health.ts",
+		"create_indices": "bun run create_indices.ts",
+		"delete_indices": "bun run delete_indices.ts",
+    "set_refresh_interval": "bun run set_refresh_interval.ts"
+	},
+	"author": "Will Hutchinson",
+	"license": "ISC",
+	"dependencies": {
+		"@biomejs/biome": "1.9.3",
+		"@opensearch-project/opensearch": "^3.2.0",
+		"@types/node": "^22.14.0",
+		"dotenv": "^16.5.0"
+	}
+}

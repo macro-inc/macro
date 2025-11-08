@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_message_labels (message_id, label_id)\n        SELECT\n            unnested_message_id,\n            l.id\n        FROM\n            UNNEST($1::uuid[]) AS t(unnested_message_id)\n        CROSS JOIN\n            email_labels l\n        WHERE\n            l.link_id = $2 AND l.provider_label_id = $3\n        ON CONFLICT (message_id, label_id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "16fe6d8422135f9b01d5acb48576c9ebeea62fe8b80747ddcf9c5fdeee1a6c7e"
+}

@@ -1,0 +1,10 @@
+config:
+  aws:region: us-east-1
+  search-service:macro_db_secret_key: macro-db-prod
+  search-service:opensearch_password_key: macro-opensearch-password-prod
+  search-service:internal_auth_key: document-storage-service-auth-key-prod
+  search-service:datadog_api_key:
+    secure: AAABANpRrPiVtIUzZ339Rd4ha3TPb+Xuprs2URWiHvbIGBmkumfnyf5VbUSE0VZNBoSA6zLDmadk4q5KptZBrQ==
+  search-service:fusionauth_client_id: 75409999-7dc4-4241-b73b-a51818c3a71c
+  search-service:fusionauth_issuer: auth.macro.com
+  search-service:jwt_secret_key: fusionauth-jwt-secret-prod

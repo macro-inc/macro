@@ -1,0 +1,14 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  cloud-storage-service:macro_db_secret_key: macro-db-dev
+  cloud-storage-service:macro_db_proxy_secret_key: macrodb-rds-proxy-dev
+  cloud-storage-service:datadog_api_key:
+    secure: AAABACY/0KuX178lcbDG/ccDhBI8P+lpBJzE0wxRONcO6fb3mXncdSRlRoPvAcegRGCn/BqcjOCPm+KhpYlCsQ==
+  cloud-storage-service:document_storage_service_auth_key: document-storage-service-auth-key-dev
+  cloud-storage-service:jwt_secret_key: fusionauth-jwt-secret-dev
+  cloud-storage-service:fusionauth_client_id: eb75fe7a-0ef1-4186-96d9-cc62cfb1d10c
+  cloud-storage-service:fusionauth_issuer: fusionauth-dev.macro.com
+  cloud-storage-service:document_storage_permissions_key: document-storage-permissions-key-dev
+  cloud-storage-service:internal_api_key: document-storage-service-auth-key-dev
+  cloud-storage-service:sync_service_auth_key: sync-service-key-dev

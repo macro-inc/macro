@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO property_options (\n            id,\n            property_definition_id,\n            display_order,\n            number_value,\n            string_value\n        )\n        VALUES ($1, $2, $3, $4, $5)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4",
+        "Float8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9e45ba072fbc5266f7edba0fecb99d19192e10139d6ea089be4a3a4a7923361c"
+}

@@ -1,0 +1,10 @@
+[package]
+edition = "2024"
+name = "remote_env_var"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+macro_env = { path = "../macro_env" }
+thiserror = { workspace = true }
+tracing = { workspace = true }

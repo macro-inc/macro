@@ -1,0 +1,7 @@
+export AWS_ACCESS_KEY_ID := env('AWS_ACCESS_KEY_ID', 'dummy')
+export AWS_SECRET_ACCESS_KEY := env('AWS_SECRET_ACCESS_KEY', 'dummy')
+
+mod ensure '../ensure.just'
+
+integration_test *FLAGS: ensure::ensure_dynamodb
+    ENVIRONMENT=local cargo test --all-features {{ FLAGS }}

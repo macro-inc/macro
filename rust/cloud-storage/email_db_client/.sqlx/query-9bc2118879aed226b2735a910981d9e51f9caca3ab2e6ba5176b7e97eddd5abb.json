@@ -1,0 +1,30 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_backfill_threads\n        SET status = $3, error_message = $4, updated_at = NOW()\n        WHERE backfill_job_id = $1 AND thread_provider_id = $2\n        AND status != $3\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        {
+          "Custom": {
+            "name": "email_backfill_thread_status",
+            "kind": {
+              "Enum": [
+                "InProgress",
+                "Skipped",
+                "Completed",
+                "Failed",
+                "Cancelled"
+              ]
+            }
+          }
+        },
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "9bc2118879aed226b2735a910981d9e51f9caca3ab2e6ba5176b7e97eddd5abb"
+}

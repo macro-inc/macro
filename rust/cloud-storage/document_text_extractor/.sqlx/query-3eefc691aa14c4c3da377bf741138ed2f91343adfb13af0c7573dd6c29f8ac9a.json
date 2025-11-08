@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO \"DocumentText\" (\"documentId\", \"content\", \"tokenCount\")\n            VALUES ($1, $2, $3)\n            ON CONFLICT (\"documentId\") DO UPDATE \n            SET \"content\" = $2, \"tokenCount\" = $3\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3eefc691aa14c4c3da377bf741138ed2f91343adfb13af0c7573dd6c29f8ac9a"
+}

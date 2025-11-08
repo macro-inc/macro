@@ -1,0 +1,87 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            mr.message_id, c.id, c.link_id, c.email_address, c.name, c.original_photo_url, c.sfs_photo_url,\n            c.created_at, c.updated_at, mr.recipient_type as \"recipient_type!: db::address::EmailRecipientType\"\n        FROM email_message_recipients mr\n        JOIN email_contacts c ON mr.contact_id = c.id\n        WHERE mr.message_id = $1\n        ORDER BY mr.recipient_type\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "email_address",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "original_photo_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "sfs_photo_url",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "recipient_type!: db::address::EmailRecipientType",
+        "type_info": {
+          "Custom": {
+            "name": "email_recipient_type",
+            "kind": {
+              "Enum": [
+                "TO",
+                "CC",
+                "BCC"
+              ]
+            }
+          }
+        }
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ed894819611cb11ae39acaf7f4ad5114dc78633ead55e87b82ea6fa8f680d522"
+}

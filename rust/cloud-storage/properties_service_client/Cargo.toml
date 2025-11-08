@@ -1,0 +1,13 @@
+[package]
+edition = "2024"
+name = "properties_service_client"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+macro_service_client = { path = "../macro_service_client" }
+models_properties = { path = "../models_properties" }
+reqwest = { workspace = true }
+serde = { workspace = true }
+tracing = { workspace = true }

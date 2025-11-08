@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM comms_entity_mentions\n        WHERE source_entity_id = ANY($1)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "706da2cb5edbf06f5304e87bed3866c7a6ba7f2a405b174a238623f5e496886c"
+}

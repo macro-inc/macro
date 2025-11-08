@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO notification_email_unsubscribe (email) VALUES ($1)\n        ON CONFLICT (email) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1411c7b041f6313844a7f5a78c741e2410cce10dc0c7a196e5104e6fa2ae0875"
+}

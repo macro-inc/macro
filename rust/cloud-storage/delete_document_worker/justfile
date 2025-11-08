@@ -1,0 +1,16 @@
+mod ci '../ci.just'
+
+deploy-dev:
+	just ci::deploy-dev delete-document-worker
+
+check:
+	SQLX_OFFLINE=true cargo check
+
+create-localstack:
+	docker run -d --name localstack -p 4566:4566 -e SERVICES=sqs localstack/localstack
+
+start-localstack:
+	docker run -p 4566:4566 -e SERVICES=sqs localstack/localstack
+
+create-queue:
+	AWS_REGION=us-east-1 aws --endpoint-url=http://localhost:4566 sqs create-queue --queue-name delete_document_queue

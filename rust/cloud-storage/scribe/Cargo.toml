@@ -1,0 +1,58 @@
+[package]
+edition = "2024"
+name = "scribe"
+publish = false
+version = "0.1.0"
+
+[features]
+
+all = ["channel", "dcs", "document", "email", "static_file"]
+channel = ["comms_service_client", "models_comms"]
+dcs = ["document_cognition_service_client"]
+default = []
+document = [
+  "document_storage_service_client",
+  "lexical_client",
+  "sync_service_client",
+  # TODO
+  # "static_file_service_client??",
+]
+email = ["email_service_client", "models_email"]
+static_file = ["models_sfs", "static_file_service_client"]
+
+[dependencies]
+# Core dependencies
+anyhow = { workspace = true }
+base64 = { workspace = true }
+bytes = { workspace = true }
+chrono = { workspace = true }
+derive_builder = { workspace = true }
+futures = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tracing = { workspace = true }
+uuid = { workspace = true }
+
+# Internal dependencies
+ai = { path = "../ai" }
+ai_format = { path = "../ai_format" }
+macro_client_errors = { path = "../macro_client_errors" }
+model = { path = "../model" }
+models_dcs = { path = "../models_dcs" }
+s3_client = { path = "../s3_client" }
+
+# Service client dependencies
+document_storage_service_client = { path = "../document_storage_service_client", optional = true }
+lexical_client = { path = "../lexical_client", optional = true }
+sync_service_client = { path = "../sync_service_client", optional = true }
+
+comms_service_client = { path = "../comms_service_client", optional = true }
+document_cognition_service_client = { path = "../document_cognition_service_client", optional = true }
+email_service_client = { path = "../email_service_client", optional = true }
+models_comms = { path = "../models_comms", optional = true }
+models_email = { path = "../models_email", optional = true }
+models_sfs = { path = "../models_sfs", optional = true }
+static_file_service_client = { path = "../static_file_service_client", optional = true }

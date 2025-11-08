@@ -1,0 +1,3 @@
+name: search-text-extractor-queue
+runtime: nodejs
+description: Search Text Extractor Queue

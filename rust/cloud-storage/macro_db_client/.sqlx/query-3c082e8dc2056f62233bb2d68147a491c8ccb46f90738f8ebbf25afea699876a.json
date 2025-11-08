@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            u.id as user_id\n        FROM \"User\" u\n        WHERE u.\"organizationId\" = $1\n        LIMIT $2\n        OFFSET $3\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "3c082e8dc2056f62233bb2d68147a491c8ccb46f90738f8ebbf25afea699876a"
+}

@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT team_id FROM team_user\n            WHERE user_id = $1 AND team_role NOT IN ('owner')\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "team_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "faf480f442ad8f5864ede47f580b5b9feb8ce049c8b1826d7d7043d3054f8a73"
+}

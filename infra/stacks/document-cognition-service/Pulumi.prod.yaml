@@ -1,0 +1,16 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  document-cognition:internal_auth_key: document-storage-service-auth-key-prod
+  document-cognition:legacy_jwt_secret_key: jwt-secret-prod
+  document-cognition:macro_db_secret_key: macro-db-prod
+  document-cognition:openai_api_key: dcs-api-keys
+  document-cognition:gcp_service_account: gcp-service-account
+  document-cognition:jwt_secret_key: fusionauth-jwt-secret-prod
+  document-cognition:fusionauth_client_id: 75409999-7dc4-4241-b73b-a51818c3a71c
+  document-cognition:fusionauth_issuer: auth.macro.com
+  document-cognition:anthropic_api_key: anthropic-api-key
+  document-cognition:xai-api-key: xai-api-key
+  document-cognition:open-router-api-key: open-router-api-key-prod-v2
+  document-cognition:sync_service_auth_key: sync-service-key-prod
+  document-cognition:perplexity-api-key: perplexity-api-key

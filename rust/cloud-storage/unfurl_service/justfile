@@ -1,0 +1,44 @@
+export SQLX_OFFLINE := "true"
+
+mod ci '../ci.just'
+
+deploy-dev:
+	just ci::deploy-dev unfurl-service
+
+run:
+	cargo run
+
+run-mock:
+	cargo run --features mock
+
+test-parsers:
+	cargo run --examples test_parsers
+
+build:
+	cargo build
+
+unfurl URL:
+	curl -X 'GET' \
+	  'http://localhost:8080/unfurl?url='{{URL}} \
+	  -H 'accept: application/json' 2>/dev/null
+test:
+	cargo test --features mock
+
+check:
+	cargo check
+
+bulk-link-test:
+	curl -X 'POST' \
+	  'http://localhost:8080/unfurl/bulk' \
+	  -H 'accept: application/json' \
+	  -H 'Content-Type: application/json' \
+	  -d @data/lots_of_links.json
+
+docker-build:
+	docker build --tag 'unfurl-service' --build-arg SERVICE_NAME=unfurl_service ..
+
+docker-run:
+	docker run -p 8080:8080 unfurl-service:latest
+
+clippy:
+	cargo clippy

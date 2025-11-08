@@ -1,0 +1,99 @@
+[package]
+default-run = "email_service"
+edition = "2024"
+name = "email_service"
+publish = false
+version = "0.1.0"
+
+[[bin]]
+name = "email_service"
+path = "src/main.rs"
+
+[[bin]]
+name = "backfill_search"
+path = "src/bin/backfill_search.rs"
+
+[features]
+disable_attachment_upload = []
+disable_connection_gateway = []
+disable_gmail_webhook_auth = []
+disable_sfs_map = []
+local_queue = []
+
+[dependencies]
+anyhow = { workspace = true }
+authentication_service_client = { path = "../authentication_service_client" }
+aws-config = { workspace = true }
+aws-sdk-s3 = { workspace = true }
+aws-sdk-secretsmanager = { workspace = true }
+aws-sdk-sqs = { workspace = true }
+axum = { workspace = true }
+base64 = { workspace = true }
+bytes = { workspace = true }
+cloudfront_sign = { workspace = true }
+connection_gateway = { path = "../connection_gateway" }
+document_storage_service_client = { path = "../document_storage_service_client" }
+ego-tree = { workspace = true }
+email_db_client = { path = "../email_db_client" }
+frecency = { path = "../frecency", features = ["postgres"] }
+futures = { workspace = true }
+gmail_client = { path = "../gmail_client" }
+html-escape = "0.2"
+http-body-util = { workspace = true }
+infer = "0.19.0"
+insight_service_client = { path = "../insight_service_client" }
+lazy_static = { workspace = true }
+lol_html = "2.4.0"
+macro_auth = { path = "../macro_auth" }
+macro_axum_utils = { path = "../macro_axum_utils" }
+macro_cors = { path = "../macro_cors" }
+macro_entrypoint = { path = "../macro_entrypoint" }
+macro_env = { path = "../macro_env" }
+macro_env_var = { path = "../macro_env_var" }
+macro_middleware = { path = "../macro_middleware", default-features = false, features = [
+  "auth",
+] }
+macro_notify = { path = "../macro_notify" }
+macro_user_id = { path = "../macro_user_id" }
+macro_uuid = { path = "../macro_uuid" }
+model = { path = "../model" }
+model-entity = { path = "../model-entity" }
+model_notifications = { path = "../model_notifications" }
+models_email = { path = "../models_email" }
+models_pagination = { path = "../models_pagination", features = ["axum"] }
+redis = { workspace = true, features = [
+  "cluster-async",
+  "tokio-native-tls-comp",
+] }
+regex = { workspace = true }
+reqwest = { workspace = true, features = ["stream"] }
+s3_client = { path = "../s3_client" }
+schemars = { workspace = true }
+scraper = { workspace = true }
+secretsmanager_client = { path = "../secretsmanager_client" }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sqlx = { workspace = true }
+sqs_client = { path = "../sqs_client", default-features = false, features = [
+
+  "email",
+  "gmail",
+  "insight_context",
+  "search",
+] }
+sqs_worker = { path = "../sqs_worker" }
+static_file_service_client = { path = "../static_file_service_client" }
+strum_macros = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true }
+tower = { workspace = true }
+tower-http = { workspace = true }
+tracing = { workspace = true }
+url = { workspace = true }
+urlencoding = { workspace = true }
+utoipa = { workspace = true }
+utoipa-swagger-ui = { workspace = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+macro_auth = { path = "../macro_auth", features = ["testing"] }

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_scheduled_messages\n        SET\n            sent = true,\n            updated_at = NOW()\n        WHERE link_id = $1 AND message_id = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "3cc12a354bd0b48195a8f6b7b1df42d96b19eda98a61750b4405c0a0c55e50b2"
+}

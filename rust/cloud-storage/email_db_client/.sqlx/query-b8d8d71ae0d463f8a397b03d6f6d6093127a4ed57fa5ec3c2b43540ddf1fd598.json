@@ -1,0 +1,72 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH input_rows (\n            id,\n            link_id,\n            provider_label_id,\n            name,\n            message_list_visibility,\n            label_list_visibility,\n            type\n        ) AS (\n           SELECT * FROM unnest(\n               $1::uuid[],\n               $2::uuid[],\n               $3::text[],\n               $4::text[],\n               $5::email_message_list_visibility_enum[],\n               $6::email_label_list_visibility_enum[],\n               $7::email_label_type_enum[]\n           )\n        )\n        INSERT INTO email_labels (\n            id,\n            link_id,\n            provider_label_id,\n            name,\n            message_list_visibility,\n            label_list_visibility,\n            type\n        )\n        SELECT\n            id,\n            link_id,\n            provider_label_id,\n            name,\n            message_list_visibility,\n            label_list_visibility,\n            type\n        FROM input_rows\n        ON CONFLICT (link_id, provider_label_id) DO UPDATE\n        SET\n            name = EXCLUDED.name,\n            message_list_visibility = EXCLUDED.message_list_visibility,\n            label_list_visibility = EXCLUDED.label_list_visibility,\n            type = EXCLUDED.type\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        {
+          "Custom": {
+            "name": "_email_message_list_visibility_enum",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "email_message_list_visibility_enum",
+                  "kind": {
+                    "Enum": [
+                      "Show",
+                      "Hide"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "_email_label_list_visibility_enum",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "email_label_list_visibility_enum",
+                  "kind": {
+                    "Enum": [
+                      "LabelShow",
+                      "LabelShowIfUnread",
+                      "LabelHide"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "Custom": {
+            "name": "_email_label_type_enum",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "email_label_type_enum",
+                  "kind": {
+                    "Enum": [
+                      "System",
+                      "User"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "b8d8d71ae0d463f8a397b03d6f6d6093127a4ed57fa5ec3c2b43540ddf1fd598"
+}

@@ -1,0 +1,9 @@
+[package]
+edition = "2024"
+name = "model-error-response"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+serde = { workspace = true }
+utoipa = { workspace = true }

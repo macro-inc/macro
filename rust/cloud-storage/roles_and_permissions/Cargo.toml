@@ -1,0 +1,18 @@
+[package]
+edition = "2024"
+name = "roles_and_permissions"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+anyhow = { workspace = true }
+async-trait = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
+sqlx = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+non_empty = { path = "../non_empty" }
+
+[dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true }
