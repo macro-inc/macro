@@ -45,7 +45,7 @@
     "@aws-sdk/client-lambda": "^3.569.0",
     "@macro-inc/document-processing-job-types": "0.1.1",
     "cors": "^2.8.5",
-    "express": "^4.19.2",
+    "express": "^4.20.0",
     "ioredis": "^5.4.1",
     "lodash": "^4.17.21",
     "luxon": "^3.4.4",
