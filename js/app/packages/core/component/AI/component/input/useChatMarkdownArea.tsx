@@ -24,7 +24,6 @@ import {
   mentionsPlugin,
   NODE_TRANSFORM,
   type NodeTransformType,
-  registerRootEventListener,
   type SelectionData,
   tabIndentationPlugin,
   tableCellResizerPlugin,
@@ -49,7 +48,7 @@ import { isMobileWidth } from '@core/mobile/mobileWidth';
 import type { IOrganizationUser } from '@core/user';
 import { $isDocumentMentionNode } from '@lexical-core';
 import type { Item } from '@service-storage/generated/schemas/item';
-import { activeElement, recheckFocus } from 'app/signal/focus';
+import { activeElement } from 'app/signal/focus';
 import { filePastePlugin } from 'core/component/LexicalMarkdown/plugins/file-paste/filePastePlugin';
 import { createAccessoryStore } from 'core/component/LexicalMarkdown/plugins/node-accessory/nodeAccessoryPlugin';
 import { textPastePlugin } from 'core/component/LexicalMarkdown/plugins/text-paste/textPastePlugin';

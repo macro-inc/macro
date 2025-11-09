@@ -7,10 +7,6 @@ import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { isInBlock } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
-import {
-  autoRegister,
-  registerRootEventListener,
-} from '@core/component/LexicalMarkdown/plugins';
 import { fileDrop } from '@core/directive/fileDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
