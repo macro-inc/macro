@@ -14,18 +14,16 @@ import {
 import { fetchWithToken, unsetTokenPromise } from './fetchWithToken';
 import { err, ok } from './maybeResult';
 
-vi.mock('./safeFetch', () => ({
-  safeFetch: vi.fn(),
-}));
+vi.mock('./safeFetch');
 
 describe('fetchWithToken', () => {
-  let mockSafeFetch: any;
+  let mockSafeFetch: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     unsetTokenPromise();
     // Import the mocked module
     const { safeFetch } = await import('./safeFetch');
-    mockSafeFetch = safeFetch;
+    mockSafeFetch = vi.mocked(safeFetch);
     // Reset to default implementation
     mockSafeFetch.mockResolvedValue(ok({ data: 'mocked data' }));
   });
