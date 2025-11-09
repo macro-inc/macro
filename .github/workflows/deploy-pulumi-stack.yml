@@ -1,0 +1,47 @@
+name: deploy pulumi service
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        required: true
+        default: 'dev'
+        options:
+          - dev
+          - prod
+        description: The environment we are deploying to.
+      pulumi-service-name:
+        type: string
+        required: true
+        description: The name of the pulumi service to deploy. This will be the exact name of the folder containing your stacks.
+
+concurrency:
+  group: ${{ github.workflow }}-${{ inputs.pulumi-service-name }}-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on:
+      [
+        runs-on,
+        runner=8cpu-linux-x64,
+        hdd=40,
+        spot=false,
+        ssh=false,
+        'run-id=${{github.run_id}}',
+      ]
+    outputs:
+      level: ${{ steps.set-level.outputs.level }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+      - uses: ./.github/actions/deploy-cloud-storage-pulumi
+        with:
+          environment: ${{ inputs.environment }}
+          aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          pulumi-service-name: ${{ inputs.pulumi-service-name }} # TODO: we should have validation that this is a valid pulumi service name before we allow it to be set here
+          dd-app-key: ${{ secrets.DD_APP_KEY }}
+          dd-api-key: ${{ secrets.DD_API_KEY }}

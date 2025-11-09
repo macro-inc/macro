@@ -1,0 +1,118 @@
+name: Pulumi Preview on PR
+on:
+  pull_request:
+    branches: [ 'main' ]
+    paths:
+      - 'rust/cloud-storage/**'
+      - '.github/workflows/pulumi-preview-pr.yml'
+      - '.github/workflows/reusable-preview-service.yml'
+      - '.github/actions/preview-cloud-storage-pulumi/**'
+      - '.github/services-config.json'
+
+# Cancel in-progress runs of the same workflow on the same PR
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pull-requests: write
+  id-token: write
+
+jobs:
+  detect-changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.detect.outputs.services }}
+      has-changes: ${{ steps.detect.outputs.has-changes }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v41
+        with:
+          files: |
+            rust/cloud-storage/**
+            .github/services-config.json
+      - name: Detect affected services
+        id: detect
+        run: |
+          services=()
+          
+          # Read service config
+          config=$(cat .github/services-config.json)
+          
+          # Check each service for changes
+          for service in $(echo "$config" | jq -r '.services | keys[]'); do
+            service_changed=false
+            
+            # Get paths for this service
+            source_path=$(echo "$config" | jq -r --arg s "$service" '.services[$s].source_path // ""')
+            stack_path=$(echo "$config" | jq -r --arg s "$service" '.services[$s].stack_path // ""')
+            additional_paths=$(echo "$config" | jq -r --arg s "$service" '.services[$s].additional_paths[]? // ""')
+            
+            # Check if any changed files match service paths
+            for file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+              if [[ -n "$source_path" && "$file" == $source_path ]]; then
+                service_changed=true
+              elif [[ -n "$stack_path" && "$file" == $stack_path ]]; then
+                service_changed=true
+              elif [[ -n "$additional_paths" ]]; then
+                for path in $additional_paths; do
+                  if [[ "$file" == $path ]]; then
+                    service_changed=true
+                  fi
+                done
+              fi
+            done
+            
+            if [[ "$service_changed" == "true" ]]; then
+              services+=("$service")
+            fi
+          done
+          
+          if [ ${#services[@]} -eq 0 ]; then
+            echo "has-changes=false" >> $GITHUB_OUTPUT
+            echo "services=[]" >> $GITHUB_OUTPUT
+            echo "No services affected by changes"
+          else
+            echo "has-changes=true" >> $GITHUB_OUTPUT
+            services_json=$(printf '%s\n' "${services[@]}" | jq -R . | jq -s -c .)
+            echo "services=${services_json}" >> $GITHUB_OUTPUT
+            echo "Services to preview: ${services[@]}"
+          fi
+
+  preview-services:
+    name: Preview ${{ matrix.service }}
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.has-changes == 'true' }}
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+    uses: ./.github/workflows/reusable-preview-service.yml
+    with:
+      environment: dev
+      service-name: ${{ matrix.service }}
+      github-token: ${{ github.token }}
+    secrets: inherit
+
+  preview-status:
+    name: Preview Status
+    runs-on: ubuntu-latest
+    needs: [detect-changes, preview-services]
+    if: always()
+    steps:
+      - name: Summary
+        run: |
+          if [[ "${{ needs.detect-changes.outputs.has-changes }}" == "false" ]]; then
+            echo "ℹ️ No services were affected by the changes in this PR"
+          elif [[ "${{ needs.preview-services.result }}" == "failure" ]]; then
+            echo "❌ One or more Pulumi previews failed"
+            exit 1
+          elif [[ "${{ needs.preview-services.result }}" == "success" ]]; then
+            echo "✅ All Pulumi previews completed successfully"
+          elif [[ "${{ needs.preview-services.result }}" == "skipped" ]]; then
+            echo "ℹ️ No services were affected by the changes in this PR"
+          fi

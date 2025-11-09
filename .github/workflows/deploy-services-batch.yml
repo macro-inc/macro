@@ -1,0 +1,122 @@
+name: Deploy Services (Batch)
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        type: choice
+        required: true
+        default: 'dev'
+        options:
+          - dev
+          - prod
+        description: The environment to deploy to
+      services:
+        type: string
+        required: true
+        description: 'Comma-separated list of services to deploy (e.g., "document-cognition-service,search-service,static-file-service")'
+
+concurrency:
+  group: deploy-batch-${{ inputs.environment }}-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  parse-services:
+    name: Parse Services List
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.parse.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Parse and validate services
+        id: parse
+        run: |
+          # Split comma-separated list into array
+          IFS=',' read -ra SERVICES <<< "${{ inputs.services }}"
+          
+          # Trim whitespace and validate each service
+          valid_services=()
+          invalid_services=()
+          
+          # Get valid service names from config
+          all_services=$(jq -r '.services | keys[]' .github/services-config.json)
+          
+          for service in "${SERVICES[@]}"; do
+            # Trim whitespace
+            service=$(echo "$service" | xargs)
+          
+            # Check if service exists in config
+            if echo "$all_services" | grep -q "^${service}$"; then
+              valid_services+=("$service")
+            else
+              invalid_services+=("$service")
+            fi
+          done
+          
+          # Report invalid services
+          if [ ${#invalid_services[@]} -gt 0 ]; then
+            echo "⚠️ Warning: The following services are invalid and will be skipped:"
+            printf '%s\n' "${invalid_services[@]}"
+          fi
+          
+          # Create matrix JSON
+          if [ ${#valid_services[@]} -eq 0 ]; then
+            echo "❌ No valid services found in the input list"
+            exit 1
+          else
+            echo "✅ Valid services to deploy:"
+            printf '%s\n' "${valid_services[@]}"
+            matrix=$(printf '%s\n' "${valid_services[@]}" | jq -R . | jq -s .)
+            echo "matrix=${matrix}" >> $GITHUB_OUTPUT
+          fi
+
+  deploy-services:
+    name: Deploy ${{ matrix.service }}
+    needs: parse-services
+    runs-on:
+      [
+        runs-on,
+        runner=8cpu-linux-x64,
+        hdd=40,
+        spot=false,
+        ssh=false,
+        'run-id=${{github.run_id}}',
+      ]
+    strategy:
+      fail-fast: false
+      max-parallel: 20  # Limit concurrent deployments
+      matrix:
+        service: ${{ fromJson(needs.parse-services.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get project name
+        id: project-name
+        uses: ./.github/actions/get-project-name
+        with:
+          service-name: ${{ matrix.service }}
+
+      - name: Deploy ${{ matrix.service }}
+        uses: ./.github/actions/deploy-cloud-storage-pulumi
+        with:
+          environment: ${{ inputs.environment }}
+          aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          pulumi-service-name: ${{ steps.project-name.outputs.project-name }}
+          dd-app-key: ${{ secrets.DD_APP_KEY }}
+          dd-api-key: ${{ secrets.DD_API_KEY }}
+
+  summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: deploy-services
+    if: always()
+    steps:
+      - name: Report results
+        run: |
+          if [[ "${{ needs.deploy-services.result }}" == "failure" ]]; then
+            echo "❌ One or more deployments failed"
+            exit 1
+          else
+            echo "✅ All requested services deployed successfully to ${{ inputs.environment }}"
+          fi

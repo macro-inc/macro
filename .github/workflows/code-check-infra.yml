@@ -1,0 +1,29 @@
+name: infra code check
+on:
+  pull_request:
+    branches: [ 'main' ]
+    paths:
+      - 'rust/cloud-storage/infra/**'
+      - .github/workflows/code-check-infra.yml
+
+concurrency:
+  group: code-check-infra-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  biome-check:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: 
+          node-version: 21
+      - name: Setup Biome
+        uses: biomejs/setup-biome@v2
+        with:
+          # keep this in sync with package.json
+          version: 2.2.6
+      - name: Run Biome
+        run: |
+          biome ci infra
