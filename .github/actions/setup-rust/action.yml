@@ -1,0 +1,18 @@
+name: Setup Rust
+description: Installs rust
+
+runs:
+  using: composite
+  steps:
+    - uses: actions-rs/toolchain@v1
+      with:
+        toolchain: stable
+    - name: setup rust version
+      shell: bash
+      run: rustup update stable && rustup default stable
+    - name: setup rust caching
+      uses: Swatinem/rust-cache@v2
+      with:
+        shared-key: cloud-storage
+        cache-all-crates: true
+        workspaces: "cloud-storage"

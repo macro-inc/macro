@@ -1,0 +1,24 @@
+name: cargo deny check
+
+on:
+  pull_request:
+    branches: ['main']
+    paths:
+      - 'rust/cloud-storage/Cargo.toml'
+      - 'rust/cloud-storage/**/Cargo.toml'
+      - 'rust/cloud-storage/Cargo.lock'
+      - 'rust/cloud-storage/deny.toml'
+      - .github/workflows/cargo-deny.yml
+
+concurrency:
+  group: cargo-deny-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  cargo-deny:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: EmbarkStudios/cargo-deny-action@v2
+        with:
+          manifest-path: rust/cloud-storage/Cargo.toml

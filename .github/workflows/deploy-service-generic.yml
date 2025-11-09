@@ -1,0 +1,66 @@
+name: Deploy Service (Generic)
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        type: choice
+        required: true
+        description: Select the service to deploy
+        options:
+          - authentication-service
+          - bulk-upload
+          - comms-service
+          - connection-gateway
+          - contacts-service
+          - convert-service
+          - delete-document-worker
+          - deleted-item-poller
+          - dlp-handler
+          - document-cognition-service
+          - document-storage
+          - document-storage-bucket-integrations
+          - document-storage-service
+          - document-text-extractor
+          - email-service
+          - email-suppression
+          - experiment-service
+          - insight-service
+          - lambda-aggregate-frecency
+          - link-sharing
+          - metering-service
+          - notification-service
+          - notification-email-poller
+          - organization-service
+          - organization-retention
+          - properties-service
+          - search-processing-service
+          - search-service
+          - search-upload
+          - static-file-service
+          - unfurl-service
+          - sha-cleanup
+          - sha-ref-count-resetter
+          - opensearch
+          - search-event-queue
+          - search-text-extractor-queue
+      environment:
+        type: choice
+        required: true
+        default: 'dev'
+        options:
+          - dev
+          - prod
+        description: The environment to deploy to
+
+concurrency:
+  group: deploy-${{ inputs.service }}-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy ${{ inputs.service }}
+    uses: ./.github/workflows/reusable-deploy-service.yml
+    with:
+      environment: ${{ inputs.environment }}
+      service-name: ${{ inputs.service }}
+    secrets: inherit

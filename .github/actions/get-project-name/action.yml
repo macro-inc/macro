@@ -1,0 +1,23 @@
+name: Get Project Name
+description: Get the Pulumi project name for a service from services-config.json
+
+inputs:
+  service-name:
+    description: 'The service name to look up'
+    required: true
+
+outputs:
+  project-name:
+    description: 'The Pulumi project directory name'
+    value: ${{ steps.get-project.outputs.project_name }}
+
+runs:
+  using: composite
+  steps:
+    - name: Get project path for ${{ inputs.service-name }}
+      id: get-project
+      shell: bash
+      run: |
+        PROJECT_NAME=$(.github/actions/get-project-name/get-project-name.sh "${{ inputs.service-name }}")
+        echo "project_name=$PROJECT_NAME" >> $GITHUB_OUTPUT
+        echo "Using project: $PROJECT_NAME for service: ${{ inputs.service-name }}"
