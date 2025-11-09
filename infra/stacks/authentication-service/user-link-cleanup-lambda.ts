@@ -4,7 +4,7 @@ import * as pulumi from '@pulumi/pulumi';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
 
 const LAMBDA_BASE_NAME = 'user_link_cleanup_handler';
-const CLOUD_STORAGE_BASE = `../../../../rust/cloud-storage`;
+const CLOUD_STORAGE_BASE = `../../../rust/cloud-storage`;
 const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${LAMBDA_BASE_NAME}/bootstrap.zip`;
 
 export type EnvVars = {

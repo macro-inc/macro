@@ -20,7 +20,7 @@ import {
 } from './datadog';
 
 const BASE_NAME = 'cloud-storage-service';
-const BASE_PATH = '../../../../rust/cloud-storage';
+const BASE_PATH = '../../../rust/cloud-storage';
 
 type CreateCloudStorageServiceServiceArgs = {
   cloudStorageClusterName: pulumi.Output<string> | string;
