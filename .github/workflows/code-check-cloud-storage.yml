@@ -1,0 +1,172 @@
+name: cloud storage code check
+on:
+  pull_request:
+    branches: [ 'main' ]
+    paths:
+      - 'rust/cloud-storage/**'
+      - .github/workflows/code-check-cloud-storage.yml
+
+concurrency:
+  group: code-check-cloud-storage-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on:
+      [
+        runs-on,
+        runner=8cpu-linux-x64,
+        hdd=40,
+        spot=false,
+        ssh=false,
+        'run-id=${{github.run_id}}',
+      ]
+    if: github.event.pull_request.draft == false
+    env:
+      CARGO_TERM_COLOR: always
+      RUSTFLAGS: "-Dwarnings"
+      RUSTDOCFLAGS: "-Dwarnings"
+      SQLX_OFFLINE: true
+    steps:
+      - uses: runs-on/action@v1
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-rust
+      - name: fmt
+        run: |
+          cd rust/cloud-storage
+          cargo fmt --check
+      - name: clippy
+        run: |
+          cd rust/cloud-storage
+          cargo clippy
+
+  test:
+    runs-on:
+      [
+        runs-on,
+        runner=8cpu-linux-x64,
+        hdd=40,
+        spot=false,
+        ssh=false,
+        'run-id=${{github.run_id}}',
+      ]
+    if: github.event.pull_request.draft == false
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: user
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: macrodb # Start with macrodb, we initialize all others in the cloud-storage/justfile
+        ports:
+          - 5432:5432
+        # needed because the postgres container does not provide a healthcheck
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    steps:
+      - uses: runs-on/action@v1
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-rust
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/bin/
+            ~/.cargo/registry/index/
+            ~/.cargo/registry/cache/
+            ~/.cargo/git/db/
+          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/cloud-storage/Cargo.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-cargo-
+      - name: install dependencies
+        run: |
+          cargo install just --force
+          cargo install sqlx-cli --force
+      - name: prepare tests
+        run: |
+          just rust/cloud-storage/setup_test_envs
+          just rust/cloud-storage/initialize_dbs
+      - name: run tests
+        run: |
+          cd rust/cloud-storage
+          cargo test
+
+  diff-check:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    outputs:
+      docx-unzip-handler: ${{ steps.changes.outputs.docx-unzip-handler }}
+      worker-trigger: ${{ steps.changes.outputs.worker-trigger }}
+      document-text-extractor: ${{ steps.changes.outputs.document-text-extractor }}
+      organization_retention_trigger: ${{ steps.changes.outputs.organization_retention_trigger }}
+      organization_retention_handler: ${{ steps.changes.outputs.organization_retention_handler }}
+      delete_chat_handler: ${{ steps.changes.outputs.delete_chat_handler }}
+      search_upload_handler: ${{ steps.changes.outputs.search_upload_handler }}
+      upload_extractor_lambda_trigger: ${{ steps.changes.outputs.upload_extractor_lambda_trigger }}
+      upload_extractor_lambda_handler: ${{ steps.changes.outputs.upload_extractor_lambda_handler }}
+      email_suppression_handler: ${{ steps.changes.outputs.email_suppression_handler }}
+      deleted_item_poller: ${{ steps.changes.outputs.deleted_item_poller }}
+      email_refresh_handler: ${{ steps.changes.outputs.email_refresh_handler }}
+      email_scheduled_handler: ${{ steps.changes.outputs.email_scheduled_handler }}
+      user_link_cleanup_handler: ${{ steps.changes.outputs.user_link_cleanup_handler }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: whutchinson98/diff-checker-action@v1.0.2
+        id: changes
+        with:
+          token: ${{ GITHUB.TOKEN }}
+          diff: |
+            docx-unzip-handler: ./rust/cloud-storage/docx-unzip-handler/*
+            worker-trigger: ./rust/cloud-storage/worker-trigger/*
+            document-text-extractor: ./rust/cloud-storage/document-text-extractor/*
+            organization_retention_trigger: ./rust/cloud-storage/organization_retention_trigger/*
+            organization_retention_handler: ./rust/cloud-storage/organization_retention_handler/*
+            delete_chat_handler: ./rust/cloud-storage/delete_chat_handler/*
+            search_upload_handler: ./rust/cloud-storage/search_upload_handler/*
+            upload_extractor_lambda_trigger: ./rust/cloud-storage/upload_extractor_lambda_trigger/*
+            upload_extractor_lambda_handler: ./rust/cloud-storage/upload_extractor_lambda_handler/*
+            email_suppression_handler: ./rust/cloud-storage/email_suppression_handler/*
+            deleted_item_poller: ./rust/cloud-storage/deleted_item_poller/*
+            email_refresh_handler: ./rust/cloud-storage/email_refresh_handler/*
+            email_scheduled_handler: ./rust/cloud-storage/email_scheduled_handler/*
+            user_link_cleanup_handler: ./rust/cloud-storage/user_link_cleanup_handler/*
+            lambda_aggregate_frecency: ./rust/cloud-storage/lambda_aggregate_frecency/*
+
+  check-lambdas:
+    needs: diff-check
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.draft == false
+    strategy:
+      # we want to fail the particular item that failed not all of them.
+      fail-fast: false
+      matrix:
+        include:
+          - service: docx-unzip-handler
+          - service: worker-trigger
+          - service: document-text-extractor
+          - service: organization_retention_trigger
+          - service: organization_retention_handler
+          - service: delete_chat_handler
+          - service: search_upload_handler
+          - service: upload_extractor_lambda_trigger
+          - service: upload_extractor_lambda_handler
+          - service: email_suppression_handler
+          - service: deleted_item_poller
+          - service: email_refresh_handler
+          - service: email_scheduled_handler
+          - service: user_link_cleanup_handler
+    steps:
+      - name: setup env var
+        shell: bash
+        run: |
+          echo "Check for ${{ matrix.service }}"
+          echo "SHOULD_RUN=${{ needs.diff-check.outputs[matrix.service] }}" >> $GITHUB_ENV
+      - uses: actions/checkout@v4
+        if: env.SHOULD_RUN == 'true'
+      - name: check if lambda is built
+        if: env.SHOULD_RUN == 'true'
+        run: |
+          echo "Checking diff to ensure bootstrap.zip is part of PR"
+          git fetch origin ${{ github.base_ref }}
+          if ! git diff --name-only --diff-filter=AM origin/${{ github.base_ref }} HEAD | grep "rust/cloud-storage/target/lambda/${{ matrix.service }}/bootstrap.zip" > /dev/null; then
+          echo "Code changes detected, but new bootstrap.zip for ${{matrix.service}} not found in PR. Please run: just rust/cloud-storage/${{matrix.service}}/build to build and commit bootstrap.zip. Alternatively you can run just rust/cloud-storage/build_lambads to build all lambdas."
+            exit 1
+          fi

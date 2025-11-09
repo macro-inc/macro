@@ -1,0 +1,66 @@
+name: Reusable Preview Service
+on:
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: The environment to preview
+      service-name:
+        required: true
+        type: string
+        description: The name of the service to preview
+      pulumi-stack-name:
+        required: false
+        type: string
+        description: Override pulumi stack name (defaults to service-name)
+      use-docker:
+        required: false
+        type: boolean
+        default: true
+        description: Whether to setup docker
+      use-lfs:
+        required: false
+        type: boolean
+        default: false
+        description: Whether to checkout LFS content
+      github-token:
+        required: false
+        type: string
+        description: GitHub token for PR comments
+    secrets:
+      AWS_ACCESS_KEY:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      PULUMI_ACCESS_TOKEN:
+        required: true
+      DD_APP_KEY:
+        required: true
+      DD_API_KEY:
+        required: true
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      
+      - name: Get project name
+        id: project-name
+        uses: ./.github/actions/get-project-name
+        with:
+          service-name: ${{ inputs.service-name }}
+      
+      - uses: ./.github/actions/preview-cloud-storage-pulumi
+        with:
+          environment: ${{ inputs.environment }}
+          aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          pulumi-service-name: ${{ inputs.pulumi-stack-name || steps.project-name.outputs.project-name }}
+          dd-app-key: ${{ secrets.DD_APP_KEY }}
+          dd-api-key: ${{ secrets.DD_API_KEY }}
+          use-docker: ${{ inputs.use-docker }}
+          use-lfs: ${{ inputs.use-lfs }}
+          github-token: ${{ inputs.github-token }}
