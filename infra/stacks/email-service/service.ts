@@ -15,7 +15,7 @@ import { EmailAttachmentsBucket } from '@stacks/email-service/attachments-bucket
 import { getCloudfrontDistribution } from '@stacks/email-service/s3-cloudfront-distribution';
 
 const BASE_NAME = 'email-service';
-const BASE_PATH = '../../../../rust/cloud-storage';
+const BASE_PATH = '../../../rust/cloud-storage';
 
 export const SERVICE_DOMAIN_NAME = `email-service${
   stack === 'prod' ? '' : `-${stack}`

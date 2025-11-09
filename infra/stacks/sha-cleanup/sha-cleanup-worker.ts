@@ -6,7 +6,7 @@ import { stack } from '@shared';
 
 const BASE_NAME = `sha-cleaner-worker`;
 const WORKER_NAME = `${BASE_NAME}-${stack}`;
-const BASE_PATH = '../../../../rust/cloud-storage';
+const BASE_PATH = '../../../rust/cloud-storage';
 
 type CreateShaCleanupWorkerArgs = {
   containerEnvVars?: { name: string; value: Output<string> | string }[];
