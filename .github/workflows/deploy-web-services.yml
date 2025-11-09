@@ -27,8 +27,6 @@ on:
         required: true
       AWS_DEPLOYMENT_SECRET_ACCESS_KEY:
         required: true
-      NOTIFICATION_WEBHOOK:
-        required: true
       PULUMI_ACCESS_TOKEN:
         required: true
 
@@ -60,16 +58,3 @@ jobs:
           work-dir: ./infra/stacks/web-services
         env:
           PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
-
-  notify:
-    name: Slack Notification
-    if: ${{ inputs.notify }}
-    needs: deploy
-    runs-on: ubuntu-latest
-    steps:
-      - name: Slack Notification Web
-        uses: rtCamp/action-slack-notify@v2.2.1
-        env:
-          SLACK_WEBHOOK: ${{ secrets.NOTIFICATION_WEBHOOK }}
-          SLACK_MESSAGE:
-            'Web services ${{ inputs.environment }} deployed :rocket:'
