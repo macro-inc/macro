@@ -1,0 +1,52 @@
+{
+  "name": "macro-entity",
+  "version": "1.0.0",
+  "description": "Macro Entity Library",
+  "author": "Rithy Muth",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/macro-inc/app-monorepo.git"
+  },
+  "homepage": "https://github.com/macro-inc/app-monorepo#readme",
+  "bugs": {
+    "url": "https://github.com/macro-inc/app-monorepo/issues"
+  },
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    "solid": {
+      "development": "./dist/dev.jsx",
+      "import": "./dist/index.jsx"
+    },
+    "development": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/dev.js"
+      }
+    },
+    "import": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "check": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@phosphor-icons/core": "^2.1.1"
+  },
+  "peerDependencies": {
+    "solid-js": "^1.9.7"
+  },
+  "keywords": [
+    "solid"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}

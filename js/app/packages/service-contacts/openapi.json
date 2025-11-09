@@ -1,0 +1,54 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "contacts_service",
+    "description": "",
+    "termsOfService": "https://macro.com/terms",
+    "license": { "name": "" },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/contacts": {
+      "get": {
+        "tags": ["contacts"],
+        "operationId": "get_contacts",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GetContactsResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "GetContactsResponse": {
+        "type": "object",
+        "required": ["contacts"],
+        "properties": {
+          "contacts": { "type": "array", "items": { "type": "string" } }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "macro contacts service", "description": "Contacts Service" }
+  ]
+}

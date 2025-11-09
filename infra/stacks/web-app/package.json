@@ -1,0 +1,18 @@
+{
+  "name": "@macro-inc/infra-web-app",
+  "packageManager": "bun",
+  "private": true,
+  "scripts": {
+    "deploy:dev": "pulumi stack select macro-inc/dev && pulumi up",
+    "preview:dev": "pulumi stack select macro-inc/dev && pulumi preview",
+    "deploy:prod": "pulumi stack select macro-inc/prod && pulumi up"
+  },
+  "dependencies": {
+    "@pulumi/aws": "^6.83.0",
+    "@pulumi/aws-native": "^1.30.0",
+    "@pulumi/command": "^1.1.0",
+    "@pulumi/datadog": "^4.51.0",
+    "@pulumi/pulumi": "^3.181.0",
+    "@pulumi/synced-folder": "^0.11.1"
+  }
+}

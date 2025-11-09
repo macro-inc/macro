@@ -1,0 +1,609 @@
+/**
+* Markdown block css overrides that are too cumbersome in tailwind. List-item
+* pseudo-elements, css trickery to make underline and strikethough possible on
+* same span.
+*/
+
+/**
+* This is a workaround  to allow inline portal rendering with Lexical + solid.
+* There will always be a div in between the portal mount point and the actual
+* mounted component. We want to let the components render transparently.
+*/
+.__decorator-mount-ref>div:first-child {
+  display: contents;
+}
+
+.md * {
+  caret-color: currentcolor;
+
+  ::selection {
+    background-color: var(--color-ink);
+    color: var(--color-page);
+  }
+}
+
+.sender-message * ::selection {
+  background-color: rgb(from white r g b / 0.9);
+  color: var(--color-accent);
+}
+
+.md-p:empty {
+  min-height: 1.5em;
+}
+
+.md-list {
+  margin-left: 1.5em;
+}
+
+.md-inline-code {
+  padding-left: 0.15em;
+  padding-right: 0.15em;
+}
+
+.md-list.md-number>li::marker {
+  font-variant-numeric: normal;
+}
+
+.md-list.md-check {
+  list-style: none;
+}
+
+.md-list>li {
+  position: relative;
+}
+
+.md-list>li:empty {
+  min-height: 1.5em;
+}
+
+.md-list.md-bullet>li::before {
+  content: " ";
+  width: 0.4em;
+  height: 0.4em;
+  position: absolute;
+  left: -1.05em;
+  top: 0;
+  transform: translateY(0.55em);
+  border-radius: 1em;
+  line-height: 0;
+  background-color: currentcolor;
+}
+
+.md-list.md-check>li::before {
+  content: " ";
+  width: 0.8em;
+  height: 0.8em;
+  position: absolute;
+  left: -1.25em;
+  top: 0.35em;
+  transform: none;
+  outline: 2px solid currentcolor;
+  background-color: transparent;
+  border-radius: 0;
+  transition: background-color 0.2s ease, outline 0.1s ease;
+}
+
+.md-list.md-check>li.checked::before {
+  background-color: var(--color-accent);
+  outline: 2px solid var(--color-accent);
+}
+
+.md-list.md-check>li.checked.chat-blue::before {
+  background-color: var(--color-accent);
+  outline: 2px solid var(--color-accent);
+}
+
+.md-list.md-check>li.checked::after {
+  border-bottom: 2px solid var(--color-panel);
+  border-left: 2px solid var(--color-panel);
+  content: " ";
+  width: 0.7em;
+  height: 0.4em;
+  position: absolute;
+  left: -1.2em;
+  top: 0.45em;
+  transform: rotate(-45deg);
+  transition: background-color 0.2s ease, outline 0.1s ease;
+}
+
+.md-list>li.nested::before {
+  content: none;
+  display: none;
+}
+
+/* Handle nested numbered lists up to depth 6. This could be done in 3 lines with variable counters,
+* but this approach support safari. */
+ol.static-md {
+  list-style: none;
+}
+
+ol.static-md>li {
+  position: relative;
+}
+
+ol.static-md>li:not(.list-none)::before {
+  position: absolute;
+  left: -1.5rem;
+  text-align: right;
+  width: 1.5rem;
+  padding-right: 0.25rem;
+}
+
+ol.static-md.depth-1>li:not(.list-none) {
+  counter-increment: static-md-counter-1;
+}
+
+ol.static-md.depth-1>li:not(.list-none)::before {
+  content: counter(static-md-counter-1) ". ";
+}
+
+ol.static-md.depth-2>li:not(.list-none) {
+  counter-increment: static-md-counter-2;
+}
+
+ol.static-md.depth-2>li:not(.list-none)::before {
+  content: counter(static-md-counter-2) ". ";
+}
+
+ol.static-md.depth-3>li:not(.list-none) {
+  counter-increment: static-md-counter-3;
+}
+
+ol.static-md.depth-3>li:not(.list-none)::before {
+  content: counter(static-md-counter-3) ". ";
+}
+
+ol.static-md.depth-4>li:not(.list-none) {
+  counter-increment: static-md-counter-4;
+}
+
+ol.static-md.depth-4>li:not(.list-none)::before {
+  content: counter(static-md-counter-4) ". ";
+}
+
+ol.static-md.depth-5>li:not(.list-none) {
+  counter-increment: static-md-counter-5;
+}
+
+ol.static-md.depth-5>li:not(.list-none)::before {
+  content: counter(static-md-counter-5) ". ";
+}
+
+ol.static-md.depth-6>li:not(.list-none) {
+  counter-increment: static-md-counter-6;
+}
+
+ol.static-md.depth-6>li:not(.list-none)::before {
+  content: counter(static-md-counter-6) ". ";
+}
+
+.md-strike {
+  text-decoration: line-through;
+  text-decoration-color: currentcolor;
+  text-decoration-thickness: max(0.1em, 1px);
+  text-underline-offset: 2px;
+}
+
+.md-underline {
+  text-decoration: underline;
+  text-decoration-color: currentcolor;
+  text-decoration-thickness: max(0.1em, 1px);
+  text-underline-offset: 2px;
+}
+
+.md-strike.md-underline {
+  text-decoration: line-through underline;
+  text-decoration-thickness: max(0.1em, 1px);
+}
+
+.md-inline-mention>div {
+  display: contents;
+}
+
+.md-code-box {
+  position: relative;
+  max-width: 100%;
+}
+
+.md-code-box:not(.no-accessory) {
+  padding-left: 3.5rem;
+  overflow: auto;
+}
+
+.md-static-code-container:not(.no-accessory) {
+  padding-top: 3.5rem;
+}
+
+.md-static-code-container .md-code-box {
+  margin-top: -1.5rem;
+}
+
+.md-code-box.no-accessory .md-code-box-header {
+  display: none;
+}
+
+.md-code-box::before {
+  content: attr(data-gutter);
+  position: absolute;
+  left: 0;
+  top: 0;
+  padding: 0.75rem;
+  white-space: pre-wrap;
+  text-align: right;
+  min-width: 25px;
+}
+
+.md-code-box.__accessory-code-box,
+.md-code-box.__accessory-code-box::before {
+  padding-top: 3rem;
+}
+
+.md-code-box.preview-mode {
+  height: 400px;
+  overflow: hidden;
+
+  >* {
+    display: none;
+  }
+}
+
+.md-code-box.preview-mode::before {
+  display: none;
+}
+
+.plugin-drop-over {
+  position: relative;
+}
+
+.plugin-drop-over::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+  height: 0.25rem;
+  background-color: rgb(from currentcolor r g b / 0.2);
+}
+
+.md-table-scrollable-wrapper {
+  overflow-x: auto;
+  margin: 1.5rem 0rem;
+  padding-bottom: 0.5rem;
+  width: 100%;
+}
+
+.md-table-alignment-center {
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.md-table-alignment-right {
+  margin-left: auto;
+}
+
+.md-table {
+  border-collapse: collapse;
+  border-spacing: 0;
+  table-layout: fixed;
+  background-color: rgb(from var(--color-failure-bg) l c h / 0.5);
+  width: 100%;
+  word-break: break-word;
+  margin: 0;
+}
+
+.md-table-frozen-row tr:nth-of-type(1)>td {
+  overflow: clip;
+  position: sticky;
+  z-index: 2;
+  top: 44px;
+}
+
+.md-table-frozen-row tr:nth-of-type(1)>th {
+  overflow: clip;
+  background-color: #f2f3f5;
+  position: sticky;
+  z-index: 2;
+  top: 44px;
+}
+
+.md-table-frozen-row tr:nth-of-type(1)>th:after,
+.md-table-frozen-row tr:nth-of-type(1)>td:after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  width: 100%;
+}
+
+.md-table-frozen-column tr>td:first-child {
+  position: sticky;
+  z-index: 2;
+  left: 0;
+}
+
+.md-table-frozen-column tr>th:first-child {
+  position: sticky;
+  z-index: 2;
+  left: 0;
+}
+
+.md-table-frozen-column tr> :first-child::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  right: 0;
+  height: 100%;
+}
+
+.md-table tr:nth-child(even) {
+  background-color: oklch(from var(--color-edge) l c h / 0.15);
+}
+
+.md-table-selection *::selection {
+  background-color: transparent;
+}
+
+.md-table-selected {
+  outline: 2px solid var(--color-accent);
+}
+
+.md-table-cell {
+  border: 1px solid var(--color-edge);
+  width: fit-content;
+  vertical-align: top;
+  text-align: start;
+  padding: 0.5rem;
+  position: relative;
+  outline: none;
+  overflow: auto;
+}
+
+/*
+A firefox workaround to allow scrolling of overflowing table cell
+ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
+*/
+.md-table-cell>* {
+  overflow: inherit;
+}
+
+.md-table-cell-resizer {
+  position: absolute;
+  right: -4px;
+  height: 100%;
+  width: 8px;
+  cursor: ew-resize;
+  z-index: 10;
+  top: 0;
+}
+
+.md-table-cell-header {
+  text-align: start;
+}
+
+.md-table-cell-selected {
+  caret-color: transparent;
+}
+
+.md-table-cell-selected::after {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  top: 0;
+  background-color: highlight;
+  content: "";
+  pointer-events: none;
+}
+
+.md-table-add-columns {
+  position: absolute;
+  background-color: #eee;
+  height: 100%;
+  animation: table-controls 0.2s ease;
+  border: 0;
+  cursor: pointer;
+}
+
+.md-table-add-columns:after {
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: block;
+  content: " ";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.4;
+}
+
+.md-table-add-columns:hover,
+.md-table-add-columns:hover {
+  background-color: #c9dbf0;
+}
+
+.md-table-add-columns {
+  position: absolute;
+  width: calc(100% - 25px);
+  animation: table-controls 0.2s ease;
+  border: 0;
+  cursor: pointer;
+}
+
+.md-table-add-columns:after {
+  background-size: contain;
+  background-position: center;
+  background-repeat: no-repeat;
+  display: block;
+  content: " ";
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0.4;
+}
+
+@keyframes table-controls {
+  0% {
+    opacity: 0;
+  }
+
+  100% {
+    opacity: 1;
+  }
+}
+
+.md-table-cell-resize-ruler {
+  display: block;
+  position: absolute;
+  width: 1px;
+  background-color: var(--color-accent);
+  height: 100%;
+  top: 0;
+}
+
+.md-table-cell-action-button-container {
+  display: block;
+  right: 5px;
+  top: 6px;
+  position: absolute;
+  z-index: 4;
+  width: 20px;
+  height: 20px;
+}
+
+.md-table-cell-action-button {
+  display: block;
+  border: 0;
+  border-radius: 20px;
+  width: 20px;
+  height: 20px;
+  color: var(--color-ink-muted);
+  cursor: pointer;
+  background-color: transparent;
+}
+
+.md-table-cell-action-button:hover {
+  background-color: rgb(from var(--color-edge) r g b / 0.15);
+}
+
+.md-editor-equation {
+  cursor: pointer;
+  user-select: none;
+}
+
+.md-editor-equation.focused {
+  outline: 2px solid rgb(60, 132, 244);
+}
+
+.md-quote + .md-quote {
+  margin-top: -1rem;
+}
+
+mark {
+  color: currentColor;
+  background-color: unset;
+}
+
+.md-mark {
+  /* add a subtle bg to "default" marks and save comment styling for semantic comments */
+  background-color: oklch(from var(--color-ink-extra-muted) l c h /0.1);
+}
+
+.md-mark.comment {
+  background: oklch(from var(--color-comment-bg) l c h / 0.1);
+  border-bottom: 2px solid oklch(from var(--color-comment) l c h / 0.3);
+  padding-bottom: 2px;
+}
+
+.md-mark-overlap.comment {
+  background: oklch(from var(--color-comment-bg) l c h / 0.2);
+  border-bottom: 2px solid oklch(from var(--color-comment) l c h / 0.4);
+}
+
+.md-mark.selected.comment {
+  background: oklch(from var(--color-comment-bg) l c h / 0.3);
+  border-bottom: 2px solid oklch(from var(--color-comment) l c h / 0.5);
+  color: var(--color-comment-ink);
+}
+
+.md-mark-overlap.selected.comment {
+  background: oklch(from var(--color-comment-bg) l c h / 0.4);
+  border-bottom: 2px solid oklch(from var(--color-comment) l c h / 0.6);
+}
+
+.md-mark.draft.comment:not(.local) {
+  background: unset;
+  border-bottom: unset;
+}
+
+.md-no-comments {
+  .md-mark.comment {
+    background: unset !important;
+    border-bottom: unset !important;
+  }
+}
+
+.md-mark.search-match,
+.md .search-match {
+  display: inline-block;
+  padding-inline: 1px;
+  background-color: rgb(from var(--color-accent) r g b / 0.2);
+  color: var(--color-accent);
+}
+
+.highlighted {
+  background-color: rgb(from var(--color-accent-270) r g b / 0.3);
+}
+
+.md-highlight-selected-nodes {
+  background-color: rgb(from var(--color-accent-270) r g b / 0.2);
+  transition: background-color 0.3s ease;
+}
+
+.md-highlight-replaced-nodes-background-color {
+  background-color: rgb(from var(--color-accent) r g b / 0.2);
+}
+
+.md-diff:not(.external) .md-diff-delete {
+  padding: 0 2rem 0 4rem;
+  background: rgb(from var(--color-failure-bg) r g b / 0.25);
+
+  >* {
+    position: relative;
+  }
+
+  *::before {
+    content: '-';
+    position: absolute;
+    left: -2rem;
+  }
+}
+
+.md-diff-insert {
+  padding: 0.5rem 2rem 0.25rem 4rem;
+  background: rgb(from var(--color-success-bg) r g b / 0.25);
+}
+
+.md-diff-insert>* {
+  position: relative;
+}
+
+.md-diff-insert>*::before {
+  content: '+';
+  position: absolute;
+  left: -2rem;
+}
+
+.opt-reject .md-diff-insert {
+  opacity: 0.25;
+  text-decoration: line-through;
+}
+
+.opt-accept .md-diff-delete {
+  opacity: 0.25;
+  text-decoration: line-through;
+}

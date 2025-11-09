@@ -1,0 +1,1 @@
+export const DEFAULT_THREAD_MESSAGES_LIMIT = 20;

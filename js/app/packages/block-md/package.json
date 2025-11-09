@@ -1,0 +1,8 @@
+{
+  "name": "block-markdown",
+  "private": true,
+  "scripts": {},
+  "dependencies": {
+    "service-storage": "workspace:*"
+  }
+}

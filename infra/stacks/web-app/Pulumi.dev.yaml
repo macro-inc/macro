@@ -1,0 +1,5 @@
+config:
+  aws-native:region: us-east-1
+  aws:region: us-east-1
+  macro-web-app:indexDocument: index.html
+  macro-web-app:path: ../../packages/app/dist

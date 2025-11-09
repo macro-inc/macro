@@ -1,0 +1,1318 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "notification_service",
+    "description": "",
+    "termsOfService": "https://macro.com/terms",
+    "license": { "name": "" },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/device/register": {
+      "post": {
+        "tags": ["device::register"],
+        "summary": "Register a user device for push notifications.",
+        "operationId": "register_device",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DeviceRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "501": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/device/unregister": {
+      "delete": {
+        "tags": ["device::unregister"],
+        "summary": "Unregister a device from receiving push notifications.",
+        "operationId": "unregister_device",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DeviceRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Health check",
+        "operationId": "health_handler",
+        "responses": {
+          "200": {
+            "description": "health",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/notifications": {
+      "post": {
+        "tags": ["notification::create_notification"],
+        "summary": "Creates a notification.\nWill generate an id for the notification.",
+        "operationId": "create_notification",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateNotification" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Notification" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/unsubscribe": {
+      "get": {
+        "tags": ["unsubscribe::get_unsubscribes"],
+        "summary": "Gets the users unsubscribe items.",
+        "operationId": "get_unsubscribes",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/UserUnsubscribe" }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/unsubscribe/email": {
+      "post": {
+        "tags": ["unsubscribe::unsubscribe_email"],
+        "summary": "Unsubscribes a user from receiving emails",
+        "operationId": "unsubscribe_email",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/unsubscribe/item/:item_type/:item_id": {
+      "post": {
+        "tags": ["unsubscribe::unsubscribe_item"],
+        "summary": "Unsubscribes a user from a given item for notifications.",
+        "operationId": "unsubscribe_item",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["unsubscribe::remove_unsubscribe_item"],
+        "summary": "Removes a unsubscribe item for a user.",
+        "operationId": "remove_unsubscribe_item",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/unsubscribe/mute": {
+      "post": {
+        "tags": ["unsubscribe::unsubscribe_all"],
+        "summary": "Unsubscribes user from all notifications.",
+        "operationId": "unsubscribe_all",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["unsubscribe::remove_unsubscribe_all"],
+        "summary": "Unmutes all notifications.\nExisting notifications that were muted manually will remain muted.",
+        "operationId": "remove_unsubscribe_all",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user_notifications": {
+      "get": {
+        "tags": ["user_notification::get_user_notification"],
+        "summary": "Gets the user's unseen notifications in a paginated format.",
+        "operationId": "get_user_notification",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Size limit per page. Default 20, max 500.",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64" }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base 64 encoded cursor",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAllUserNotificationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user_notifications/bulk": {
+      "delete": {
+        "tags": ["user_notification::bulk_delete_user_notification"],
+        "summary": "Marks the user's notifications as deleted",
+        "operationId": "bulk_delete_user_notification",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user_notifications/bulk/done": {
+      "patch": {
+        "tags": ["user_notification::bulk_mark_user_notification_done"],
+        "summary": "Marks the user's notifications as done",
+        "operationId": "bulk_mark_user_notification_done",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user_notifications/bulk/seen": {
+      "patch": {
+        "tags": ["user_notification::bulk_mark_user_notification_seen"],
+        "summary": "Marks the user's notifications as seen",
+        "operationId": "bulk_mark_user_notification_seen",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user_notifications/item/bulk": {
+      "post": {
+        "tags": [
+          "user_notification::bulk_get_user_notifications_by_event_item_id"
+        ],
+        "summary": "Gets the user's notifications for a provided event item ids in a paginated format.\nThis will only return unseen notifications.",
+        "operationId": "bulk_get_user_notifications_by_event_item_id",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Size limit per page. Default 20, max 500.",
+            "required": true,
+            "schema": { "type": "integer", "format": "int32", "minimum": 0 }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Cursor value. Base64 encoded timestamp and item id, separated by |.",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/BulkGetUserNotificationsByEventItemIdRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAllUserNotificationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user_notifications/item/{event_item_id}": {
+      "get": {
+        "tags": ["user_notification::get_user_notifications_by_event_item_id"],
+        "summary": "Gets the user's notifications for a given event item id in a paginated format.",
+        "operationId": "get_user_notifications_by_event_item_id",
+        "parameters": [
+          {
+            "name": "event_item_id",
+            "in": "path",
+            "description": "The event item id",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Size limit per page. Default 20, max 500.",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64" }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Cursor value. Base64 encoded timestamp and item id, separated by |.",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAllUserNotificationsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user_notifications/item/{event_item_id}/done": {
+      "patch": {
+        "tags": [
+          "user_notification::bulk_mark_user_notification_done_by_event"
+        ],
+        "summary": "Marks the user's notification as done for a given event item id and type.",
+        "operationId": "bulk_mark_user_notification_done_by_event",
+        "parameters": [
+          {
+            "name": "event_item_id",
+            "in": "path",
+            "description": "ID of the event item",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user_notifications/item/{event_item_id}/seen": {
+      "patch": {
+        "tags": [
+          "user_notification::bulk_mark_user_notification_seen_by_event"
+        ],
+        "summary": "Marks the user's notification as seen for a given event item id and type.",
+        "operationId": "bulk_mark_user_notification_seen_by_event",
+        "parameters": [
+          {
+            "name": "event_item_id",
+            "in": "path",
+            "description": "ID of the event item",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user_notifications/{notification_id}": {
+      "delete": {
+        "tags": ["user_notification::delete_user_notification"],
+        "summary": "Marks the user's notification as deleted.",
+        "operationId": "delete_user_notification",
+        "parameters": [
+          {
+            "name": "notification_id",
+            "in": "path",
+            "description": "ID of the notification",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BulkGetUserNotificationsByEventItemIdRequest": {
+        "type": "object",
+        "required": ["eventItemIds"],
+        "properties": {
+          "eventItemIds": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "ChannelInviteMetadata": {
+        "allOf": [
+          { "$ref": "#/components/schemas/CommonChannelMetadata" },
+          {
+            "type": "object",
+            "required": ["invitedBy"],
+            "properties": {
+              "invitedBy": { "$ref": "#/components/schemas/String" }
+            }
+          }
+        ],
+        "description": "Metadata for when a user is invited to a channel"
+      },
+      "ChannelMentionMetadata": {
+        "allOf": [
+          { "$ref": "#/components/schemas/CommonChannelMetadata" },
+          {
+            "type": "object",
+            "required": ["messageId", "messageContent"],
+            "properties": {
+              "messageContent": {
+                "type": "string",
+                "description": "The message content"
+              },
+              "messageId": {
+                "type": "string",
+                "description": "The message you were mentioned in"
+              },
+              "threadId": {
+                "type": ["string", "null"],
+                "description": "the id of the thread"
+              }
+            }
+          }
+        ]
+      },
+      "ChannelMessageSendMetadata": {
+        "allOf": [
+          { "$ref": "#/components/schemas/CommonChannelMetadata" },
+          {
+            "type": "object",
+            "required": ["sender", "messageId"],
+            "properties": {
+              "messageContent": {
+                "type": "string",
+                "description": "The content of the message"
+              },
+              "messageId": {
+                "type": "string",
+                "description": "The message id"
+              },
+              "sender": {
+                "$ref": "#/components/schemas/String",
+                "description": "The user who sent the message"
+              }
+            }
+          }
+        ]
+      },
+      "ChannelReplyMetadata": {
+        "allOf": [
+          { "$ref": "#/components/schemas/CommonChannelMetadata" },
+          {
+            "type": "object",
+            "required": ["threadId", "messageId", "userId", "messageContent"],
+            "properties": {
+              "messageContent": {
+                "type": "string",
+                "description": "The message content"
+              },
+              "messageId": {
+                "type": "string",
+                "description": "The id of the new message"
+              },
+              "threadId": {
+                "type": "string",
+                "description": "The id of the thread that has the reply"
+              },
+              "userId": {
+                "type": "string",
+                "description": "The sender id of the reply"
+              }
+            }
+          }
+        ]
+      },
+      "ChannelType": {
+        "type": "string",
+        "enum": ["public", "organization", "private", "direct_message"]
+      },
+      "CommonChannelMetadata": {
+        "type": "object",
+        "description": "Common metadata for notifications on channels",
+        "required": ["channelType"],
+        "properties": {
+          "channelName": { "type": "string" },
+          "channelType": { "$ref": "#/components/schemas/ChannelType" }
+        }
+      },
+      "CreateNotification": {
+        "type": "object",
+        "required": [
+          "notification_event_type",
+          "event_item_id",
+          "event_item_type",
+          "service_sender"
+        ],
+        "properties": {
+          "event_item_id": {
+            "type": "string",
+            "description": "The item id the notification event was created for"
+          },
+          "event_item_type": {
+            "type": "string",
+            "description": "The item type (document, chat, project...)"
+          },
+          "metadata": {
+            "description": "Custom metadata that may be needed for the notification"
+          },
+          "notification_event_type": {
+            "type": "string",
+            "description": "The type of notification"
+          },
+          "service_sender": {
+            "type": "string",
+            "description": "The service that created the notification"
+          }
+        }
+      },
+      "DeviceRequest": {
+        "type": "object",
+        "required": ["deviceType", "token"],
+        "properties": {
+          "deviceType": { "$ref": "#/components/schemas/DeviceType" },
+          "token": { "type": "string" }
+        }
+      },
+      "DeviceType": { "type": "string", "enum": ["ios", "android"] },
+      "DocumentMentionMetadata": {
+        "allOf": [
+          {},
+          {
+            "type": "object",
+            "required": ["documentName", "owner"],
+            "properties": {
+              "documentName": {
+                "type": "string",
+                "description": "The name of the document"
+              },
+              "fileType": {
+                "type": ["string", "null"],
+                "description": "The file type of the document"
+              },
+              "owner": {
+                "$ref": "#/components/schemas/String",
+                "description": "The owner of the document"
+              }
+            }
+          }
+        ]
+      },
+      "EmptyResponse": {
+        "type": "object",
+        "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "EntityType": {
+        "type": "string",
+        "description": "The type of an entity in Macro",
+        "enum": [
+          "user",
+          "chat",
+          "channel",
+          "document",
+          "project",
+          "email",
+          "team"
+        ]
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "A plain old json error response for use with axum.\nyup, thats it.",
+        "required": ["message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message to explain failure"
+          }
+        }
+      },
+      "GetAllUserNotificationsResponse": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/UserNotification" }
+          },
+          "next_cursor": { "type": ["string", "null"] }
+        }
+      },
+      "InviteToTeamMetadata": {
+        "type": "object",
+        "required": ["teamName", "teamId", "invitedBy"],
+        "properties": {
+          "invitedBy": {
+            "$ref": "#/components/schemas/String",
+            "description": "The user who sent the invitation"
+          },
+          "role": {
+            "type": ["string", "null"],
+            "description": "Role/permission level in the team"
+          },
+          "teamId": {
+            "type": "string",
+            "description": "The unique identifier of the team"
+          },
+          "teamName": {
+            "type": "string",
+            "description": "The name of the team being invited to"
+          }
+        }
+      },
+      "ItemSharedMetadata": {
+        "type": "object",
+        "description": "Metadata for when a item is shared with a user",
+        "required": ["userIds", "itemType", "itemId", "sharedBy"],
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "The name/title of the shared item (optional)"
+          },
+          "itemName": {
+            "type": ["string", "null"],
+            "description": "The name/title of the shared item"
+          },
+          "itemType": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "The type of item being shared"
+          },
+          "permissionLevel": {
+            "type": ["string", "null"],
+            "description": "Permission level granted (read, write, admin, etc.)"
+          },
+          "sharedBy": { "$ref": "#/components/schemas/String" },
+          "userIds": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "List of user IDs that the item is shared with"
+          }
+        }
+      },
+      "ItemSharedOrganizationMetadata": {
+        "type": "object",
+        "description": "Metadata for when a item is shared with an organization",
+        "required": ["orgUserIds", "itemType", "itemId", "sharedBy"],
+        "properties": {
+          "itemId": {
+            "type": "string",
+            "description": "The name/title of the shared item (optional)"
+          },
+          "itemName": {
+            "type": ["string", "null"],
+            "description": "The name/title of the shared item"
+          },
+          "itemType": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "The type of item being shared"
+          },
+          "orgUserIds": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "List of user IDs that the item is shared with"
+          },
+          "permissionLevel": {
+            "type": ["string", "null"],
+            "description": "Permission level granted (read, write, admin, etc.)"
+          },
+          "sharedBy": {
+            "$ref": "#/components/schemas/String",
+            "description": "The user who shared the item"
+          }
+        }
+      },
+      "NewEmailMetadata": {
+        "type": "object",
+        "required": ["toEmail", "threadId", "subject", "snippet"],
+        "properties": {
+          "sender": { "type": ["string", "null"] },
+          "snippet": { "type": "string" },
+          "subject": { "type": "string" },
+          "threadId": { "type": "string" },
+          "toEmail": { "type": "string" }
+        }
+      },
+      "Notification": {
+        "allOf": [
+          { "$ref": "#/components/schemas/NotificationEntity" },
+          { "$ref": "#/components/schemas/NotificationTemporalData" },
+          { "$ref": "#/components/schemas/NotificationEvent" },
+          {
+            "type": "object",
+            "required": ["id", "serviceSender"],
+            "properties": {
+              "id": { "type": "string", "format": "uuid" },
+              "senderId": { "type": ["string", "null"] },
+              "serviceSender": { "type": "string" }
+            }
+          }
+        ]
+      },
+      "NotificationBulkRequest": {
+        "type": "object",
+        "required": ["notificationIds"],
+        "properties": {
+          "notificationIds": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "The ids of the notifications to handle"
+          }
+        }
+      },
+      "NotificationEntity": {
+        "type": "object",
+        "description": "The entity that triggered the notification\nThis is a combination of an [EntityType] and an id (Uuid or string)",
+        "required": ["eventItemId", "eventItemType"],
+        "properties": {
+          "eventItemId": { "type": "string" },
+          "eventItemType": { "$ref": "#/components/schemas/EntityType" }
+        }
+      },
+      "NotificationEvent": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "An Item was shared with a specific user",
+            "required": ["notificationMetadata", "notificationEventType"],
+            "properties": {
+              "notificationEventType": {
+                "type": "string",
+                "enum": ["item_shared_user"]
+              },
+              "notificationMetadata": {
+                "$ref": "#/components/schemas/ItemSharedMetadata",
+                "description": "An Item was shared with a specific user"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A item was shared with an organization",
+            "required": ["notificationMetadata", "notificationEventType"],
+            "properties": {
+              "notificationEventType": {
+                "type": "string",
+                "enum": ["item_shared_organization"]
+              },
+              "notificationMetadata": {
+                "$ref": "#/components/schemas/ItemSharedOrganizationMetadata",
+                "description": "A item was shared with an organization"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone mentioned you in a channel",
+            "required": ["notificationMetadata", "notificationEventType"],
+            "properties": {
+              "notificationEventType": {
+                "type": "string",
+                "enum": ["channel_mention"]
+              },
+              "notificationMetadata": {
+                "$ref": "#/components/schemas/ChannelMentionMetadata",
+                "description": "Someone mentioned you in a channel"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone mentioned you in a document",
+            "required": ["notificationMetadata", "notificationEventType"],
+            "properties": {
+              "notificationEventType": {
+                "type": "string",
+                "enum": ["document_mention"]
+              },
+              "notificationMetadata": {
+                "$ref": "#/components/schemas/DocumentMentionMetadata",
+                "description": "Someone mentioned you in a document"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "The user was invited to a channel",
+            "required": ["notificationMetadata", "notificationEventType"],
+            "properties": {
+              "notificationEventType": {
+                "type": "string",
+                "enum": ["channel_invite"]
+              },
+              "notificationMetadata": {
+                "$ref": "#/components/schemas/ChannelInviteMetadata",
+                "description": "The user was invited to a channel"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A user sent a message in a channel",
+            "required": ["notificationMetadata", "notificationEventType"],
+            "properties": {
+              "notificationEventType": {
+                "type": "string",
+                "enum": ["channel_message_send"]
+              },
+              "notificationMetadata": {
+                "$ref": "#/components/schemas/ChannelMessageSendMetadata",
+                "description": "A user sent a message in a channel"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Someone replied to a thread in a channel that the user is part of",
+            "required": ["notificationMetadata", "notificationEventType"],
+            "properties": {
+              "notificationEventType": {
+                "type": "string",
+                "enum": ["channel_message_reply"]
+              },
+              "notificationMetadata": {
+                "$ref": "#/components/schemas/ChannelReplyMetadata",
+                "description": "Someone replied to a thread in a channel that the user is part of"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "If a document is included via mention or attachment on a message",
+            "required": ["notificationMetadata", "notificationEventType"],
+            "properties": {
+              "notificationEventType": {
+                "type": "string",
+                "enum": ["channel_message_document"]
+              },
+              "notificationMetadata": {
+                "$ref": "#/components/schemas/DocumentMentionMetadata",
+                "description": "If a document is included via mention or attachment on a message"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A new email has been sent to the user",
+            "required": ["notificationMetadata", "notificationEventType"],
+            "properties": {
+              "notificationEventType": {
+                "type": "string",
+                "enum": ["new_email"]
+              },
+              "notificationMetadata": {
+                "$ref": "#/components/schemas/NewEmailMetadata",
+                "description": "A new email has been sent to the user"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A user was invited to a team",
+            "required": ["notificationMetadata", "notificationEventType"],
+            "properties": {
+              "notificationEventType": {
+                "type": "string",
+                "enum": ["invite_to_team"]
+              },
+              "notificationMetadata": {
+                "$ref": "#/components/schemas/InviteToTeamMetadata",
+                "description": "A user was invited to a team"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A team invite was rejected",
+            "required": ["notificationEventType"],
+            "properties": {
+              "notificationEventType": {
+                "type": "string",
+                "enum": ["reject_team_invite"]
+              }
+            }
+          }
+        ]
+      },
+      "NotificationEventType": {
+        "type": "string",
+        "description": "Auto-generated discriminant enum variants",
+        "enum": [
+          "item_shared_user",
+          "item_shared_organization",
+          "channel_mention",
+          "document_mention",
+          "channel_invite",
+          "channel_message_send",
+          "channel_message_reply",
+          "channel_message_document",
+          "new_email",
+          "invite_to_team",
+          "reject_team_invite"
+        ]
+      },
+      "NotificationServiceApiVersion": { "type": "string", "enum": ["v1"] },
+      "NotificationTemporalData": {
+        "type": "object",
+        "required": ["createdAt", "viewedAt", "updatedAt", "deletedAt"],
+        "properties": {
+          "createdAt": { "type": "integer", "format": "int64" },
+          "deletedAt": { "type": ["integer", "null"], "format": "int64" },
+          "updatedAt": { "type": ["integer", "null"], "format": "int64" },
+          "viewedAt": { "type": ["integer", "null"], "format": "int64" }
+        }
+      },
+      "PushNotificationData": {
+        "allOf": [
+          { "$ref": "#/components/schemas/NotificationEntity" },
+          {
+            "type": "object",
+            "required": ["openRoute"],
+            "properties": {
+              "openRoute": {
+                "type": "string",
+                "description": "The route to open the notification in the app\nexample: /channel/{channel_id}"
+              },
+              "senderId": {
+                "type": ["string", "null"],
+                "description": "user id of the macro user who generated the notification"
+              }
+            }
+          }
+        ]
+      },
+      "String": { "type": "string" },
+      "UnsubscribeItemPathParams": {
+        "type": "object",
+        "required": ["item_type", "item_id"],
+        "properties": {
+          "item_id": { "type": "string" },
+          "item_type": { "type": "string" }
+        }
+      },
+      "UserNotification": {
+        "allOf": [
+          { "$ref": "#/components/schemas/NotificationEntity" },
+          { "$ref": "#/components/schemas/NotificationTemporalData" },
+          { "$ref": "#/components/schemas/NotificationEvent" },
+          {
+            "type": "object",
+            "required": ["id", "sent", "done", "isImportantV0"],
+            "properties": {
+              "done": {
+                "type": "boolean",
+                "description": "If the notification is \"done\""
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The id of the notification. Self-generated uuidv7"
+              },
+              "isImportantV0": {
+                "type": "boolean",
+                "description": "if notification is important or not"
+              },
+              "senderId": {
+                "type": ["string", "null"],
+                "description": "user id of the macro user who generated the notification"
+              },
+              "sent": {
+                "type": "boolean",
+                "description": "If the notification has been sent"
+              }
+            }
+          }
+        ]
+      },
+      "UserUnsubscribe": {
+        "type": "object",
+        "required": ["item_id", "item_type"],
+        "properties": {
+          "item_id": { "type": "string", "description": "The item id" },
+          "item_type": { "type": "string", "description": "The item type" }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "notification service",
+      "description": "Macro Notification Service"
+    }
+  ]
+}

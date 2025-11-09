@@ -1,0 +1,44 @@
+{
+    "name": "@loro-mirror/react",
+    "version": "0.1.0",
+    "description": "React integration for Loro Mirror - a state management library with Loro CRDT synchronization",
+    "main": "dist/index.js",
+    "module": "dist/index.esm.js",
+    "types": "dist/index.d.ts",
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "rollup -c",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "lint": "eslint src --ext .ts,.tsx",
+        "typecheck": "tsc --noEmit"
+    },
+    "keywords": [
+        "loro",
+        "crdt",
+        "state",
+        "management",
+        "sync",
+        "mirror",
+        "react",
+        "hooks"
+    ],
+    "author": "",
+    "license": "MIT",
+    "dependencies": {
+        "@loro-mirror/core": "workspace:*"
+    },
+    "peerDependencies": {
+        "loro-crdt": "^1.4.4",
+        "react": "^16.8.0 || ^17.0.0 || ^18.0.0"
+    },
+    "devDependencies": {
+        "@types/node": "^20.10.5",
+        "@types/react": "^18.2.45",
+        "loro-crdt": "^1.4.4",
+        "react": "^18.2.0",
+        "typescript": "^5.3.3"
+    }
+}

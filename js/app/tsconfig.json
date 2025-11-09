@@ -1,0 +1,238 @@
+{
+  "include": [
+    "./packages/**/*"
+  ],
+  "exclude": [
+    "./node_module/**/*",
+    "./tests/**/*",
+    "./packages/core/**/*.spec.ts",
+    "./packages/block-code/scripts/**/*",
+    "./packages/service-sync/scripts/**/*",
+    "./packages/loro-mirror/packages/react/**/*",
+  ],
+  "compilerOptions": {
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noFallthroughCasesInSwitch": true,
+    "moduleResolution": "node",
+    "skipDefaultLibCheck": true,
+    "skipLibCheck": true,
+    "importHelpers": true,
+    "target": "ESNext",
+    "module": "esnext",
+    "lib": [
+      "dom",
+      "esnext",
+      "webworker",
+      "DOM.Iterable"
+    ],
+    "jsx": "react-jsx",
+    "jsxImportSource": "react",
+    "declaration": true,
+    "declarationMap": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "isolatedModules": true,
+    "sourceMap": true,
+    "preserveWatchOutput": true,
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true,
+    "types": [
+      "vite-plugin-solid-svg/types-component-solid",
+      "vite/client",
+      "vite-plugin-solid-svg/types",
+      "wicg-file-system-access"
+    ],
+    "composite": true,
+    "incremental": true,
+    "paths": {
+      "@filesystem": [
+        "./packages/filesystem/src"
+      ],
+      "@filesystem/*": [
+        "./packages/filesystem/src/*"
+      ],
+      "@core/*": [
+        "./packages/core/*"
+      ],
+      "@macro/tauri": [
+        "./packages/tauri/src"
+      ],
+      "@icon/*": [
+        "./node_modules/@phosphor-icons/core/assets/*"
+      ],
+      "@block-canvas/*": [
+        "./packages/block-canvas/*"
+      ],
+      "@block-pdf/*": [
+        "./packages/block-pdf/*"
+      ],
+      "@block-project/*": [
+        "./packages/block-project/*"
+      ],
+      "@service-gql/*": [
+        "./packages/service-gql/*"
+      ],
+      "@service-auth/*": [
+        "./packages/service-auth/*"
+      ],
+      "@service-stripe/*": [
+        "./packages/service-stripe/*"
+      ],
+      "@growth/*": [
+        "./packages/growth/*"
+      ],
+      "@service-storage/*": [
+        "./packages/service-storage/*"
+      ],
+      "@service-search/*": [
+        "./packages/service-search/*"
+      ],
+      "@service-static-files/*": [
+        "./packages/service-static-files/*"
+      ],
+      "@service-cognition/*": [
+        "./packages/service-cognition/*"
+      ],
+      "@service-organization/*": [
+        "./packages/service-organization/*"
+      ],
+      "@service-connection/*": [
+        "./packages/service-connection/*"
+      ],
+      "@service-notification/*": [
+        "./packages/service-notification/*"
+      ],
+      "@service-comms/*": [
+        "./packages/service-comms/*"
+      ],
+      "@service-unfurl/*": [
+        "./packages/service-unfurl/*"
+      ],
+      "@service-email/*": [
+        "./packages/service-email/*"
+      ],
+      "@service-insight/*": [
+        "./packages/service-insight/*"
+      ],
+      "@service-properties/*": [
+        "./packages/service-properties/*"
+      ],
+      "@block-chat/*": [
+        "./packages/block-chat/*"
+      ],
+      "@block-code/*": [
+        "./packages/block-code/*"
+      ],
+      "@block-channel/*": [
+        "./packages/block-channel/*"
+      ],
+      "@block-md/*": [
+        "./packages/block-md/*"
+      ],
+      "@block-image/*": [
+        "./packages/block-image/*"
+      ],
+      "@block-color/*": [
+        "./packages/block-color/*"
+      ],
+      "@block-start/*": [
+        "./packages/block-start/*"
+      ],
+      "@block-unknown/*": [
+        "./packages/block-unknown/*"
+      ],
+      "@block-video/*": [
+        "./packages/block-video/*"
+      ],
+      "@block-ai/*": [
+        "./packages/block-ai/*"
+      ],
+      "@block-contact/*": [
+        "./packages/block-contact/*"
+      ],
+      "@macro-entity": [
+        "./packages/macro-entity/src/index.tsx"
+      ],
+      "@macro-icons/*": [
+        "./packages/macro-icons/*"
+      ],
+      "@macros-prompts/*": [
+        "./packages/macros-prompts/*"
+      ],
+      "@observability": [
+        "./packages/observability/src/"
+      ],
+      "@observability/*": [
+        "./packages/observability/src/*"
+      ],
+      "@service-sync": [
+        "./packages/service-sync"
+      ],
+      "@loro-mirror/*": [
+        "./packages/loro-mirror/*"
+      ],
+      "@websocket": [
+        "./packages/websocket"
+      ],
+      "@websocket/*": [
+        "./packages/websocket/*"
+      ],
+      "@lexical-core": [
+        "./packages/lexical-core/"
+      ],
+      "@lexical-core/*": [
+        "./packages/lexical-core/*"
+      ],
+      "@baby-gl": [
+        "./packages/baby-gl/"
+      ],
+      "@baby-gl/*": [
+        "./packages/baby-gl/*"
+      ],
+      "@notifications": [
+        "./packages/notifications/"
+      ],
+      "@notifications/*": [
+        "./packages/notifications/*"
+      ],
+      "@app/*": [
+        "./packages/app/*"
+      ]
+    },
+    "rootDir": ".",
+    "outDir": "./dist"
+  },
+  "references": [
+    {
+      "path": "./packages/core"
+    },
+    {
+      "path": "./packages/block-chat"
+    },
+    {
+      "path": "./packages/block-project"
+    },
+    {
+      "path": "./packages/block-pdf"
+    },
+    {
+      "path": "./packages/block-contact"
+    },
+    {
+      "path": "./packages/observability"
+    },
+    {
+      "path": "./packages/loro-mirror"
+    },
+    {
+      "path": "./packages/websocket"
+    },
+    {
+      "path": "./packages/service-properties"
+    }
+  ]
+}

@@ -1,0 +1,3194 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Document Cognition Service",
+    "description": "",
+    "termsOfService": "https://macro.com/terms",
+    "license": { "name": "Proprietary", "identifier": "Proprietary" },
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/attachments/get_models_for_attachments": {
+      "post": {
+        "tags": ["get_models_for_attachments"],
+        "operationId": "get_models_for_attachments_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetModelsForAttachmentsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetModelsForAttachmentsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/attachments/verify": {
+      "post": {
+        "tags": ["verify_attachments"],
+        "operationId": "verify_attachments_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/VerifyAttachmentsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/VerifyAttachmentsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/attachments/{attachment_id}/chats": {
+      "get": {
+        "tags": ["get_chats_for_attachment"],
+        "operationId": "get_chats_for_attachment_handler",
+        "parameters": [
+          {
+            "name": "attachment_id",
+            "in": "path",
+            "description": "id of the attachment",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetChatsForAttachmentResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/chats": {
+      "get": {
+        "tags": ["get_chats"],
+        "summary": "Gets all the chats for a user",
+        "operationId": "get_chats_handler",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ChatsResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "post": {
+        "tags": ["create_user_chat"],
+        "operationId": "create_chat_handler",
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StringIDResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/chats/history/{chat_id}": {
+      "get": {
+        "tags": ["chat_history"],
+        "summary": "Retrieves chat history for a specific chat ID",
+        "operationId": "get_chat_history_handler",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "description": "Chat ID to retrieve history for",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ChatHistory" }
+              }
+            }
+          },
+          "404": {
+            "description": "Chat not found",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/chats/history_batch_messages": {
+      "post": {
+        "tags": ["chat_history_batch_messages"],
+        "summary": "Retrieves chat history for multiple message IDs",
+        "operationId": "get_chat_history_batch_messages_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ChatHistoryBatchMessagesRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ChatHistory" }
+              }
+            }
+          },
+          "403": {
+            "description": "Access denied to chat",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "Messages not found",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/chats/{chat_id}": {
+      "get": {
+        "tags": ["get_chat"],
+        "summary": "Gets a particular chat by its id",
+        "operationId": "get_chat_handler",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "description": "id of the chat",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GetChatResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["delete_chat"],
+        "summary": "Deletes a particular chat by its id.\nSoft deletes the chat.",
+        "operationId": "delete_chat_handler",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "description": "Chat id",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/chats/{chat_id}/copy": {
+      "post": {
+        "tags": ["copy_chat"],
+        "operationId": "copy_chat_handler",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "description": "Chat id",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CopyChatRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StringIDResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/chats/{chat_id}/permanent": {
+      "delete": {
+        "tags": ["delete_chat"],
+        "summary": "Permanently deletes a chat.",
+        "operationId": "permanently_delete_chat",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "description": "Chat id",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/chats/{chat_id}/revert_delete": {
+      "put": {
+        "tags": ["chat"],
+        "summary": "Deletes a specific document",
+        "operationId": "revert_delete_chat",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "description": "Chat ID",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SuccessResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/citations/{id}": {
+      "get": {
+        "tags": ["citations"],
+        "operationId": "get_citation_handler",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "id of the citation",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/DocumentTextPart" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/completions/get_completion": {
+      "post": {
+        "tags": ["get_completion"],
+        "operationId": "get_completion_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/GetCompletionRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetCompletionResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "422": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/completions/structured_output": {
+      "post": {
+        "tags": ["structured_output"],
+        "operationId": "handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/StructedOutputCompletionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructedOutputCompletionResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/document_text/:document_id": {
+      "post": {
+        "tags": ["upsert_document_text"],
+        "operationId": "upsert_text_handler",
+        "parameters": [
+          {
+            "name": "document_id",
+            "in": "path",
+            "description": "Id of the document to create text for",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateTextRequestBody" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": { "description": "" },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Health check",
+        "operationId": "health_handler",
+        "responses": {
+          "200": {
+            "description": "health",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/macros": {
+      "get": {
+        "tags": ["get_macros"],
+        "summary": "Gets all the macros for a user.",
+        "operationId": "get_macros_handler",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/MacrosResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "post": {
+        "tags": ["create_macro"],
+        "operationId": "create_macro_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateMacroRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/StringIDResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/macros/{macro_prompt_id}": {
+      "get": {
+        "tags": ["get_macro"],
+        "summary": "Gets a particular macro by its id",
+        "operationId": "get_macro_handler",
+        "parameters": [
+          {
+            "name": "macro_prompt_id",
+            "in": "path",
+            "description": "id of the macro",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GetMacroResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["delete_macro"],
+        "summary": "Deletes a particular macro by its id",
+        "operationId": "delete_macro_handler",
+        "parameters": [
+          {
+            "name": "macro_prompt_id",
+            "in": "path",
+            "description": "id of the macro",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "" },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["patch_macro"],
+        "operationId": "patch_macro_handler",
+        "parameters": [
+          {
+            "name": "macro_prompt_id",
+            "in": "path",
+            "description": "id of the macro",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PatchMacroRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": { "description": "" },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/macros/{macro_prompt_id}/permissions": {
+      "get": {
+        "tags": ["get_macro_permissions"],
+        "summary": "Gets the current macro share permissions",
+        "operationId": "get_macro_permissions_handler",
+        "parameters": [
+          {
+            "name": "macro_prompt_id",
+            "in": "path",
+            "description": "id of the macro",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetMacroPermissionsResponseV2"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/models": {
+      "get": {
+        "tags": ["get_models"],
+        "summary": "Gets all available models",
+        "operationId": "get_models_handler",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GetModelsResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/preview": {
+      "post": {
+        "tags": ["get_batch_preview"],
+        "operationId": "get_batch_preview",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetBatchPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetBatchPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/stream": {
+      "get": {
+        "tags": ["ws::connection"],
+        "operationId": "ws_handler",
+        "responses": {
+          "200": {
+            "description": "Sucessfully conntect to streaming websocket"
+          },
+          "500": {
+            "description": "Failed to connect to streaming websocket",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/tools/schemas": {
+      "get": {
+        "tags": ["tools"],
+        "summary": "Get all available tool schemas as JSON Schema definitions",
+        "operationId": "get_tool_schemas",
+        "responses": {
+          "200": {
+            "description": "Tool schemas retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ToolSchemasResponse" }
+              }
+            }
+          },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
+    "/v2/chats/{chat_id}/permissions": {
+      "get": {
+        "tags": ["get_chat_permissions"],
+        "summary": "Gets the current chat share permissions",
+        "operationId": "get_chat_permissions_handler_v2",
+        "parameters": [
+          {
+            "name": "chat_id",
+            "in": "path",
+            "description": "id of the chat",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetChatPermissionsResponseV2"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AIModel": {
+        "type": "object",
+        "required": ["name", "provider", "metadata"],
+        "properties": {
+          "metadata": { "$ref": "#/components/schemas/ModelMetadata" },
+          "name": { "type": "string" },
+          "provider": { "$ref": "#/components/schemas/Provider" }
+        }
+      },
+      "AccessLevel": {
+        "type": "string",
+        "description": "Ordered from least to most access top -> bottom",
+        "enum": ["view", "comment", "edit", "owner"]
+      },
+      "AssistantMessagePart": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["text", "type"],
+            "properties": {
+              "text": { "type": "string" },
+              "type": { "type": "string", "enum": ["text"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["name", "json", "id", "type"],
+            "properties": {
+              "id": { "type": "string" },
+              "json": {},
+              "name": { "type": "string" },
+              "type": { "type": "string", "enum": ["toolCall"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["name", "json", "id", "type"],
+            "properties": {
+              "id": { "type": "string" },
+              "json": {},
+              "name": { "type": "string" },
+              "type": { "type": "string", "enum": ["toolCallResponseJson"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["name", "description", "id", "type"],
+            "properties": {
+              "description": { "type": "string" },
+              "id": { "type": "string" },
+              "name": { "type": "string" },
+              "type": { "type": "string", "enum": ["toolCallErr"] }
+            }
+          }
+        ]
+      },
+      "AttachmentMetadata": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["document_type", "document_name", "type"],
+            "properties": {
+              "document_name": {
+                "type": "string",
+                "description": "Name of the document"
+              },
+              "document_type": {
+                "$ref": "#/components/schemas/FileType",
+                "description": "Type of the document ['pdf' | 'docx' | 'md']"
+              },
+              "type": { "type": "string", "enum": ["document"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["image_extension", "image_name", "type"],
+            "properties": {
+              "image_extension": {
+                "$ref": "#/components/schemas/FileType",
+                "description": "jpg | png | etc"
+              },
+              "image_name": { "type": "string", "description": "image name" },
+              "type": { "type": "string", "enum": ["image"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["channel_name", "channel_type", "type"],
+            "properties": {
+              "channel_name": { "type": "string" },
+              "channel_type": { "$ref": "#/components/schemas/ChannelType" },
+              "type": { "type": "string", "enum": ["channel"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "an email thread",
+            "required": ["email_subject", "type"],
+            "properties": {
+              "email_subject": { "type": "string" },
+              "type": { "type": "string", "enum": ["email"] }
+            }
+          }
+        ]
+      },
+      "AttachmentType": {
+        "type": "string",
+        "enum": ["document", "image", "channel", "email"]
+      },
+      "ChannelSharePermission": {
+        "type": "object",
+        "description": "The channel share permission",
+        "required": ["channel_id", "access_level"],
+        "properties": {
+          "access_level": {
+            "$ref": "#/components/schemas/AccessLevel",
+            "description": "The access level for the channel"
+          },
+          "channel_id": { "type": "string", "description": "The channel id" }
+        }
+      },
+      "ChannelType": {
+        "type": "string",
+        "enum": ["public", "organization", "private", "direct_message"]
+      },
+      "Chat": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "userId",
+          "createdAt",
+          "updatedAt",
+          "isPersistent"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The time the chat was created"
+          },
+          "deletedAt": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The time the chat was deleted"
+          },
+          "id": { "type": "string", "description": "The chat uuid" },
+          "isPersistent": { "type": "boolean" },
+          "model": {
+            "type": ["string", "null"],
+            "description": "The model used to generate the chat"
+          },
+          "name": { "type": "string", "description": "The name of the chat" },
+          "projectId": {
+            "type": ["string", "null"],
+            "description": "The project id of the chat"
+          },
+          "tokenCount": { "type": ["integer", "null"], "format": "int64" },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The time the chat was last updated"
+          },
+          "userId": {
+            "type": "string",
+            "description": "Who the chat belongs to"
+          }
+        }
+      },
+      "ChatAttachment": {
+        "type": "object",
+        "required": ["id", "attachment_type", "attachment_id"],
+        "properties": {
+          "attachment_id": {
+            "type": "string",
+            "description": "The id of the attachment\neither a `document_id` or `project_id` or `chat_id`"
+          },
+          "attachment_type": {
+            "$ref": "#/components/schemas/AttachmentType",
+            "description": "The type of attachment"
+          },
+          "chat_id": {
+            "type": ["string", "null"],
+            "description": "The id of the chat if the attachment is a chat"
+          },
+          "id": { "type": "string", "description": "Id of the attachment" },
+          "message_id": {
+            "type": ["string", "null"],
+            "description": "The id of the message if the attachment is a message"
+          }
+        }
+      },
+      "ChatAttachmentWithName": {
+        "type": "object",
+        "required": ["attachmentType", "attachmentId", "id"],
+        "properties": {
+          "attachmentId": {
+            "type": "string",
+            "description": "Id of the attachment [Foreign Key to either document, chat or project]"
+          },
+          "attachmentType": {
+            "$ref": "#/components/schemas/AttachmentType",
+            "description": "Type of the attachment ['document' | 'chat' | 'project' | 'image' | 'channel']"
+          },
+          "id": {
+            "type": "string",
+            "description": "Incremented int id of the attachment (not really used for anything)"
+          },
+          "metadata": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/AttachmentMetadata",
+                "description": "Metadata about the attachment, depending on the type"
+              }
+            ]
+          }
+        }
+      },
+      "ChatHistory": {
+        "type": "object",
+        "required": ["conversation"],
+        "properties": {
+          "conversation": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ConversationRecord" }
+          }
+        }
+      },
+      "ChatHistoryBatchMessagesRequest": {
+        "type": "object",
+        "required": ["message_ids"],
+        "properties": {
+          "message_ids": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "ChatMessage": {
+        "type": "object",
+        "required": ["id", "content", "role"],
+        "properties": {
+          "content": {
+            "$ref": "#/components/schemas/ChatMessageContent",
+            "description": "Message content"
+          },
+          "id": { "type": "string", "description": "The chat message id" },
+          "model": {
+            "type": ["string", "null"],
+            "description": "the model used to generate the message"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role",
+            "description": "Whether the chat is from the user or system"
+          }
+        }
+      },
+      "ChatMessageContent": {
+        "oneOf": [
+          { "type": "string" },
+          {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AssistantMessagePart" }
+          }
+        ]
+      },
+      "ChatMessageWithAttachments": {
+        "type": "object",
+        "required": ["id", "content", "role", "attachments"],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ChatAttachmentWithName" },
+            "description": "The ids of the attachments used to generate the message"
+          },
+          "content": {
+            "$ref": "#/components/schemas/ChatMessageContent",
+            "description": "Message content"
+          },
+          "id": { "type": "string", "description": "The chat message id" },
+          "model": {
+            "type": ["string", "null"],
+            "description": "The model used to generate the message"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role",
+            "description": "Whether the chat is from the user or system"
+          }
+        }
+      },
+      "ChatPreview": {
+        "oneOf": [
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/ChatPreviewData" },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["access"] }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/WithChatId" },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["no_access"] }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/WithChatId" },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["does_not_exist"] }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "ChatPreviewData": {
+        "type": "object",
+        "required": ["chat_id", "chat_name", "owner", "updated_at"],
+        "properties": {
+          "chat_id": { "type": "string" },
+          "chat_name": { "type": "string" },
+          "owner": { "type": "string" },
+          "updated_at": { "type": "integer", "format": "int64" }
+        }
+      },
+      "ChatResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "userId",
+          "name",
+          "messages",
+          "createdAt",
+          "updatedAt",
+          "attachments",
+          "availableModels",
+          "webCitations",
+          "isPersistent"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ChatAttachmentWithName" },
+            "description": "attachment context - attachments not attached to messages",
+            "deprecated": true
+          },
+          "availableModels": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Model" },
+            "description": "Available models for the chat"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The time the chat was created"
+          },
+          "id": { "type": "string", "description": "The chat uuid" },
+          "isPersistent": {
+            "type": "boolean",
+            "description": "whether the chat is persistent or not"
+          },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/ChatMessageWithAttachments"
+            },
+            "description": "The messages in the chat"
+          },
+          "model": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/Model",
+                "description": "The model used to generate the chat"
+              }
+            ]
+          },
+          "name": { "type": "string", "description": "The name of the Chat" },
+          "projectId": {
+            "type": ["string", "null"],
+            "description": "The project id the chat belongs to"
+          },
+          "tokenCount": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Current number of tokens in the chat"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The time the chat was last updated"
+          },
+          "userId": {
+            "type": "string",
+            "description": "Who the chat belongs to"
+          },
+          "webCitations": {
+            "type": "array",
+            "items": {
+              "type": "array",
+              "items": false,
+              "prefixItems": [
+                { "type": "string" },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "required": ["url", "title"],
+                    "properties": {
+                      "description": { "type": ["string", "null"] },
+                      "favicon_url": { "type": ["string", "null"] },
+                      "image_url": { "type": ["string", "null"] },
+                      "title": { "type": "string" },
+                      "url": { "type": "string" }
+                    }
+                  }
+                }
+              ]
+            },
+            "description": "message_id - web citation list"
+          }
+        }
+      },
+      "ChatsResponse": {
+        "type": "object",
+        "required": ["chats"],
+        "properties": {
+          "chats": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Chat" }
+          }
+        }
+      },
+      "ConversationRecord": {
+        "type": "object",
+        "required": ["chat_id", "title", "messages"],
+        "properties": {
+          "chat_id": { "type": "string" },
+          "messages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageWithAttachmentSummary"
+            }
+          },
+          "title": { "type": "string" }
+        }
+      },
+      "CopyChatRequest": {
+        "type": "object",
+        "required": ["name"],
+        "properties": { "name": { "type": "string" } }
+      },
+      "CreateChatRequest": {
+        "type": "object",
+        "properties": {
+          "attachments": {
+            "type": ["array", "null"],
+            "items": { "$ref": "#/components/schemas/NewAttachment" }
+          },
+          "isPersistent": { "type": ["boolean", "null"] },
+          "model": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/Model" }
+            ]
+          },
+          "name": { "type": ["string", "null"] },
+          "projectId": { "type": ["string", "null"] }
+        }
+      },
+      "CreateMacroRequest": {
+        "type": "object",
+        "required": ["title", "prompt", "icon", "color"],
+        "properties": {
+          "color": { "type": "string" },
+          "icon": { "type": "string" },
+          "prompt": { "type": "string" },
+          "requiredDocs": { "type": ["integer", "null"], "format": "int32" },
+          "title": { "type": "string" }
+        }
+      },
+      "CreateTextRequestBody": {
+        "type": "object",
+        "required": ["content"],
+        "properties": { "content": { "type": "string" } }
+      },
+      "CreateTextRequestParams": {
+        "type": "object",
+        "required": ["document_id"],
+        "properties": { "document_id": { "type": "string" } }
+      },
+      "DocumentCognitionServiceApiVersion": {
+        "type": "string",
+        "enum": ["v1", "v2"]
+      },
+      "DocumentReference": {
+        "oneOf": [
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/UserPdfRect" },
+              {
+                "type": "object",
+                "required": ["kind"],
+                "properties": { "kind": { "type": "string", "enum": ["pdf"] } }
+              }
+            ]
+          }
+        ]
+      },
+      "DocumentSummary": {
+        "type": "object",
+        "required": ["document_id", "summary", "version_id"],
+        "properties": {
+          "created_at": { "type": ["string", "null"], "format": "date-time" },
+          "document_id": { "type": "string" },
+          "id": { "type": ["string", "null"] },
+          "summary": { "type": "string" },
+          "version_id": { "type": "string" }
+        }
+      },
+      "DocumentTextPart": {
+        "type": "object",
+        "required": ["id", "document_id", "reference"],
+        "properties": {
+          "document_id": { "type": "string" },
+          "id": { "type": "string" },
+          "reference": { "$ref": "#/components/schemas/DocumentReference" }
+        }
+      },
+      "EmptyResponse": {
+        "type": "object",
+        "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "ExtractionStatusEnum": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["incomplete"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": { "type": { "type": "string", "enum": ["empty"] } }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["insufficient"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": { "type": { "type": "string", "enum": ["complete"] } }
+          }
+        ]
+      },
+      "ExtractionStatusPayload": {
+        "type": "object",
+        "required": ["attachment_id"],
+        "properties": { "attachment_id": { "type": "string" } }
+      },
+      "FileType": {
+        "type": "string",
+        "description": "Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n",
+        "enum": [
+          "docx",
+          "pdf",
+          "md",
+          "canvas",
+          "coffee",
+          "cson",
+          "iced",
+          "c",
+          "i",
+          "cpp",
+          "cppm",
+          "cc",
+          "ccm",
+          "cxx",
+          "cxxm",
+          "cplusplus",
+          "cplusplusm",
+          "hpp",
+          "hh",
+          "hxx",
+          "hplusplus",
+          "h",
+          "ii",
+          "ino",
+          "inl",
+          "ipp",
+          "ixx",
+          "tpp",
+          "txx",
+          "hppin",
+          "hin",
+          "cu",
+          "cuh",
+          "cs",
+          "csx",
+          "cake",
+          "css",
+          "dart",
+          "diff",
+          "patch",
+          "rej",
+          "dockerfile",
+          "containerfile",
+          "go",
+          "handlebars",
+          "hbs",
+          "hjs",
+          "hlsl",
+          "hlsli",
+          "fx",
+          "fxh",
+          "vsh",
+          "psh",
+          "cginc",
+          "compute",
+          "html",
+          "htm",
+          "shtml",
+          "xhtml",
+          "xht",
+          "mdoc",
+          "jsp",
+          "asp",
+          "aspx",
+          "jshtm",
+          "volt",
+          "ejs",
+          "rhtml",
+          "ini",
+          "conf",
+          "properties",
+          "cfg",
+          "directory",
+          "gitattributes",
+          "gitconfig",
+          "gitmodules",
+          "editorconfig",
+          "repo",
+          "java",
+          "jav",
+          "jsx",
+          "js",
+          "es6",
+          "mjs",
+          "cjs",
+          "pac",
+          "json",
+          "bowerrc",
+          "jscsrc",
+          "webmanifest",
+          "jsmap",
+          "cssmap",
+          "tsmap",
+          "har",
+          "jslintrc",
+          "jsonld",
+          "geojson",
+          "ipynb",
+          "vuerc",
+          "jsonc",
+          "eslintrc",
+          "eslintrcjson",
+          "jsfmtrc",
+          "jshintrc",
+          "swcrc",
+          "hintrc",
+          "babelrc",
+          "jsonl",
+          "ndjson",
+          "codesnippets",
+          "jl",
+          "jmd",
+          "sty",
+          "cls",
+          "bbx",
+          "cbx",
+          "tex",
+          "ltx",
+          "ctx",
+          "bib",
+          "less",
+          "log",
+          "lua",
+          "mak",
+          "mk",
+          "mkd",
+          "mdwn",
+          "mdown",
+          "markdown",
+          "markdn",
+          "mdtxt",
+          "mdtext",
+          "workbook",
+          "m",
+          "mm",
+          "pl",
+          "pm",
+          "pod",
+          "t",
+          "psgi",
+          "raku",
+          "rakumod",
+          "rakutest",
+          "rakudoc",
+          "nqp",
+          "p6",
+          "pl6",
+          "pm6",
+          "php",
+          "php4",
+          "php5",
+          "phtml",
+          "ctp",
+          "ps1",
+          "psm1",
+          "psd1",
+          "pssc",
+          "psrc",
+          "py",
+          "rpy",
+          "pyw",
+          "cpy",
+          "gyp",
+          "gypi",
+          "pyi",
+          "ipy",
+          "pyt",
+          "r",
+          "rhistory",
+          "rprofile",
+          "rt",
+          "cshtml",
+          "razor",
+          "rb",
+          "rbx",
+          "rjs",
+          "gemspec",
+          "rake",
+          "ru",
+          "erb",
+          "podspec",
+          "rbi",
+          "rs",
+          "scss",
+          "shader",
+          "sh",
+          "bash",
+          "bashrc",
+          "bashaliases",
+          "bashprofile",
+          "bashlogin",
+          "ebuild",
+          "eclass",
+          "profile",
+          "bashlogout",
+          "xprofile",
+          "xsession",
+          "xsessionrc",
+          "zsh",
+          "zshrc",
+          "zprofile",
+          "zlogin",
+          "zlogout",
+          "zshenv",
+          "zshtheme",
+          "fish",
+          "ksh",
+          "csh",
+          "cshrc",
+          "tcshrc",
+          "yashrc",
+          "yashprofile",
+          "sql",
+          "dsql",
+          "swift",
+          "ts",
+          "cts",
+          "mts",
+          "tsx",
+          "tsbuildinfo",
+          "xml",
+          "xsd",
+          "ascx",
+          "atom",
+          "axml",
+          "axaml",
+          "bpmn",
+          "cpt",
+          "csl",
+          "csproj",
+          "csprojuser",
+          "dita",
+          "ditamap",
+          "dtd",
+          "ent",
+          "mod",
+          "dtml",
+          "fsproj",
+          "fxml",
+          "iml",
+          "isml",
+          "jmx",
+          "launch",
+          "menu",
+          "mxml",
+          "nuspec",
+          "opml",
+          "owl",
+          "proj",
+          "props",
+          "pt",
+          "publishsettings",
+          "pubxml",
+          "pubxmluser",
+          "rbxlx",
+          "rbxmx",
+          "rdf",
+          "rng",
+          "rss",
+          "shproj",
+          "storyboard",
+          "targets",
+          "tld",
+          "tmx",
+          "vbproj",
+          "vbprojuser",
+          "vcxproj",
+          "vcxprojfilters",
+          "wsdl",
+          "wxi",
+          "wxl",
+          "wxs",
+          "xaml",
+          "xbl",
+          "xib",
+          "xlf",
+          "xliff",
+          "xpdl",
+          "xul",
+          "xoml",
+          "xsl",
+          "xslt",
+          "yaml",
+          "yml",
+          "eyaml",
+          "eyml",
+          "cff",
+          "yamltmlanguage",
+          "yamltmpreferences",
+          "yamltmtheme",
+          "winget",
+          "txt",
+          "csv",
+          "tsv",
+          "jpeg",
+          "jpg",
+          "png",
+          "gif",
+          "svg",
+          "webp",
+          "avif",
+          "bmp",
+          "ico",
+          "tiff",
+          "tif",
+          "heic",
+          "heif",
+          "tar",
+          "targz",
+          "tgz",
+          "gz",
+          "bz2",
+          "tarbz2",
+          "tbz2",
+          "z",
+          "tarz",
+          "lz",
+          "tarlz",
+          "xz",
+          "tarxz",
+          "txz",
+          "lzma",
+          "tarlzma",
+          "rar",
+          "sevenz",
+          "zst",
+          "tarzst",
+          "tzst",
+          "zip",
+          "exe",
+          "msi",
+          "dll",
+          "bat",
+          "cmd",
+          "com",
+          "appimage",
+          "app",
+          "bin",
+          "deb",
+          "rpm",
+          "apk",
+          "dmg",
+          "pkg",
+          "crx",
+          "xpi",
+          "mp3",
+          "wav",
+          "ogg",
+          "flac",
+          "aac",
+          "m4a",
+          "wma",
+          "mid",
+          "midi",
+          "mp4",
+          "mkv",
+          "webm",
+          "avi",
+          "mov",
+          "wmv",
+          "mpg",
+          "mpeg",
+          "m4v",
+          "flv",
+          "f4v",
+          "threegp",
+          "ttf",
+          "otf",
+          "woff",
+          "woff2",
+          "eot",
+          "rtf",
+          "odt",
+          "ods",
+          "odp",
+          "odg",
+          "odf",
+          "epub",
+          "mobi",
+          "azw",
+          "azw3",
+          "djvu",
+          "xls",
+          "ppt",
+          "pptx",
+          "xlsx",
+          "db",
+          "sqlite",
+          "sqlite3",
+          "mdb",
+          "accdb",
+          "dbf",
+          "plist",
+          "toml",
+          "env",
+          "dot",
+          "gv",
+          "torrent",
+          "ics",
+          "vcf",
+          "ai",
+          "eps",
+          "ps",
+          "dxf",
+          "dwg",
+          "stl",
+          "obj",
+          "fbx",
+          "blend",
+          "dae",
+          "threeds",
+          "gltf",
+          "glb",
+          "vhd",
+          "vhdx",
+          "vmdk",
+          "ova",
+          "ovf",
+          "iso",
+          "img",
+          "swf"
+        ]
+      },
+      "FromWebSocketMessage": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/WebSocketError",
+                "description": "Misc error"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["error"] }
+                }
+              }
+            ],
+            "description": "Misc error"
+          },
+          {
+            "type": "object",
+            "description": "Acknowledges that a message has been received for processing",
+            "required": ["message_id", "chat_id", "type"],
+            "properties": {
+              "chat_id": { "type": "string" },
+              "message_id": { "type": "string" },
+              "type": { "type": "string", "enum": ["chat_message_ack"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Indicates a response from the chat completion API for a given message",
+            "required": [
+              "stream_id",
+              "message_id",
+              "chat_id",
+              "content",
+              "type"
+            ],
+            "properties": {
+              "chat_id": { "type": "string" },
+              "content": {
+                "$ref": "#/components/schemas/AssistantMessagePart"
+              },
+              "message_id": { "type": "string" },
+              "stream_id": { "type": "string" },
+              "type": { "type": "string", "enum": ["chat_message_response"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Indicates that a message has been finished",
+            "required": ["message_id", "chat_id", "user_message_id", "type"],
+            "properties": {
+              "chat_id": { "type": "string" },
+              "message_id": { "type": "string" },
+              "type": { "type": "string", "enum": ["chat_message_finished"] },
+              "user_message_id": { "type": "string" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Indicates that a chat has been renamed",
+            "required": ["stream_id", "chat_id", "name", "type"],
+            "properties": {
+              "chat_id": { "type": "string" },
+              "name": { "type": "string" },
+              "stream_id": { "type": "string" },
+              "type": { "type": "string", "enum": ["chat_renamed"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Notifies the client that the available models have changed",
+            "required": ["chat_id", "available_models", "type"],
+            "properties": {
+              "available_models": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/Model" }
+              },
+              "chat_id": { "type": "string" },
+              "new_model": {
+                "oneOf": [
+                  { "type": "null" },
+                  { "$ref": "#/components/schemas/Model" }
+                ]
+              },
+              "type": { "type": "string", "enum": ["model_selection_changed"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["chat_id", "token_count", "type"],
+            "properties": {
+              "chat_id": { "type": "string" },
+              "token_count": { "type": "integer", "format": "int64" },
+              "type": { "type": "string", "enum": ["token_count_changed"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Status update",
+            "required": ["chat_id", "message_id", "message", "type"],
+            "properties": {
+              "chat_id": { "type": "string" },
+              "message": { "type": "string" },
+              "message_id": { "type": "string" },
+              "type": {
+                "type": "string",
+                "enum": ["chat_message_status_update"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Acknowledges the request to get extraction status\nif the `status` field is 'incomplete', we need to await the extraction status updates\nif the `status` field is 'empty', extraction is complete but text content is empty\nif the `status` field is 'complete', the extraction is already complete",
+            "required": ["attachment_id", "status", "type"],
+            "properties": {
+              "attachment_id": { "type": "string" },
+              "status": { "$ref": "#/components/schemas/ExtractionStatusEnum" },
+              "type": { "type": "string", "enum": ["extraction_status_ack"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Status update for the extraction status",
+            "required": ["attachment_id", "status", "type"],
+            "properties": {
+              "attachment_id": { "type": "string" },
+              "status": { "$ref": "#/components/schemas/ExtractionStatusEnum" },
+              "type": { "type": "string", "enum": ["extraction_status_update"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": { "type": { "type": "string", "enum": ["pong"] } }
+          },
+          {
+            "type": "object",
+            "description": "pdf completion",
+            "required": ["completion_id", "content", "done", "type"],
+            "properties": {
+              "completion_id": { "type": "string" },
+              "content": { "type": "string" },
+              "done": { "type": "boolean" },
+              "type": { "type": "string", "enum": ["completion_response"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["completion_id", "content", "done", "type"],
+            "properties": {
+              "completion_id": { "type": "string" },
+              "content": { "type": "string" },
+              "done": { "type": "boolean" },
+              "type": { "type": "string", "enum": ["completion_stream_chunk"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["stream_id", "type"],
+            "properties": {
+              "stream_id": { "type": "string" },
+              "type": { "type": "string", "enum": ["stream_end"] }
+            }
+          }
+        ]
+      },
+      "GenericErrorResponse": {
+        "type": "object",
+        "required": ["error", "message"],
+        "properties": {
+          "error": {
+            "type": "boolean",
+            "description": "Indicates if an error occurred"
+          },
+          "message": {
+            "type": "string",
+            "description": "Message to explain failure"
+          }
+        }
+      },
+      "GenericSuccessResponse": {
+        "type": "object",
+        "required": ["success"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Indicates if the request was successful"
+          }
+        }
+      },
+      "GetBatchPreviewRequest": {
+        "type": "object",
+        "required": ["chat_ids"],
+        "properties": {
+          "chat_ids": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "GetBatchPreviewResponse": {
+        "type": "object",
+        "required": ["previews"],
+        "properties": {
+          "previews": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ChatPreview" }
+          }
+        }
+      },
+      "GetChatPathParams": {
+        "type": "object",
+        "required": ["chat_id"],
+        "properties": { "chat_id": { "type": "string" } }
+      },
+      "GetChatPermissionsResponseV2": {
+        "type": "object",
+        "required": ["permissions"],
+        "properties": {
+          "permissions": { "$ref": "#/components/schemas/SharePermissionV2" }
+        }
+      },
+      "GetChatResponse": {
+        "type": "object",
+        "required": ["chat", "userAccessLevel"],
+        "properties": {
+          "chat": { "$ref": "#/components/schemas/ChatResponse" },
+          "userAccessLevel": { "$ref": "#/components/schemas/AccessLevel" }
+        }
+      },
+      "GetChatsForAttachmentResponse": {
+        "type": "object",
+        "required": ["all_chats"],
+        "properties": {
+          "all_chats": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Chat" }
+          },
+          "recent_chat": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/Chat" }
+            ]
+          }
+        }
+      },
+      "GetCompletionRequest": {
+        "type": "object",
+        "required": ["prompt", "user_message"],
+        "properties": {
+          "max_tokens": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "minimum": 0
+          },
+          "model": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/Model" }
+            ]
+          },
+          "prompt": { "type": "string" },
+          "user_message": { "type": "string" }
+        }
+      },
+      "GetCompletionResponse": {
+        "type": "object",
+        "required": ["completion"],
+        "properties": { "completion": { "type": "string" } }
+      },
+      "GetMacroPathParams": {
+        "type": "object",
+        "required": ["macro_prompt_id"],
+        "properties": { "macro_prompt_id": { "type": "string" } }
+      },
+      "GetMacroPermissionsResponseV2": {
+        "type": "object",
+        "required": ["permissions"],
+        "properties": {
+          "permissions": { "$ref": "#/components/schemas/SharePermissionV2" }
+        }
+      },
+      "GetMacroResponse": {
+        "type": "object",
+        "required": ["macroItem", "userAccessLevel"],
+        "properties": {
+          "macroItem": { "$ref": "#/components/schemas/MacroResponse" },
+          "userAccessLevel": { "$ref": "#/components/schemas/AccessLevel" }
+        }
+      },
+      "GetModelsForAttachmentsRequest": {
+        "type": "object",
+        "required": ["attachments"],
+        "properties": {
+          "active_model": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/Model" }
+            ]
+          },
+          "attachments": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/NewAttachment" }
+          }
+        }
+      },
+      "GetModelsForAttachmentsResponse": {
+        "type": "object",
+        "required": ["available_models"],
+        "properties": {
+          "available_models": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Model" }
+          },
+          "new_model": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/Model" }
+            ]
+          }
+        }
+      },
+      "GetModelsResponse": {
+        "type": "object",
+        "required": ["models"],
+        "properties": {
+          "models": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AIModel" }
+          }
+        }
+      },
+      "GetSimpleCompletionStreamPayload": {
+        "type": "object",
+        "required": ["prompt", "user_request", "completion_id"],
+        "properties": {
+          "completion_id": {
+            "type": "string",
+            "description": "client provided id, returned in responses"
+          },
+          "content_document_ids": {
+            "type": ["array", "null"],
+            "items": { "type": "string" },
+            "description": "Optional document ID to provide context"
+          },
+          "max_tokens": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "max tokens",
+            "minimum": 0
+          },
+          "model": {
+            "type": ["string", "null"],
+            "description": "model to use for the completion"
+          },
+          "prompt": { "type": "string", "description": "system prompt" },
+          "user_request": { "type": "string", "description": "user request" }
+        }
+      },
+      "JwtPayload": {
+        "type": "object",
+        "required": ["token"],
+        "properties": { "token": { "type": "string" } }
+      },
+      "Macro": {
+        "type": "object",
+        "required": [
+          "id",
+          "userId",
+          "title",
+          "prompt",
+          "icon",
+          "color",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "color": {
+            "type": "string",
+            "description": "The color of the macro"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The time the macro was created"
+          },
+          "icon": { "type": "string", "description": "The icon of the macro" },
+          "id": { "type": "string", "description": "The macro uuid" },
+          "prompt": {
+            "type": "string",
+            "description": "The prompt used in the macro"
+          },
+          "requiredDocs": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "The required number of documents to use the macro"
+          },
+          "title": {
+            "type": "string",
+            "description": "The title of the macro prompt"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The time the macro was last updated"
+          },
+          "userId": {
+            "type": "string",
+            "description": "Who the macro belongs to"
+          }
+        }
+      },
+      "MacroResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "title",
+          "userId",
+          "prompt",
+          "icon",
+          "color",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "color": {
+            "type": "string",
+            "description": "The color of the macro"
+          },
+          "createdAt": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The time the macro was created"
+          },
+          "icon": { "type": "string", "description": "The icon of the macro" },
+          "id": { "type": "string", "description": "The macro uuid" },
+          "prompt": {
+            "type": "string",
+            "description": "The prompt used in the macro"
+          },
+          "requiredDocs": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "The required number of documents to use the macro"
+          },
+          "title": {
+            "type": "string",
+            "description": "The title of the macro prompt"
+          },
+          "updatedAt": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The time the macro was last updated"
+          },
+          "userId": {
+            "type": "string",
+            "description": "Who the macro belongs to"
+          }
+        }
+      },
+      "MacrosResponse": {
+        "type": "object",
+        "required": ["macros"],
+        "properties": {
+          "macros": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Macro" }
+          }
+        }
+      },
+      "MessageWithAttachmentSummary": {
+        "type": "object",
+        "required": ["content", "date", "attachment_summaries"],
+        "properties": {
+          "attachment_summaries": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Summary" }
+          },
+          "content": { "type": "string" },
+          "date": { "type": "string", "format": "date-time" }
+        }
+      },
+      "Model": {
+        "type": "string",
+        "enum": [
+          "google/gemini-2.5-pro",
+          "google/gemini-2.0-flash-001",
+          "google/gemini-2.0-flash-lite-001",
+          "google/gemini-pro-1.5",
+          "openai/gpt-5",
+          "openai/gpt-4.1",
+          "openai/gpt-4o",
+          "openai/gpt-4o-mini",
+          "openai/o1",
+          "openai/gpt-4o-search-preview",
+          "openai/gpt-4o-mini-search-preview",
+          "openai/o3",
+          "anthropic/claude-3.5-sonnet",
+          "anthropic/claude-3.7-sonnet",
+          "anthropic/claude-sonnet-4"
+        ]
+      },
+      "ModelMetadata": {
+        "type": "object",
+        "required": [
+          "description",
+          "contextWindow",
+          "speed",
+          "quality",
+          "premium",
+          "displayName"
+        ],
+        "properties": {
+          "contextWindow": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The token size of the context window"
+          },
+          "description": {
+            "type": "string",
+            "description": "A description of the model"
+          },
+          "displayName": {
+            "type": "string",
+            "description": "The display name of the model"
+          },
+          "premium": { "type": "boolean" },
+          "quality": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Scale of quality from 0 to 5"
+          },
+          "speed": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Scale of speed from 0 to 5"
+          }
+        }
+      },
+      "NewAttachment": {
+        "type": "object",
+        "required": ["attachment_type", "attachment_id"],
+        "properties": {
+          "attachment_id": { "type": "string" },
+          "attachment_type": { "$ref": "#/components/schemas/AttachmentType" }
+        }
+      },
+      "NewChatMessage": {
+        "type": "object",
+        "required": ["content", "role", "model", "createdAt", "updatedAt"],
+        "properties": {
+          "attachments": {
+            "type": ["array", "null"],
+            "items": { "$ref": "#/components/schemas/NewAttachment" },
+            "description": "The ids of the attachments used to generate the message"
+          },
+          "content": {
+            "$ref": "#/components/schemas/ChatMessageContent",
+            "description": "Content of the message"
+          },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "model": {
+            "$ref": "#/components/schemas/Model",
+            "description": "The model used to generate the chat"
+          },
+          "role": {
+            "$ref": "#/components/schemas/Role",
+            "description": "Whether the chat is from the user or system"
+          },
+          "updatedAt": { "type": "string", "format": "date-time" }
+        }
+      },
+      "NewMessageAttachment": {
+        "type": "object",
+        "required": ["messageId", "attachmentType", "attachmentId"],
+        "properties": {
+          "attachmentId": { "type": "string" },
+          "attachmentType": { "$ref": "#/components/schemas/AttachmentType" },
+          "messageId": { "type": "string" }
+        }
+      },
+      "PatchChatRequest": {
+        "type": "object",
+        "properties": {
+          "model": { "type": ["string", "null"] },
+          "name": { "type": ["string", "null"] },
+          "projectId": { "type": ["string", "null"] }
+        }
+      },
+      "PatchChatRequestV2": {
+        "type": "object",
+        "properties": {
+          "model": { "type": ["string", "null"] },
+          "name": { "type": ["string", "null"] },
+          "projectId": { "type": ["string", "null"] },
+          "sharePermission": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/UpdateSharePermissionRequestV2" }
+            ]
+          }
+        }
+      },
+      "PatchMacroRequest": {
+        "type": "object",
+        "properties": {
+          "color": { "type": ["string", "null"] },
+          "icon": { "type": ["string", "null"] },
+          "prompt": { "type": ["string", "null"] },
+          "requiredDocs": { "type": ["integer", "null"], "format": "int32" },
+          "title": { "type": ["string", "null"] }
+        }
+      },
+      "Provider": {
+        "type": "string",
+        "enum": ["openai", "google", "anthropic", "googleanthropic", "xai"]
+      },
+      "Role": { "type": "string", "enum": ["user", "assistant", "system"] },
+      "SelectModelPayload": {
+        "type": "object",
+        "required": ["chat_id", "model"],
+        "properties": {
+          "chat_id": { "type": "string" },
+          "model": { "type": "string" }
+        }
+      },
+      "SendChatMessagePayload": {
+        "allOf": [
+          { "$ref": "#/components/schemas/JwtPayload" },
+          {
+            "type": "object",
+            "required": ["stream_id", "content", "chat_id", "model"],
+            "properties": {
+              "additional_instructions": {
+                "type": ["string", "null"],
+                "description": "Additional system instructions appended to the base system prompt"
+              },
+              "attachments": {
+                "type": ["array", "null"],
+                "items": {
+                  "$ref": "#/components/schemas/ChatAttachmentWithName"
+                },
+                "description": "Use citation prompt"
+              },
+              "chat_id": {
+                "type": "string",
+                "description": "Id of the chat the message belongs to"
+              },
+              "content": {
+                "type": "string",
+                "description": "The content of the message"
+              },
+              "model": {
+                "$ref": "#/components/schemas/Model",
+                "description": "the chate model to respond with"
+              },
+              "stream_id": {
+                "type": "string",
+                "description": "you give me id, i give you id"
+              },
+              "toolset": {
+                "$ref": "#/components/schemas/ToolSet",
+                "description": "Which toolset to use. Defaults to `all`"
+              }
+            }
+          }
+        ]
+      },
+      "SendCompletionPayload": {
+        "type": "object",
+        "required": ["prompt"],
+        "properties": {
+          "attachment_id": {
+            "type": ["string", "null"],
+            "description": "Optional attachment id for the completion"
+          },
+          "completion_id": {
+            "type": ["string", "null"],
+            "description": "Optional completion id to keep track of the completion\nif non is provided, one will be generated"
+          },
+          "prompt": {
+            "type": "string",
+            "description": "the prompt of the completion"
+          },
+          "selected_text": {
+            "type": ["string", "null"],
+            "description": "The selected text for the completion,"
+          }
+        }
+      },
+      "SharePermissionV2": {
+        "type": "object",
+        "required": ["id", "isPublic", "owner"],
+        "properties": {
+          "channelSharePermissions": {
+            "type": ["array", "null"],
+            "items": { "$ref": "#/components/schemas/ChannelSharePermission" },
+            "description": "The channel share permissions for the item"
+          },
+          "id": { "type": "string", "description": "The share permission id" },
+          "isPublic": {
+            "type": "boolean",
+            "description": "If the item is publicly accessible"
+          },
+          "owner": { "type": "string", "description": "The owner of the item" },
+          "publicAccessLevel": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The level of public access"
+              }
+            ]
+          }
+        }
+      },
+      "StopChatMessagePayload": {
+        "type": "object",
+        "required": ["stream_id"],
+        "properties": {
+          "stream_id": { "type": "string", "description": "stream id" }
+        }
+      },
+      "StreamError": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["stream_id", "model", "stream_error"],
+            "properties": {
+              "model": { "$ref": "#/components/schemas/Model" },
+              "stream_error": { "type": "string", "enum": ["provider_error"] },
+              "stream_id": { "type": "string" }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["stream_id", "model", "stream_error"],
+            "properties": {
+              "model": { "$ref": "#/components/schemas/Model" },
+              "stream_error": {
+                "type": "string",
+                "enum": ["model_context_overflow"]
+              },
+              "stream_id": { "type": "string" }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["stream_id", "stream_error"],
+            "properties": {
+              "stream_error": { "type": "string", "enum": ["internal_error"] },
+              "stream_id": { "type": "string" }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["stream_id", "stream_error"],
+            "properties": {
+              "stream_error": { "type": "string", "enum": ["unauthorized"] },
+              "stream_id": { "type": "string" }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["stream_id", "stream_error"],
+            "properties": {
+              "stream_error": {
+                "type": "string",
+                "enum": ["payment_required"]
+              },
+              "stream_id": { "type": "string" }
+            }
+          }
+        ]
+      },
+      "StringIDResponse": {
+        "type": "object",
+        "required": ["id"],
+        "properties": { "id": { "type": "string" } }
+      },
+      "StructedOutputCompletionRequest": {
+        "type": "object",
+        "required": ["prompt", "schema", "schema_name"],
+        "properties": {
+          "prompt": { "type": "string" },
+          "schema": {},
+          "schema_name": { "type": "string" }
+        }
+      },
+      "StructedOutputCompletionResponse": {
+        "type": "object",
+        "required": ["completion"],
+        "properties": { "completion": {} }
+      },
+      "SuccessResponse": {
+        "type": "object",
+        "required": ["error", "data"],
+        "properties": {
+          "data": {
+            "$ref": "#/components/schemas/GenericSuccessResponse",
+            "description": "Data to be returned"
+          },
+          "error": {
+            "type": "boolean",
+            "description": "Indicates if an error occurred"
+          }
+        }
+      },
+      "Summary": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["Summary"],
+            "properties": {
+              "Summary": { "$ref": "#/components/schemas/DocumentSummary" }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["NoSummary"],
+            "properties": {
+              "NoSummary": {
+                "type": "object",
+                "required": ["document_id"],
+                "properties": { "document_id": { "type": "string" } }
+              }
+            }
+          }
+        ]
+      },
+      "ToWebSocketMessage": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SendChatMessagePayload",
+                "description": "Initializes a new message in a chat for streaming"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["send_chat_message"] }
+                }
+              }
+            ],
+            "description": "Initializes a new message in a chat for streaming"
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SendChatMessagePayload",
+                "description": "Replace user message and restream response"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["edit_chat_message"] }
+                }
+              }
+            ],
+            "description": "Replace user message and restream response"
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/StopChatMessagePayload",
+                "description": "Stop streaming for a given message"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["stop_chat_message"] }
+                }
+              }
+            ],
+            "description": "Stop streaming for a given message"
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SelectModelPayload",
+                "description": "Select model for a given chat"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["select_model_for_chat"]
+                  }
+                }
+              }
+            ],
+            "description": "Select model for a given chat"
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ExtractionStatusPayload",
+                "description": "Get extraction status for a given attachment"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["extraction_status"] }
+                }
+              }
+            ],
+            "description": "Get extraction status for a given attachment"
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/SendCompletionPayload",
+                "description": "pdf completion"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["send_completion"] }
+                }
+              }
+            ],
+            "description": "pdf completion"
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GetSimpleCompletionStreamPayload",
+                "description": "stream a simple completion"
+              },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": {
+                    "type": "string",
+                    "enum": ["get_simple_completion_stream"]
+                  }
+                }
+              }
+            ],
+            "description": "stream a simple completion"
+          }
+        ]
+      },
+      "ToolSchema": {
+        "type": "object",
+        "required": ["name", "inputSchema", "outputSchema"],
+        "properties": {
+          "inputSchema": {},
+          "name": { "type": "string" },
+          "outputSchema": {}
+        }
+      },
+      "ToolSchemasResponse": {
+        "type": "object",
+        "required": ["schemas"],
+        "properties": {
+          "schemas": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ToolSchema" }
+          }
+        }
+      },
+      "ToolSet": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": { "type": { "type": "string", "enum": ["all"] } }
+          },
+          {
+            "type": "object",
+            "required": ["type"],
+            "properties": { "type": { "type": "string", "enum": ["none"] } }
+          }
+        ]
+      },
+      "UpdateChannelSharePermission": {
+        "type": "object",
+        "required": ["operation", "channelId"],
+        "properties": {
+          "accessLevel": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The access level for the channel\nThis is required if the operation is add or replace"
+              }
+            ]
+          },
+          "channelId": { "type": "string", "description": "The channel id" },
+          "operation": {
+            "$ref": "#/components/schemas/UpdateOperation",
+            "description": "The type of operation to be performed on the chanel share permission\nYou can add, remove or replace and existing permission"
+          }
+        }
+      },
+      "UpdateOperation": {
+        "type": "string",
+        "enum": ["add", "remove", "replace"]
+      },
+      "UpdateSharePermissionRequestV2": {
+        "type": "object",
+        "properties": {
+          "channelSharePermissions": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/UpdateChannelSharePermission"
+            },
+            "description": "Any channel share permissions to be created/updated/removed"
+          },
+          "isPublic": {
+            "type": ["boolean", "null"],
+            "description": "If the item is publicly accessible"
+          },
+          "publicAccessLevel": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The level of public access"
+              }
+            ]
+          }
+        }
+      },
+      "UserPdfRect": {
+        "type": "object",
+        "description": "UserPdfRect is in UserSpace\n(0,0) top left\npercent page units\n1-based page index",
+        "required": ["page_index", "left", "top", "width", "height"],
+        "properties": {
+          "height": { "type": "number", "format": "float" },
+          "left": { "type": "number", "format": "float" },
+          "page_index": { "type": "integer", "format": "int32", "minimum": 0 },
+          "top": { "type": "number", "format": "float" },
+          "width": { "type": "number", "format": "float" }
+        }
+      },
+      "VerifyAttachmentsRequest": {
+        "type": "object",
+        "required": ["attachments"],
+        "properties": {
+          "attachments": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "VerifyAttachmentsResponse": {
+        "type": "object",
+        "required": ["attachments"],
+        "properties": {
+          "attachments": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "WebSocketError": {
+        "oneOf": [
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/StreamError" },
+              {
+                "type": "object",
+                "required": ["error_type"],
+                "properties": {
+                  "error_type": { "type": "string", "enum": ["stream_error"] }
+                }
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "required": ["chat_id", "message_id", "stream_id", "error_type"],
+            "properties": {
+              "chat_id": { "type": "string" },
+              "details": { "type": ["string", "null"] },
+              "error_type": {
+                "type": "string",
+                "enum": ["failed_to_send_chat_message"]
+              },
+              "message_id": { "type": "string" },
+              "stream_id": { "type": "string" }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["chat_id", "stream_id", "error_type"],
+            "properties": {
+              "chat_id": { "type": "string" },
+              "details": { "type": ["string", "null"] },
+              "error_type": {
+                "type": "string",
+                "enum": ["failed_to_rename_chat"]
+              },
+              "stream_id": { "type": "string" }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["error_type"],
+            "properties": {
+              "details": { "type": ["string", "null"] },
+              "error_type": {
+                "type": "string",
+                "enum": ["failed_to_send_error_message"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["chat_id", "stream_id", "error_type"],
+            "properties": {
+              "chat_id": { "type": "string" },
+              "details": { "type": ["string", "null"] },
+              "error_type": {
+                "type": "string",
+                "enum": ["failed_to_store_chat"]
+              },
+              "stream_id": { "type": "string" }
+            }
+          },
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/GenericErrorResponse" },
+              {
+                "type": "object",
+                "required": ["error_type"],
+                "properties": {
+                  "error_type": { "type": "string", "enum": ["generic"] }
+                }
+              }
+            ]
+          },
+          {
+            "type": "object",
+            "required": ["error_type"],
+            "properties": {
+              "details": { "type": ["string", "null"] },
+              "error_type": {
+                "type": "string",
+                "enum": ["failed_to_send_websocket_message"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["error_type"],
+            "properties": {
+              "details": { "type": ["string", "null"] },
+              "error_type": {
+                "type": "string",
+                "enum": ["failed_to_select_model"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["chat_id", "message_id", "stream_id", "error_type"],
+            "properties": {
+              "chat_id": { "type": "string" },
+              "details": { "type": ["string", "null"] },
+              "error_type": {
+                "type": "string",
+                "enum": ["failed_to_update_token_count"]
+              },
+              "message_id": { "type": "string" },
+              "stream_id": { "type": "string" }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["attachment_id", "error_type"],
+            "properties": {
+              "attachment_id": { "type": "string" },
+              "error_type": {
+                "type": "string",
+                "enum": ["extraction_status_failed"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["attachment_ids", "error_type"],
+            "properties": {
+              "attachment_ids": {
+                "type": "array",
+                "items": { "type": "string" }
+              },
+              "error_type": {
+                "type": "string",
+                "enum": ["attachment_permission_error"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["reason", "stream_id", "error_type"],
+            "properties": {
+              "error_type": {
+                "type": "string",
+                "enum": ["failed_to_edit_message"]
+              },
+              "reason": { "type": "string" },
+              "stream_id": { "type": "string" }
+            }
+          }
+        ]
+      },
+      "WithChatId": {
+        "type": "object",
+        "required": ["chat_id"],
+        "properties": { "chat_id": { "type": "string" } }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "macro document cognition service",
+      "description": "Document Cognition Service"
+    }
+  ]
+}

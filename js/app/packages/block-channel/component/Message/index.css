@@ -1,0 +1,48 @@
+.highlight-enter-active,
+.highlight-exit-active {
+  transition: opacity 700ms ease-in-out;
+}
+
+.highlight-enter,
+.highlight-exit-to {
+  opacity: 0;
+}
+
+.highlight-enter-to,
+.highlight-exit {
+  opacity: 20%;
+}
+
+.current-user-message-enter-active {
+  transition: all 200ms cubic-bezier(.78,.4,.68,1.38);
+  transform-origin: 95% 100%;
+}
+
+.current-user-message-enter {
+  opacity: 0;
+  transform: translateY(100%) scale(0);
+}
+
+.current-user-message-enter-to {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.typing-indicator-message-enter-active,
+.typing-indicator-message-exit-active {
+  transition: transform 200ms cubic-bezier(.78,.4,.68,1.38), opacity 200ms linear;
+  transform-origin: 40px 100%;
+}
+
+ 
+.typing-indicator-message-enter,
+.typing-indicator-message-exit-to {
+   opacity: 0;
+   transform: translateY(100%) scaleY(0);
+}
+ 
+.typing-indicator-message-enter-to,
+.typing-indicator-message-exit {
+   opacity: 1;
+   transform: translateY(0) scaleY(1);
+}

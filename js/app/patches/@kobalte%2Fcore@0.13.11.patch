@@ -1,0 +1,95 @@
+diff --git a/node_modules/@kobalte/core/.bun-tag-1c6021044f1084d1 b/.bun-tag-1c6021044f1084d1
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@kobalte/core/.bun-tag-6165aebdd8f56877 b/.bun-tag-6165aebdd8f56877
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/node_modules/@kobalte/core/.bun-tag-be2da99940c84794 b/.bun-tag-be2da99940c84794
+new file mode 100644
+index 0000000000000000000000000000000000000000..e69de29bb2d1d6434b8b29ae775ad8c2e48c5391
+diff --git a/dist/chunk/2CTBMVJ4.jsx b/dist/chunk/2CTBMVJ4.jsx
+index d6727fedf8009f6be7adb2232722d8bd9b7d05ab..673b098c4a526482875d04a64e181a0c75d9b42f 100644
+--- a/dist/chunk/2CTBMVJ4.jsx
++++ b/dist/chunk/2CTBMVJ4.jsx
+@@ -219,7 +219,9 @@ function PopperRoot(props) {
+       hideWhenDetached: false,
+       detachedPadding: 0,
+       arrowPadding: 4,
+-      overflowPadding: 8
++      overflowPadding: 8,
++      layoutPosition: false,
++      boundary: () => 'clippingAncestors',
+     },
+     props
+   );
+@@ -263,7 +265,8 @@ function PopperRoot(props) {
+       middleware.push(
+         flip({
+           padding: mergedProps.overflowPadding,
+-          fallbackPlacements
++          fallbackPlacements,
++          boundary: mergedProps.boundary() ?? 'clippingAncestors'
+         })
+       );
+     }
+@@ -272,7 +275,8 @@ function PopperRoot(props) {
+         shift({
+           mainAxis: mergedProps.slide,
+           crossAxis: mergedProps.overlap,
+-          padding: mergedProps.overflowPadding
++          padding: mergedProps.overflowPadding,
++          boundary: mergedProps.boundary() ?? 'clippingAncestors'
+         })
+       );
+     }
+@@ -331,13 +335,17 @@ function PopperRoot(props) {
+       "--kb-popper-content-transform-origin",
+       getTransformOrigin(pos.placement, direction())
+     );
+-    const x = Math.round(pos.x);
+-    const y = Math.round(pos.y);
++		const x = mergedProps.layoutPosition ? pos.x : Math.round(pos.x);
++		const y = mergedProps.layoutPosition ? pos.y : Math.round(pos.y);
+     let visibility;
+     if (mergedProps.hideWhenDetached) {
+       visibility = pos.middlewareData.hide?.referenceHidden ? "hidden" : "visible";
+     }
+-    Object.assign(floatingEl.style, {
++    Object.assign(floatingEl.style, mergedProps.layoutPosition ? {
++			top:`${y}px`,
++			left: `${x}px`,
++			visibility,
++		} : {
+       top: "0",
+       left: "0",
+       transform: `translate3d(${x}px, ${y}px, 0)`,
+diff --git a/dist/index-e5682983.d.ts b/dist/index-e5682983.d.ts
+index af0348dc2614c8d6332b19c95c58dc2813ddd478..0a358ef9775a151bf7865de7d78b356483381108 100644
+--- a/dist/index-e5682983.d.ts
++++ b/dist/index-e5682983.d.ts
+@@ -175,6 +175,10 @@ interface PopoverRootOptions extends Omit<PopperRootOptions, "anchorRef" | "cont
+     forceMount?: boolean;
+     /** The localized strings of the component. */
+     translations?: PopoverIntlTranslations;
++    /* Use position layout rather than transform for precise alignment on the pixel grid
++	 *
++	 */
++	layoutPosition?: boolean;
+ }
+ interface PopoverRootProps extends ParentProps<PopoverRootOptions> {
+ }
+diff --git a/dist/popper-root-14a88a55.d.ts b/dist/popper-root-14a88a55.d.ts
+index 0179d8632061195d73d94a7041ec9c65facb22e0..91dddabb8d243b03d6f6b15d4a4438750afceaef 100644
+--- a/dist/popper-root-14a88a55.d.ts
++++ b/dist/popper-root-14a88a55.d.ts
+@@ -89,6 +89,10 @@ interface PopperRootOptions {
+      * This will be exposed to CSS as `--kb-popper-content-overflow-padding`.
+      */
+     overflowPadding?: number;
++    /**
++     * The clipping boundary area of the floating element.
++     */
++    boundary?: () => 'clippingAncestors' | Element | Array<Element> | Rect;
+ }
+ interface PopperRootProps extends ParentProps<PopperRootOptions> {
+ }

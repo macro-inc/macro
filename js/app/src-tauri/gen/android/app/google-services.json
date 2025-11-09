@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "1012554704290",
+    "project_id": "macro-app-dev-12ae0",
+    "storage_bucket": "macro-app-dev-12ae0.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1012554704290:android:cfb4156faa3120ea6b7efb",
+        "android_client_info": {
+          "package_name": "com.macro.app.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDFCZJodt_xVGUtQEJzh3-4dQ4Ucc5M3Hs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1012554704290:android:84a7906a27baef806b7efb",
+        "android_client_info": {
+          "package_name": "com.tauri.dev"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDFCZJodt_xVGUtQEJzh3-4dQ4Ucc5M3Hs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

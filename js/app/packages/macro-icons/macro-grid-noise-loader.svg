@@ -1,0 +1,95 @@
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" style="background: transparent">
+  <style>
+    .px { fill: currentColor; pointer-events:none; }
+    .a { animation-timing-function:steps(1,end); animation-iteration-count:infinite; }
+
+    @keyframes flick {
+      0%, 100% { opacity:1 }
+      71% { opacity:0 }
+    }
+  </style>
+
+  <defs>
+    <rect id="pixel" width="3.6" height="3.6" class="px a" rx="5" ry="5" />
+  </defs>
+
+  <!-- Row 0 -->
+  <use href="#pixel" x="0.2"  y="0.2"  style="animation: flick 0.34s infinite; animation-delay:0.08s"/>
+  <use href="#pixel" x="4.2"  y="0.2"  style="animation: flick 0.40s infinite; animation-delay:0.14s"/>
+  <use href="#pixel" x="8.2"  y="0.2"  style="animation: flick 0.28s infinite; animation-delay:0.05s"/>
+  <use href="#pixel" x="12.2" y="0.2"  style="animation: flick 0.37s infinite; animation-delay:0.11s"/>
+  <use href="#pixel" x="16.2" y="0.2"  style="animation: flick 0.31s infinite; animation-delay:0.02s"/>
+  <use href="#pixel" x="20.2" y="0.2"  style="animation: flick 0.44s infinite; animation-delay:0.07s"/>
+  <use href="#pixel" x="24.2" y="0.2"  style="animation: flick 0.29s infinite; animation-delay:0.15s"/>
+  <use href="#pixel" x="28.2" y="0.2"  style="animation: flick 0.39s infinite; animation-delay:0.04s"/>
+
+  <!-- Row 1 -->
+  <use href="#pixel" x="0.2"  y="4.2"  style="animation: flick 0.33s infinite; animation-delay:0.09s"/>
+  <use href="#pixel" x="4.2"  y="4.2"  style="animation: flick 0.41s infinite; animation-delay:0.13s"/>
+  <use href="#pixel" x="8.2"  y="4.2"  style="animation: flick 0.30s infinite; animation-delay:0.06s"/>
+  <use href="#pixel" x="12.2" y="4.2"  style="animation: flick 0.36s infinite; animation-delay:0.01s"/>
+  <use href="#pixel" x="16.2" y="4.2"  style="animation: flick 0.27s infinite; animation-delay:0.10s"/>
+  <use href="#pixel" x="20.2" y="4.2"  style="animation: flick 0.43s infinite; animation-delay:0.12s"/>
+  <use href="#pixel" x="24.2" y="4.2"  style="animation: flick 0.32s infinite; animation-delay:0.03s"/>
+  <use href="#pixel" x="28.2" y="4.2"  style="animation: flick 0.38s infinite; animation-delay:0.05s"/>
+
+  <!-- Row 2 -->
+  <use href="#pixel" x="0.2"  y="8.2"  style="animation: flick 0.35s infinite; animation-delay:0.07s"/>
+  <use href="#pixel" x="4.2"  y="8.2"  style="animation: flick 0.42s infinite; animation-delay:0.09s"/>
+  <use href="#pixel" x="8.2"  y="8.2"  style="animation: flick 0.28s infinite; animation-delay:0.02s"/>
+  <use href="#pixel" x="12.2" y="8.2"  style="animation: flick 0.39s infinite; animation-delay:0.15s"/>
+  <use href="#pixel" x="16.2" y="8.2"  style="animation: flick 0.31s infinite; animation-delay:0.04s"/>
+  <use href="#pixel" x="20.2" y="8.2"  style="animation: flick 0.44s infinite; animation-delay:0.06s"/>
+  <use href="#pixel" x="24.2" y="8.2"  style="animation: flick 0.29s infinite; animation-delay:0.13s"/>
+  <use href="#pixel" x="28.2" y="8.2"  style="animation: flick 0.37s infinite; animation-delay:0.08s"/>
+
+  <!-- Row 3 -->
+  <use href="#pixel" x="0.2"  y="12.2" style="animation: flick 0.33s infinite; animation-delay:0.05s"/>
+  <use href="#pixel" x="4.2"  y="12.2" style="animation: flick 0.40s infinite; animation-delay:0.14s"/>
+  <use href="#pixel" x="8.2"  y="12.2" style="animation: flick 0.28s infinite; animation-delay:0.09s"/>
+  <use href="#pixel" x="12.2" y="12.2" style="animation: flick 0.36s infinite; animation-delay:0.12s"/>
+  <use href="#pixel" x="16.2" y="12.2" style="animation: flick 0.31s infinite; animation-delay:0.03s"/>
+  <use href="#pixel" x="20.2" y="12.2" style="animation: flick 0.43s infinite; animation-delay:0.07s"/>
+  <use href="#pixel" x="24.2" y="12.2" style="animation: flick 0.29s infinite; animation-delay:0.15s"/>
+  <use href="#pixel" x="28.2" y="12.2" style="animation: flick 0.39s infinite; animation-delay:0.01s"/>
+
+  <!-- Row 4 -->
+  <use href="#pixel" x="0.2"  y="16.2" style="animation: flick 0.34s infinite; animation-delay:0.11s"/>
+  <use href="#pixel" x="4.2"  y="16.2" style="animation: flick 0.41s infinite; animation-delay:0.08s"/>
+  <use href="#pixel" x="8.2"  y="16.2" style="animation: flick 0.28s infinite; animation-delay:0.14s"/>
+  <use href="#pixel" x="12.2" y="16.2" style="animation: flick 0.37s infinite; animation-delay:0.02s"/>
+  <use href="#pixel" x="16.2" y="16.2" style="animation: flick 0.32s infinite; animation-delay:0.06s"/>
+  <use href="#pixel" x="20.2" y="16.2" style="animation: flick 0.44s infinite; animation-delay:0.13s"/>
+  <use href="#pixel" x="24.2" y="16.2" style="animation: flick 0.30s infinite; animation-delay:0.04s"/>
+  <use href="#pixel" x="28.2" y="16.2" style="animation: flick 0.38s infinite; animation-delay:0.10s"/>
+
+  <!-- Row 5 -->
+  <use href="#pixel" x="0.2"  y="20.2" style="animation: flick 0.35s infinite; animation-delay:0.09s"/>
+  <use href="#pixel" x="4.2"  y="20.2" style="animation: flick 0.40s infinite; animation-delay:0.05s"/>
+  <use href="#pixel" x="8.2"  y="20.2" style="animation: flick 0.28s infinite; animation-delay:0.12s"/>
+  <use href="#pixel" x="12.2" y="20.2" style="animation: flick 0.37s infinite; animation-delay:0.03s"/>
+  <use href="#pixel" x="16.2" y="20.2" style="animation: flick 0.31s infinite; animation-delay:0.14s"/>
+  <use href="#pixel" x="20.2" y="20.2" style="animation: flick 0.44s infinite; animation-delay:0.06s"/>
+  <use href="#pixel" x="24.2" y="20.2" style="animation: flick 0.29s infinite; animation-delay:0.08s"/>
+  <use href="#pixel" x="28.2" y="20.2" style="animation: flick 0.39s infinite; animation-delay:0.01s"/>
+
+  <!-- Row 6 -->
+  <use href="#pixel" x="0.2"  y="24.2" style="animation: flick 0.33s infinite; animation-delay:0.15s"/>
+  <use href="#pixel" x="4.2"  y="24.2" style="animation: flick 0.40s infinite; animation-delay:0.11s"/>
+  <use href="#pixel" x="8.2"  y="24.2" style="animation: flick 0.28s infinite; animation-delay:0.04s"/>
+  <use href="#pixel" x="12.2" y="24.2" style="animation: flick 0.37s infinite; animation-delay:0.07s"/>
+  <use href="#pixel" x="16.2" y="24.2" style="animation: flick 0.31s infinite; animation-delay:0.02s"/>
+  <use href="#pixel" x="20.2" y="24.2" style="animation: flick 0.43s infinite; animation-delay:0.09s"/>
+  <use href="#pixel" x="24.2" y="24.2" style="animation: flick 0.29s infinite; animation-delay:0.13s"/>
+  <use href="#pixel" x="28.2" y="24.2" style="animation: flick 0.39s infinite; animation-delay:0.05s"/>
+
+  <!-- Row 7 -->
+  <use href="#pixel" x="0.2"  y="28.2" style="animation: flick 0.35s infinite; animation-delay:0.06s"/>
+  <use href="#pixel" x="4.2"  y="28.2" style="animation: flick 0.41s infinite; animation-delay:0.02s"/>
+  <use href="#pixel" x="8.2"  y="28.2" style="animation: flick 0.28s infinite; animation-delay:0.08s"/>
+  <use href="#pixel" x="12.2" y="28.2" style="animation: flick 0.36s infinite; animation-delay:0.12s"/>
+  <use href="#pixel" x="16.2" y="28.2" style="animation: flick 0.31s infinite; animation-delay:0.04s"/>
+  <use href="#pixel" x="20.2" y="28.2" style="animation: flick 0.44s infinite; animation-delay:0.10s"/>
+  <use href="#pixel" x="24.2" y="28.2" style="animation: flick 0.30s infinite; animation-delay:0.14s"/>
+  <use href="#pixel" x="28.2" y="28.2" style="animation: flick 0.38s infinite; animation-delay:0.09s"/>
+</svg>

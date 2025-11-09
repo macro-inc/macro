@@ -1,0 +1,1399 @@
+import {
+  useGlobalBlockOrchestrator,
+  useGlobalNotificationSource,
+} from '@app/component/GlobalAppState';
+import {
+  emailRefetchInterval,
+  useEmailAuthStatus,
+} from '@app/signal/emailAuth';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { Button } from '@core/component/FormControls/Button';
+import DropdownMenu from '@core/component/FormControls/DropdownMenu';
+import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
+import { ToggleButton } from '@core/component/FormControls/ToggleButton';
+import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
+import {
+  ContextMenuContent,
+  MenuItem,
+  MenuSeparator,
+} from '@core/component/Menu';
+import { RecipientSelector } from '@core/component/RecipientSelector';
+import {
+  blockAcceptsFileExtension,
+  fileTypeToBlockName,
+} from '@core/constant/allBlocks';
+import {
+  ENABLE_PREVIEW,
+  ENABLE_SOUP_FROM_FILTER,
+} from '@core/constant/featureFlags';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
+import type { ViewId } from '@core/types/view';
+import type { WithCustomUserInput } from '@core/user';
+import { ContextMenu } from '@kobalte/core/context-menu';
+import { supportedExtensions } from '@lexical-core/utils';
+import {
+  createChannelsQuery,
+  createDeleteDssItemMutation,
+  createDssInfiniteQuery,
+  createEmailsInfiniteQuery,
+  createFilterComposer,
+  createProjectFilterFn,
+  createSort,
+  createUnifiedInfiniteList,
+  createUnifiedSearchInfiniteQuery,
+  type DocumentEntity,
+  Entity,
+  type EntityClickHandler,
+  type EntityData,
+  type EntityFilter,
+  type EntityType,
+  importantFilterFn,
+  notDoneFilterFn,
+  type SortOption,
+  sortByCreatedAt,
+  sortByFrecencyScore,
+  sortByUpdatedAt,
+  sortByViewedAt,
+  unreadFilterFn,
+  type WithNotification,
+} from '@macro-entity';
+import {
+  markNotificationsForEntityAsDone,
+  useNotificationsForEntity,
+} from '@notifications/notificationHelpers';
+import {
+  isChannelMention,
+  isChannelMessageReply,
+  isChannelMessageSend,
+  notificationWithMetadata,
+} from '@notifications/notificationMetadata';
+import type { UnifiedNotification } from '@notifications/types';
+import type { PaginatedSearchArgs } from '@service-search/client';
+import type {
+  ChannelFilters,
+  ChatFilters,
+  DocumentFilters,
+  EmailFilters,
+  ProjectFilters,
+  UnifiedSearchIndex,
+  UnifiedSearchRequestFilters,
+} from '@service-search/generated/models';
+import type { GetItemsSoupParams } from '@service-storage/generated/schemas';
+import fuzzy from 'fuzzy';
+import stringify from 'json-stable-stringify';
+import {
+  type Accessor,
+  batch,
+  createEffect,
+  createMemo,
+  createSelector,
+  createSignal,
+  mergeProps,
+  on,
+  onMount,
+  type ParentProps,
+  type Setter,
+  Show,
+} from 'solid-js';
+import { createStore, unwrap } from 'solid-js/store';
+import { EntityWithEverything } from '../../macro-entity/src/components/EntityWithEverything';
+import { createCopyDssEntityMutation } from '../../macro-entity/src/queries/dss';
+import type { FetchPaginatedEmailsParams } from '../../macro-entity/src/queries/email';
+import { EntityModal } from './EntityModal/EntityModal';
+import { useUpsertSavedViewMutation } from './Soup';
+import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
+import { useSplitLayout } from './split-layout/layout';
+import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
+import { EmptyState } from './UnifiedListEmptyState';
+import {
+  archiveEmail,
+  type DisplayOptions,
+  type DocumentTypeFilter,
+  type FilterOptions,
+  type HotkeyOptions,
+  isConfigEqual,
+  KNOWN_FILE_TYPES,
+  type SortOptions,
+  VIEWCONFIG_BASE,
+  VIEWCONFIG_DEFAULTS_NAMES,
+} from './ViewConfig';
+
+const sortOptions = [
+  {
+    value: 'viewed_at',
+    label: 'Viewed',
+    sortFn: sortByViewedAt,
+  },
+  {
+    value: 'updated_at',
+    label: 'Updated',
+    sortFn: sortByUpdatedAt,
+  },
+  {
+    value: 'created_at',
+    label: 'Created',
+    sortFn: sortByCreatedAt,
+  },
+  {
+    value: 'frecency',
+    label: 'Frecency',
+    sortFn: sortByFrecencyScore,
+  },
+] satisfies SortOption<EntityData, SortOptions['sortBy']>[];
+
+export type UnifiedListViewProps = {
+  viewId?: ViewId;
+  defaultFilterOptions?: Partial<FilterOptions>;
+  defaultSortOptions?: Partial<SortOptions>;
+  defaultDisplayOptions?: Partial<DisplayOptions>;
+  defaultHotkeyOptions?: Partial<HotkeyOptions>;
+  searchText?: string;
+  onLoadingChange?: (isLoading: boolean) => void;
+  hideToolbar?: true;
+};
+
+export function UnifiedListView(props: UnifiedListViewProps) {
+  const [contextAndModalState, setContextAndModalState] = createStore<{
+    modalOpen: boolean;
+    modalView: 'rename' | 'moveToProject';
+    contextMenuOpen: boolean;
+    selectedEntity: WithNotification<EntityData> | undefined;
+    prevSelectedEntity: WithNotification<EntityData> | undefined;
+  }>({
+    modalOpen: false,
+    modalView: 'rename',
+    contextMenuOpen: false,
+    selectedEntity: undefined,
+    prevSelectedEntity: undefined,
+  });
+  const openEntityModal = (view: 'rename' | 'moveToProject') => {
+    // terrible will fix
+    // context menu upon closing steals focus from mounted menu
+    setTimeout(() => {
+      setTimeout(() => {
+        setContextAndModalState((prev) => ({
+          ...prev,
+          modalOpen: true,
+          modalView: view,
+          selectedEntity: prev.prevSelectedEntity,
+        }));
+      }, 100);
+    });
+  };
+
+  const [localEntityListRef, setLocalEntityListRef] = createSignal<
+    HTMLDivElement | undefined
+  >();
+
+  const defaultFilterOptions = mergeProps(
+    VIEWCONFIG_BASE.filters,
+    props.defaultFilterOptions
+  );
+  const defaultSortOptions = mergeProps(
+    VIEWCONFIG_BASE.sort,
+    props.defaultSortOptions
+  );
+  const defaultDisplayOptions = mergeProps(
+    VIEWCONFIG_BASE.display,
+    props.defaultDisplayOptions
+  );
+
+  const { isPanelActive, unifiedListContext, panelRef } =
+    useSplitPanelOrThrow();
+  const {
+    viewsDataStore: viewsData,
+    setViewDataStore,
+    virtualizerHandleSignal: [, setVirtualizerHandle],
+    entityListRefSignal: [, setEntityListRef],
+    entitiesSignal: [_entities, setEntities],
+    emailViewSignal: [emailView],
+  } = unifiedListContext;
+  const view = props.viewId ? viewsData[props.viewId] : undefined;
+  const selectedEntity = () => view?.selectedEntity;
+
+  createEffect(
+    on(
+      () =>
+        [
+          localEntityListRef(),
+          // access index to properly track
+          _entities()?.[0],
+        ] as const,
+      ([localEntityListRef]) => {
+        if (!localEntityListRef) return;
+        setEntityListRef(localEntityListRef);
+
+        if (view?.hasUserInteractedEntity) return;
+
+        // select first item from entityList until interaction
+        if (!_entities() || !_entities()?.length) return;
+        const firstEntity = _entities()![0];
+
+        if (props.viewId) {
+          setViewDataStore(props.viewId, 'highlightedId', firstEntity.id);
+          setViewDataStore(props.viewId, 'selectedEntity', firstEntity);
+        }
+
+        setTimeout(() => {
+          // don't steal focus outside of entityList
+          if (
+            !(
+              document.activeElement === document.body ||
+              document.activeElement === panelRef() ||
+              localEntityListRef.contains(document.activeElement)
+            )
+          ) {
+            return;
+          }
+
+          const focusElement = localEntityListRef.querySelector(
+            `[data-entity-id="${firstEntity.id}"]`
+          ) as HTMLElement;
+
+          if (focusElement instanceof HTMLElement)
+            focusElement.focus({ preventScroll: true });
+        });
+      }
+    )
+  );
+
+  const [notificationFilter, setNotificationFilter] = createSignal(
+    view?.filters?.notificationFilter ?? defaultFilterOptions.notificationFilter
+  );
+  const [importantFilter, setImportantFilter] = createSignal(
+    view?.filters?.importantFilter ?? defaultFilterOptions.importantFilter
+  );
+  const [entityTypeFilter, setEntityTypeFilter] = createSignal(
+    view?.filters?.typeFilter ?? defaultFilterOptions.typeFilter
+  );
+  const [fileTypeFilter, setFileTypeFilter] = createSignal(
+    view?.filters?.documentTypeFilter ?? defaultFilterOptions.documentTypeFilter
+  );
+  const [projectFilter, setProjectFilter] = createSignal(
+    view?.filters?.projectFilter ?? defaultFilterOptions.projectFilter
+  );
+
+  const { all: emailRecipientOptions } = useCombinedRecipients(['user']);
+  const fromFilter = view?.filters.fromFilter;
+  const hasFromFilter = fromFilter !== undefined;
+  const shouldFilterEmails = createMemo(() => {
+    if (!hasFromFilter) return false;
+    const types = entityTypeFilter();
+    return types.length === 0 || types.includes('email');
+  });
+  const shouldFilterOwnedEntities = createMemo(() => {
+    if (!hasFromFilter) return false;
+    const types = entityTypeFilter();
+    return types.length === 0 || types.some((t) => t !== 'email');
+  });
+  const showFromFilter = createMemo(
+    () => shouldFilterEmails() || shouldFilterOwnedEntities()
+  );
+  const [fromFilterUsers, setFromFilterUsers] = createSignal<
+    WithCustomUserInput<'user' | 'contact'>[]
+  >(view?.filters.fromFilter ?? []);
+
+  const sortTypeSignal = createSignal(
+    view?.sort?.sortBy ?? defaultSortOptions.sortBy
+  );
+  const [sortType] = sortTypeSignal;
+
+  // sync view store from local signals
+  createEffect(() => {
+    if (!props.viewId) {
+      return;
+    }
+
+    setViewDataStore(
+      props.viewId,
+      'filters',
+      'notificationFilter',
+      notificationFilter()
+    );
+    setViewDataStore(
+      props.viewId,
+      'filters',
+      'importantFilter',
+      importantFilter()
+    );
+    setViewDataStore(props.viewId, 'filters', 'typeFilter', entityTypeFilter());
+    setViewDataStore(
+      props.viewId,
+      'filters',
+      'documentTypeFilter',
+      fileTypeFilter()
+    );
+    setViewDataStore(props.viewId, 'filters', 'projectFilter', projectFilter());
+    setViewDataStore(props.viewId, 'filters', 'fromFilter', fromFilterUsers());
+    setViewDataStore(props.viewId, 'display', 'preview', preview());
+    setViewDataStore(props.viewId, 'display', 'showProjects', showProjects());
+    setViewDataStore(
+      props.viewId,
+      'display',
+      'showUnreadIndicator',
+      showUnreadIndicator()
+    );
+    setViewDataStore(
+      props.viewId,
+      'display',
+      'unrollNotifications',
+      showUnrollNotifications()
+    );
+    setViewDataStore(props.viewId, 'sort', 'sortBy', sortType());
+  });
+
+  // sync local signals to view store
+  createEffect(() => {
+    setShowUnrollNotifications(
+      view?.display?.unrollNotifications ??
+        defaultDisplayOptions.unrollNotifications
+    );
+    setShowProjects(
+      view?.display?.showProjects ?? defaultDisplayOptions.showProjects
+    );
+    setShowUnreadIndicator(
+      view?.display?.showUnreadIndicator ??
+        defaultDisplayOptions.showUnreadIndicator
+    );
+    setPreview(view?.display.preview ?? defaultDisplayOptions.preview);
+    setNotificationFilter(
+      view?.filters?.notificationFilter ??
+        defaultFilterOptions.notificationFilter
+    );
+    setImportantFilter(
+      view?.filters?.importantFilter ?? defaultFilterOptions.importantFilter
+    );
+    setEntityTypeFilter(
+      view?.filters?.typeFilter ?? defaultFilterOptions.typeFilter
+    );
+    setFileTypeFilter(
+      view?.filters?.documentTypeFilter ??
+        defaultFilterOptions.documentTypeFilter
+    );
+    setProjectFilter(
+      view?.filters?.projectFilter ?? defaultFilterOptions.projectFilter
+    );
+  });
+
+  const searchText = createMemo(() => props.searchText?.trim() ?? '');
+  const [showUnrollNotifications, setShowUnrollNotifications] = createSignal(
+    view?.display?.unrollNotifications ??
+      defaultDisplayOptions.unrollNotifications
+  );
+  const [showProjects, setShowProjects] = createSignal(
+    view?.display?.showProjects ?? defaultDisplayOptions.showProjects
+  );
+  const [showUnreadIndicator, setShowUnreadIndicator] = createSignal(
+    view?.display?.showUnreadIndicator ??
+      defaultDisplayOptions.showUnreadIndicator
+  );
+  const [preview, setPreview] = createSignal(
+    view?.display.preview ?? defaultDisplayOptions.preview
+  );
+
+  const currentViewConfigBase = createMemo(() => {
+    if (!view) return null;
+    return {
+      display: view.display,
+      filters: view.filters,
+      sort: view.sort,
+    };
+  });
+  const stringifiedCurrentViewConfigBase = createMemo(() => {
+    if (!view) return null;
+    return stringify(currentViewConfigBase());
+  });
+
+  const setHighlightedId = (id: string) => {
+    if (!props.viewId) return;
+    setViewDataStore(props.viewId, 'highlightedId', id);
+  };
+
+  const { setFilters: setOptionalFilters, filterFn: optionalFilter } =
+    createFilterComposer();
+  const { setFilters: setRequiredFilters, filterFn: requiredFilter } =
+    createFilterComposer();
+
+  const toggleFileTypeFilter = (fileType: DocumentTypeFilter) =>
+    batch(() => {
+      if (!entityTypeFilter().includes('document'))
+        setEntityTypeFilter((prev) => [...prev, 'document']);
+
+      setFileTypeFilter((prev) =>
+        prev.includes(fileType)
+          ? prev.filter((t) => t !== fileType)
+          : [...prev, fileType]
+      );
+    });
+
+  const nameFuzzySearchFilter = createMemo(() =>
+    props.searchText
+      ? (items: WithNotification<EntityData>[]) => {
+          if (!searchText() || searchText().length === 0) return items;
+          const fuzzyResults = fuzzy.filter(searchText(), items, {
+            extract: (item) => item.name,
+          });
+          return fuzzyResults.map((result) => result.original);
+        }
+      : undefined
+  );
+
+  const fileTypeCompatibilityFilter = createMemo(() => {
+    const filterByFileType = fileTypeFilter();
+
+    let filterFn: EntityFilter<EntityData> | undefined;
+    if (filterByFileType.length === 1 && filterByFileType[0] === 'unknown') {
+      filterFn = (entity) => {
+        if (entity.type !== 'document') return true;
+
+        const entityFileType = entity.fileType;
+        if (!entityFileType) return true;
+
+        return KNOWN_FILE_TYPES.every(
+          (fileType) => !blockAcceptsFileExtension(fileType, entityFileType)
+        );
+      };
+    } else if (filterByFileType.length > 0) {
+      filterFn = (entity) => {
+        if (entity.type !== 'document') return true;
+
+        const entityFileType = entity.fileType;
+        if (
+          filterByFileType.includes('unknown') &&
+          (!entityFileType ||
+            KNOWN_FILE_TYPES.every(
+              (fileType) => !blockAcceptsFileExtension(fileType, entityFileType)
+            ))
+        )
+          return true;
+
+        return (
+          !!entityFileType &&
+          filterByFileType.some((fileType) =>
+            blockAcceptsFileExtension(fileType, entityFileType)
+          )
+        );
+      };
+    }
+    return filterFn;
+  });
+
+  const ownerFilter = createMemo<EntityFilter<EntityData> | undefined>(() => {
+    if (!shouldFilterOwnedEntities()) return undefined;
+    const selectedFromUsers = fromFilterUsers();
+    if (selectedFromUsers.length === 0) return undefined;
+
+    return (entity) => {
+      if (entity.type === 'email') return true;
+
+      const ownerId = entity.ownerId;
+      if (!ownerId) return false;
+
+      const match = selectedFromUsers.some((user) => {
+        return user.id === ownerId;
+      });
+      return match;
+    };
+  });
+
+  // NOTE: these filters are required because the backend doesn't support these filters yet
+  createEffect(() => {
+    let filterFns: EntityFilter<EntityData>[] = [];
+
+    if (importantFilter()) filterFns.push(importantFilterFn);
+
+    if (notificationFilter() === 'unread') filterFns.push(unreadFilterFn);
+
+    if (notificationFilter() === 'notDone') filterFns.push(notDoneFilterFn);
+
+    setRequiredFilters(filterFns);
+  });
+
+  createEffect(() => {
+    let filterFns: EntityFilter<EntityData>[] = [];
+
+    // TODO: use the project id filter the search service
+    const projectFilter_ = projectFilter();
+    if (projectFilter_) {
+      filterFns.push(createProjectFilterFn(projectFilter_));
+    }
+
+    if (entityTypeFilter().length > 0)
+      filterFns.push(({ type }) => entityTypeFilter().includes(type));
+
+    const fileTypeCompatibilityFilter_ = fileTypeCompatibilityFilter();
+    if (fileTypeCompatibilityFilter_)
+      filterFns.push(fileTypeCompatibilityFilter_);
+
+    // NOTE: email from filters handled directly in search service
+    const ownerFilter_ = ownerFilter();
+    if (ownerFilter_) filterFns.push(ownerFilter_);
+
+    setOptionalFilters(filterFns);
+  });
+
+  const unifiedSearchIncludeArray = createMemo<UnifiedSearchIndex[]>(() => {
+    let types = entityTypeFilter();
+    // NOTE: empty array means search all
+    if (types.length === 0) types = [];
+    const includeArray: UnifiedSearchIndex[] = [];
+    for (const type of types) {
+      switch (type) {
+        case 'document':
+          includeArray.push('documents');
+          break;
+        case 'chat':
+          includeArray.push('chats');
+          break;
+        case 'channel':
+          includeArray.push('channels');
+          break;
+        case 'email':
+          includeArray.push('emails');
+          break;
+        case 'project':
+          includeArray.push('projects');
+          break;
+      }
+    }
+    return includeArray;
+  });
+
+  const unifiedSearchFilters = createMemo<UnifiedSearchRequestFilters>(() => {
+    let documentFilters: DocumentFilters | null = null;
+    if (fileTypeFilter().length > 0) {
+      const fileTypes = fileTypeFilter().flatMap((fileType) => {
+        // not ideal but it works for most cases
+        if (fileType === 'code') return supportedExtensions;
+        return [fileType];
+      });
+      documentFilters = {
+        file_types: fileTypes,
+      };
+    }
+
+    let emailFilters: EmailFilters | null = null;
+    if (shouldFilterEmails()) {
+      const users = fromFilterUsers();
+      if (users.length > 0) {
+        const senderEmails = users.map((user) => user.data.email);
+        emailFilters = {
+          senders: senderEmails,
+        };
+      }
+    }
+
+    let channelFilters: ChannelFilters | null = null;
+    let chatFilters: ChatFilters | null = null;
+    let projectFilters: ProjectFilters | null = null;
+    if (shouldFilterOwnedEntities()) {
+      const users = fromFilterUsers();
+      if (users.length > 0) {
+        const ownerIds = users.map((user) => user.id);
+        channelFilters = {
+          sender_ids: ownerIds,
+        };
+        chatFilters = {
+          owners: ownerIds,
+        };
+        projectFilters = {
+          owners: ownerIds,
+        };
+      }
+    }
+
+    const filters = {
+      document: documentFilters,
+      chat: chatFilters,
+      channel: channelFilters,
+      email: emailFilters,
+      project: projectFilters,
+    };
+
+    return filters;
+  });
+
+  const dssQueryParams = createMemo(
+    (): GetItemsSoupParams => ({
+      limit: props.defaultDisplayOptions?.limit ?? 100,
+      sort_method: sortType(),
+    })
+  );
+  const emailQueryParams = createMemo((): FetchPaginatedEmailsParams => {
+    const sort = sortType();
+    return {
+      limit: props.defaultDisplayOptions?.limit ?? 100,
+      // email sort methods does not accept frecency yet
+      sort_method: sort === 'frecency' ? 'viewed_updated' : sort,
+      view: props.viewId === 'emails' ? emailView() : 'inbox',
+    };
+  });
+  const searchUnifiedContentQueryParams = createMemo(
+    (): PaginatedSearchArgs => ({
+      params: {
+        page: 0,
+        page_size: 100,
+      },
+      request: {
+        search_on: 'content',
+        match_type: 'partial',
+        terms: searchText().length > 0 ? [searchText()] : undefined,
+        filters: unifiedSearchFilters(),
+        include: unifiedSearchIncludeArray(),
+      },
+    })
+  );
+  const searchUnifiedNameQueryParams = createMemo(
+    (): PaginatedSearchArgs => ({
+      params: {
+        page: 0,
+        page_size: 100,
+      },
+      request: {
+        search_on: 'name',
+        match_type: 'partial',
+        terms: searchText().length > 0 ? [searchText()] : undefined,
+        filters: unifiedSearchFilters(),
+        include: unifiedSearchIncludeArray(),
+      },
+    })
+  );
+
+  const validSearchTerms = createMemo(() => {
+    return searchText().length >= 3;
+  });
+  const validSearchFilters = createMemo(() => {
+    const senders = unifiedSearchFilters()?.email?.senders;
+    if (senders && senders.length > 0) return true;
+    return false;
+  });
+
+  const disableSearchService = createMemo(() => {
+    // we only need to use search service when we have some sort of search text/filter
+    const validSearch = validSearchTerms() || validSearchFilters();
+    return !validSearch;
+  });
+
+  const emailActive = useEmailAuthStatus();
+
+  const disableEmailQuery = createMemo(() => {
+    // NOTE: at the moment emails are not supported in project blocks
+    // so it doesn't make sense to do an expensive email query
+    if (projectFilter()) return true;
+    if (!emailActive()) return true;
+    const typeFilter = entityTypeFilter();
+    if (typeFilter.length > 0 && !typeFilter.includes('email')) return true;
+    return !disableSearchService();
+  });
+
+  const disableDssInfiniteQuery = createMemo(() => {
+    const typeFilter = entityTypeFilter();
+    if (typeFilter.length === 0) return false;
+    const dssTypes = ['document', 'chat', 'project'];
+    const hasDssTypes = typeFilter.some((t) => dssTypes.includes(t));
+    return !hasDssTypes;
+  });
+
+  const disableChannelsQuery = createMemo(() => {
+    const typeFilter = entityTypeFilter();
+    if (typeFilter.length > 0 && !typeFilter.includes('channel')) return true;
+    return false;
+  });
+
+  const disableNameOnlySearch = createMemo(() => {
+    if (disableSearchService()) return true;
+    // if terms is empty, we only need to search once
+    return !validSearchTerms();
+  });
+
+  const channelsQuery = createChannelsQuery({
+    disabled: disableChannelsQuery,
+  });
+  const dssInfiniteQuery = createDssInfiniteQuery(dssQueryParams, {
+    disabled: disableDssInfiniteQuery,
+  });
+  const emailsInfiniteQuery = createEmailsInfiniteQuery(emailQueryParams, {
+    refetchInterval: () => emailRefetchInterval(),
+    disabled: disableEmailQuery,
+  });
+  const searchContentInfiniteQuery = createUnifiedSearchInfiniteQuery(
+    searchUnifiedContentQueryParams,
+    { disabled: disableSearchService }
+  );
+  const searchNameInfiniteQuery = createUnifiedSearchInfiniteQuery(
+    searchUnifiedNameQueryParams,
+    { disabled: disableNameOnlySearch }
+  );
+
+  // TODO: fix email source
+  // const emailSource = useGlobalEmailSource();
+  // createEffect(() => emailSource.setQueryParams(emailQueryParams()));
+
+  const notificationSource = useGlobalNotificationSource();
+  const defaultHotkeyE = props.defaultHotkeyOptions?.e;
+  const markEntityAsDone = defaultHotkeyE
+    ? (entity: EntityData) =>
+        defaultHotkeyE(entity, {
+          notificationSource,
+          soupContext: unifiedListContext,
+        })
+    : (entity: EntityData) => {
+        if (emailView() === 'inbox') {
+          if (entity.type === 'email') {
+            archiveEmail(entity.id, {
+              isDone: entity.done,
+              optimisticallyExclude: true,
+            });
+          }
+          return true;
+        }
+        if (entity.type === 'email') {
+          archiveEmail(entity.id, { isDone: entity.done });
+        }
+        markNotificationsForEntityAsDone(notificationSource, entity);
+        return true;
+      };
+
+  const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
+
+  const blockOrchestrator = useGlobalBlockOrchestrator();
+  const gotoChannelNotification = async (notification: UnifiedNotification) => {
+    if (
+      !isChannelMention(notification) &&
+      !isChannelMessageReply(notification) &&
+      !isChannelMessageSend(notification)
+    )
+      return;
+
+    const message_id = notification.notificationMetadata.messageId;
+    let thread_id: string | null | undefined;
+
+    const blockHandle = await blockOrchestrator.getBlockHandle(
+      notification.eventItemId,
+      'channel'
+    );
+    if (!blockHandle) return;
+
+    if (!isChannelMessageSend(notification))
+      thread_id = notification.notificationMetadata.threadId;
+
+    notificationSource.markAsRead(notification);
+
+    return blockHandle?.goToLocationFromParams({ message_id, thread_id });
+  };
+
+  const entityMapper = (entity: EntityData) => {
+    return {
+      ...unwrap(entity),
+      notifications: useNotificationsForEntity(notificationSource, entity),
+    };
+  };
+
+  const { SortComponent, sortFn: entitySort } = createSort({
+    sortOptions,
+    sortTypeSignal,
+  });
+
+  const { UnifiedListComponent, entities, isLoading } =
+    createUnifiedInfiniteList<WithNotification<EntityData>>({
+      entityInfiniteQueries: [
+        {
+          query: dssInfiniteQuery,
+          operations: { filter: true, search: true },
+        },
+        {
+          query: emailsInfiniteQuery,
+          operations: { filter: true, search: false },
+        },
+        {
+          query: searchContentInfiniteQuery,
+          operations: { filter: false, search: false },
+        },
+        {
+          query: searchNameInfiniteQuery,
+          operations: { filter: false, search: false },
+        },
+      ],
+      entityMapper,
+      entityQueries: [
+        { query: channelsQuery, operations: { filter: true, search: true } },
+      ],
+      requiredFilter,
+      optionalFilter,
+      entitySort,
+      searchFilter: nameFuzzySearchFilter,
+      showProjects,
+    });
+
+  createEffect(() => setEntities(entities()));
+
+  createEffect(() => props.onLoadingChange?.(isLoading()));
+
+  const documentEntityClickHandler: EntityClickHandler<DocumentEntity> = (
+    { id, fileType },
+    event
+  ) => {
+    const blockName = fileTypeToBlockName(fileType);
+    const handle = event.altKey
+      ? insertSplit({ type: blockName, id })
+      : replaceOrInsertSplit({ type: blockName, id });
+    handle?.activate();
+  };
+
+  const entityClickHandler: EntityClickHandler<EntityData> = (
+    entity,
+    event
+  ) => {
+    if (preview()) {
+      if (!props.viewId) return;
+      setViewDataStore(props.viewId, 'selectedEntity', entity);
+      return;
+    }
+
+    if (entity.type === 'document')
+      return documentEntityClickHandler(entity, event);
+
+    const handle = event.altKey
+      ? insertSplit({ type: entity.type, id: entity.id })
+      : replaceOrInsertSplit({ type: entity.type, id: entity.id });
+    handle?.activate();
+  };
+
+  const { mutate: deleteDssItem } = createDeleteDssItemMutation();
+  const { mutate: copyDssItem } = createCopyDssEntityMutation();
+
+  const StyledTriggerLabel = (props: ParentProps) => {
+    return <span class="text-[0.625rem]">{props.children}</span>;
+  };
+
+  const highlightedSelector = createSelector(() => view?.highlightedId);
+
+  const selectedSelector = createSelector(() => selectedEntity()?.id);
+
+  const saveViewMutation = useUpsertSavedViewMutation();
+
+  const isViewConfigChanged = createMemo(() => {
+    if (!view) return false;
+
+    const configChanges = view.initialConfig;
+    if (configChanges == null || configChanges === '') return false;
+
+    try {
+      const initialConfigObj = JSON.parse(configChanges);
+      const currentConfigObj = currentViewConfigBase();
+
+      if (!currentConfigObj) return false;
+
+      const isEqual = isConfigEqual(initialConfigObj, currentConfigObj);
+
+      return !isEqual;
+    } catch (e) {
+      console.warn(e);
+      return false;
+    }
+  });
+
+  const hasRefinementsFromBase = createMemo(() => {
+    return isViewConfigChanged() || validSearchTerms() || validSearchFilters();
+  });
+
+  onMount(() => {
+    if (props.viewId && view) {
+      const initialConfig = view.initialConfig;
+
+      if (initialConfig) return;
+
+      const stringifiedConfig = stringifiedCurrentViewConfigBase();
+      if (stringifiedConfig) {
+        setViewDataStore(props.viewId, 'initialConfig', stringifiedConfig);
+      }
+    }
+  });
+
+  return (
+    <>
+      <Show when={!props.hideToolbar}>
+        <SplitToolbarRight order={5}>
+          <div class="flex flex-row items-center gap-1 p-1 h-full select-none">
+            <Show when={isViewConfigChanged()}>
+              <Button
+                size="SM"
+                classList={{
+                  '!border-ink/25 !text-ink !bg-panel hover:!text-ink mx-1.5 font-normal': true,
+                }}
+                onClick={() => {
+                  if (!props.viewId) return;
+                  saveViewMutation.mutate({
+                    id: props.viewId,
+                    name: view!.view,
+                    config: currentViewConfigBase()!,
+                  });
+                  // only for default views
+                  if (VIEWCONFIG_DEFAULTS_NAMES.includes(props.viewId as any)) {
+                    // Reset initialConfigSignal to current config after save
+                    const currentConfig = stringifiedCurrentViewConfigBase();
+                    if (currentConfig !== null && currentConfig !== undefined) {
+                      setViewDataStore(
+                        props.viewId,
+                        'initialConfig',
+                        currentConfig
+                      );
+                    }
+                  }
+                }}
+              >
+                SAVE CHANGES
+              </Button>
+            </Show>
+            <DropdownMenu
+              size="SM"
+              theme="secondary"
+              triggerLabel={<StyledTriggerLabel>Filter</StyledTriggerLabel>}
+            >
+              <div class="min-w-[10vw] max-w-md">
+                <div class="grid divide-y divide-edge">
+                  <section class="gap-1 grid p-2">
+                    <ToggleSwitch
+                      size="SM"
+                      label="Important"
+                      checked={importantFilter()}
+                      onChange={setImportantFilter}
+                    />
+                    <SegmentedControl
+                      size="SM"
+                      label="Show"
+                      list={[
+                        { value: 'all', label: 'All' },
+                        { value: 'unread', label: 'Unread' },
+                        { value: 'notDone', label: 'Not Done' },
+                      ]}
+                      value={notificationFilter()}
+                      onChange={setNotificationFilter}
+                    />
+                  </section>
+                  <section class="gap-1 p-2">
+                    <span class="font-medium text-xs">Type</span>
+                    <div class="flex flex-row flex-wrap items-center gap-1">
+                      <EntityTypeToggle
+                        filter={entityTypeFilter}
+                        setFilter={setEntityTypeFilter}
+                        setFileTypeFilter={setFileTypeFilter}
+                        type="document"
+                      />
+                      <EntityTypeToggle
+                        filter={entityTypeFilter}
+                        setFilter={setEntityTypeFilter}
+                        type="chat"
+                      />
+                      <EntityTypeToggle
+                        filter={entityTypeFilter}
+                        setFilter={setEntityTypeFilter}
+                        type="channel"
+                      />
+                      <EntityTypeToggle
+                        filter={entityTypeFilter}
+                        setFilter={setEntityTypeFilter}
+                        type="email"
+                      />
+                      <EntityTypeToggle
+                        filter={entityTypeFilter}
+                        setFilter={setEntityTypeFilter}
+                        type="project"
+                      />
+                    </div>
+                  </section>
+                  <section class="gap-1 p-2">
+                    <span class="font-medium text-xs">Filetype</span>
+                    <div class="flex flex-row flex-wrap items-center gap-1">
+                      <ToggleButton
+                        size="SM"
+                        pressed={fileTypeFilter().includes('md')}
+                        onChange={() => toggleFileTypeFilter('md')}
+                      >
+                        NOTE
+                      </ToggleButton>
+                      <ToggleButton
+                        size="SM"
+                        pressed={fileTypeFilter().includes('pdf')}
+                        onChange={() => toggleFileTypeFilter('pdf')}
+                      >
+                        PDF
+                      </ToggleButton>
+                      <ToggleButton
+                        size="SM"
+                        pressed={fileTypeFilter().includes('canvas')}
+                        onChange={() => toggleFileTypeFilter('canvas')}
+                      >
+                        CANVAS
+                      </ToggleButton>
+                      <ToggleButton
+                        size="SM"
+                        pressed={fileTypeFilter().includes('code')}
+                        onChange={() => toggleFileTypeFilter('code')}
+                      >
+                        CODE
+                      </ToggleButton>
+                      <ToggleButton
+                        size="SM"
+                        pressed={fileTypeFilter().includes('image')}
+                        onChange={() => toggleFileTypeFilter('image')}
+                      >
+                        IMAGE
+                      </ToggleButton>
+                      <ToggleButton
+                        size="SM"
+                        pressed={fileTypeFilter().includes('unknown')}
+                        onChange={() => toggleFileTypeFilter('unknown')}
+                      >
+                        Other
+                      </ToggleButton>
+                    </div>
+                  </section>
+                  <Show when={ENABLE_SOUP_FROM_FILTER && showFromFilter()}>
+                    <section class="gap-1 p-2">
+                      <span class="font-medium text-xs">From</span>
+                      <RecipientSelector<'user' | 'contact'>
+                        options={emailRecipientOptions}
+                        selectedOptions={fromFilterUsers}
+                        setSelectedOptions={setFromFilterUsers}
+                        placeholder="Filter by user..."
+                        includeSelf
+                      />
+                    </section>
+                  </Show>
+                </div>
+              </div>
+            </DropdownMenu>
+            <DropdownMenu
+              size="SM"
+              triggerLabel={<StyledTriggerLabel>Display</StyledTriggerLabel>}
+            >
+              <div class="min-w-[10vw] max-w-md">
+                <div class="grid divide-y divide-edge">
+                  <section class="p-2">
+                    <SegmentedControl
+                      size="SM"
+                      label="Layout"
+                      // value={selectItemFromList()}
+                      list={['Compact', 'Relaxed', 'Visual']}
+                      // onChange={(newValue) => setSelectItemFromList(newValue)}
+                      disabled
+                    />
+                  </section>
+                  <section class="p-2">
+                    <SortComponent size="SM" />
+                  </section>
+                  <section class="gap-1 grid p-2">
+                    <ToggleSwitch
+                      size="SM"
+                      label="Show Projects"
+                      checked={showProjects()}
+                      onChange={setShowProjects}
+                    />
+                    <ToggleSwitch
+                      size="SM"
+                      label="Unroll Notifications"
+                      checked={showUnrollNotifications()}
+                      onChange={setShowUnrollNotifications}
+                    />
+                    <ToggleSwitch
+                      size="SM"
+                      label="Indicate Unread"
+                      checked={showUnreadIndicator()}
+                      onChange={setShowUnreadIndicator}
+                    />
+                    <ToggleSwitch
+                      size="SM"
+                      label="Preview"
+                      disabled={!ENABLE_PREVIEW}
+                      checked={preview()}
+                      onChange={setPreview}
+                    />
+                  </section>
+                </div>
+              </div>
+            </DropdownMenu>
+          </div>
+        </SplitToolbarRight>
+      </Show>
+      <ContextMenu
+        onOpenChange={(open) => {
+          setContextAndModalState((prev) => {
+            if (open) {
+              return {
+                ...prev,
+                contextMenuOpen: open,
+                prevSelectedEntity: prev.selectedEntity,
+              };
+            }
+            return {
+              ...prev,
+              contextMenuOpen: open,
+              selectedEntity: undefined,
+            };
+          });
+        }}
+      >
+        <ContextMenu.Trigger class="size-full">
+          <UnifiedListComponent
+            entityListRef={setLocalEntityListRef}
+            virtualizerHandle={setVirtualizerHandle}
+            emptyState={<EmptyState view={view?.view} />}
+            hasRefinementsFromBase={hasRefinementsFromBase}
+          >
+            {(innerProps) => {
+              const displayDoneButton = () => {
+                if (innerProps.entity.type === 'email') {
+                  return !innerProps.entity.done;
+                }
+
+                return (innerProps.entity.notifications?.().length ?? 0) > 0;
+              };
+              const timestamp = () => {
+                switch (sortType()) {
+                  case 'viewed_at':
+                    return innerProps.entity.viewedAt;
+                  case 'created_at':
+                    return innerProps.entity.createdAt;
+                  case 'updated_at':
+                    return innerProps.entity.updatedAt;
+                }
+              };
+              return (
+                <EntityWithEverything
+                  onContextMenu={() => {
+                    setHighlightedId(innerProps.entity.id);
+
+                    if (isPanelActive() && !preview() && props.viewId) {
+                      setViewDataStore(
+                        props.viewId,
+                        'selectedEntity',
+                        innerProps.entity
+                      );
+                    }
+
+                    setContextAndModalState((prev) => {
+                      return {
+                        ...prev,
+                        contextMenuOpen: true,
+                        selectedEntity: innerProps.entity,
+                      };
+                    });
+                  }}
+                  entity={innerProps.entity}
+                  timestamp={timestamp()}
+                  onClick={entityClickHandler}
+                  onClickRowAction={(entity, type) => {
+                    if (type === 'done') {
+                      markEntityAsDone?.(entity);
+                    }
+                  }}
+                  onClickNotification={(notifiedEntity) => {
+                    const notification = notificationWithMetadata(
+                      notifiedEntity.notification
+                    );
+                    if (!notification) return;
+
+                    if (notifiedEntity.type === 'channel')
+                      gotoChannelNotification(notification);
+                  }}
+                  onMouseOver={() => {
+                    if (props.viewId) {
+                      setViewDataStore(
+                        props.viewId,
+                        'hasUserInteractedEntity',
+                        true
+                      );
+                    }
+                    setHighlightedId(innerProps.entity.id);
+
+                    if (isPanelActive() && !preview() && props.viewId) {
+                      setViewDataStore(
+                        props.viewId,
+                        'selectedEntity',
+                        innerProps.entity
+                      );
+                    }
+                  }}
+                  onMouseLeave={() => {}}
+                  onFocusIn={() => {
+                    setHighlightedId(innerProps.entity.id);
+
+                    if (isPanelActive() && !preview() && props.viewId) {
+                      setViewDataStore(
+                        props.viewId,
+                        'selectedEntity',
+                        innerProps.entity
+                      );
+                    }
+                  }}
+                  showLeftColumnIndicator={
+                    showUnreadIndicator() || importantFilter()
+                  }
+                  fadeIfRead={showUnreadIndicator()}
+                  showUnrollNotifications={showUnrollNotifications()}
+                  importantIndicatorActive={importantFilterFn(
+                    innerProps.entity
+                  )}
+                  unreadIndicatorActive={unreadFilterFn(innerProps.entity)}
+                  showDoneButton={displayDoneButton()}
+                  highlighted={highlightedSelector?.(innerProps.entity.id)}
+                  selected={
+                    isPanelActive() && selectedSelector(innerProps.entity.id)
+                  }
+                />
+              );
+            }}
+          </UnifiedListComponent>
+          <EntityModal
+            isOpen={() =>
+              !!(
+                contextAndModalState.modalOpen &&
+                contextAndModalState.selectedEntity?.id
+              )
+            }
+            setIsOpen={() =>
+              setContextAndModalState((prev) => ({
+                ...prev,
+                modalOpen: !prev.modalOpen,
+              }))
+            }
+            view={() => contextAndModalState.modalView}
+            entity={contextAndModalState.selectedEntity}
+          />
+          <ContextMenu.Portal>
+            <ContextMenuContent mobileFullScreen>
+              <Show when={isTouchDevice && isMobileWidth()}>
+                <Entity
+                  entity={contextAndModalState.selectedEntity!}
+                  timestamp={
+                    sortType() === 'viewed_at'
+                      ? contextAndModalState.selectedEntity!.viewedAt
+                      : sortType() === 'created_at'
+                        ? contextAndModalState.selectedEntity!.createdAt
+                        : undefined
+                  }
+                />
+                <MenuSeparator />
+              </Show>
+              <Show when={markEntityAsDone}>
+                {(fnAccessor) => (
+                  <MenuItem
+                    text="Mark as Done"
+                    onClick={() =>
+                      fnAccessor()(contextAndModalState.selectedEntity!)
+                    }
+                    disabled={
+                      contextAndModalState.selectedEntity?.type === 'email'
+                        ? contextAndModalState.selectedEntity.done
+                        : contextAndModalState.selectedEntity
+                            ?.notifications?.()
+                            .every(({ done }) => done)
+                    }
+                  />
+                )}
+              </Show>
+              <MenuItem
+                text="Delete"
+                onClick={() =>
+                  deleteDssItem(contextAndModalState.selectedEntity!)
+                }
+                disabled={
+                  contextAndModalState.selectedEntity?.type !== 'document' &&
+                  contextAndModalState.selectedEntity?.type !== 'chat'
+                }
+              />
+              <MenuItem
+                text="Rename"
+                onClick={() => openEntityModal('rename')}
+                disabled={
+                  contextAndModalState.selectedEntity?.type !== 'document' &&
+                  contextAndModalState.selectedEntity?.type !== 'chat'
+                }
+              />
+              <MenuItem
+                text="Move to Project"
+                onClick={() => {
+                  openEntityModal('moveToProject');
+                }}
+                disabled={
+                  contextAndModalState.selectedEntity?.type !== 'document' &&
+                  contextAndModalState.selectedEntity?.type !== 'project' &&
+                  contextAndModalState.selectedEntity?.type !== 'chat'
+                  // https://github.com/macro-inc/macro-api/pull/2395
+                  //  || !hasProjectPermissions()
+                }
+              />
+              <MenuItem
+                text="Copy"
+                onClick={() => {
+                  copyDssItem({ entity: contextAndModalState.selectedEntity! });
+                }}
+                disabled={
+                  contextAndModalState.selectedEntity?.type !== 'document' &&
+                  contextAndModalState.selectedEntity?.type !== 'chat'
+                }
+              />
+              <MenuItem
+                text="Open in new split"
+                onClick={() => {
+                  const splitManager = globalSplitManager();
+                  if (!splitManager) {
+                    console.error('No split manager available');
+                    return;
+                  }
+                  if (
+                    contextAndModalState.selectedEntity?.type === 'document'
+                  ) {
+                    const { fileType, id } =
+                      contextAndModalState.selectedEntity!;
+                    splitManager.createNewSplit({
+                      type: fileTypeToBlockName(fileType),
+                      id,
+                    });
+                  } else {
+                    const { id, type } = contextAndModalState.selectedEntity!;
+                    splitManager.createNewSplit({
+                      type,
+                      id,
+                    });
+                  }
+                }}
+              />
+            </ContextMenuContent>
+          </ContextMenu.Portal>
+        </ContextMenu.Trigger>
+      </ContextMenu>
+    </>
+  );
+}
+
+const EntityTypeToggle = (props: {
+  type: EntityType;
+  filter: Accessor<typeof VIEWCONFIG_BASE.filters.typeFilter>;
+  setFilter: Setter<typeof VIEWCONFIG_BASE.filters.typeFilter>;
+  setFileTypeFilter?: Setter<typeof VIEWCONFIG_BASE.filters.documentTypeFilter>;
+}) => {
+  const toggleEntityTypeFilter = (type: EntityType) => {
+    props.setFilter((prev) =>
+      prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
+    );
+  };
+  return (
+    <ToggleButton
+      size="SM"
+      pressed={props.filter().includes(props.type)}
+      onChange={(pressed) =>
+        batch(() => {
+          if (props.setFileTypeFilter && !pressed) props.setFileTypeFilter([]);
+
+          toggleEntityTypeFilter(props.type);
+        })
+      }
+    >
+      <span class="uppercase">{props.type}</span>
+    </ToggleButton>
+  );
+};
