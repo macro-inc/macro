@@ -27,8 +27,6 @@ on:
         required: true
       AWS_DEPLOYMENT_SECRET_ACCESS_KEY:
         required: true
-      NOTIFICATION_WEBHOOK:
-        required: true
       PULUMI_ACCESS_TOKEN:
         required: true
 
