@@ -11,7 +11,7 @@ import { EcrImage } from '@service';
 import { BASE_DOMAIN, CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
 
 const BASE_NAME = 'authentication-service';
-const BASE_PATH = '../../../../rust/cloud-storage';
+const BASE_PATH = '../../../rust/cloud-storage';
 
 export const SERVICE_DOMAIN_NAME = `auth-service${
   stack === 'prod' ? '' : `-${stack}`

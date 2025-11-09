@@ -13,7 +13,7 @@ import { awsRegion, stack } from '@shared';
 
 const BASE_NAME = `notification-email-poller-worker`;
 const WORKER_NAME = `${BASE_NAME}-${stack}`;
-const BASE_PATH = '../../../../rust/cloud-storage';
+const BASE_PATH = '../../../rust/cloud-storage';
 
 type WorkerArgs = {
   containerEnvVars: { name: string; value: Output<string> | string }[];

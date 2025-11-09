@@ -4,7 +4,7 @@ import * as pulumi from '@pulumi/pulumi';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
 
 const LAMBA_BASE_NAME = 'organization_retention_handler';
-const CLOUD_STORAGE_BASE = `../../../../rust/cloud-storage`;
+const CLOUD_STORAGE_BASE = `../../../rust/cloud-storage`;
 const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${LAMBA_BASE_NAME}/bootstrap.zip`;
 
 export type OrganizationRetentionhandlerEnvVars = {

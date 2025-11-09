@@ -11,7 +11,7 @@ import {
 } from './datadog';
 
 const BASE_NAME = 'experiment-service';
-const BASE_PATH = '../../../../rust/cloud-storage';
+const BASE_PATH = '../../../rust/cloud-storage';
 export const SERVICE_DOMAIN_NAME = `experiments-service${
   stack === 'prod' ? '' : `-${stack}`
 }.${BASE_DOMAIN}`;
