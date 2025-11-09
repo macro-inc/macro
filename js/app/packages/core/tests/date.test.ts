@@ -21,15 +21,15 @@ describe('Date Utilities (core/utils/date.ts)', () => {
     });
 
     it('should format time for today', () => {
-      // Today at 8:15 AM
+      // Today at 8:15 AM UTC
       const todayMorning = epochTime('2025-06-14T08:15:00.000Z');
-      expect(formatDate(todayMorning, mockNowEpochSeconds)).toBe('8:15 AM');
+      expect(formatDate(todayMorning, mockNowEpochSeconds, 'UTC')).toBe('8:15 AM');
     });
 
     it('should format "Yesterday at {time}" for yesterday (UTC day boundary)', () => {
       // Yesterday at 11:00 PM UTC (June 13)
       const yesterdayEvening = epochTime('2025-06-13T23:00:00.000Z');
-      expect(formatDate(yesterdayEvening, mockNowEpochSeconds)).toBe(
+      expect(formatDate(yesterdayEvening, mockNowEpochSeconds, 'UTC')).toBe(
         'Yesterday at 11:00 PM'
       );
     });
@@ -38,7 +38,7 @@ describe('Date Utilities (core/utils/date.ts)', () => {
       // Reference time: June 14, 2:15 PM UTC
       // Yesterday at 11:59 PM UTC (June 13) - just before midnight
       const justBeforeMidnight = epochTime('2025-06-13T23:59:59.000Z');
-      expect(formatDate(justBeforeMidnight, mockNowEpochSeconds)).toBe(
+      expect(formatDate(justBeforeMidnight, mockNowEpochSeconds, 'UTC')).toBe(
         'Yesterday at 11:59 PM'
       );
     });
@@ -47,14 +47,14 @@ describe('Date Utilities (core/utils/date.ts)', () => {
       // Reference time: June 14, 2:15 PM UTC
       // Same day at 1:00 AM UTC (13.25 hours earlier, but same UTC day)
       const earlyToday = epochTime('2025-06-14T01:00:00.000Z');
-      expect(formatDate(earlyToday, mockNowEpochSeconds)).toBe('1:00 AM');
+      expect(formatDate(earlyToday, mockNowEpochSeconds, 'UTC')).toBe('1:00 AM');
     });
 
     it('should handle yesterday even with more than 24 hour difference', () => {
       // Reference time: June 14, 2:15 PM UTC
       // Yesterday at 1:00 AM UTC (37.25 hours earlier, but still "yesterday")
       const yesterdayEarly = epochTime('2025-06-13T01:00:00.000Z');
-      expect(formatDate(yesterdayEarly, mockNowEpochSeconds)).toBe(
+      expect(formatDate(yesterdayEarly, mockNowEpochSeconds, 'UTC')).toBe(
         'Yesterday at 1:00 AM'
       );
     });
