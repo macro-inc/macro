@@ -91,7 +91,7 @@ export function createNotificationSource(
   );
 
   // TODO: remove
-  console.log('creating notification source')
+  console.log('creating notification source');
 
   const [mutedEntities, setMutedEntities] = createSignal<UserUnsubscribe[]>([]);
 
