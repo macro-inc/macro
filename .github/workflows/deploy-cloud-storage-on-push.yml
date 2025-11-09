@@ -1,0 +1,108 @@
+name: Deploy Cloud Storage Services on Push
+
+on:
+  push:
+    branches: [ 'main' ]
+    paths:
+      - 'rust/cloud-storage/**'
+      - '.github/workflows/deploy-cloud-storage-on-push.yml'
+      - '.github/services-config.json'
+
+concurrency:
+  group: deploy-cloud-storage-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  detect-changes:
+    name: Detect Changed Services
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.detect.outputs.services }}
+      has_changes: ${{ steps.detect.outputs.has_changes }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+
+      - name: Setup Rust
+        uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          toolchain: stable
+
+      - name: Detect changed services
+        id: detect
+        run: |
+          # Make the script executable
+          chmod +x .github/scripts/detect-affected-services.sh
+          
+          # Run the detection script and capture output
+          OUTPUT=$(.github/scripts/detect-affected-services.sh)
+          
+          # Parse the output
+          SERVICES=$(echo "$OUTPUT" | grep "^services=" | cut -d'=' -f2-)
+          HAS_CHANGES=$(echo "$OUTPUT" | grep "^has_changes=" | cut -d'=' -f2-)
+          
+          # Set outputs
+          echo "services=$SERVICES" >> $GITHUB_OUTPUT
+          echo "has_changes=$HAS_CHANGES" >> $GITHUB_OUTPUT
+          
+          # Log for debugging
+          echo "Detected services: $SERVICES"
+          echo "Has changes: $HAS_CHANGES"
+
+  deploy-services:
+    name: Deploy ${{ matrix.service }}
+    needs: detect-changes
+    if: ${{ needs.detect-changes.outputs.has_changes == 'true' }}
+    runs-on:
+      [
+        runs-on,
+        runner=8cpu-linux-x64,
+        hdd=40,
+        spot=false,
+        ssh=false,
+        'run-id=${{github.run_id}}',
+      ]
+    strategy:
+      fail-fast: false
+      max-parallel: 20
+      matrix:
+        service: ${{ fromJson(needs.detect-changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Get project name
+        id: project-name
+        uses: ./.github/actions/get-project-name
+        with:
+          service-name: ${{ matrix.service }}
+
+      - name: Deploy ${{ matrix.service }}
+        uses: ./.github/actions/deploy-cloud-storage-pulumi
+        with:
+          environment: dev
+          aws-access-key: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          pulumi-access-token: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          pulumi-service-name: ${{ steps.project-name.outputs.project-name }}
+          dd-app-key: ${{ secrets.DD_APP_KEY }}
+          dd-api-key: ${{ secrets.DD_API_KEY }}
+
+  deployment-summary:
+    name: Deployment Summary
+    runs-on: ubuntu-latest
+    needs: [ detect-changes, deploy-services ]
+    if: always()
+    steps:
+      - name: Check deployment results
+        run: |
+          if [[ "${{ needs.detect-changes.outputs.has_changes }}" == "false" ]]; then
+            echo "ℹ️ No cloud-storage services were affected by the changes"
+          elif [[ "${{ needs.deploy-services.result }}" == "failure" ]]; then
+            echo "❌ One or more service deployments failed"
+            exit 1
+          elif [[ "${{ needs.deploy-services.result }}" == "skipped" ]]; then
+            echo "⏭️ No services to deploy"
+          else
+            echo "✅ All affected cloud-storage services deployed successfully to dev environment"
+          fi

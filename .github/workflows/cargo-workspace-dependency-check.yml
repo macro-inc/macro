@@ -1,0 +1,29 @@
+name: cargo workspace dependency check
+on:
+  pull_request:
+    branches: [ 'main' ]
+    paths:
+      - 'rust/cloud-storage/Cargo.toml'
+      - 'rust/cloud-storage/**/Cargo.toml'
+      - .github/workflows/cargo-workspace-dependency-check.yml
+
+concurrency:
+  group: cargo-workspace-dependency-check-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  dependency-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+      - name: setup rust version
+        run: rustup default 1.85
+      - name: install tool
+        run: cargo install cargo-workspace-dependency-checker@1.0.1
+      - name: check
+        run: |
+          cd rust/cloud-storage
+          cargo-workspace-dependency-checker
