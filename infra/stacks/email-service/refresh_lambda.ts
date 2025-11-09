@@ -4,7 +4,7 @@ import * as pulumi from '@pulumi/pulumi';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
 
 const EMAIL_LAMBDA_BASE_NAME = 'email_refresh_handler';
-const CLOUD_STORAGE_BASE = `../../../`;
+const CLOUD_STORAGE_BASE = `../../../../rust/cloud-storage`;
 const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${EMAIL_LAMBDA_BASE_NAME}/bootstrap.zip`;
 
 export type EnvVars = {
