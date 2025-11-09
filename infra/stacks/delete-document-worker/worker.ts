@@ -11,7 +11,7 @@ import { EcrImage } from '@service';
 import { BASE_DOMAIN, CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
 
 const BASE_NAME = 'delete-document-worker';
-const BASE_PATH = '../../../';
+const BASE_PATH = '../../../../rust/cloud-storage';
 
 export const SERVICE_DOMAIN_NAME = `delete-document-worker${
   stack === 'prod' ? '' : `-${stack}`

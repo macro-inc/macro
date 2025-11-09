@@ -21,7 +21,7 @@ const KEBAB_BASE_NAME = toKebabCase(PROJECT, 'service');
 // directory name of service
 const SNAKE_BASE_NAME = toSnakeCase(PROJECT, 'service');
 const SERVICE_DIR_NAME = SNAKE_BASE_NAME;
-const BASE_PATH = '../../../';
+const BASE_PATH = '../../../../rust/cloud-storage';
 
 export const SERVICE_DOMAIN_NAME = `${PROJECT}${stack === 'prod' ? '' : `-${stack}`}.${BASE_DOMAIN}`;
 

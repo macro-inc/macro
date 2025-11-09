@@ -11,7 +11,7 @@ import {
 } from './datadog';
 
 const BASE_NAME = 'unfurl-service';
-const BASE_PATH = '../../../';
+const BASE_PATH = '../../../../rust/cloud-storage';
 
 export const SERVICE_DOMAIN_NAME = `unfurl-service${
   stack === 'prod' ? '' : `-${stack}`
