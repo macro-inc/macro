@@ -4,7 +4,7 @@ import * as pulumi from '@pulumi/pulumi';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
 
 const LAMBA_BASE_NAME = 'delete_chat_handler';
-const CLOUD_STORAGE_BASE = `../../../`;
+const CLOUD_STORAGE_BASE = `../../../../rust/cloud-storage`;
 const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${LAMBA_BASE_NAME}/bootstrap.zip`;
 
 export type DeleteChatHandlerEnvVars = {
