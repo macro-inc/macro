@@ -6,7 +6,7 @@ import { stack } from '@shared';
 
 const BASE_NAME = `sha-ref-count-resetter-worker`;
 const WORKER_NAME = `${BASE_NAME}-${stack}`;
-const BASE_PATH = '../../../';
+const BASE_PATH = '../../../../rust/cloud-storage';
 
 type CreateShaRefCountResetterWorkerArgs = {
   containerEnvVars?: { name: string; value: Output<string> | string }[];
