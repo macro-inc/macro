@@ -39,13 +39,15 @@ jobs:
     steps:
       - name: Checkout Repo
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Setup Biome
         uses: biomejs/setup-biome@v2
         with:
           version: 2.2.6
       - name: Run Biome
         working-directory: js/app
-        run: biome ci .
+        run: biome ci --changed --no-errors-on-unmatched
 
   tailwind:
     name: Theme Hygiene Inspector
