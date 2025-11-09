@@ -2,7 +2,15 @@
  * @vitest-environment happy-dom
  */
 
-import { afterEach, beforeEach, describe, expect, test, vi } from 'vitest';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+  vi,
+} from 'vitest';
 import { fetchWithToken, unsetTokenPromise } from './fetchWithToken';
 import { err, ok } from './maybeResult';
 
@@ -24,6 +32,23 @@ describe('fetchWithToken', () => {
 
   afterEach(() => {
     vi.clearAllMocks();
+  });
+
+  beforeAll(() => {
+    // Mock window.matchMedia for tests
+    Object.defineProperty(window, 'matchMedia', {
+      writable: true,
+      value: (query: string) => ({
+        matches: false,
+        media: query,
+        onchange: null,
+        addListener: () => {},
+        removeListener: () => {},
+        addEventListener: () => {},
+        removeEventListener: () => {},
+        dispatchEvent: () => true,
+      }),
+    });
   });
 
   test('successful request', async () => {
