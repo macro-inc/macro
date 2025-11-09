@@ -1,4 +1,4 @@
-name: 'Web App Pr Check on Main'
+name: 'Web App Pr Checks'
 on:
   pull_request:
     branches:
