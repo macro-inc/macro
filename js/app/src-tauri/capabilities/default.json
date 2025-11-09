@@ -1,0 +1,38 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "enables the default permissions",
+  "windows": [
+    "main"
+  ],
+  "permissions": [
+    "core:default",
+    {
+      "identifier": "http:default",
+      "allow": [
+        {
+          "url": "https://*.macro.com"
+        },
+        {
+          "url": "https://doc-storage-dev.s3.us-east-1.amazonaws.com"
+        },
+        {
+          "url": "https://doc-storage.s3.us-east-1.amazonaws.com"
+        },
+        {
+          "url": "https://*.macroverse.workers.dev"
+        },
+        {
+          "url": "http://localhost:*"
+        }
+      ]
+    },
+    "opener:default",
+    "deep-link:default",
+    "websocket:default",
+    "safe-area-insets:default",
+    "notification:default",
+    "notifications:default",
+    "os:default"
+  ]
+}

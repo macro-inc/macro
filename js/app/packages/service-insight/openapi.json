@@ -1,0 +1,309 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "insight_service",
+    "description": "",
+    "termsOfService": "https://macro.com/terms",
+    "license": { "name": "" },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/user_insight": {
+      "get": {
+        "tags": ["user_insight"],
+        "description": "get user insights",
+        "operationId": "handle_get_user_insights",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": ["integer", "null"],
+              "format": "int32",
+              "minimum": 0
+            }
+          },
+          {
+            "name": "generated",
+            "in": "query",
+            "required": false,
+            "schema": { "type": ["boolean", "null"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetUserInsightsResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/InsightProcessingResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "post": {
+        "tags": ["user_insight"],
+        "description": "update_user_insight",
+        "operationId": "handle_create_insights",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateInsightsRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/IdList" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["user_insight"],
+        "description": "update_user_insight",
+        "operationId": "handle_delete_user_insights",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/IdList" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/IdList" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["user_insight"],
+        "description": "update_user_insight",
+        "operationId": "handle_update_user_insight",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateInsightRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserInsightRecord" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "CreateInsightsRequest": {
+        "type": "object",
+        "required": ["insights"],
+        "properties": {
+          "insights": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "EmailSourceLocation": {
+        "type": "object",
+        "required": ["threadIds", "messageIds"],
+        "properties": {
+          "emailAddresses": {
+            "type": ["array", "null"],
+            "items": { "type": "string" }
+          },
+          "messageIds": { "type": "array", "items": { "type": "string" } },
+          "threadIds": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "GetUserInsightsParams": {
+        "type": "object",
+        "properties": {
+          "generated": { "type": ["boolean", "null"] },
+          "limit": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "minimum": 0
+          },
+          "offset": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "minimum": 0
+          }
+        }
+      },
+      "GetUserInsightsResponse": {
+        "type": "object",
+        "required": ["insights", "total"],
+        "properties": {
+          "insights": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/UserInsightRecord" }
+          },
+          "total": { "type": "integer", "format": "int64" }
+        }
+      },
+      "IdList": {
+        "type": "object",
+        "required": ["ids"],
+        "properties": {
+          "ids": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "InsightProcessingResponse": {
+        "type": "object",
+        "required": ["status", "message"],
+        "properties": {
+          "estimated_wait_minutes": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "minimum": 0
+          },
+          "message": { "type": "string" },
+          "status": { "type": "string" }
+        }
+      },
+      "InsightType": {
+        "type": "string",
+        "enum": ["actionable", "informational", "warning", "trend"]
+      },
+      "SourceLocation": {
+        "oneOf": [{ "$ref": "#/components/schemas/EmailSourceLocation" }]
+      },
+      "UpdateInsightRequest": {
+        "type": "object",
+        "required": ["insight_id", "content"],
+        "properties": {
+          "content": { "type": "string" },
+          "insight_id": { "type": "string" }
+        }
+      },
+      "UserInsightRecord": {
+        "type": "object",
+        "required": [
+          "userId",
+          "content",
+          "generated",
+          "createdAt",
+          "updatedAt",
+          "source"
+        ],
+        "properties": {
+          "confidence": { "type": ["integer", "null"], "format": "int32" },
+          "content": { "type": "string" },
+          "createdAt": { "type": "integer", "format": "int64" },
+          "generated": { "type": "boolean" },
+          "id": { "type": ["string", "null"] },
+          "insightType": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/InsightType" }
+            ]
+          },
+          "relevanceKeywords": {
+            "type": ["array", "null"],
+            "items": { "type": "string" }
+          },
+          "source": { "type": "string" },
+          "sourceLocation": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/SourceLocation" }
+            ]
+          },
+          "spanEnd": { "type": ["string", "null"], "format": "date-time" },
+          "spanStart": { "type": ["string", "null"], "format": "date-time" },
+          "updatedAt": { "type": "integer", "format": "int64" },
+          "userId": { "type": "string" }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "macro insight service", "description": "Insight Service" }
+  ]
+}

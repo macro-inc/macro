@@ -1,0 +1,1005 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "properties_service",
+    "description": "",
+    "termsOfService": "https://macro.com/terms",
+    "license": { "name": "" },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/properties/definitions": {
+      "get": {
+        "tags": ["Properties"],
+        "summary": "List property definitions with flexible filtering",
+        "operationId": "list_properties",
+        "parameters": [
+          {
+            "name": "scope",
+            "in": "query",
+            "description": "Filter by scope: 'user' for user-scoped only, 'org' for organization-scoped only, 'all' for both scopes",
+            "required": true,
+            "schema": { "$ref": "#/components/schemas/PropertyScope" }
+          },
+          {
+            "name": "include_options",
+            "in": "query",
+            "description": "Whether to include property options in the response",
+            "required": false,
+            "schema": { "type": "boolean" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Properties retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/PropertyDefinitionResponse"
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid request" },
+          "500": { "description": "Internal server error" }
+        }
+      },
+      "post": {
+        "tags": ["Properties"],
+        "summary": "Create a new property definition",
+        "operationId": "create_property_definition",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreatePropertyDefinitionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Property definition created successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PropertyDefinition" }
+              }
+            }
+          },
+          "400": { "description": "Invalid request" },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
+    "/properties/definitions/{definition_id}": {
+      "delete": {
+        "tags": ["Properties"],
+        "summary": "Delete a property definition",
+        "operationId": "delete_property_definition",
+        "parameters": [
+          {
+            "name": "definition_id",
+            "in": "path",
+            "description": "Property definition ID",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Property definition deleted successfully" },
+          "400": { "description": "Invalid property ID" },
+          "404": { "description": "Property definition not found" },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
+    "/properties/definitions/{definition_id}/options": {
+      "get": {
+        "tags": ["Properties"],
+        "summary": "Get all options for a property (for dropdowns)",
+        "operationId": "get_property_options",
+        "parameters": [
+          {
+            "name": "definition_id",
+            "in": "path",
+            "description": "Property definition ID",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Property options retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/PropertyOption" }
+                }
+              }
+            }
+          },
+          "404": { "description": "Property not found" },
+          "500": { "description": "Internal server error" }
+        }
+      },
+      "post": {
+        "tags": ["Properties"],
+        "summary": "Add a new option to a property dropdown",
+        "operationId": "add_property_option",
+        "parameters": [
+          {
+            "name": "definition_id",
+            "in": "path",
+            "description": "Property definition ID",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddPropertyOptionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Property option created successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PropertyOption" }
+              }
+            }
+          },
+          "400": { "description": "Invalid request" },
+          "404": { "description": "Property not found" },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
+    "/properties/definitions/{definition_id}/options/{option_id}": {
+      "delete": {
+        "tags": ["Properties"],
+        "summary": "Delete a property option",
+        "operationId": "delete_property_option",
+        "parameters": [
+          {
+            "name": "definition_id",
+            "in": "path",
+            "description": "Property definition ID",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "option_id",
+            "in": "path",
+            "description": "Property option ID",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Property option deleted successfully" },
+          "400": { "description": "Invalid option ID" },
+          "404": { "description": "Property option not found" },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
+    "/properties/entities/{entity_type}/{entity_id}": {
+      "get": {
+        "tags": ["Properties"],
+        "summary": "Get all properties for an entity",
+        "operationId": "get_entity_properties",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Entity type (user, document, channel, project, thread)",
+            "required": true,
+            "schema": { "$ref": "#/components/schemas/EntityType" }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "Entity ID",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "include_metadata",
+            "in": "query",
+            "description": "Whether to include property metadata (default: false)",
+            "required": false,
+            "schema": { "type": "boolean" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Entity properties retrieved successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EntityPropertiesResponse"
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid entity type" },
+          "403": {
+            "description": "Forbidden - User does not have permission to view this entity"
+          },
+          "404": { "description": "Entity not found" },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
+    "/properties/entities/{entity_type}/{entity_id}/{property_id}": {
+      "put": {
+        "tags": ["Properties"],
+        "summary": "Set or update a property value for an entity, or attach a property without a value",
+        "operationId": "set_entity_property",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "Entity type (user, document, channel, project, thread)",
+            "required": true,
+            "schema": { "$ref": "#/components/schemas/EntityType" }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "Entity ID",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "property_id",
+            "in": "path",
+            "description": "Property ID",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SetEntityPropertyRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Entity property set successfully (with or without value)"
+          },
+          "400": { "description": "Invalid request or entity type" },
+          "404": { "description": "Entity or property not found" },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
+    "/properties/entity_properties/{entity_property_id}": {
+      "delete": {
+        "tags": ["Properties"],
+        "summary": "Remove a specific entity property by its ID",
+        "operationId": "delete_entity_property",
+        "parameters": [
+          {
+            "name": "entity_property_id",
+            "in": "path",
+            "description": "Entity Property ID",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "204": { "description": "Entity property removed successfully" },
+          "404": { "description": "Entity property not found" },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AddNumberOptionRequest": {
+        "type": "object",
+        "description": "Type-safe request to add a number option to a SelectNumber property.",
+        "required": ["display_order", "value"],
+        "properties": {
+          "display_order": { "type": "integer", "format": "int32" },
+          "value": { "type": "number", "format": "double" }
+        }
+      },
+      "AddPropertyOptionRequest": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Add a string option to a SelectString property",
+            "required": ["option", "type"],
+            "properties": {
+              "option": {
+                "$ref": "#/components/schemas/AddStringOptionRequest"
+              },
+              "type": { "type": "string", "enum": ["select_string"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Add a number option to a SelectNumber property",
+            "required": ["option", "type"],
+            "properties": {
+              "option": {
+                "$ref": "#/components/schemas/AddNumberOptionRequest"
+              },
+              "type": { "type": "string", "enum": ["select_number"] }
+            }
+          }
+        ],
+        "description": "Enum for type-safe property option addition requests."
+      },
+      "AddStringOptionRequest": {
+        "type": "object",
+        "description": "Type-safe request to add a string option to a SelectString property.",
+        "required": ["display_order", "value"],
+        "properties": {
+          "display_order": { "type": "integer", "format": "int32" },
+          "value": { "type": "string" }
+        }
+      },
+      "BulkEntityPropertiesRequest": {
+        "type": "object",
+        "description": "Request for getting properties for multiple entities in bulk",
+        "required": ["entities"],
+        "properties": {
+          "entities": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/EntityReference" },
+            "description": "Array of entity references (entity_id and entity_type pairs)"
+          }
+        }
+      },
+      "CreatePropertyDefinitionRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/PropertyOwner" },
+          {
+            "type": "object",
+            "required": ["display_name", "data_type"],
+            "properties": {
+              "data_type": { "$ref": "#/components/schemas/PropertyDataType" },
+              "display_name": { "type": "string" }
+            }
+          }
+        ],
+        "description": "Request to create a new property definition."
+      },
+      "DataType": {
+        "type": "string",
+        "description": "Data type for property values, determining storage and validation.",
+        "enum": [
+          "BOOLEAN",
+          "DATE",
+          "NUMBER",
+          "STRING",
+          "SELECT_NUMBER",
+          "SELECT_STRING",
+          "ENTITY",
+          "LINK"
+        ]
+      },
+      "EntityPropertiesResponse": {
+        "type": "object",
+        "description": "Response for document/entity properties endpoint.",
+        "required": ["entity_id", "properties"],
+        "properties": {
+          "entity_id": { "type": "string" },
+          "properties": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/EntityPropertyWithDefinition"
+            }
+          }
+        }
+      },
+      "EntityProperty": {
+        "type": "object",
+        "description": "Assignment of a property definition to a specific entity (service representation).",
+        "required": [
+          "id",
+          "entity_id",
+          "entity_type",
+          "property_definition_id",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": { "type": "string", "format": "date-time" },
+          "entity_id": { "type": "string" },
+          "entity_type": { "$ref": "#/components/schemas/EntityType" },
+          "id": { "type": "string", "format": "uuid" },
+          "property_definition_id": { "type": "string", "format": "uuid" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "EntityPropertyResponse": {
+        "type": "object",
+        "description": "Entity property response (API representation).",
+        "required": ["id", "entityId", "entityType", "propertyDefinitionId"],
+        "properties": {
+          "createdAt": { "type": ["string", "null"], "format": "date-time" },
+          "entityId": { "type": "string" },
+          "entityType": { "$ref": "#/components/schemas/EntityType" },
+          "id": { "type": "string", "format": "uuid" },
+          "propertyDefinitionId": { "type": "string", "format": "uuid" },
+          "updatedAt": { "type": ["string", "null"], "format": "date-time" }
+        }
+      },
+      "EntityPropertyWithDefinition": {
+        "type": "object",
+        "description": "Entity property with its definition, value, and options (service representation).",
+        "required": ["property", "definition"],
+        "properties": {
+          "definition": { "$ref": "#/components/schemas/PropertyDefinition" },
+          "options": {
+            "type": ["array", "null"],
+            "items": { "$ref": "#/components/schemas/PropertyOption" }
+          },
+          "property": { "$ref": "#/components/schemas/EntityProperty" },
+          "value": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/PropertyValue" }
+            ]
+          }
+        }
+      },
+      "EntityPropertyWithDefinitionResponse": {
+        "type": "object",
+        "description": "Entity property with definition response (API representation).",
+        "required": ["property", "definition"],
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/PropertyDefinitionResponse"
+          },
+          "options": {
+            "type": ["array", "null"],
+            "items": { "$ref": "#/components/schemas/PropertyOptionResponse" }
+          },
+          "property": { "$ref": "#/components/schemas/EntityPropertyResponse" },
+          "value": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/PropertyValue" }
+            ]
+          }
+        }
+      },
+      "EntityQueryParams": {
+        "type": "object",
+        "description": "Query parameters for entity properties endpoint.",
+        "properties": {
+          "include_metadata": {
+            "type": "boolean",
+            "description": "Whether to include system metadata properties (default: false)"
+          }
+        }
+      },
+      "EntityReference": {
+        "type": "object",
+        "description": "Entity reference for entity-type property values.",
+        "required": ["entity_type", "entity_id"],
+        "properties": {
+          "entity_id": { "type": "string" },
+          "entity_type": { "$ref": "#/components/schemas/EntityType" }
+        }
+      },
+      "EntityType": {
+        "type": "string",
+        "description": "Type of entity that can be referenced by entity properties.",
+        "enum": ["CHANNEL", "CHAT", "DOCUMENT", "PROJECT", "THREAD", "USER"]
+      },
+      "ListPropertiesQuery": {
+        "type": "object",
+        "description": "Query parameters for listing properties",
+        "required": ["scope"],
+        "properties": {
+          "include_options": {
+            "type": "boolean",
+            "description": "Whether to include property options in the response"
+          },
+          "scope": {
+            "$ref": "#/components/schemas/PropertyScope",
+            "description": "Scope filter for properties"
+          }
+        }
+      },
+      "PropertyDataType": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Boolean true/false values.",
+            "required": ["type"],
+            "properties": { "type": { "type": "string", "enum": ["boolean"] } }
+          },
+          {
+            "type": "object",
+            "description": "Date and time values.",
+            "required": ["type"],
+            "properties": { "type": { "type": "string", "enum": ["date"] } }
+          },
+          {
+            "type": "object",
+            "description": "Numeric values.",
+            "required": ["type"],
+            "properties": { "type": { "type": "string", "enum": ["number"] } }
+          },
+          {
+            "type": "object",
+            "description": "String/text values.",
+            "required": ["type"],
+            "properties": { "type": { "type": "string", "enum": ["string"] } }
+          },
+          {
+            "type": "object",
+            "description": "Select property with numeric options.",
+            "required": ["options", "multi", "type"],
+            "properties": {
+              "multi": { "type": "boolean" },
+              "options": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/SelectNumberOption" }
+              },
+              "type": { "type": "string", "enum": ["select_number"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Select property with string options.",
+            "required": ["options", "multi", "type"],
+            "properties": {
+              "multi": { "type": "boolean" },
+              "options": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/SelectStringOption" }
+              },
+              "type": { "type": "string", "enum": ["select_string"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Entity reference property.",
+            "required": ["multi", "type"],
+            "properties": {
+              "multi": { "type": "boolean" },
+              "specific_type": {
+                "oneOf": [
+                  { "type": "null" },
+                  { "$ref": "#/components/schemas/EntityType" }
+                ]
+              },
+              "type": { "type": "string", "enum": ["entity"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Link property.",
+            "required": ["multi", "type"],
+            "properties": {
+              "multi": { "type": "boolean" },
+              "type": { "type": "string", "enum": ["link"] }
+            }
+          }
+        ],
+        "description": "Data type with embedded options for requests - provides compile-time validation."
+      },
+      "PropertyDefinition": {
+        "type": "object",
+        "description": "Property definition model (service representation).",
+        "required": [
+          "id",
+          "owner",
+          "display_name",
+          "data_type",
+          "is_multi_select",
+          "created_at",
+          "updated_at",
+          "is_metadata"
+        ],
+        "properties": {
+          "created_at": { "type": "string", "format": "date-time" },
+          "data_type": { "$ref": "#/components/schemas/DataType" },
+          "display_name": { "type": "string" },
+          "id": { "type": "string", "format": "uuid" },
+          "is_metadata": {
+            "type": "boolean",
+            "description": "Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer."
+          },
+          "is_multi_select": { "type": "boolean" },
+          "owner": { "$ref": "#/components/schemas/PropertyOwner" },
+          "specific_entity_type": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/EntityType" }
+            ]
+          },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "PropertyDefinitionResponse": {
+        "oneOf": [
+          { "$ref": "#/components/schemas/PropertyDefinition" },
+          { "$ref": "#/components/schemas/PropertyDefinitionWithOptions" }
+        ],
+        "description": "Response for property definition with optional property options"
+      },
+      "PropertyDefinitionWithOptions": {
+        "type": "object",
+        "description": "Property definition with its associated options (service representation).",
+        "required": ["definition", "property_options"],
+        "properties": {
+          "definition": { "$ref": "#/components/schemas/PropertyDefinition" },
+          "property_options": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/PropertyOption" }
+          }
+        }
+      },
+      "PropertyDefinitionWithOptionsResponse": {
+        "type": "object",
+        "description": "Property definition with options response.",
+        "required": ["definition", "propertyOptions"],
+        "properties": {
+          "definition": {
+            "$ref": "#/components/schemas/PropertyDefinitionResponse"
+          },
+          "propertyOptions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/PropertyOptionResponse" }
+          }
+        }
+      },
+      "PropertyOption": {
+        "type": "object",
+        "description": "A selectable option for select-type properties (service representation).",
+        "required": [
+          "id",
+          "property_definition_id",
+          "display_order",
+          "value",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": { "type": "string", "format": "date-time" },
+          "display_order": { "type": "integer", "format": "int32" },
+          "id": { "type": "string", "format": "uuid" },
+          "property_definition_id": { "type": "string", "format": "uuid" },
+          "updated_at": { "type": "string", "format": "date-time" },
+          "value": { "$ref": "#/components/schemas/PropertyOptionValue" }
+        }
+      },
+      "PropertyOptionResponse": {
+        "type": "object",
+        "description": "Property option response (API representation).",
+        "required": ["id", "propertyDefinitionId", "displayOrder", "value"],
+        "properties": {
+          "displayOrder": { "type": "integer", "format": "int32" },
+          "id": { "type": "string", "format": "uuid" },
+          "propertyDefinitionId": { "type": "string", "format": "uuid" },
+          "value": { "$ref": "#/components/schemas/PropertyOptionValue" }
+        }
+      },
+      "PropertyOptionValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "String value for SelectString properties",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["string"] },
+              "value": {
+                "type": "string",
+                "description": "String value for SelectString properties"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Number value for SelectNumber properties",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["number"] },
+              "value": {
+                "type": "number",
+                "format": "double",
+                "description": "Number value for SelectNumber properties"
+              }
+            }
+          }
+        ],
+        "description": "The value of a property option - either a string or a number."
+      },
+      "PropertyOwner": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "User-scoped property only",
+            "required": ["user_id", "scope"],
+            "properties": {
+              "scope": { "type": "string", "enum": ["user"] },
+              "user_id": { "type": "string" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Organization-scoped property only",
+            "required": ["organization_id", "scope"],
+            "properties": {
+              "organization_id": { "type": "integer", "format": "int32" },
+              "scope": { "type": "string", "enum": ["organization"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Both user and organization-scoped",
+            "required": ["user_id", "organization_id", "scope"],
+            "properties": {
+              "organization_id": { "type": "integer", "format": "int32" },
+              "scope": { "type": "string", "enum": ["user_and_organization"] },
+              "user_id": { "type": "string" }
+            }
+          }
+        ],
+        "description": "Defines who owns a property - user-scoped, org-scoped, or both."
+      },
+      "PropertyScope": {
+        "type": "string",
+        "description": "Scope filter for property queries",
+        "enum": ["user", "org", "all"]
+      },
+      "PropertyValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["Boolean"] },
+              "value": {
+                "type": "boolean",
+                "description": "Boolean value\nSerializes as: {\"type\": \"Boolean\", \"value\": true}"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["Number"] },
+              "value": {
+                "type": "number",
+                "format": "double",
+                "description": "Numeric value\nSerializes as: {\"type\": \"Number\", \"value\": 42.5}"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["String"] },
+              "value": {
+                "type": "string",
+                "description": "String value\nSerializes as: {\"type\": \"String\", \"value\": \"text\"}"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["Date"] },
+              "value": {
+                "type": "string",
+                "format": "date-time",
+                "description": "Date/timestamp value\nSerializes as: {\"type\": \"Date\", \"value\": \"2025-01-01T00:00:00Z\"}"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["SelectOption"] },
+              "value": {
+                "type": "array",
+                "items": { "type": "string", "format": "uuid" },
+                "description": "Select option(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"SelectOption\", \"value\": [\"uuid\"]} (length 0 or 1)\nMulti-select: {\"type\": \"SelectOption\", \"value\": [\"uuid1\", \"uuid2\", ...]} (length 0+)"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["EntityReference"] },
+              "value": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/EntityReference" },
+                "description": "Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)"
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["Link"] },
+              "value": {
+                "type": "array",
+                "items": { "type": "string" },
+                "description": "Link value(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"Link\", \"value\": [\"https://example.com\"]} (length 0 or 1)\nMulti-select: {\"type\": \"Link\", \"value\": [\"https://example.com\", \"https://other.com\"]} (length 0+)"
+              }
+            }
+          }
+        ],
+        "description": "Property value (service representation).\n\nRepresents the actual value stored for an entity property.\nThis is serialized to/from JSONB in the database."
+      },
+      "SelectNumberOption": {
+        "type": "object",
+        "description": "Option for select number properties in requests.",
+        "required": ["display_order", "value"],
+        "properties": {
+          "display_order": { "type": "integer", "format": "int32" },
+          "value": { "type": "number", "format": "double" }
+        }
+      },
+      "SelectStringOption": {
+        "type": "object",
+        "description": "Option for select-type properties in requests.",
+        "required": ["display_order", "value"],
+        "properties": {
+          "display_order": { "type": "integer", "format": "int32" },
+          "value": { "type": "string" }
+        }
+      },
+      "SetEntityPropertyRequest": {
+        "type": "object",
+        "description": "Type-safe request for setting entity property values.",
+        "properties": {
+          "value": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/SetPropertyValue",
+                "description": "The value to set for the property. If None, the property is attached to the entity without a value."
+              }
+            ]
+          }
+        }
+      },
+      "SetPropertyValue": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Boolean true/false value",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["boolean"] },
+              "value": { "type": "boolean" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Date and time value",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["date"] },
+              "value": { "type": "string", "format": "date-time" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Numeric value",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["number"] },
+              "value": { "type": "number", "format": "double" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "String/text value",
+            "required": ["value", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["string"] },
+              "value": { "type": "string" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Select option by ID (for select-type properties)",
+            "required": ["option_id", "type"],
+            "properties": {
+              "option_id": { "type": "string", "format": "uuid" },
+              "type": { "type": "string", "enum": ["select_option"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Multiple select options by ID (for multi-select properties)",
+            "required": ["option_ids", "type"],
+            "properties": {
+              "option_ids": {
+                "type": "array",
+                "items": { "type": "string", "format": "uuid" }
+              },
+              "type": { "type": "string", "enum": ["multi_select_option"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Entity reference",
+            "required": ["reference", "type"],
+            "properties": {
+              "reference": { "$ref": "#/components/schemas/EntityReference" },
+              "type": { "type": "string", "enum": ["entity_reference"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Multiple entity references (for multi-select entity properties)",
+            "required": ["references", "type"],
+            "properties": {
+              "references": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/EntityReference" }
+              },
+              "type": { "type": "string", "enum": ["multi_entity_reference"] }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Link value",
+            "required": ["url", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["link"] },
+              "url": { "type": "string" }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Multiple link values (for multi-select link properties)",
+            "required": ["urls", "type"],
+            "properties": {
+              "type": { "type": "string", "enum": ["multi_link"] },
+              "urls": { "type": "array", "items": { "type": "string" } }
+            }
+          }
+        ],
+        "description": "Type-safe enum for setting entity property values - provides compile-time validation."
+      }
+    }
+  },
+  "tags": [
+    { "name": "properties service", "description": "Macro Properties Service" }
+  ]
+}

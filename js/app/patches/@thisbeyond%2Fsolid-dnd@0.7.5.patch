@@ -1,0 +1,140 @@
+diff --git a/dist/dev.js b/dist/dev.js
+index c4cce694adbb42342851cf4859ef7592f38ffa52..2f75d72cf8bfb1239fb94528a2e328b81ac4c793 100644
+--- a/dist/dev.js
++++ b/dist/dev.js
+@@ -724,7 +724,7 @@ var createPointerSensor = (id = "pointer-sensor") => {
+   const activationDelay = 250;
+   const activationDistance = 10;
+   onMount(() => {
+-    addSensor({ id, activators: { pointerdown: attach } });
++    addSensor({ id, activators: { mousedown: attach } });
+   });
+   onCleanup(() => {
+     removeSensor(id);
+@@ -736,8 +736,8 @@ var createPointerSensor = (id = "pointer-sensor") => {
+   const attach = (event, draggableId) => {
+     if (event.button !== 0)
+       return;
+-    document.addEventListener("pointermove", onPointerMove);
+-    document.addEventListener("pointerup", onPointerUp);
++    document.addEventListener("mousemove", onPointerMove);
++    document.addEventListener("mouseup", onPointerUp);
+     activationDraggableId = draggableId;
+     initialCoordinates.x = event.clientX;
+     initialCoordinates.y = event.clientY;
+@@ -748,8 +748,8 @@ var createPointerSensor = (id = "pointer-sensor") => {
+       clearTimeout(activationDelayTimeoutId);
+       activationDelayTimeoutId = null;
+     }
+-    document.removeEventListener("pointermove", onPointerMove);
+-    document.removeEventListener("pointerup", onPointerUp);
++    document.removeEventListener("mousemove", onPointerMove);
++    document.removeEventListener("mouseup", onPointerUp);
+     document.removeEventListener("selectionchange", clearSelection);
+   };
+   const onActivate = () => {
+diff --git a/dist/dev.jsx b/dist/dev.jsx
+index b06d7fcea2c4a96a4d3b21c33b2c029b3e80fddf..1c3f5f2461a43ebb558e5ad3f648b6b05195070b 100644
+--- a/dist/dev.jsx
++++ b/dist/dev.jsx
+@@ -737,7 +737,7 @@ var createPointerSensor = (id = "pointer-sensor") => {
+   const activationDelay = 250;
+   const activationDistance = 10;
+   onMount(() => {
+-    addSensor({ id, activators: { pointerdown: attach } });
++    addSensor({ id, activators: { mousedown: attach } });
+   });
+   onCleanup(() => {
+     removeSensor(id);
+@@ -749,8 +749,8 @@ var createPointerSensor = (id = "pointer-sensor") => {
+   const attach = (event, draggableId) => {
+     if (event.button !== 0)
+       return;
+-    document.addEventListener("pointermove", onPointerMove);
+-    document.addEventListener("pointerup", onPointerUp);
++    document.addEventListener("mousemove", onPointerMove);
++    document.addEventListener("mouseup", onPointerUp);
+     activationDraggableId = draggableId;
+     initialCoordinates.x = event.clientX;
+     initialCoordinates.y = event.clientY;
+@@ -761,8 +761,8 @@ var createPointerSensor = (id = "pointer-sensor") => {
+       clearTimeout(activationDelayTimeoutId);
+       activationDelayTimeoutId = null;
+     }
+-    document.removeEventListener("pointermove", onPointerMove);
+-    document.removeEventListener("pointerup", onPointerUp);
++    document.removeEventListener("mousemove", onPointerMove);
++    document.removeEventListener("mouseup", onPointerUp);
+     document.removeEventListener("selectionchange", clearSelection);
+   };
+   const onActivate = () => {
+diff --git a/dist/index.js b/dist/index.js
+index ccc5acb7e88cf7e3fb0717d5fc64c93ad8cfe712..a8d368b17a9c3b918f63f45943b0c62a84d48df6 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -717,7 +717,7 @@ var createPointerSensor = (id = "pointer-sensor") => {
+   const activationDelay = 250;
+   const activationDistance = 10;
+   onMount(() => {
+-    addSensor({ id, activators: { pointerdown: attach } });
++    addSensor({ id, activators: { mousedown: attach } });
+   });
+   onCleanup(() => {
+     removeSensor(id);
+@@ -729,8 +729,8 @@ var createPointerSensor = (id = "pointer-sensor") => {
+   const attach = (event, draggableId) => {
+     if (event.button !== 0)
+       return;
+-    document.addEventListener("pointermove", onPointerMove);
+-    document.addEventListener("pointerup", onPointerUp);
++    document.addEventListener("mousemove", onPointerMove);
++    document.addEventListener("mouseup", onPointerUp);
+     activationDraggableId = draggableId;
+     initialCoordinates.x = event.clientX;
+     initialCoordinates.y = event.clientY;
+@@ -741,8 +741,8 @@ var createPointerSensor = (id = "pointer-sensor") => {
+       clearTimeout(activationDelayTimeoutId);
+       activationDelayTimeoutId = null;
+     }
+-    document.removeEventListener("pointermove", onPointerMove);
+-    document.removeEventListener("pointerup", onPointerUp);
++    document.removeEventListener("mousemove", onPointerMove);
++    document.removeEventListener("mouseup", onPointerUp);
+     document.removeEventListener("selectionchange", clearSelection);
+   };
+   const onActivate = () => {
+diff --git a/dist/index.jsx b/dist/index.jsx
+index 54348fe4ef6c6034742280283212a6b0e917a1e5..eb05a9e9f721f98cc39ac112008cf8486ec7fb11 100644
+--- a/dist/index.jsx
++++ b/dist/index.jsx
+@@ -724,7 +724,7 @@ var createPointerSensor = (id = "pointer-sensor") => {
+   const activationDelay = 250;
+   const activationDistance = 10;
+   onMount(() => {
+-    addSensor({ id, activators: { pointerdown: attach } });
++    addSensor({ id, activators: { mousedown: attach } });
+   });
+   onCleanup(() => {
+     removeSensor(id);
+@@ -736,8 +736,8 @@ var createPointerSensor = (id = "pointer-sensor") => {
+   const attach = (event, draggableId) => {
+     if (event.button !== 0)
+       return;
+-    document.addEventListener("pointermove", onPointerMove);
+-    document.addEventListener("pointerup", onPointerUp);
++    document.addEventListener("mousemove", onPointerMove);
++    document.addEventListener("mouseup", onPointerUp);
+     activationDraggableId = draggableId;
+     initialCoordinates.x = event.clientX;
+     initialCoordinates.y = event.clientY;
+@@ -748,8 +748,8 @@ var createPointerSensor = (id = "pointer-sensor") => {
+       clearTimeout(activationDelayTimeoutId);
+       activationDelayTimeoutId = null;
+     }
+-    document.removeEventListener("pointermove", onPointerMove);
+-    document.removeEventListener("pointerup", onPointerUp);
++    document.removeEventListener("mousemove", onPointerMove);
++    document.removeEventListener("mouseup", onPointerUp);
+     document.removeEventListener("selectionchange", clearSelection);
+   };
+   const onActivate = () => {

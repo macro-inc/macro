@@ -1,0 +1,9 @@
+{
+  "name": "@coparse/types",
+  "private": true,
+  "main": "src/index.ts",
+  "type": "module",
+  "devDependencies": {
+    "typescript": "^4.9.5"
+  }
+}

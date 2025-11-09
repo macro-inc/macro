@@ -1,0 +1,128 @@
+{
+  "$schema": "https://biomejs.dev/schemas/2.2.6/schema.json",
+  "vcs": {
+    "clientKind": "git",
+    "enabled": true,
+    "useIgnoreFile": true,
+    "defaultBranch": "dev"
+  },
+  "files": {
+    "includes": [
+      "**/*.{ts,tsx,js,jsx}",
+      "**/openapi.json",
+      "!**/*.d.ts",
+      "!**/generated",
+      "!chrome-extension-vite",
+      "!infra/web-app/output",
+      "!scripts",
+      "!packages/filesystem",
+      "!packages/_app-mobile",
+      "!packages/loro-mirror/packages",
+      "**/generated/tools",
+      "!wireframe",
+      "!packages/app/dist",
+      "!packages/app/build",
+      "!**/node_modules"
+    ]
+  },
+  "formatter": {
+    "enabled": true,
+    "formatWithErrors": false,
+    "indentStyle": "space",
+    "indentWidth": 2,
+    "lineEnding": "lf",
+    "lineWidth": 80,
+    "attributePosition": "auto"
+  },
+  "assist": {
+    "enabled": true,
+    "actions": {
+      "source": {
+        "organizeImports": "on"
+      }
+    }
+  },
+  "linter": {
+    "enabled": true,
+    "domains": {
+      "solid": "all",
+      "react": "none"
+    },
+    "rules": {
+      "a11y": "off",
+      "complexity": {
+        "useArrowFunction": "off",
+        "noBannedTypes": "off",
+        "useOptionalChain": "off",
+        "useLiteralKeys": "off",
+        "noStaticOnlyClass": "off",
+        "noThisInStatic": "off",
+        "noUselessEscapeInRegex": "off",
+        "noUselessEmptyExport": "off"
+      },
+      "correctness": {
+        "noUnusedImports": "error",
+        "noSwitchDeclarations": "off",
+        "useParseIntRadix": "off",
+        "noChildrenProp": "off",
+        "noPrivateImports": "error"
+      },
+      "style": {
+        "useBlockStatements": "off",
+        "useConst": "off",
+        "noNonNullAssertion": "off",
+        "useTemplate": "off",
+        "useLiteralEnumMembers": "off",
+        "useExponentiationOperator": "off"
+        // "noParameterAssign": "error",
+        // "useAsConstAssertion": "error",
+        // "useDefaultParameterLast": "error",
+        // "useEnumInitializers": "error",
+        // "useSelfClosingElements": "error",
+        // "useSingleVarDeclarator": "error",
+        // "noUnusedTemplateLiteral": "error",
+        // "useNumberNamespace": "error",
+        // "noInferrableTypes": "error",
+        // "noUselessElse": "error"
+      },
+      "suspicious": {
+        "noExplicitAny": "off",
+        "noDocumentCookie": "off",
+        "noImplicitAnyLet": "off",
+        "noGlobalIsNan": "off",
+        "noConfusingVoidType": "off",
+        "useIterableCallbackReturn": "off",
+        "noTsIgnore": "off",
+        "noUselessEscapeInString": "off",
+        "noPrototypeBuiltins": "off"
+      },
+      "performance": {
+        "noAccumulatingSpread": "off"
+      },
+      "nursery": {
+        // "noImportCycles": "warn"
+      }
+    }
+  },
+  "javascript": {
+    "formatter": {
+      "jsxQuoteStyle": "double",
+      "quoteProperties": "asNeeded",
+      "trailingCommas": "es5",
+      "semicolons": "always",
+      "arrowParentheses": "always",
+      "bracketSpacing": true,
+      "bracketSameLine": false,
+      "quoteStyle": "single",
+      "attributePosition": "auto"
+    }
+  },
+  "overrides": [
+    {
+      "includes": ["scripts/**", "packages/block-code/scripts/**"],
+      "javascript": {
+        "globals": ["Bun"]
+      }
+    }
+  ]
+}

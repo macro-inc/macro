@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" version="1.1" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+ <rect x="2" y="2" width="20" height="20" ry="0" stroke-linejoin="miter"/>
+ <path d="m2.0346 17.723 7.5838-7.619 6.3815-2.1038-2.1213 6.364-7.6014 7.6014" stroke-linecap="butt" stroke-linejoin="miter"/>
+ <path d="m13.292 14.244c-1.7255-0.4623-3.0732-1.81-3.5355-3.5355"/>
+</svg>

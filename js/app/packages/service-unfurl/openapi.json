@@ -1,0 +1,161 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "unfurl_service",
+    "description": "",
+    "termsOfService": "https://macro.com/terms",
+    "license": { "name": "" },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/proxy": {
+      "get": {
+        "tags": ["proxy"],
+        "operationId": "proxy_request_handler",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "description": "The url to proxy from",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {}
+      }
+    },
+    "/unfurl": {
+      "get": {
+        "tags": ["unfurl"],
+        "operationId": "get_unfurl",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "description": "URL to unfold",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GetUnfurlResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/unfurl/bulk": {
+      "post": {
+        "tags": ["unfurl"],
+        "operationId": "get_unfurl_bulk",
+        "requestBody": {
+          "description": "JSON list of URLs",
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/GetUnfurlBulkBody" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetUnfurlBulkResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "GetUnfurlBulkBody": {
+        "type": "object",
+        "required": ["url_list"],
+        "properties": {
+          "url_list": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "GetUnfurlBulkResponse": {
+        "type": "object",
+        "required": ["responses"],
+        "properties": { "responses": { "$ref": "#/components/schemas/Vec" } }
+      },
+      "GetUnfurlQueryParams": {
+        "type": "object",
+        "required": ["url"],
+        "properties": { "url": { "type": "string" } }
+      },
+      "GetUnfurlResponse": {
+        "type": "object",
+        "required": ["url", "title"],
+        "properties": {
+          "description": { "type": ["string", "null"] },
+          "favicon_url": { "type": ["string", "null"] },
+          "image_url": { "type": ["string", "null"] },
+          "title": { "type": "string" },
+          "url": { "type": "string" }
+        }
+      },
+      "ProxyParams": {
+        "type": "object",
+        "required": ["url"],
+        "properties": { "url": { "type": "string" } }
+      },
+      "Vec": {
+        "type": "array",
+        "items": {
+          "oneOf": [
+            { "type": "null" },
+            {
+              "type": "object",
+              "required": ["url", "title"],
+              "properties": {
+                "description": { "type": ["string", "null"] },
+                "favicon_url": { "type": ["string", "null"] },
+                "image_url": { "type": ["string", "null"] },
+                "title": { "type": "string" },
+                "url": { "type": "string" }
+              }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "tags": [{ "name": "macro unfurl service", "description": "Unfurl Service" }]
+}

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" version="1.1" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+ <rect x="2" y="2" width="20" height="20" ry="0" stroke-linejoin="miter"/>
+ <path d="m5 22 12-12 5 5" stroke-linejoin="miter"/>
+ <path d="m11 16-4-4-5 5" stroke-linejoin="miter"/>
+ <circle cx="11" cy="8.5" r="1.5"/>
+</svg>

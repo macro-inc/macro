@@ -1,0 +1,32 @@
+{
+    "name": "loro-mirror-monorepo",
+    "version": "0.1.0",
+    "private": true,
+    "description": "A state management library for Loro CRDT with immutable data pattern support",
+    "scripts": {
+        "build": "pnpm -r build",
+        "test": "pnpm -r test",
+        "lint": "pnpm -r lint",
+        "typecheck": "pnpm -r typecheck"
+    },
+    "keywords": [
+        "loro",
+        "crdt",
+        "state-management",
+        "immutable"
+    ],
+    "author": "",
+    "license": "MIT",
+    "devDependencies": {
+        "@rollup/plugin-commonjs": "^28.0.2",
+        "@rollup/plugin-node-resolve": "^16.0.0",
+        "@types/node": "^18.0.0",
+        "@typescript-eslint/eslint-plugin": "^5.0.0",
+        "@typescript-eslint/parser": "^5.0.0",
+        "eslint": "^8.0.0",
+        "rollup": "^4.34.8",
+        "rollup-plugin-typescript2": "^0.36.0",
+        "typescript": "^4.7.0",
+        "vitest": "^3.0.7"
+    }
+}

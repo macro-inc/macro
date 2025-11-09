@@ -1,0 +1,142 @@
+import { useEmailAuthStatus } from '@app/signal/emailAuth';
+import { useHandleFileUpload } from '@app/util/handleFileUpload';
+
+import { fileSelector } from '@core/directive/fileSelector';
+import { folderSelector } from '@core/directive/folderSelector';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
+import type { View } from '@core/types/view';
+import { handleFolderSelect } from '@core/util/upload';
+import { Match, Show, Switch } from 'solid-js';
+import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
+
+false && fileSelector;
+false && folderSelector;
+
+export function EmptyState(props: { view?: View }) {
+  const emailActive = useEmailAuthStatus();
+  const splitPanelContext = useSplitPanelOrThrow();
+  const {
+    unifiedListContext: { setShowHelpDrawer },
+  } = splitPanelContext;
+  return (
+    <Switch>
+      <Match when={props.view === 'emails' && !emailActive()}>
+        {(_) => {
+          setShowHelpDrawer((prev) => new Set([...prev, 'emails']));
+          return <EmptyStateInner emptyMessage={'Email not connected.'} />;
+        }}
+      </Match>
+      <Match
+        when={
+          (props.view === 'emails' || props.view === 'inbox') && emailActive()
+        }
+      >
+        <EmptyStateInner emptyMessage={'Inbox zero.'} />
+      </Match>
+      <Match when={props.view === 'inbox' && !emailActive()}>
+        {(_) => {
+          setShowHelpDrawer((prev) => new Set([...prev, 'inbox']));
+          return (
+            <EmptyStateInner
+              emptyMessage={'Nothing to show. Email not connected.'}
+            />
+          );
+        }}
+      </Match>
+      <Match when={props.view === 'comms'}>
+        {(_) => {
+          setShowHelpDrawer((prev) => new Set([...prev, 'comms']));
+          return <EmptyStateInner emptyMessage={'No messages to show.'} />;
+        }}
+      </Match>
+      <Match when={props.view === 'docs'}>
+        {(_) => {
+          setShowHelpDrawer((prev) => new Set([...prev, 'docs']));
+          return <EmptyStateInner showDropZone />;
+        }}
+      </Match>
+      <Match when={props.view === 'ai'}>
+        {(_) => {
+          setShowHelpDrawer((prev) => new Set([...prev, 'ai']));
+          return <EmptyStateInner emptyMessage={'No AI chats to show.'} />;
+        }}
+      </Match>
+      <Match when={props.view === 'folders'}>
+        {(_) => {
+          setShowHelpDrawer((prev) => new Set([...prev, 'folders']));
+          return <EmptyStateInner showDropZone />;
+        }}
+      </Match>
+      <Match when={true}>
+        <EmptyStateInner showDropZone />
+      </Match>
+    </Switch>
+  );
+}
+
+export interface EmptyStateInnerProps {
+  emptyMessage?: string;
+  showDropZone?: boolean;
+  cta?: {
+    label: string;
+    onClick: () => void;
+  };
+}
+
+export function EmptyStateInner(props: EmptyStateInnerProps) {
+  const handleFileUpload = useHandleFileUpload();
+
+  return (
+    <div class="size-full flex items-center justify-center p-4 text-ink-muted">
+      <div class="panel w-full flex flex-col size-full">
+        <Show when={props.emptyMessage}>
+          <p class="text-ink-muted font-mono">{props.emptyMessage}</p>
+        </Show>
+        <Show when={props.cta}>
+          {(cta) => (
+            <div class="w-full flex justify-start pt-4">
+              <button
+                onMouseDown={cta().onClick}
+                class="cta py-2 px-2 bg-accent/75 text-panel"
+              >
+                <span class="font-medium">{cta().label.toUpperCase()}</span>
+              </button>
+            </div>
+          )}
+        </Show>
+        <Show when={props.showDropZone && !(isTouchDevice && isMobileWidth())}>
+          <div class="drop-zone flex flex-col items-center justify-center w-full py-8 border border-dashed border-edge-muted bg-hover">
+            <p class="text-ink-muted">Drag & drop files and folders here</p>
+            <p class="text-ink-muted">
+              or{' '}
+              <span
+                use:fileSelector={{
+                  multiple: true,
+                  onSelect: (files) => {
+                    handleFileUpload(files);
+                  },
+                }}
+                class="underline cursor-pointer"
+              >
+                Upload files
+              </span>{' '}
+              /{' '}
+              <span
+                use:folderSelector={{
+                  onSelect: async (files) => {
+                    await handleFolderSelect(files, handleFileUpload);
+                  },
+                }}
+                class="underline cursor-pointer"
+              >
+                Upload folders
+              </span>
+            </p>
+            <p class="text-ink-muted"></p>
+          </div>
+        </Show>
+      </div>
+    </div>
+  );
+}

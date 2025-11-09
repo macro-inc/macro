@@ -1,0 +1,466 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "organization_service",
+    "description": "",
+    "termsOfService": "https://macro.com/terms",
+    "license": { "name": "" },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/health": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Health check",
+        "operationId": "health_handler",
+        "responses": {
+          "200": {
+            "description": "health",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/organization/settings": {
+      "get": {
+        "tags": ["organization::get_settings"],
+        "summary": "Gets the organizations settings",
+        "operationId": "get_settings_handler",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OrganizationSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["organization::patch_organization_settings"],
+        "summary": "Patches the organization settings",
+        "operationId": "patch_organization_settings_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchOrganizationSettingsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": { "description": "" },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/users": {
+      "get": {
+        "tags": ["users::get_users"],
+        "summary": "Gets all users currently in your organization",
+        "operationId": "get_users_handler",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "The maximum number of users to retreive. Default 10, max 100.",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64" }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "The offset to start from. Default 0.",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GetUsersResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["users::delete_user"],
+        "summary": "Deletes the user. This action cannot be undone as it queues the user for deletion.",
+        "operationId": "delete_user_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/DeleteUserRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": { "description": "" },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/users/invite": {
+      "post": {
+        "tags": ["users::invite_user"],
+        "summary": "Invites a user to an organization",
+        "operationId": "invite_user_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/InviteUserRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": { "description": "" },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["users::revoke_user_invite"],
+        "summary": "Removes the users invitation from OrganizationInvitation",
+        "description": "If the user is `allow_list_only` we will also remove the `OrganizationEmailMatch`",
+        "operationId": "revoke_user_invite_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/InviteUserRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": { "description": "" },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/users/invited": {
+      "get": {
+        "tags": ["users::get_invited_users"],
+        "summary": "Gets all invited users for your organization",
+        "operationId": "get_invited_users_handler",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetInvitedUsersResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/users/role": {
+      "patch": {
+        "tags": ["users::patch_user_role"],
+        "summary": "Patches the requested users role. Updating whether they have organization_it role or\nnot.",
+        "operationId": "patch_user_role_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PatchUserRoleRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": { "description": "" },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AccessLevel": {
+        "type": "string",
+        "description": "Ordered from least to most access top -> bottom",
+        "enum": ["view", "comment", "edit", "owner"]
+      },
+      "DeleteUserRequest": {
+        "type": "object",
+        "required": ["user_id"],
+        "properties": {
+          "user_id": {
+            "type": "string",
+            "description": "The user id who we are deleting"
+          }
+        }
+      },
+      "EmptyResponse": {
+        "type": "object",
+        "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "GetInvitedUsersResponse": {
+        "type": "object",
+        "required": ["invited_users"],
+        "properties": {
+          "invited_users": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "The invited users in your organization"
+          }
+        }
+      },
+      "GetUsersResponse": {
+        "type": "object",
+        "required": ["users", "total"],
+        "properties": {
+          "next_offset": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "The next offset to be used if there is one"
+          },
+          "total": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The total number of documents the user has"
+          },
+          "users": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/User" },
+            "description": "The users in your organization returned from the query"
+          }
+        }
+      },
+      "InviteUserRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The email of the user to invite"
+          }
+        }
+      },
+      "OrganizationDefaultSharePermission": {
+        "type": "object",
+        "required": ["is_public", "organization_access_enabled"],
+        "properties": {
+          "is_public": {
+            "type": "boolean",
+            "description": "If the item is publicly accessible by default"
+          },
+          "organization_access_enabled": {
+            "type": "boolean",
+            "description": "If the item is accessible by organization by default"
+          },
+          "organization_access_level": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The access level for users if the item is accessible by organization"
+              }
+            ]
+          },
+          "public_access_level": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/AccessLevel",
+                "description": "The access level for users if the item is publicly accessible"
+              }
+            ]
+          }
+        }
+      },
+      "OrganizationSettingsResponse": {
+        "type": "object",
+        "required": ["name", "default_share_permission"],
+        "properties": {
+          "default_share_permission": {
+            "$ref": "#/components/schemas/OrganizationShareType",
+            "description": "The default share permission for the organization"
+          },
+          "name": {
+            "type": "string",
+            "description": "The name of the organization"
+          },
+          "retention_days": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "The number of days an item can go unopened for before it is automatically deleted"
+          }
+        }
+      },
+      "OrganizationShareType": {
+        "type": "string",
+        "enum": ["public", "organization", "private"]
+      },
+      "OrganizationUserRole": { "type": "string", "enum": ["owner", "member"] },
+      "PatchOrganizationSettingsRequest": {
+        "type": "object",
+        "properties": {
+          "remove_default_share_permission": {
+            "type": ["boolean", "null"],
+            "description": "Removes the default share permission you currently have set"
+          },
+          "remove_retention_days": {
+            "type": ["boolean", "null"],
+            "description": "Removes the retention policy you currently have set"
+          },
+          "retention_days": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "The new retention policy you want to set\n\n Note: This will get ignored if you have pass in **any value** for remove_retention_days"
+          }
+        }
+      },
+      "PatchUserRoleRequest": {
+        "type": "object",
+        "required": ["user_id", "organization_user_role"],
+        "properties": {
+          "organization_user_role": {
+            "$ref": "#/components/schemas/OrganizationUserRole",
+            "description": "The new role to give the user"
+          },
+          "user_id": {
+            "type": "string",
+            "description": "The user id who we are updating the role for"
+          }
+        }
+      },
+      "User": {
+        "type": "object",
+        "required": ["id", "email", "is_it_admin"],
+        "properties": {
+          "email": { "type": "string", "description": "The email of the user" },
+          "id": { "type": "string", "description": "The id of the user" },
+          "is_it_admin": {
+            "type": "boolean",
+            "description": "If the user is an it admin or not"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    {
+      "name": "macro organization service",
+      "description": "Organization service"
+    }
+  ]
+}

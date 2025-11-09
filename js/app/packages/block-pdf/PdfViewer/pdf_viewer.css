@@ -1,0 +1,405 @@
+/* Copyright 2014 Mozilla Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+@import url(pdfjs-dist/web/text_layer_builder.css);
+@import url(pdfjs-dist/web/annotation_layer_builder.css);
+@import url(pdfjs-dist/web/xfa_layer_builder.css);
+@import url(./input_reset.css);
+@import url(./overlay.css);
+
+.textLayer .highlight.selected {
+  background-color: rgba(5, 168, 230, 0.7);
+  border-color: rgba(5, 168, 230, 1);
+}
+
+.textLayer .highlight {
+  background-color: rgba(255, 210, 0, 0.5);
+  border: 1px solid rgba(255, 210, 0, 1);
+}
+
+.textLayer {
+  user-select: text;
+  opacity: 0.3;
+}
+
+.textLayer ::selection {
+  background: rgb(127, 199, 255, 1);
+}
+
+.calloutIndicator {
+  position: absolute;
+  left: 0;
+  width: calc(100%);
+  background: rgb(127, 199, 255, 0.3);
+}
+
+.processedOverlayContainer,
+.pageOverlayContainer {
+  background: transparent;
+  pointer-events: none;
+  position: absolute;
+  display: block;
+  overflow: visible;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  outline: none;
+}
+
+.pageOverlayInner *:not(.pointer-events-none),
+.pageOverLayInner *:not(.pdf-pointer-event-reset *){
+  pointer-events: all;
+}
+
+.pageOverlayInner.noClickOverlay * {
+  pointer-events: none;
+}
+
+.pageOverlayInner.noClickOverlay #generalized-popup * {
+  pointer-events: all;
+}
+
+.page.noSelect * {
+  user-select: none;
+}
+
+.pdfViewerContainer .pdfPopupOuter {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 25%;
+  min-height: 350px;
+  width: 100%;
+  margin: 0;
+  pointer-events: none;
+  visibility: hidden;
+  box-sizing: border-box;
+}
+
+.pdfViewerContainer .pdfPopupInner {
+  position: relative;
+  height: 100%;
+  width: 0;
+  margin: 0 auto;
+  outline: none;
+  transform: translateX(7px);
+  visibility: hidden;
+  pointer-events: none;
+
+  border-radius: 8px !important;
+  overflow: hidden;
+  box-shadow:
+    0 26px 58px 0 rgba(0, 0, 0, 0.22),
+    0 5px 14px 0 rgba(0, 0, 0, 0.18);
+  border: 0 solid rgba(108, 117, 125, 0.125);
+  border-width: 4px 1px 0;
+  background-color: var(--PINNED_TERMS_BACKGROUND);
+
+  --page-border: none;
+  --page-margin: 1px 0 8px;
+}
+
+.pdfPopupInner div.openInNewTab {
+  position: absolute;
+  top: 5px;
+  right: 12px;
+  background: #fff;
+  color: #000;
+  padding: 4px;
+  border-radius: 5px;
+}
+
+.pdfPopupInner div.openInNewTab svg {
+  cursor: pointer;
+}
+
+:root {
+  --viewer-container-height: 0;
+  --pdfViewer-padding-bottom: 12px;
+  --page-margin: 1px auto -8px;
+  --page-border: 15px solid transparent;
+  --spreadHorizontalWrapped-margin-LR: -3.5px;
+  --zoom-factor: 1;
+}
+
+@media screen and (forced-colors: active) {
+  :root {
+    --pdfViewer-padding-bottom: 9px;
+    --page-margin: 15px auto 0;
+    --page-border: none;
+    --spreadHorizontalWrapped-margin-LR: 4.5px;
+  }
+}
+
+/* handle the counter logic */
+.pdfThumbnailViewerContainer {
+  counter-reset: thumbnail-counter;
+}
+.thumbnailSelectionRing {
+  position: relative;
+  counter-increment: thumbnail-counter;
+}
+.thumbnailSelectionRing::after {
+  content: counter(thumbnail-counter);
+  display: block;
+  position: absolute;
+  bottom: 1rem;
+  right: 2.5rem;
+  font-size: 2rem;
+  opacity: 0.6;
+  color: black;
+}
+
+.pdfThumbnailViewerContainer,
+.pdfViewerContainer {
+  position: absolute;
+  display: block;
+  overflow: auto;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  outline: none;
+}
+.pdfThumbnailViewerContainer *,
+.pdfViewerContainer * {
+  box-sizing: content-box;
+}
+
+.pdfThumbnailViewerContainer .thumbnail {
+  margin: 0 0 5px;
+}
+
+.processedOverlayContainer *,
+.pageOverlayContainer * {
+  box-sizing: border-box;
+}
+
+.pdfViewer {
+  padding-bottom: var(--pdfViewer-padding-bottom);
+}
+
+.pdfViewer .canvasWrapper {
+  overflow: hidden;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.pdfViewer .page {
+  direction: ltr;
+  width: 816px;
+  height: 1056px;
+  margin: var(--page-margin);
+  position: relative;
+  overflow: visible;
+  border: var(--page-border);
+  background-clip: content-box;
+  background-color: rgba(255, 255, 255, 1);
+  border-radius: 16px;
+}
+
+.pdfViewer .dummyPage {
+  position: relative;
+  width: 0;
+  height: var(--viewer-container-height);
+}
+
+.pdfViewer.removePageBorders .page {
+  margin: 0 auto 10px;
+  border: none;
+}
+
+.pdfViewer.singlePageView {
+  display: block;
+}
+
+.pdfViewer.singlePageView .page {
+  margin: 0;
+  border: none;
+}
+
+.pdfViewer.scrollHorizontal,
+.pdfViewer.scrollWrapped,
+.spread {
+  margin-left: 3.5px;
+  margin-right: 3.5px;
+  text-align: center;
+}
+
+.pdfViewer.scrollHorizontal,
+.spread {
+  white-space: nowrap;
+}
+
+.pdfViewer.removePageBorders,
+.pdfViewer.scrollHorizontal .spread,
+.pdfViewer.scrollWrapped .spread {
+  margin-left: 0;
+  margin-right: 0;
+}
+
+.spread .page,
+.spread .dummyPage,
+.pdfViewer.scrollHorizontal .page,
+.pdfViewer.scrollWrapped .page,
+.pdfViewer.scrollHorizontal .spread,
+.pdfViewer.scrollWrapped .spread {
+  display: inline-block;
+  vertical-align: middle;
+}
+
+.spread .page,
+.pdfViewer.scrollHorizontal .page,
+.pdfViewer.scrollWrapped .page {
+  margin-left: var(--spreadHorizontalWrapped-margin-LR);
+  margin-right: var(--spreadHorizontalWrapped-margin-LR);
+}
+
+.pdfViewer.removePageBorders .spread .page,
+.pdfViewer.removePageBorders.scrollHorizontal .page,
+.pdfViewer.removePageBorders.scrollWrapped .page {
+  margin-left: 5px;
+  margin-right: 5px;
+}
+
+.pdfViewer .page canvas {
+  margin: 0;
+  display: block;
+  user-select: none;
+  pointer-events: none;
+}
+
+.pdfViewer .page canvas[hidden] {
+  display: none;
+}
+
+.pdfViewer .page .loadingIcon {
+  position: absolute;
+  display: block;
+  left: 0;
+  top: 0;
+  right: 0;
+  bottom: 0;
+}
+.pdfViewer .page .loadingIcon.notVisible {
+  background: none;
+}
+
+.pdfViewer.enablePermissions .textLayer span {
+  user-select: none !important;
+  cursor: not-allowed;
+}
+
+.pdfPresentationMode .pdfViewer {
+  padding-bottom: 0;
+}
+
+.pdfPresentationMode .spread {
+  margin: 0;
+}
+
+.pdfPresentationMode .pdfViewer .page {
+  margin: 0 auto;
+  border: 2px solid transparent;
+}
+
+.pdfThumbnailViewerContainer > a {
+  display: flex;
+  justify-content: center;
+  border-radius: 2px;
+}
+
+.pdfThumbnailViewerContainer > a:active,
+.pdfThumbnailViewerContainer > a:focus {
+  outline: 0;
+}
+
+.thumbnail {
+  margin: 0 10px 5px;
+}
+
+.pdfThumbnailViewerContainer > a:last-of-type > .thumbnail {
+  margin-bottom: 10px;
+}
+.pdfThumbnailViewerContainer > a:last-of-type > .thumbnail:not([data-loaded]) {
+  margin-bottom: 9px;
+}
+
+.pdfThumbnailViewerContainer .thumbnail:not([data-loaded]) {
+  border: 1px dashed rgba(132, 132, 132, 1);
+  margin: -1px 9px 4px;
+}
+
+.pdfThumbnailViewerContainer .thumbnailImage {
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.1),
+    0 2px 8px rgba(0, 0, 0, 0.3);
+  opacity: 0.8;
+  background-color: rgba(255, 255, 255, 1);
+  background-clip: content-box;
+  border-radius: 4px;
+}
+
+.pdfThumbnailViewerContainer .thumbnailSelectionRing {
+  border-radius: 6px;
+  padding: 5px 3px 3px 5px;
+}
+
+.pdfThumbnailViewerContainer
+  a:focus
+  > .thumbnail
+  > .thumbnailSelectionRing
+  > .thumbnailImage,
+.thumbnail:hover > .thumbnailSelectionRing > .thumbnailImage {
+  opacity: 0.9;
+}
+
+.pdfThumbnailViewerContainer a:focus > .thumbnail > .thumbnailSelectionRing,
+.pdfThumbnailViewerContainer .thumbnail:hover > .thumbnailSelectionRing {
+  background-color: rgba(219, 234, 254, 0.5);
+  background-clip: padding-box;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.pdfThumbnailViewerContainer
+  .thumbnail.selected
+  > .thumbnailSelectionRing
+  > .thumbnailImage {
+  opacity: 1;
+}
+
+.pdfThumbnailViewerContainer {
+  padding: 15px 0 50px;
+  overflow-x: hidden;
+}
+
+.pdfThumbnailViewerContainer .thumbnail.selected > .thumbnailSelectionRing {
+  background-color: rgba(219, 234, 254, 1);
+  background-clip: padding-box;
+  color: rgba(255, 255, 255, 1);
+}
+
+.pdfViewer .annotationLayer {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.pdfViewer .annotationLayer > * {
+  pointer-events: all;
+}

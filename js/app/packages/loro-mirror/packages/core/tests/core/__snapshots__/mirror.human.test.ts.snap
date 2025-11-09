@@ -1,0 +1,27 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`syncing from state => LoroDoc 1`] = `
+{
+  "todos": {
+    "id": "cid:root-todos:List",
+    "value": [
+      {
+        "id": "cid:0@1:Map",
+        "value": {
+          "completed": true,
+          "id": "1",
+          "text": "Buy milk",
+        },
+      },
+      {
+        "id": "cid:4@1:Map",
+        "value": {
+          "completed": false,
+          "id": "2",
+          "text": "Write tests",
+        },
+      },
+    ],
+  },
+}
+`;

@@ -1,0 +1,10 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "jsx": "preserve",
+    "jsxImportSource": "solid-js",
+    "verbatimModuleSyntax": true,
+    "declaration": true,
+    "composite": true
+  }
+}

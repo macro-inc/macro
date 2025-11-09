@@ -1,0 +1,11 @@
+{
+  "name": "@macro-inc/infra-web-services",
+  "packageManager": "bun",
+  "private": true,
+  "main": "index.ts",
+  "dependencies": {
+    "@pulumi/aws": "^6.0.0",
+    "@pulumi/awsx": "^2.0.2",
+    "@pulumi/pulumi": "^3.0.0"
+  }
+}

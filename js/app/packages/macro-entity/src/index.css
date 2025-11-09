@@ -1,0 +1,25 @@
+.entity-layout {
+  display: grid;
+  grid-template-rows: 1fr 2fr;
+  grid-template-areas: 
+  "header-left header-right"
+  "content content";
+}
+
+@media (width >= 40rem) {
+  .entity-layout {
+  grid-template-areas: "header-left content header-right";
+  }
+}
+
+.entity-layout .header-left {
+  grid-area: header-left;
+}
+
+.entity-layout .header-right {
+  grid-area: header-right;
+}
+
+.entity-layout .content {
+  grid-area: content;
+}
