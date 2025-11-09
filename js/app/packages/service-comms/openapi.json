@@ -1,0 +1,1770 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "comms_service",
+    "description": "",
+    "termsOfService": "https://macro.com/terms",
+    "license": { "name": "" },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/activity": {
+      "get": {
+        "tags": ["activity"],
+        "operationId": "get_activity",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GetActivityResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "post": {
+        "tags": ["activity"],
+        "operationId": "post_activity",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PostActivityRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Activity" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/attachments/{entity_type}/{entity_id}/references": {
+      "get": {
+        "tags": ["attachments"],
+        "operationId": "get_attachment_references",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "type of the attachment entity",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "id of the attachment entity",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAttachmentReferencesResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/channels": {
+      "get": {
+        "tags": ["channels"],
+        "operationId": "get_channels",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GetChannelsResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "post": {
+        "tags": ["channels"],
+        "operationId": "create_channel",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateChannelRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateChannelResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/channels/get_or_create_dm": {
+      "post": {
+        "tags": ["channels"],
+        "description": "given a user and a recipient, either finds or creates a direct message channel",
+        "operationId": "get_or_create_dm",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/GetOrCreateDmRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetOrCreateDmResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/channels/get_or_create_private": {
+      "post": {
+        "tags": ["channels"],
+        "description": "given a list of partiicpants, either fetch an existing private channel with the permtation or create a new one",
+        "operationId": "get_or_create_private",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetOrCreatePrivateRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetOrCreatePrivateResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/channels/messages/context": {
+      "get": {
+        "tags": ["channels"],
+        "operationId": "get_message_with_context",
+        "parameters": [
+          {
+            "name": "message_id",
+            "in": "query",
+            "description": "ID of the message to get context around",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "before",
+            "in": "query",
+            "description": "Number of messages to fetch before the target message (defaults to 0)",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64" }
+          },
+          {
+            "name": "after",
+            "in": "query",
+            "description": "Number of messages to fetch after the target message (defaults to 0)",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successfully retrieved messages with context",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetMessageWithContextResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid request parameters",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}": {
+      "get": {
+        "tags": ["channels"],
+        "operationId": "get_channel",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "id of the channel",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "ISO8601 timestamp to fetch messages since",
+            "required": false,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Maximum number of messages to fetch",
+            "required": false,
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GetChannelResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["channels"],
+        "operationId": "delete_channel",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "id of the channel",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["channels"],
+        "operationId": "patch_channel",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "id of the channel",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PatchChannelOptions" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/join": {
+      "post": {
+        "tags": ["channels"],
+        "description": "allows a user to attempt to join a channel",
+        "operationId": "join_channel",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "channel id",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "" },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/leave": {
+      "post": {
+        "tags": ["channels"],
+        "description": "allows a user to attempt to leave a channel",
+        "operationId": "leave_channel",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "channel id",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "" },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/mentions": {
+      "get": {
+        "tags": ["channels"],
+        "operationId": "get_mentions_for_channel",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "id of the channel",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GetMentionsResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/message": {
+      "post": {
+        "tags": ["channels"],
+        "operationId": "post_message",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "id of the channel",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PostMessageRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/PostMessageResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/message/{message_id}": {
+      "delete": {
+        "tags": ["channels"],
+        "operationId": "delete_message",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "id of the channel",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "description": "id of the message",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["channels"],
+        "operationId": "patch_message",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "id of the channel",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "message_id",
+            "in": "path",
+            "description": "id of the message",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PatchMessageRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/participants": {
+      "post": {
+        "tags": ["channels"],
+        "description": "adds a list of participants to the channel, user must be an owner or an admin",
+        "operationId": "add_participants",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "channel id",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/AddParticipantsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": { "description": "" },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["channels"],
+        "description": "removes a list of participants to the channel, user must be an owner or an admin",
+        "operationId": "remove_participants",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "channel id",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/RemoveParticipantsRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": { "description": "" },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/reaction": {
+      "post": {
+        "tags": ["channels"],
+        "operationId": "post_reaction",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "id of the channel",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PostReactionRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/channels/{channel_id}/typing": {
+      "post": {
+        "tags": ["channels"],
+        "operationId": "post_typing",
+        "parameters": [
+          {
+            "name": "channel_id",
+            "in": "path",
+            "description": "id of the channel",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PostTypingRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/mentions": {
+      "post": {
+        "tags": ["mentions"],
+        "operationId": "create_mention_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateEntityMentionRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "Entity mention created successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateEntityMentionResponse"
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid request parameters" },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
+    "/mentions/{mention_id}": {
+      "delete": {
+        "tags": ["mentions"],
+        "operationId": "delete_mention_handler",
+        "parameters": [
+          {
+            "name": "mention_id",
+            "in": "path",
+            "description": "UUID of the entity mention to delete",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Entity mention deleted successfully",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DeleteEntityMentionResponse"
+                }
+              }
+            }
+          },
+          "400": { "description": "Invalid request parameters" },
+          "403": { "description": "Insufficient permissions" },
+          "404": { "description": "Entity mention not found" },
+          "500": { "description": "Internal server error" }
+        }
+      }
+    },
+    "/preview": {
+      "post": {
+        "tags": ["preview"],
+        "operationId": "get_batch_channel_preview",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetBatchChannelPreviewRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetBatchChannelPreviewResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Activity": {
+        "type": "object",
+        "description": "Represents a user's activity in a channel",
+        "required": ["id", "user_id", "channel_id", "created_at", "updated_at"],
+        "properties": {
+          "channel_id": { "type": "string", "format": "uuid" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "id": { "type": "string", "format": "uuid" },
+          "interacted_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "the last time the user intereacted with the channel\neg. reacting, replying, sending a message"
+          },
+          "updated_at": { "type": "string", "format": "date-time" },
+          "user_id": { "type": "string" },
+          "viewed_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "the last time the user viewed the channel"
+          }
+        }
+      },
+      "ActivityType": { "type": "string", "enum": ["view", "interact"] },
+      "AddParticipantsRequest": {
+        "type": "object",
+        "required": ["participants"],
+        "properties": {
+          "participants": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "Attachment": {
+        "type": "object",
+        "required": [
+          "id",
+          "channel_id",
+          "message_id",
+          "entity_type",
+          "entity_id",
+          "created_at"
+        ],
+        "properties": {
+          "channel_id": { "type": "string", "format": "uuid" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "entity_id": { "type": "string" },
+          "entity_type": { "type": "string" },
+          "id": { "type": "string", "format": "uuid" },
+          "message_id": { "type": "string", "format": "uuid" }
+        }
+      },
+      "Channel": {
+        "type": "object",
+        "required": [
+          "id",
+          "channel_type",
+          "created_at",
+          "updated_at",
+          "owner_id"
+        ],
+        "properties": {
+          "channel_type": {
+            "$ref": "#/components/schemas/ChannelType",
+            "description": "type of the channel"
+          },
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "timestamp of when the channel was created"
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "uuid of the channel"
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "string name of the channel"
+          },
+          "org_id": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "id of the organization this channel belongs too"
+          },
+          "owner_id": {
+            "type": "string",
+            "description": "id of the user who created the channel"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "timestamp of when the channel was last updated"
+          }
+        }
+      },
+      "ChannelMessage": {
+        "type": "object",
+        "required": [
+          "message_id",
+          "sender_id",
+          "content",
+          "created_at",
+          "updated_at",
+          "mentions"
+        ],
+        "properties": {
+          "content": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "deleted_at": { "type": ["string", "null"], "format": "date-time" },
+          "mentions": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "message mentions formatted as `{ENTITY_TYPE}:{ENTITY_ID}`"
+          },
+          "message_id": { "type": "string", "format": "uuid" },
+          "sender_id": { "type": "string" },
+          "thread_id": { "type": ["string", "null"], "format": "uuid" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ChannelParticipant": {
+        "type": "object",
+        "required": ["channel_id", "user_id", "role", "joined_at"],
+        "properties": {
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "id of the channel"
+          },
+          "joined_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "timestamp of when the user joined the channel"
+          },
+          "left_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "timestamp of when the user left the channel"
+          },
+          "role": {
+            "$ref": "#/components/schemas/ParticipantRole",
+            "description": "type of the participant"
+          },
+          "user_id": { "type": "string", "description": "id of the user" }
+        }
+      },
+      "ChannelPreview": {
+        "oneOf": [
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/ChannelPreviewData" },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["access"] }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/WithChannelId" },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["no_access"] }
+                }
+              }
+            ]
+          },
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/WithChannelId" },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["does_not_exist"] }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "ChannelPreviewData": {
+        "type": "object",
+        "required": ["channel_id", "channel_name", "channel_type"],
+        "properties": {
+          "channel_id": { "type": "string" },
+          "channel_name": { "type": "string" },
+          "channel_type": { "$ref": "#/components/schemas/ChannelType" }
+        }
+      },
+      "ChannelReference": {
+        "type": "object",
+        "description": "Representation of a reference from a channel/message",
+        "required": [
+          "channel_id",
+          "message_id",
+          "sender_id",
+          "message_content",
+          "message_created_at",
+          "attachment_created_at"
+        ],
+        "properties": {
+          "attachment_created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the attachment row was created (normally identical to message\ncreation, but stored separately just in case)"
+          },
+          "channel_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Channel that contains the message"
+          },
+          "channel_name": {
+            "type": ["string", "null"],
+            "description": "Optional channel name (DMs do not have a name)"
+          },
+          "message_content": {
+            "type": "string",
+            "description": "Full message content (might be used for preview/snippet)"
+          },
+          "message_created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When the message itself was created"
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Message that contains the attachment reference"
+          },
+          "sender_id": {
+            "type": "string",
+            "description": "Sender of the message"
+          },
+          "thread_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "If the message belongs to a thread this is the parent id"
+          }
+        }
+      },
+      "ChannelType": {
+        "type": "string",
+        "enum": ["public", "organization", "private", "direct_message"]
+      },
+      "ChannelWithLatest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ChannelWithParticipants" },
+          { "$ref": "#/components/schemas/LatestMessage" },
+          {
+            "type": "object",
+            "required": ["frecency_score"],
+            "properties": {
+              "frecency_score": { "type": "number", "format": "double" },
+              "interacted_at": {
+                "type": ["string", "null"],
+                "format": "date-time"
+              },
+              "viewed_at": { "type": ["string", "null"], "format": "date-time" }
+            }
+          }
+        ]
+      },
+      "ChannelWithParticipants": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Channel" },
+          {
+            "type": "object",
+            "required": ["participants"],
+            "properties": {
+              "participants": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/ChannelParticipant" }
+              }
+            }
+          }
+        ]
+      },
+      "CommunicationServiceApiVersion": { "type": "string", "enum": ["v1"] },
+      "CountedReaction": {
+        "type": "object",
+        "required": ["emoji", "users"],
+        "properties": {
+          "emoji": { "type": "string" },
+          "users": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "CreateChannelRequest": {
+        "type": "object",
+        "required": ["channel_type", "participants"],
+        "properties": {
+          "channel_type": {
+            "$ref": "#/components/schemas/ChannelType",
+            "description": "The type of channel"
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "Optionally a name for the channel"
+          },
+          "participants": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "list of participants not including the owner"
+          }
+        }
+      },
+      "CreateChannelResponse": {
+        "type": "object",
+        "required": ["id"],
+        "properties": { "id": { "type": "string" } }
+      },
+      "CreateEntityMentionRequest": {
+        "type": "object",
+        "required": [
+          "source_entity_type",
+          "source_entity_id",
+          "entity_type",
+          "entity_id"
+        ],
+        "properties": {
+          "entity_id": { "type": "string" },
+          "entity_type": { "type": "string" },
+          "source_entity_id": { "type": "string" },
+          "source_entity_type": { "type": "string" }
+        }
+      },
+      "CreateEntityMentionResponse": {
+        "type": "object",
+        "required": [
+          "id",
+          "source_entity_type",
+          "source_entity_id",
+          "entity_type",
+          "entity_id",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": { "type": "string", "format": "date-time" },
+          "entity_id": { "type": "string" },
+          "entity_type": { "type": "string" },
+          "id": { "type": "string" },
+          "source_entity_id": { "type": "string" },
+          "source_entity_type": { "type": "string" },
+          "user_id": { "type": ["string", "null"] }
+        }
+      },
+      "DeleteEntityMentionRequest": {
+        "type": "object",
+        "required": ["entity_mention_id"],
+        "properties": { "entity_mention_id": { "type": "string" } }
+      },
+      "DeleteEntityMentionResponse": {
+        "type": "object",
+        "required": ["deleted"],
+        "properties": { "deleted": { "type": "boolean" } }
+      },
+      "DeleteMessageParams": {
+        "type": "object",
+        "required": ["channel_id", "message_id"],
+        "properties": {
+          "channel_id": { "type": "string" },
+          "message_id": { "type": "string" }
+        }
+      },
+      "EntityMention": {
+        "type": "object",
+        "required": [
+          "id",
+          "source_entity_type",
+          "source_entity_id",
+          "entity_type",
+          "entity_id",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": { "type": "string", "format": "date-time" },
+          "entity_id": { "type": "string" },
+          "entity_type": { "type": "string" },
+          "id": { "type": "string", "format": "uuid" },
+          "source_entity_id": { "type": "string" },
+          "source_entity_type": { "type": "string" },
+          "user_id": { "type": ["string", "null"] }
+        }
+      },
+      "EntityReference": {
+        "oneOf": [
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/ChannelReference",
+                "description": "An entity was referenced from a channel"
+              },
+              {
+                "type": "object",
+                "required": ["reference_type"],
+                "properties": {
+                  "reference_type": { "type": "string", "enum": ["channel"] }
+                }
+              }
+            ],
+            "description": "An entity was referenced from a channel"
+          },
+          {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/GenericReference",
+                "description": "An entity was referenced from anything but a channel"
+              },
+              {
+                "type": "object",
+                "required": ["reference_type"],
+                "properties": {
+                  "reference_type": { "type": "string", "enum": ["generic"] }
+                }
+              }
+            ],
+            "description": "An entity was referenced from anything but a channel"
+          }
+        ]
+      },
+      "GenericErrorResponse": {
+        "type": "object",
+        "required": ["error", "message"],
+        "properties": {
+          "error": {
+            "type": "boolean",
+            "description": "Indicates if an error occurred"
+          },
+          "message": {
+            "type": "string",
+            "description": "Message to explain failure"
+          }
+        }
+      },
+      "GenericReference": {
+        "type": "object",
+        "description": "Representation of a reference from any entity type",
+        "required": [
+          "source_entity_type",
+          "source_entity_id",
+          "entity_type",
+          "entity_id",
+          "created_at"
+        ],
+        "properties": {
+          "created_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "When this reference was created"
+          },
+          "entity_id": {
+            "type": "string",
+            "description": "ID of the referenced entity"
+          },
+          "entity_type": {
+            "type": "string",
+            "description": "Type of the referenced entity"
+          },
+          "metadata": {
+            "description": "Optional metadata specific to the source type"
+          },
+          "source_entity_id": {
+            "type": "string",
+            "description": "ID of the source entity"
+          },
+          "source_entity_type": {
+            "type": "string",
+            "description": "Type of the source entity (e.g., \"document\", \"chat\", etc.)"
+          },
+          "user_id": {
+            "type": ["string", "null"],
+            "description": "User who created this reference (optional for non-user sources like channels)"
+          }
+        }
+      },
+      "GetActivityResponse": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Activity" }
+          }
+        }
+      },
+      "GetAttachmentReferencesResponse": {
+        "type": "object",
+        "required": ["references"],
+        "properties": {
+          "references": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/EntityReference" }
+          }
+        }
+      },
+      "GetBatchChannelPreviewRequest": {
+        "type": "object",
+        "required": ["channel_ids"],
+        "properties": {
+          "channel_ids": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "GetBatchChannelPreviewResponse": {
+        "type": "object",
+        "required": ["previews"],
+        "properties": {
+          "previews": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ChannelPreview" }
+          }
+        }
+      },
+      "GetChannelResponse": {
+        "type": "object",
+        "required": [
+          "channel",
+          "participants",
+          "messages",
+          "reactions",
+          "attachments",
+          "access"
+        ],
+        "properties": {
+          "access": {
+            "$ref": "#/components/schemas/ParticipantAccess",
+            "description": "What kind of access the user has to the channel\nalmost always this should be [Access(ParticipantType)]"
+          },
+          "activity": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/Activity",
+                "description": "the last activity for the given user on this channel"
+              }
+            ]
+          },
+          "attachments": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Attachment" },
+            "description": "Attachments that are linked to messages in this channel"
+          },
+          "channel": {
+            "$ref": "#/components/schemas/Channel",
+            "description": "information about the channel"
+          },
+          "messages": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Message" },
+            "description": "messages"
+          },
+          "participants": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ChannelParticipant" },
+            "description": "list of participants"
+          },
+          "reactions": {
+            "type": "object",
+            "description": "reactions grouped by message",
+            "additionalProperties": {
+              "type": "array",
+              "items": { "$ref": "#/components/schemas/CountedReaction" }
+            },
+            "propertyNames": { "type": "string" }
+          }
+        }
+      },
+      "GetChannelsResponse": {
+        "type": "object",
+        "required": ["channels"],
+        "properties": {
+          "channels": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ChannelWithLatest" }
+          }
+        }
+      },
+      "GetMentionsResponse": {
+        "type": "object",
+        "required": ["mentions"],
+        "properties": {
+          "mentions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/MessageMention" }
+          }
+        }
+      },
+      "GetMessageWithContextResponse": {
+        "type": "object",
+        "required": ["messages"],
+        "properties": {
+          "messages": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Message" }
+          }
+        }
+      },
+      "GetOrCreateAction": { "type": "string", "enum": ["get", "create"] },
+      "GetOrCreateDmRequest": {
+        "type": "object",
+        "required": ["recipient_id"],
+        "properties": { "recipient_id": { "type": "string" } }
+      },
+      "GetOrCreateDmResponse": {
+        "type": "object",
+        "required": ["channel_id", "action"],
+        "properties": {
+          "action": { "$ref": "#/components/schemas/GetOrCreateAction" },
+          "channel_id": { "type": "string" }
+        }
+      },
+      "GetOrCreatePrivateRequest": {
+        "type": "object",
+        "required": ["recipients"],
+        "properties": {
+          "recipients": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "GetOrCreatePrivateResponse": {
+        "type": "object",
+        "required": ["channel_id", "action"],
+        "properties": {
+          "action": { "$ref": "#/components/schemas/GetOrCreateAction" },
+          "channel_id": { "type": "string" }
+        }
+      },
+      "LatestMessage": {
+        "type": "object",
+        "properties": {
+          "latest_message": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/ChannelMessage" }
+            ]
+          },
+          "latest_non_thread_message": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/ChannelMessage" }
+            ]
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "required": [
+          "id",
+          "channel_id",
+          "sender_id",
+          "content",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "channel_id": { "type": "string", "format": "uuid" },
+          "content": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "deleted_at": { "type": ["string", "null"], "format": "date-time" },
+          "edited_at": { "type": ["string", "null"], "format": "date-time" },
+          "id": { "type": "string", "format": "uuid" },
+          "sender_id": { "type": "string" },
+          "thread_id": { "type": ["string", "null"], "format": "uuid" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "MessageMention": {
+        "type": "object",
+        "required": ["message_id", "entity_type", "entity_id", "created_at"],
+        "properties": {
+          "created_at": { "type": "string", "format": "date-time" },
+          "entity_id": { "type": "string" },
+          "entity_type": { "type": "string" },
+          "message_id": { "type": "string", "format": "uuid" }
+        }
+      },
+      "NewAttachment": {
+        "type": "object",
+        "required": ["entity_type", "entity_id"],
+        "properties": {
+          "entity_id": { "type": "string" },
+          "entity_type": { "type": "string" }
+        }
+      },
+      "ParticipantAccess": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["Access"],
+            "properties": {
+              "Access": {
+                "type": "object",
+                "required": ["role"],
+                "properties": {
+                  "role": { "$ref": "#/components/schemas/ParticipantRole" }
+                }
+              }
+            }
+          },
+          { "type": "string", "enum": ["NoAccess"] }
+        ]
+      },
+      "ParticipantRole": {
+        "type": "string",
+        "enum": ["owner", "admin", "member"]
+      },
+      "PatchChannelOptions": {
+        "type": "object",
+        "properties": { "channel_name": { "type": ["string", "null"] } }
+      },
+      "PatchMessageParams": {
+        "type": "object",
+        "required": ["channel_id", "message_id"],
+        "properties": {
+          "channel_id": { "type": "string" },
+          "message_id": { "type": "string" }
+        }
+      },
+      "PatchMessageRequest": {
+        "type": "object",
+        "properties": {
+          "attachment_ids_to_delete": {
+            "type": ["array", "null"],
+            "items": { "type": "string" }
+          },
+          "content": { "type": ["string", "null"] }
+        }
+      },
+      "PostActivityRequest": {
+        "type": "object",
+        "required": ["channel_id", "activity_type"],
+        "properties": {
+          "activity_type": { "$ref": "#/components/schemas/ActivityType" },
+          "channel_id": { "type": "string" }
+        }
+      },
+      "PostMessageRequest": {
+        "type": "object",
+        "required": ["content", "mentions", "attachments"],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/NewAttachment" }
+          },
+          "content": { "type": "string" },
+          "mentions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/SimpleMention" }
+          },
+          "thread_id": { "type": ["string", "null"], "format": "uuid" }
+        }
+      },
+      "PostMessageResponse": {
+        "type": "object",
+        "required": ["id"],
+        "properties": { "id": { "type": "string" } }
+      },
+      "PostReactionRequest": {
+        "type": "object",
+        "required": ["emoji", "message_id", "action"],
+        "properties": {
+          "action": { "$ref": "#/components/schemas/ReactionAction" },
+          "emoji": { "type": "string" },
+          "message_id": { "type": "string" }
+        }
+      },
+      "PostTypingRequest": {
+        "type": "object",
+        "required": ["action"],
+        "properties": {
+          "action": { "$ref": "#/components/schemas/TypingAction" },
+          "thread_id": { "type": ["string", "null"] }
+        }
+      },
+      "Reaction": {
+        "type": "object",
+        "required": ["message_id", "user_id", "emoji", "created_at"],
+        "properties": {
+          "created_at": { "type": "string", "format": "date-time" },
+          "emoji": { "type": "string" },
+          "message_id": { "type": "string", "format": "uuid" },
+          "user_id": { "type": "string" }
+        }
+      },
+      "ReactionAction": { "type": "string", "enum": ["Add", "Remove"] },
+      "RemoveParticipantsRequest": {
+        "type": "object",
+        "required": ["participants"],
+        "properties": {
+          "participants": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "SimpleMention": {
+        "type": "object",
+        "required": ["entity_type", "entity_id"],
+        "properties": {
+          "entity_id": { "type": "string" },
+          "entity_type": { "type": "string" }
+        }
+      },
+      "StringIDResponse": {
+        "type": "object",
+        "required": ["id"],
+        "properties": { "id": { "type": "string" } }
+      },
+      "TypingAction": { "type": "string", "enum": ["start", "stop"] },
+      "WithChannelId": {
+        "type": "object",
+        "required": ["channel_id"],
+        "properties": { "channel_id": { "type": "string" } }
+      }
+    }
+  },
+  "tags": [{ "name": "macro comms service", "description": "Comms Service" }]
+}

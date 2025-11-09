@@ -1,0 +1,9 @@
+{
+	"name": "block-canvas",
+	"private": true,
+	"scripts": {},
+	"dependencies": {
+		"service-storage": "workspace:*"
+	}
+}
+  

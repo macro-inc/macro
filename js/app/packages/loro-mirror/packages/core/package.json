@@ -1,0 +1,39 @@
+{
+    "name": "@loro-mirror/core",
+    "version": "0.1.0",
+    "description": "Core functionality for Loro Mirror - a state management library with Loro CRDT synchronization",
+    "main": "dist/index.js",
+    "module": "dist/index.esm.js",
+    "types": "dist/index.d.ts",
+    "files": [
+        "dist"
+    ],
+    "scripts": {
+        "build": "rollup -c",
+        "test": "vitest run",
+        "test:watch": "vitest",
+        "lint": "eslint src --ext .ts,.tsx",
+        "typecheck": "tsc --noEmit"
+    },
+    "keywords": [
+        "loro",
+        "crdt",
+        "state",
+        "management",
+        "sync",
+        "mirror"
+    ],
+    "author": "",
+    "license": "MIT",
+    "dependencies": {
+        "immer": "^10.0.3"
+    },
+    "peerDependencies": {
+        "loro-crdt": "^1.4.4"
+    },
+    "devDependencies": {
+        "@types/node": "^20.10.5",
+        "loro-crdt": "^1.4.4",
+        "typescript": "^5.3.3"
+    }
+}

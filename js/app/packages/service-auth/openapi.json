@@ -1,0 +1,2599 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "authentication_service",
+    "description": "",
+    "termsOfService": "https://macro.com/terms",
+    "license": { "name": "" },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/email/fusionauth/verify/{verification_id}": {
+      "get": {
+        "tags": ["email::verify_fusionauth_user_email"],
+        "summary": "Verifies the user's primary email for FusionAuth",
+        "operationId": "verify_fusionauth_user_email",
+        "parameters": [
+          {
+            "name": "verification_id",
+            "in": "path",
+            "description": "The verification id",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/fusionauth_resend": {
+      "post": {
+        "tags": ["email::resend_fusionauth_verify_user_email"],
+        "summary": "Resend the user's primary email verification for FusionAuth",
+        "operationId": "resend_fusionauth_verify_user_email",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/ResendFusionauthVerifyUserEmailRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/generate/link": {
+      "post": {
+        "tags": ["email::generate_email_link"],
+        "summary": "Generates an email link for the user to verify their email address.",
+        "operationId": "generate_email_link",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateEmailLinkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/verify/{verification_id}": {
+      "get": {
+        "tags": ["email::verify_email_link"],
+        "summary": "Verifies the user's email for a user profile",
+        "operationId": "verify_email_link",
+        "parameters": [
+          {
+            "name": "verification_id",
+            "in": "path",
+            "description": "The verification id",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Health check",
+        "operationId": "health_handler",
+        "responses": {
+          "200": {
+            "description": "health",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/jwt/macro_api_token": {
+      "get": {
+        "tags": ["jwt::macro_api_token"],
+        "summary": "Generates a macro-api-token using the user's macro-access-token\nYou can either have your access token in the cookies or in the request\nheaders\nAuthorization: Bearer <access_token>\nThis returns a new macro-api-token",
+        "operationId": "macro_api_token",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "query",
+            "description": "The email to generate the macro-api-token for. If not provided, we use your default profile.",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MacroApiTokenResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/jwt/refresh": {
+      "post": {
+        "tags": ["jwt::refresh"],
+        "summary": "Refreshes a JWT token\nYou can either have your access token and refresh token in the cookies or in the request\nheaders\nAuthorization: Bearer <access_token>\nx-macro-refresh-token: <refresh_token>\nThis returns the cookies with the new access and refresh token",
+        "operationId": "refresh",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserTokensResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/link": {
+      "post": {
+        "tags": ["link::create_in_progress_link"],
+        "summary": "Initiates a link for a user",
+        "operationId": "create_in_progress_link",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateInProgressLinkResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/login/apple": {
+      "post": {
+        "tags": ["login::apple"],
+        "summary": "Completes the apple login flow",
+        "operationId": "apple_login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AppleLoginRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/login/password": {
+      "post": {
+        "tags": ["login::password"],
+        "summary": "Performs a password login",
+        "operationId": "password_login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PasswordRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserTokensResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/login/passwordless": {
+      "post": {
+        "tags": ["login::passwordless"],
+        "summary": "Initiates a passwordless login",
+        "operationId": "passwordless_login",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PasswordlessRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "202": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SsoRequiredResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "403": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/login/sso": {
+      "get": {
+        "tags": ["login::sso"],
+        "summary": "Initiates an SSO login",
+        "operationId": "sso_login",
+        "parameters": [
+          {
+            "name": "idp_name",
+            "in": "query",
+            "description": "The name of the identity provider to use for login. e.g Google",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "idp_id",
+            "in": "query",
+            "description": "**OPTIONAL**. The idp id of the identity provider to use for login.",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "login_hint",
+            "in": "query",
+            "description": "**OPTIONAL**. The user's email.",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "original_url",
+            "in": "query",
+            "description": "**OPTIONAL**. The original url you came from.",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "is_mobile",
+            "in": "query",
+            "description": "**OPTIONAL**. If the authentication request is from a mobile device.",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "" },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/logout": {
+      "post": {
+        "tags": ["logout"],
+        "summary": "Initiates a passwordless login",
+        "operationId": "logout",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/merge": {
+      "post": {
+        "tags": ["merge::create_merge_request"],
+        "summary": "Creates a merge request used to verify the user's email address in order to merge their\naccounts.\nThis is different than generate_email_link which is used to verify a new email address to add a\nnew profile to a user's account.",
+        "operationId": "create_merge_request",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateAccountMergeRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/merge/verify/{code}": {
+      "get": {
+        "tags": ["merge::verify_merge_request"],
+        "summary": "Verifies the merge request",
+        "operationId": "verify_merge_request",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "The code",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/oauth/passwordless/{code}": {
+      "get": {
+        "tags": ["oauth::passwordless_callback"],
+        "summary": "Handles oauth redirect",
+        "operationId": "passwordless_callback",
+        "parameters": [
+          {
+            "name": "code",
+            "in": "path",
+            "description": "Code",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "description": "Email",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserTokensResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/oauth/redirect": {
+      "get": {
+        "tags": ["oauth::oauth_redirect"],
+        "summary": "Handles oauth redirect",
+        "operationId": "oauth_redirect",
+        "responses": {
+          "200": { "description": "" },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/oauth2/{provider}/callback": {
+      "get": {
+        "tags": ["oauth2"],
+        "summary": "Custom OAuth2 callback",
+        "operationId": "oauth2_callback",
+        "parameters": [
+          {
+            "name": "provider",
+            "in": "path",
+            "description": "The provider to use",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": { "description": "" },
+          "304": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "307": { "description": "" },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/permissions": {
+      "get": {
+        "tags": ["permissions::get_permissions"],
+        "summary": "Gets all permissions",
+        "operationId": "get_permissions",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Permission" }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/permissions/me": {
+      "get": {
+        "tags": ["permissions::get_user_permissions"],
+        "summary": "Gets a list of the users permissions",
+        "operationId": "get_user_permissions",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/session": {
+      "post": {
+        "tags": ["session::session_creation"],
+        "summary": "Refreshes a JWT token",
+        "operationId": "session_creation",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/session/login/{session_code}": {
+      "get": {
+        "tags": ["session::session_login"],
+        "summary": "Performs a login via session code",
+        "operationId": "session_login",
+        "parameters": [
+          {
+            "name": "session_code",
+            "in": "path",
+            "description": "The session code",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserTokensResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team": {
+      "post": {
+        "tags": ["team::create_team"],
+        "summary": "Creates a new team.",
+        "operationId": "create_team",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateTeamRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Team" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/join/{team_invite_id}": {
+      "get": {
+        "tags": ["team::join_team"],
+        "summary": "Joins a team by accepting an invite.",
+        "operationId": "join_team",
+        "parameters": [
+          {
+            "name": "team_invite_id",
+            "in": "path",
+            "description": "The team invite id",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["team::reject_invitation"],
+        "summary": "Rejects an invitation to join a team.",
+        "operationId": "reject_invitation",
+        "parameters": [
+          {
+            "name": "team_invite_id",
+            "in": "path",
+            "description": "The team invite id",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/user": {
+      "get": {
+        "tags": ["team::get_user_teams"],
+        "summary": "Gets all teams for the authenticated user.",
+        "operationId": "get_user_teams",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/Team" }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/user/invites": {
+      "get": {
+        "tags": ["team::get_user_invites"],
+        "summary": "Gets all of a user's invitations.",
+        "operationId": "get_user_invites",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TeamInvitesResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/{team_id}": {
+      "get": {
+        "tags": ["team::get_team"],
+        "summary": "Gets a team by ID.",
+        "operationId": "get_team",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "The ID of the team to retrieve",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TeamWithUsers" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["team::delete_team"],
+        "summary": "Deletes a team.\nThis will update all team members roles and cancel your subscription for the team.\nThis action is **irreversible** and you will not be able to recover the team afterwards.",
+        "operationId": "delete_team",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "The ID of the team to delete",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "patch": {
+        "tags": ["team::patch_team"],
+        "summary": "Updates a team.",
+        "operationId": "patch_team",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "The ID of the team to update",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PatchTeamRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/{team_id}/invite": {
+      "post": {
+        "tags": ["team::invite_to_team"],
+        "summary": "Invites a user to a team.",
+        "operationId": "invite_to_team",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "The ID of the team to invite to",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/InviteToTeamRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": { "description": "" },
+          "304": { "description": "" },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/{team_id}/invites": {
+      "get": {
+        "tags": ["team::get_team_invites"],
+        "summary": "Gets all invites for a team.",
+        "operationId": "get_team_invites",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "The ID of the team to get invites for",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TeamInvitesResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/{team_id}/reinvite/{team_invite_id}": {
+      "post": {
+        "tags": ["team::reinvite_to_team"],
+        "summary": "Regenerates a team invite notifying the user again.",
+        "operationId": "reinvite_to_team",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "The ID of the team to invite to",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "team_invite_id",
+            "in": "path",
+            "description": "The ID of the team invite to reinvite",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/team/{team_id}/remove/{remove_user_id}": {
+      "delete": {
+        "tags": ["team::remove_user_from_team"],
+        "summary": "Removes a user from a team.",
+        "operationId": "remove_user_from_team",
+        "parameters": [
+          {
+            "name": "team_id",
+            "in": "path",
+            "description": "The ID of the team to invite to",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "remove_user_id",
+            "in": "path",
+            "description": "The ID of the user to remove",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user": {
+      "post": {
+        "tags": ["user::create_user"],
+        "summary": "Creates a new user.",
+        "operationId": "create_user",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateUserRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/get_names": {
+      "post": {
+        "tags": ["user::post_get_names"],
+        "summary": "Retrieves user names in bulk",
+        "operationId": "get_user_names",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PostGetNamesRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserNames" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/group": {
+      "patch": {
+        "tags": ["user::patch_user_group"],
+        "summary": "Updates the user's group.",
+        "operationId": "patch_user_group",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PatchUserGroupRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/legacy_user_permissions": {
+      "get": {
+        "tags": ["user::get_legacy_user_permissions"],
+        "summary": "Gets the calling user's info which matches what was given in the **deprecated**\ngetUserPermissions query in our graphql api.\nThis will eventually be removed and optimized to use smaller calls that grab\nwhat is needed for various parts of the UI.",
+        "operationId": "get_legacy_user_permissions",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetLegacyUserPermissionsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/link_exists": {
+      "get": {
+        "tags": ["user::get_user_link_exists"],
+        "summary": "Returns whether or not a given idp link exists for a user",
+        "operationId": "get_user_link_exists",
+        "parameters": [
+          {
+            "name": "idp_name",
+            "in": "query",
+            "description": "The idp name to lookup. If not provided, the idp_id must be provided.",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "idp_id",
+            "in": "query",
+            "description": "The idp id to lookup. If not provided, the idp_name must be provided.",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserLinkResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/me": {
+      "get": {
+        "tags": ["user::get_user_info"],
+        "summary": "Gets the calling user's info",
+        "operationId": "get_user_info",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/GetUserInfo" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["user::delete_user"],
+        "summary": "Deletes the user who calls this endpoint",
+        "operationId": "delete_user",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericSuccessResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/name": {
+      "get": {
+        "tags": ["user::get_name"],
+        "summary": "Retrieves the name of a particular user.",
+        "operationId": "get_user_name",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserName" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "put": {
+        "tags": ["user::put_name"],
+        "summary": "Sets the name of a particular user",
+        "operationId": "put_user_name",
+        "parameters": [
+          {
+            "name": "first_name",
+            "in": "query",
+            "description": "First Name of user",
+            "required": false,
+            "schema": { "type": ["string", "null"] }
+          },
+          {
+            "name": "last_name",
+            "in": "query",
+            "description": "Last Name of user",
+            "required": false,
+            "schema": { "type": ["string", "null"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/onboarding": {
+      "patch": {
+        "tags": ["user::patch_user_onboarding"],
+        "summary": "Updates the user's onboarding.",
+        "operationId": "patch_user_onboarding",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchUserOnboardingRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/organization": {
+      "get": {
+        "tags": ["user::get_user_organization"],
+        "summary": "Retrieves the users organization if present.\nReturns NO_CONTENT if the user is a not part of an organization.",
+        "operationId": "get_user_organization",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UserOrganizationResponse"
+                }
+              }
+            }
+          },
+          "204": { "description": "" },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/profile_picture": {
+      "put": {
+        "tags": ["user::put_profile_picture"],
+        "summary": "Sets the profile picture URL for a particular user",
+        "operationId": "put_profile_picture",
+        "parameters": [
+          {
+            "name": "url",
+            "in": "query",
+            "description": "profile picture URL",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/profile_pictures": {
+      "post": {
+        "tags": ["user::post_profile_pictures"],
+        "summary": "Retrieves profile picture URLs for a list of users",
+        "operationId": "post_profile_pictures",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GetProfilePicturesRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ProfilePictures" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/quota": {
+      "get": {
+        "tags": ["user::get_user_quota"],
+        "summary": "Retrieves the users quota.\nReturns NO_CONTENT if the user is a premium user with no quota.",
+        "operationId": "get_user_quota",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/UserQuota" }
+              }
+            }
+          },
+          "204": { "description": "" },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/user/tutorial": {
+      "patch": {
+        "tags": ["user::patch_tutorial"],
+        "summary": "Updates the user's tutorialComplete flag.",
+        "operationId": "patch_user_tutorial",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PatchUserTutorialRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "AppleLoginRequest": {
+        "type": "object",
+        "required": ["id_token", "code"],
+        "properties": {
+          "code": { "type": "string" },
+          "id_token": { "type": "string" }
+        }
+      },
+      "CreateAccountMergeRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The email address to generate the merge link for."
+          }
+        }
+      },
+      "CreateInProgressLinkResponse": {
+        "type": "object",
+        "required": ["link_id"],
+        "properties": {
+          "link_id": { "type": "string", "description": "The link id" }
+        }
+      },
+      "CreateTeamRequest": {
+        "type": "object",
+        "description": "The request body to create a new team",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "description": "The name of the team" }
+        }
+      },
+      "CreateUserRequest": {
+        "type": "object",
+        "description": "The request body to create a new user in fusionauth\nNOTE: Never derive debug here as we don't want to accidentally log the password",
+        "required": ["username", "email", "password"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The primary email address of the user.\nThis will be the user's root \"profile\"."
+          },
+          "password": {
+            "type": "string",
+            "description": "The password for the user.\nTODO: configure password policy and validate password before attempting to create user"
+          },
+          "username": {
+            "type": "string",
+            "description": "The unique username for the user."
+          }
+        }
+      },
+      "EmptyResponse": {
+        "type": "object",
+        "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "A plain old json error response for use with axum.\nyup, thats it.",
+        "required": ["message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message to explain failure"
+          }
+        }
+      },
+      "GenerateEmailLinkRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The email address to resend the verification email to"
+          }
+        }
+      },
+      "GenericSuccessResponse": {
+        "type": "object",
+        "required": ["success"],
+        "properties": {
+          "success": {
+            "type": "boolean",
+            "description": "Indicates if the request was successful"
+          }
+        }
+      },
+      "GetLegacyUserPermissionsResponse": {
+        "type": "object",
+        "required": [
+          "userId",
+          "permissions",
+          "email",
+          "licenseStatus",
+          "tutorialComplete",
+          "hasChromeExt",
+          "hasTrialed"
+        ],
+        "properties": {
+          "email": { "type": "string", "description": "The user's email" },
+          "group": {
+            "type": ["string", "null"],
+            "description": "The user's group"
+          },
+          "hasChromeExt": {
+            "type": "boolean",
+            "description": "Whether the user has the chrome extension"
+          },
+          "hasTrialed": {
+            "type": "boolean",
+            "description": "Whether the user has trialed through stripe"
+          },
+          "licenseStatus": {
+            "type": "string",
+            "description": "The user's license status"
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The user's name"
+          },
+          "permissions": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "The permissions the user has"
+          },
+          "tutorialComplete": {
+            "type": "boolean",
+            "description": "Whether the user has completed the tutorial"
+          },
+          "userId": { "type": "string", "description": "The user id" }
+        }
+      },
+      "GetProfilePicturesRequestBody": {
+        "type": "object",
+        "required": ["user_id_list"],
+        "properties": {
+          "user_id_list": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "GetUserInfo": {
+        "type": "object",
+        "required": ["user_id", "permissions"],
+        "properties": {
+          "organization_id": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "The user's organization id if there is one associated with the user"
+          },
+          "permissions": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "The user's permissions"
+          },
+          "user_id": { "type": "string", "description": "The user id" }
+        }
+      },
+      "InviteToTeamRequest": {
+        "type": "object",
+        "description": "The request body to invite a user to a team",
+        "required": ["emails"],
+        "properties": {
+          "emails": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "The emails of the users you want to invite to the team"
+          }
+        }
+      },
+      "MacroApiTokenResponse": {
+        "type": "object",
+        "required": ["macro_api_token"],
+        "properties": {
+          "macro_api_token": {
+            "type": "string",
+            "description": "The newly created macro_api_token"
+          }
+        }
+      },
+      "PasswordRequest": {
+        "type": "object",
+        "required": ["email", "password"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The email to login with"
+          },
+          "password": { "type": "string" }
+        }
+      },
+      "PasswordlessRequest": {
+        "type": "object",
+        "required": ["email", "redirect_uri"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The email to initiate passwordless authentication for"
+          },
+          "redirect_uri": {
+            "type": "string",
+            "description": "The redirect uri to redirect to after login"
+          }
+        }
+      },
+      "PatchTeamRequest": {
+        "type": "object",
+        "description": "The request body to update a team",
+        "properties": {
+          "name": {
+            "type": ["string", "null"],
+            "description": "The new name of the team"
+          }
+        }
+      },
+      "PatchUserGroupRequest": {
+        "type": "object",
+        "required": ["group"],
+        "properties": {
+          "group": {
+            "type": "string",
+            "description": "The group to add the user to"
+          }
+        }
+      },
+      "PatchUserOnboardingRequest": {
+        "type": "object",
+        "required": ["firstName", "lastName", "title", "industry"],
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "description": "The first name of the user"
+          },
+          "industry": {
+            "type": "string",
+            "description": "The industry of the user"
+          },
+          "lastName": {
+            "type": "string",
+            "description": "The last name of the user"
+          },
+          "title": { "type": "string", "description": "The title of the user" }
+        }
+      },
+      "PatchUserTutorialRequest": {
+        "type": "object",
+        "required": ["tutorialComplete"],
+        "properties": {
+          "tutorialComplete": {
+            "type": "boolean",
+            "description": "If the user has completed the tutorial"
+          }
+        }
+      },
+      "Permission": {
+        "type": "object",
+        "required": ["id", "description"],
+        "properties": {
+          "description": {
+            "type": "string",
+            "description": "The description of the permission"
+          },
+          "id": { "type": "string", "description": "The permission" }
+        }
+      },
+      "PostGetNamesRequestBody": {
+        "type": "object",
+        "required": ["user_ids"],
+        "properties": {
+          "user_ids": { "type": "array", "items": { "type": "string" } }
+        }
+      },
+      "ProfilePictureQueryParams": {
+        "type": "object",
+        "required": ["url"],
+        "properties": { "url": { "type": "string" } }
+      },
+      "ProfilePictures": {
+        "type": "object",
+        "required": ["pictures"],
+        "properties": {
+          "pictures": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/UserProfilePicture" }
+          }
+        }
+      },
+      "PutUserNameQueryParams": {
+        "type": "object",
+        "properties": {
+          "first_name": {
+            "type": ["string", "null"],
+            "description": "First Name of user"
+          },
+          "last_name": {
+            "type": ["string", "null"],
+            "description": "Last Name of user"
+          }
+        }
+      },
+      "ResendFusionauthVerifyUserEmailRequest": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": {
+            "type": "string",
+            "description": "The email address to resend the verification email to"
+          }
+        }
+      },
+      "SsoRequiredResponse": {
+        "type": "object",
+        "required": ["idp_id"],
+        "properties": {
+          "idp_id": {
+            "type": "string",
+            "description": "The idp_id you need to perform sso login with."
+          }
+        }
+      },
+      "Team": {
+        "type": "object",
+        "required": ["id", "name", "owner_id"],
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "owner_id": { "type": "string" }
+        }
+      },
+      "TeamInvite": {
+        "type": "object",
+        "required": [
+          "id",
+          "email",
+          "team_id",
+          "team_role",
+          "invited_by",
+          "created_at",
+          "last_sent_at"
+        ],
+        "properties": {
+          "created_at": { "type": "string", "format": "date-time" },
+          "email": { "type": "string" },
+          "id": { "type": "string", "format": "uuid" },
+          "invited_by": { "type": "string" },
+          "last_sent_at": { "type": "string", "format": "date-time" },
+          "team_id": { "type": "string", "format": "uuid" },
+          "team_role": { "$ref": "#/components/schemas/TeamRole" }
+        }
+      },
+      "TeamInviteUpdate": {
+        "type": "object",
+        "required": ["team_invite_id", "operation"],
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/TeamUpdateOperation",
+            "description": "The operation to perform\n`Update` will update the existing invitation role\n`Remove` will remove the invitation"
+          },
+          "team_invite_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The team invite id to update"
+          },
+          "team_role": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/TeamRole",
+                "description": "The role to assign to the invited user\nThis is only used for `Update` operation"
+              }
+            ]
+          }
+        }
+      },
+      "TeamInvitesResponse": {
+        "type": "object",
+        "required": ["invites"],
+        "properties": {
+          "invites": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TeamInvite" }
+          }
+        }
+      },
+      "TeamRole": {
+        "type": "string",
+        "description": "Ordered from least to most access top -> bottom",
+        "enum": ["member", "admin", "owner"]
+      },
+      "TeamUpdateOperation": { "type": "string", "enum": ["update", "remove"] },
+      "TeamUser": {
+        "type": "object",
+        "required": ["user_id", "team_id", "team_role"],
+        "properties": {
+          "team_id": { "type": "string", "format": "uuid" },
+          "team_role": { "$ref": "#/components/schemas/TeamRole" },
+          "user_id": { "type": "string" }
+        }
+      },
+      "TeamUserUpdate": {
+        "type": "object",
+        "required": ["user_id", "operation"],
+        "properties": {
+          "operation": {
+            "$ref": "#/components/schemas/TeamUpdateOperation",
+            "description": "The operation to perform\n`Update` will update the existing user role\n`Remove` will remove the user"
+          },
+          "team_role": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/TeamRole",
+                "description": "The new role for the user if the operation is `Update`"
+              }
+            ]
+          },
+          "user_id": {
+            "type": "string",
+            "description": "The user id to update or remove"
+          }
+        }
+      },
+      "TeamWithUsers": {
+        "type": "object",
+        "required": ["team", "users"],
+        "properties": {
+          "team": { "$ref": "#/components/schemas/Team" },
+          "users": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TeamUser" }
+          }
+        }
+      },
+      "UserLinkResponse": {
+        "type": "object",
+        "required": ["link_exists"],
+        "properties": {
+          "link_exists": {
+            "type": "boolean",
+            "description": "Whether or not a link exists for the given idp"
+          }
+        }
+      },
+      "UserName": {
+        "type": "object",
+        "required": ["id"],
+        "properties": {
+          "first_name": { "type": ["string", "null"] },
+          "id": { "type": "string" },
+          "last_name": { "type": ["string", "null"] }
+        }
+      },
+      "UserNames": {
+        "type": "object",
+        "required": ["names"],
+        "properties": {
+          "names": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/UserName" }
+          }
+        }
+      },
+      "UserOrganizationResponse": {
+        "type": "object",
+        "required": ["organizationId", "organizationName"],
+        "properties": {
+          "organizationId": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The id of the organization"
+          },
+          "organizationName": {
+            "type": "string",
+            "description": "The name of the organization"
+          }
+        }
+      },
+      "UserProfilePicture": {
+        "type": "object",
+        "required": ["id", "url"],
+        "properties": {
+          "checksum": { "type": ["string", "null"] },
+          "id": { "type": "string" },
+          "url": { "type": "string" }
+        }
+      },
+      "UserQuota": {
+        "type": "object",
+        "description": "The UserQuota represents the user's current quota",
+        "required": [
+          "documents",
+          "ai_chat_messages",
+          "max_documents",
+          "max_ai_chat_messages"
+        ],
+        "properties": {
+          "ai_chat_messages": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The user's total number of AI chat messages the user has sent."
+          },
+          "documents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The user's total number of documents they have created."
+          },
+          "max_ai_chat_messages": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The maximum number of AI chat messages they can send.",
+            "minimum": 0
+          },
+          "max_documents": {
+            "type": "integer",
+            "format": "int32",
+            "description": "The maximum number of documents they can create.",
+            "minimum": 0
+          }
+        }
+      },
+      "UserTokensResponse": {
+        "type": "object",
+        "required": ["access_token", "refresh_token"],
+        "properties": {
+          "access_token": {
+            "type": "string",
+            "description": "The users access token"
+          },
+          "refresh_token": {
+            "type": "string",
+            "description": "The users refresh token"
+          }
+        }
+      }
+    }
+  },
+  "tags": [
+    { "name": "auth service", "description": "Macro Authentication Service" }
+  ]
+}

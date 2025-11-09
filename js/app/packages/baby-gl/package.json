@@ -1,0 +1,34 @@
+{
+  "name": "baby-gl",
+  "version": "0.1.0",
+  "description": "Minimal WebGL2 utilities and shader management",
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./index.js",
+      "types": "./index.d.ts"
+    }
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "lib.js",
+    "lib.d.ts",
+    "glsl.js",
+    "glsl.d.ts",
+    "shaders/"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rm -rf *.js *.d.ts"
+  },
+  "peerDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  }
+}

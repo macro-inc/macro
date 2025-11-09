@@ -1,0 +1,18 @@
+{
+  "name": "@coparse/analytics",
+  "private": true,
+  "main": "src/index.ts",
+  "files": [
+    "./build/*"
+  ],
+  "scripts": {
+    "build": "tsc -p ./"
+  },
+  "dependencies": {
+    "react-facebook-pixel": "^1.0.4"
+  },
+  "devDependencies": {
+    "dotenv": "^16.0.3",
+    "typescript": "^4.9.5"
+  }
+}

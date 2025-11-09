@@ -1,0 +1,10 @@
+{
+  "include": [
+    "./generated/schema.bop"
+  ],
+  "generators": {
+    "ts": {
+      "outFile": "./generated/schema.ts"
+    }
+  }
+}

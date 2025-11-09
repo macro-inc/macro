@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" id="img" width="100%" height="100%" fill="none" stroke="currentColor" stroke-width="1px" stroke-linejoin="round" version="1.1" viewBox="0 0 480 480" xml:space="preserve">
+    <defs>
+        <linearGradient id="gradient" x2="0" y2="48" gradientUnits="userSpaceOnUse">
+            <stop offset="0"/>
+            <stop stop-color="#fff" offset=".2"/>
+            <stop stop-color="#fff" offset=".8"/>
+            <stop offset="1"/>
+        </linearGradient>
+    </defs>
+
+    <mask id="fadeMask">
+        <rect width="48" height="48" fill="url(#gradient)"/>
+    </mask>
+
+    <g transform="matrix(10 0 0 10 -.00285 .0081)" mask="url(#fadeMask)">
+        <path d="m27.557 -43.918-2.2305 0.875v6.6406c0 0.2554 0.10697 0.49843 0.29297 0.67383l8.0801 7.6426 2.2305-0.875v-6.6367c0-0.2554-0.10306-0.50038-0.28906-0.67578z" vector-effect="non-scaling-stroke">
+            <animateTransform keySplines="0 0 1 1; 0.25 0.46 0.45 0.94; 0 0 1 1; 0.55 0.06 0.68 0.19" values="0,-0; 0,62; 0,60; 0,60; 0,120" keyTimes="0; 0.25; 0.3; 0.7; 1" attributeName="transform" repeatCount="indefinite" calcMode="spline" type="translate" begin="0.2s" dur="2s"/>
+        </path>
+        <path d="m18.277 -43.918-2.2305 0.875v6.6406c0 0.2554 0.10697 0.49843 0.29297 0.67383l8.0801 7.6426 2.2305-0.875v-6.6367c0-0.2554-0.10306-0.50038-0.28906-0.67578z" vector-effect="non-scaling-stroke">
+            <animateTransform keySplines="0 0 1 1; 0.25 0.46 0.45 0.94; 0 0 1 1; 0.55 0.06 0.68 0.19" values="0,-0; 0,62; 0,60; 0,60; 0,120" keyTimes="0; 0.25; 0.3; 0.7; 1" attributeName="transform" repeatCount="indefinite" calcMode="spline" type="translate" begin="0.1s" dur="2s"/>
+        </path>
+        <path d="m14.301 -38.902-2.2305 0.87305v6.6426c0 0.2554 0.10697 0.49843 0.29297 0.67383l2.7773 2.6289 2.2324-0.875v-6.6367c0-0.2554-0.10306-0.50038-0.28906-0.67578z" vector-effect="non-scaling-stroke">
+            <animateTransform keySplines="0 0 1 1; 0.25 0.46 0.45 0.94; 0 0 1 1; 0.55 0.06 0.68 0.19" values="0,-0; 0,62; 0,60; 0,60; 0,120" keyTimes="0; 0.25; 0.3; 0.7; 1" attributeName="transform" repeatCount="indefinite" calcMode="spline" type="translate" begin="0s" dur="2s"/>
+        </path>
+    </g>
+<script xmlns=""/></svg>

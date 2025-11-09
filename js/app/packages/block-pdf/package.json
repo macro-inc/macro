@@ -1,0 +1,14 @@
+{
+  "name": "block-pdf",
+  "private": true,
+  "scripts": {},
+  "dependencies": {
+    "@dinero.js/currencies": "2.0.0-alpha.8",
+    "dinero.js": "2.0.0-alpha.8",
+    "pdfjs-dist": "github:macro-inc/pdf.js#v2.16.52-web",
+    "solid-custom-scrollbars": "^0.1.7",
+    "solid-styled-components": "^0.28.5",
+    "tinycolor2": "^1.6.0",
+    "zod-validation-error": "^3.4.0"
+  }
+}

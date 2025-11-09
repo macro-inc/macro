@@ -1,0 +1,298 @@
+/* From: packages/app/src/App.css */
+/* To be refactor, remove unused, and move to appropriate files */
+
+:root {
+  /* Navigation colors */
+  --NAV_CONTROL_BAR_BACKGROUND: var(--color-white);
+  --NAV_ARROW_AVAILABLE_BACKGROUND: var(--color-black);
+  --NAV_ARROW_UNAVAILABLE_BACKGROUND: var(--color-gray-500);
+  --NAV_FORM_BACKGROUND: var(--color-gray-200);
+  --NAV_FORM_ACTIVE_BACKGROUND: var(--color-white);
+  --NAV_FORM_ACTIVE_TEXT: var(--color-gray-500);
+  --NAV_SEARCH_CLASSIC_BACKGROUND: var(--color-blue-100);
+  --NAV_SEARCH_CLASSIC_TEXT: var(--color-black);
+  --NAV_SEARCH_TERM_TEXT: var(--color-blue-900);
+  --NAV_SEARCH_TERM_BACKGROUND: var(--color-white);
+  --NAV_SEARCH_SECTION_TEXT: var(--color-red-800);
+  --NAV_SEARCH_HOVER_BACKGROUND: var(--color-blue-100);
+  --NAV_SEARCH_CLASSIC_HOVER_BACKGROUND: var(--color-blue-200);
+  --NAV_SEARCH_LOADING_BACKGROUND: var(--color-white);
+  --NAV_SEARCH_LOADING_TEXT: var(--color-blue-900);
+  --NAV_ACTIVE_PAGE_NUMBER_BACKGROUND: var(--color-gray-200);
+  --NAV_ACTIVE_PAGE_NUMBER_TEXT: var(--color-black);
+  --NAV_MAX_PAGE_NUMBER_TEXT: var(--color-black);
+  --NAV_SETTINGS_MENU_ICON_COLOR: var(--color-gray-500);
+  --NAV_SETTINGS_MENU_ICON_HOVER_COLOR: var(--color-black);
+  --NAV_SETTINGS_MENU_DROPDOWN_TEXT: var(--color-black);
+  --NAV_SETTINGS_MENU_DROPDOWN_BACKGROUND: var(--color-white);
+  --NAV_SETTINGS_MENU_DROPDOWN_BORDER: var(--color-blue-100);
+  --NAV_SETTINGS_MENU_LOGOUT_TEXT: var(--color-white);
+  --NAV_SETTINGS_MENU_LOGOUT_BACKGROUND: var(--color-blue-500);
+  --NAV_SETTINGS_MENU_LOGOUT_BORDER: var(--color-gray-500);
+
+  /* Table of Contents colors */
+  --TOC_HEADER_BACKGROUND: var(--color-gray-100);
+  --TOC_HEADER_TEXT: var(--color-black);
+  --TOC_BACKGROUND: var(--color-white);
+  --TOC_TEXT: var(--color-black);
+  --TOC_MENU_OPTION_BACKGROUND: var(--color-white);
+  --TOC_MENU_OPTION_TEXT: var(--color-gray-700);
+  --TOC_MENU_OPTION_BORDER: var(--color-gray-300);
+  --PANEL_EXPAND_BACKGROUND: var(--color-gray-200);
+  --DOC_VIEW: var(--color-gray-50);
+  --DOC_VIEW_ACCENT: var(--color-gray-50);
+  --SCROLLBAR_TRACK_COLOR: var(--color-gray-900);
+  --SCROLLBAR_THUMB_COLOR: rgb(from var(--color-black) r g b / 20%);
+  --SCROLLBAR_THUMB_HOVER_COLOR: rgb(from var(--color-black) r g b / 45%);
+  --SECTION_MENU_OPTION_BACKGROUND: var(--color-gray-100);
+  --SECTION_MENU_OPTION_TEXT: var(--color-gray-700);
+  --SECTION_MENU_POPOUT_BACKGROUND: var(--color-white);
+  --SECTION_MENU_POPOUT_TEXT: var(--color-black);
+
+  /* Pinned Terms colors */
+  --PINNED_TERMS_HEADER_BACKGROUND: var(--color-white);
+  --PINNED_TERMS_TAB_BACKGROUND: var(--color-white);
+  --PINNED_TERMS_TAB_BORDER: var(--color-gray-200);
+  --PINNED_TERMS_TAB_TEXT: var(--color-gray-700);
+  --PINNED_TERMS_EMPTY_BACKGROUND: var(--color-white);
+  --PINNED_TERMS_EMPTY_TEXT: var(--color-gray-700);
+  --PINNED_TERMS_BACKGROUND: var(--color-white);
+  --PINNED_TERMS_TEXT: var(--color-gray-800);
+  --PINNED_TERMS_BORDER: var(--color-transparent);
+  --PINNED_SEEMORE_TEXT: var(--color-blue-900);
+  --PINNED_SEEMORE_HOVER_TEXT: var(--color-pink-500);
+
+  /* Definition Popup colors */
+  --DEFINITION_POPUP_TAB_BUTTON_BACKGROUND: var(--color-gray-100);
+  --DEFINITION_POPUP_TAB_BUTTON_TEXT: var(--color-black);
+  --DEFINITION_POPUP_TAB_BUTTON_ACTIVE_BACKGROUND: var(--color-white);
+  --DEFINITION_POPUP_TAB_BUTTON_HOVER_BACKGROUND: var(--color-white);
+  --DEFINITION_POPUP_TAB_BUTTON_BORDER: var(--color-gray-700);
+  --DEFINITION_POPUP_TAB_SECTION_BACKGROUND: var(--color-white);
+
+  /* Multiviewer colors */
+  --MULTIVIEWER_EMPTY_BACKGROUND: var(--DOC_VIEW);
+  --MULTIVIEWER_EMPTY_TEXT: var(--color-gray-700);
+  --MULTIVIEWER_FILLED_BACKGROUND: var(--color-white);
+  --MULTIVIEWER_MODAL_BACKGROUND: var(--color-gray-100);
+  --MULTIVIEWER_MODAL_BORDER: rgb(from var(--color-black) r g b / 10%);
+  --MULTIVIEWER_MODAL_TEXT: var(--color-gray-700);
+  --MULTIVIEWER_MODAL_ICON: var(--color-gray-700);
+  --MULTIVIEWER_MODAL_ICON_BORDER: var(--color-gray-700);
+
+  /* Bookmark related colors */
+  --DELETE_BOOKMARK_BACKGROUND: var(--color-white);
+  --DELETE_BOOKMARK_TEXT: var(--color-black);
+  --DELETE_BOOKMARK_BUTTON_BACKGROUND: var(--color-gray-500);
+  --DELETE_BOOKMARK_BUTTON_TEXT: var(--color-white);
+  --DELETE_BOOKMARK_HORIZONTAL_RULE: var(--color-gray-200);
+  --RENAME_BOOKMARK_FORM_BACKGROUND: var(--color-white);
+  --DOWNLOAD_OPTIONS_BACKGROUND: var(--DOC_VIEW);
+  --DOWNLOAD_OPTIONS_TEXT: var(--color-black);
+  --SAVE_BOOKMARKS_TEXT: var(--color-black);
+  --SAVE_BOOKMARKS_BACKGROUND: var(--color-white);
+
+  /* Upload related colors */
+  --UPLOAD_HEADER_BACKGROUND: var(--color-blue-800);
+  --UPLOAD_BACKGROUND: var(--DOC_VIEW);
+  --UPLOAD_MODAL_BACKGROUND: var(--color-white);
+  --UPLOAD_MODAL_TEXT: var(--color-gray-800);
+  --UPLOAD_MODAL_HORIZONTAL_RULE: var(--color-gray-200);
+  --UPLOAD_MODAL_ICON: var(--color-gray-500);
+  --UPLOAD_MODAL_BUTTON_COLOR: var(--color-blue-500);
+  --UPLOAD_PDF_BACKGROUND: var(--DOC_VIEW);
+  --UPLOAD_URL_BACKGROUND: var(--color-white);
+  --UPLOAD_URL_TEXT: var(--color-gray-700);
+  --UPLOAD_URL_PLACEHOLDER_TEXT: var(--color-gray-700);
+  --PDF_LOADING_VIEWER_MODAL_BACKGROUND: var(--DOC_VIEW);
+  --PDF_LOADING_VIEWER_MODAL_TEXT: var(--color-black);
+  --RECENT_FILES_COLOR: var(--color-gray-800);
+  --RECENT_FILES_BACKGROUND: var(--color-white);
+
+  --PDF_PAGE_FILTER: none;
+  --PDF_MIX_BLEND_MODE: lighten;
+}
+
+.section > * {
+  background: var(--SECTION_OVERLAY_COLOR);
+  fill: var(--SECTION_OVERLAY_COLOR);
+}
+.section:hover > * {
+  background: var(--SECTION_OVERLAY_HOVER_COLOR);
+  fill: var(--SECTION_OVERLAY_HOVER_COLOR);
+}
+span.pinned-terms-section.section {
+  color: var(--SECTION_OVERLAY_COLOR);
+}
+span.pinned-terms-section.section:hover {
+  color: var(--SECTION_OVERLAY_HOVER_COLOR);
+}
+
+.tref > * {
+  background: var(--TREF_OVERLAY_COLOR);
+  fill: var(--TREF_OVERLAY_COLOR);
+  display: var(--TREF_OVERLAY_DISPLAY);
+  transform: translateZ(0);
+}
+.tref:hover > * {
+  background: var(--TREF_OVERLAY_HOVER_COLOR);
+  fill: var(--TREF_OVERLAY_HOVER_COLOR);
+}
+span.pinned-terms-section.tref {
+  color: var(--TREF_OVERLAY_COLOR);
+}
+span.pinned-terms-section.tref:hover {
+  color: var(--TREF_OVERLAY_HOVER_COLOR);
+}
+
+.term > * {
+  background: var(--TERM_OVERLAY_COLOR);
+  fill: var(--TERM_OVERLAY_COLOR);
+  display: var(--TERM_OVERLAY_DISPLAY);
+  transform: translateZ(0);
+}
+.term:hover > * {
+  background: var(--TERM_OVERLAY_HOVER_COLOR);
+  fill: var(--TERM_OVERLAY_HOVER_COLOR);
+}
+span.pinned-terms-section.term {
+  color: var(--TERM_OVERLAY_COLOR);
+}
+span.pinned-terms-section.term:hover {
+  color: var(--TERM_OVERLAY_HOVER_COLOR);
+}
+
+.sref > * {
+  background: var(--SREF_OVERLAY_COLOR);
+  fill: var(--SREF_OVERLAY_COLOR);
+  display: var(--SREF_OVERLAY_DISPLAY);
+  transform: translateZ(0);
+}
+.sref:hover > * {
+  background: var(--SREF_OVERLAY_HOVER_COLOR);
+  fill: var(--SREF_OVERLAY_HOVER_COLOR);
+}
+span.pinned-terms-section.sref {
+  color: var(--SREF_OVERLAY_COLOR);
+}
+span.pinned-terms-section.sref:hover {
+  color: var(--SREF_OVERLAY_HOVER_COLOR);
+}
+
+.special > div {
+  background: #a40ac7;
+}
+
+tspan {
+  stroke: none;
+}
+
+.pdfThumbnailViewerContainer .thumbnailImage {
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / 0.1),
+    0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+  border-radius: 0.375rem !important;
+}
+
+.pdfThumbnailViewerContainer .thumbnail.selected > .thumbnailSelectionRing {
+  background-color: #0ea4e930 !important;
+  box-shadow:
+    0 4px 6px -1px rgb(0 0 0 / 0.1),
+    0 2px 4px -2px rgb(0 0 0 / 0.1) !important;
+}
+
+.active .tab {
+  background-color: white !important;
+  border-radius: 4px !important;
+  border: none !important;
+  opacity: 1;
+  box-shadow: 0 0 5px rgba(0, 0, 0, 0.15);
+  border-bottom: 2px solid #6495ed !important;
+}
+
+.tab {
+  background-color: var(--TAB_INACTIVE_BACKGROUND);
+  border: none !important;
+  border-right: solid 1px black !important;
+  border-radius: 2px !important;
+  font-weight: bold !important;
+  opacity: 0;
+  box-shadow: 0 0 5px var(--DOC_VIEW);
+  height: 46px !important;
+  margin-top: -10px !important;
+}
+
+/* definition popup / pinned terms */
+.pinned-terms {
+  background-color: var(--PINNED_TERMS_BACKGROUND);
+  color: var(--PINNED_TERMS_TEXT);
+  border-radius: 9px !important;
+  border-color: rgba(0, 0, 0, 0.125) !important;
+}
+
+.highlight-popup {
+  background-color: white;
+  border-radius: 9px !important;
+}
+
+.definition-popup-tab-button {
+  background-color: transparent !important;
+  color: var(--DEFINITION_POPUP_TAB_BUTTON_TEXT);
+  border-width: 0px 0px 1px 0px;
+  padding: 10px !important;
+}
+
+.pinned-terms .card-header {
+  background: var(--PINNED_TERMS_SECTION_BACKGROUND);
+}
+
+.pinned-seemore {
+  color: var(--PINNED_SEEMORE_TEXT);
+}
+
+.pinned-seemore:hover {
+  color: var(--PINNED_SEEMORE_HOVER_TEXT);
+}
+
+.icon {
+  color: var(--PINNED_TERMS_TEXT);
+}
+
+.multiviewer-empty {
+  background-color: var(--MULTIVIEWER_EMPTY_BACKGROUND);
+  color: var(--MULTIVIEWER_EMPTY_TEXT);
+}
+
+.multiviewer-filled {
+  background-color: var(--DOC_VIEW);
+}
+
+.multiviewer-modal {
+  background-color: var(--DOC_VIEW);
+  color: var(--MULTIVIEWER_MODAL_TEXT);
+}
+
+.multiviewer-modal-border {
+  border: none;
+}
+
+.multiviewer-icon {
+  color: var(--MULTIVIEWER_MODAL_ICON);
+}
+
+.multiviewer-icon-border {
+  border: var(--MULTIVIEWER_MODAL_ICON_BORDER);
+}
+
+.dot {
+  position: fixed;
+  margin-top: -45;
+  border-radius: 5px;
+  padding: 10px;
+  background-color: white;
+  box-shadow:
+    0px 0px 3px 2px rgba(0, 0, 0, 0.1),
+    3px 5px 5px 2px rgba(0, 0, 0, 0.05);
+
+  pointer-events: none;
+}

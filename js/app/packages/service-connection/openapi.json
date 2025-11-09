@@ -1,0 +1,349 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "connection_gateway",
+    "description": "",
+    "termsOfService": "https://macro.com/terms",
+    "license": { "name": "" },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/batch_send": {
+      "post": {
+        "tags": ["message"],
+        "operationId": "batch_send_message_handler",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/BatchSendMessageBody" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Message sent successfully",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SendMessageResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/message/send/{entity_type}/{entity_id}": {
+      "post": {
+        "tags": ["message"],
+        "operationId": "send_message_handler",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "the type of the entity to send the msssage to e.g. \"user\" | \"channel\" | \"document\" etc...",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "the id of the entity to send the message to",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SendMessageBody" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SendMessageResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "404": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    },
+    "/track/{entity_type}/{entity_id}": {
+      "get": {
+        "tags": ["entities"],
+        "operationId": "get_entity_handler",
+        "parameters": [
+          {
+            "name": "entity_type",
+            "in": "path",
+            "description": "the type of the entity to send the msssage to e.g. \"user\" | \"channel\" | \"document\" etc...",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "entity_id",
+            "in": "path",
+            "description": "the id of the entity to send the message to",
+            "required": true,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "type": "string" } }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          },
+          "500": {
+            "description": "",
+            "content": { "text/plain": { "schema": { "type": "string" } } }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "BatchSendMessageBody": {
+        "type": "object",
+        "required": ["message", "entities", "message_type"],
+        "properties": {
+          "entities": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Entity" },
+            "description": "all entities to send the message to"
+          },
+          "message": { "description": "the message to send" },
+          "message_type": {
+            "type": "string",
+            "description": "the type of the message we are sending"
+          }
+        }
+      },
+      "Entity": {
+        "type": "object",
+        "description": "The Entity describes the minimum amount of information required to describe a unique thing in Macro\nThis contains the type of the entity [EntityType] and the string id of that entity",
+        "required": ["entity_type", "entity_id"],
+        "properties": {
+          "entity_id": {
+            "type": "string",
+            "description": "The id of that entity"
+          },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "The type of entity we are describing"
+          }
+        }
+      },
+      "EntityType": {
+        "type": "string",
+        "description": "The type of an entity in Macro",
+        "enum": [
+          "user",
+          "chat",
+          "channel",
+          "document",
+          "project",
+          "email",
+          "team"
+        ]
+      },
+      "GenericErrorResponse": {
+        "type": "object",
+        "required": ["error", "message"],
+        "properties": {
+          "error": {
+            "type": "boolean",
+            "description": "Indicates if an error occurred"
+          },
+          "message": {
+            "type": "string",
+            "description": "Message to explain failure"
+          }
+        }
+      },
+      "MessageReceipt": {
+        "type": "object",
+        "required": ["user_id", "delivery_count", "active"],
+        "properties": {
+          "active": {
+            "type": "boolean",
+            "description": "If one of those connections was active for the entity"
+          },
+          "delivery_count": {
+            "type": "integer",
+            "format": "int64",
+            "description": "The numer of times the message was delivered to the user",
+            "minimum": 0
+          },
+          "user_id": {
+            "type": "string",
+            "description": "The user id of the user who received the message"
+          }
+        }
+      },
+      "SendMessageBody": {
+        "type": "object",
+        "required": ["message", "message_type"],
+        "properties": { "message": {}, "message_type": { "type": "string" } }
+      },
+      "SendMessageResponse": {
+        "type": "object",
+        "required": ["receipts"],
+        "properties": {
+          "receipts": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/MessageReceipt" }
+          }
+        }
+      },
+      "StoredConnectionEntity": {
+        "type": "object",
+        "required": [
+          "PK",
+          "SK",
+          "entity_type",
+          "entity_id",
+          "connection_id",
+          "created_at",
+          "user_id"
+        ],
+        "properties": {
+          "PK": { "type": "string" },
+          "SK": { "type": "string" },
+          "connection_id": {
+            "type": "string",
+            "description": "id of the connection"
+          },
+          "created_at": {
+            "type": "integer",
+            "format": "int64",
+            "description": "timestamp when the connection was initiated",
+            "minimum": 0
+          },
+          "entity_id": { "type": "string", "description": "id of the entity" },
+          "entity_type": {
+            "$ref": "#/components/schemas/EntityType",
+            "description": "type of the entity"
+          },
+          "last_ping": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "the timestamp of the last ping",
+            "minimum": 0
+          },
+          "user_id": {
+            "type": "string",
+            "description": "user id to whom the conneciton belongs to"
+          }
+        }
+      },
+      "StringIDResponse": {
+        "type": "object",
+        "required": ["id"],
+        "properties": { "id": { "type": "string" } }
+      },
+      "ToWebsocketMessage": {
+        "oneOf": [
+          {
+            "allOf": [
+              { "$ref": "#/components/schemas/TrackEntityMessage" },
+              {
+                "type": "object",
+                "required": ["type"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["track_entity"] }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "TrackAction": {
+        "type": "string",
+        "description": "The type of action that can occur on an [Entity]",
+        "enum": ["open", "ping", "close"]
+      },
+      "TrackEntityMessage": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Entity" },
+          {
+            "type": "object",
+            "required": ["action"],
+            "properties": {
+              "action": { "$ref": "#/components/schemas/TrackAction" }
+            }
+          }
+        ]
+      },
+      "UploadFolderStatusUpdate": {
+        "oneOf": [
+          {
+            "type": "object",
+            "required": ["requestId", "projectId", "status"],
+            "properties": {
+              "projectId": { "type": "string" },
+              "requestId": { "type": "string" },
+              "status": { "type": "string", "enum": ["completed"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["requestId", "projectId", "status"],
+            "properties": {
+              "projectId": { "type": "string" },
+              "requestId": { "type": "string" },
+              "status": { "type": "string", "enum": ["partially_completed"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["requestId", "status"],
+            "properties": {
+              "requestId": { "type": "string" },
+              "status": { "type": "string", "enum": ["failed"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["requestId", "status"],
+            "properties": {
+              "requestId": { "type": "string" },
+              "status": { "type": "string", "enum": ["unknown"] }
+            }
+          }
+        ]
+      }
+    }
+  },
+  "tags": [
+    { "name": "connection gateway", "description": "Connection gateway API" }
+  ]
+}

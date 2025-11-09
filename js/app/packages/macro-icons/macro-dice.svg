@@ -1,0 +1,7 @@
+<svg fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+  <circle class="dot" anim="false" x="-6" y="6" cx="18" cy="6" r="1.8"/>
+  <circle class="dot" anim="false" x="6" y="6" cx="6" cy="6" r="1.8"/>
+  <circle cx="12" cy="12" r="1.8"/>
+  <circle class="dot" anim="false" x="6" y="-6" cx="6" cy="18" r="1.8"/>
+  <circle class="dot" anim="false" x="-6" y="-6" cx="18" cy="18" r="1.8"/>
+</svg>

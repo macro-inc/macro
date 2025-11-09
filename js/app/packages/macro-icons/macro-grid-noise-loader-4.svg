@@ -1,0 +1,28 @@
+<svg viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" style="background: transparent">
+  <style>
+    .px { fill: currentColor; pointer-events: none; }
+    .a { animation-timing-function: steps(1, end); animation-iteration-count: infinite; }
+
+    @keyframes flick {
+      0%, 100% { opacity: 1; }
+      71% { opacity: 0; }
+    }
+  </style>
+
+  <defs>
+    <rect id="pixel" width="10" height="10" class="px a" rx="7.5" ry="7.5" />
+  </defs>
+
+  <!-- Row 0 -->
+  <use href="#pixel" x="0" y="0" style="animation: flick 0.45s infinite; animation-delay: 0.21s"/>
+  <use href="#pixel" x="11" y="0" style="animation: flick 0.73s infinite; animation-delay: 0.01s"/>
+  <use href="#pixel" x="22" y="0" style="animation: flick 0.42s infinite; animation-delay: 0.01s"/>
+  <!-- Row 1 -->
+  <use href="#pixel" x="0" y="11" style="animation: flick 0.67s infinite; animation-delay: 0.15s"/>
+  <use href="#pixel" x="11" y="11" style="animation: flick 0.72s infinite; animation-delay: 0.20s"/>
+  <use href="#pixel" x="22" y="11" style="animation: flick 0.53s infinite; animation-delay: 0.05s"/>
+  <!-- Row 2 -->
+  <use href="#pixel" x="0" y="22" style="animation: flick 0.51s infinite; animation-delay: 0.20s"/>
+  <use href="#pixel" x="11" y="22" style="animation: flick 0.74s infinite; animation-delay: 0.04s"/>
+  <use href="#pixel" x="22" y="22" style="animation: flick 0.53s infinite; animation-delay: 0.01s"/>
+</svg>

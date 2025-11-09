@@ -1,0 +1,3 @@
+config:
+  macro-app-infra:jwt_secret_key:
+    secure: AAABAJEOPon+PTos5KilLwwrLa2FPfCcYdVAeb9xx3EbYvZeul4BywI/ud2KaA8liLk6+IFDvvfKC6IGYarN8A==
