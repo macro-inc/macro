@@ -1,3 +1,4 @@
+import { recheckFocus } from '@app/signal/focus';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import type { EditorType } from '@lexical-core';
 import type { Item } from '@service-storage/generated/schemas/item';
@@ -32,6 +33,7 @@ import {
   type ItemMention,
   keyboardFocusPlugin,
   mentionsPlugin,
+  registerRootEventListener,
   type SelectionData,
   selectionDataPlugin,
   tabIndentationPlugin,
@@ -121,6 +123,16 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
       setEditorStateFromMarkdown(editor, props.initialValue);
     }
   });
+
+  // better focus in handling. preserves selection on regain focus!
+  autoRegister(
+    registerRootEventListener(editor, 'focusin', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      editor.focus();
+      recheckFocus(); // force update global focus signal
+    })
+  );
 
   createEffect(() => {
     editor.setEditable(props.editable());

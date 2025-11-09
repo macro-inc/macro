@@ -1,3 +1,4 @@
+import { recheckFocus } from '@app/signal/focus';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { NodeAccessoryRenderer } from '@core/component/LexicalMarkdown/component/core/NodeAccessoryRenderer';
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
@@ -20,6 +21,7 @@ import {
   mentionsPlugin,
   NODE_TRANSFORM,
   type NodeTransformType,
+  registerRootEventListener,
   type SelectionData,
   tabIndentationPlugin,
   tableCellResizerPlugin,
@@ -326,6 +328,16 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
       },
       COMMAND_PRIORITY_CRITICAL
     )
+  );
+
+  // better focus in handling. preserves selection on regain focus!
+  autoRegister(
+    registerRootEventListener(editor, 'focusin', (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      editor.focus();
+      recheckFocus(); // force update global focus signal
+    })
   );
 
   return (
