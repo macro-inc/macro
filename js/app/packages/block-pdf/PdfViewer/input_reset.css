@@ -1,0 +1,85 @@
+/* This reverts styling applied by https://github.com/tailwindlabs/tailwindcss-forms/blob/master/src/index.js */
+.annotationLayer [type="text"],
+.annotationLayer [type="email"],
+.annotationLayer [type="url"],
+.annotationLayer [type="password"],
+.annotationLayer [type="number"],
+.annotationLayer [type="date"],
+.annotationLayer [type="datetime-local"],
+.annotationLayer [type="month"],
+.annotationLayer [type="search"],
+.annotationLayer [type="tel"],
+.annotationLayer [type="time"],
+.annotationLayer [type="week"],
+.annotationLayer [multiple],
+.annotationLayer textarea,
+.annotationLayer select {
+  appearance: initial;
+  box-shadow: initial;
+  font-size: initial;
+  line-height: initial;
+  padding: initial;
+  border: initial;
+  border-radius: initial;
+  border-color: initial;
+  border-width: initial;
+}
+
+.annotationLayer [type="text"]:focus,
+.annotationLayer [type="email"]:focus,
+.annotationLayer [type="url"]:focus,
+.annotationLayer [type="password"]:focus,
+.annotationLayer [type="number"]:focus,
+.annotationLayer [type="date"]:focus,
+.annotationLayer [type="datetime-local"]:focus,
+.annotationLayer [type="month"]:focus,
+.annotationLayer [type="search"]:focus,
+.annotationLayer [type="tel"]:focus,
+.annotationLayer [type="time"]:focus,
+.annotationLayer [type="week"]:focus,
+.annotationLayer [multiple]:focus,
+.annotationLayer textarea:focus,
+.annotationLayer select:focus {
+  box-shadow: initial;
+  border-color: initial;
+  outline: initial;
+  outline-offset: initial;
+}
+
+.annotationLayer [type="checkbox"],
+.annotationLayer [type="radio"] {
+  color: initial;
+  display: block;
+}
+
+.annotationLayer [type="checkbox"]:focus,
+.annotationLayer [type="radio"]:focus {
+  color: #3b82f6;
+  outline-offset: 3px;
+  outline-width: 1px;
+  box-shadow: initial;
+}
+.annotationLayer [type="checkbox"]:checked,
+.annotationLayer [type="radio"]:checked,
+.annotationLayer [type="checkbox"]:checked:hover,
+.annotationLayer [type="radio"]:checked:hover,
+.annotationLayer [type="checkbox"]:checked:focus,
+.annotationLayer [type="radio"]:checked:focus,
+.annotationLayer [type="checkbox"]:indeterminate,
+.annotationLayer [type="checkbox"]:indeterminate:focus,
+.annotationLayer [type="checkbox"]:indeterminate:hover {
+  border-color: initial;
+  background-color: initial;
+  background-size: initial;
+  background-position: initial;
+  background-repeat: initial;
+  background-image: initial;
+}
+
+.annotationLayer .buttonWidgetAnnotation.radioButton input[type="radio"] {
+  border-color: #000;
+}
+
+.annotationLayer .buttonWidgetAnnotation.radioButton {
+  border-color: transparent !important;
+}

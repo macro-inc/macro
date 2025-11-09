@@ -1,0 +1,56 @@
+{
+  "apiVersion": "v3",
+  "kind": "service",
+  "metadata": {
+    "name": "web-app",
+    "owner": "the-canaries",
+    "links": [
+      {
+        "name": "repository",
+        "type": "repo",
+        "provider": "Github",
+        "url": "https://github.com/macro-inc/app-monorepo"
+      },
+      {
+        "name": "runbook",
+        "type": "runbook",
+        "url": "https://docs.company.com/runbooks/web-app"
+      }
+    ],
+    "contacts": [
+      {
+        "name": "Rithy",
+        "type": "email",
+        "contact": "rithy@macro.com"
+      },
+      {
+        "name": "Seamus",
+        "type": "email",
+        "contact": "seamus@macro.com"
+      },
+      {
+        "name": "Peter",
+        "type": "email",
+        "contact": "peter@macro.com"
+      }
+    ]
+  },
+  "spec": {
+    "lifecycle": "production",
+    "tier": "high",
+    "type": "browser",
+    "languages": [
+      "typescript"
+    ]
+  },
+  "datadog": {
+    "codeLocations": [
+      {
+        "repositoryURL": "https://github.com/macro-inc/app-monorepo.git",
+        "paths": [
+          "packages/**/*"
+        ]
+      }
+    ]
+  }
+}

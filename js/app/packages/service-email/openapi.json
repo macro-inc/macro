@@ -1,0 +1,1982 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "email_service",
+    "description": "",
+    "termsOfService": "https://macro.com/terms",
+    "license": { "name": "" },
+    "version": "0.1.0"
+  },
+  "paths": {
+    "/email/attachments/{id}": {
+      "get": {
+        "tags": ["Attachments"],
+        "summary": "Get an attachment by ID.",
+        "operationId": "get_attachment",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Attachment ID.",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/GetAttachmentResponse"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/backfill/gmail": {
+      "delete": {
+        "tags": ["Init"],
+        "summary": "Cancel a backfill job.",
+        "operationId": "cancel_backfill_gmail",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CancelBackfillParams" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/backfill/gmail/{id}": {
+      "get": {
+        "tags": ["Init"],
+        "summary": "Get a backfill job.",
+        "operationId": "get_backfill_gmail",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Job ID.",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetBackfillJobResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/contacts": {
+      "get": {
+        "tags": ["Contacts"],
+        "summary": "List all contacts belonging to the user, grouped by link.",
+        "operationId": "list_contacts",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListContactsResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/drafts": {
+      "post": {
+        "tags": ["Drafts"],
+        "summary": "Create a draft.",
+        "operationId": "create_draft",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateDraftRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CreateDraftResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/drafts/{id}": {
+      "delete": {
+        "tags": ["Drafts"],
+        "summary": "Delete a draft.",
+        "operationId": "delete_draft",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Draft ID.",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/init": {
+      "post": {
+        "tags": ["Init"],
+        "summary": "Initialize email functionality for the user. Populates initial threads and enables inbox syncing.",
+        "operationId": "init_user",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/labels": {
+      "get": {
+        "tags": ["Labels"],
+        "summary": "List user labels.",
+        "operationId": "list_labels",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ListLabelsResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["Labels"],
+        "summary": "Create a label.",
+        "operationId": "create_label",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateLabelRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CreateLabelResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/labels/{id}": {
+      "delete": {
+        "tags": ["Labels"],
+        "summary": "Delete a label.",
+        "operationId": "delete_label",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Label ID.",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/links": {
+      "get": {
+        "tags": ["Links"],
+        "summary": "List all links belonging to the user.",
+        "operationId": "list_links",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/messages": {
+      "post": {
+        "tags": ["Messages"],
+        "summary": "Send an email message.",
+        "operationId": "send_message",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SendMessageRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SendMessageResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/messages/batch": {
+      "post": {
+        "tags": ["Messages"],
+        "operationId": "get_messages_batch",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "array",
+                "items": { "type": "string", "format": "uuid" }
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/ParsedMessage" }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/messages/labels": {
+      "patch": {
+        "tags": ["Messages"],
+        "summary": "Add or remove a label from a batch of messages",
+        "operationId": "add_remove_label",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/UpdateLabelBatchRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpdateLabelBatchResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/messages/{id}": {
+      "get": {
+        "tags": ["Messages"],
+        "operationId": "get_message",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Message ID.",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ParsedMessage" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/sync": {
+      "post": {
+        "tags": ["Sync"],
+        "summary": "Enables inbox syncing for user.",
+        "operationId": "enable_sync",
+        "responses": {
+          "201": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": ["Sync"],
+        "summary": "Disables inbox syncing for user.",
+        "operationId": "disable_sync",
+        "responses": {
+          "204": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/threads/previews/cursor/{view}": {
+      "get": {
+        "tags": ["Previews"],
+        "summary": "Get paginated thread previews with cursor-based pagination.",
+        "operationId": "previews_inbox_cursor",
+        "parameters": [
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Limit for pagination. Default is 20. Max is 500.",
+            "required": false,
+            "schema": { "type": "integer", "format": "int32", "minimum": 0 }
+          },
+          {
+            "name": "sort_method",
+            "in": "query",
+            "description": "Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_updated.",
+            "required": false,
+            "schema": { "$ref": "#/components/schemas/ApiSortMethod" }
+          },
+          {
+            "name": "view",
+            "in": "path",
+            "description": "View type. Supported values: inbox, sent, drafts, starred, all, important, other, user:<label>",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Cursor value. Base64 encoded timestamp and item id, separated by |.",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetPreviewsFrecencyResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/threads/{id}": {
+      "get": {
+        "tags": ["Threads"],
+        "summary": "Get a thread with a paginated number of messages.",
+        "operationId": "get_thread",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Thread ID.",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "offset",
+            "in": "query",
+            "description": "Offset for message pagination. Default is 0.",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Limit for message pagination. Default is 5.",
+            "required": true,
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/GetThreadResponse" }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/threads/{id}/archived": {
+      "patch": {
+        "tags": ["Threads"],
+        "summary": "Change the archived status of a thread.",
+        "operationId": "archive_thread",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ArchiveThreadRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/threads/{id}/messages": {
+      "get": {
+        "tags": ["email::threads::get"],
+        "operationId": "get_thread_messages_handler",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Thread ID",
+            "required": true,
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "since",
+            "in": "query",
+            "description": "Filter messages after this date",
+            "required": false,
+            "schema": { "type": "string", "format": "date-time" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "description": "Limit number of messages returned",
+            "required": false,
+            "schema": { "type": "integer", "format": "int64" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": { "$ref": "#/components/schemas/ParsedMessage" }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/threads/{id}/seen": {
+      "post": {
+        "tags": ["Threads"],
+        "summary": "Called by FE when the user has seen a thread.",
+        "operationId": "thread_seen",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Thread ID.",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/health": {
+      "get": {
+        "tags": ["Health"],
+        "summary": "Health check",
+        "operationId": "health_handler",
+        "responses": {
+          "200": {
+            "description": "Health",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "APIThread": {
+        "type": "object",
+        "description": "Thread object exposed to the FE in Get Threads Call",
+        "required": [
+          "link_id",
+          "inbox_visible",
+          "is_read",
+          "created_at",
+          "updated_at",
+          "messages"
+        ],
+        "properties": {
+          "created_at": { "type": "string", "format": "date-time" },
+          "db_id": { "type": ["string", "null"], "format": "uuid" },
+          "inbox_visible": { "type": "boolean" },
+          "is_read": { "type": "boolean" },
+          "latest_inbound_message_ts": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "latest_non_spam_message_ts": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "latest_outbound_message_ts": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "link_id": { "type": "string", "format": "uuid" },
+          "messages": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/MessageWithBodyReplyless" }
+          },
+          "provider_id": { "type": ["string", "null"] },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ApiSortMethod": {
+        "type": "string",
+        "description": "common types of sorts based on timestamps",
+        "enum": ["viewed_at", "updated_at", "created_at", "viewed_updated"]
+      },
+      "ArchiveThreadRequest": {
+        "type": "object",
+        "required": ["value"],
+        "properties": { "value": { "type": "boolean" } }
+      },
+      "Attachment": {
+        "type": "object",
+        "description": "Attachments of a message, as sent to us by the provider.",
+        "properties": {
+          "content_id": { "type": ["string", "null"] },
+          "data_url": { "type": ["string", "null"] },
+          "db_id": { "type": ["string", "null"], "format": "uuid" },
+          "filename": { "type": ["string", "null"] },
+          "mime_type": { "type": ["string", "null"] },
+          "provider_id": { "type": ["string", "null"] },
+          "size_bytes": { "type": ["integer", "null"], "format": "int64" }
+        }
+      },
+      "AttachmentMacro": {
+        "type": "object",
+        "description": "Attachments of a message created when sending a message/draft through Macro FE. references\na macro item (document, canvas, etc). These don't actually get sent to the provider when\nsending a message, but we store them so we can display the pills for the Macro objects in the FE\nwhen displaying the message.",
+        "required": ["item_id", "item_type"],
+        "properties": {
+          "db_id": { "type": ["string", "null"], "format": "uuid" },
+          "item_id": { "type": "string", "format": "uuid" },
+          "item_type": { "type": "string" },
+          "message_id": { "type": ["string", "null"], "format": "uuid" }
+        }
+      },
+      "BackfillJob": {
+        "type": "object",
+        "required": [
+          "id",
+          "fusionauth_user_id",
+          "total_threads",
+          "status",
+          "threads_retrieved_count",
+          "threads_processed_count",
+          "messages_retrieved_count",
+          "messages_processed_count",
+          "threads_succeeded_count",
+          "threads_skipped_count",
+          "threads_failed_count",
+          "messages_succeeded_count",
+          "messages_failed_count",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": { "type": "string", "format": "date-time" },
+          "fusionauth_user_id": { "type": "string" },
+          "id": { "type": "string", "format": "uuid" },
+          "link_id": { "type": ["string", "null"], "format": "uuid" },
+          "messages_failed_count": { "type": "integer", "format": "int32" },
+          "messages_processed_count": { "type": "integer", "format": "int32" },
+          "messages_retrieved_count": { "type": "integer", "format": "int32" },
+          "messages_succeeded_count": { "type": "integer", "format": "int32" },
+          "status": { "$ref": "#/components/schemas/BackfillJobStatus" },
+          "threads_failed_count": { "type": "integer", "format": "int32" },
+          "threads_processed_count": { "type": "integer", "format": "int32" },
+          "threads_requested_limit": {
+            "type": ["integer", "null"],
+            "format": "int32"
+          },
+          "threads_retrieved_count": { "type": "integer", "format": "int32" },
+          "threads_skipped_count": { "type": "integer", "format": "int32" },
+          "threads_succeeded_count": { "type": "integer", "format": "int32" },
+          "total_threads": { "type": "integer", "format": "int32" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "BackfillJobStatus": {
+        "type": "string",
+        "enum": ["Init", "InProgress", "Complete", "Cancelled", "Failed"]
+      },
+      "CancelBackfillParams": {
+        "type": "object",
+        "required": ["job_id"],
+        "properties": { "job_id": { "type": "string", "format": "uuid" } }
+      },
+      "Contact": {
+        "type": "object",
+        "required": ["link_id"],
+        "properties": {
+          "email_address": { "type": ["string", "null"] },
+          "id": { "type": ["string", "null"], "format": "uuid" },
+          "link_id": { "type": "string", "format": "uuid" },
+          "name": { "type": ["string", "null"] },
+          "original_photo_url": { "type": ["string", "null"] },
+          "sfs_photo_url": { "type": ["string", "null"] }
+        }
+      },
+      "ContactInfo": {
+        "type": "object",
+        "required": ["email"],
+        "properties": {
+          "email": { "type": "string" },
+          "name": { "type": ["string", "null"] },
+          "photo_url": { "type": ["string", "null"] }
+        }
+      },
+      "ContactInfoLegacy": {
+        "type": "object",
+        "required": ["email", "email_address"],
+        "properties": {
+          "email": { "type": "string" },
+          "email_address": { "type": "string" },
+          "name": { "type": ["string", "null"] },
+          "photo_url": { "type": ["string", "null"] }
+        }
+      },
+      "ContactInfoWithInteraction": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ContactInfoLegacy" },
+          {
+            "type": "object",
+            "required": ["last_interaction"],
+            "properties": {
+              "last_interaction": { "type": "string", "format": "date-time" }
+            }
+          }
+        ]
+      },
+      "CreateDraftRequest": {
+        "type": "object",
+        "description": "The request passed to send a message",
+        "required": ["draft"],
+        "properties": {
+          "draft": { "$ref": "#/components/schemas/MessageToSend" }
+        }
+      },
+      "CreateDraftResponse": {
+        "type": "object",
+        "required": ["draft"],
+        "properties": {
+          "draft": { "$ref": "#/components/schemas/MessageToSend" }
+        }
+      },
+      "CreateLabelRequest": {
+        "type": "object",
+        "required": ["label_name"],
+        "properties": { "label_name": { "type": "string" } }
+      },
+      "CreateLabelResponse": {
+        "type": "object",
+        "description": "The response returned from the create label endpoint",
+        "required": ["label"],
+        "properties": {
+          "label": {
+            "$ref": "#/components/schemas/Label",
+            "description": "the thread, with messages inside"
+          }
+        }
+      },
+      "EmptyResponse": {
+        "type": "object",
+        "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "ErrorResponse": {
+        "type": "object",
+        "description": "A plain old json error response for use with axum.\nyup, thats it.",
+        "required": ["message"],
+        "properties": {
+          "message": {
+            "type": "string",
+            "description": "Message to explain failure"
+          }
+        }
+      },
+      "GetAttachmentResponse": {
+        "type": "object",
+        "description": "The response returned from the get attachment endpoint",
+        "required": ["attachment"],
+        "properties": {
+          "attachment": { "$ref": "#/components/schemas/Attachment" }
+        }
+      },
+      "GetBackfillJobResponse": {
+        "type": "object",
+        "description": "The response returned from the get backfill job endpoint",
+        "required": ["job"],
+        "properties": { "job": { "$ref": "#/components/schemas/BackfillJob" } }
+      },
+      "GetPreviewsCursorResponse": {
+        "type": "object",
+        "required": ["previews"],
+        "properties": {
+          "previews": {
+            "$ref": "#/components/schemas/PaginatedThreadCursor",
+            "description": "the thread, with messages inside"
+          }
+        }
+      },
+      "GetPreviewsFrecencyResponse": {
+        "type": "object",
+        "required": ["previews"],
+        "properties": {
+          "previews": {
+            "$ref": "#/components/schemas/ThreadPreviewPagination",
+            "description": "the thread, with messages inside"
+          }
+        }
+      },
+      "GetThreadResponse": {
+        "type": "object",
+        "description": "The response returned from the get thread endpoint",
+        "required": ["thread"],
+        "properties": {
+          "thread": {
+            "$ref": "#/components/schemas/APIThread",
+            "description": "the thread, with messages inside"
+          }
+        }
+      },
+      "Label": {
+        "type": "object",
+        "required": ["link_id", "provider_label_id", "created_at"],
+        "properties": {
+          "created_at": { "type": "string", "format": "date-time" },
+          "id": { "type": ["string", "null"], "format": "uuid" },
+          "label_list_visibility": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/LabelListVisibility" }
+            ]
+          },
+          "link_id": { "type": "string", "format": "uuid" },
+          "message_list_visibility": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/MessageListVisibility" }
+            ]
+          },
+          "name": { "type": ["string", "null"] },
+          "provider_label_id": { "type": "string" },
+          "type_": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/LabelType" }
+            ]
+          }
+        }
+      },
+      "LabelInfo": {
+        "type": "object",
+        "required": ["provider_id", "name"],
+        "properties": {
+          "name": { "type": "string" },
+          "provider_id": { "type": "string" }
+        }
+      },
+      "LabelListVisibility": {
+        "type": "string",
+        "enum": ["LabelShow", "LabelShowIfUnread", "LabelHide"]
+      },
+      "LabelType": { "type": "string", "enum": ["System", "User"] },
+      "Link": {
+        "type": "object",
+        "required": [
+          "id",
+          "macro_id",
+          "fusionauth_user_id",
+          "email_address",
+          "provider",
+          "is_sync_active",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": { "type": "string", "format": "date-time" },
+          "email_address": { "type": "string" },
+          "fusionauth_user_id": { "type": "string" },
+          "id": { "type": "string", "format": "uuid" },
+          "is_sync_active": { "type": "boolean" },
+          "macro_id": { "type": "string" },
+          "provider": { "$ref": "#/components/schemas/UserProvider" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ListContactsResponse": {
+        "type": "object",
+        "required": ["contacts"],
+        "properties": {
+          "contacts": {
+            "type": "object",
+            "description": "the thread, with messages inside",
+            "additionalProperties": {
+              "type": "array",
+              "items": {
+                "$ref": "#/components/schemas/ContactInfoWithInteraction"
+              }
+            },
+            "propertyNames": { "type": "string", "format": "uuid" }
+          }
+        }
+      },
+      "ListLabelsResponse": {
+        "type": "object",
+        "required": ["labels"],
+        "properties": {
+          "labels": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Label" }
+          }
+        }
+      },
+      "ListLinksResponse": {
+        "type": "object",
+        "description": "The response returned from the list links endpoint",
+        "required": ["links"],
+        "properties": {
+          "links": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Link" },
+            "description": "the thread, with messages inside"
+          }
+        }
+      },
+      "Message": {
+        "type": "object",
+        "required": [
+          "link_id",
+          "is_read",
+          "is_starred",
+          "is_sent",
+          "is_draft",
+          "has_attachments",
+          "to",
+          "cc",
+          "bcc",
+          "labels",
+          "attachments",
+          "attachments_macro",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Attachment" }
+          },
+          "attachments_macro": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AttachmentMacro" }
+          },
+          "bcc": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ContactInfo" }
+          },
+          "body_html_sanitized": { "type": ["string", "null"] },
+          "body_macro": { "type": ["string", "null"] },
+          "body_text": { "type": ["string", "null"] },
+          "cc": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ContactInfo" }
+          },
+          "created_at": { "type": "string", "format": "date-time" },
+          "db_id": { "type": ["string", "null"], "format": "uuid" },
+          "from": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/ContactInfo" }
+            ]
+          },
+          "global_id": {
+            "type": ["string", "null"],
+            "description": "The globally unique Message-ID header value created by the sender to uniquely identify this email\nUsed for threading across all providers (In-Reply-To header, References header)"
+          },
+          "has_attachments": { "type": "boolean" },
+          "headers_json": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/Value" }
+            ]
+          },
+          "internal_date_ts": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "is_draft": { "type": "boolean" },
+          "is_read": { "type": "boolean" },
+          "is_sent": { "type": "boolean" },
+          "is_starred": { "type": "boolean" },
+          "labels": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Label" }
+          },
+          "link_id": { "type": "string", "format": "uuid" },
+          "provider_history_id": { "type": ["string", "null"] },
+          "provider_id": { "type": ["string", "null"] },
+          "provider_thread_id": { "type": ["string", "null"] },
+          "replying_to_id": { "type": ["string", "null"], "format": "uuid" },
+          "scheduled_send_time": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "sent_at": { "type": ["string", "null"], "format": "date-time" },
+          "size_estimate": { "type": ["integer", "null"], "format": "int64" },
+          "snippet": { "type": ["string", "null"] },
+          "subject": { "type": ["string", "null"] },
+          "thread_db_id": { "type": ["string", "null"], "format": "uuid" },
+          "to": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ContactInfo" }
+          },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "MessageListVisibility": { "type": "string", "enum": ["Show", "Hide"] },
+      "MessageToSend": {
+        "type": "object",
+        "required": ["link_id", "subject"],
+        "properties": {
+          "attachments": {
+            "type": ["array", "null"],
+            "items": { "$ref": "#/components/schemas/Attachment" }
+          },
+          "attachments_macro": {
+            "type": ["array", "null"],
+            "items": { "$ref": "#/components/schemas/AttachmentMacro" }
+          },
+          "bcc": {
+            "type": ["array", "null"],
+            "items": { "$ref": "#/components/schemas/ContactInfo" }
+          },
+          "body_html": { "type": ["string", "null"] },
+          "body_macro": { "type": ["string", "null"] },
+          "body_text": { "type": ["string", "null"] },
+          "cc": {
+            "type": ["array", "null"],
+            "items": { "$ref": "#/components/schemas/ContactInfo" }
+          },
+          "db_id": { "type": ["string", "null"], "format": "uuid" },
+          "headers_json": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/Value" }
+            ]
+          },
+          "link_id": { "type": "string", "format": "uuid" },
+          "provider_id": { "type": ["string", "null"] },
+          "provider_thread_id": { "type": ["string", "null"] },
+          "replying_to_id": { "type": ["string", "null"], "format": "uuid" },
+          "send_time": { "type": ["string", "null"], "format": "date-time" },
+          "subject": { "type": "string" },
+          "thread_db_id": { "type": ["string", "null"], "format": "uuid" },
+          "to": {
+            "type": ["array", "null"],
+            "items": { "$ref": "#/components/schemas/ContactInfo" }
+          }
+        }
+      },
+      "MessageWithBodyReplyless": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Message" },
+          {
+            "type": "object",
+            "properties": { "body_replyless": { "type": ["string", "null"] } }
+          }
+        ]
+      },
+      "PaginatedThreadCursor": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ThreadPreviewCursor" }
+          },
+          "next_cursor": { "type": ["string", "null"] }
+        }
+      },
+      "ParsedMessage": {
+        "type": "object",
+        "required": [
+          "db_id",
+          "link_id",
+          "thread_db_id",
+          "to",
+          "cc",
+          "bcc",
+          "labels"
+        ],
+        "properties": {
+          "bcc": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ContactInfo" }
+          },
+          "body_parsed": { "type": ["string", "null"] },
+          "cc": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ContactInfo" }
+          },
+          "db_id": { "type": "string", "format": "uuid" },
+          "from": {
+            "oneOf": [
+              { "type": "null" },
+              { "$ref": "#/components/schemas/ContactInfo" }
+            ]
+          },
+          "internal_date_ts": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "labels": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/LabelInfo" }
+          },
+          "link_id": { "type": "string", "format": "uuid" },
+          "subject": { "type": ["string", "null"] },
+          "thread_db_id": { "type": "string", "format": "uuid" },
+          "to": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ContactInfo" }
+          }
+        }
+      },
+      "PreviewView": {
+        "oneOf": [
+          {
+            "type": "string",
+            "enum": [
+              "inbox",
+              "sent",
+              "drafts",
+              "starred",
+              "all",
+              "important",
+              "other"
+            ]
+          },
+          { "type": "string", "format": "user:<label>" }
+        ],
+        "description": "View type. Supported values include standard labels and a custom user label user:<label>"
+      },
+      "PreviewViewStandardLabel": {
+        "type": "string",
+        "enum": [
+          "inbox",
+          "sent",
+          "drafts",
+          "starred",
+          "all",
+          "important",
+          "other"
+        ]
+      },
+      "SendMessageRequest": {
+        "type": "object",
+        "description": "The request passed to send a message",
+        "required": ["message"],
+        "properties": {
+          "message": { "$ref": "#/components/schemas/MessageToSend" }
+        }
+      },
+      "SendMessageResponse": {
+        "type": "object",
+        "required": ["message"],
+        "properties": {
+          "message": { "$ref": "#/components/schemas/MessageToSend" }
+        }
+      },
+      "Thread": {
+        "type": "object",
+        "required": [
+          "link_id",
+          "inbox_visible",
+          "is_read",
+          "created_at",
+          "updated_at",
+          "messages"
+        ],
+        "properties": {
+          "created_at": { "type": "string", "format": "date-time" },
+          "db_id": { "type": ["string", "null"], "format": "uuid" },
+          "inbox_visible": { "type": "boolean" },
+          "is_read": { "type": "boolean" },
+          "latest_inbound_message_ts": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "latest_non_spam_message_ts": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "latest_outbound_message_ts": {
+            "type": ["string", "null"],
+            "format": "date-time"
+          },
+          "link_id": { "type": "string", "format": "uuid" },
+          "messages": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Message" }
+          },
+          "provider_id": { "type": ["string", "null"] },
+          "updated_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "ThreadList": {
+        "type": "object",
+        "required": ["threads"],
+        "properties": {
+          "next_page_token": { "type": ["string", "null"] },
+          "threads": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ThreadSummary" }
+          }
+        }
+      },
+      "ThreadPreviewCursor": {
+        "type": "object",
+        "description": "thread summary returned in preview cursor endpoint",
+        "required": [
+          "id",
+          "ownerId",
+          "inboxVisible",
+          "isRead",
+          "isDraft",
+          "isImportant",
+          "attachments",
+          "attachmentsMacro",
+          "participants",
+          "sortTs",
+          "createdAt",
+          "updatedAt",
+          "viewedAt"
+        ],
+        "properties": {
+          "attachments": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Attachment" }
+          },
+          "attachmentsMacro": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/AttachmentMacro" }
+          },
+          "createdAt": { "type": "integer", "format": "int64" },
+          "id": { "type": "string", "format": "uuid" },
+          "inboxVisible": { "type": "boolean" },
+          "isDraft": { "type": "boolean" },
+          "isImportant": { "type": "boolean" },
+          "isRead": { "type": "boolean" },
+          "name": { "type": ["string", "null"] },
+          "ownerId": { "type": "string" },
+          "participants": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/Contact" }
+          },
+          "providerId": { "type": ["string", "null"] },
+          "senderEmail": { "type": ["string", "null"] },
+          "senderName": { "type": ["string", "null"] },
+          "senderPhotoUrl": { "type": ["string", "null"] },
+          "snippet": { "type": ["string", "null"] },
+          "sortTs": { "type": "integer", "format": "int64" },
+          "updatedAt": { "type": "integer", "format": "int64" },
+          "viewedAt": { "type": ["integer", "null"], "format": "int64" }
+        }
+      },
+      "ThreadPreviewFrecency": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ThreadPreviewCursor" },
+          {
+            "type": "object",
+            "required": ["frecency_score"],
+            "properties": {
+              "frecency_score": { "type": "number", "format": "double" }
+            }
+          }
+        ]
+      },
+      "ThreadPreviewPagination": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ThreadPreviewFrecency" }
+          },
+          "next_cursor": { "type": ["string", "null"] }
+        }
+      },
+      "ThreadSummary": {
+        "type": "object",
+        "required": ["provider_id"],
+        "properties": { "provider_id": { "type": "string" } }
+      },
+      "UpdateLabelBatchRequest": {
+        "type": "object",
+        "required": ["message_ids", "label_id", "value"],
+        "properties": {
+          "label_id": { "type": "string", "format": "uuid" },
+          "message_ids": {
+            "type": "array",
+            "items": { "type": "string", "format": "uuid" }
+          },
+          "value": { "type": "boolean" }
+        }
+      },
+      "UpdateLabelBatchResponse": {
+        "type": "object",
+        "required": ["successful_ids", "failed_ids", "missing_ids"],
+        "properties": {
+          "failed_ids": {
+            "type": "array",
+            "items": { "type": "string", "format": "uuid" }
+          },
+          "missing_ids": {
+            "type": "array",
+            "items": { "type": "string", "format": "uuid" }
+          },
+          "successful_ids": {
+            "type": "array",
+            "items": { "type": "string", "format": "uuid" }
+          }
+        }
+      },
+      "UserProvider": { "type": "string", "enum": ["Gmail"] },
+      "Value": {}
+    }
+  },
+  "tags": [{ "name": "Email Service", "description": "Macro Email Service" }]
+}

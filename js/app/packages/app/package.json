@@ -1,0 +1,31 @@
+{
+  "name": "app",
+  "private": true,
+  "main": "index.ts",
+  "type": "module",
+  "version": "2.5.0",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build && echo $npm_package_version >> ./dist/semver.txt",
+    "preview:dev": "vite preview -c vite-ci.config.ts --outDir dist --base /app",
+    "preview:prod": "vite preview -c vite-ci.config.ts --outDir dist --base /app",
+    "check": "tsc --noEmit --skipLibCheck",
+    "ddupload:dev": "datadog-ci sourcemaps upload ./dist --service web-app --release-version $WEB_APP_VERSION --minified-path-prefix https://dev.macro.com/app",
+    "ddupload:prod": "datadog-ci sourcemaps upload ./dist --service web-app --release-version $WEB_APP_VERSION --minified-path-prefix https://macro.com/app"
+  },
+  "dependencies": {
+    "@types/three": "^0.178.0",
+    "@macro/tauri": "workspace:*",
+    "core": "workspace:*",
+    "mermaid": "^11.6.0",
+    "overlayscrollbars-solid": "^0.5.5",
+    "service-auth": "workspace:*",
+    "service-cognition": "workspace:*",
+    "service-gql": "workspace:*",
+    "three": "^0.178.0"
+  },
+  "devDependencies": {
+    "@datadog/datadog-ci": "^3.7.0",
+    "jsdom": "^26.1.0"
+  }
+}

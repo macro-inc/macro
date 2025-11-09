@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no, interactive-widget=resizes-visual"
+    />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="theme-color" content="#FFFFFF" />
+    <meta name="description" content="Macro AI Workspace" />
+    <link rel="shortcut icon" href="%ASSETS_PATH%/icon.png" />
+    <link rel="apple-touch-icon" href="%ASSETS_PATH%/logo192.png" />
+    <!--
+      manifest.json provides metadata used when your web app is installed on a
+      user's mobile device or desktop. See https://developers.google.com/web/fundamentals/web-app-manifest/
+    -->
+    <link rel="manifest" href="/manifest.json" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root" class="h-full"></div>
+    <div id="modal" class="z-modal"></div>
+    <!--
+      Entrypoint
+    -->
+    <script type="module" src="/index.tsx"></script>
+    <script>
+      window.__START_TIME__ = performance.now();
+    </script>
+    <!-- Sets blank page to theme surface color to prevent background color flash -->
+    <script>
+      try {
+        let htmlColorString = localStorage.getItem('html-color-theme');
+        if(htmlColorString){
+          let htmlColor = JSON.parse(htmlColorString);
+          document.body.style.backgroundColor = htmlColor.color;
+        }
+      } catch(err) {
+        console.error('Failed parse macro-selected-theme: ', err)
+      }
+    </script>
+  </body>
+</html>

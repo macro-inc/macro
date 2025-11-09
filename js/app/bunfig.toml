@@ -1,0 +1,6 @@
+[run]
+bun = true
+[install]
+linker = "hoisted"
+[install.scopes]
+macro-inc = { token = "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", url = "https://npm.pkg.github.com" }

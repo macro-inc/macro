@@ -1,0 +1,22 @@
+{
+  "extends": "../../tsconfig.json",
+  "compilerOptions": {
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "emitDeclarationOnly": true,
+    "declaration": true,
+    "composite": true,
+    "types": [
+      "node"
+    ],
+    "lib": [
+      "es2021",
+      "DOM"
+    ]
+  },
+  "exclude": [
+    "**/*.test.ts"
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "name": "@coparse/filesystem",
+  "version": "0.1.0",
+  "description": "Environment agnostic primitives for reading writing and caching files",
+  "author": "CoParse Inc.",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/coparse-inc/filesystem.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "typescript",
+    "boilerplate"
+  ],
+  "main": "src/main.ts",
+  "scripts": {
+    "docs": "typedoc --entryPoints src/main.ts"
+  },
+  "devDependencies": {
+    "@types/wicg-file-system-access": "^2020.9.5",
+    "rimraf": "^3.0.2",
+    "tslib": "^2.6.2",
+    "typedoc": "^0.22.18"
+  },
+  "dependencies": {
+    "idb": "^6.1.3",
+    "jszip": "^3.10.1"
+  },
+  "bugs": {
+    "url": "https://github.com/coparse-inc/filesystem/issues"
+  },
+  "homepage": "https://github.com/coparse-inc/filesystem#readme"
+}

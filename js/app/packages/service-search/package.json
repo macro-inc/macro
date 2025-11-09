@@ -1,0 +1,8 @@
+{
+  "name": "service-search",
+  "private": true,
+  "dependencies": {},
+  "scripts": {
+    "test": "vitest"
+  }
+}

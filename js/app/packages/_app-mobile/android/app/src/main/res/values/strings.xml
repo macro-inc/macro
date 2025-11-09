@@ -1,0 +1,7 @@
+<?xml version='1.0' encoding='utf-8'?>
+<resources>
+    <string name="app_name">Macro</string>
+    <string name="title_activity_main">Macro</string>
+    <string name="package_name">com.macro.app.prod</string>
+    <string name="custom_url_scheme">com.macro.app.prod</string>
+</resources>

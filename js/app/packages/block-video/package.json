@@ -1,0 +1,8 @@
+{
+  "name": "block-video",
+  "private": true,
+  "scripts": {},
+  "dependencies": {
+    "service-storage": "workspace:*"
+  }
+}

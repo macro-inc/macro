@@ -1,0 +1,28 @@
+{
+  "name": "@macro-inc/lexical-core",
+  "version": "0.2.2",
+  "description": "Core lexical types, nodes, and utilities for. Includes custom nodes (CommentNode, ImageNode, EquationNode, etc.), plugins (nodeIdPlugin, peerIdPlugin), and markdown transformers for Lexical editor.",
+  "main": "index.ts",
+  "type": "module",
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com/"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/macro-inc/app-monorepo.git",
+    "directory": "packages/lexical-core"
+  },
+  "keywords": [],
+  "author": "seamus",
+  "peerDependencies": {
+    "lexical": "^0.32.1",
+    "@lexical/code": "^0.32.1",
+    "@lexical/link": "^0.32.1",
+    "@lexical/list": "^0.32.1",
+    "@lexical/mark": "^0.32.1",
+    "@lexical/markdown": "^0.32.1",
+    "@lexical/rich-text": "^0.32.1",
+    "@lexical/table": "^0.32.1",
+    "@lexical/utils": "^0.32.1"
+  }
+}

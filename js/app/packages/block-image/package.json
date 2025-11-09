@@ -1,0 +1,8 @@
+{
+  "name": "block-image",
+  "private": true,
+  "scripts": {},
+  "dependencies": {
+    "service-storage": "workspace:*"
+  }
+}
