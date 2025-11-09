@@ -1,15 +1,16 @@
 name: 'Web App Pr Check on Main'
 on:
   pull_request:
-    branches: 
+    branches:
       - main
     paths:
-      - './js/app/package.json'
-      - './js/app/bun.lock'
-      - './js/app/bunfig.toml'
-      - './js/app/packages/**'
-      - '.github/actions/setup-prereqs/**'
-      - '.github/workflows/check.yml'
+      - 'js/app/package.json'
+      - 'js/app/bun.lock'
+      - 'js/app/bunfig.toml'
+      - 'js/app/packages/**'
+      - 'js/app/src/**'
+      - '.github/actions/setup-reqs-web/**'
+      - '.github/workflows/web-app-check-main.yml'
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}-check
