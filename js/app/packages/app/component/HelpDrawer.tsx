@@ -1,4 +1,4 @@
-import { connectEmail, useEmailAuthStatus } from '@app/signal/emailAuth';
+import { connectEmail, useEmailLinksStatus } from '@app/signal/emailAuth';
 import { IconButton } from '@core/component/IconButton';
 import { toast } from '@core/component/Toast/Toast';
 import { fileSelector } from '@core/directive/fileSelector';
@@ -16,7 +16,7 @@ import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 false && fileSelector;
 
 export function HelpDrawer(props: { view?: View }) {
-  const emailActive = useEmailAuthStatus();
+  const emailActive = useEmailLinksStatus();
 
   return (
     <Switch>

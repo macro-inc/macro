@@ -32,7 +32,7 @@ import { createMemo, createResource, createSignal, Show } from 'solid-js';
 import {
   connectEmail,
   disconnectEmail,
-  useEmailAuthStatus,
+  useEmailLinksStatus,
 } from '../../signal/emailAuth';
 import { BetaTooltip } from '../BetaTooltip';
 import { deleteAccount, unregisterFromPushNotifications } from './Mobile';
@@ -79,7 +79,7 @@ export function Account() {
     string | undefined
   >(undefined);
 
-  const emailActive = useEmailAuthStatus();
+  const emailActive = useEmailLinksStatus();
   const [showTooltip, setShowTooltip] = createSignal<boolean>(false);
 
   const firstName = () => {

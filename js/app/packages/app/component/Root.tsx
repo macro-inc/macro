@@ -1,4 +1,4 @@
-import { useEmailAuthStatus } from '@app/signal/emailAuth';
+import { useEmailLinksStatus } from '@app/signal/emailAuth';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { ChannelsContextProvider } from '@core/component/ChannelsProvider';
@@ -56,6 +56,7 @@ import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
 import { useMobileEffect, useMobileNavigate } from './settings/Mobile';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
+import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -122,8 +123,6 @@ const rootPreload: RoutePreloadFunc = async (args) => {
     }
   }
 };
-
-const DEFAULT_ROUTE = '/component/unified-list';
 
 function BasePathComponent() {
   const [searchParams] = useSearchParams();
@@ -243,7 +242,7 @@ export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
       : notifInterface.showNotification
   );
 
-  const emailActive = useEmailAuthStatus();
+  const emailActive = useEmailLinksStatus();
   const emailSource = createEmailSource(undefined, undefined, {
     disabled: () => !emailActive(),
   });

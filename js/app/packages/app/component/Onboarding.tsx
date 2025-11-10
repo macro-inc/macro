@@ -1,4 +1,5 @@
-import { connectEmail, useEmailAuthStatus } from '@app/signal/emailAuth';
+import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
+import { connectEmail, useEmailLinksStatus } from '@app/signal/emailAuth';
 import { withAnalytics } from '@coparse/analytics';
 import { updateUserAuth, useIsAuthenticated } from '@core/auth';
 import { useHasPaidAccess } from '@core/auth/license';
@@ -17,7 +18,7 @@ export default function Onboarding() {
 
   const [progress, setProgress] = createSignal(0);
   const authenticated = useIsAuthenticated();
-  const connected = useEmailAuthStatus();
+  const connected = useEmailLinksStatus();
   const subscribed = useHasPaidAccess();
 
   const navigate = useNavigate();
@@ -44,7 +45,7 @@ export default function Onboarding() {
       track(TrackingEvents.ONBOARDING.COMPLETE);
       localStorage.removeItem('new_user_onboarding');
     }
-    return navigate('/unified-list');
+    return navigate(DEFAULT_ROUTE);
   }
 
   // WATCH FOR AUTH SUCCESS

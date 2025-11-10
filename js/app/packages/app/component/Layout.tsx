@@ -140,9 +140,6 @@ export function Layout(props: RouteSectionProps) {
       <Show when={paywallOpen()}>
         <Paywall />
       </Show>
-
-      {/* We match here based on mobile width so that we can remove Resizable from mobile-width app, so that we can properly resize elements in response to, for example, the virtual keyboard appearing */}
-      {/* TODO (seamus) talk to mobile boys and make correct decision */}
       <div class="p-2 grow-1">
         <Resize.Zone
           gutter={8}
