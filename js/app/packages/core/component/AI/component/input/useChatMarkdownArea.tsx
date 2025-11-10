@@ -57,6 +57,7 @@ import {
   COMMAND_PRIORITY_HIGH,
   FORMAT_TEXT_COMMAND,
   KEY_ENTER_COMMAND,
+  LexicalEditor,
   type TextFormatType,
 } from 'lexical';
 import {
@@ -222,6 +223,7 @@ export type ConsumableChatMarkdownAreaProps = {
   portalScope?: PortalScope;
   onFocusLeaveStart?: (e: KeyboardEvent) => void;
   onFocusLeaveEnd?: (e: KeyboardEvent) => void;
+  captureEditor?: (editor: LexicalEditor) => void;
 };
 
 function MarkdownArea(
@@ -273,6 +275,10 @@ function MarkdownArea(
       }
     })
   );
+
+  if (props.captureEditor) {
+    props.captureEditor(editor);
+  }
 
   createEffect(() => {
     props.onChange?.(props.markdownState());

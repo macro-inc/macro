@@ -666,7 +666,6 @@ export function MarkdownEditor() {
   autoRegister(
     registerRootEventListener(editor, 'focusin', (e) => {
       e.preventDefault();
-      e.stopPropagation();
       editor.focus();
       recheckFocus(); // force update global focus signal
     })
@@ -1247,7 +1246,6 @@ export function InstructionsMarkdownEditor() {
   autoRegister(
     registerRootEventListener(editor, 'focusin', (e) => {
       e.preventDefault();
-      e.stopPropagation();
       editor.focus();
       recheckFocus(); // force update global focus signal
     })

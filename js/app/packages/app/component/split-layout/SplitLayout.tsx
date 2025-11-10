@@ -18,6 +18,7 @@ import {
   type Setter,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { a } from 'vitest/dist/chunks/suite.d.FvehnV49.js';
 import {
   createNavigationEntityListShortcut,
   createSoupContext,
@@ -40,6 +41,15 @@ type SplitLayoutContainerProps = {
   pairs: string[];
   setManager: Setter<SplitManager | undefined>;
 };
+
+function getParentSplitId(element: Element | null) {
+  if (!element || !element.isConnected) return null;
+  const splitParent = element.closest('[data-split-container]');
+  if (!splitParent) return null;
+  const splitId = splitParent.getAttribute('data-split-id');
+  if (!splitId) return null;
+  return splitId as SplitId;
+}
 
 /**
  * Creates an effect that syncs the layout manager with the URL.
@@ -95,20 +105,44 @@ function createSplitFocusTracker(props: {
   const DEBOUNCE = 100;
   const activeSplitId = () => props.splitManager.activeSplitId();
 
-  const isElementInPanel = (panelId: SplitId, element: Element | null): boolean => {
+  const currentSplitsIds = () => new Set(props.splits().map((s) => s.id));
+  const lastFocusedChildBySplitId: Map<SplitId, HTMLElement | null> = new Map();
+  createEffect(
+    on(currentSplitsIds, (ids) => {
+      for (const key of lastFocusedChildBySplitId.keys()) {
+        if (!ids.has(key)) {
+          lastFocusedChildBySplitId.delete(key);
+        }
+      }
+    })
+  );
+
+  const isElementInPanel = (
+    panelId: SplitId,
+    element: Element | null
+  ): boolean => {
     const panelRef = props.panelRefs.get(panelId);
     if (!panelRef || element === null) return false;
     return panelRef === element || panelRef.contains(element);
   };
 
   const focusSplitById = (id: SplitId) => {
-    console.log('### focus split by id');
     const splitPanelRef = props.panelRefs.get(id);
     if (!splitPanelRef) {
       console.warn(`Tried to focus split with id ${id} but it doesn't exist`);
       return;
     }
+
+    // return if panel has a child already with focus.
     if (splitPanelRef.contains(document.activeElement)) return;
+
+    // look for a child to return focus to.
+    const child = lastFocusedChildBySplitId.get(id);
+    if (child && child.isConnected) {
+      child.focus();
+      return;
+    }
+
     splitPanelRef.focus();
   };
 
@@ -178,7 +212,16 @@ function createSplitFocusTracker(props: {
       (newEvent) => {
         if (focusTimeout) {
           clearTimeout(focusTimeout);
-          clearTimeout(activateTimeout);
+        }
+        if (newEvent.type === SplitEvent.ReturnFocus) {
+          const id = props.splitManager.activeSplitId();
+          if (id) {
+            // focusTimeout = setTimeout(() => {
+            //   focusSplitById(id);
+            // });
+            focusSplitById(id);
+          }
+          return;
         }
         focusTimeout = setTimeout(() => {
           focusFromEvent(newEvent);
@@ -194,6 +237,13 @@ function createSplitFocusTracker(props: {
         clearTimeout(activateTimeout);
       }
       if (!element) return;
+
+      const parentId = getParentSplitId(element);
+      console.log({ element, parentId });
+      if (parentId && element instanceof HTMLElement) {
+        lastFocusedChildBySplitId.set(parentId, element);
+      }
+
       activateTimeout = setTimeout(() => {
         activateFocusedSplit(element);
       }, DEBOUNCE);
@@ -211,6 +261,13 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   // Store a ref to each panel by id
   let panelRefs = new Map<SplitId, HTMLDivElement>();
+  createEffect(
+    on(splitManager.events, (event) => {
+      if (event.type === SplitEvent.Remove) {
+        panelRefs.delete(event.splitId);
+      }
+    })
+  );
 
   const splits = createMemo(splitManager.splits);
 

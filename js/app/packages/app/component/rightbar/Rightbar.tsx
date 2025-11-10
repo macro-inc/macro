@@ -1,3 +1,4 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useIsAuthenticated } from '@core/auth';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { useChatInput } from '@core/component/AI/component/input/useChatInput';
@@ -49,6 +50,7 @@ import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
 import { useUserId } from '@service-gql/client';
 import { refetchHistory, useHistory } from '@service-storage/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
+import { LexicalEditor } from 'lexical';
 import {
   type Accessor,
   createEffect,
@@ -59,6 +61,7 @@ import {
   onCleanup,
   type Setter,
   Show,
+  untrack,
 } from 'solid-js';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 
@@ -341,6 +344,20 @@ export function Rightbar(props: {
     }
   };
 
+  const [editor, setEditor] = createSignal<LexicalEditor>();
+  createEffect(() => {
+    if (props.isBig) {
+      console.log('BIG', editor());
+      setTimeout(() => setTimeout(() => editor()?.focus()));
+    } else {
+      if (untrack(isRightPanelOpen)) {
+        return;
+      } else {
+        globalSplitManager()?.returnFocus();
+      }
+    }
+  });
+
   return (
     <DragDropWrapper
       class="relative flex flex-col size-full select-none"
@@ -382,6 +399,7 @@ export function Rightbar(props: {
                 showActiveTabs
                 onSend={props.onSend}
                 onStop={stopGenerating}
+                captureEditor={setEditor}
               />
             </div>
           </div>

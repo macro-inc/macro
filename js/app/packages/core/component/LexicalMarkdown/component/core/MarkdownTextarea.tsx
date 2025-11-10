@@ -128,7 +128,6 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
   autoRegister(
     registerRootEventListener(editor, 'focusin', (e) => {
       e.preventDefault();
-      e.stopPropagation();
       editor.focus();
       recheckFocus(); // force update global focus signal
     })

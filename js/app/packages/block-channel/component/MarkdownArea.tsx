@@ -334,7 +334,6 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
   autoRegister(
     registerRootEventListener(editor, 'focusin', (e) => {
       e.preventDefault();
-      e.stopPropagation();
       editor.focus();
       recheckFocus(); // force update global focus signal
     })
