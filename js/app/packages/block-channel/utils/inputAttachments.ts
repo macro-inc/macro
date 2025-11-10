@@ -9,6 +9,7 @@ import {
   STATIC_IMAGE,
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
+import type { UploadFileEntry } from '@core/util/upload';
 import { chatRuleset, uploadFile } from '@core/util/upload';
 import type { NewAttachment } from '@service-comms/generated/models';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
@@ -53,7 +54,7 @@ export function mapAttachmentsForSend(
 }
 
 export async function handleFileUpload(
-  files: File[],
+  files: UploadFileEntry[],
   inputAttachmentsStore: InputAttachmentsStore,
   onUploaded?: (attachment: InputAttachment) => void
 ) {
@@ -61,7 +62,8 @@ export async function handleFileUpload(
   let newAttachments: InputAttachment[] =
     inputAttachmentsStore.store[key] ?? [];
 
-  for (const file of files) {
+  for (const entry of files) {
+    const file = entry.file;
     const pendingId = crypto.randomUUID();
     const initialAttachmentType = getAttachmentType(file.type);
 
@@ -79,6 +81,7 @@ export async function handleFileUpload(
     try {
       const result = await uploadFile(file, chatRuleset, {
         hideProgressIndicator: true,
+        unzipFolder: entry.isFolder,
       });
 
       if (!result.failed) {

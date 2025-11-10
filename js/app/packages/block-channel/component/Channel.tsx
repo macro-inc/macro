@@ -22,7 +22,7 @@ import { useBlockId } from '@core/block';
 import type { DragEventWithData } from '@core/component/FileList/DraggableItem';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { fileDrop } from '@core/directive/fileDrop';
+import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
   blockElementSignal,
@@ -31,6 +31,7 @@ import {
 import { blockHandleSignal } from '@core/signal/load';
 import { createTabFocusEffect } from '@core/signal/tabFocus';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
+import { handleFileFolderDrop } from '@core/util/upload';
 import { ChannelDebouncedNotificationReadMarker } from '@notifications/components/DebouncedNotificationReadMarker';
 import type { Message } from '@service-comms/generated/models';
 import { connectionGatewayClient } from '@service-connection/client';
@@ -47,7 +48,7 @@ import { ChannelInput } from './ChannelInput';
 import { MessageList } from './MessageList/MessageList';
 import { Top } from './Top';
 
-false && fileDrop;
+false && fileFolderDrop;
 
 /** 10 seconds threshold */
 const THRESHOLD = 10_000;
@@ -237,17 +238,20 @@ export function Channel(props: { data: Required<ChannelData> }) {
         <Top />
         <div
           class="h-full flex flex-col min-h-0 flex-1 relative w-full"
-          use:fileDrop={{
-            onDrop: (files) => {
-              handleFileUpload(files, {
-                store: channelInputAttachmentsStore,
-                setStore: setChannelInputAttachmentsStore,
-                key: channelId,
-              });
+          use:fileFolderDrop={{
+            onDrop: (files, folders) => {
+              handleFileFolderDrop(files, folders, (uploadEntries) =>
+                handleFileUpload(uploadEntries, {
+                  store: channelInputAttachmentsStore,
+                  setStore: setChannelInputAttachmentsStore,
+                  key: channelId,
+                })
+              );
             },
-            onDragStart: (valid) => {
+            folder: true,
+            onDragStart: () => {
               setIsDraggingOverChannel(true);
-              setIsValidChannelDrag(valid);
+              setIsValidChannelDrag(true);
             },
             onDragEnd: () => {
               setIsDraggingOverChannel(false);

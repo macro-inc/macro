@@ -4,6 +4,7 @@ import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
 import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
 import { type BlockName, useBlockId } from '@core/block';
+import { handleFoldersInput } from '@core/client/zipWorkerClient';
 import type { DragEventWithData } from '@core/component/FileList/DraggableItem';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
@@ -100,7 +101,6 @@ import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import {
   blockNameToFileExtensions,
-  blockNameToMimeTypes,
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
 import {
@@ -109,8 +109,8 @@ import {
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
-import { fileDrop } from '@core/directive/fileDrop';
-import { HEIC_EXTENSIONS, HEIC_MIME_TYPES } from '@core/heic/constants';
+import { fileFolderDrop } from '@core/directive/fileFolderDrop';
+import { HEIC_EXTENSIONS } from '@core/heic/constants';
 import { blockElementSignal } from '@core/signal/blockElement';
 import {
   blockFileSignal,
@@ -122,6 +122,12 @@ import { trackMention } from '@core/signal/mention';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
+import {
+  forceDssRuleset,
+  handleFileFolderDrop,
+  type UploadFileEntry,
+  uploadFile,
+} from '@core/util/upload';
 import WarningIcon from '@icon/regular/warning.svg';
 import {
   $createDocumentMentionNode,
@@ -133,6 +139,7 @@ import {
   peerIdPlugin,
 } from '@lexical-core';
 import type { MarkdownRewriteOutput } from '@service-cognition/generated/tools/types';
+import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import { fileExtension } from '@service-storage/util/filename';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce, throttle } from '@solid-primitives/scheduled';
@@ -141,7 +148,13 @@ import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { normalizeEnterPlugin } from 'core/component/LexicalMarkdown/plugins/normalize-enter/';
 import { lazyRegister } from 'core/component/LexicalMarkdown/plugins/shared/utils';
 import { createMethodRegistration } from 'core/orchestrator';
-import { $getRoot, $isElementNode, type EditorState } from 'lexical';
+import {
+  $getRoot,
+  $getSelection,
+  $isElementNode,
+  $isRangeSelection,
+  type EditorState,
+} from 'lexical';
 import {
   type Accessor,
   createEffect,
@@ -164,7 +177,7 @@ import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
 
-false && fileDrop;
+false && fileFolderDrop;
 
 const DEBUG = LOCAL_ONLY;
 
@@ -194,12 +207,7 @@ export function MarkdownEditor() {
     ...blockNameToFileExtensions.image,
     ...HEIC_EXTENSIONS,
   ];
-  const IMAGE_MIME_TYPES_HEIC = [
-    ...blockNameToMimeTypes.image,
-    ...HEIC_MIME_TYPES,
-  ];
   const VIDEO_EXTENSIONS = blockNameToFileExtensions.video;
-  const VIDEO_MIME_TYPES = blockNameToMimeTypes.video;
 
   const blockHandle = blockHandleSignal.get;
   createMethodRegistration(blockHandle, {
@@ -295,31 +303,141 @@ export function MarkdownEditor() {
     return { key, position };
   };
 
-  // handler for the file paste directive
-  const onPasteFiles = async (files: File[]) => {
+  async function processInlineMediaFiles(files: File[]) {
     for (const file of files) {
       const ext = fileExtension(file.name);
-
-      let success = false;
-
       if (ext != null && IMAGE_EXTENSIONS_HEIC.includes(ext)) {
         const res = await addMediaFromFile(editor, file, 'image');
-        success = res.success;
-      } else if (ext != null && VIDEO_EXTENSIONS.includes(ext)) {
-        const res = await addMediaFromFile(editor, file, 'video');
-        success = res.success;
+        if (!res.success) toast.failure('Invalid attachment file(s)');
+        continue;
       }
-
-      if (!success) {
-        toast.failure('Invalid attachment file(s)');
+      if (ext != null && VIDEO_EXTENSIONS.includes(ext)) {
+        const res = await addMediaFromFile(editor, file, 'video');
+        if (!res.success) toast.failure('Invalid attachment file(s)');
       }
     }
-  };
+  }
 
-  // handler for the file drop directive - file paste plus calc drop pos.
-  const onDropFiles = (files: File[], e: DragEvent) => {
-    getDragDropPosition(e, true);
-    onPasteFiles(files);
+  async function insertMention(
+    documentId: string,
+    documentName: string,
+    blockName: string
+  ) {
+    const mentionId = await trackMention(blockId, 'document', documentId);
+    editor.update(() => {
+      const mention = $createDocumentMentionNode({
+        documentId,
+        documentName,
+        blockName: blockName as any,
+        mentionUuid: mentionId,
+      });
+      const selection = $getSelection();
+      if ($isRangeSelection(selection)) {
+        selection.insertNodes([mention]);
+      } else {
+        $getRoot().append(mention);
+      }
+      mention.selectEnd();
+    });
+  }
+
+  async function handleUploadEntriesForEditor(
+    uploadEntries: UploadFileEntry[]
+  ): Promise<void> {
+    const mediaFiles: File[] = [];
+    const nonMediaFiles: File[] = [];
+    const folderZips: File[] = [];
+
+    for (const entry of uploadEntries) {
+      if (entry.isFolder) {
+        folderZips.push(entry.file);
+      } else {
+        const file = entry.file;
+        const ext = fileExtension(file.name);
+        if (
+          ext != null &&
+          (IMAGE_EXTENSIONS_HEIC.includes(ext) ||
+            VIDEO_EXTENSIONS.includes(ext))
+        ) {
+          mediaFiles.push(file);
+        } else {
+          nonMediaFiles.push(file);
+        }
+      }
+    }
+
+    await processInlineMediaFiles(mediaFiles);
+
+    for (const file of nonMediaFiles) {
+      const result = await uploadFile(file, forceDssRuleset);
+      if (
+        !result.failed &&
+        result.destination === 'dss' &&
+        result.type === 'document'
+      ) {
+        const blockName = fileTypeToBlockName(result.fileType, true);
+        if (blockName) {
+          await insertMention(result.documentId, file.name, blockName);
+        }
+      } else {
+        toast.failure('Upload failed. Please try again.');
+      }
+    }
+
+    // upload folders as projects
+    for (const zip of folderZips) {
+      const result = await uploadFile(zip, forceDssRuleset, {
+        unzipFolder: true,
+      });
+      if (
+        !result.failed &&
+        result.destination === 'dss' &&
+        result.type === 'folder'
+      ) {
+        const projectId = await waitBulkUploadStatus(result.requestId);
+        if (projectId) {
+          await insertMention(projectId, result.name, 'project');
+        } else {
+          toast.failure('Folder upload failed or timed out');
+        }
+      }
+    }
+  }
+
+  const onPasteFilesAndDirs = async (
+    fileEntries: FileSystemFileEntry[],
+    directories: FileSystemDirectoryEntry[]
+  ) => {
+    const files = await Promise.all(
+      fileEntries.map(
+        (entry) =>
+          new Promise<File>((resolve, reject) =>
+            entry.file(
+              (f: File) => resolve(f),
+              (err: DOMException) => reject(err)
+            )
+          )
+      )
+    );
+
+    if (directories.length > 0) {
+      const zipPromises = handleFoldersInput(directories);
+      const zipped = await Promise.all(zipPromises);
+      const zipFiles = zipped.filter((f): f is File => !!f);
+
+      const entries: UploadFileEntry[] = [
+        ...files.map((f) => ({ file: f, isFolder: false })),
+        ...zipFiles.map((f) => ({ file: f, isFolder: true })),
+      ];
+      await handleUploadEntriesForEditor(entries);
+      return;
+    }
+
+    const entries: UploadFileEntry[] = files.map((f) => ({
+      file: f,
+      isFolder: false,
+    }));
+    await handleUploadEntriesForEditor(entries);
   };
 
   // store for the drag insert pluign.
@@ -560,7 +678,7 @@ export function MarkdownEditor() {
     )
     .use(tableCellResizerPlugin())
     .use(tableActionMenuPlugin(tableActionsMenuPluginProps))
-    .use(filePastePlugin({ onPaste: onPasteFiles }))
+    .use(filePastePlugin({ onPasteFilesAndDirs: onPasteFilesAndDirs }))
     .use(
       findAndReplacePlugin({
         setListOffset: onSetListOffset,
@@ -866,16 +984,20 @@ export function MarkdownEditor() {
       <div
         class="relative"
         ref={editorContainerRef}
-        use:fileDrop={{
-          acceptedMimeTypes: [...IMAGE_MIME_TYPES_HEIC, ...VIDEO_MIME_TYPES],
-          acceptedFileExtensions: [
-            ...IMAGE_EXTENSIONS_HEIC,
-            ...VIDEO_EXTENSIONS,
-          ],
-          onDrop: (files, event) => {
-            onDropFiles(files, event);
+        use:fileFolderDrop={{
+          onDrop: (fileEntries, folderEntries, e) => {
+            if (e) {
+              getDragDropPosition(e, true);
+            }
+            handleFileFolderDrop(
+              fileEntries,
+              folderEntries,
+              async (uploadEntries: UploadFileEntry[]) => {
+                await handleUploadEntriesForEditor(uploadEntries);
+              }
+            );
           },
-          multiple: true,
+          folder: true,
         }}
         use:droppable
       >

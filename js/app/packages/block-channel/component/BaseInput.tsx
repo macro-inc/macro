@@ -5,9 +5,10 @@ import {
 import type { sendMessage } from '@block-channel/signal/channel';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { isInBlock } from '@core/block';
+import { handleFoldersInput } from '@core/client/zipWorkerClient';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
-import { fileDrop } from '@core/directive/fileDrop';
+import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
@@ -18,6 +19,8 @@ import {
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
 import type { IUser } from '@core/user';
+import type { UploadFileEntry } from '@core/util/upload';
+import { handleFileFolderDrop } from '@core/util/upload';
 import PlusIcon from '@icon/regular/plus.svg';
 import FormatIcon from '@icon/regular/text-aa.svg';
 import XIcon from '@icon/regular/x.svg';
@@ -49,7 +52,7 @@ import { Attachment } from './Attachment';
 import { FormatRibbon } from './FormatRibbon';
 import { useChannelMarkdownArea } from './MarkdownArea';
 
-false && fileDrop;
+false && fileFolderDrop;
 
 type InputAttachmentsStore = {
   store: Record<string, InputAttachment[]>;
@@ -336,11 +339,37 @@ export function BaseInput(props: BaseInputProps) {
     }
   }
 
-  async function onMarkdownAreaPaste(files: File[]) {
+  async function onMarkdownAreaPasteFilesAndDirs(
+    files: FileSystemFileEntry[],
+    directories: FileSystemDirectoryEntry[]
+  ) {
+    // If any directories present, ignore raw files to avoid phantom duplicates
+    const filesToUse = directories.length > 0 ? [] : files;
+
+    const zippedPromises = handleFoldersInput(directories);
+    const zipped = await Promise.all(zippedPromises);
+    const dirEntries: UploadFileEntry[] = zipped
+      .filter((f): f is File => !!f)
+      .map((file) => ({ file, isFolder: true }));
+    const fileEntryPromises = filesToUse.map(
+      (entry) =>
+        new Promise<File>((resolve, reject) => {
+          entry.file(
+            (f) => resolve(f),
+            (err) => reject(err)
+          );
+        })
+    );
+    const plainFiles = await Promise.all(fileEntryPromises);
+    const fileEntries: UploadFileEntry[] = plainFiles.map((file) => ({
+      file,
+      isFolder: false,
+    }));
+    const entries: UploadFileEntry[] = [...fileEntries, ...dirEntries];
     let uploadedCount = 0;
-    handleFileUpload(files, props.inputAttachments, () => {
+    handleFileUpload(entries, props.inputAttachments, () => {
       uploadedCount++;
-      if (uploadedCount === files.length) {
+      if (uploadedCount === entries.length) {
         props.onChange(markdownState());
       }
     });
@@ -367,12 +396,17 @@ export function BaseInput(props: BaseInputProps) {
     <div
       class="relative flex flex-col flex-1 items-center justify-between bg-input border-1 border-edge focus-within:bracket-offset-2"
       ref={containerRef}
-      use:fileDrop={{
-        onDrop: (files) => {
-          handleFileUpload(files, props.inputAttachments, () => {
-            setIsDraggingOverChannel(false);
-          });
+      use:fileFolderDrop={{
+        onDrop: (files, folders) => {
+          handleFileFolderDrop(files, folders, (uploadEntries) =>
+            handleFileUpload(uploadEntries, {
+              store: props.inputAttachments.store,
+              setStore: props.inputAttachments.setStore,
+              key: key,
+            })
+          );
         },
+        folder: true,
         onDragStart: () => {
           setIsDraggedOver(true);
         },
@@ -423,7 +457,7 @@ export function BaseInput(props: BaseInputProps) {
           onBlur={stopTyping}
           users={props.channelUsers}
           onChange={handleChange}
-          onPasteFile={onMarkdownAreaPaste}
+          onPasteFilesAndDirs={onMarkdownAreaPasteFilesAndDirs}
           initialValue={props.initialValue?.()}
           useBlockBoundary={true}
           onEscape={onEscape}

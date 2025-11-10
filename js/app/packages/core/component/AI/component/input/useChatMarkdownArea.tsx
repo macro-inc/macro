@@ -313,7 +313,7 @@ function MarkdownArea(
     .use(tabIndentationPlugin())
     .use(
       filePastePlugin({
-        onPaste: (files: File[]) => {
+        onPasteFiles: (files: File[]) => {
           if (props.onPasteFile) {
             props.onPasteFile(files);
           }

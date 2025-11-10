@@ -71,7 +71,7 @@ type UploadFileResult<D extends UploadDestination> = D extends 'dss'
 type DssUploadFilesOptions = Omit<DssUploadFileOptions, 'unzipFolder'>;
 
 /** regular file or a directory that was zipped */
-type UploadFileEntry = {
+export type UploadFileEntry = {
   file: File;
   isFolder: boolean;
 };

@@ -191,7 +191,7 @@ export function AttachMenu(props: AttachMenuProps) {
                 acceptedFileExtensions: blockAcceptedFileExtensions,
                 multiple: true,
                 onSelect: (files) => {
-                  handleFileUpload(files, props.inputAttachmentsStore);
+                  handleFileUpload(files.map((file) => ({ file, isFolder: false })), props.inputAttachmentsStore);
                   props.close();
                 },
               }}
