@@ -2,6 +2,7 @@
 use crate::api::context::ApiContext;
 use crate::core::model::{CHAT_MODELS, FALLBACK_MODEL};
 use crate::model::chats::ChatResponse;
+use ai::model_selection::ModelSelection;
 use ai::{model_selection::select_model, types::Model};
 use anyhow::Context;
 use macro_db_client::dcs::get_chat::{
@@ -96,7 +97,10 @@ pub async fn get_chat(
         .map(|m| Model::from_str(&m).unwrap_or(FALLBACK_MODEL));
 
     let model_selection = select_model(None, chat.token_count.unwrap_or(0), CHAT_MODELS.to_vec())
-        .context("Failed to select model")?;
+        .unwrap_or_else(|_| ModelSelection {
+            available_models: vec![],
+            new_model: None,
+        });
 
     let web_citations = get_web_citations(&ctx.db, chat_id)
         .await
