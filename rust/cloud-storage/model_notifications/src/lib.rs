@@ -277,12 +277,16 @@ impl Identify for Notification {
 }
 
 impl SortOn<CreatedAt> for UserNotification {
-    fn sort_on(sort: CreatedAt) -> impl FnOnce(&Self) -> models_pagination::CursorVal<CreatedAt> {
+    fn sort_on<F>(
+        sort: CreatedAt,
+        filter: F,
+    ) -> impl FnOnce(&Self) -> models_pagination::CursorVal<CreatedAt, F> {
         move |v| {
             let last_val = v.temporal.created_at.unwrap_or(DateTime::UNIX_EPOCH);
             models_pagination::CursorVal {
                 sort_type: sort,
                 last_val,
+                filter,
             }
         }
     }
