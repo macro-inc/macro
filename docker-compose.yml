@@ -1,6 +1,6 @@
 version: '3.8'
 services:
-    macrodb:
+  macrodb:
     image: postgres:16
     container_name: macrodb
     ports:
