@@ -1,0 +1,45 @@
+name: "Deploy web app dev on push to main"
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}
+  # We do not want to cancel a deployment if it's in progress. That could lead to a broken deployment.
+  cancel-in-progress: false
+
+jobs:
+  check-to-deploy:
+    runs-on: ubuntu-latest
+    outputs:
+      web-app: ${{ steps.changes.outputs.web-app }}
+      web-services: ${{ steps.changes.outputs.web-services }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: whutchinson98/diff-checker-action@v1.0.2
+        id: changes
+        with:
+          token: ${{ GITHUB.TOKEN }}
+          diff: |
+            web-app: ./infra/stacks/web-app/* ./js/app/packages/* ./js/app/package.json
+            web-services: ./infra/stacks/web-services/*
+  deploy_web_app:
+    needs: [check-to-deploy]
+    if: ${{ needs.check-to-deploy.outputs.web-app == 'true' }}
+    uses: ./.github/workflows/deploy-web-app.yml
+    with:
+      notify: false
+      environment: dev
+    secrets: inherit
+
+  deploy_web_services:
+    needs: [check-to-deploy]
+    if: ${{ needs.check-to-deploy.outputs.web-services == 'true' }}
+    uses: ./.github/workflows/deploy-web-services.yml
+    with:
+      notify: false
+      environment: dev
+    secrets:
+      AWS_DEPLOYMENT_ACCESS_KEY: ${{ secrets.AWS_DEPLOYMENT_ACCESS_KEY }}
+      AWS_DEPLOYMENT_SECRET_ACCESS_KEY: ${{ secrets.AWS_DEPLOYMENT_SECRET_ACCESS_KEY }}
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}

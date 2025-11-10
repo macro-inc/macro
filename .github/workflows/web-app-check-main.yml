@@ -1,0 +1,103 @@
+name: 'Web App Pr Checks'
+on:
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'js/app/package.json'
+      - 'js/app/bun.lock'
+      - 'js/app/bunfig.toml'
+      - 'js/app/packages/**'
+      - 'js/app/src/**'
+      - '.github/actions/setup-reqs-web/**'
+      - '.github/workflows/web-app-check-main.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}-check
+  cancel-in-progress: true
+
+jobs:
+  typescript:
+    name: Typecheck
+    runs-on: linux-latest-beefy
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+      - name: Setup Prereqs
+        uses: ./.github/actions/setup-reqs-web
+      - name: Generate API Types
+        working-directory: js/app
+        run: bun run gen-api
+      - name: Check Types
+        working-directory: js/app
+        run: |
+          bun run --bun --silent tsc --project ./packages/app/tsconfig.json
+
+  biome-check:
+    name: Biome Check
+    runs-on: linux-latest-middy
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Biome
+        uses: biomejs/setup-biome@v2
+        with:
+          version: 2.2.6
+      - name: Run Biome
+        working-directory: js/app
+        run: biome ci --changed --no-errors-on-unmatched
+
+  tailwind:
+    name: Theme Hygiene Inspector
+    runs-on: linux-latest-middy
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Setup Prereqs
+        uses: ./.github/actions/setup-reqs-web
+      - name: Check Tailwind Classes
+        working-directory: js/app
+        run: bun run check-tailwind
+
+  test:
+    name: Test
+    runs-on: linux-latest-middy
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+      - name: Setup
+        uses: ./.github/actions/setup-reqs-web
+      - name: Test
+        working-directory: js/app
+        run: bun run test
+
+  cycles:
+    name: Cycles Import Check
+    runs-on: linux-latest-middy
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Biome
+        uses: biomejs/setup-biome@v2
+        with:
+          version: latest
+      - name: Cycles Import Check
+        working-directory: js/app
+        run: biome lint --changed --no-errors-on-unmatched --only=nursery/noImportCycles
+
+  build:
+    name: Build
+    runs-on: linux-latest-middy
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+      - name: Setup
+        uses: ./.github/actions/setup-reqs-web
+      - name: Build
+        working-directory: js/app
+        run: bun run build
+    

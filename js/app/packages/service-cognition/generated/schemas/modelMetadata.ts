@@ -6,15 +6,5 @@
  */
 
 export interface ModelMetadata {
-  /** The token size of the context window */
   contextWindow: number;
-  /** A description of the model */
-  description: string;
-  /** The display name of the model */
-  displayName: string;
-  premium: boolean;
-  /** Scale of quality from 0 to 5 */
-  quality: number;
-  /** Scale of speed from 0 to 5 */
-  speed: number;
 }

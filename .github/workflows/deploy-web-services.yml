@@ -1,0 +1,64 @@
+name: Deploy Web Services
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        required: true
+        type: choice
+        options:
+          - dev
+          - prod
+        description: The environment to build for
+      notify:
+        required: false
+        type: boolean
+        description: Whether to notify the Slack channel of the deployment completion
+  workflow_call:
+    inputs:
+      environment:
+        required: true
+        type: string
+        description: The environment to build for. (dev, prod)
+      notify:
+        required: false
+        type: boolean
+    secrets:
+      AWS_DEPLOYMENT_ACCESS_KEY:
+        required: true
+      AWS_DEPLOYMENT_SECRET_ACCESS_KEY:
+        required: true
+      PULUMI_ACCESS_TOKEN:
+        required: true
+
+concurrency:
+  group: ${{ github.workflow }}-web-services-${{ inputs.environment }}
+  # We do not want to cancel a deployment if it's in progress. That could lead to a broken deployment.
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: [runs-on,runner=8cpu-linux-x64,hdd=40,spot=lowest-price,ssh=false,"run-id=${{github.run_id}}"]
+    env:
+      CI: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_DEPLOYMENT_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_DEPLOYMENT_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Setup
+        uses: ./.github/actions/setup-reqs-web
+      - name: Install infra dependencies
+        run: |
+          cd infra
+          bun install
+      - uses: pulumi/actions@v3
+        with:
+          command: up
+          stack-name: macro-inc/${{ inputs.environment }}
+          work-dir: ./infra/stacks/web-services
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}

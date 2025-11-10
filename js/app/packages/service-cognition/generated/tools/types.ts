@@ -484,9 +484,9 @@ export interface UnifiedSearchInput {
      */
     match_type: 'exact' | 'partial' | 'regexp';
     /**
-     * Fields to search on (Name, Content, NameContent). Defaults to Content
+     * If true, match the `terms` field on name only. If false, names will not be matched on in the search. False by default.
      */
-    search_on: 'name' | 'content' | 'name_content';
+    name_only: boolean | null;
     /**
      * Multiple distinct search terms as separate strings. Use this for keyword-based searches where you want to find content containing any of these terms. Each term must be at least 3 characters (shorter terms are automatically filtered out). Examples: ['machine', 'learning', 'algorithms'], ['project', 'status', 'update']. `null` this field if searching without text terms to search all. This field matches query string against both name and content.
      */
@@ -688,6 +688,10 @@ export interface UnifiedSearchOutput {
            * The time the project was created
            */
           created_at: string;
+          /**
+           * The parent project id
+           */
+          parent_project_id?: string | null;
           /**
            * The project id
            */

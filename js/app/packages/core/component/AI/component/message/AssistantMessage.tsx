@@ -2,10 +2,6 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { structuredOutputCompletion } from '@core/client/structuredOutput';
 import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMessageMarkdown';
 import { RenderTool } from '@core/component/AI/component/tool/handler';
-import {
-  DEFAULT_MODEL,
-  // MODEL_PROVIDER_ICON,
-} from '@core/component/AI/constant/model';
 import { replaceCitations } from '@core/component/LexicalMarkdown/citationsUtils';
 import { ENABLE_TTFT } from '@core/constant/featureFlags';
 import { createFromMarkdownText } from '@core/util/md';
@@ -16,8 +12,6 @@ import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?componen
 import type { AssistantMessagePart } from '@service-cognition/generated/schemas/assistantMessagePart';
 import type { ChatMessageContent } from '@service-cognition/generated/schemas/chatMessageContent';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
-import type { Model } from '@service-cognition/generated/schemas/model';
-import { PrettyModelName } from '@service-cognition/generated/schemas/model';
 import { createCallback } from '@solid-primitives/rootless';
 import {
   createMemo,
@@ -215,13 +209,6 @@ export function AssistantMessage(props: {
 
     setIsLoading(false);
   });
-
-  const _modelName = () => {
-    const prettyName: string | undefined =
-      PrettyModelName[props.message?.model as Model];
-    if (!prettyName) return PrettyModelName[DEFAULT_MODEL];
-    return prettyName;
-  };
 
   // ONLY one model for now so don't show icon
   // const modelIcon = () => {
