@@ -67,19 +67,13 @@ fn test_with_additional_fields() {
         "size": page_size,
         "sort":  [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "channel_id": {
-                    "order": "asc"
-                }
+                "channel_id": "asc"
             },
             {
-                "message_id": {
-                    "order": "asc"
-                }
+                "message_id": "asc"
             },
         ],
         "highlight": {
@@ -160,19 +154,13 @@ fn test_sanity() {
         "size": page_size,
         "sort":  [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc",
             },
             {
-                "channel_id": {
-                    "order": "asc"
-                }
+                "channel_id": "asc"
             },
             {
-                "message_id": {
-                    "order": "asc"
-                }
+                "message_id": "asc"
             },
         ],
         "highlight": {
@@ -245,19 +233,13 @@ fn test_ids_only() {
         "size": page_size,
         "sort":  [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "channel_id": {
-                    "order": "asc"
-                }
+                "channel_id": "asc"
             },
             {
-                "message_id": {
-                    "order": "asc"
-                }
+                "message_id": "asc"
             },
         ],
         "highlight": {

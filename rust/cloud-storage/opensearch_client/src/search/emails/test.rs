@@ -59,19 +59,13 @@ fn test_email_query_with_thread_ids() {
         "size": page_size,
         "sort": [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "message_id": {
-                    "order": "asc"
-                }
+                "message_id": "asc"
             },
             {
-                "thread_id": {
-                    "order": "asc"
-                }
+                "thread_id": "asc"
             },
         ],
         "highlight": {
@@ -177,19 +171,13 @@ fn test_email_query_with_senders() {
         "size": page_size,
         "sort": [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "message_id": {
-                    "order": "asc"
-                }
+                "message_id": "asc"
             },
             {
-                "thread_id": {
-                    "order": "asc"
-                }
+                "thread_id": "asc"
             },
         ],
         "highlight": {
@@ -311,19 +299,13 @@ fn test_email_query_with_cc() {
         "size": page_size,
         "sort": [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "message_id": {
-                    "order": "asc"
-                }
+                "message_id": "asc"
             },
             {
-                "thread_id": {
-                    "order": "asc"
-                }
+                "thread_id": "asc"
             },
         ],
         "highlight": {
@@ -422,19 +404,13 @@ fn test_email_query_with_recipients() {
         "size": page_size,
         "sort": [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "message_id": {
-                    "order": "asc"
-                }
+                "message_id": "asc"
             },
             {
-                "thread_id": {
-                    "order": "asc"
-                }
+                "thread_id": "asc"
             },
         ],
         "highlight": {
@@ -504,19 +480,13 @@ fn test_ids_only() {
         "size": page_size,
         "sort": [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "message_id": {
-                    "order": "asc"
-                }
+                "message_id": "asc"
             },
             {
-                "thread_id": {
-                    "order": "asc"
-                }
+                "thread_id": "asc"
             },
         ],
         "highlight": {
@@ -591,19 +561,13 @@ fn test_sanity() {
         "size": page_size,
         "sort":  [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "message_id": {
-                    "order": "asc"
-                }
+                "message_id": "asc"
             },
             {
-                "thread_id": {
-                    "order": "asc"
-                }
+                "thread_id": "asc"
             },
         ],
         "highlight": {
@@ -680,19 +644,13 @@ fn test_email_name_only_search() {
         },
         "sort": [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "message_id": {
-                    "order": "asc"
-                }
+                "message_id": "asc"
             },
             {
-                "thread_id": {
-                    "order": "asc"
-                }
+                "thread_id": "asc"
             },
         ],
         "highlight": {
@@ -793,19 +751,13 @@ fn test_email_name_only_with_senders() {
         },
         "sort": [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "message_id": {
-                    "order": "asc"
-                }
+                "message_id": "asc"
             },
             {
-                "thread_id": {
-                    "order": "asc"
-                }
+                "thread_id": "asc"
             },
         ],
         "highlight": {

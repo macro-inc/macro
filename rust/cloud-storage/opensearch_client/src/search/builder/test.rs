@@ -41,9 +41,7 @@ fn test_search_query_builder_build() {
     // Verify sort structure (using default)
     let expected_sort = serde_json::json!([
         {
-            "updated_at_seconds": {
-                "order": "desc"
-            }
+            "updated_at_seconds": "desc"
         },
     ]);
     assert_eq!(result["sort"], expected_sort);

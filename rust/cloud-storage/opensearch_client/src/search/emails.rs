@@ -8,7 +8,7 @@ use crate::{
 };
 
 use crate::SearchOn;
-use opensearch_query_builder::{BoolQueryBuilder, QueryType};
+use opensearch_query_builder::{BoolQueryBuilder, FieldSort, QueryType, SortOrder, SortType};
 
 use crate::search::model::DefaultSearchResponse;
 use serde_json::Value;
@@ -21,24 +21,12 @@ impl SearchQueryConfig for EmailSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "subject";
 
-    fn default_sort() -> Value {
-        serde_json::json!([
-            {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
-            },
-            {
-                Self::ID_KEY: {
-                    "order": "asc"
-                }
-            },
-            {
-                "thread_id": {
-                    "order": "asc"
-                }
-            }
-        ])
+    fn default_sort_types() -> Vec<SortType> {
+        vec![
+            SortType::Field(FieldSort::new("updated_at_seconds", SortOrder::Desc)),
+            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
+            SortType::Field(FieldSort::new("thread_id", SortOrder::Asc)),
+        ]
     }
 }
 

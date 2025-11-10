@@ -1,4 +1,5 @@
 use crate::SearchOn;
+use crate::error::OpensearchClientError;
 use crate::{Result, search::query::Keys, search::query::build_top_level_bool};
 use opensearch_query_builder::*;
 
@@ -51,17 +52,6 @@ pub trait SearchQueryConfig {
     const TITLE_KEY: &'static str;
     /// Content field
     const CONTENT_KEY: &'static str = "content";
-
-    /// Override this method if you need custom sorting logic
-    fn default_sort() -> Value {
-        serde_json::json!([
-            {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
-            },
-        ])
-    }
 
     /// Returns the default sort types that are used on the search query.
     /// Override this method if you need custom sort logic
@@ -197,7 +187,19 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         query_map.insert("query".to_string(), query_object);
         query_map.insert("from".to_string(), serde_json::json!(from));
         query_map.insert("size".to_string(), serde_json::json!(self.page_size));
-        query_map.insert("sort".to_string(), T::default_sort());
+        query_map.insert(
+            "sort".to_string(),
+            serde_json::to_value(
+                T::default_sort_types()
+                    .iter()
+                    .map(|s| s.to_json())
+                    .collect::<Vec<Value>>(),
+            )
+            .map_err(|e| OpensearchClientError::SerializationFailed {
+                details: e.to_string(),
+                method: Some("build_with_query".to_string()),
+            })?,
+        );
         query_map.insert("highlight".to_string(), T::default_highlight().to_json());
 
         // If collapse is true or searching only on Name, collapse the id field to remove duplicate

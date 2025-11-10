@@ -25,14 +25,10 @@ fn test_project_query_builder_basic_build() {
     // Verify default sort for projects
     let expected_sort = serde_json::json!([
         {
-            "updated_at_seconds": {
-                "order": "desc"
-            }
+            "updated_at_seconds": "desc"
         },
         {
-            "project_id": {
-                "order": "asc"
-            }
+            "project_id": "asc"
         }
     ]);
     assert_eq!(result["sort"], expected_sort);
@@ -233,14 +229,10 @@ fn test_ids_only() {
         },
         "sort": [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "project_id": {
-                    "order": "asc"
-                }
+                "project_id": "asc"
             }
         ],
         "highlight": {
@@ -341,14 +333,10 @@ fn test_project_content_search_syntactically_invalid() {
         "size": page_size,
         "sort": [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "project_id": {
-                    "order": "asc"
-                }
+                "project_id": "asc"
             }
         ],
         "highlight": {

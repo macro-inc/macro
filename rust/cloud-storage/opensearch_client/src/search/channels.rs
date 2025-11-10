@@ -8,7 +8,7 @@ use crate::{
 };
 
 use crate::SearchOn;
-use opensearch_query_builder::{BoolQueryBuilder, QueryType};
+use opensearch_query_builder::{BoolQueryBuilder, FieldSort, QueryType, SortOrder, SortType};
 use serde_json::Value;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -50,24 +50,13 @@ impl SearchQueryConfig for ChannelMessageSearchConfig {
     const USER_ID_KEY: &'static str = "sender_id";
     const TITLE_KEY: &'static str = "channel_name";
 
-    fn default_sort() -> Value {
-        serde_json::json!([
-            {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
-            },
-            {
-                Self::ID_KEY: {
-                    "order": "asc"
-                }
-            },
-            {
-                "message_id": {
-                    "order": "asc"
-                }
-            },
-        ])
+
+    fn default_sort_types() -> Vec<SortType> {
+        vec![
+            SortType::Field(FieldSort::new("updated_at_seconds", SortOrder::Desc)),
+            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
+            SortType::Field(FieldSort::new("message_id", SortOrder::Asc)),
+        ]
     }
 }
 

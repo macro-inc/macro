@@ -11,6 +11,11 @@ pub enum OpensearchClientError {
         details: String,
         method: Option<String>,
     },
+    #[error("unable to serialize into json. method: {method:?} details: {details}")]
+    SerializationFailed {
+        details: String,
+        method: Option<String>,
+    },
     #[error("a network error occurred. status_code: {status_code} message: {message}")]
     NetworkError { status_code: u16, message: String },
 

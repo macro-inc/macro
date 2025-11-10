@@ -44,19 +44,13 @@ fn test_sanity() {
         "size": page_size,
         "sort":  [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "chat_id": {
-                    "order": "asc"
-                }
+                "chat_id": "asc"
             },
             {
-                "chat_message_id": {
-                    "order": "asc"
-                }
+                "chat_message_id": "asc"
             },
         ],
         "highlight": {
@@ -143,19 +137,13 @@ fn test_build_with_single_role() {
         "size": page_size,
         "sort": [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "chat_id": {
-                    "order": "asc"
-                }
+                "chat_id": "asc"
             },
             {
-                "chat_message_id": {
-                    "order": "asc"
-                }
+                "chat_message_id": "asc"
             },
         ],
         "highlight": {
@@ -250,19 +238,13 @@ fn test_build_with_multiple_roles() {
         "size": page_size,
         "sort": [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "chat_id": {
-                    "order": "asc"
-                }
+                "chat_id": "asc"
             },
             {
-                "chat_message_id": {
-                    "order": "asc"
-                }
+                "chat_message_id": "asc"
             },
         ],
         "highlight": {
@@ -351,19 +333,13 @@ fn test_build_with_role_and_chat_ids() {
         "size": page_size,
         "sort": [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "chat_id": {
-                    "order": "asc"
-                }
+                "chat_id": "asc"
             },
             {
-                "chat_message_id": {
-                    "order": "asc"
-                }
+                "chat_message_id": "asc"
             },
         ],
         "highlight": {
@@ -436,19 +412,13 @@ fn test_build_with_empty_role_filter() {
         "size": page_size,
         "sort": [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "chat_id": {
-                    "order": "asc"
-                }
+                "chat_id": "asc"
             },
             {
-                "chat_message_id": {
-                    "order": "asc"
-                }
+                "chat_message_id": "asc"
             },
         ],
         "highlight": {
@@ -516,19 +486,13 @@ fn test_ids_only() {
         "size": page_size,
         "sort":  [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "chat_id": {
-                    "order": "asc"
-                }
+                "chat_id": "asc"
             },
             {
-                "chat_message_id": {
-                    "order": "asc"
-                }
+                "chat_message_id": "asc"
             },
         ],
         "highlight": {
@@ -630,19 +594,13 @@ fn test_build_with_role_and_search_on_name() {
         "size": 10,
         "sort": [
             {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
+                "updated_at_seconds": "desc"
             },
             {
-                "chat_id": {
-                    "order": "asc"
-                }
+                "chat_id": "asc"
             },
             {
-                "chat_message_id": {
-                    "order": "asc"
-                }
+                "chat_message_id": "asc"
             }
         ]
     });
