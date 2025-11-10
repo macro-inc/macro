@@ -235,7 +235,7 @@ export function EntityWithEverything<
           when={!props.showUnrollNotifications && notificationMessageContent()}
         >
           {(messageContent) => (
-            <div class="text-sm truncate line-clamp-1 leading-none shrink text-ink-extra-muted">
+            <div class="text-sm truncate line-clamp-1 leading-none shrink text-ink-extra-muted py-1">
               <StaticMarkdown
                 markdown={messageContent()}
                 theme={unifiedListMarkdownTheme}
