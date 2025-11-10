@@ -274,8 +274,6 @@ export function Root() {
 
   clearBodyInlineStyleColor();
 
-  clearBodyInlineStyleColor();
-
   createEffect(() => {
     const isAuth = isAuthenticated();
 
@@ -328,6 +326,7 @@ export function Root() {
           <ConfiguredGlobalAppStateProvider>
             <ChannelsContextProvider>
               <Title>{tabTitle()}</Title>
+              <MacroJump />
               <Suspense fallback={''}>
                 <IsomorphicRouter
                   transformUrl={transformShortIdInUrlPathname}
@@ -346,7 +345,6 @@ export function Root() {
               <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
                 <WebsocketDebugger />
               </Show>
-              <MacroJump />
             </ChannelsContextProvider>
           </ConfiguredGlobalAppStateProvider>
         </EntityProvider>
