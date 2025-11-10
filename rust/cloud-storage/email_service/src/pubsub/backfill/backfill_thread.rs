@@ -1,3 +1,4 @@
+use crate::pubsub::backfill::job_complete::check_for_job_completion;
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::check_gmail_rate_limit;
 use crate::util::backfill::backfill_insights::backfill_email_insights;
@@ -57,7 +58,7 @@ pub async fn backfill_thread(
         })
     })?;
 
-    // if the thread already exists, skip backfilling and update backfill_job counters
+    // if the thread already exists, skip backfilling and update redis counters
     if !existing_threads.is_empty() {
         skip_thread(&ctx, data, link, &thread_provider_id).await?;
         return Ok(());
@@ -192,67 +193,7 @@ async fn skip_thread(
         })
     })?;
 
-    let job_counters =
-        email_db_client::backfill::job::update::record_thread_skipped_in_job(&ctx.db, data.job_id)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context(format!(
-                        "record backfill thread skipped call for {} failed",
-                        thread_provider_id
-                    )),
-                })
-            })?;
-
-    // if all threads needing backfill have been processed, update job status to complete
-    let all_threads_processed_count =
-        job_counters.threads_processed_count >= job_counters.total_threads;
-
-    if all_threads_processed_count {
-        tracing::info!("Backfill complete for job {}", data.job_id);
-        email_db_client::backfill::job::update::update_backfill_job_status(
-            &ctx.db,
-            data.job_id,
-            BackfillJobStatus::Complete,
-        )
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to update thread status to complete"),
-            })
-        })?;
-
-        tracing::info!("Backfilling email insights for user {}", link.macro_id);
-        let backfill_email_insights_filter = BackfillEmailInsightsFilter {
-            user_ids: Some(vec![link.macro_id.clone()]),
-            user_thread_limit: None,
-        };
-
-        match backfill_email_insights(
-            ctx.sqs_client.clone(),
-            &ctx.db,
-            backfill_email_insights_filter,
-        )
-        .await
-        {
-            Ok(res) => {
-                tracing::info!(
-                    "Backfilled email insights for user {} with job ids: {:?}",
-                    link.macro_id,
-                    res.job_ids
-                );
-            }
-            Err(e) => {
-                tracing::error!(
-                    error = ?e,
-                    "Failed to backfill email insights for user {}",
-                    link.macro_id
-                );
-            }
-        }
-    }
+    check_for_job_completion(ctx, &link.macro_id, data.job_id).await?;
 
     Ok(())
 }

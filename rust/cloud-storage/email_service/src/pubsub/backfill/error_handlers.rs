@@ -1,3 +1,4 @@
+use crate::pubsub::backfill::job_complete::check_for_job_completion;
 use crate::pubsub::context::PubSubContext;
 use models_email::email::service::backfill::UpdateMetadataPayload;
 use models_email::email::service::backfill::{
@@ -5,6 +6,7 @@ use models_email::email::service::backfill::{
     BackfillPubsubMessage, BackfillThreadStatus,
 };
 use models_email::email::service::pubsub::{DetailedError, ProcessingError};
+use models_email::service::pubsub::FailureReason;
 use sqs_worker::cleanup_message;
 use uuid::Uuid;
 
@@ -50,25 +52,13 @@ pub async fn handle_non_retryable_error(
             }
         }
         BackfillOperation::BackfillThread(p) => {
-            handle_thread_failure(
-                ctx,
-                data.job_id,
-                &p.thread_provider_id,
-                &e.reason.to_string(),
-            )
-            .await;
+            handle_thread_failure(ctx, data.link_id, data.job_id).await;
         }
         BackfillOperation::BackfillMessage(p) => {
             handle_message_failure(ctx, data, p, &e.reason.to_string()).await?;
         }
         BackfillOperation::UpdateThreadMetadata(p) => {
-            handle_thread_failure(
-                ctx,
-                data.job_id,
-                &p.thread_provider_id,
-                &e.reason.to_string(),
-            )
-            .await;
+            handle_thread_failure(ctx, data.link_id, data.job_id).await;
         }
     }
 
@@ -167,35 +157,31 @@ pub async fn handle_retryable_error(
 }
 
 #[tracing::instrument(skip(ctx))]
-async fn handle_thread_failure(
-    ctx: &PubSubContext,
-    job_id: Uuid,
-    thread_provider_id: &str,
-    error_reason: &str,
-) {
-    // update status of backfill_thread entry to failed
-    if let Err(db_err) = email_db_client::backfill::thread::update_backfill_thread_status(
-        &ctx.db,
-        job_id,
-        thread_provider_id,
-        BackfillThreadStatus::Failed,
-        Some(error_reason.to_string()),
-    )
-    .await
-    {
-        tracing::error!(
-            error = %db_err,
-            "Failed to update backfill thread status to Failed"
-        );
-    }
+async fn handle_thread_failure(ctx: &PubSubContext, link_id: Uuid, job_id: Uuid) {
+    let link = match email_db_client::links::get::fetch_link_by_id(&ctx.db, link_id).await {
+        Ok(Some(link)) => link,
+        Ok(None) => {
+            tracing::error!(
+                link_id = link_id.to_string(),
+                job_id = job_id.to_string(),
+                "Link not found"
+            );
+            return;
+        }
+        Err(db_err) => {
+            tracing::error!(
+                error = %db_err,
+                "Failed to fetch link"
+            );
+            return;
+        }
+    };
 
-    // update counters in backfill_job
-    if let Err(db_err) =
-        email_db_client::backfill::job::update::record_thread_failure_in_job(&ctx.db, job_id).await
-    {
+    if let Err(err) = check_for_job_completion(&ctx, &link.macro_id, job_id).await {
         tracing::error!(
-            error = %db_err,
-            "Failed to record backfill thread failure"
+            error = %err,
+            job_id = job_id.to_string(),
+            "Failed to check if job is completed in handle thread failure"
         );
     }
 }
