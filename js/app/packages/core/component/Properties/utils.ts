@@ -6,8 +6,14 @@ type PropertyValueUnion = string | number | Date | boolean;
 
 /**
  * Format a number to show up to 4 decimal places
+ * Uses exponential notation for numbers beyond safe integer range
  */
 export function formatNumber(value: number): string {
+  // Use exponential notation for numbers beyond 15 digits
+  // 15 is the largest js can handle
+  if (Math.abs(value) >= 1e15 || (value !== 0 && Math.abs(value) < 1e-15)) {
+    return value.toExponential(NUMBER_DECIMAL_PLACES);
+  }
   // Round to 4 decimal places and remove trailing zeros
   const rounded = parseFloat(value.toFixed(NUMBER_DECIMAL_PLACES));
   return rounded.toString();
