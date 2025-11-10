@@ -21,6 +21,7 @@ import { isMobileWidth } from '@core/mobile/mobileWidth';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import { createCallback } from '@solid-primitives/rootless';
+import { LexicalEditor } from 'lexical';
 import type { Accessor, Component, Setter } from 'solid-js';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { ActiveTabAttachment } from './ActiveTabAttachment';
@@ -41,6 +42,7 @@ export type ChatInputProps = {
   onStop?: () => void;
   isPersistent?: boolean;
   showActiveTabs?: boolean;
+  captureEditor?: (editor: LexicalEditor) => void;
 };
 
 type ChatInputInternalProps = {
@@ -126,6 +128,7 @@ export function useChatInput(
 }
 
 function ChatInput(props: ChatInputInternalProps) {
+  console.log('CHAT INPUT', props);
   let containerRef!: HTMLDivElement;
   const generating = props.isGenerating ?? (() => false);
   const toolsetSignal = createSignal<ToolSet>({ type: 'all' });
@@ -190,15 +193,12 @@ function ChatInput(props: ChatInputInternalProps) {
     <div
       id="chat-input"
       ref={containerRef}
-      class="relative flex-1 flex flex-col items-center sm:self-center bg-input border-t border-l border-r sm:border border-edge min-h-26 max-h-50 justify-between"
+      class="relative flex-1 flex flex-col items-center sm:self-center bg-input border-t border-l border-r sm:border border-edge min-h-26 max-h-50 justify-between focus-within:bracket-offset-2"
     >
       <div class="relative w-full z-0 pt-2 px-4 flex-1 overflow-hidden">
         <div
           id="chat-input-text-area"
-          class={`
-            transition-all duration-150 rounded-md
-            w-full h-full text-base sm:text-sm text-ink
-            `}
+          class="rounded-md w-full h-full text-base sm:text-sm text-ink"
         >
           <props.markdown.MarkdownArea
             onEnter={handleEnter}
@@ -206,6 +206,7 @@ function ChatInput(props: ChatInputInternalProps) {
             history={availableAttachments}
             dontFocusOnMount={isMobileWidth()}
             onPasteFile={props.uploadQueue.upload}
+            captureEditor={props.captureEditor}
           />
         </div>
       </div>

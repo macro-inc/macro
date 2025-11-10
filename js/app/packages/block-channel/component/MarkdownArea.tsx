@@ -20,6 +20,7 @@ import {
   mentionsPlugin,
   NODE_TRANSFORM,
   type NodeTransformType,
+  registerRootEventListener,
   type SelectionData,
   tabIndentationPlugin,
   tableCellResizerPlugin,
@@ -326,6 +327,14 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
       },
       COMMAND_PRIORITY_CRITICAL
     )
+  );
+
+  // better focus in handling. preserves selection on regain focus!
+  autoRegister(
+    registerRootEventListener(editor, 'focusin', (e) => {
+      e.preventDefault();
+      editor.focus();
+    })
   );
 
   return (

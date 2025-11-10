@@ -41,6 +41,15 @@ type SplitLayoutContainerProps = {
   setManager: Setter<SplitManager | undefined>;
 };
 
+function getParentSplitId(element: Element | null) {
+  if (!element || !element.isConnected) return null;
+  const splitParent = element.closest('[data-split-container]');
+  if (!splitParent) return null;
+  const splitId = splitParent.getAttribute('data-split-id');
+  if (!splitId) return null;
+  return splitId as SplitId;
+}
+
 /**
  * Creates an effect that syncs the layout manager with the URL.
  *
@@ -95,9 +104,24 @@ function createSplitFocusTracker(props: {
   const DEBOUNCE = 100;
   const activeSplitId = () => props.splitManager.activeSplitId();
 
-  const isElementInPanel = (panelId: SplitId, element: Element): boolean => {
+  const currentSplitsIds = () => new Set(props.splits().map((s) => s.id));
+  const lastFocusedChildBySplitId: Map<SplitId, HTMLElement | null> = new Map();
+  createEffect(
+    on(currentSplitsIds, (ids) => {
+      for (const key of lastFocusedChildBySplitId.keys()) {
+        if (!ids.has(key)) {
+          lastFocusedChildBySplitId.delete(key);
+        }
+      }
+    })
+  );
+
+  const isElementInPanel = (
+    panelId: SplitId,
+    element: Element | null
+  ): boolean => {
     const panelRef = props.panelRefs.get(panelId);
-    if (!panelRef) return false;
+    if (!panelRef || element === null) return false;
     return panelRef === element || panelRef.contains(element);
   };
 
@@ -108,21 +132,30 @@ function createSplitFocusTracker(props: {
       return;
     }
 
+    // return if panel has a child already with focus.
+    if (splitPanelRef.contains(document.activeElement)) return;
+
+    // look for a child to return focus to.
+    const child = lastFocusedChildBySplitId.get(id);
+    if (child && child.isConnected) {
+      child.focus();
+      return;
+    }
+
     splitPanelRef.focus();
   };
 
   const activateFocusedSplit = (element: Element) => {
-    const activeSplitId_ = activeSplitId();
-    if (!activeSplitId_) return;
+    const splitId = activeSplitId();
+    if (!splitId) return;
 
-    const doesActiveSplitHaveFocus = isElementInPanel(activeSplitId_, element);
+    const doesActiveSplitHaveFocus = isElementInPanel(splitId, element);
 
     if (doesActiveSplitHaveFocus) {
       return;
     }
 
     let splitWithFocus: SplitId | undefined;
-
     for (const split of props.splits()) {
       if (isElementInPanel(split.id, element)) {
         splitWithFocus = split.id;
@@ -178,7 +211,13 @@ function createSplitFocusTracker(props: {
       (newEvent) => {
         if (focusTimeout) {
           clearTimeout(focusTimeout);
-          clearTimeout(activateTimeout);
+        }
+        if (newEvent.type === SplitEvent.ReturnFocus) {
+          const id = props.splitManager.activeSplitId();
+          if (id) {
+            focusSplitById(id);
+          }
+          return;
         }
         focusTimeout = setTimeout(() => {
           focusFromEvent(newEvent);
@@ -194,11 +233,19 @@ function createSplitFocusTracker(props: {
         clearTimeout(activateTimeout);
       }
       if (!element) return;
+
+      const parentId = getParentSplitId(element);
+      if (parentId && element instanceof HTMLElement) {
+        lastFocusedChildBySplitId.set(parentId, element);
+      }
+
       activateTimeout = setTimeout(() => {
         activateFocusedSplit(element);
       }, DEBOUNCE);
     })
   );
+
+  return { focusSplitById };
 }
 
 export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
@@ -209,6 +256,13 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   // Store a ref to each panel by id
   let panelRefs = new Map<SplitId, HTMLDivElement>();
+  createEffect(
+    on(splitManager.events, (event) => {
+      if (event.type === SplitEvent.Remove) {
+        panelRefs.delete(event.splitId);
+      }
+    })
+  );
 
   const splits = createMemo(splitManager.splits);
 
@@ -374,7 +428,6 @@ function SplitPanel(props: SplitPanelProps) {
           setPanelRef(ref);
           props.setPanelRef(ref);
           attachHotKeys(ref);
-          ref.focus();
         }}
       >
         <Dynamic component={props.split.mount.element} />
