@@ -15,6 +15,7 @@ import {
 import type { Accessor, JSXElement } from 'solid-js';
 import { createEffect, createSignal, For, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { DEFAULT_MODEL } from '../../constant';
 import { AttachmentList } from '../input/Attachment';
 import * as ATTACHMENTS from './attachments';
 import { StreamDebugger } from './stream';
@@ -93,7 +94,7 @@ const requests: (model: Model) => AttachmentTest[] = (model) => [
   },
 ];
 
-const MODEL: Model = 'anthropic/claude-sonnet-4';
+const MODEL: Model = DEFAULT_MODEL;
 
 export default function DebugAttachments() {
   const sends: any = [];

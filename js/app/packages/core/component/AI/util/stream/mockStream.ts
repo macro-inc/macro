@@ -2,6 +2,7 @@ import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type { MessageStream, StreamItem } from '@service-cognition/websocket';
 import { uuid } from 'short-uuid';
 import { createEffect, createSignal } from 'solid-js';
+import { DEFAULT_MODEL } from '../../constant';
 import { characters } from './splitStream';
 import type { NetworkDelay, Splitter } from './types';
 
@@ -17,7 +18,7 @@ const makeFakeRequst = () =>
   ({
     chat_id: MOCK_ID,
     content: 'test',
-    model: 'anthropic/claude-sonnet-4',
+    model: DEFAULT_MODEL,
     type: 'send_chat_message',
     token: '??',
     stream_id: MOCK_ID,

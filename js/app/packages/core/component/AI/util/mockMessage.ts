@@ -1,4 +1,5 @@
 import { uuid } from 'short-uuid';
+import { DEFAULT_MODEL } from '../constant';
 import { type ChatMessageWithAttachments, Model } from '../types';
 
 // TODO mock attachments
@@ -8,7 +9,7 @@ function user(text: string, _attachments: [] = []): ChatMessageWithAttachments {
     content: text,
     id: uuid(),
     role: 'user',
-    model: Model['anthropic/claude-sonnet-4'],
+    model: Model[DEFAULT_MODEL],
   };
 }
 
