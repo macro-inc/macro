@@ -1,38 +1,38 @@
 import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
-} from '@app/component/GlobalAppState';
+} from "@app/component/GlobalAppState";
 import {
   emailRefetchInterval,
   useEmailAuthStatus,
-} from '@app/signal/emailAuth';
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { Button } from '@core/component/FormControls/Button';
-import DropdownMenu from '@core/component/FormControls/DropdownMenu';
-import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
-import { ToggleButton } from '@core/component/FormControls/ToggleButton';
-import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
+} from "@app/signal/emailAuth";
+import { globalSplitManager } from "@app/signal/splitLayout";
+import { Button } from "@core/component/FormControls/Button";
+import DropdownMenu from "@core/component/FormControls/DropdownMenu";
+import { SegmentedControl } from "@core/component/FormControls/SegmentControls";
+import { ToggleButton } from "@core/component/FormControls/ToggleButton";
+import { ToggleSwitch } from "@core/component/FormControls/ToggleSwitch";
 import {
   ContextMenuContent,
   MenuItem,
   MenuSeparator,
-} from '@core/component/Menu';
-import { RecipientSelector } from '@core/component/RecipientSelector';
+} from "@core/component/Menu";
+import { RecipientSelector } from "@core/component/RecipientSelector";
 import {
   blockAcceptsFileExtension,
   fileTypeToBlockName,
-} from '@core/constant/allBlocks';
+} from "@core/constant/allBlocks";
 import {
   ENABLE_PREVIEW,
   ENABLE_SOUP_FROM_FILTER,
-} from '@core/constant/featureFlags';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
-import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
-import type { ViewId } from '@core/types/view';
-import type { WithCustomUserInput } from '@core/user';
-import { ContextMenu } from '@kobalte/core/context-menu';
-import { supportedExtensions } from '@lexical-core/utils';
+} from "@core/constant/featureFlags";
+import { isTouchDevice } from "@core/mobile/isTouchDevice";
+import { isMobileWidth } from "@core/mobile/mobileWidth";
+import { useCombinedRecipients } from "@core/signal/useCombinedRecipient";
+import type { ViewId } from "@core/types/view";
+import type { WithCustomUserInput } from "@core/user";
+import { ContextMenu } from "@kobalte/core/context-menu";
+import { supportedExtensions } from "@lexical-core/utils";
 import {
   createChannelsQuery,
   createDeleteDssItemMutation,
@@ -58,19 +58,19 @@ import {
   sortByViewedAt,
   unreadFilterFn,
   type WithNotification,
-} from '@macro-entity';
+} from "@macro-entity";
 import {
   markNotificationsForEntityAsDone,
   useNotificationsForEntity,
-} from '@notifications/notificationHelpers';
+} from "@notifications/notificationHelpers";
 import {
   isChannelMention,
   isChannelMessageReply,
   isChannelMessageSend,
   notificationWithMetadata,
-} from '@notifications/notificationMetadata';
-import type { UnifiedNotification } from '@notifications/types';
-import type { PaginatedSearchArgs } from '@service-search/client';
+} from "@notifications/notificationMetadata";
+import type { UnifiedNotification } from "@notifications/types";
+import type { PaginatedSearchArgs } from "@service-search/client";
 import type {
   ChannelFilters,
   ChatFilters,
@@ -79,10 +79,10 @@ import type {
   ProjectFilters,
   UnifiedSearchIndex,
   UnifiedSearchRequestFilters,
-} from '@service-search/generated/models';
-import type { GetItemsSoupParams } from '@service-storage/generated/schemas';
-import fuzzy from 'fuzzy';
-import stringify from 'json-stable-stringify';
+} from "@service-search/generated/models";
+import type { GetItemsSoupParams } from "@service-storage/generated/schemas";
+import fuzzy from "fuzzy";
+import stringify from "json-stable-stringify";
 import {
   type Accessor,
   batch,
@@ -96,17 +96,17 @@ import {
   type ParentProps,
   type Setter,
   Show,
-} from 'solid-js';
-import { createStore, unwrap } from 'solid-js/store';
-import { EntityWithEverything } from '../../macro-entity/src/components/EntityWithEverything';
-import { createCopyDssEntityMutation } from '../../macro-entity/src/queries/dss';
-import type { FetchPaginatedEmailsParams } from '../../macro-entity/src/queries/email';
-import { EntityModal } from './EntityModal/EntityModal';
-import { useUpsertSavedViewMutation } from './Soup';
-import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
-import { useSplitLayout } from './split-layout/layout';
-import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
-import { EmptyState } from './UnifiedListEmptyState';
+} from "solid-js";
+import { createStore, unwrap } from "solid-js/store";
+import { EntityWithEverything } from "../../macro-entity/src/components/EntityWithEverything";
+import { createCopyDssEntityMutation } from "../../macro-entity/src/queries/dss";
+import type { FetchPaginatedEmailsParams } from "../../macro-entity/src/queries/email";
+import { EntityModal } from "./EntityModal/EntityModal";
+import { useUpsertSavedViewMutation } from "./Soup";
+import { SplitToolbarRight } from "./split-layout/components/SplitToolbar";
+import { useSplitLayout } from "./split-layout/layout";
+import { useSplitPanelOrThrow } from "./split-layout/layoutUtils";
+import { EmptyState } from "./UnifiedListEmptyState";
 import {
   archiveEmail,
   type DisplayOptions,
@@ -118,30 +118,30 @@ import {
   type SortOptions,
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_NAMES,
-} from './ViewConfig';
+} from "./ViewConfig";
 
 const sortOptions = [
   {
-    value: 'viewed_at',
-    label: 'Viewed',
+    value: "viewed_at",
+    label: "Viewed",
     sortFn: sortByViewedAt,
   },
   {
-    value: 'updated_at',
-    label: 'Updated',
+    value: "updated_at",
+    label: "Updated",
     sortFn: sortByUpdatedAt,
   },
   {
-    value: 'created_at',
-    label: 'Created',
+    value: "created_at",
+    label: "Created",
     sortFn: sortByCreatedAt,
   },
   {
-    value: 'frecency',
-    label: 'Frecency',
+    value: "frecency",
+    label: "Frecency",
     sortFn: sortByFrecencyScore,
   },
-] satisfies SortOption<EntityData, SortOptions['sortBy']>[];
+] satisfies SortOption<EntityData, SortOptions["sortBy"]>[];
 
 export type UnifiedListViewProps = {
   viewId?: ViewId;
@@ -157,18 +157,18 @@ export type UnifiedListViewProps = {
 export function UnifiedListView(props: UnifiedListViewProps) {
   const [contextAndModalState, setContextAndModalState] = createStore<{
     modalOpen: boolean;
-    modalView: 'rename' | 'moveToProject';
+    modalView: "rename" | "moveToProject";
     contextMenuOpen: boolean;
     selectedEntity: WithNotification<EntityData> | undefined;
     prevSelectedEntity: WithNotification<EntityData> | undefined;
   }>({
     modalOpen: false,
-    modalView: 'rename',
+    modalView: "rename",
     contextMenuOpen: false,
     selectedEntity: undefined,
     prevSelectedEntity: undefined,
   });
-  const openEntityModal = (view: 'rename' | 'moveToProject') => {
+  const openEntityModal = (view: "rename" | "moveToProject") => {
     // terrible will fix
     // context menu upon closing steals focus from mounted menu
     setTimeout(() => {
@@ -232,8 +232,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         const firstEntity = _entities()![0];
 
         if (props.viewId) {
-          setViewDataStore(props.viewId, 'highlightedId', firstEntity.id);
-          setViewDataStore(props.viewId, 'selectedEntity', firstEntity);
+          setViewDataStore(props.viewId, "highlightedId", firstEntity.id);
+          setViewDataStore(props.viewId, "selectedEntity", firstEntity);
         }
 
         setTimeout(() => {
@@ -275,24 +275,24 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     view?.filters?.projectFilter ?? defaultFilterOptions.projectFilter
   );
 
-  const { all: emailRecipientOptions } = useCombinedRecipients(['user']);
+  const { all: emailRecipientOptions } = useCombinedRecipients(["user"]);
   const fromFilter = view?.filters.fromFilter;
   const hasFromFilter = fromFilter !== undefined;
   const shouldFilterEmails = createMemo(() => {
     if (!hasFromFilter) return false;
     const types = entityTypeFilter();
-    return types.length === 0 || types.includes('email');
+    return types.length === 0 || types.includes("email");
   });
   const shouldFilterOwnedEntities = createMemo(() => {
     if (!hasFromFilter) return false;
     const types = entityTypeFilter();
-    return types.length === 0 || types.some((t) => t !== 'email');
+    return types.length === 0 || types.some((t) => t !== "email");
   });
   const showFromFilter = createMemo(
     () => shouldFilterEmails() || shouldFilterOwnedEntities()
   );
   const [fromFilterUsers, setFromFilterUsers] = createSignal<
-    WithCustomUserInput<'user' | 'contact'>[]
+    WithCustomUserInput<"user" | "contact">[]
   >(view?.filters.fromFilter ?? []);
 
   const sortTypeSignal = createSignal(
@@ -308,40 +308,40 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     setViewDataStore(
       props.viewId,
-      'filters',
-      'notificationFilter',
+      "filters",
+      "notificationFilter",
       notificationFilter()
     );
     setViewDataStore(
       props.viewId,
-      'filters',
-      'importantFilter',
+      "filters",
+      "importantFilter",
       importantFilter()
     );
-    setViewDataStore(props.viewId, 'filters', 'typeFilter', entityTypeFilter());
+    setViewDataStore(props.viewId, "filters", "typeFilter", entityTypeFilter());
     setViewDataStore(
       props.viewId,
-      'filters',
-      'documentTypeFilter',
+      "filters",
+      "documentTypeFilter",
       fileTypeFilter()
     );
-    setViewDataStore(props.viewId, 'filters', 'projectFilter', projectFilter());
-    setViewDataStore(props.viewId, 'filters', 'fromFilter', fromFilterUsers());
-    setViewDataStore(props.viewId, 'display', 'preview', preview());
-    setViewDataStore(props.viewId, 'display', 'showProjects', showProjects());
+    setViewDataStore(props.viewId, "filters", "projectFilter", projectFilter());
+    setViewDataStore(props.viewId, "filters", "fromFilter", fromFilterUsers());
+    setViewDataStore(props.viewId, "display", "preview", preview());
+    setViewDataStore(props.viewId, "display", "showProjects", showProjects());
     setViewDataStore(
       props.viewId,
-      'display',
-      'showUnreadIndicator',
+      "display",
+      "showUnreadIndicator",
       showUnreadIndicator()
     );
     setViewDataStore(
       props.viewId,
-      'display',
-      'unrollNotifications',
+      "display",
+      "unrollNotifications",
       showUnrollNotifications()
     );
-    setViewDataStore(props.viewId, 'sort', 'sortBy', sortType());
+    setViewDataStore(props.viewId, "sort", "sortBy", sortType());
   });
 
   // sync local signals to view store
@@ -377,7 +377,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     );
   });
 
-  const searchText = createMemo(() => props.searchText?.trim() ?? '');
+  const searchText = createMemo(() => props.searchText?.trim() ?? "");
   const [showUnrollNotifications, setShowUnrollNotifications] = createSignal(
     view?.display?.unrollNotifications ??
       defaultDisplayOptions.unrollNotifications
@@ -408,7 +408,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const setHighlightedId = (id: string) => {
     if (!props.viewId) return;
-    setViewDataStore(props.viewId, 'highlightedId', id);
+    setViewDataStore(props.viewId, "highlightedId", id);
   };
 
   const { setFilters: setOptionalFilters, filterFn: optionalFilter } =
@@ -418,8 +418,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const toggleFileTypeFilter = (fileType: DocumentTypeFilter) =>
     batch(() => {
-      if (!entityTypeFilter().includes('document'))
-        setEntityTypeFilter((prev) => [...prev, 'document']);
+      if (!entityTypeFilter().includes("document"))
+        setEntityTypeFilter((prev) => [...prev, "document"]);
 
       setFileTypeFilter((prev) =>
         prev.includes(fileType)
@@ -444,9 +444,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const filterByFileType = fileTypeFilter();
 
     let filterFn: EntityFilter<EntityData> | undefined;
-    if (filterByFileType.length === 1 && filterByFileType[0] === 'unknown') {
+    if (filterByFileType.length === 1 && filterByFileType[0] === "unknown") {
       filterFn = (entity) => {
-        if (entity.type !== 'document') return true;
+        if (entity.type !== "document") return true;
 
         const entityFileType = entity.fileType;
         if (!entityFileType) return true;
@@ -457,11 +457,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       };
     } else if (filterByFileType.length > 0) {
       filterFn = (entity) => {
-        if (entity.type !== 'document') return true;
+        if (entity.type !== "document") return true;
 
         const entityFileType = entity.fileType;
         if (
-          filterByFileType.includes('unknown') &&
+          filterByFileType.includes("unknown") &&
           (!entityFileType ||
             KNOWN_FILE_TYPES.every(
               (fileType) => !blockAcceptsFileExtension(fileType, entityFileType)
@@ -486,7 +486,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     if (selectedFromUsers.length === 0) return undefined;
 
     return (entity) => {
-      if (entity.type === 'email') return true;
+      if (entity.type === "email") return true;
 
       const ownerId = entity.ownerId;
       if (!ownerId) return false;
@@ -504,9 +504,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     if (importantFilter()) filterFns.push(importantFilterFn);
 
-    if (notificationFilter() === 'unread') filterFns.push(unreadFilterFn);
+    if (notificationFilter() === "unread") filterFns.push(unreadFilterFn);
 
-    if (notificationFilter() === 'notDone') filterFns.push(notDoneFilterFn);
+    if (notificationFilter() === "notDone") filterFns.push(notDoneFilterFn);
 
     setRequiredFilters(filterFns);
   });
@@ -541,20 +541,20 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const includeArray: UnifiedSearchIndex[] = [];
     for (const type of types) {
       switch (type) {
-        case 'document':
-          includeArray.push('documents');
+        case "document":
+          includeArray.push("documents");
           break;
-        case 'chat':
-          includeArray.push('chats');
+        case "chat":
+          includeArray.push("chats");
           break;
-        case 'channel':
-          includeArray.push('channels');
+        case "channel":
+          includeArray.push("channels");
           break;
-        case 'email':
-          includeArray.push('emails');
+        case "email":
+          includeArray.push("emails");
           break;
-        case 'project':
-          includeArray.push('projects');
+        case "project":
+          includeArray.push("projects");
           break;
       }
     }
@@ -566,7 +566,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     if (fileTypeFilter().length > 0) {
       const fileTypes = fileTypeFilter().flatMap((fileType) => {
         // not ideal but it works for most cases
-        if (fileType === 'code') return supportedExtensions;
+        if (fileType === "code") return supportedExtensions;
         return [fileType];
       });
       documentFilters = {
@@ -626,8 +626,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return {
       limit: props.defaultDisplayOptions?.limit ?? 100,
       // email sort methods does not accept frecency yet
-      sort_method: sort === 'frecency' ? 'viewed_updated' : sort,
-      view: props.viewId === 'emails' ? emailView() : 'inbox',
+      sort_method: sort === "frecency" ? "viewed_updated" : sort,
+      view: props.viewId === "emails" ? emailView() : "inbox",
     };
   });
   const searchUnifiedContentQueryParams = createMemo(
@@ -637,8 +637,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         page_size: 100,
       },
       request: {
-        search_on: 'content',
-        match_type: 'partial',
+        search_on: "content",
+        match_type: "partial",
         terms: searchText().length > 0 ? [searchText()] : undefined,
         filters: unifiedSearchFilters(),
         include: unifiedSearchIncludeArray(),
@@ -652,8 +652,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         page_size: 100,
       },
       request: {
-        search_on: 'name',
-        match_type: 'partial',
+        search_on: "name",
+        match_type: "partial",
         terms: searchText().length > 0 ? [searchText()] : undefined,
         filters: unifiedSearchFilters(),
         include: unifiedSearchIncludeArray(),
@@ -684,21 +684,21 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     if (projectFilter()) return true;
     if (!emailActive()) return true;
     const typeFilter = entityTypeFilter();
-    if (typeFilter.length > 0 && !typeFilter.includes('email')) return true;
+    if (typeFilter.length > 0 && !typeFilter.includes("email")) return true;
     return !disableSearchService();
   });
 
   const disableDssInfiniteQuery = createMemo(() => {
     const typeFilter = entityTypeFilter();
     if (typeFilter.length === 0) return false;
-    const dssTypes = ['document', 'chat', 'project'];
+    const dssTypes = ["document", "chat", "project"];
     const hasDssTypes = typeFilter.some((t) => dssTypes.includes(t));
     return !hasDssTypes;
   });
 
   const disableChannelsQuery = createMemo(() => {
     const typeFilter = entityTypeFilter();
-    if (typeFilter.length > 0 && !typeFilter.includes('channel')) return true;
+    if (typeFilter.length > 0 && !typeFilter.includes("channel")) return true;
     return false;
   });
 
@@ -740,8 +740,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           soupContext: unifiedListContext,
         })
     : (entity: EntityData) => {
-        if (emailView() === 'inbox') {
-          if (entity.type === 'email') {
+        if (emailView() === "inbox") {
+          if (entity.type === "email") {
             archiveEmail(entity.id, {
               isDone: entity.done,
               optimisticallyExclude: true,
@@ -749,7 +749,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           }
           return true;
         }
-        if (entity.type === 'email') {
+        if (entity.type === "email") {
           archiveEmail(entity.id, { isDone: entity.done });
         }
         markNotificationsForEntityAsDone(notificationSource, entity);
@@ -772,7 +772,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     const blockHandle = await blockOrchestrator.getBlockHandle(
       notification.eventItemId,
-      'channel'
+      "channel"
     );
     if (!blockHandle) return;
 
@@ -848,11 +848,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   ) => {
     if (preview()) {
       if (!props.viewId) return;
-      setViewDataStore(props.viewId, 'selectedEntity', entity);
+      setViewDataStore(props.viewId, "selectedEntity", entity);
       return;
     }
 
-    if (entity.type === 'document')
+    if (entity.type === "document")
       return documentEntityClickHandler(entity, event);
 
     const handle = event.altKey
@@ -878,7 +878,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     if (!view) return false;
 
     const configChanges = view.initialConfig;
-    if (configChanges == null || configChanges === '') return false;
+    if (configChanges == null || configChanges === "") return false;
 
     try {
       const initialConfigObj = JSON.parse(configChanges);
@@ -907,7 +907,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
       const stringifiedConfig = stringifiedCurrentViewConfigBase();
       if (stringifiedConfig) {
-        setViewDataStore(props.viewId, 'initialConfig', stringifiedConfig);
+        setViewDataStore(props.viewId, "initialConfig", stringifiedConfig);
       }
     }
   });
@@ -921,7 +921,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               <Button
                 size="SM"
                 classList={{
-                  '!border-ink/25 !text-ink !bg-panel hover:!text-ink mx-1.5 font-normal': true,
+                  "!border-ink/25 !text-ink !bg-panel hover:!text-ink mx-1.5 font-normal": true,
                 }}
                 onClick={() => {
                   if (!props.viewId) return;
@@ -937,7 +937,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     if (currentConfig !== null && currentConfig !== undefined) {
                       setViewDataStore(
                         props.viewId,
-                        'initialConfig',
+                        "initialConfig",
                         currentConfig
                       );
                     }
@@ -965,9 +965,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       size="SM"
                       label="Show"
                       list={[
-                        { value: 'all', label: 'All' },
-                        { value: 'unread', label: 'Unread' },
-                        { value: 'notDone', label: 'Not Done' },
+                        { value: "all", label: "All" },
+                        { value: "unread", label: "Unread" },
+                        { value: "notDone", label: "Not Done" },
                       ]}
                       value={notificationFilter()}
                       onChange={setNotificationFilter}
@@ -1009,43 +1009,43 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     <div class="flex flex-row flex-wrap items-center gap-1">
                       <ToggleButton
                         size="SM"
-                        pressed={fileTypeFilter().includes('md')}
-                        onChange={() => toggleFileTypeFilter('md')}
+                        pressed={fileTypeFilter().includes("md")}
+                        onChange={() => toggleFileTypeFilter("md")}
                       >
                         NOTE
                       </ToggleButton>
                       <ToggleButton
                         size="SM"
-                        pressed={fileTypeFilter().includes('pdf')}
-                        onChange={() => toggleFileTypeFilter('pdf')}
+                        pressed={fileTypeFilter().includes("pdf")}
+                        onChange={() => toggleFileTypeFilter("pdf")}
                       >
                         PDF
                       </ToggleButton>
                       <ToggleButton
                         size="SM"
-                        pressed={fileTypeFilter().includes('canvas')}
-                        onChange={() => toggleFileTypeFilter('canvas')}
+                        pressed={fileTypeFilter().includes("canvas")}
+                        onChange={() => toggleFileTypeFilter("canvas")}
                       >
                         CANVAS
                       </ToggleButton>
                       <ToggleButton
                         size="SM"
-                        pressed={fileTypeFilter().includes('code')}
-                        onChange={() => toggleFileTypeFilter('code')}
+                        pressed={fileTypeFilter().includes("code")}
+                        onChange={() => toggleFileTypeFilter("code")}
                       >
                         CODE
                       </ToggleButton>
                       <ToggleButton
                         size="SM"
-                        pressed={fileTypeFilter().includes('image')}
-                        onChange={() => toggleFileTypeFilter('image')}
+                        pressed={fileTypeFilter().includes("image")}
+                        onChange={() => toggleFileTypeFilter("image")}
                       >
                         IMAGE
                       </ToggleButton>
                       <ToggleButton
                         size="SM"
-                        pressed={fileTypeFilter().includes('unknown')}
-                        onChange={() => toggleFileTypeFilter('unknown')}
+                        pressed={fileTypeFilter().includes("unknown")}
+                        onChange={() => toggleFileTypeFilter("unknown")}
                       >
                         Other
                       </ToggleButton>
@@ -1054,7 +1054,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   <Show when={ENABLE_SOUP_FROM_FILTER && showFromFilter()}>
                     <section class="gap-1 p-2">
                       <span class="font-medium text-xs">From</span>
-                      <RecipientSelector<'user' | 'contact'>
+                      <RecipientSelector<"user" | "contact">
                         options={emailRecipientOptions}
                         selectedOptions={fromFilterUsers}
                         setSelectedOptions={setFromFilterUsers}
@@ -1077,7 +1077,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       size="SM"
                       label="Layout"
                       // value={selectItemFromList()}
-                      list={['Compact', 'Relaxed', 'Visual']}
+                      list={["Compact", "Relaxed", "Visual"]}
                       // onChange={(newValue) => setSelectItemFromList(newValue)}
                       disabled
                     />
@@ -1145,7 +1145,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           >
             {(innerProps) => {
               const displayDoneButton = () => {
-                if (innerProps.entity.type === 'email') {
+                if (innerProps.entity.type === "email") {
                   return !innerProps.entity.done;
                 }
 
@@ -1153,11 +1153,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               };
               const timestamp = () => {
                 switch (sortType()) {
-                  case 'viewed_at':
+                  case "viewed_at":
                     return innerProps.entity.viewedAt;
-                  case 'created_at':
+                  case "created_at":
                     return innerProps.entity.createdAt;
-                  case 'updated_at':
+                  case "updated_at":
                     return innerProps.entity.updatedAt;
                 }
               };
@@ -1169,7 +1169,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     if (isPanelActive() && !preview() && props.viewId) {
                       setViewDataStore(
                         props.viewId,
-                        'selectedEntity',
+                        "selectedEntity",
                         innerProps.entity
                       );
                     }
@@ -1186,7 +1186,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   timestamp={timestamp()}
                   onClick={entityClickHandler}
                   onClickRowAction={(entity, type) => {
-                    if (type === 'done') {
+                    if (type === "done") {
                       markEntityAsDone?.(entity);
                     }
                   }}
@@ -1196,14 +1196,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     );
                     if (!notification) return;
 
-                    if (notifiedEntity.type === 'channel')
+                    if (notifiedEntity.type === "channel")
                       gotoChannelNotification(notification);
                   }}
                   onMouseOver={() => {
                     if (props.viewId) {
                       setViewDataStore(
                         props.viewId,
-                        'hasUserInteractedEntity',
+                        "hasUserInteractedEntity",
                         true
                       );
                     }
@@ -1212,7 +1212,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     if (isPanelActive() && !preview() && props.viewId) {
                       setViewDataStore(
                         props.viewId,
-                        'selectedEntity',
+                        "selectedEntity",
                         innerProps.entity
                       );
                     }
@@ -1224,7 +1224,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     if (isPanelActive() && !preview() && props.viewId) {
                       setViewDataStore(
                         props.viewId,
-                        'selectedEntity',
+                        "selectedEntity",
                         innerProps.entity
                       );
                     }
@@ -1269,9 +1269,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                 <Entity
                   entity={contextAndModalState.selectedEntity!}
                   timestamp={
-                    sortType() === 'viewed_at'
+                    sortType() === "viewed_at"
                       ? contextAndModalState.selectedEntity!.viewedAt
-                      : sortType() === 'created_at'
+                      : sortType() === "created_at"
                         ? contextAndModalState.selectedEntity!.createdAt
                         : undefined
                   }
@@ -1286,7 +1286,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       fnAccessor()(contextAndModalState.selectedEntity!)
                     }
                     disabled={
-                      contextAndModalState.selectedEntity?.type === 'email'
+                      contextAndModalState.selectedEntity?.type === "email"
                         ? contextAndModalState.selectedEntity.done
                         : contextAndModalState.selectedEntity
                             ?.notifications?.()
@@ -1301,27 +1301,28 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   deleteDssItem(contextAndModalState.selectedEntity!)
                 }
                 disabled={
-                  contextAndModalState.selectedEntity?.type !== 'document' &&
-                  contextAndModalState.selectedEntity?.type !== 'chat'
+                  contextAndModalState.selectedEntity?.type !== "document" &&
+                  contextAndModalState.selectedEntity?.type !== "project" &&
+                  contextAndModalState.selectedEntity?.type !== "chat"
                 }
               />
               <MenuItem
                 text="Rename"
-                onClick={() => openEntityModal('rename')}
+                onClick={() => openEntityModal("rename")}
                 disabled={
-                  contextAndModalState.selectedEntity?.type !== 'document' &&
-                  contextAndModalState.selectedEntity?.type !== 'chat'
+                  contextAndModalState.selectedEntity?.type !== "document" &&
+                  contextAndModalState.selectedEntity?.type !== "chat"
                 }
               />
               <MenuItem
                 text="Move to Project"
                 onClick={() => {
-                  openEntityModal('moveToProject');
+                  openEntityModal("moveToProject");
                 }}
                 disabled={
-                  contextAndModalState.selectedEntity?.type !== 'document' &&
-                  contextAndModalState.selectedEntity?.type !== 'project' &&
-                  contextAndModalState.selectedEntity?.type !== 'chat'
+                  contextAndModalState.selectedEntity?.type !== "document" &&
+                  contextAndModalState.selectedEntity?.type !== "project" &&
+                  contextAndModalState.selectedEntity?.type !== "chat"
                   // https://github.com/macro-inc/macro-api/pull/2395
                   //  || !hasProjectPermissions()
                 }
@@ -1332,8 +1333,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   copyDssItem({ entity: contextAndModalState.selectedEntity! });
                 }}
                 disabled={
-                  contextAndModalState.selectedEntity?.type !== 'document' &&
-                  contextAndModalState.selectedEntity?.type !== 'chat'
+                  contextAndModalState.selectedEntity?.type !== "document" &&
+                  contextAndModalState.selectedEntity?.type !== "chat"
                 }
               />
               <MenuItem
@@ -1341,11 +1342,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                 onClick={() => {
                   const splitManager = globalSplitManager();
                   if (!splitManager) {
-                    console.error('No split manager available');
+                    console.error("No split manager available");
                     return;
                   }
                   if (
-                    contextAndModalState.selectedEntity?.type === 'document'
+                    contextAndModalState.selectedEntity?.type === "document"
                   ) {
                     const { fileType, id } =
                       contextAndModalState.selectedEntity!;
