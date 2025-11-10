@@ -22,7 +22,7 @@ debug:
     RUST_LOG=document_cognition_service=debug,ai=debug,ai_tools=debug,info cargo run --features macro_middleware/local_auth
 
 trace:
-    RUST_LOG=document_cognition_service=trace,ai=trace,ai_tools=debug,info cargo run --features macro_middleware/local_auth
+    RUST_LOG=document_cognition_service=trace,ai=trace,ai_tools=debug,anthropic=debug,info, cargo run --features macro_middleware/local_auth
 
 dev-lq:
     cargo run --features macro_middleware/local_auth,local_queue
