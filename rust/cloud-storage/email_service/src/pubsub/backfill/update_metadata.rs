@@ -6,8 +6,8 @@ use models_email::email::service::backfill::{
 };
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use sqs_client::search::SearchQueueMessage;
 use sqs_client::search::email::EmailThreadMessage;
+use sqs_client::search::SearchQueueMessage;
 
 /// This step is invoked by BackfillMessage once all messages in a thread have been backfilled.
 /// Updates the thread metadata in the database, the replying_to_id values of its messages, and
@@ -56,20 +56,6 @@ pub async fn update_thread_metadata(
             })
         })?;
 
-        // update job status to complete and get back counters to update the job with
-        let thread_counters = email_db_client::backfill::thread::update_backfill_thread_success(
-            &mut *tx,
-            data.job_id,
-            &p.thread_provider_id,
-        )
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to update thread status to complete"),
-            })
-        })?;
-
         // notify search-service about the new thread
         let search_message = SearchQueueMessage::ExtractEmailThreadMessage(EmailThreadMessage {
             thread_id: p.thread_db_id.clone().to_string(),
@@ -86,23 +72,16 @@ pub async fn update_thread_metadata(
                 })
             })?;
 
-        // update job counters with thread counters
-        let job_counters = email_db_client::backfill::job::update::record_thread_success_in_job(
-            &mut *tx,
-            data.job_id,
-            thread_counters,
-        )
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to update thread status to complete"),
-            })
-        })?;
-
-        // if all threads needing backfill have been processed, update job status to complete
-        let all_threads_processed =
-            job_counters.threads_processed_count >= job_counters.total_threads;
+        let all_threads_processed = ctx
+            .redis_client
+            .handle_completed_thread(data.job_id)
+            .await
+            .map_err(|e| {
+                ProcessingError::Retryable(DetailedError {
+                    reason: FailureReason::RedisQueryFailed,
+                    source: e.context("Failed to increment completed thread count"),
+                })
+            })?;
 
         if all_threads_processed {
             tracing::info!("Backfill complete for job {}", data.job_id);
