@@ -1,8 +1,8 @@
-import { useTokenToHotkeyString } from "@core/hotkey/hotkeys";
-import type { HotkeyToken } from "@core/hotkey/tokens";
-import { isMobileWidth } from "@core/mobile/mobileWidth";
-import { onKeyDownClick, onKeyUpClick } from "@core/util/click";
-import CaretDown from "@phosphor-icons/core/regular/caret-down.svg";
+import { useTokenToHotkeyString } from '@core/hotkey/hotkeys';
+import type { HotkeyToken } from '@core/hotkey/tokens';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { onKeyDownClick, onKeyUpClick } from '@core/util/click';
+import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
 import {
   type Component,
   type ComponentProps,
@@ -11,17 +11,17 @@ import {
   type JSX,
   Show,
   splitProps,
-} from "solid-js";
-import { Dynamic } from "solid-js/web";
-import { BasicHotkey } from "./Hotkey";
-import { type Theme, themeColors, themeStyles } from "./Themes";
-import { LabelAndHotKey, NullTooltip, Tooltip } from "./Tooltip";
+} from 'solid-js';
+import { Dynamic } from 'solid-js/web';
+import { BasicHotkey } from './Hotkey';
+import { type Theme, themeColors, themeStyles } from './Themes';
+import { LabelAndHotKey, NullTooltip, Tooltip } from './Tooltip';
 
-type IconButton = ComponentProps<"button"> & {
+type IconButton = ComponentProps<'button'> & {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   iconSize?: number;
   theme?: Theme;
-  size?: "sm" | "base" | "lg" | "xs";
+  size?: 'sm' | 'base' | 'lg' | 'xs';
   showChevron?: boolean;
   onClick?: JSX.EventHandler<HTMLButtonElement, MouseEvent | KeyboardEvent>;
   border?: boolean;
@@ -69,19 +69,19 @@ export type IconButtonProps = IconButton;
  */
 export function IconButton(props: IconButtonProps) {
   const [local, rest] = splitProps(props, [
-    "icon",
-    "theme",
-    "size",
-    "showChevron",
-    "onDeepClick",
-    "onClick",
-    "border",
-    "index",
-    "class",
-    "disabled",
-    "tooltip",
-    "onTouchEnd",
-    "tabIndex",
+    'icon',
+    'theme',
+    'size',
+    'showChevron',
+    'onDeepClick',
+    'onClick',
+    'border',
+    'index',
+    'class',
+    'disabled',
+    'tooltip',
+    'onTouchEnd',
+    'tabIndex',
   ]);
 
   const tooltips = () => {
@@ -137,25 +137,25 @@ export function IconButton(props: IconButtonProps) {
   });
 
   const sizeClasses = createMemo(() => {
-    switch (local.size ?? "base") {
-      case "xs":
-        return "h-5 w-5";
-      case "sm":
-        return "h-6 w-6";
-      case "lg":
-        return "h-12 w-12";
+    switch (local.size ?? 'base') {
+      case 'xs':
+        return 'h-5 w-5';
+      case 'sm':
+        return 'h-6 w-6';
+      case 'lg':
+        return 'h-12 w-12';
       default:
-        return "h-8 w-8";
+        return 'h-8 w-8';
     }
   });
 
   const defaultIconSize = createMemo(() => {
-    switch (local.size ?? "base") {
-      case "xs":
+    switch (local.size ?? 'base') {
+      case 'xs':
         return 12;
-      case "sm":
+      case 'sm':
         return 16;
-      case "lg":
+      case 'lg':
         return 24;
       default:
         return 20;
@@ -167,7 +167,7 @@ export function IconButton(props: IconButtonProps) {
       <button
         {...rest}
         disabled={local.disabled}
-        class={`${themeColors[local.theme ?? "base"]} ${themeStyles[local.theme ?? "base"]} ${local.border ? "" : "border-0"} flex flex-row ${sizeClasses()} justify-center items-center gap-0.5 ${local.class ?? ""} ${local.disabled ? "opacity-50 cursor-not-allowed" : ""} relative`}
+        class={`${themeColors[local.theme ?? 'base']} ${themeStyles[local.theme ?? 'base']} ${local.border ? '' : 'border-0'} flex flex-row ${sizeClasses()} justify-center items-center gap-0.5 ${local.class ?? ''} ${local.disabled ? 'opacity-50 cursor-not-allowed' : ''} relative`}
         onMouseDown={local.onClick}
         onKeyDown={local.onClick ? onKeyDownClick(local.onClick) : undefined}
         onKeyUp={local.onClick ? onKeyUpClick(local.onClick) : undefined}
@@ -178,12 +178,12 @@ export function IconButton(props: IconButtonProps) {
       >
         <div
           class="flex justify-start items-center"
-          classList={{ "text-panel": local.theme === "reverse" }}
+          classList={{ 'text-panel': local.theme === 'reverse' }}
         >
           <Dynamic
             component={local.icon}
             style={{
-              "overflow-clip-margin": "content-box",
+              'overflow-clip-margin': 'content-box',
             }}
             width={props.iconSize ?? defaultIconSize()}
             height={props.iconSize ?? defaultIconSize()}
@@ -192,7 +192,7 @@ export function IconButton(props: IconButtonProps) {
         <Show when={local.showChevron}>
           <div
             class="flex h-full justify-center items-center"
-            classList={{ "text-panel": local.theme === "reverse" }}
+            classList={{ 'text-panel': local.theme === 'reverse' }}
           >
             <CaretDown class="flex w-3 h-3" />
           </div>
