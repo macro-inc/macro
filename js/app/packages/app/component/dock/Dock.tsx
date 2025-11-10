@@ -1,36 +1,36 @@
-import { withAnalytics } from '@coparse/analytics';
-import { IconButton } from '@core/component/IconButton';
+import { withAnalytics } from "@coparse/analytics";
+import { IconButton } from "@core/component/IconButton";
 
 const { track, TrackingEvents } = withAnalytics();
 
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { useHasPaidAccess } from '@core/auth';
-import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
-import { BasicHotkey } from '@core/component/Hotkey';
+import { globalSplitManager } from "@app/signal/splitLayout";
+import { useHasPaidAccess } from "@core/auth";
+import { GlobalNotificationBell } from "@core/component/GlobalNotificationBell";
+import { BasicHotkey } from "@core/component/Hotkey";
 import {
   DEV_MODE_ENV,
   ENABLE_DOCK_NOTITIFCATIONS,
   ENABLE_RIGHTHAND_SIDEBAR,
-} from '@core/constant/featureFlags';
+} from "@core/constant/featureFlags";
 import {
   setSettingsOpen,
   useSettingsState,
-} from '@core/constant/SettingsState';
-import { runCommand } from '@core/hotkey/hotkeys';
-import { activeScopeStack, hotkeyScopeTree } from '@core/hotkey/state';
-import { TOKENS } from '@core/hotkey/tokens';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
-import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
-import IconQuestion from '@icon/regular/question.svg';
-import IconAtom from '@macro-icons/macro-atom.svg';
-import IconGear from '@macro-icons/macro-gear.svg';
-import { createMemo, createSignal, For, Show } from 'solid-js';
-import { setKonsoleOpen } from '../command/state';
-import { useGlobalNotificationSource } from '../GlobalAppState';
-import { BasicTierLimit } from './BasicTierLimit';
-import { CreateMenu } from './CreateMenu';
-import Hints from './Hints';
-import { QuickAccess } from './QuickAccess';
+} from "@core/constant/SettingsState";
+import { runCommand } from "@core/hotkey/hotkeys";
+import { activeScopeStack, hotkeyScopeTree } from "@core/hotkey/state";
+import { TOKENS } from "@core/hotkey/tokens";
+import { isMobileWidth } from "@core/mobile/mobileWidth";
+import { isRightPanelOpen, useToggleRightPanel } from "@core/signal/layout";
+import IconQuestion from "@icon/regular/question.svg";
+import IconAtom from "@macro-icons/macro-atom.svg";
+import IconGear from "@macro-icons/macro-gear.svg";
+import { createMemo, createSignal, For, Show } from "solid-js";
+import { setKonsoleOpen } from "../command/state";
+import { useGlobalNotificationSource } from "../GlobalAppState";
+import { BasicTierLimit } from "./BasicTierLimit";
+import { CreateMenu } from "./CreateMenu";
+import Hints from "./Hints";
+import { QuickAccess } from "./QuickAccess";
 
 export function Dock() {
   const hasPaid = useHasPaidAccess();
@@ -45,7 +45,7 @@ export function Dock() {
     if (!splitId) return false;
     const split = globalSplitManager()?.getSplit(splitId);
     if (!split) return false;
-    return split.content().id === 'unified-list';
+    return split.content().id === "unified-list";
   });
   // This method of opening the correct help drawer is disgusting, but it works and doesn't require changing anything else.
   const activeSoupDrawerCommand = () => {
@@ -53,7 +53,7 @@ export function Dock() {
     if (!activeScope) return undefined;
     let activeScopeNode = hotkeyScopeTree.get(activeScope);
     if (!activeScopeNode) return undefined;
-    if (activeScopeNode?.type !== 'dom') return;
+    if (activeScopeNode?.type !== "dom") return;
     const dom = activeScopeNode.element;
     const closestSplitScope = dom.closest('[data-hotkey-scope^="split"]');
     if (!closestSplitScope || !(closestSplitScope instanceof HTMLElement))
@@ -62,7 +62,7 @@ export function Dock() {
     if (!scopeId) return undefined;
     const splitNode = hotkeyScopeTree.get(scopeId);
     if (!splitNode) return undefined;
-    return splitNode.hotkeyCommands.get('shift+/');
+    return splitNode.hotkeyCommands.get("shift+/");
   };
 
   const [debugOpen, setDebugOpen] = createSignal(false);
@@ -97,7 +97,7 @@ export function Dock() {
             class="-right-2 bottom-full absolute opacity-50 hover:opacity-100 outline outline-red-500right-0 font-mono text-dialog text-xs transition translate-x-full hover:translate-0 duration-500"
             title="Click to keep open"
             classList={{
-              'translate-0!': debugOpen(),
+              "translate-0!": debugOpen(),
             }}
             onClick={() => setDebugOpen((p) => !p)}
           >
@@ -137,7 +137,7 @@ export function Dock() {
               theme="clear"
               class="h-full aspect-square"
               tooltip={{
-                label: 'Help',
+                label: "Help",
                 hotkeyToken: TOKENS.split.showHelpDrawer,
               }}
               onClick={() => {
@@ -150,9 +150,9 @@ export function Dock() {
           <Show when={ENABLE_RIGHTHAND_SIDEBAR}>
             <IconButton
               icon={IconAtom}
-              theme={isRightPanelCollapsed() ? 'clear' : 'accent'}
+              theme={isRightPanelCollapsed() ? "clear" : "accent"}
               tooltip={{
-                label: 'Toggle AI Panel',
+                label: "Toggle AI Panel",
                 hotkeyToken: TOKENS.global.toggleRightPanel,
               }}
               class="h-full aspect-square"
@@ -169,18 +169,13 @@ export function Dock() {
 
           <IconButton
             icon={IconGear}
-            theme={settingsOpen() ? 'accent' : 'clear'}
+            theme={settingsOpen() ? "accent" : "clear"}
             tooltip={{
-              label: settingsOpen() ? 'Close Settings' : 'Open Settings',
+              label: settingsOpen() ? "Close Settings" : "Open Settings",
               hotkeyToken: TOKENS.global.toggleSettings,
             }}
             class="h-full aspect-square"
             data-settings-button
-            // need both onClick and onDeepClick for activation both keyboard and click
-            onClick={() => {
-              setSettingsOpen(true);
-            }}
-            // need both onClick and onDeepClick for activation both keyboard and click
             onDeepClick={() => {
               setSettingsOpen(true);
             }}
