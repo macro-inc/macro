@@ -3,6 +3,8 @@
 !.eslintrc.js
 !.prettierrc.js
 !library.js
+!**/appRouteLambda/**/*.js
+!**/contentEncodingLambda/**/*.js
 
 node_modules
 dist
