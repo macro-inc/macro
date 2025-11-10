@@ -11,6 +11,8 @@ vi.mock('../componentRegistry.tsx', () => ({
   })),
 }));
 
+vi.mock('zod', () => ({ z: undefined }));
+
 beforeAll(() => {
   // Mock window.matchMedia for tests
   Object.defineProperty(window, 'matchMedia', {
