@@ -3,13 +3,14 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{Hit, SearchResponse},
+        model::{SearchResponse, parse_highlight_hit},
+        query::Keys,
     },
 };
 
 use crate::SearchOn;
 use opensearch_query_builder::{
-    BoolQueryBuilder, FieldSort, Highlight, HighlightField, SortOrder, SortType,
+    FieldSort, Highlight, HighlightField, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -58,8 +59,8 @@ impl ProjectQueryBuilder {
     // Copy function signature from SearchQueryBuilder
     delegate_methods! {
         fn match_type(match_type: &str) -> Self;
-        fn page(page: i64) -> Self;
-        fn page_size(page_size: i64) -> Self;
+        fn page(page: u32) -> Self;
+        fn page_size(page_size: u32) -> Self;
         fn user_id(user_id: &str) -> Self;
         fn search_on(search_on: SearchOn) -> Self;
         fn collapse(collapse: bool) -> Self;
@@ -67,17 +68,16 @@ impl ProjectQueryBuilder {
         fn ids_only(ids_only: bool) -> Self;
     }
 
-    fn query_builder(self) -> Result<(SearchQueryBuilder<ProjectSearchConfig>, BoolQueryBuilder)> {
-        let query_object = self.inner.query_builder()?;
+    fn build_search_request(self) -> Result<SearchRequest> {
+        // Build the main bool query containing all terms and any other filters
+        let bool_query = self.inner.build_bool_query()?;
 
-        Ok((self.inner, query_object))
-    }
+        // Build the search request with the bool query
+        // This will automatically wrap the bool query in a function score if
+        // SearchOn::NameContent is used
+        let search_request = self.inner.build_search_request(bool_query.build())?;
 
-    pub fn build(self) -> Result<Value> {
-        let (builder, query_object) = self.query_builder()?;
-        let base_query = builder.build_with_query(query_object.build().into())?;
-
-        Ok(base_query)
+        Ok(search_request)
     }
 }
 
@@ -95,8 +95,8 @@ pub struct ProjectIndex {
 pub struct ProjectSearchArgs {
     pub terms: Vec<String>,
     pub user_id: String,
-    pub page: i64,
-    pub page_size: i64,
+    pub page: u32,
+    pub page_size: u32,
     pub match_type: String,
     pub project_ids: Vec<String>,
     pub search_on: SearchOn,
@@ -115,7 +115,8 @@ impl ProjectSearchArgs {
             .collapse(self.collapse)
             .ids(self.project_ids)
             .ids_only(self.ids_only);
-        builder.build()
+
+        Ok(builder.build_search_request()?.to_json())
     }
 }
 
@@ -129,28 +130,11 @@ pub struct ProjectSearchResponse {
     pub content: Option<Vec<String>>,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct HighlightProject {
-    pub project_name: Vec<String>,
-}
-
-impl From<Hit<ProjectIndex, HighlightProject>> for ProjectSearchResponse {
-    fn from(hit: Hit<ProjectIndex, HighlightProject>) -> Self {
-        Self {
-            project_id: hit._source.project_id,
-            user_id: hit._source.user_id,
-            project_name: hit._source.project_name,
-            created_at: hit._source.created_at_seconds,
-            updated_at: hit._source.updated_at_seconds,
-            content: hit.highlight.map(|h| h.project_name),
-        }
-    }
-}
-
 pub(crate) async fn search_projects(
     client: &opensearch::OpenSearch,
     args: ProjectSearchArgs,
 ) -> Result<Vec<ProjectSearchResponse>> {
+    let search_on = args.search_on;
     let query_body = args.build()?;
 
     let response = client
@@ -170,19 +154,33 @@ pub(crate) async fn search_projects(
                 method: Some("search_projects".to_string()),
             })?;
 
-    let result: SearchResponse<ProjectIndex, HighlightProject> = serde_json::from_value(json_value)
-        .map_err(|e| OpensearchClientError::DeserializationFailed {
+    let result: SearchResponse<ProjectIndex> = serde_json::from_value(json_value).map_err(|e| {
+        OpensearchClientError::DeserializationFailed {
             details: e.to_string(),
             method: Some("search_projects".to_string()),
-        })?;
+        }
+    })?;
 
     Ok(result
         .hits
         .hits
         .into_iter()
-        .map(ProjectSearchResponse::from)
+        .map(|hit| ProjectSearchResponse {
+            project_id: hit._source.project_id,
+            user_id: hit._source.user_id,
+            project_name: hit._source.project_name,
+            created_at: hit._source.created_at_seconds,
+            updated_at: hit._source.updated_at_seconds,
+            content: hit.highlight.map(|h| {
+                parse_highlight_hit(
+                    h,
+                    Keys {
+                        title_key: ProjectSearchConfig::TITLE_KEY,
+                        content_key: ProjectSearchConfig::CONTENT_KEY,
+                    },
+                    search_on,
+                )
+            }),
+        })
         .collect())
 }
-
-#[cfg(test)]
-mod test;

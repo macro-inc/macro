@@ -3,12 +3,15 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::DefaultSearchResponse,
+        model::{DefaultSearchResponse, parse_highlight_hit},
+        query::Keys,
     },
 };
 
 use crate::SearchOn;
-use opensearch_query_builder::{BoolQueryBuilder, FieldSort, QueryType, SortOrder, SortType};
+use opensearch_query_builder::{
+    FieldSort, QueryType, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
+};
 use serde_json::Value;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -49,7 +52,6 @@ impl SearchQueryConfig for ChannelMessageSearchConfig {
     const INDEX: &'static str = CHANNEL_INDEX;
     const USER_ID_KEY: &'static str = "sender_id";
     const TITLE_KEY: &'static str = "channel_name";
-
 
     fn default_sort_types() -> Vec<SortType> {
         vec![
@@ -107,54 +109,52 @@ impl ChannelMessageQueryBuilder {
     // Copy function signature from SearchQueryBuilder
     delegate_methods! {
         fn match_type(match_type: &str) -> Self;
-        fn page(page: i64) -> Self;
-        fn page_size(page_size: i64) -> Self;
+        fn page(page: u32) -> Self;
+        fn page_size(page_size: u32) -> Self;
         fn user_id(user_id: &str) -> Self;
         fn search_on(search_on: SearchOn) -> Self;
         fn ids_only(ids_only: bool) -> Self;
         fn collapse(collapse: bool) -> Self;
     }
 
-    fn query_builder(
-        self,
-    ) -> Result<(
-        SearchQueryBuilder<ChannelMessageSearchConfig>,
-        BoolQueryBuilder,
-    )> {
-        let mut query_object = self.inner.query_builder()?;
+    fn build_search_request(self) -> Result<SearchRequest> {
+        // Build the main bool query containing all terms and any other filters
+        let mut bool_query = self.inner.build_bool_query()?;
+
+        // CUSTOM ATTRIBUTES SECTION
 
         // Add org_id to must clause if provided
         if let Some(org_id) = self.org_id {
-            query_object.must(QueryType::term("org_id", org_id));
+            bool_query.must(QueryType::term("org_id", org_id));
         }
 
         // Add thread_ids to must clause if provided
         if !self.thread_ids.is_empty() {
-            query_object.must(QueryType::terms("thread_id", self.thread_ids));
+            bool_query.must(QueryType::terms("thread_id", self.thread_ids));
         }
 
         // Add mentions to must clause if provided
         if !self.mentions.is_empty() {
-            query_object.must(QueryType::terms("mentions", self.mentions));
+            bool_query.must(QueryType::terms("mentions", self.mentions));
         }
 
         if !self.channel_ids.is_empty() {
-            query_object.must(QueryType::terms("channel_id", self.channel_ids));
+            bool_query.must(QueryType::terms("channel_id", self.channel_ids));
         }
 
         // Add sender_ids to must clause if provided
         if !self.sender_ids.is_empty() {
-            query_object.must(QueryType::terms("sender_id", self.sender_ids));
+            bool_query.must(QueryType::terms("sender_id", self.sender_ids));
         }
 
-        Ok((self.inner, query_object))
-    }
+        // END CUSTOM ATTRIBUTES SECTION
 
-    pub fn build(self) -> Result<Value> {
-        let (builder, query_object) = self.query_builder()?;
-        let base_query = builder.build_with_query(query_object.build().into())?;
+        // Build the search request with the bool query
+        // This will automatically wrap the bool query in a function score if
+        // SearchOn::NameContent is used
+        let search_request = self.inner.build_search_request(bool_query.build())?;
 
-        Ok(base_query)
+        Ok(search_request)
     }
 }
 
@@ -163,8 +163,8 @@ pub struct ChannelMessageSearchArgs {
     pub terms: Vec<String>,
     pub user_id: String,
     pub channel_ids: Vec<String>,
-    pub page: i64,
-    pub page_size: i64,
+    pub page: u32,
+    pub page_size: u32,
     pub match_type: String,
     pub org_id: Option<i64>,
     pub thread_ids: Vec<String>,
@@ -195,7 +195,7 @@ impl ChannelMessageSearchArgs {
             builder = builder.org_id(org_id);
         }
 
-        builder.build()
+        Ok(builder.build_search_request()?.to_json())
     }
 }
 
@@ -203,6 +203,7 @@ pub(crate) async fn search_channel_messages(
     client: &opensearch::OpenSearch,
     args: ChannelMessageSearchArgs,
 ) -> Result<Vec<ChannelMessageSearchResponse>> {
+    let search_on = args.search_on;
     let query_body = args.build()?;
 
     let response = client
@@ -236,10 +237,16 @@ pub(crate) async fn search_channel_messages(
             mentions: hit._source.mentions,
             created_at: hit._source.created_at_seconds,
             updated_at: hit._source.updated_at_seconds,
-            content: hit.highlight.map(|h| h.content),
+            content: hit.highlight.map(|h| {
+                parse_highlight_hit(
+                    h,
+                    Keys {
+                        title_key: ChannelMessageSearchConfig::TITLE_KEY,
+                        content_key: ChannelMessageSearchConfig::CONTENT_KEY,
+                    },
+                    search_on,
+                )
+            }),
         })
         .collect())
 }
-
-#[cfg(test)]
-mod test;

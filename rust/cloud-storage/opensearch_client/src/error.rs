@@ -25,6 +25,9 @@ pub enum OpensearchClientError {
     #[error("validation failed: {details}")]
     ValidationFailed { details: String },
 
+    #[error("no terms provided")]
+    NoTermsProvided,
+
     #[error("an unknown error occurred. method: {method:?} details: {details}")]
     Unknown {
         details: String,

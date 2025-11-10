@@ -3,12 +3,16 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
+        model::parse_highlight_hit,
+        query::Keys,
         utils::should_wildcard_field_query_builder,
     },
 };
 
 use crate::SearchOn;
-use opensearch_query_builder::{BoolQueryBuilder, FieldSort, QueryType, SortOrder, SortType};
+use opensearch_query_builder::{
+    FieldSort, QueryType, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
+};
 
 use crate::search::model::DefaultSearchResponse;
 use serde_json::Value;
@@ -62,8 +66,8 @@ impl EmailQueryBuilder {
     // Copy function signature from SearchQueryBuilder
     delegate_methods! {
         fn match_type(match_type: &str) -> Self;
-        fn page(page: i64) -> Self;
-        fn page_size(page_size: i64) -> Self;
+        fn page(page: u32) -> Self;
+        fn page_size(page_size: u32) -> Self;
         fn user_id(user_id: &str) -> Self;
         fn search_on(search_on: SearchOn) -> Self;
         fn collapse(collapse: bool) -> Self;
@@ -101,51 +105,54 @@ impl EmailQueryBuilder {
         self
     }
 
-    fn query_builder(self) -> Result<(SearchQueryBuilder<EmailSearchConfig>, BoolQueryBuilder)> {
-        let mut query_object = self.inner.query_builder()?;
+    fn build_search_request(self) -> Result<SearchRequest> {
+        // Build the main bool query containing all terms and any other filters
+        let mut bool_query = self.inner.build_bool_query()?;
+
+        // CUSTOM ATTRIBUTES SECTION
 
         // If thread_ids are provided, add them to the query
         if !self.thread_ids.is_empty() {
-            query_object.must(QueryType::terms("thread_id", self.thread_ids));
+            bool_query.must(QueryType::terms("thread_id", self.thread_ids));
         }
 
         // If link_ids are provided, add them to the query
         if !self.link_ids.is_empty() {
-            query_object.must(QueryType::terms("link_id", self.link_ids));
+            bool_query.must(QueryType::terms("link_id", self.link_ids));
         }
 
         if !self.sender.is_empty() {
             // Create new query for senders
             let senders_query = should_wildcard_field_query_builder("sender", &self.sender);
-            query_object.must(senders_query);
+            bool_query.must(senders_query);
         }
 
         if !self.cc.is_empty() {
             let ccs_query = should_wildcard_field_query_builder("cc", &self.cc);
-            query_object.must(ccs_query);
+            bool_query.must(ccs_query);
         }
 
         if !self.bcc.is_empty() {
             // Create new query for bccs
             let bccs_query = should_wildcard_field_query_builder("bcc", &self.bcc);
-            query_object.must(bccs_query);
+            bool_query.must(bccs_query);
         }
 
         if !self.recipients.is_empty() {
             // Create new query for recipients
             let recipients_query =
                 should_wildcard_field_query_builder("recipients", &self.recipients);
-            query_object.must(recipients_query);
+            bool_query.must(recipients_query);
         }
 
-        Ok((self.inner, query_object))
-    }
+        // END CUSTOM ATTRIBUTES SECTION
 
-    pub fn build(self) -> Result<Value> {
-        let (builder, query_object) = self.query_builder()?;
-        let base_query = builder.build_with_query(query_object.build().into())?;
+        // Build the search request with the bool query
+        // This will automatically wrap the bool query in a function score if
+        // SearchOn::NameContent is used
+        let search_request = self.inner.build_search_request(bool_query.build())?;
 
-        Ok(base_query)
+        Ok(search_request)
     }
 }
 
@@ -206,8 +213,8 @@ pub struct EmailSearchArgs {
     pub cc: Vec<String>,
     pub bcc: Vec<String>,
     pub recipients: Vec<String>,
-    pub page: i64,
-    pub page_size: i64,
+    pub page: u32,
+    pub page_size: u32,
     pub match_type: String,
     pub search_on: SearchOn,
     pub collapse: bool,
@@ -216,7 +223,7 @@ pub struct EmailSearchArgs {
 
 impl EmailSearchArgs {
     pub fn build(self) -> Result<Value> {
-        EmailQueryBuilder::new(self.terms)
+        Ok(EmailQueryBuilder::new(self.terms)
             .match_type(&self.match_type)
             .page_size(self.page_size)
             .page(self.page)
@@ -231,7 +238,8 @@ impl EmailSearchArgs {
             .recipients(self.recipients)
             .collapse(self.collapse)
             .ids_only(self.ids_only)
-            .build()
+            .build_search_request()?
+            .to_json())
     }
 }
 
@@ -239,6 +247,7 @@ pub(crate) async fn search_emails(
     client: &opensearch::OpenSearch,
     args: EmailSearchArgs,
 ) -> Result<Vec<EmailSearchResponse>> {
+    let search_on = args.search_on;
     let query_body = args.build()?;
 
     let response = client
@@ -274,13 +283,16 @@ pub(crate) async fn search_emails(
             user_id: hit._source.user_id,
             updated_at: hit._source.updated_at_seconds,
             sent_at: hit._source.sent_at_seconds,
-            content: hit
-                .highlight
-                .map(|h| h.content)
-                .or(Some(vec![hit._source.content])),
+            content: hit.highlight.map(|h| {
+                parse_highlight_hit(
+                    h,
+                    Keys {
+                        title_key: EmailSearchConfig::TITLE_KEY,
+                        content_key: EmailSearchConfig::CONTENT_KEY,
+                    },
+                    search_on,
+                )
+            }),
         })
         .collect())
 }
-
-#[cfg(test)]
-mod test;

@@ -3,12 +3,15 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{DefaultHit, DefaultSearchResponse},
+        model::{DefaultSearchResponse, parse_highlight_hit},
+        query::Keys,
     },
 };
 
 use crate::SearchOn;
-use opensearch_query_builder::{BoolQueryBuilder, FieldSort, QueryType, SortOrder, SortType};
+use opensearch_query_builder::{
+    FieldSort, QueryType, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
+};
 use serde_json::Value;
 
 #[derive(Clone)]
@@ -46,8 +49,8 @@ impl DocumentQueryBuilder {
     // Copy function signature from SearchQueryBuilder
     delegate_methods! {
         fn match_type(match_type: &str) -> Self;
-        fn page(page: i64) -> Self;
-        fn page_size(page_size: i64) -> Self;
+        fn page(page: u32) -> Self;
+        fn page_size(page_size: u32) -> Self;
         fn user_id(user_id: &str) -> Self;
         fn search_on(search_on: SearchOn) -> Self;
         fn collapse(collapse: bool) -> Self;
@@ -60,20 +63,25 @@ impl DocumentQueryBuilder {
         self
     }
 
-    fn query_builder(self) -> Result<(SearchQueryBuilder<DocumentSearchConfig>, BoolQueryBuilder)> {
-        let mut query_object = self.inner.query_builder()?;
-        // Add in file types to must query
+    fn build_search_request(self) -> Result<SearchRequest> {
+        // Build the main bool query containing all terms and any other filters
+        let mut bool_query = self.inner.build_bool_query()?;
+
+        // CUSTOM ATTRIBUTES SECTION
+
+        // If file types are provided, add them to the must query
         if !self.file_types.is_empty() {
-            query_object.must(QueryType::terms("file_type", self.file_types));
+            bool_query.must(QueryType::terms("file_type", self.file_types));
         }
-        Ok((self.inner, query_object))
-    }
 
-    pub fn build(self) -> Result<Value> {
-        let (builder, query_object) = self.query_builder()?;
-        let base_query = builder.build_with_query(query_object.build().into())?;
+        // END CUSTOM ATTRIBUTES SECTION
 
-        Ok(base_query)
+        // Build the search request with the bool query
+        // This will automatically wrap the bool query in a function score if
+        // SearchOn::NameContent is used
+        let search_request = self.inner.build_search_request(bool_query.build())?;
+
+        Ok(search_request)
     }
 }
 
@@ -107,8 +115,8 @@ pub struct DocumentSearchArgs {
     pub user_id: String,
     pub document_ids: Vec<String>,
     pub file_types: Vec<String>,
-    pub page: i64,
-    pub page_size: i64,
+    pub page: u32,
+    pub page_size: u32,
     pub match_type: String,
     pub search_on: SearchOn,
     pub collapse: bool,
@@ -117,7 +125,7 @@ pub struct DocumentSearchArgs {
 
 impl DocumentSearchArgs {
     pub fn build(self) -> Result<Value> {
-        DocumentQueryBuilder::new(self.terms)
+        Ok(DocumentQueryBuilder::new(self.terms)
             .match_type(&self.match_type)
             .page_size(self.page_size)
             .page(self.page)
@@ -127,22 +135,8 @@ impl DocumentSearchArgs {
             .search_on(self.search_on)
             .collapse(self.collapse)
             .ids_only(self.ids_only)
-            .build()
-    }
-}
-
-impl From<DefaultHit<DocumentIndex>> for DocumentSearchResponse {
-    fn from(hit: DefaultHit<DocumentIndex>) -> Self {
-        Self {
-            document_id: hit._source.document_id,
-            node_id: hit._source.node_id,
-            document_name: hit._source.document_name,
-            owner_id: hit._source.owner_id,
-            file_type: hit._source.file_type,
-            updated_at: hit._source.updated_at_seconds,
-            content: hit.highlight.map(|h| h.content),
-            raw_content: hit._source.raw_content,
-        }
+            .build_search_request()?
+            .to_json())
     }
 }
 
@@ -150,7 +144,10 @@ pub(crate) async fn search_documents(
     client: &opensearch::OpenSearch,
     args: DocumentSearchArgs,
 ) -> Result<Vec<DocumentSearchResponse>> {
+    let search_on = args.search_on;
     let query_body = args.build()?;
+
+    tracing::trace!("query: {}", query_body);
 
     let response = client
         .search(opensearch::SearchParts::Index(&[DOCUMENTS_INDEX]))
@@ -172,9 +169,24 @@ pub(crate) async fn search_documents(
         .hits
         .hits
         .into_iter()
-        .map(DocumentSearchResponse::from)
+        .map(|hit| DocumentSearchResponse {
+            document_id: hit._source.document_id,
+            node_id: hit._source.node_id,
+            document_name: hit._source.document_name,
+            owner_id: hit._source.owner_id,
+            file_type: hit._source.file_type,
+            updated_at: hit._source.updated_at_seconds,
+            raw_content: hit._source.raw_content,
+            content: hit.highlight.map(|h| {
+                parse_highlight_hit(
+                    h,
+                    Keys {
+                        title_key: DocumentSearchConfig::TITLE_KEY,
+                        content_key: DocumentSearchConfig::CONTENT_KEY,
+                    },
+                    search_on,
+                )
+            }),
+        })
         .collect())
 }
-
-#[cfg(test)]
-mod tests {}
