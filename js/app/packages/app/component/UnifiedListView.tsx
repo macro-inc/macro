@@ -4,7 +4,7 @@ import {
 } from '@app/component/GlobalAppState';
 import {
   emailRefetchInterval,
-  useEmailAuthStatus,
+  useEmailLinksStatus,
 } from '@app/signal/emailAuth';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { Button } from '@core/component/FormControls/Button';
@@ -676,7 +676,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return !validSearch;
   });
 
-  const emailActive = useEmailAuthStatus();
+  const emailActive = useEmailLinksStatus();
 
   const disableEmailQuery = createMemo(() => {
     // NOTE: at the moment emails are not supported in project blocks
