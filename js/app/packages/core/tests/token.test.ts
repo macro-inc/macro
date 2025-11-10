@@ -16,6 +16,7 @@ vi.mock('@service-storage/client', () => ({
 
 vi.mock('@solid-primitives/rootless', () => ({
   createCallback: vi.fn((fn) => fn),
+  createSingletonRoot: vi.fn((fn) => fn()),
 }));
 
 import { storageServiceClient } from '@service-storage/client';

@@ -1,6 +1,6 @@
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { createRoot } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeAll, describe, expect, it, vi } from 'vitest';
 import { createSplitLayout } from '../layoutManager';
 
 vi.mock('../componentRegistry.tsx', () => ({
@@ -10,6 +10,25 @@ vi.mock('../componentRegistry.tsx', () => ({
     params,
   })),
 }));
+
+vi.mock('zod', () => ({ z: undefined }));
+
+beforeAll(() => {
+  // Mock window.matchMedia for tests
+  Object.defineProperty(window, 'matchMedia', {
+    writable: true,
+    value: (query: string) => ({
+      matches: false,
+      media: query,
+      onchange: null,
+      addListener: () => {},
+      removeListener: () => {},
+      addEventListener: () => {},
+      removeEventListener: () => {},
+      dispatchEvent: () => true,
+    }),
+  });
+});
 
 function createMockOrchestrator(): BlockOrchestrator {
   return {
