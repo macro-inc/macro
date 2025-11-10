@@ -81,17 +81,18 @@
   --c3: oklch(var(--c3l) var(--c3c) var(--c3h));
   --c4: oklch(var(--c4l) var(--c4c) var(--c4h));
 
-  --theme-folder: oklch(from var(--a0) l c 240deg);
-  --theme-canvas: oklch(from var(--a0) l c  60deg);
-  --theme-write:  oklch(from var(--a0) l c 260deg);
-  --theme-video:  oklch(from var(--a0) l c 277deg);
-  --theme-note:   oklch(from var(--a0) l c 293deg);
-  --theme-code:   oklch(from var(--a0) l c 162deg);
-  --theme-chat:   oklch(from var(--a0) l c 220deg);
-  --theme-image:  oklch(from var(--a0) l c  95deg);
-  --theme-html:   oklch(from var(--a0) l c  47deg);
-  --theme-rss:    oklch(from var(--a0) l c 260deg);
-  --theme-pdf:    oklch(from var(--a0) l c  25deg);
+  --theme-folder:    oklch(from var(--a0) l c 240deg);
+  --theme-canvas:    oklch(from var(--a0) l c  60deg);
+  --theme-write:     oklch(from var(--a0) l c 260deg);
+  --theme-video:     oklch(from var(--a0) l c 277deg);
+  --theme-note:      oklch(from var(--a0) l c 293deg);
+  --theme-code:      oklch(from var(--a0) l c 162deg);
+  --theme-chat:      oklch(from var(--a0) l c 220deg);
+  --theme-image:     oklch(from var(--a0) l c  95deg);
+  --theme-html:      oklch(from var(--a0) l c  47deg);
+  --theme-rss:       oklch(from var(--a0) l c 260deg);
+  --theme-pdf:       oklch(from var(--a0) l c  25deg);
+  --theme-comment:   oklch(from var(--a0) l c  90deg);
 
 /* Semantic Color names, use these when writing tailwind */
 
