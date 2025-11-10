@@ -1,3 +1,4 @@
+import { activeElement } from '@app/signal/focus';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useIsAuthenticated } from '@core/auth';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
@@ -345,16 +346,38 @@ export function Rightbar(props: {
   };
 
   const [editor, setEditor] = createSignal<LexicalEditor>();
+  let borrowedFocus: Element | null = null;
+  const returnFocus = () => {
+    if (
+      borrowedFocus &&
+      borrowedFocus.isConnected &&
+      borrowedFocus instanceof HTMLElement
+    ) {
+      borrowedFocus.focus();
+    } else {
+      globalSplitManager()?.returnFocus();
+    }
+  }
+
   createEffect(() => {
     if (props.isBig) {
-      console.log('BIG', editor());
-      setTimeout(() => setTimeout(() => editor()?.focus()));
+      borrowedFocus = document.activeElement;
+      editor()?.focus();
     } else {
       if (untrack(isRightPanelOpen)) {
         return;
       } else {
-        globalSplitManager()?.returnFocus();
+        returnFocus();
       }
+    }
+  });
+
+  createEffect(() => {
+    if (isRightPanelOpen()) {
+      borrowedFocus = document.activeElement;
+      editor()?.focus();
+    } else {
+      returnFocus();
     }
   });
 

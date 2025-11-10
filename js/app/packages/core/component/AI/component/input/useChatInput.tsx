@@ -198,10 +198,7 @@ function ChatInput(props: ChatInputInternalProps) {
       <div class="relative w-full z-0 pt-2 px-4 flex-1 overflow-hidden">
         <div
           id="chat-input-text-area"
-          class={`
-            transition-all duration-150 rounded-md
-            w-full h-full text-base sm:text-sm text-ink
-            `}
+          class="rounded-md w-full h-full text-base sm:text-sm text-ink"
         >
           <props.markdown.MarkdownArea
             onEnter={handleEnter}

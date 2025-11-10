@@ -24,6 +24,7 @@ import {
   mentionsPlugin,
   NODE_TRANSFORM,
   type NodeTransformType,
+  registerRootEventListener,
   type SelectionData,
   tabIndentationPlugin,
   tableCellResizerPlugin,
@@ -262,6 +263,7 @@ function MarkdownArea(
 
   createEffect(
     on(props.mountRef, (ref) => {
+      console.log('EFFECT ON REF', ref);
       if (!ref) return;
       editor.setRootElement(ref);
       editor.setEditable(true);
@@ -388,6 +390,14 @@ function MarkdownArea(
       )
     );
   }
+
+  // better focus in handling. preserves selection on regain focus!
+  autoRegister(
+    registerRootEventListener(editor, 'focusin', (e) => {
+      e.preventDefault();
+      editor.focus();
+    })
+  );
 
   onCleanup(() => {
     cleanup();

@@ -7,6 +7,7 @@ import {
   createMemo,
   createSignal,
   on,
+  onCleanup,
   type ParentProps,
   type Setter,
   Show,
@@ -16,6 +17,7 @@ import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitModalProvider } from './SplitModalContext';
 import { SplitToolbar } from './SplitToolbar';
+import { createFocusTrap } from '@block-channel/utils/focusTrap';
 
 export function SplitContainer(
   props: ParentProps<{ id: string; ref: (elem: HTMLDivElement) => void }>
@@ -96,6 +98,7 @@ export function SplitlikeContainer(
 ) {
   const [panel, setPanel] = createSignal<HTMLDivElement | null>(null);
   const panelSize = createElementSize(panel);
+
   return (
     <SplitModalProvider>
       <SplitDrawerGroup panelSize={panelSize} contentOffsetTop={() => 0}>
