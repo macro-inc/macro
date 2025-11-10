@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT *\n            FROM\n                frecency_events\n            WHERE was_processed = false\n            LIMIT $1\n            FOR UPDATE\n            ",
+  "query": "\n            SELECT *\n            FROM\n                frecency_events\n            WHERE was_processed = false\n            LIMIT $1\n            ",
   "describe": {
     "columns": [
       {
@@ -60,5 +60,5 @@
       false
     ]
   },
-  "hash": "06e932b580d1f7a6f60d847e38b6270e48e384e3e8a70f5a3cdcec1f275d0438"
+  "hash": "d42e3270642ca0b9eff6b5807f600c24fd26d50d612a66edf0738c62d15680ba"
 }
