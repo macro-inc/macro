@@ -1,4 +1,4 @@
-import { useEmailAuthStatus } from '@app/signal/emailAuth';
+import { useEmailLinksStatus } from '@app/signal/emailAuth';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { ChannelsContextProvider } from '@core/component/ChannelsProvider';
@@ -242,7 +242,7 @@ export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
       : notifInterface.showNotification
   );
 
-  const emailActive = useEmailAuthStatus();
+  const emailActive = useEmailLinksStatus();
   const emailSource = createEmailSource(undefined, undefined, {
     disabled: () => !emailActive(),
   });
