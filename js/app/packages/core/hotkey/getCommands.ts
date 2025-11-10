@@ -1,7 +1,7 @@
 import { isEditableInput } from '@core/util/isEditableInput';
 import { activeElement } from 'app/signal/focus';
 import { createMemo } from 'solid-js';
-import { activeScopeStack, hotkeyScopeTree } from './state';
+import { activeScope, hotkeyScopeTree } from './state';
 import type { HotkeyCommand, ValidHotkey } from './types';
 
 type sortAndFilterOptions = {
@@ -21,7 +21,7 @@ export function useActiveCommands(
   scope?: string
 ) {
   return createMemo(() => {
-    const scopeId = scope ?? activeScopeStack().at(-1) ?? '';
+    const scopeId = scope ?? activeScope() ?? '';
     return getActiveCommandsFromScope(scopeId, displayOptions ?? {});
   });
 }
