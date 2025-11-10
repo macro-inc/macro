@@ -51,5 +51,6 @@ pub async fn get_chat_completion_openai_request(
 ) -> Result<String, ChatCompletionError> {
     // Streaming OpenAI models directly via OpenAI
     let client = OpenRouterClient::new();
+    let request = client.preprocess_request(request);
     get_openai_chat_completion(client, request).await
 }
