@@ -1,4 +1,4 @@
-import { useEmailAuthStatus } from '@app/signal/emailAuth';
+import { useEmailLinksStatus } from '@app/signal/emailAuth';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 
 import { fileSelector } from '@core/directive/fileSelector';
@@ -14,7 +14,7 @@ false && fileSelector;
 false && folderSelector;
 
 export function EmptyState(props: { view?: View }) {
-  const emailActive = useEmailAuthStatus();
+  const emailActive = useEmailLinksStatus();
   const splitPanelContext = useSplitPanelOrThrow();
   const {
     unifiedListContext: { setShowHelpDrawer },
