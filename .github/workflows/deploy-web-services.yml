@@ -51,6 +51,10 @@ jobs:
           aws-region: us-east-1
       - name: Setup
         uses: ./.github/actions/setup-reqs-web
+      - name: Install infra dependencies
+        run: |
+          cd infra
+          bun install
       - uses: pulumi/actions@v3
         with:
           command: up
