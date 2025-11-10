@@ -6,8 +6,8 @@ use models_email::email::service::backfill::{
 };
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
-use sqs_client::search::email::EmailThreadMessage;
 use sqs_client::search::SearchQueueMessage;
+use sqs_client::search::email::EmailThreadMessage;
 
 /// This step is invoked by BackfillMessage once all messages in a thread have been backfilled.
 /// Updates the thread metadata in the database, the replying_to_id values of its messages, and
