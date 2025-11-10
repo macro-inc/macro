@@ -20,9 +20,7 @@ const initialTree = new Map<string, ScopeNode>([
 
 export const hotkeyScopeTree = initialTree;
 
-export const [activeScopeStack, setActiveScopeStack] = createSignal<string[]>([
-  'global',
-]);
+export const [activeScope, setActiveScope] = createSignal<string>('global');
 
 export const [pressedKeys, setPressedKeys] = createSignal<Set<string>>(
   new Set()
