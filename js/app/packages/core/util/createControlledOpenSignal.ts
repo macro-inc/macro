@@ -16,7 +16,7 @@ export const createControlledOpenSignal = (value?: boolean) => {
         console.info('Borrowing focus from', previouslyFocusedElement);
     } else {
       // has to fire two tasks after to prevent Kobalte menus stealing focus and opening menu on up/down keypress
-      setTimeout(() => {
+      // i guess not - until it does once again
         setTimeout(() => {
           if (previouslyFocusedElement instanceof HTMLElement) {
             if (previouslyFocusedElement.isConnected) {
@@ -36,7 +36,6 @@ export const createControlledOpenSignal = (value?: boolean) => {
               }
             }
           }
-        });
       });
     }
   };

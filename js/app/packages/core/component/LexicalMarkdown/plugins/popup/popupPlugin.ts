@@ -165,7 +165,6 @@ function $updateDomRectInSelction(
 }
 
 function registerPopupPlugin(editor: LexicalEditor, props: PopupPluginProps) {
-  console.log('register popup ', props);
   let cachedLastSelection: EnhancedSelection | null = null;
 
   function $validateAndSetSelection(selection: BaseSelection) {
@@ -195,11 +194,9 @@ function registerPopupPlugin(editor: LexicalEditor, props: PopupPluginProps) {
           if (!selection) return false;
 
           const enhancedSelection = $validateAndSetSelection(selection);
-          console.log({ enhancedSelection });
           if (!enhancedSelection) return false;
 
           const success = props.setIsPopupVisible(true);
-          console.log({ success });
           if (success) {
             cachedLastSelection = enhancedSelection;
             props.setSelection({ ...enhancedSelection });

@@ -16,6 +16,7 @@ import { LexicalWrapperContext } from '@core/component/LexicalMarkdown/context/L
 import {
   autoRegister,
   type EnhancedSelection,
+  registerRootEventListener,
 } from '@core/component/LexicalMarkdown/plugins';
 import {
   HIGHLIGHT_SELECTED_NODES,
@@ -174,6 +175,9 @@ export function MarkdownPopup(props: {
           });
         }
       }
+    }),
+    registerRootEventListener(editor, 'focusout', () => {
+      setPopupVisible(false);
     })
   );
 
