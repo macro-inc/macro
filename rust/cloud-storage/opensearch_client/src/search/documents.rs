@@ -263,9 +263,9 @@ mod tests {
                         "number_of_fragments": 500, // Breaks up the "content" field into said
                         "pre_tags": ["<macro_em>"], // HTML tag before highlight
                         "post_tags": ["</macro_em>"], // HTML tag after highlight
-                        "require_field_match": true, // Default is true, but good to be explicit
                     }
-                }
+                },
+                "require_field_match": true, // Default is true, but good to be explicit
             },
         });
 
@@ -348,9 +348,9 @@ mod tests {
                         "number_of_fragments": 500, // Breaks up the "content" field into said
                         "pre_tags": ["<macro_em>"], // HTML tag before highlight
                         "post_tags": ["</macro_em>"], // HTML tag after highlight
-                        "require_field_match": true, // Default is true, but good to be explicit
                     }
-                }
+                },
+                "require_field_match": true, // Default is true, but good to be explicit
             },
         });
 
@@ -428,9 +428,9 @@ mod tests {
                         "number_of_fragments": 500, // Breaks up the "content" field into said
                         "pre_tags": ["<macro_em>"], // HTML tag before highlight
                         "post_tags": ["</macro_em>"], // HTML tag after highlight
-                        "require_field_match": true, // Default is true, but good to be explicit
                     }
-                }
+                },
+                "require_field_match": true, // Default is true, but good to be explicit
             },
         });
 
@@ -468,9 +468,9 @@ mod tests {
                         "number_of_fragments": 500, // Breaks up the "content" field into said
                         "pre_tags": ["<macro_em>"], // HTML tag before highlight
                         "post_tags": ["</macro_em>"], // HTML tag after highlight
-                        "require_field_match": true, // Default is true, but good to be explicit
                     }
-                }
+                },
+                "require_field_match": true, // Default is true, but good to be explicit
             },
             "query": {
 

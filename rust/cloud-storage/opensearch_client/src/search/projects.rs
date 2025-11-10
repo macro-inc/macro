@@ -8,7 +8,7 @@ use crate::{
 };
 
 use crate::SearchOn;
-use opensearch_query_builder::{BoolQueryBuilder, Highlight, HighlightField, ToOpenSearchJson};
+use opensearch_query_builder::{BoolQueryBuilder, Highlight, HighlightField};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -37,18 +37,15 @@ impl SearchQueryConfig for ProjectSearchConfig {
     }
 
     // Projects have no "content" to highlight match on, so match on the TITLE_KEY instead
-    fn default_highlight() -> Value {
-        Highlight::new()
-            .require_field_match(true)
-            .field(
-                Self::TITLE_KEY,
-                HighlightField::new()
-                    .highlight_type("unified")
-                    .number_of_fragments(500)
-                    .pre_tags(vec!["<macro_em>".to_string()])
-                    .post_tags(vec!["</macro_em>".to_string()]),
-            )
-            .to_json()
+    fn default_highlight() -> Highlight {
+        Highlight::new().require_field_match(true).field(
+            Self::TITLE_KEY,
+            HighlightField::new()
+                .highlight_type("unified")
+                .number_of_fragments(500)
+                .pre_tags(vec!["<macro_em>".to_string()])
+                .post_tags(vec!["</macro_em>".to_string()]),
+        )
     }
 }
 

@@ -248,9 +248,9 @@ mod tests {
                         "number_of_fragments": 500, // Breaks up the "content" field into said
                         "pre_tags": ["<macro_em>"], // HTML tag before highlight
                         "post_tags": ["</macro_em>"], // HTML tag after highlight
-                        "require_field_match": true, // Default is true, but good to be explicit
                     }
-                }
+                },
+                "require_field_match": true, // Default is true, but good to be explicit
             },
         });
 
@@ -347,9 +347,9 @@ mod tests {
                         "number_of_fragments": 500,
                         "pre_tags": ["<macro_em>"],
                         "post_tags": ["</macro_em>"],
-                        "require_field_match": true,
                     }
-                }
+                },
+                "require_field_match": true,
             },
         });
 
@@ -454,9 +454,9 @@ mod tests {
                         "number_of_fragments": 500,
                         "pre_tags": ["<macro_em>"],
                         "post_tags": ["</macro_em>"],
-                        "require_field_match": true,
                     }
-                }
+                },
+                "require_field_match": true,
             },
         });
 
@@ -555,9 +555,9 @@ mod tests {
                         "number_of_fragments": 500,
                         "pre_tags": ["<macro_em>"],
                         "post_tags": ["</macro_em>"],
-                        "require_field_match": true,
                     }
-                }
+                },
+                "require_field_match": true,
             },
         });
 
@@ -640,9 +640,9 @@ mod tests {
                         "number_of_fragments": 500,
                         "pre_tags": ["<macro_em>"],
                         "post_tags": ["</macro_em>"],
-                        "require_field_match": true,
                     }
-                }
+                },
+                "require_field_match": true,
             },
         });
 
@@ -720,9 +720,9 @@ mod tests {
                         "number_of_fragments": 500, // Breaks up the "content" field into said
                         "pre_tags": ["<macro_em>"], // HTML tag before highlight
                         "post_tags": ["</macro_em>"], // HTML tag after highlight
-                        "require_field_match": true, // Default is true, but good to be explicit
                     }
-                }
+                },
+                "require_field_match": true, // Default is true, but good to be explicit
             },
         });
 
@@ -758,10 +758,10 @@ mod tests {
                         "number_of_fragments": 500,
                         "post_tags": ["</macro_em>"],
                         "pre_tags": ["<macro_em>"],
-                        "require_field_match": true,
                         "type": "unified"
                     }
-                }
+                },
+                "require_field_match": true,
             },
             "query": {
                 "bool": {

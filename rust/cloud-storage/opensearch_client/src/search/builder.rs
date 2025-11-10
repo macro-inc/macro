@@ -63,19 +63,25 @@ pub trait SearchQueryConfig {
         ])
     }
 
+    /// Returns the default sort types that are used on the search query.
+    /// Override this method if you need custom sort logic
+    fn default_sort_types() -> Vec<SortType> {
+        vec![SortType::Field(FieldSort::new(
+            "updated_at_seconds",
+            SortOrder::Desc,
+        ))]
+    }
+
     /// Override this method if you need custom highlight logic
-    fn default_highlight() -> Value {
-        serde_json::json!({
-            "fields": {
-                "content": {
-                    "type": "unified",
-                    "number_of_fragments": 500,
-                    "pre_tags": ["<macro_em>"],
-                    "post_tags": ["</macro_em>"],
-                    "require_field_match": true,
-        }
-            }
-        })
+    fn default_highlight() -> Highlight {
+        Highlight::new().require_field_match(true).field(
+            "content",
+            HighlightField::new()
+                .highlight_type("unified")
+                .pre_tags(vec!["<macro_em>".to_string()])
+                .post_tags(vec!["</macro_em>".to_string()])
+                .number_of_fragments(500),
+        )
     }
 }
 
@@ -192,7 +198,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         query_map.insert("from".to_string(), serde_json::json!(from));
         query_map.insert("size".to_string(), serde_json::json!(self.page_size));
         query_map.insert("sort".to_string(), T::default_sort());
-        query_map.insert("highlight".to_string(), T::default_highlight());
+        query_map.insert("highlight".to_string(), T::default_highlight().to_json());
 
         // If collapse is true or searching only on Name, collapse the id field to remove duplicate
         // results for pagination
@@ -267,9 +273,9 @@ mod tests {
                     "number_of_fragments": 500,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
-                    "require_field_match": true,
                 }
-            }
+            },
+            "require_field_match": true,
         });
         assert_eq!(result["highlight"], expected_highlight);
 

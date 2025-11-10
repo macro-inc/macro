@@ -81,9 +81,9 @@ fn test_email_query_with_thread_ids() {
                     "number_of_fragments": 500,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
-                    "require_field_match": true,
                 }
-            }
+            },
+            "require_field_match": true,
         },
     });
 
@@ -199,9 +199,9 @@ fn test_email_query_with_senders() {
                     "number_of_fragments": 500,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
-                    "require_field_match": true,
                 }
-            }
+            },
+            "require_field_match": true,
         },
     });
 
@@ -333,9 +333,9 @@ fn test_email_query_with_cc() {
                     "number_of_fragments": 500,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
-                    "require_field_match": true,
                 }
-            }
+            },
+            "require_field_match": true,
         },
     });
 
@@ -444,9 +444,9 @@ fn test_email_query_with_recipients() {
                     "number_of_fragments": 500,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
-                    "require_field_match": true,
                 }
-            }
+            },
+            "require_field_match": true,
         },
     });
 
@@ -526,9 +526,9 @@ fn test_ids_only() {
                     "number_of_fragments": 500,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
-                    "require_field_match": true,
                 }
-            }
+            },
+            "require_field_match": true,
         },
     });
 
@@ -613,9 +613,9 @@ fn test_sanity() {
                     "number_of_fragments": 500,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
-                    "require_field_match": true,
                 }
-            }
+            },
+            "require_field_match": true,
         },
     });
 
@@ -702,9 +702,9 @@ fn test_email_name_only_search() {
                     "number_of_fragments": 500,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
-                    "require_field_match": true,
                 }
-            }
+            },
+            "require_field_match": true,
         },
     });
 
@@ -815,9 +815,9 @@ fn test_email_name_only_with_senders() {
                     "number_of_fragments": 500,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
-                    "require_field_match": true,
                 }
-            }
+            },
+            "require_field_match": true,
         },
     });
 
