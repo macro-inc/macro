@@ -90,6 +90,14 @@ pub async fn init_backfill(
         })
     })?;
 
+    ctx.redis_client.init_backfill_job_progress(data.job_id, total_threads).await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e.context("Failed to create entry in redis for job"),
+            })
+        })?;
+
     let thread_sqs_msg = BackfillPubsubMessage {
         link_id: data.link_id,
         job_id: data.job_id,
