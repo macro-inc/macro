@@ -17,7 +17,6 @@ import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitModalProvider } from './SplitModalContext';
 import { SplitToolbar } from './SplitToolbar';
-import { createFocusTrap } from '@block-channel/utils/focusTrap';
 
 export function SplitContainer(
   props: ParentProps<{ id: string; ref: (elem: HTMLDivElement) => void }>
