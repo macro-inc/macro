@@ -15,34 +15,30 @@ export const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
   number | undefined
 >();
 
-const emailAuthResource = createSingletonRoot(() => {
-  const fetchLink = async () => {
-    return await authServiceClient.checkLinkExists({
-      idp_name: 'google_gmail',
-    });
+const emailLinksResource = createSingletonRoot(() => {
+  const fetchLinks = async () => {
+    return await emailClient.getLinks();
   };
-  return createResource(fetchLink, {
-    initialValue: ok({ link_exists: false }),
+  return createResource(fetchLinks, {
+    initialValue: ok({ links: [] }),
   });
 });
 
-export const useEmailAuthStatus = createSingletonRoot(() => {
-  const [resource] = emailAuthResource();
+// Returns true if user has at least one email link
+export const useEmailLinksStatus = createSingletonRoot(() => {
+  const [resource] = emailLinksResource();
   return createMemo(() => {
-    const result = resource.latest;
-
-    if (isOk(result)) return result[1].link_exists;
-
-    return false;
+    if (isErr(resource.latest)) return false;
+    const [, links] = resource.latest;
+    return links.links.length > 0;
   });
 });
 
-export async function refetchEmailAuthStatus(force = false) {
-  const [resource, { refetch }] = emailAuthResource();
-  if (force) return refetch();
+export async function refetchEmailLinks(force = false) {
+  const [resource, { refetch }] = emailLinksResource();
+  if (force) return await refetch();
   if (resource.loading) return resource.latest;
-
-  return refetch();
+  return await refetch();
 }
 
 export async function connectEmail() {
@@ -51,6 +47,8 @@ export async function connectEmail() {
     setBroadcastChannels(broadcastChannels().set('auth', channel));
   }
   const channel = broadcastChannels().get('auth');
+
+  const emailConnected = useEmailLinksStatus();
 
   const idpName = 'google_gmail';
   const originalUrl = `${window.location.origin}/app/login/popup/success`;
@@ -73,6 +71,13 @@ export async function connectEmail() {
   return new Promise((resolve) => {
     channel.onmessage = async (event) => {
       if (event.data.type === 'login-success') {
+        await refetchEmailLinks();
+        if (emailConnected()) {
+          await updateUserAuth();
+          await updateUserInfo();
+          resolve(true);
+          return;
+        }
         const syncResult = await emailClient.init();
         if (isErr(syncResult) && !isErr(syncResult, 'HTTP_ERROR')) {
           toast.failure('Failed to connect to Gmail account');
@@ -86,7 +91,7 @@ export async function connectEmail() {
           setTimeout(() => {
             setEmailRefetchInterval(undefined);
           }, 20000);
-          await refetchEmailAuthStatus();
+          await refetchEmailLinks();
           await updateUserAuth();
           await updateUserInfo();
           resolve(true);
@@ -108,14 +113,13 @@ export async function disconnectEmail() {
       'Gmail account disconnected. Deleting your email data...',
       'This may take a little while to complete.'
     );
-    refetchEmailAuthStatus();
+    refetchEmailLinks();
     setEmailRefetchInterval(undefined);
     await queryClient.cancelQueries({ queryKey: queryKeys.all.email });
     queryClient.setQueriesData({ queryKey: queryKeys.all.email }, () => ({
       pages: [],
       pageParams: [],
     }));
-    // stop any polling
-    refetchEmailAuthStatus();
+    refetchEmailLinks();
   }
 }

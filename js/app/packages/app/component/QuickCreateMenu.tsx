@@ -89,7 +89,7 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
-import { useEmailAuthStatus } from '../signal/emailAuth';
+import { useEmailLinksStatus } from '../signal/emailAuth';
 import { useSplitLayout } from './split-layout/layout';
 
 type CreateType = 'note' | 'email' | 'message';
@@ -155,7 +155,7 @@ export function QuickCreateMenuInner(props: QuickCreateMenuProps) {
   const [selectedType, setSelectedType] = props.selectedTypeSignal;
   const [_, setCreateMenuOpen] = props.quickCreateMenuOpenSignal;
   let noteTitleRef: HTMLInputElement | undefined;
-  const emailActive = useEmailAuthStatus();
+  const emailActive = useEmailLinksStatus();
   const [selectedEmailOptions, setSelectedEmailOptions] = createSignal<
     WithCustomUserInput<'user' | 'contact'>[]
   >([]);
