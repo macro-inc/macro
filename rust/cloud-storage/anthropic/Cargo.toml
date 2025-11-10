@@ -1,0 +1,28 @@
+[package]
+edition = "2024"
+name = "anthropic"
+publish = false
+version = "0.1.0"
+
+[features]
+default = ["openai"]
+openai = ["dep:async-openai"]
+
+[dev-dependencies]
+rand = { workspace = true }
+
+
+[dependencies]
+tokio = { workspace = true, features = ["sync"]}
+async-stream = { workspace = true }
+futures = { workspace = true }
+reqwest = { workspace = true }
+reqwest-eventsource = "0.6.0"
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tokio-stream = { workspace = true }
+async-openai = { workspace = true, optional = true}
+chrono.workspace = true
