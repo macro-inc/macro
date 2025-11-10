@@ -169,8 +169,8 @@ export function IconButton(props: IconButtonProps) {
         disabled={local.disabled}
         class={`${themeColors[local.theme ?? 'base']} ${themeStyles[local.theme ?? 'base']} ${local.border ? '' : 'border-0'} flex flex-row ${sizeClasses()} justify-center items-center gap-0.5 ${local.class ?? ''} ${local.disabled ? 'opacity-50 cursor-not-allowed' : ''} relative`}
         onMouseDown={local.onClick}
-        onKeyDown={onKeyDownClick(local.onClick)}
-        onKeyUp={onKeyUpClick(local.onClick)}
+        onKeyDown={local.onClick ? onKeyDownClick(local.onClick) : undefined}
+        onKeyUp={local.onClick ? onKeyUpClick(local.onClick) : undefined}
         onclick={local.onDeepClick}
         onTouchEnd={local.onTouchEnd}
         data-index={local.index}
