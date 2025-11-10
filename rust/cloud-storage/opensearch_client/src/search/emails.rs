@@ -118,36 +118,36 @@ impl EmailQueryBuilder {
 
         // If thread_ids are provided, add them to the query
         if !self.thread_ids.is_empty() {
-            query_object = query_object.must(QueryType::terms("thread_id", self.thread_ids));
+            query_object.must(QueryType::terms("thread_id", self.thread_ids));
         }
 
         // If link_ids are provided, add them to the query
         if !self.link_ids.is_empty() {
-            query_object = query_object.must(QueryType::terms("link_id", self.link_ids));
+            query_object.must(QueryType::terms("link_id", self.link_ids));
         }
 
         if !self.sender.is_empty() {
             // Create new query for senders
             let senders_query = should_wildcard_field_query_builder("sender", &self.sender);
-            query_object = query_object.must(senders_query);
+            query_object.must(senders_query);
         }
 
         if !self.cc.is_empty() {
             let ccs_query = should_wildcard_field_query_builder("cc", &self.cc);
-            query_object = query_object.must(ccs_query);
+            query_object.must(ccs_query);
         }
 
         if !self.bcc.is_empty() {
             // Create new query for bccs
             let bccs_query = should_wildcard_field_query_builder("bcc", &self.bcc);
-            query_object = query_object.must(bccs_query);
+            query_object.must(bccs_query);
         }
 
         if !self.recipients.is_empty() {
             // Create new query for recipients
             let recipients_query =
                 should_wildcard_field_query_builder("recipients", &self.recipients);
-            query_object = query_object.must(recipients_query);
+            query_object.must(recipients_query);
         }
 
         Ok((self.inner, query_object))
@@ -155,7 +155,7 @@ impl EmailQueryBuilder {
 
     pub fn build(self) -> Result<Value> {
         let (builder, query_object) = self.query_builder()?;
-        let base_query = builder.build_with_query(query_object.build())?;
+        let base_query = builder.build_with_query(query_object.build().into())?;
 
         Ok(base_query)
     }

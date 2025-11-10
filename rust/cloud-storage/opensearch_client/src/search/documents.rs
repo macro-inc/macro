@@ -76,14 +76,14 @@ impl DocumentQueryBuilder {
         let mut query_object = self.inner.query_builder()?;
         // Add in file types to must query
         if !self.file_types.is_empty() {
-            query_object = query_object.must(QueryType::terms("file_type", self.file_types));
+            query_object.must(QueryType::terms("file_type", self.file_types));
         }
         Ok((self.inner, query_object))
     }
 
     pub fn build(self) -> Result<Value> {
         let (builder, query_object) = self.query_builder()?;
-        let base_query = builder.build_with_query(query_object.build())?;
+        let base_query = builder.build_with_query(query_object.build().into())?;
 
         Ok(base_query)
     }

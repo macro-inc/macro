@@ -98,14 +98,14 @@ impl ChatQueryBuilder {
         let mut query_object = self.inner.query_builder()?;
         if !self.role.is_empty() {
             let should_query = should_wildcard_field_query_builder("role", &self.role);
-            query_object = query_object.must(should_query);
+            query_object.must(should_query);
         }
         Ok((self.inner, query_object))
     }
 
     pub fn build(self) -> Result<Value> {
         let (builder, query_object) = self.query_builder()?;
-        let base_query = builder.build_with_query(query_object.build())?;
+        let base_query = builder.build_with_query(query_object.build().into())?;
         Ok(base_query)
     }
 }

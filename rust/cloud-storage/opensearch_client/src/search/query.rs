@@ -64,12 +64,14 @@ impl QueryKey {
             };
 
             let second_term_query =
-                QueryType::WildCard(WildcardQuery::new(field, last_part_of_term));
+                QueryType::WildCard(WildcardQuery::new(field, &format!("*{}*", last_part_of_term.to_lowercase()), true));
 
-            return QueryType::bool_query()
-                .must(first_term_query)
-                .must(second_term_query)
-                .build();
+            let mut bool_query = QueryType::bool_query();
+
+            bool_query.must(first_term_query);
+            bool_query.must(second_term_query);
+
+            return bool_query.build().into();
         }
 
         match self {
@@ -84,7 +86,9 @@ impl QueryKey {
 
 /// Generate the terms for the "must" query
 fn generate_terms_must_query(query_key: QueryKey, fields: &[&str], terms: &[String]) -> QueryType {
-    let mut terms_must_query = BoolQueryBuilder::new().minimum_should_match(1);
+    let mut terms_must_query = BoolQueryBuilder::new();
+
+    terms_must_query.minimum_should_match(1);
 
     // Map terms to queries
     let queries: Vec<_> = fields
@@ -94,10 +98,10 @@ fn generate_terms_must_query(query_key: QueryKey, fields: &[&str], terms: &[Stri
 
     // populate in in "should" field
     for query in queries {
-        terms_must_query = terms_must_query.should(query);
+        terms_must_query.should(query);
     }
 
-    terms_must_query.build()
+    terms_must_query.build().into()
 }
 
 /// Builds the basic query object that can be used to search any index
@@ -131,15 +135,17 @@ pub(crate) fn build_top_level_bool(
         must_array.push(terms_must_query);
     }
 
-    let mut query_object = BoolQueryBuilder::new().minimum_should_match(1);
+    let mut query_object = BoolQueryBuilder::new();
+
+    query_object.minimum_should_match(1);
 
     if !ids_only {
-        query_object = query_object.should(QueryType::term(keys.user_id_key, user_id));
+        query_object.should(QueryType::term(keys.user_id_key, user_id));
     }
-    query_object = query_object.should(QueryType::terms(keys.id_key, ids.to_vec()));
+    query_object.should(QueryType::terms(keys.id_key, ids.to_vec()));
 
     for item in must_array {
-        query_object = query_object.must(item);
+        query_object.must(item);
     }
 
     Ok(query_object)
@@ -161,7 +167,7 @@ mod tests {
         let query_object =
             build_top_level_bool(terms, match_type, keys, ids, user_id, search_on, ids_only)?;
         let query_object = query_object.build();
-        Ok(query_object)
+        Ok(query_object.into())
     }
 
     #[test]

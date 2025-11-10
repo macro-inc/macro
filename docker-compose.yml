@@ -1,6 +1,6 @@
 version: '3.8'
 services:
-    macrodb:
+  macrodb:
     image: postgres:16
     container_name: macrodb
     ports:
@@ -17,7 +17,6 @@ services:
       - ./database/Clear.sql:/etc/Clear.sql
     networks:
       - macro_api_network
-
   macrocache:
     image: 'redis/redis-stack:latest'
     container_name: macrocache

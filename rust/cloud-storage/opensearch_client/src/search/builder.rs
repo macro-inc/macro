@@ -235,7 +235,7 @@ mod tests {
             .user_id(user_id)
             .ids(ids.clone());
 
-        let query = builder.query_builder().unwrap().build();
+        let query = builder.query_builder().unwrap().build().into();
         let result = builder.build_with_query(query).unwrap();
 
         // Verify the structure contains expected keys
