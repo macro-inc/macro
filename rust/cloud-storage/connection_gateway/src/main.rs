@@ -4,8 +4,6 @@ mod constants;
 mod context;
 mod model;
 mod service;
-use std::{sync::Arc, time::Duration};
-
 use crate::{api::router, config::EnvVars, context::AppState};
 use anyhow::{Context, Result};
 use axum::http::{
@@ -14,11 +12,7 @@ use axum::http::{
 };
 use config::Config;
 use constants::ORIGINS;
-use frecency::{
-    domain::services::{EventIngestorImpl, PullAggregatorImpl},
-    inbound::polling_aggregator::FrecencyAggregatorWorkerHandle,
-    outbound::postgres::{FrecencyPgProcessor, FrecencyPgStorage},
-};
+use frecency::{domain::services::EventIngestorImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_env_var::env_var;
@@ -27,6 +21,7 @@ use secretsmanager_client::LocalOrRemoteSecret;
 use service::dynamodb::create_dynamo_db_connection_manager;
 use service::redis::poll_messages;
 use sqlx::postgres::PgPoolOptions;
+use std::sync::Arc;
 use tower_http::cors::CorsLayer;
 
 env_var!(
@@ -111,10 +106,6 @@ async fn main() -> Result<()> {
         config: Arc::clone(&config),
         jwt_args,
         internal_auth_key: LocalOrRemoteSecret::Local(InternalApiSecretKey::new()?),
-        frecency_worker: Arc::new(FrecencyAggregatorWorkerHandle::new_worker(
-            PullAggregatorImpl::new_with_default_time(FrecencyPgProcessor::new(pgpool)),
-            Duration::from_secs(60),
-        )),
     })
     .layer(cors);
 
