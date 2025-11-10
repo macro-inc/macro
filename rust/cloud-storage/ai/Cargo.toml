@@ -29,3 +29,4 @@ tiktoken-rs = "0.5.9"
 tokio.workspace = true
 tracing = { workspace = true }
 utoipa = { workspace = true }
+anthropic = { path = "../anthropic" }
