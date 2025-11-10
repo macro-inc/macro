@@ -37,7 +37,7 @@ export function mountGlobalFocusListener(withDebug?: boolean) {
   );
   if (withDebug) {
     createEffect(() => {
-      console.log('### ACTIVE ELEMENT', rawActiveElement());
+      console.trace('### ACTIVE ELEMENT', rawActiveElement());
     });
   }
 }

@@ -18,8 +18,15 @@ import { ok } from '@core/util/maybeResult';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import MacroCreateIcon from '@macro-icons/macro-create-b.svg';
 import { useCreateProject } from '@service-storage/projects';
-import { createMemo, For, onMount, Show } from 'solid-js';
-import { useSplitLayout } from '../split-layout/layout'; // except this, not part of the TEMP but biome sorts the imports.
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onMount,
+  Show,
+} from 'solid-js';
+import { useSplitLayout } from '../split-layout/layout';
 
 export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal();
 
@@ -84,6 +91,7 @@ const createBlock = async (spec: {
 };
 
 const createComponent = async (spec: { componentId: string }) => {
+  setCreateMenuOpen(false);
   const { replaceSplit, insertSplit } = useSplitLayout();
   const shouldInsert = pressedKeys().has('opt');
   if (shouldInsert) {
@@ -91,8 +99,6 @@ const createComponent = async (spec: { componentId: string }) => {
   } else {
     replaceSplit({ type: 'component', id: spec.componentId });
   }
-
-  setCreateMenuOpen(false);
 };
 
 export const CREATABLE_BLOCKS: (Omit<HotkeyRegistrationOptions, 'scopeId'> & {
@@ -308,11 +314,31 @@ function MenuContent() {
   );
 }
 
+// ignore the first refocus on the trigger
+const [triggerRef, setTriggerRef] = createSignal<HTMLButtonElement>();
+createEffect(() => {
+  if (!createMenuOpen()) {
+    const ref = triggerRef();
+    if (!ref) return;
+    ref.addEventListener(
+      'focusin',
+      (e) => {
+        e.preventDefault();
+        ref.blur();
+      },
+      { once: true }
+    );
+  }
+});
+
 export function CreateMenu() {
   // onMount(() => setCreateMenuOpen(true))
   return (
     <DropdownMenu open={createMenuOpen()} onOpenChange={setCreateMenuOpen}>
-      <DropdownMenu.Trigger class="relative flex justify-between items-center gap-2 data-expanded:bg-accent px-3 py-2 border border-edge-muted data-expanded:border-accent **:border-none! font-medium text-ink-muted data-expanded:text-default-bg hover:text-accent text-base bracket-never">
+      <DropdownMenu.Trigger
+        ref={setTriggerRef}
+        class="relative flex justify-between items-center gap-2 data-expanded:bg-accent px-3 py-2 border border-edge-muted data-expanded:border-accent **:border-none! font-medium text-ink-muted data-expanded:text-default-bg hover:text-accent text-base bracket-never"
+      >
         <span class="flex items-center">
           <MacroCreateIcon
             class={`h-2.5 ${createMenuOpen() ? 'fill-dialog/70' : 'fill-accent/70 transition-all duration-300'}`}

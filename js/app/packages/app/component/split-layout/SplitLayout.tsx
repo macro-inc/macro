@@ -95,34 +95,34 @@ function createSplitFocusTracker(props: {
   const DEBOUNCE = 100;
   const activeSplitId = () => props.splitManager.activeSplitId();
 
-  const isElementInPanel = (panelId: SplitId, element: Element): boolean => {
+  const isElementInPanel = (panelId: SplitId, element: Element | null): boolean => {
     const panelRef = props.panelRefs.get(panelId);
-    if (!panelRef) return false;
+    if (!panelRef || element === null) return false;
     return panelRef === element || panelRef.contains(element);
   };
 
   const focusSplitById = (id: SplitId) => {
+    console.log('### focus split by id');
     const splitPanelRef = props.panelRefs.get(id);
     if (!splitPanelRef) {
       console.warn(`Tried to focus split with id ${id} but it doesn't exist`);
       return;
     }
-
+    if (splitPanelRef.contains(document.activeElement)) return;
     splitPanelRef.focus();
   };
 
   const activateFocusedSplit = (element: Element) => {
-    const activeSplitId_ = activeSplitId();
-    if (!activeSplitId_) return;
+    const splitId = activeSplitId();
+    if (!splitId) return;
 
-    const doesActiveSplitHaveFocus = isElementInPanel(activeSplitId_, element);
+    const doesActiveSplitHaveFocus = isElementInPanel(splitId, element);
 
     if (doesActiveSplitHaveFocus) {
       return;
     }
 
     let splitWithFocus: SplitId | undefined;
-
     for (const split of props.splits()) {
       if (isElementInPanel(split.id, element)) {
         splitWithFocus = split.id;
@@ -199,6 +199,8 @@ function createSplitFocusTracker(props: {
       }, DEBOUNCE);
     })
   );
+
+  return { focusSplitById };
 }
 
 export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
@@ -374,7 +376,6 @@ function SplitPanel(props: SplitPanelProps) {
           setPanelRef(ref);
           props.setPanelRef(ref);
           attachHotKeys(ref);
-          ref.focus();
         }}
       >
         <Dynamic component={props.split.mount.element} />
