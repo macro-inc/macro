@@ -1,27 +1,27 @@
-import { useEmailAuthStatus } from "@app/signal/emailAuth";
-import { withAnalytics } from "@coparse/analytics";
-import { useIsAuthenticated } from "@core/auth";
-import { ChannelsContextProvider } from "@core/component/ChannelsProvider";
-import { TextButton } from "@core/component/TextButton";
-import { toast } from "@core/component/Toast/Toast";
-import { ToastRegion } from "@core/component/Toast/ToastRegion";
-import { WebsocketDebugger } from "@core/component/WebsocketDebugger";
+import { useEmailAuthStatus } from '@app/signal/emailAuth';
+import { withAnalytics } from '@coparse/analytics';
+import { useIsAuthenticated } from '@core/auth';
+import { ChannelsContextProvider } from '@core/component/ChannelsProvider';
+import { TextButton } from '@core/component/TextButton';
+import { toast } from '@core/component/Toast/Toast';
+import { ToastRegion } from '@core/component/Toast/ToastRegion';
+import { WebsocketDebugger } from '@core/component/WebsocketDebugger';
 import {
   ENABLE_WEBSOCKET_DEBUGGER,
   PROD_MODE_ENV,
-} from "@core/constant/featureFlags";
-import { isNativeMobilePlatform } from "@core/mobile/isNativeMobilePlatform";
-import { createBlockOrchestrator } from "@core/orchestrator";
-import { formatTabTitle, tabTitleSignal } from "@core/signal/tabTitle";
-import { licenseChannel } from "@core/util/licenseUpdateBroadcastChannel";
-import { isErr } from "@core/util/maybeResult";
-import { transformShortIdInUrlPathname } from "@core/util/url";
-import { isTauri, MaybeTauriProvider } from "@macro/tauri";
-import { createEmailSource, Provider as EntityProvider } from "@macro-entity";
-import { createNotificationSource } from "@notifications/notificationSource";
-import { setUser, useObserveRouting } from "@observability";
-import { gqlServiceClient } from "@service-gql/client";
-import { MetaProvider, Title } from "@solidjs/meta";
+} from '@core/constant/featureFlags';
+import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { createBlockOrchestrator } from '@core/orchestrator';
+import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
+import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
+import { isErr } from '@core/util/maybeResult';
+import { transformShortIdInUrlPathname } from '@core/util/url';
+import { isTauri, MaybeTauriProvider } from '@macro/tauri';
+import { createEmailSource, Provider as EntityProvider } from '@macro-entity';
+import { createNotificationSource } from '@notifications/notificationSource';
+import { setUser, useObserveRouting } from '@observability';
+import { gqlServiceClient } from '@service-gql/client';
+import { MetaProvider, Title } from '@solidjs/meta';
 import {
   HashRouter,
   Navigate,
@@ -30,9 +30,9 @@ import {
   Router,
   type RouterProps,
   useSearchParams,
-} from "@solidjs/router";
-import { useHotKeyRoot } from "core/hotkey/hotkeys";
-import { detect } from "detect-browser";
+} from '@solidjs/router';
+import { useHotKeyRoot } from 'core/hotkey/hotkeys';
+import { detect } from 'detect-browser';
 import {
   createEffect,
   type JSX,
@@ -42,20 +42,20 @@ import {
   type ParentProps,
   Show,
   Suspense,
-} from "solid-js";
-import { currentThemeId } from "../../block-theme/signals/themeSignals";
-import { applyTheme } from "../../block-theme/utils/themeUtils";
-import { useNotificationState } from "../../notification-provider/src/NotificationProvider";
-import { TauriRouteListener } from "../../tauri/src/TauriProvider";
-import { updateCookie } from "../util/updateCookie";
-import { Login } from "./auth/Login";
-import { LOGIN_COOKIE_AGE, setCookie } from "./auth/Shared";
-import { GlobalAppStateProvider } from "./GlobalAppState";
-import { Layout } from "./Layout";
-import MacroJump from "./MacroJump";
-import Onboarding from "./Onboarding";
-import { useMobileEffect, useMobileNavigate } from "./settings/Mobile";
-import { LAYOUT_ROUTE } from "./split-layout/SplitLayoutRoute";
+} from 'solid-js';
+import { currentThemeId } from '../../block-theme/signals/themeSignals';
+import { applyTheme } from '../../block-theme/utils/themeUtils';
+import { useNotificationState } from '../../notification-provider/src/NotificationProvider';
+import { TauriRouteListener } from '../../tauri/src/TauriProvider';
+import { updateCookie } from '../util/updateCookie';
+import { Login } from './auth/Login';
+import { LOGIN_COOKIE_AGE, setCookie } from './auth/Shared';
+import { GlobalAppStateProvider } from './GlobalAppState';
+import { Layout } from './Layout';
+import MacroJump from './MacroJump';
+import Onboarding from './Onboarding';
+import { useMobileEffect, useMobileNavigate } from './settings/Mobile';
+import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -68,16 +68,16 @@ const rootPreload: RoutePreloadFunc = async (args) => {
 
   // List of query parameters to capture.
   const params = [
-    "utm_campaign",
-    "utm_source",
-    "utm_medium",
-    "utm_term",
-    "utm_content",
-    "rdt_cid",
-    "gclid",
-    "twclid",
-    "_fbc",
-    "_fbp",
+    'utm_campaign',
+    'utm_source',
+    'utm_medium',
+    'utm_term',
+    'utm_content',
+    'rdt_cid',
+    'gclid',
+    'twclid',
+    '_fbc',
+    '_fbp',
   ];
 
   const searchParams = new URLSearchParams(url.search);
@@ -95,7 +95,7 @@ const rootPreload: RoutePreloadFunc = async (args) => {
       `replacing url pathname from ${existingPathname} to ${transformedPathname}`
     );
     url.pathname = transformedPathname;
-    window.history.replaceState(args.location.state, "", url);
+    window.history.replaceState(args.location.state, '', url);
   }
   track(TrackingEvents.AUTH.START);
   // TODO: load general data like sidepanel, etc.
@@ -104,7 +104,7 @@ const rootPreload: RoutePreloadFunc = async (args) => {
 
   const [, { id, email, hasChromeExt, ...userInfo }] = userInfoResult;
   const platform = detect(navigator.userAgent);
-  const os = `${platform?.os?.replaceAll(" ", "")}`;
+  const os = `${platform?.os?.replaceAll(' ', '')}`;
 
   if (id) {
     if (email) {
@@ -123,28 +123,28 @@ const rootPreload: RoutePreloadFunc = async (args) => {
   }
 };
 
-const DEFAULT_ROUTE = "/component/unified-list";
+const DEFAULT_ROUTE = '/component/unified-list';
 
 function BasePathComponent() {
   const [searchParams] = useSearchParams();
   const subscriptionSuccess = searchParams.subscriptionSuccess;
   const type = searchParams.type;
-  if (subscriptionSuccess === "true") {
-    toast.success("Your plan has been activated!");
+  if (subscriptionSuccess === 'true') {
+    toast.success('Your plan has been activated!');
     track(TrackingEvents.SUBSCRIPTION.SUCCESS, {
       type: type ?? undefined,
     });
   }
 
-  if (searchParams.upgrade === "true") {
-    sessionStorage.setItem("showUpgradeModal", "true");
+  if (searchParams.upgrade === 'true') {
+    sessionStorage.setItem('showUpgradeModal', 'true');
   }
 
   // check session storage for redirect url
-  const redirectUrl = sessionStorage.getItem("redirectUrl");
+  const redirectUrl = sessionStorage.getItem('redirectUrl');
   if (redirectUrl) {
-    sessionStorage.removeItem("redirectUrl");
-    const relativeUrl = redirectUrl.replace(window.location.origin, "");
+    sessionStorage.removeItem('redirectUrl');
+    const relativeUrl = redirectUrl.replace(window.location.origin, '');
     window.location.href = relativeUrl;
     return;
   }
@@ -155,7 +155,7 @@ function BasePathComponent() {
   // Preserve existing query parameters when redirecting
   const params = new URLSearchParams(window.location.search);
   const queryString =
-    params.toString().length > 0 ? `?${params.toString()}` : "";
+    params.toString().length > 0 ? `?${params.toString()}` : '';
 
   const redirectPath = `${DEFAULT_ROUTE}${queryString}`;
 
@@ -165,22 +165,22 @@ function BasePathComponent() {
 function NotFound() {
   if (isNativeMobilePlatform()) return <Navigate href={DEFAULT_ROUTE} />;
   window.location.href = window.location.origin;
-  return "";
+  return '';
 }
 
 const ROUTES: RouteDefinition[] = [
   LAYOUT_ROUTE,
   {
-    path: "/",
+    path: '/',
     component: BasePathComponent,
   },
   {
-    path: "/login/popup/success",
+    path: '/login/popup/success',
     component: () => {
-      const channel = new BroadcastChannel("auth");
+      const channel = new BroadcastChannel('auth');
 
       onMount(() => {
-        channel.postMessage({ type: "login-success" });
+        channel.postMessage({ type: 'login-success' });
         channel.close();
         window.close();
       });
@@ -197,7 +197,7 @@ const ROUTES: RouteDefinition[] = [
               theme="base"
               text="Close"
               onClick={() => {
-                channel.postMessage({ type: "login-success" });
+                channel.postMessage({ type: 'login-success' });
                 channel.close();
                 window.close();
               }}
@@ -208,7 +208,7 @@ const ROUTES: RouteDefinition[] = [
     },
   },
   {
-    path: "/login",
+    path: '/login',
     component: () => (
       <div class="flex w-full h-full overflow-y-hidden">
         <Login />
@@ -216,7 +216,7 @@ const ROUTES: RouteDefinition[] = [
     ),
   },
   {
-    path: "/onboarding",
+    path: '/onboarding',
     component: () => (
       <div class="flex *:flex-1 w-full h-full overflow-y-hidden">
         <Onboarding />
@@ -224,12 +224,12 @@ const ROUTES: RouteDefinition[] = [
     ),
   },
   {
-    path: "/new/:block",
-    component: lazy(() => import("./NewRoute")),
+    path: '/new/:block',
+    component: lazy(() => import('./NewRoute')),
   },
   {
     // This splat route must be last to catch all unmatched routes
-    path: "*404",
+    path: '*404',
     component: NotFound,
   },
 ];
@@ -238,7 +238,7 @@ export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   // Initialize global notification helpers
   const notifInterface = useNotificationState();
   const notificationSource = createNotificationSource(
-    notifInterface === "not-supported"
+    notifInterface === 'not-supported'
       ? undefined
       : notifInterface.showNotification
   );
@@ -264,7 +264,7 @@ export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
 const clearBodyInlineStyleColor = () => {
   // index.html has inline script to set page color to theme surface to prevent page color flash.
   // removes page color inline style to prevent overriding main stylesheet
-  document.body.style.backgroundColor = "";
+  document.body.style.backgroundColor = '';
 };
 
 export function Root() {
@@ -284,18 +284,18 @@ export function Root() {
         currentDate.setMonth(currentDate.getMonth() + 1)
       );
 
-      updateCookie("login", "true", {
+      updateCookie('login', 'true', {
         expires: oneMonthFromNow,
         maxAge: LOGIN_COOKIE_AGE,
-        path: "/",
-        sameSite: "Lax",
+        path: '/',
+        sameSite: 'Lax',
       });
     } else {
-      updateCookie("login", "false", {
+      updateCookie('login', 'false', {
         expires: new Date(0),
         maxAge: 0,
-        path: "/",
-        sameSite: "Lax",
+        path: '/',
+        sameSite: 'Lax',
       });
     }
   });
@@ -311,10 +311,10 @@ export function Root() {
   const handleBeforeUnload = () => track(TrackingEvents.AUTH.TERMINATE);
   onMount(() => {
     applyTheme(currentThemeId());
-    window.addEventListener("beforeunload", handleBeforeUnload);
+    window.addEventListener('beforeunload', handleBeforeUnload);
   });
   onCleanup(() =>
-    window.removeEventListener("beforeunload", handleBeforeUnload)
+    window.removeEventListener('beforeunload', handleBeforeUnload)
   );
 
   const [tabInfo] = tabTitleSignal;
@@ -328,7 +328,7 @@ export function Root() {
             <ChannelsContextProvider>
               <Title>{tabTitle()}</Title>
               <MacroJump />
-              <Suspense fallback={""}>
+              <Suspense fallback={''}>
                 <IsomorphicRouter
                   transformUrl={transformShortIdInUrlPathname}
                   root={Layout}
@@ -336,7 +336,7 @@ export function Root() {
                   base="/app"
                 >
                   {{
-                    path: "/",
+                    path: '/',
                     component: TauriRouteListener,
                     children: ROUTES,
                   }}
