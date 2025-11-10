@@ -45,7 +45,7 @@ pub async fn handler(
     user_context: Extension<UserContext>,
     Path(PathParams { event_item_id }): Path<PathParams>,
     Query(Params { limit }): Query<Params>,
-    cursor: CursorExtractor<Uuid, CreatedAt>,
+    cursor: CursorExtractor<Uuid, CreatedAt, ()>,
 ) -> Result<Json<GetAllUserNotificationsResponse>, (StatusCode, Json<ErrorResponse<'static>>)> {
     tracing::info!("get_user_notifications_by_event_item_id");
 

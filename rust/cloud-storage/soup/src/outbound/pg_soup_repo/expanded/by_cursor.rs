@@ -16,7 +16,7 @@ pub async fn expanded_generic_cursor_soup(
     db: &PgPool,
     user_id: MacroUserIdStr<'_>,
     limit: u16,
-    cursor: Query<String, SimpleSortMethod>,
+    cursor: Query<String, SimpleSortMethod, ()>,
 ) -> Result<Vec<SoupItem>, sqlx::Error> {
     let query_limit = limit as i64;
     let sort_method_str = cursor.sort_method().to_string();
@@ -243,7 +243,7 @@ pub async fn no_frecency_expanded_generic_soup(
     db: &PgPool,
     user_id: MacroUserIdStr<'_>,
     limit: u16,
-    cursor: Query<String, SimpleSortMethod>,
+    cursor: Query<String, SimpleSortMethod, ()>,
 ) -> Result<Vec<SoupItem>, sqlx::Error> {
     let query_limit = limit as i64;
     let sort_method_str = cursor.sort_method().to_string();

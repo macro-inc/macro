@@ -12,6 +12,7 @@ postgres = ["dep:serde_json", "dep:sqlx"]
 anyhow = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 futures = { workspace = true }
+item_filters = { path = "../item_filters" }
 lambda_runtime = { workspace = true, optional = true, features = ["tracing"] }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var", optional = true }

@@ -1,7 +1,7 @@
 use crate::domain::{
     models::{
-        AdvancedSortParams, FrecencySoupItem, SimpleSortRequest, SoupErr, SoupExclude, SoupQuery,
-        SoupRequest, SoupType,
+        AdvancedSortParams, AstFilter, FrecencySoupItem, SimpleSortRequest, SoupErr, SoupFilter,
+        SoupQuery, SoupRequest, SoupType,
     },
     ports::{SoupRepo, SoupService},
 };
@@ -10,6 +10,7 @@ use frecency::domain::{
     models::{AggregateId, FrecencyPageRequest, JoinFrecency},
     ports::FrecencyQueryService,
 };
+use item_filters::ast::EntityFilterAst;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::as_owned::ShallowClone;
 use models_pagination::{
@@ -17,6 +18,7 @@ use models_pagination::{
     SimpleSortMethod,
 };
 use models_soup::item::SoupItem;
+use non_empty::IsEmpty;
 use std::cmp::Ordering;
 
 #[cfg(test)]
@@ -96,7 +98,7 @@ where
                     limit: remainder_to_fetch.try_into().unwrap_or(500),
                     cursor: Query::Sort(SimpleSortMethod::UpdatedAt),
                     user_id: user,
-                    exclude: vec![SoupExclude::Frecency],
+                    filters: Some(SoupFilter::Frecency),
                 },
             )
             .await?;
@@ -105,7 +107,7 @@ where
 
     async fn handle_advanced_sort(
         &self,
-        cursor: Query<String, Frecency>,
+        cursor: Query<String, Frecency, ()>,
         soup_type: SoupType,
         user: MacroUserIdStr<'static>,
         limit: u16,
@@ -117,6 +119,7 @@ where
                     CursorVal {
                         sort_type: Frecency,
                         last_val: FrecencyValue::FrecencyScore(score),
+                        filter: (),
                     },
                 ..
             }) => Some(score),
@@ -128,6 +131,7 @@ where
                     CursorVal {
                         sort_type: Frecency,
                         last_val: FrecencyValue::UpdatedAt(updated),
+                        filter: (),
                     },
             }) => {
                 return Ok(Either::Left(
@@ -141,10 +145,11 @@ where
                                 val: CursorVal {
                                     sort_type: SimpleSortMethod::UpdatedAt,
                                     last_val: updated,
+                                    filter: (),
                                 },
                             }),
                             user_id: user,
-                            exclude: vec![SoupExclude::Frecency],
+                            filters: Some(SoupFilter::Frecency),
                         },
                     )
                     .await?,
@@ -171,6 +176,7 @@ where
                 user_id: user.copied(),
                 from_score: None,
                 limit: limit as u32,
+                filters: Default::default(),
             })
             .await?;
 
@@ -229,7 +235,10 @@ where
                             limit,
                             cursor,
                             user_id: req.user,
-                            exclude: Vec::new(),
+                            filters: match req.filters.is_empty() {
+                                true => None,
+                                false => Some(SoupFilter::Ast(AstFilter::Normal(req.filters))),
+                            },
                         },
                     )
                     .await?
