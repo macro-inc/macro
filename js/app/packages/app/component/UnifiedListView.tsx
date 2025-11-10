@@ -1302,6 +1302,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                 }
                 disabled={
                   contextAndModalState.selectedEntity?.type !== 'document' &&
+                  contextAndModalState.selectedEntity?.type !== 'project' &&
                   contextAndModalState.selectedEntity?.type !== 'chat'
                 }
               />
