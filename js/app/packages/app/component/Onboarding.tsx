@@ -1,3 +1,4 @@
+import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { connectEmail, useEmailAuthStatus } from '@app/signal/emailAuth';
 import { withAnalytics } from '@coparse/analytics';
 import { updateUserAuth, useIsAuthenticated } from '@core/auth';
@@ -44,7 +45,7 @@ export default function Onboarding() {
       track(TrackingEvents.ONBOARDING.COMPLETE);
       localStorage.removeItem('new_user_onboarding');
     }
-    return navigate('/unified-list');
+    return navigate(DEFAULT_ROUTE);
   }
 
   // WATCH FOR AUTH SUCCESS

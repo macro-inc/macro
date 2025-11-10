@@ -56,6 +56,7 @@ import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
 import { useMobileEffect, useMobileNavigate } from './settings/Mobile';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
+import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -122,8 +123,6 @@ const rootPreload: RoutePreloadFunc = async (args) => {
     }
   }
 };
-
-const DEFAULT_ROUTE = '/component/unified-list';
 
 function BasePathComponent() {
   const [searchParams] = useSearchParams();
