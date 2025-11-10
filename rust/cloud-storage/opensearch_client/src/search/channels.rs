@@ -136,26 +136,26 @@ impl ChannelMessageQueryBuilder {
 
         // Add org_id to must clause if provided
         if let Some(org_id) = self.org_id {
-            query_object = query_object.must(QueryType::term("org_id", org_id));
+            query_object.must(QueryType::term("org_id", org_id));
         }
 
         // Add thread_ids to must clause if provided
         if !self.thread_ids.is_empty() {
-            query_object = query_object.must(QueryType::terms("thread_id", self.thread_ids));
+            query_object.must(QueryType::terms("thread_id", self.thread_ids));
         }
 
         // Add mentions to must clause if provided
         if !self.mentions.is_empty() {
-            query_object = query_object.must(QueryType::terms("mentions", self.mentions));
+            query_object.must(QueryType::terms("mentions", self.mentions));
         }
 
         if !self.channel_ids.is_empty() {
-            query_object = query_object.must(QueryType::terms("channel_id", self.channel_ids));
+            query_object.must(QueryType::terms("channel_id", self.channel_ids));
         }
 
         // Add sender_ids to must clause if provided
         if !self.sender_ids.is_empty() {
-            query_object = query_object.must(QueryType::terms("sender_id", self.sender_ids));
+            query_object.must(QueryType::terms("sender_id", self.sender_ids));
         }
 
         Ok((self.inner, query_object))
@@ -163,7 +163,7 @@ impl ChannelMessageQueryBuilder {
 
     pub fn build(self) -> Result<Value> {
         let (builder, query_object) = self.query_builder()?;
-        let base_query = builder.build_with_query(query_object.build())?;
+        let base_query = builder.build_with_query(query_object.build().into())?;
 
         Ok(base_query)
     }
@@ -562,7 +562,7 @@ mod tests {
             .query_builder()
             .unwrap();
 
-        let must = if let QueryType::Bool(bool) = builder.build() {
+        let must = if let QueryType::Bool(bool) = builder.build().into() {
             bool.must
         } else {
             panic!("Could not extract MUST field from bool because type was not a bool");

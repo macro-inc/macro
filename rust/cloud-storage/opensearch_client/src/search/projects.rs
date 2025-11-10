@@ -39,14 +39,14 @@ impl SearchQueryConfig for ProjectSearchConfig {
     // Projects have no "content" to highlight match on, so match on the TITLE_KEY instead
     fn default_highlight() -> Value {
         Highlight::new()
+            .require_field_match(true)
             .field(
                 Self::TITLE_KEY,
                 HighlightField::new()
                     .highlight_type("unified")
                     .number_of_fragments(500)
                     .pre_tags(vec!["<macro_em>".to_string()])
-                    .post_tags(vec!["</macro_em>".to_string()])
-                    .require_field_match(true),
+                    .post_tags(vec!["</macro_em>".to_string()]),
             )
             .to_json()
     }
@@ -84,7 +84,7 @@ impl ProjectQueryBuilder {
 
     pub fn build(self) -> Result<Value> {
         let (builder, query_object) = self.query_builder()?;
-        let base_query = builder.build_with_query(query_object.build())?;
+        let base_query = builder.build_with_query(query_object.build().into())?;
 
         Ok(base_query)
     }
@@ -241,9 +241,9 @@ mod tests {
                     "number_of_fragments": 500,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
-                    "require_field_match": true,
                 }
-            }
+            },
+            "require_field_match": true,
         });
         // Verify empty highlight (project-specific)
         assert_eq!(result["highlight"], expected_highlight);
@@ -447,9 +447,9 @@ mod tests {
                         "number_of_fragments": 500,
                         "pre_tags": ["<macro_em>"],
                         "post_tags": ["</macro_em>"],
-                        "require_field_match": true,
                     }
-                }
+                },
+                "require_field_match": true,
             },
         });
 
@@ -556,9 +556,9 @@ fn test_project_content_search_syntactically_invalid() {
                     "number_of_fragments": 500,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
-                    "require_field_match": true,
                 }
-            }
+            },
+            "require_field_match": true,
         },
     });
 
