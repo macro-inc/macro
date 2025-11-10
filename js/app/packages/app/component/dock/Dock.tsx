@@ -176,11 +176,6 @@ export function Dock() {
             }}
             class="h-full aspect-square"
             data-settings-button
-            // need both onClick and onDeepClick for activation both keyboard and click
-            onClick={() => {
-              setSettingsOpen(true);
-            }}
-            // need both onClick and onDeepClick for activation both keyboard and click
             onDeepClick={() => {
               setSettingsOpen(true);
             }}
