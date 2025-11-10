@@ -5,20 +5,12 @@ import {
   shiftPunctuationReverseMap,
 } from './constants';
 import {
-  activeScopeStack,
+  activeScope,
   hotkeyScopeTree,
   hotkeysAwaitingKeyUp,
-  setActiveScopeStack,
+  setActiveScope,
 } from './state';
 import type { ScopeNode, ValidHotkey } from './types';
-
-// Pushes a scope to the active scope stack, if it is not already the active scope.
-export function pushActiveScope(scopeId: string) {
-  setActiveScopeStack((prev) => {
-    if (prev.at(-1) === scopeId) return prev;
-    return [...prev, scopeId];
-  });
-}
 
 let scopeCounter = 0;
 export function getScopeId(prefix: string = 'scope'): string {
@@ -89,7 +81,7 @@ export function removeScope(scopeId: string) {
 
   // if scope is in currently active scope branch, we want to "snip just above it", i.e. set active scope to closest DOM scope parent.
   if (scope.type === 'dom') {
-    let currentScope = scopeTree.get(activeScopeStack().at(-1) ?? '');
+    let currentScope = scopeTree.get(activeScope() ?? '');
     while (currentScope) {
       if (currentScope.id === scopeId) {
         let parentScope = hotkeyScopeTree.get(currentScope.parentScopeId ?? '');
@@ -100,14 +92,14 @@ export function removeScope(scopeId: string) {
             parentScope.element instanceof HTMLElement
           ) {
             parentScope.element.focus();
-            pushActiveScope(parentScope.id);
+            setActiveScope(parentScope.id);
             foundDOMScopeParent = true;
             break;
           }
           parentScope = hotkeyScopeTree.get(parentScope.parentScopeId ?? '');
         }
         if (!foundDOMScopeParent) {
-          pushActiveScope('global');
+          setActiveScope('global');
         }
         break;
       }
@@ -142,7 +134,7 @@ export function removeScope(scopeId: string) {
  * Used to 'exit' a command scope.
  */
 export function activateClosestDOMScope() {
-  let currentScope = hotkeyScopeTree.get(activeScopeStack().at(-1) ?? '');
+  let currentScope = hotkeyScopeTree.get(activeScope() ?? '');
   let activeScopeId = 'global';
   // find the closest active DOM scope
   while (currentScope) {
@@ -159,7 +151,7 @@ export function activateClosestDOMScope() {
     currentScope = hotkeyScopeTree.get(currentScope.parentScopeId);
   }
 
-  pushActiveScope(activeScopeId);
+  setActiveScope(activeScopeId);
 }
 
 export function normalizeEventKeyPress(e: KeyboardEvent): string {

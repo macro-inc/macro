@@ -1,6 +1,6 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
-import { activeScopeStack } from '@core/hotkey/state';
+import { activeScope } from '@core/hotkey/state';
 import { useEmailContacts } from '@core/user';
 import { mapFromListsByKey } from '@core/util/compareUtils';
 import type { Channel } from '@service-comms/generated/models/channel';
@@ -31,8 +31,7 @@ export function useCommandItems() {
   const channelsContext = useChannelsContext();
   const channels = () => channelsContext.channels();
   const contactItems = useEmailContacts();
-  const activeScope = activeScopeStack().at(-1) ?? 'global';
-  const activeCommands = getActiveCommandsFromScope(activeScope, {
+  const activeCommands = getActiveCommandsFromScope(activeScope(), {
     sortByScopeLevel: false,
     hideShadowedCommands: false,
     hideCommandsWithoutHotkeys: false,
