@@ -1,6 +1,7 @@
 import { structuredOutputCompletion } from '@core/client/structuredOutput';
 import {
   DEFAULT_MODEL,
+  MODEL_PRETTYNAME,
   MODEL_PROVIDER_ICON,
 } from '@core/component/AI/constant/model';
 import { replaceCitations } from '@core/component/LexicalMarkdown/citationsUtils';
@@ -12,7 +13,6 @@ import LoadingIcon from '@phosphor-icons/core/bold/spinner-gap-bold.svg?componen
 import type { ChatMessageContent } from '@service-cognition/generated/schemas/chatMessageContent';
 import type { ChatMessageWithAttachments } from '@service-cognition/generated/schemas/chatMessageWithAttachments';
 import type { Model } from '@service-cognition/generated/schemas/model';
-import { PrettyModelName } from '@service-cognition/generated/schemas/model';
 import { createCallback } from '@solid-primitives/rootless';
 import { useSplitLayout } from 'app/component/split-layout/layout';
 import type { Component } from 'solid-js';
@@ -26,8 +26,8 @@ type AssistantActionProps = {
 export function AssistantMessageActionAndMetadata(props: AssistantActionProps) {
   const modelName = () => {
     const prettyName: string | undefined =
-      PrettyModelName[props.message?.model as Model];
-    if (!prettyName) return PrettyModelName[DEFAULT_MODEL];
+      MODEL_PRETTYNAME[props.message?.model as Model];
+    if (!prettyName) return MODEL_PRETTYNAME[DEFAULT_MODEL];
     return prettyName;
   };
 

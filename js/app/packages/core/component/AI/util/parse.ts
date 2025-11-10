@@ -1,4 +1,5 @@
-import { type Model, ModelEnum } from '../types';
+import { ModelEnum } from '@service-cognition/generated/schemas';
+import type { Model } from '../types';
 
 /**
  * Parses a Model type from a string.
