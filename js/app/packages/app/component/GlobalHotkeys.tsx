@@ -212,6 +212,7 @@ export default function GlobalShortcuts() {
       return true;
     },
     icon: AiInstructionsIcon,
+    runWithInputFocused: true,
   });
 
   if (ENABLE_SEARCH_SERVICE) {
@@ -236,6 +237,7 @@ export default function GlobalShortcuts() {
       return true;
     },
     activateCommandScope: true,
+    runWithInputFocused: true,
     displayPriority: 10,
   });
 
@@ -258,6 +260,7 @@ export default function GlobalShortcuts() {
       return true;
     },
     activateCommandScope: true,
+    runWithInputFocused: true,
   });
 
   themes().forEach((theme) => {
@@ -279,6 +282,7 @@ export default function GlobalShortcuts() {
       return true;
     },
     activateCommandScope: true,
+    runWithInputFocused: true,
   });
 
   themes().forEach((theme) => {
@@ -303,6 +307,7 @@ export default function GlobalShortcuts() {
       setThemeShouldMatchSystem((prev) => !prev);
       return true;
     },
+    runWithInputFocused: true,
   });
 
   registerHotkey({
@@ -312,6 +317,7 @@ export default function GlobalShortcuts() {
       setMonochromeIcons(!monochromeIcons());
       return true;
     },
+    runWithInputFocused: true,
   });
 
   return '';
