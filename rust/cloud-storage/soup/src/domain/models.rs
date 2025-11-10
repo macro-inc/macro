@@ -35,7 +35,7 @@ pub struct SimpleSortRequest<'a> {
     /// the limit of the number of items to return
     pub limit: u16,
     /// the [ParsedCursor] the client passes (if any)
-    pub cursor: Query<String, SimpleSortMethod, ()>,
+    pub cursor: Query<String, SimpleSortMethod, EntityFilterAst>,
     /// the id of the user
     pub user_id: MacroUserIdStr<'a>,
     /// a list of things that should be excluded from the query
@@ -49,8 +49,8 @@ pub struct AdvancedSortParams<'a> {
 }
 
 pub enum SoupQuery {
-    Simple(Query<String, SimpleSortMethod, ()>),
-    Frecency(Query<String, Frecency, ()>),
+    Simple(Query<String, SimpleSortMethod, EntityFilterAst>),
+    Frecency(Query<String, Frecency, EntityFilterAst>),
 }
 
 pub struct SoupRequest {

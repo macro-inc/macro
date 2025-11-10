@@ -107,7 +107,7 @@ where
 
     async fn handle_advanced_sort(
         &self,
-        cursor: Query<String, Frecency, ()>,
+        cursor: Query<String, Frecency, EntityFilterAst>,
         soup_type: SoupType,
         user: MacroUserIdStr<'static>,
         limit: u16,
@@ -119,10 +119,10 @@ where
                     CursorVal {
                         sort_type: Frecency,
                         last_val: FrecencyValue::FrecencyScore(score),
-                        filter: (),
+                        filter: filter,
                     },
                 ..
-            }) => Some(score),
+            }) => Some((score, filter)),
             // we have passed all the frecency values on this cursor so we pull from updated at
             Query::Cursor(Cursor {
                 id,
@@ -131,7 +131,7 @@ where
                     CursorVal {
                         sort_type: Frecency,
                         last_val: FrecencyValue::UpdatedAt(updated),
-                        filter: (),
+                        filter,
                     },
             }) => {
                 return Ok(Either::Left(
@@ -145,7 +145,7 @@ where
                                 val: CursorVal {
                                     sort_type: SimpleSortMethod::UpdatedAt,
                                     last_val: updated,
-                                    filter: (),
+                                    filter,
                                 },
                             }),
                             user_id: user,
@@ -165,7 +165,7 @@ where
 
     async fn handle_frecency_cursor(
         &self,
-        #[expect(unused_variables)] from_value: Option<f64>,
+        #[expect(unused_variables)] from_value: Option<(f64, EntityFilterAst)>,
         soup_type: SoupType,
         user: MacroUserIdStr<'static>,
         limit: u16,

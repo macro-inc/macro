@@ -440,7 +440,7 @@ async fn frecency_should_resume_cursor() {
                 val: CursorVal {
                     sort_type: Frecency,
                     last_val: FrecencyValue::FrecencyScore(5.0),
-                    filter: (),
+                    filter: Default::default(),
                 },
             })),
             user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
@@ -479,7 +479,7 @@ async fn frecency_fallback_cursor_should_resume() {
 
     soup.expect_unexpanded_generic_cursor_soup()
         .withf(|params| {
-            assert_matches!(params, SimpleSortRequest { limit: 100, cursor: Query::Cursor(Cursor { id, limit: 100, val: CursorVal { sort_type: SimpleSortMethod::UpdatedAt, last_val, filter: () } }), filters, .. } => {
+            assert_matches!(params, SimpleSortRequest { limit: 100, cursor: Query::Cursor(Cursor { id, limit: 100, val: CursorVal { sort_type: SimpleSortMethod::UpdatedAt, last_val, filter: EntityFilterAst { document_filter: None } } }), filters, .. } => {
                 assert_matches!(filters, Some(SoupFilter::Frecency));
                 let expected_time = <DateTime<Utc>>::default() + Days::new(5);
                 assert_eq!(last_val, &expected_time);
@@ -512,7 +512,7 @@ async fn frecency_fallback_cursor_should_resume() {
                 val: CursorVal {
                     sort_type: Frecency,
                     last_val: FrecencyValue::UpdatedAt(DateTime::default() + Days::new(5)),
-                    filter: (),
+                    filter: Default::default(),
                 },
             })),
             user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),

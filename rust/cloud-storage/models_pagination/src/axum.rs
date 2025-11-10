@@ -1,6 +1,4 @@
-use crate::{
-    Base64SerdeErr, Base64Str, Cursor, CursorVal, CursorWithVal, CursorWithValAndFilter, Sortable,
-};
+use crate::{Base64SerdeErr, Base64Str, Cursor, CursorVal, CursorWithValAndFilter, Sortable};
 use axum::extract::{FromRequestParts, Query};
 use axum::http::{StatusCode, request::Parts};
 use axum::response::IntoResponse;

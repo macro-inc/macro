@@ -237,8 +237,10 @@ pub struct PostSoupRequest {
     params: Params,
 }
 
-type SoupCursor =
-    Either<CursorExtractor<String, SimpleSortMethod, ()>, CursorExtractor<String, Frecency, ()>>;
+type SoupCursor = Either<
+    CursorExtractor<String, SimpleSortMethod, EntityFilterAst>,
+    CursorExtractor<String, Frecency, EntityFilterAst>,
+>;
 
 /// Gets the items the user has access to
 #[utoipa::path(

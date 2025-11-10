@@ -113,9 +113,10 @@ impl ExpandFrame<DocumentLiteral> for DocumentFilters {
 }
 
 /// Describes a bundle of filters that should be applied across different entity types
-#[derive(Default, Debug)]
+#[derive(Default, Debug, Serialize, Deserialize)]
 pub struct EntityFilterAst {
     /// the filters that should be applied to the document entity
+    #[serde(default)]
     pub document_filter: Option<Expr<DocumentLiteral>>,
 }
 
