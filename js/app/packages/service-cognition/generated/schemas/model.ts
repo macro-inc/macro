@@ -7,23 +7,19 @@ import {z} from 'zod';
 export type Model = typeof Model[keyof typeof Model];
 
 export const Model = {
-  "anthropic/claude-sonnet-4": "anthropic/claude-sonnet-4",
+  "claude-haiku-4-5": "claude-haiku-4-5",
+  "claude-sonnet-4-5": "claude-sonnet-4-5",
 } as const;
 
-  /** @deprecated use constant in @core/component/AI instead */
-  const values: [Model, ...Model[]] = [
-  Object.values(Model)[0],
-  ...Object.values(Model).slice(1),
+export const AllModels: Model[] = [
+  "claude-haiku-4-5",
+  "claude-sonnet-4-5"
+] as const;
+const values: [Model, ...Model[]] = [
+Object.values(Model)[0],
+...Object.values(Model).slice(1),
 ];
 
 export const ModelEnum = z.enum(values);
 
-export const PrettyModelName: Record<Model, string> = {
-  "anthropic/claude-sonnet-4": "Claude 4.0 Sonnet",
-} as const;
 
-
-export const AllModels: Model[] = [
-  "anthropic/claude-sonnet-4"
-] as const;
-  
