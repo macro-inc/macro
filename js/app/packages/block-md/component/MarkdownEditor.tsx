@@ -1,4 +1,3 @@
-import { recheckFocus } from '@app/signal/focus';
 import { CommentsProvider } from '@block-md/comments/CommentsProvider';
 import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
 import { markdownBlockErrorSignal } from '@block-md/signal/error';
@@ -667,7 +666,6 @@ export function MarkdownEditor() {
     registerRootEventListener(editor, 'focusin', (e) => {
       e.preventDefault();
       editor.focus();
-      recheckFocus(); // force update global focus signal
     })
   );
 
@@ -1247,7 +1245,6 @@ export function InstructionsMarkdownEditor() {
     registerRootEventListener(editor, 'focusin', (e) => {
       e.preventDefault();
       editor.focus();
-      recheckFocus(); // force update global focus signal
     })
   );
 

@@ -1,4 +1,3 @@
-import { recheckFocus } from '@app/signal/focus';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { NodeAccessoryRenderer } from '@core/component/LexicalMarkdown/component/core/NodeAccessoryRenderer';
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
@@ -335,7 +334,6 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
     registerRootEventListener(editor, 'focusin', (e) => {
       e.preventDefault();
       editor.focus();
-      recheckFocus(); // force update global focus signal
     })
   );
 

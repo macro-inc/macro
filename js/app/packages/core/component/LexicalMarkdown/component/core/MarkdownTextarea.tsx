@@ -1,4 +1,3 @@
-import { recheckFocus } from '@app/signal/focus';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import type { EditorType } from '@lexical-core';
 import type { Item } from '@service-storage/generated/schemas/item';
@@ -129,7 +128,6 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     registerRootEventListener(editor, 'focusin', (e) => {
       e.preventDefault();
       editor.focus();
-      recheckFocus(); // force update global focus signal
     })
   );
 

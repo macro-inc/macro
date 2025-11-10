@@ -18,7 +18,6 @@ import {
   type Setter,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { a } from 'vitest/dist/chunks/suite.d.FvehnV49.js';
 import {
   createNavigationEntityListShortcut,
   createSoupContext,
@@ -216,9 +215,6 @@ function createSplitFocusTracker(props: {
         if (newEvent.type === SplitEvent.ReturnFocus) {
           const id = props.splitManager.activeSplitId();
           if (id) {
-            // focusTimeout = setTimeout(() => {
-            //   focusSplitById(id);
-            // });
             focusSplitById(id);
           }
           return;
@@ -239,7 +235,6 @@ function createSplitFocusTracker(props: {
       if (!element) return;
 
       const parentId = getParentSplitId(element);
-      console.log({ element, parentId });
       if (parentId && element instanceof HTMLElement) {
         lastFocusedChildBySplitId.set(parentId, element);
       }
