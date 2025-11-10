@@ -3064,6 +3064,10 @@ dependencies = [
 [[package]]
 name = "filter_ast"
 version = "0.1.0"
+dependencies = [
+ "recursion",
+ "serde",
+]
 
 [[package]]
 name = "flate2"
@@ -4212,6 +4216,7 @@ name = "item_filters"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "cool_asserts",
  "filter_ast",
  "macro_user_id",
  "non_empty",
@@ -6518,6 +6523,12 @@ dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
 ]
+
+[[package]]
+name = "recursion"
+version = "0.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9dba2197bf7b1d87b4dd460c195f4edeb45a94e82e8054f8d5f317c1f0e93ca1"
 
 [[package]]
 name = "redis"

@@ -1,16 +1,19 @@
 //! This module defines stricter typing for the filters found in lib.
 //! This is used to construct a strictly typed ast for the input filters, allowing consumers to have a logical represenation of the required operations
 
+use crate::{DocumentFilters, EntityFilters};
 use filter_ast::{ExpandFrame, ExpandNode, Expr};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use non_empty::IsEmpty;
+use serde::{Deserialize, Serialize};
 use thiserror::Error;
 use uuid::Uuid;
 
-use crate::{DocumentFilters, EntityFilters};
+#[cfg(test)]
+mod tests;
 
 /// the types of documents we can filter by
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum FileType {
     /// the document is a pdf
     Pdf,
@@ -41,7 +44,7 @@ impl FileType {
 }
 
 /// the literal type that can appear in the item filer ast
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum DocumentLiteral {
     /// this node value filters by [FileType]
     FileType(FileType),

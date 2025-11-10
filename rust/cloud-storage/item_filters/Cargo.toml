@@ -16,3 +16,6 @@ strum = { workspace = true }
 thiserror = { workspace = true }
 utoipa = { workspace = true }
 uuid = { workspace = true }
+
+[dev-dependencies]
+cool_asserts = "2.0.3"

@@ -1,3 +1,6 @@
+use recursion::{Collapsible, Expandable, MappableFrame, PartiallyApplied};
+use serde::{Deserialize, Serialize};
+
 pub trait ExpandNode: Iterator {
     fn expand<U, E>(
         self,
@@ -33,11 +36,11 @@ pub enum ExprFrame<A, B> {
     Literal(B),
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub enum Expr<B> {
-    And(Box<Expr<B>>, Box<Expr<B>>),
-    Or(Box<Expr<B>>, Box<Expr<B>>),
-    Not(Box<Expr<B>>),
+    And(Box<Self>, Box<Self>),
+    Or(Box<Self>, Box<Self>),
+    Not(Box<Self>),
     Literal(B),
 }
 
@@ -62,4 +65,46 @@ impl<B> Expr<B> {
 pub trait ExpandFrame<T> {
     type Err;
     fn expand_ast(input: Self) -> Result<Option<Expr<T>>, Self::Err>;
+}
+
+impl<T, U> MappableFrame for ExprFrame<T, U> {
+    type Frame<X> = ExprFrame<X, U>;
+
+    fn map_frame<A, B>(input: Self::Frame<A>, mut f: impl FnMut(A) -> B) -> Self::Frame<B> {
+        match input {
+            ExprFrame::And(a, b) => ExprFrame::And(f(a), f(b)),
+            ExprFrame::Or(a, b) => ExprFrame::Or(f(a), f(b)),
+            ExprFrame::Not(a) => ExprFrame::Not(f(a)),
+            ExprFrame::Literal(a) => ExprFrame::Literal(a),
+        }
+    }
+}
+
+impl<T> Collapsible for &Expr<T>
+where
+    T: Clone,
+{
+    type FrameToken = ExprFrame<PartiallyApplied, T>;
+
+    fn into_frame(self) -> <Self::FrameToken as MappableFrame>::Frame<Self> {
+        match self {
+            Expr::And(a, b) => ExprFrame::And(a.as_ref(), b.as_ref()),
+            Expr::Or(a, b) => ExprFrame::Or(a.as_ref(), b.as_ref()),
+            Expr::Not(a) => ExprFrame::Not(a.as_ref()),
+            Expr::Literal(a) => ExprFrame::Literal(a.clone()),
+        }
+    }
+}
+
+impl<T> Expandable for Expr<T> {
+    type FrameToken = ExprFrame<PartiallyApplied, T>;
+
+    fn from_frame(val: <Self::FrameToken as MappableFrame>::Frame<Self>) -> Self {
+        match val {
+            ExprFrame::And(a, b) => Expr::And(Box::new(a), Box::new(b)),
+            ExprFrame::Or(a, b) => Expr::Or(Box::new(a), Box::new(b)),
+            ExprFrame::Not(a) => Expr::Not(Box::new(a)),
+            ExprFrame::Literal(a) => Expr::Literal(a),
+        }
+    }
 }
