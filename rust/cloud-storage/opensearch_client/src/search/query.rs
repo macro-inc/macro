@@ -63,8 +63,11 @@ impl QueryKey {
                 Self::Regexp => QueryType::Regexp(RegexpQuery::new(field, &first_part_of_term)),
             };
 
-            let second_term_query =
-                QueryType::WildCard(WildcardQuery::new(field, &format!("*{}*", last_part_of_term.to_lowercase()), true));
+            let second_term_query = QueryType::WildCard(WildcardQuery::new(
+                field,
+                &format!("*{}*", last_part_of_term.to_lowercase()),
+                true,
+            ));
 
             let mut bool_query = QueryType::bool_query();
 
