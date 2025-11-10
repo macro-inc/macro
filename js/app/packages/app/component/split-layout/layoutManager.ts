@@ -65,6 +65,7 @@ export enum SplitEvent {
   Insert,
   Remove,
   ContentChange,
+  ReturnFocus,
 }
 
 export type SplitEventPayload = {
@@ -83,6 +84,7 @@ export type SplitEventPayload = {
     newContent: SplitContent;
     previousContent: SplitContent;
   };
+  [SplitEvent.ReturnFocus]: void;
 };
 
 export type SplitEventWithType =
@@ -90,7 +92,10 @@ export type SplitEventWithType =
   | ({ type: SplitEvent.Remove } & SplitEventPayload[SplitEvent.Remove])
   | ({
       type: SplitEvent.ContentChange;
-    } & SplitEventPayload[SplitEvent.ContentChange]);
+    } & SplitEventPayload[SplitEvent.ContentChange])
+  | ({
+      type: SplitEvent.ReturnFocus;
+    } & SplitEventPayload[SplitEvent.ReturnFocus]);
 
 export type SplitManager = {
   readonly splits: Accessor<ReadonlyArray<SplitState>>;
@@ -139,6 +144,9 @@ export type SplitManager = {
 
   /** Get a reactive string that is the display name of the active split. */
   tabTitle: () => string | undefined;
+
+  /** A function to return focus to the most recent split. */
+  returnFocus: () => void;
 } & UrlCapabilities;
 
 export type SplitHandle = {
@@ -645,5 +653,6 @@ export function createSplitLayout(
     unSpotlightSplit,
     toggleSpotlightSplit,
     tabTitle,
+    returnFocus: () => dispatchEvent(SplitEvent.ReturnFocus, undefined),
   };
 }
