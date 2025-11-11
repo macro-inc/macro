@@ -9,9 +9,7 @@ use crate::{
 };
 
 use crate::SearchOn;
-use opensearch_query_builder::{
-    FieldSort, QueryType, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
-};
+use opensearch_query_builder::{FieldSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson};
 use serde_json::Value;
 
 #[derive(Clone)]
@@ -34,15 +32,12 @@ impl SearchQueryConfig for DocumentSearchConfig {
 
 struct DocumentQueryBuilder {
     inner: SearchQueryBuilder<DocumentSearchConfig>,
-    /// File types to filter by
-    file_types: Vec<String>,
 }
 
 impl DocumentQueryBuilder {
     pub fn new(terms: Vec<String>) -> Self {
         Self {
             inner: SearchQueryBuilder::new(terms),
-            file_types: Vec::new(),
         }
     }
 
@@ -58,28 +53,13 @@ impl DocumentQueryBuilder {
         fn ids_only(ids_only: bool) -> Self;
     }
 
-    pub fn file_types(mut self, file_types: Vec<String>) -> Self {
-        self.file_types = file_types;
-        self
-    }
-
     fn build_search_request(self) -> Result<SearchRequest> {
-        // Build the main bool query containing all terms and any other filters
-        let mut bool_query = self.inner.build_bool_query()?;
-
-        // CUSTOM ATTRIBUTES SECTION
-
-        // If file types are provided, add them to the must query
-        if !self.file_types.is_empty() {
-            bool_query.must(QueryType::terms("file_type", self.file_types));
-        }
-
-        // END CUSTOM ATTRIBUTES SECTION
-
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
         // SearchOn::NameContent is used
-        let search_request = self.inner.build_search_request(bool_query.build())?;
+        let search_request = self
+            .inner
+            .build_search_request(self.inner.build_bool_query()?.build())?;
 
         Ok(search_request)
     }
@@ -114,7 +94,6 @@ pub struct DocumentSearchArgs {
     pub terms: Vec<String>,
     pub user_id: String,
     pub document_ids: Vec<String>,
-    pub file_types: Vec<String>,
     pub page: u32,
     pub page_size: u32,
     pub match_type: String,
@@ -131,7 +110,6 @@ impl DocumentSearchArgs {
             .page(self.page)
             .user_id(&self.user_id)
             .ids(self.document_ids)
-            .file_types(self.file_types)
             .search_on(self.search_on)
             .collapse(self.collapse)
             .ids_only(self.ids_only)

@@ -10,8 +10,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
         .user_id("user123")
         .search_on(SearchOn::Content)
         .collapse(true)
-        .ids(vec!["doc1".to_string(), "doc2".to_string()])
-        .file_types(vec!["pdf".to_string(), "docx".to_string()]);
+        .ids(vec!["doc1".to_string(), "doc2".to_string()]);
 
     let result = builder.build_search_request()?;
 
@@ -31,11 +30,6 @@ fn test_build_search_request() -> anyhow::Result<()> {
                             "content": "test"
                         }
                     },
-                    {
-                        "terms": {
-                            "file_type": ["pdf", "docx"]
-                        }
-                    }
                 ],
                 "should": [
                     {
