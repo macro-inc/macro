@@ -4,7 +4,7 @@ use crate::search::query::Keys;
 
 /// macro open/close tags for highlight matches
 #[derive(Debug, PartialEq)]
-pub enum MacroEm {
+pub(crate) enum MacroEm {
     /// Open tag <macro_em>
     Open,
     /// Close tag </macro_em>
@@ -21,7 +21,7 @@ impl Display for MacroEm {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct Hit<T> {
+pub(crate) struct Hit<T> {
     pub _score: Option<f64>,
     pub _source: T,
     /// Highlights may or may not be present since we could match
@@ -59,30 +59,30 @@ pub(crate) fn parse_highlight_hit(
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct Total {
+pub(crate) struct Total {
     pub value: i64,
     pub relation: String,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct Hits<T> {
+pub(crate) struct Hits<T> {
     pub total: Total,
     pub max_score: Option<f64>,
     pub hits: Vec<Hit<T>>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct Shards {
+pub(crate) struct Shards {
     pub total: i32,
     pub successful: i32,
     pub skipped: i32,
     pub failed: i32,
 }
 
-pub type DefaultSearchResponse<T> = SearchResponse<T>;
+pub(crate) type DefaultSearchResponse<T> = SearchResponse<T>;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct SearchResponse<T> {
+pub(crate) struct SearchResponse<T> {
     pub hits: Hits<T>,
     pub took: i32,
     pub timed_out: bool,
