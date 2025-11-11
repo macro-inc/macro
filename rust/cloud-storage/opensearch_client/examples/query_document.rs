@@ -15,7 +15,6 @@ async fn main() -> anyhow::Result<()> {
             terms: vec!["equation".to_string()],
             user_id: "user".to_string(),
             document_ids: Vec::new(),
-            file_types: Vec::new(),
             page: 0,
             page_size: 10,
             match_type: "partial".to_string(),
