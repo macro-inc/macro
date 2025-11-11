@@ -97,7 +97,7 @@ export function Layout(props: RouteSectionProps) {
     return currentAuth;
   }, isAuthenticated());
 
-  mountGlobalFocusListener(true);
+  mountGlobalFocusListener();
 
   useABTest();
 

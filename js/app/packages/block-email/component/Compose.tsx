@@ -3,7 +3,6 @@ import {
   SplitHeaderBadge,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
-import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
 import { connectEmail } from '@app/signal/emailAuth';
 import { useHasPaidAccess } from '@core/auth';
 import { RecipientSelector } from '@core/component/RecipientSelector';
@@ -111,9 +110,6 @@ export function EmailCompose() {
           ]}
         />
       </SplitHeaderLeft>
-      <SplitToolbarLeft>
-        <div class="h-full items-center flex" p-1></div>
-      </SplitToolbarLeft>
       <div class="relative flex flex-col w-full h-full panel">
         <Switch>
           <Match when={linkError()}>
@@ -150,12 +146,12 @@ export function EmailCompose() {
           </Match>
         </Switch>
         <div
-          class="pt-2 h-full grow w-full overflow-y-auto px-4"
+          class="pt-2 h-full w-full overflow-y-auto px-4 flex flex-col"
           classList={{
             'pointer-events-none opacity-50': Boolean(linkError()),
           }}
         >
-          <div class="macro-message-width mx-auto pb-1 h-full">
+          <div class="macro-message-width mx-auto pb-1 w-full">
             <div class="mb-4 mt-12 h-6 flex items-center justify-between">
               <Show when={link()}>
                 {(link) => (
@@ -254,26 +250,26 @@ export function EmailCompose() {
               disabled={!!linkError()}
             />
           </div>
-        </div>
-        <div
-          class="shrink-0 w-full px-4 pb-2 {linkError()"
-          classList={{
-            'pointer-events-none opacity-50': Boolean(linkError()),
-          }}
-        >
-          <div class="mx-auto w-full macro-message-width">
-            <ComposeEmailInput
-              selectedRecipients={selectedRecipients}
-              ccRecipients={ccRecipients}
-              bccRecipients={bccRecipients}
-              subject={subject}
-              link={link()}
-              inputAttachments={{
-                store: emailInputAttachmentsStore,
-                setStore: setEmailInputAttachmentsStore,
-                key: 'draft',
-              }}
-            />
+          <div
+            class="shrink-0 w-full pb-2 grow"
+            classList={{
+              'pointer-events-none opacity-50': Boolean(linkError()),
+            }}
+          >
+            <div class="mx-auto w-full h-full macro-message-width">
+              <ComposeEmailInput
+                selectedRecipients={selectedRecipients}
+                ccRecipients={ccRecipients}
+                bccRecipients={bccRecipients}
+                subject={subject}
+                link={link()}
+                inputAttachments={{
+                  store: emailInputAttachmentsStore,
+                  setStore: setEmailInputAttachmentsStore,
+                  key: 'draft',
+                }}
+              />
+            </div>
           </div>
         </div>
       </div>

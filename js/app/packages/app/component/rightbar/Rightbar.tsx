@@ -1,4 +1,3 @@
-import { activeElement } from '@app/signal/focus';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useIsAuthenticated } from '@core/auth';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
@@ -51,7 +50,7 @@ import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
 import { useUserId } from '@service-gql/client';
 import { refetchHistory, useHistory } from '@service-storage/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
-import { LexicalEditor } from 'lexical';
+import type { LexicalEditor } from 'lexical';
 import {
   type Accessor,
   createEffect,
