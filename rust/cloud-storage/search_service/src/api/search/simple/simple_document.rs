@@ -110,7 +110,9 @@ pub(in crate::api::search) async fn search_documents(
     } else {
         // If both the project_ids and owners are empty, we want to get the list of everything the has access to but does not own
         // Otherwise, we need a list of all items the user has access to including what they own
-        let should_exclude_owner = filters.project_ids.is_empty() && filters.owners.is_empty();
+        let should_exclude_owner = filters.project_ids.is_empty()
+            && filters.owners.is_empty()
+            && filters.file_types.is_empty();
 
         // No filters are provided, we want to get the list of everything the has access to but does not own
         ctx.dss_client
@@ -133,7 +135,8 @@ pub(in crate::api::search) async fn search_documents(
     // explicitly search over the ids provided in opensearch
     let ids_only = !filters.document_ids.is_empty()
         || !filters.project_ids.is_empty()
-        || !filters.owners.is_empty();
+        || !filters.owners.is_empty()
+        || !filters.file_types.is_empty();
 
     // If project_ids are provided, we need to filter to ids that are within those projects
     // or sub-projects of those projects
@@ -171,13 +174,28 @@ pub(in crate::api::search) async fn search_documents(
         return Ok(Vec::new());
     }
 
+    let document_ids = if !filters.file_types.is_empty() {
+        macro_db_client::items::filter::filter_documents_by_file_types(
+            &ctx.db,
+            &document_ids,
+            &filters.file_types,
+        )
+        .await
+        .map_err(SearchError::InternalError)?
+    } else {
+        document_ids
+    };
+
+    if document_ids.is_empty() && ids_only {
+        return Ok(Vec::new());
+    }
+
     let results = ctx
         .opensearch_client
         .search_documents(DocumentSearchArgs {
             terms,
             user_id: user_id.to_string(),
             document_ids,
-            file_types: filters.file_types,
             page,
             page_size,
             match_type: req.match_type.to_string(),
