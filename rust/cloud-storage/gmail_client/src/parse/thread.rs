@@ -69,23 +69,20 @@ pub async fn map_thread_resource_to_service(
     // get the latest timestamp of incoming messages for thread.
     let latest_inbound_message_ts = service_messages
         .iter()
-        .filter(|msg| is_inbound(msg))
-        .next_back()
+        .rfind(|msg| is_inbound(msg))
         .map(|msg| msg.internal_date_ts)
         .unwrap_or_else(|| None);
 
     // get the latest timestamp of outgoing messages for thread.
     let latest_outbound_message_ts = service_messages
         .iter()
-        .filter(|msg| is_outbound(msg))
-        .next_back()
+        .rfind(|msg| is_outbound(msg))
         .map(|msg| msg.internal_date_ts)
         .unwrap_or_else(|| None);
 
     let latest_non_spam_message_ts = service_messages
         .iter()
-        .filter(|msg| !is_spam_or_trash(msg))
-        .next_back()
+        .rfind(|msg| !is_spam_or_trash(msg))
         .map(|msg| msg.internal_date_ts)
         .unwrap_or_else(|| None);
 

@@ -147,7 +147,6 @@ lambda_runtime = "0.13.0"
 lazy_static = "1.5.0"
 log = "0.4.26"
 mockall = "0.13"
-nanoid = "0.4.0"
 nom = "8"
 openssl = { version = "0.10.71", features = ["vendored"] }
 pdfium-render = { version = "0.8.28" }
