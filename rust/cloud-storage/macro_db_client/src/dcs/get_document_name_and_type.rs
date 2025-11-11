@@ -1,7 +1,6 @@
-use std::str::FromStr;
-
 use model::document::FileType;
 use sqlx::{Pool, Postgres};
+use std::str::FromStr;
 
 #[tracing::instrument(skip(db))]
 pub async fn get_document_name_and_type(
@@ -24,10 +23,10 @@ pub async fn get_document_name_and_type(
         let name: String = row.name;
         let file_type_str: String = row.file_type;
         match FileType::from_str(&file_type_str) {
-            Some(file_type) => Ok((name, file_type)),
-            None => Err(sqlx::Error::ColumnDecode {
+            Ok(file_type) => Ok((name, file_type)),
+            Err(e) => Err(sqlx::Error::ColumnDecode {
                 index: "file_type".to_string(),
-                source: format!("invalid file type {}", file_type_str).into(),
+                source: e.into(),
             }),
         }
     })

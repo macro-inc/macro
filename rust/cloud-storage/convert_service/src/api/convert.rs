@@ -1,4 +1,4 @@
-use std::{fs::File, io::Write, thread, time::Duration};
+use std::{fs::File, io::Write, str::FromStr, thread, time::Duration};
 
 use anyhow::Context;
 use axum::{
@@ -55,7 +55,7 @@ pub async fn handler(
         .split('.')
         .next_back()
         .context("expected key to contain a file type")
-        .and_then(|s| s.try_into())
+        .and_then(|s| FileType::from_str(s).map_err(anyhow::Error::from))
         .map_err(|e| {
             tracing::error!(error=?e, job_id=%job_id, "unable to get file type");
             (
@@ -72,7 +72,7 @@ pub async fn handler(
         .split('.')
         .next_back()
         .context("expected key to contain a file type")
-        .and_then(|s| s.try_into())
+        .and_then(|s| FileType::from_str(s).map_err(anyhow::Error::from))
         .map_err(|e| {
             tracing::error!(error=?e, job_id=%job_id, "unable to get file type");
             (

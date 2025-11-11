@@ -6,7 +6,7 @@ use axum::{
 };
 use macro_share_permissions::user_item_access::update_user_item_access;
 use model::{
-    document::{DocumentBasic, FileType},
+    document::{DocumentBasic, FileType, FileTypeExt},
     response::{ErrorResponse, GenericSuccessResponse, SuccessResponse},
     user::UserContext,
 };
@@ -25,7 +25,9 @@ pub async fn edit_document(
     let share_permission: Option<UpdateSharePermissionRequestV2> = req.share_permission.clone();
     // Overrides the document name cleaned document name (removing file extension)
     // if it was accidentally included
-    let document_name = req.document_name.map(FileType::clean_document_name);
+    let document_name = req
+        .document_name
+        .map(|s| FileType::clean_document_name(&s).unwrap_or(s));
 
     if req.project_id.is_some() && users_access_level != AccessLevel::Owner {
         return Err((

@@ -90,13 +90,14 @@ macro_rules! generate_file_types {
                 }
             }
 
-            // pub fn macro_app_path(&self) -> String {
-            //     match self {
-            //         $(
-            //             FileType::$variant => $app_path.to_string(),
-            //         )*
-            //     }
-            // }
+            /// return the app path for the file type
+            pub fn macro_app_path(&self) -> String {
+                match self {
+                    $(
+                        FileType::$variant => $app_path.to_string(),
+                    )*
+                }
+            }
 
             /// return all possible values as a slice
             pub fn all() -> &'static [FileType] {

@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::{
     api::context::ApiContext,
     model::{
@@ -62,7 +64,7 @@ pub async fn presave_document_handler(
     let file_type: FileType = match document_context
         .file_type
         .as_deref()
-        .and_then(|f| f.try_into().ok())
+        .and_then(|f| FileType::from_str(f).ok())
     {
         Some(file_type) => file_type,
         None => {
