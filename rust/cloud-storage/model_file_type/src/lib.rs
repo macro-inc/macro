@@ -7,7 +7,6 @@ use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::str::FromStr;
 use thiserror::Error;
-use utoipa::ToSchema;
 
 /// Indicates we eoncountered an unknown string value while attempting to construct type T
 #[derive(Debug, Error)]
@@ -45,7 +44,8 @@ macro_rules! generate_file_types {
         ///   - From<FileType> for ContentType - Maps FileType to ContentType
         ///   - ContentType::mime_type() - Gets MIME type for ContentType
         ///
-        #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Copy, Clone, ToSchema)]
+        #[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Copy, Clone)]
+        #[cfg_attr(feature = "utoipa", derive(utoipa::ToSchema))]
         #[serde(rename_all = "lowercase")]
         pub enum FileType {
             $(

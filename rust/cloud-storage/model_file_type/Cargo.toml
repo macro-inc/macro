@@ -4,7 +4,10 @@ name = "model_file_type"
 publish = false
 version = "0.1.0"
 
+[features]
+utoipa = ["dep:utoipa"]
+
 [dependencies]
 serde = { workspace = true }
 thiserror = { workspace = true }
-utoipa = { workspace = true }
+utoipa = { workspace = true, optional = true }
