@@ -1,4 +1,5 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -36,6 +37,7 @@ import {
 } from 'lexical';
 import { createSignal, onMount, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { type FocusableElement, tabbable } from 'tabbable';
 import { sendEmail } from '../signal/email';
 import { handleFileUpload } from '../util/handleFileUpload';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
@@ -71,6 +73,28 @@ export function ComposeEmailInput(props: {
   const [error, setError] = createSignal(false);
   const [errorMsg, setErrorMsg] = createSignal('');
   const [sending, setSending] = createSignal(false);
+
+  const panel = useSplitPanel();
+
+  const focusSibling = (direction: 'next' | 'prev') => {
+    console.log('FOCUS SIBLING!');
+    const panelRef = panel?.panelRef();
+    if (!panelRef) return;
+    const tabbableEls = tabbable(panelRef);
+    const activeEl = document.activeElement;
+    const activeElIndex = tabbableEls.indexOf(activeEl as FocusableElement);
+    if (activeElIndex > -1) {
+      const ndx = activeElIndex + (direction === 'next' ? 1 : -1);
+      if (ndx < 0 || ndx >= tabbableEls.length) return false;
+      const prevEl = tabbableEls[ndx];
+      if (!prevEl) return false;
+      prevEl.focus();
+      return true;
+    } else {
+      tabbableEls.at(-1)?.focus();
+      return true;
+    }
+  };
 
   useUserId();
 
@@ -225,25 +249,14 @@ export function ComposeEmailInput(props: {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class={`macro-message-width relative flex-1 flex flex-col border border-edge px-3 py-2 bg-input`}
+      class="w-full h-full relative flex-1 flex flex-col py-2"
     >
       <Show when={error()}>
         <div class="text-failure-ink text-sm mt-1">{errorMsg()}</div>
       </Show>
       <div class="w-full h-full flex flex-col">
-        <Show when={showFormatRibbon()}>
-          <FormatRibbon
-            state={formatState}
-            inlineFormat={(format: TextFormatType) => {
-              editor()?.dispatchCommand(FORMAT_TEXT_COMMAND, format);
-            }}
-            nodeFormat={(transform: NodeTransformType) => {
-              editor()?.dispatchCommand(NODE_TRANSFORM, transform);
-            }}
-          />
-        </Show>
         <div
-          class="min-h-20 max-h-80 overflow-y-scroll w-full flex flex-col cursor-text"
+          class="min-h-20 grow w-full h-full flex flex-col cursor-text"
           ref={bodyDiv}
           onclick={() => {
             editor()?.focus();
@@ -263,17 +276,23 @@ export function ComposeEmailInput(props: {
             },
           }}
         >
-          <div
-            class={`${!isDragging() && 'hidden'} absolute size-full inset-0`}
-          >
+          <div class={`${!isDragging() && 'hidden'} absolute inset-0`}>
             <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
           </div>
           <MarkdownTextarea
             captureEditor={setEditor}
-            class={`text-sm break-words text-ink ${isDragging() && 'blur'}`}
+            class="text-sm break-words text-ink"
             editable={() => true}
-            placeholder="Send an Email"
+            placeholder="Use `@` to reference files"
             onChange={setContent}
+            onFocusLeaveStart={(e) => {
+              e.preventDefault();
+              focusSibling('prev');
+            }}
+            onFocusLeaveEnd={(e) => {
+              e.preventDefault();
+              focusSibling('next');
+            }}
             // onDocumentMention={(item) => {
             //   makeAttachmentPublic(item.id);
             // }}
@@ -283,7 +302,18 @@ export function ComposeEmailInput(props: {
             // setFormatState={setFormatState}
           />
         </div>
-        <div class="flex flex-row items-center space-x-2">
+        <Show when={showFormatRibbon()}>
+          <FormatRibbon
+            state={formatState}
+            inlineFormat={(format: TextFormatType) => {
+              editor()?.dispatchCommand(FORMAT_TEXT_COMMAND, format);
+            }}
+            nodeFormat={(transform: NodeTransformType) => {
+              editor()?.dispatchCommand(NODE_TRANSFORM, transform);
+            }}
+          />
+        </Show>
+        <div class="flex flex-row items-center space-x-2 p-1 border-edge-muted border-t">
           <div class="relative" ref={attachButtonRef}>
             <IconButton
               theme="clear"

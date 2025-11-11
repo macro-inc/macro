@@ -273,7 +273,6 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
         }}
       >
         <div
-          class="h-full"
           ref={mountRef}
           contentEditable={props.editable()}
         ></div>
