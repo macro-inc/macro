@@ -1,4 +1,6 @@
-import { URL_PARAMS } from '@block-pdf/signal/location';
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
+import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import type { BlockName } from '@core/block';
 import { BozzyBracket } from '@core/component/BozzyBracket';
 import type { ChannelsContext } from '@core/component/ChannelsProvider';
@@ -15,6 +17,7 @@ import {
 import { runCommand } from '@core/hotkey/hotkeys';
 import { pressedKeys } from '@core/hotkey/state';
 import type { ValidHotkey } from '@core/hotkey/types';
+import type { BlockOrchestrator } from '@core/orchestrator';
 import { type ChannelWithParticipants, idToDisplayName } from '@core/user';
 import PushPin from '@phosphor-icons/core/regular/push-pin.svg?component-solid';
 import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
@@ -38,6 +41,7 @@ import {
   type Setter,
   Switch,
 } from 'solid-js';
+import { useGlobalBlockOrchestrator } from '../GlobalAppState';
 import { useSplitLayout } from '../split-layout/layout';
 import { EmailCommandItem } from './EmailKonsoleItem';
 import {
@@ -206,35 +210,39 @@ export type CommandItemCard = (
 ) &
   CommandItemBase;
 
-/**
- * Builds a URL with search snippet parameters for navigating to specific locations within documents
- * @param baseHref - The base URL for the document/item
- * @param snippet - Search snippet containing location and file type information
- * @param searchTerm - The search term used to find the snippet
- * @returns URL with appropriate query parameters for the file type
- */
-function buildSnippetUrl(
-  baseHref: string,
+async function gotoSnippetLocation(
+  orchestrator: BlockOrchestrator,
+  id: string,
   snippet: SearchSnippet,
   searchTerm: string
-): string {
-  const params = new URLSearchParams();
-  const fileType = snippet.fileType;
-  const matchIndex = snippet.matchIndex ? snippet.matchIndex.toString() : '0';
-
-  if (fileType === 'docx' || fileType === 'pdf') {
-    params.set(URL_PARAMS.searchPage, snippet.locationId);
-    params.set(URL_PARAMS.searchMatchNumOnPage, matchIndex);
-    // HACK: searchTerm() works well enough for exact matching, but it would be better
-    // to have the match term explicitly stored for fuzzy matching
-    params.set(URL_PARAMS.searchTerm, searchTerm);
-  } else if (fileType === 'chat' || fileType === 'channel') {
-    params.set('message_id', snippet.locationId);
-  } else if (fileType === 'md') {
-    params.set('node_id', snippet.locationId);
+) {
+  const handle = await orchestrator.getBlockHandle(id);
+  if (!handle) return;
+  switch (snippet.fileType) {
+    case 'pdf':
+    case 'docx':
+      handle.goToLocationFromParams({
+        [PDF_PARAMS.searchPage]: snippet.locationId,
+        [PDF_PARAMS.searchMatchNumOnPage]: snippet.matchIndex ?? 0,
+        [PDF_PARAMS.searchTerm]: searchTerm,
+      });
+      break;
+    case 'chat':
+      handle.goToLocationFromParams({
+        message_id: snippet.locationId,
+      });
+      break;
+    case 'channel':
+      handle.goToLocationFromParams({
+        [CHANNEL_PARAMS.message]: snippet.locationId,
+      });
+      break;
+    case 'md':
+      handle.goToLocationFromParams({
+        [MD_PARAMS.nodeId]: snippet.locationId,
+      });
+      break;
   }
-
-  return baseHref + '?' + params.toString();
 }
 
 // Actions on an item from the command palette
@@ -245,20 +253,24 @@ export function useCommandItemAction(args: {
 }) {
   const { setCommandScopeCommands } = args;
   const { replaceSplit, insertSplit } = useSplitLayout();
+  const blockOrchestrator = useGlobalBlockOrchestrator();
 
   return function itemAction(
     item: CommandItemCard | undefined,
     action: ItemAction
   ) {
+    console.log('ITEM ACTION', item, action);
     if (!item) return;
     const blockName = getCommandItemBlockName(item);
-    const id = item.snippet
-      ? buildSnippetUrl(item.data.id, item.snippet, rawQuery())
-      : item.data.id;
+    const id = item.data.id;
     const split = action === 'new-split' ? insertSplit : replaceSplit;
+    console.log('GO TO LOCATION', id);
 
     if (blockName) {
       split({ type: blockName, id });
+      if (item.snippet) {
+        gotoSnippetLocation(blockOrchestrator, id, item.snippet, rawQuery());
+      }
     } else {
       switch (item.type) {
         case 'loadmore': {
