@@ -73,7 +73,7 @@ jobs:
         uses: ./.github/actions/setup-reqs-web
       - name: Test
         working-directory: js/app
-        run: bun run test
+        run: bunx vitest
 
   cycles:
     name: Cycles Import Check
