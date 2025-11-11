@@ -7,15 +7,23 @@ import { ColorSwatch } from './ColorSwatch';
 
 const [ displayType, setDisplayType ] = createSignal('hex');
 
-function setColor(colorValue: ThemeReactiveColor, colorString: string){
-  if(colorString && colorString.length < 6 && !validateColor(colorString)){
-    console.log(`${colorValue} not valid color`);
-    return;
+function setColor(colorValue: ThemeReactiveColor, colorString: string) {
+  if (!colorString || colorString.trim() === '' || colorString.length < 6 || !validateColor(colorString)) {return}
+  try {
+    let oklch = getOklch(colorString);
+    const l = oklch.l;
+    const c = oklch.c;
+    const h = oklch.h;
+
+    console.log(`oklch(${l} ${c} ${h}deg)`);
+
+    colorValue.l[1](l);
+    colorValue.c[1](c);
+    colorValue.h[1](h);
   }
-  let oklch = getOklch(colorString);
-  colorValue.l[1](oklch.l);
-  colorValue.c[1](oklch.c);
-  colorValue.h[1](oklch.h);
+  catch (error) {
+    console.log(`Error processing color "${colorString}":`, error);
+  }
 }
 
 export function ThemeEditorAdvanced() {
@@ -29,6 +37,7 @@ export function ThemeEditorAdvanced() {
           font-size: 14px;
           display: block;
           height: 100%;
+          position: relative;
         }
         .advanced-theme-host *::selection {
           background-color: var(--a0);
@@ -54,11 +63,12 @@ export function ThemeEditorAdvanced() {
           background-color: var(--b0);
         }
         .advanced-theme-color {
-          grid-template-columns: min-content min-content 1fr min-content;
+          grid-template-columns: min-content 1fr min-content;
           align-items: center;
+          height: 41px;
           display: grid;
-          padding: 10px 20px;
-          gap: 20px;
+          gap: 1px;
+          background-color: var(--b4);
         }
         .advanced-theme-color div {
           white-space: nowrap;
@@ -88,12 +98,7 @@ export function ThemeEditorAdvanced() {
           border: none;
           outline: none;
           display: block;
-        }
-        .input-group {
-          display: grid;
-          grid-template-columns: repeat(5, min-content);
-          width: min
-          gap: 2px;
+          width: 100%;
         }
       `}</style>
 
@@ -103,17 +108,25 @@ export function ThemeEditorAdvanced() {
             {([colorKey, colorValue]) => (
               <div class="advanced-theme-color-wrapper">
                 <div class="advanced-theme-color">
-                  <ColorSwatch
-                    color={`oklch(${colorValue.l[0]()} ${colorValue.c[0]()} ${colorValue.h[0]()}deg)`}
-                    width={'100px'}
-                  />
-                  <input
-                    value={convertOklchTo(`oklch(${colorValue.l[0]()} ${colorValue.c[0]()} ${colorValue.h[0]()}deg)`, displayType())}
-                    onInput={e => {setColor(colorValue, e.target.value)}}
-                    type="text"
-                  />
-                  <hr />
-                  <div>--{colorKey}</div>
+
+                  <div style="padding-left: 20px; padding-right: 20px; box-sizing: border-box; display: grid; width: 100%; height: 100%; align-items: center; background-color: var(--b0);">
+                    <ColorSwatch
+                      color={`oklch(${colorValue.l[0]()} ${colorValue.c[0]()} ${colorValue.h[0]()}deg)`}
+                      width={'100px'}
+                    />
+                  </div>
+
+                  <div style="padding-left: 20px; padding-right: 20px; box-sizing: border-box; display: grid; width: 100%; height: 100%; align-items: center; background-color: var(--b0);">
+                    <input
+                      value={convertOklchTo(`oklch(${colorValue.l[0]()} ${colorValue.c[0]()} ${colorValue.h[0]()}deg)`, displayType())}
+                      onInput={e => {setColor(colorValue, e.target.value)}}
+                      type="text"
+                    />
+                  </div>
+
+                  <div style="padding-left: 20px; padding-right: 20px; box-sizing: border-box; display: grid; width: 100%; height: 100%; align-items: center; background-color: var(--b0);">
+                    --{colorKey}
+                  </div>
                 </div>
               </div>
             )}

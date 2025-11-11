@@ -29,21 +29,36 @@ export function validateColor(color: string): boolean {
 export function getOklch(cssColor: string) {
   const color = new Color(cssColor);
   const convert = color.to('oklch');
-  return { l: convert.coords[0], c: convert.coords[1], h: convert.coords[2] };
+  console.log(convert.oklch);
+
+  // Handle undefined values properly - pure white/black/gray have undefined chroma and hue
+  let l = convert.coords[0] !== undefined ? convert.coords[0] : 0;
+  let c = convert.coords[1] !== undefined ? convert.coords[1] : 0;
+  let h = convert.coords[2] !== undefined ? convert.coords[2] : 0;
+
+  let returnColor = { l: l, c: c, h: h }
+  console.log(returnColor);
+
+  return returnColor;
 }
 
-export function convertOklchTo(oklch: string, type: string): string {
-  const color = new Color(oklch);
+export function convertOklchTo(oklch: string, type: string){
+  console.log(oklch);
 
-  switch (type.toLowerCase()) {
-    case 'hex': return color.to('srgb').toString({ format: 'hex' });
-    case 'rgb': return color.to('srgb').toString({ format: 'rgb' });
-    case 'rec2020': return color.to('rec2020').toString();
-    case 'oklab': return color.to('oklab').toString();
-    case 'srgb': return color.to('srgb').toString();
-    case 'hsl': return color.to('hsl').toString();
-    default: return color.to('srgb').toString();
-    case 'p3': return color.to('p3').toString();
-    case 'oklch': return color.toString();
+  try {
+    const color = new Color(oklch);
+
+    switch(type.toLowerCase()){
+      case 'hex': return color.to('srgb').toString({ format: 'hex' });
+      case 'rgb': return color.to('srgb').toString({ format: 'rgb' });
+      case 'oklab': return color.to('oklab').toString();
+      case 'hsl': return color.to('hsl').toString();
+      case 'oklch': return color.toString();
+      default: return color.to('srgb').toString({ format: 'hex' });
+    }
+  }
+  catch(error){
+    console.error('Error converting color:', error);
+    return '#000000';
   }
 }
