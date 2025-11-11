@@ -1,12 +1,11 @@
 use axum::{
-    extract::{Extension, Path, State},
+    extract::{Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
 };
 use thiserror::Error;
 
 use crate::api::context::ApiContext;
-use model::user::UserContext;
 use models_properties::{EntityReference, EntityType};
 use properties_db_client::{
     entity_properties::delete as entity_properties_delete, error::PropertiesDatabaseError,
@@ -44,7 +43,7 @@ impl IntoResponse for DeleteEntityErr {
 /// Delete all properties for an entity
 #[utoipa::path(
     delete,
-    path = "/properties/entities/{entity_type}/{entity_id}",
+    path = "/internal/properties/entities/{entity_type}/{entity_id}",
     params(
         ("entity_type" = EntityType, Path, description = "Entity type (user, document, channel, project, thread)"),
         ("entity_id" = String, Path, description = "Entity ID")
@@ -54,15 +53,12 @@ impl IntoResponse for DeleteEntityErr {
         (status = 404, description = "Entity not found"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Properties"
+    tag = "Internal"
 )]
-#[tracing::instrument(skip(context, _user_context))]
-#[allow(dead_code)]
+#[tracing::instrument(skip(context))]
 pub async fn delete_entity(
-    Path(entity_type): Path<EntityType>,
-    Path(entity_id): Path<String>,
+    Path((entity_type, entity_id)): Path<(EntityType, String)>,
     State(context): State<ApiContext>,
-    Extension(_user_context): Extension<UserContext>,
 ) -> Result<StatusCode, DeleteEntityErr> {
     tracing::info!(
         entity_type = %entity_type,
