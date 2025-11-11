@@ -29,7 +29,7 @@ pub(crate) struct Hit<T> {
     pub highlight: Option<HashMap<String, Vec<String>>>,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Default)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Default, Clone)]
 pub struct Highlight {
     /// The highlight name match if present
     #[serde(skip_serializing_if = "Option::is_none")]
