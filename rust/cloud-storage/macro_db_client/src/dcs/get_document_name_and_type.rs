@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use model::document::FileType;
 use sqlx::{Pool, Postgres};
 

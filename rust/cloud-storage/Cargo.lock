@@ -7216,6 +7216,7 @@ dependencies = [
  "aws_lambda_events",
  "lambda_runtime",
  "macro_entrypoint",
+ "model_file_type",
  "openssl",
  "sqs_client",
  "tokio",
