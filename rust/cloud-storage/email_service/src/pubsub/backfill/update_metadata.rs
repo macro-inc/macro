@@ -1,4 +1,4 @@
-use crate::pubsub::backfill::job_complete::check_for_job_completion;
+use crate::pubsub::backfill::increment_counters::incr_completed_threads;
 use crate::pubsub::context::PubSubContext;
 use models_email::email::service::backfill::{BackfillPubsubMessage, UpdateMetadataPayload};
 use models_email::email::service::link;
@@ -94,7 +94,7 @@ pub async fn update_thread_metadata(
             })
         })?;
 
-    check_for_job_completion(&ctx, &link.macro_id, data.job_id).await?;
+    incr_completed_threads(ctx, &link.macro_id, data.job_id).await?;
 
     Ok(())
 }

@@ -1,12 +1,10 @@
-use crate::pubsub::backfill::job_complete::check_for_job_completion;
+use crate::pubsub::backfill::increment_counters;
+use crate::pubsub::backfill::increment_counters::incr_completed_threads;
 use crate::pubsub::context::PubSubContext;
-use models_email::email::service::backfill::UpdateMetadataPayload;
 use models_email::email::service::backfill::{
-    BackfillJobStatus, BackfillMessagePayload, BackfillMessageStatus, BackfillOperation,
-    BackfillPubsubMessage, BackfillThreadStatus,
+    BackfillJobStatus, BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage,
 };
 use models_email::email::service::pubsub::{DetailedError, ProcessingError};
-use models_email::service::pubsub::FailureReason;
 use sqs_worker::cleanup_message;
 use uuid::Uuid;
 
@@ -51,13 +49,13 @@ pub async fn handle_non_retryable_error(
                 );
             }
         }
-        BackfillOperation::BackfillThread(p) => {
+        BackfillOperation::BackfillThread(_) => {
             handle_thread_failure(ctx, data.link_id, data.job_id).await;
         }
         BackfillOperation::BackfillMessage(p) => {
-            handle_message_failure(ctx, data, p, &e.reason.to_string()).await?;
+            handle_message_failure(ctx, data, p).await?;
         }
-        BackfillOperation::UpdateThreadMetadata(p) => {
+        BackfillOperation::UpdateThreadMetadata(_) => {
             handle_thread_failure(ctx, data.link_id, data.job_id).await;
         }
     }
@@ -67,11 +65,10 @@ pub async fn handle_non_retryable_error(
 }
 
 /// Handles retryable errors by updating status to InProgress and adding the error message
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument]
 pub async fn handle_retryable_error(
-    ctx: &PubSubContext,
     data: &BackfillPubsubMessage,
-    e: &DetailedError,
+    _e: &DetailedError,
 ) -> anyhow::Result<()> {
     match &data.backfill_operation {
         BackfillOperation::Init => {
@@ -85,23 +82,6 @@ pub async fn handle_retryable_error(
                 thread_id = %p.thread_provider_id,
                 "Retryable error backfilling thread"
             );
-
-            // update error_message of backfill_thread but keep status as InProgress
-            if let Err(db_err) = email_db_client::backfill::thread::update_backfill_thread_status(
-                &ctx.db,
-                data.job_id,
-                &p.thread_provider_id,
-                BackfillThreadStatus::InProgress,
-                Some(e.reason.to_string()),
-            )
-            .await
-            {
-                tracing::error!(
-                    error = %db_err,
-                    thread_id = %p.thread_provider_id,
-                    "Failed to update backfill thread error message"
-                );
-            }
         }
         BackfillOperation::BackfillMessage(p) => {
             tracing::debug!(
@@ -109,48 +89,12 @@ pub async fn handle_retryable_error(
                 message_id = %p.message_provider_id,
                 "Retryable error backfilling message"
             );
-
-            // update error message of backfill_message but keep status as InProgress
-            if let Err(db_err) = email_db_client::backfill::message::update_backfill_message_status(
-                &ctx.db,
-                data.job_id,
-                &p.thread_provider_id,
-                &p.message_provider_id,
-                BackfillMessageStatus::InProgress,
-                Some(e.reason.to_string()),
-            )
-            .await
-            {
-                tracing::error!(
-                    error = %db_err,
-                    thread_id = %p.thread_provider_id,
-                    message_id = %p.message_provider_id,
-                    "Failed to update backfill message error message"
-                );
-            }
         }
         BackfillOperation::UpdateThreadMetadata(p) => {
             tracing::debug!(
                 thread_id = %p.thread_provider_id,
                 "Retryable error backfilling thread"
             );
-
-            // update error_message of backfill_thread but keep status as InProgress
-            if let Err(db_err) = email_db_client::backfill::thread::update_backfill_thread_status(
-                &ctx.db,
-                data.job_id,
-                &p.thread_provider_id,
-                BackfillThreadStatus::InProgress,
-                Some(e.reason.to_string()),
-            )
-            .await
-            {
-                tracing::error!(
-                    error = %db_err,
-                    thread_id = %p.thread_provider_id,
-                    "Failed to update backfill thread error message"
-                );
-            }
         }
     }
     Ok(())
@@ -177,7 +121,7 @@ async fn handle_thread_failure(ctx: &PubSubContext, link_id: Uuid, job_id: Uuid)
         }
     };
 
-    if let Err(err) = check_for_job_completion(&ctx, &link.macro_id, job_id).await {
+    if let Err(err) = incr_completed_threads(ctx, &link.macro_id, job_id).await {
         tracing::error!(
             error = %err,
             job_id = job_id.to_string(),
@@ -191,72 +135,6 @@ pub async fn handle_message_failure(
     ctx: &PubSubContext,
     data: &BackfillPubsubMessage,
     p: &BackfillMessagePayload,
-    error_reason: &str,
 ) -> Result<(), ProcessingError> {
-    // Update status of backfill_message entry to failed
-    if let Err(db_err) = email_db_client::backfill::message::update_backfill_message_status(
-        &ctx.db,
-        data.job_id,
-        &p.thread_provider_id,
-        &p.message_provider_id,
-        BackfillMessageStatus::Failed,
-        Some(error_reason.to_string()),
-    )
-    .await
-    {
-        tracing::error!(
-            error = %db_err,
-            "Failed to update backfill message status to Failed"
-        );
-    }
-
-    // Update thread-level counters
-    let thread_counters = match email_db_client::backfill::thread::record_message_failure_in_thread(
-        &ctx.db,
-        data.job_id,
-        &p.thread_provider_id,
-    )
-    .await
-    {
-        Ok(counters) => counters,
-        Err(db_err) => {
-            tracing::error!(
-                error = %db_err,
-                "Failed to record backfill message failure in thread"
-            );
-            return Ok(());
-        }
-    };
-
-    // If this is the last message to be processed in the thread, we can move on to updating the
-    // thread metadata.
-    let thread_backfill_complete =
-        thread_counters.messages_processed_count >= thread_counters.messages_retrieved_count;
-
-    if thread_backfill_complete {
-        let new_payload = UpdateMetadataPayload {
-            thread_provider_id: p.thread_provider_id.clone(),
-            thread_db_id: p.thread_db_id,
-        };
-
-        let ps_message = BackfillPubsubMessage {
-            link_id: Uuid::default(), // UpdateThreadMetadata doesn't use this, and we don't have it
-            job_id: data.job_id,
-            backfill_operation: BackfillOperation::UpdateThreadMetadata(new_payload),
-        };
-
-        if let Err(e) = ctx
-            .sqs_client
-            .enqueue_email_backfill_message(ps_message)
-            .await
-        {
-            tracing::error!(
-                error = %e,
-                "Failed to enqueue metadata message for thread_id {}",
-                p.thread_provider_id
-            );
-        }
-    }
-
-    Ok(())
+    increment_counters::incr_completed_messages(ctx, data.link_id, data.job_id, p).await
 }
