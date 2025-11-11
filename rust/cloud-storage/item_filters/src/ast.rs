@@ -5,7 +5,6 @@ use crate::{
     ChatFilters, DocumentFilters, EntityFilters, ProjectFilters,
     ast::{
         chat::{ChatLiteral, ChatRole},
-        document::FileType,
         project::ProjectLiteral,
     },
 };
@@ -39,7 +38,7 @@ trait ParseFromStr: Sized {
 pub enum ExpandErr {
     /// unknown file type
     #[error(transparent)]
-    FileTypeErr(#[from] UnknownValue<FileType>),
+    FileTypeErr(#[from] model_file_type::ValueError<model_file_type::FileType>),
     /// unknown chat type
     #[error(transparent)]
     ChatRoleErr(#[from] UnknownValue<ChatRole>),

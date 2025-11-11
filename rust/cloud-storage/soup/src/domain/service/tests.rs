@@ -486,7 +486,26 @@ async fn frecency_fallback_cursor_should_resume() {
 
     soup.expect_unexpanded_generic_cursor_soup()
         .withf(|params| {
-            assert_matches!(params, SimpleSortRequest { limit: 100, cursor: Query::Cursor(Cursor { id, limit: 100, val: CursorVal { sort_type: SimpleSortMethod::UpdatedAt, last_val, filter: EntityFilterAst { document_filter: None } } }), filters, .. } => {
+            assert_matches!(
+                params,
+                SimpleSortRequest {
+                    limit: 100,
+                    cursor: Query::Cursor(Cursor {
+                        id,
+                        limit: 100,
+                        val: CursorVal {
+                            sort_type: SimpleSortMethod::UpdatedAt,
+                            last_val,
+                            filter: EntityFilterAst {
+                                document_filter: None,
+                                project_filter: None,
+                                chat_filter: None
+                            }
+                        }
+                    }),
+                    filters,
+                    ..
+                } => {
                 assert_matches!(filters, Some(SoupFilter::Frecency));
                 let expected_time = <DateTime<Utc>>::default() + Days::new(5);
                 assert_eq!(last_val, &expected_time);
