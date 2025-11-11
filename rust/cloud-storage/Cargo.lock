@@ -4219,6 +4219,7 @@ dependencies = [
  "cool_asserts",
  "filter_ast",
  "macro_user_id",
+ "model_file_type",
  "non_empty",
  "schemars",
  "serde",

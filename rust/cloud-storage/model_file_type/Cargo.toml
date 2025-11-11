@@ -1,9 +1,10 @@
 [package]
-name = "model_file_type"
-version = "0.1.0"
 edition = "2024"
+name = "model_file_type"
+publish = false
+version = "0.1.0"
 
 [dependencies]
 serde = { workspace = true }
-utoipa = { workspace = true }
 thiserror = { workspace = true }
+utoipa = { workspace = true }

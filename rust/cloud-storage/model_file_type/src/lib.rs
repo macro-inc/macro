@@ -3,6 +3,7 @@
 //! This crate is used to define an enumeration of all the [FileType] and [ContentType] that are compatible with Macro
 
 use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 use std::marker::PhantomData;
 use std::str::FromStr;
 use thiserror::Error;
@@ -12,6 +13,21 @@ use utoipa::ToSchema;
 #[derive(Debug, Error)]
 #[error("{0} is not a supported {t}", t = std::any::type_name::<T>())]
 pub struct ValueError<T>(String, PhantomData<T>);
+
+struct Lowercase<'a>(Cow<'a, str>);
+
+impl<'a> Lowercase<'a> {
+    fn new(s: &'a str) -> Self {
+        Self(match s.chars().any(|c| c.is_ascii_uppercase()) {
+            true => {
+                let mut string = s.to_string();
+                string.make_ascii_lowercase();
+                Cow::Owned(string)
+            }
+            false => Cow::Borrowed(s),
+        })
+    }
+}
 
 macro_rules! generate_file_types {
     ($(($variant:ident, $str_name:expr, $mime_type:expr, $app_path:expr)),* $(,)?) => {
@@ -42,17 +58,14 @@ macro_rules! generate_file_types {
             type Err = ValueError<Self>;
             fn from_str(file_type: &str) -> Result<Self, Self::Err> {
 
+                let lowercase = Lowercase::new(file_type.trim_start_matches('.')); // remove leading dot
 
-                let cleaned = file_type
-                    .trim_start_matches('.') // remove leading dot
-                    .to_ascii_lowercase();   // normalize to lowercase
-
-                match cleaned.as_str() {
+                match lowercase.0.as_ref() {
                     $(
                         $str_name => Ok(FileType::$variant),
                     )*
                     _ => {
-                        Err(ValueError(cleaned, PhantomData))
+                        Err(ValueError(lowercase.0.into_owned(), PhantomData))
                     }
                 }
             }
