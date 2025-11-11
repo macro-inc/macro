@@ -2,14 +2,10 @@ import { isInBlock } from '@core/block';
 import { blockLoroManagerSignal } from '@core/signal/load';
 import { createEmptyHistoryState, registerHistory } from '@lexical/history';
 import { registerList } from '@lexical/list';
-import { CODE, registerMarkdownShortcuts } from '@lexical/markdown';
+import { CODE } from '@lexical/markdown';
 import { registerPlainText } from '@lexical/plain-text';
 import { registerRichText } from '@lexical/rich-text';
-import {
-  ALL_TRANSFORMERS,
-  type EditorType,
-  RegisteredNodesByType,
-} from '@lexical-core';
+import { ALL_TRANSFORMERS, type EditorType } from '@lexical-core';
 import { HR } from '@lexical-core/transformers/transformers';
 import type { EditorState, LexicalEditor, UpdateListener } from 'lexical';
 import type { Setter } from 'solid-js';
