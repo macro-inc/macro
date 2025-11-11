@@ -47,9 +47,10 @@ impl Client {
         request: I,
     ) -> Pin<Box<dyn Stream<Item = Result<O, AnthropicError>> + Send>>
     where
-        I: Serialize,
+        I: Serialize + std::fmt::Debug,
         O: DeserializeOwned + Send + Sync + 'static,
     {
+        tracing::debug!("{:#?}", request);
         let event_source = self
             .http_client
             .post(format!("{}{}", self.config.api_base, path))

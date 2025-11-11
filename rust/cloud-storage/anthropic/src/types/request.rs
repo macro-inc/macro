@@ -23,13 +23,10 @@ pub enum RequestContentKind {
         // TODO?
         citations: Vec<serde_json::Value>,
     },
-    Base64 {
-        data: String,
-        /// one of image/jpeg | image/png | image/gif | image/webp
-        media_type: String,
-    },
-    Url {
-        url: String,
+    Image {
+        #[serde(skip_serializing_if = "Option::is_none")]
+        cache_control: Option<CacheControl>,
+        source: ImageSource,
     },
     ToolUse {
         id: String,
@@ -45,6 +42,21 @@ pub enum RequestContentKind {
         cache_control: Option<CacheControl>,
         #[serde(skip_serializing_if = "Option::is_none")]
         is_err: Option<bool>,
+    },
+}
+
+// https://docs.claude.com/en/api/messages#image
+#[derive(Serialize, Deserialize, Clone, Debug, PartialEq)]
+#[serde(tag = "type", rename_all = "snake_case")]
+pub enum ImageSource {
+    #[serde(rename = "base64")]
+    Base64 {
+        data: String,
+        media_type: String,
+    },
+
+    Url {
+        url: String,
     },
 }
 
