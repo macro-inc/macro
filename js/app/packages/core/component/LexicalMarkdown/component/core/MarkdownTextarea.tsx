@@ -272,10 +272,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
           e.stopPropagation();
         }}
       >
-        <div
-          ref={mountRef}
-          contentEditable={props.editable()}
-        ></div>
+        <div ref={mountRef} contentEditable={props.editable()} />
         <DecoratorRenderer editor={editor} />
         <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
         <Show when={showPlaceholder()}>
