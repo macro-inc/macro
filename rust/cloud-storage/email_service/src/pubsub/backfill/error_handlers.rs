@@ -65,7 +65,7 @@ pub async fn handle_non_retryable_error(
 }
 
 /// Handles retryable errors by updating status to InProgress and adding the error message
-#[tracing::instrument]
+#[tracing::instrument(err)]
 pub async fn handle_retryable_error(
     data: &BackfillPubsubMessage,
     _e: &DetailedError,
