@@ -44,16 +44,16 @@ done <<< "$CHANGED_FILES"
 AFFECTED_SERVICES=()
 
 # Get services from the config file
-SERVICES=$(jq -r '.services | keys[]' ../.github/services-config.json)
+SERVICES=$(jq -r '.services | keys[]' ../../.github/services-config.json)
 
 for service in $SERVICES; do
     SERVICE_AFFECTED=false
     
     # Get the source paths for this service from config
-    SOURCE_PATHS=$(jq -r --arg svc "$service" '.services[$svc].source_paths[]? // empty' ../.github/services-config.json)
+    SOURCE_PATHS=$(jq -r --arg svc "$service" '.services[$svc].source_paths[]? // empty' ../../.github/services-config.json)
     
     # Check stack path changes
-    STACK_PATH=$(jq -r --arg svc "$service" '.services[$svc].stack_path // empty' ../.github/services-config.json)
+    STACK_PATH=$(jq -r --arg svc "$service" '.services[$svc].stack_path // empty' ../../.github/services-config.json)
     if [ -n "$STACK_PATH" ]; then
         STACK_PATH_PATTERN="${STACK_PATH%/**}"
         if echo "$CHANGED_FILES" | grep -q "^$STACK_PATH_PATTERN"; then
