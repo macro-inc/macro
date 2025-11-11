@@ -3,11 +3,16 @@ use opensearch::{
     http::{StatusCode, response::Response},
 };
 
-#[derive(thiserror::Error, Debug, serde::Serialize)]
+#[derive(thiserror::Error, Debug, serde::Serialize, PartialEq)]
 #[serde(tag = "type")]
 pub enum OpensearchClientError {
     #[error("error deserializing response body. method: {method:?} details: {details}")]
     DeserializationFailed {
+        details: String,
+        method: Option<String>,
+    },
+    #[error("unable to serialize into json. method: {method:?} details: {details}")]
+    SerializationFailed {
         details: String,
         method: Option<String>,
     },
@@ -19,6 +24,9 @@ pub enum OpensearchClientError {
 
     #[error("validation failed: {details}")]
     ValidationFailed { details: String },
+
+    #[error("no terms provided")]
+    NoTermsProvided,
 
     #[error("an unknown error occurred. method: {method:?} details: {details}")]
     Unknown {
