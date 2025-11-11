@@ -24,6 +24,7 @@ import {
   mentionsPlugin,
   NODE_TRANSFORM,
   type NodeTransformType,
+  registerRootEventListener,
   type SelectionData,
   tabIndentationPlugin,
   tableCellResizerPlugin,
@@ -57,6 +58,7 @@ import {
   COMMAND_PRIORITY_HIGH,
   FORMAT_TEXT_COMMAND,
   KEY_ENTER_COMMAND,
+  LexicalEditor,
   type TextFormatType,
 } from 'lexical';
 import {
@@ -222,6 +224,7 @@ export type ConsumableChatMarkdownAreaProps = {
   portalScope?: PortalScope;
   onFocusLeaveStart?: (e: KeyboardEvent) => void;
   onFocusLeaveEnd?: (e: KeyboardEvent) => void;
+  captureEditor?: (editor: LexicalEditor) => void;
 };
 
 function MarkdownArea(
@@ -260,6 +263,7 @@ function MarkdownArea(
 
   createEffect(
     on(props.mountRef, (ref) => {
+      console.log('EFFECT ON REF', ref);
       if (!ref) return;
       editor.setRootElement(ref);
       editor.setEditable(true);
@@ -273,6 +277,10 @@ function MarkdownArea(
       }
     })
   );
+
+  if (props.captureEditor) {
+    props.captureEditor(editor);
+  }
 
   createEffect(() => {
     props.onChange?.(props.markdownState());
@@ -382,6 +390,14 @@ function MarkdownArea(
       )
     );
   }
+
+  // better focus in handling. preserves selection on regain focus!
+  autoRegister(
+    registerRootEventListener(editor, 'focusin', (e) => {
+      e.preventDefault();
+      editor.focus();
+    })
+  );
 
   onCleanup(() => {
     cleanup();

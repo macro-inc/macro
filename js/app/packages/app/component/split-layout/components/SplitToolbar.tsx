@@ -41,7 +41,7 @@ export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {
     <div
       class="relative w-full flex items-center justify-between shrink-0"
       classList={{
-        'h-10 px-1': hasContent(),
+        'h-10 px-1 border-b border-edge-muted/50': hasContent(),
       }}
       data-split-toolbar
       ref={props.ref}

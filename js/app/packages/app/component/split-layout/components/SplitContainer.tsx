@@ -7,6 +7,7 @@ import {
   createMemo,
   createSignal,
   on,
+  onCleanup,
   type ParentProps,
   type Setter,
   Show,
@@ -96,6 +97,7 @@ export function SplitlikeContainer(
 ) {
   const [panel, setPanel] = createSignal<HTMLDivElement | null>(null);
   const panelSize = createElementSize(panel);
+
   return (
     <SplitModalProvider>
       <SplitDrawerGroup panelSize={panelSize} contentOffsetTop={() => 0}>

@@ -107,7 +107,6 @@ export const NumberValue: Component<NumberValueProps> = (props) => {
         ref={(el) => {
           setTimeout(() => {
             el.focus();
-            el.setSelectionRange(el.value.length, el.value.length);
           }, 0);
         }}
         type="number"

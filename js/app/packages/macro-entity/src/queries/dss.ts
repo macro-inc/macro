@@ -1,7 +1,6 @@
+import { deleteItem } from '@core/component/FileList/itemOperations';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
-import { invalidateUserQuota } from '@service-auth/userQuota';
 import type { ItemType } from '@service-storage/client';
-import type { SuccessResponse } from '@service-storage/generated/schemas/successResponse';
 import { hashKey, useInfiniteQuery, useMutation } from '@tanstack/solid-query';
 import { SERVER_HOSTS } from 'core/constant/servers';
 import { platformFetch } from 'core/util/platformFetch';
@@ -229,57 +228,11 @@ export function createChatsInfiniteQuery(
   }));
 }
 
-const deleteDocument = async (id: string, apiToken: string) => {
-  if (!apiToken) throw new Error('No API token provided');
-  const Authorization = `Bearer ${apiToken}`;
-
-  const url = new URL(
-    `${SERVER_HOSTS['document-storage-service']}/documents/${id}`
-  );
-  const response = await platformFetch(url, {
-    method: 'DELETE',
-    headers: { Authorization },
-  });
-  invalidateUserQuota();
-  if (!response.ok)
-    throw new Error('Failed to delete document', { cause: response });
-
-  const result: SuccessResponse = await response.json();
-  return result;
-};
-
-const deleteChat = async (id: string, apiToken: string) => {
-  if (!apiToken) throw new Error('No API token provided');
-  const Authorization = `Bearer ${apiToken}`;
-
-  const url = new URL(`${SERVER_HOSTS['cognition-service']}/chats/${id}`);
-  const response = await platformFetch(url, {
-    method: 'DELETE',
-    headers: { Authorization },
-  });
-  invalidateUserQuota();
-  if (!response.ok)
-    throw new Error('Failed to delete chat', { cause: response });
-
-  return {
-    data: {
-      success: true,
-    },
-    error: false,
-  } satisfies SuccessResponse;
-};
-
 export function createDeleteDssItemMutation() {
-  const authQuery = createApiTokenQuery();
   return useMutation(() => ({
     mutationFn: async ({ id, type }: EntityData) => {
-      if (type !== 'chat' && type !== 'document')
-        throw new Error(`Unsupported entity type: ${type} for id ${id}`);
-
-      const apiToken = await authQuery.promise;
-      return type === 'chat'
-        ? deleteChat(id, apiToken)
-        : deleteDocument(id, apiToken);
+      const success = await deleteItem({ id, itemType: type });
+      return { success };
     },
     onMutate: async ({ id }: EntityData) => {
       await queryClient.cancelQueries({
@@ -300,7 +253,7 @@ export function createDeleteDssItemMutation() {
       );
     },
     onSettled: (data, error, entity) => {
-      if (data?.data.success === false || error)
+      if (data?.success === false || error)
         console.error(`Failed to delete dss item ${entity}`, data, error);
 
       queryClient.invalidateQueries({
@@ -320,9 +273,6 @@ export function createRenameDssEntityMutation() {
       entity: EntityData & { name: string };
       newName: string;
     }) => {
-      if (type !== 'chat' && type !== 'document' && type !== 'project')
-        throw new Error(`Unsupported entity type: ${type} for id ${id}`);
-
       const success = await itemOperations.renameItem({
         itemType: type as ItemType,
         id,
@@ -330,11 +280,7 @@ export function createRenameDssEntityMutation() {
         newName,
       });
 
-      if (!success) {
-        throw new Error(`Failed to rename ${type} with id ${id}`);
-      }
-
-      return { success: true };
+      return { success };
     },
     onMutate: async ({
       entity: { id },
@@ -363,7 +309,8 @@ export function createRenameDssEntityMutation() {
       );
     },
     onSettled: (data, error, { entity: { id } }) => {
-      if (error) console.error(`Failed to rename dss item ${id}`, data, error);
+      if (data?.success === false || error)
+        console.error(`Failed to rename dss item ${id}`, data, error);
 
       queryClient.invalidateQueries({
         queryKey: queryKeys.dss({ infinite: true }),
@@ -382,9 +329,6 @@ export function createMoveToProjectDssEntityMutation() {
       entity: EntityData & { name: string };
       project: { id: string; name: string };
     }) => {
-      if (type !== 'chat' && type !== 'document' && type !== 'project')
-        throw new Error(`Unsupported entity type: ${type} for id ${id}`);
-
       const success = await itemOperations.moveToFolder({
         itemType: type as 'document' | 'chat' | 'project',
         id: id,
@@ -393,11 +337,7 @@ export function createMoveToProjectDssEntityMutation() {
         folderName: projectName,
       });
 
-      if (!success) {
-        throw new Error(`Failed to move ${type} with id ${id}`);
-      }
-
-      return { success: true };
+      return { success };
     },
     onMutate: async ({
       entity: { id },
@@ -426,7 +366,8 @@ export function createMoveToProjectDssEntityMutation() {
       );
     },
     onSettled: (data, error, { entity: { id } }) => {
-      if (error) console.error(`Failed to move dss item ${id}`, data, error);
+      if (data?.success === false || error)
+        console.error(`Failed to move dss item ${id}`, data, error);
 
       queryClient.invalidateQueries({
         queryKey: queryKeys.dss({ infinite: true }),

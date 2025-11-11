@@ -177,3 +177,23 @@ export function registerMutationListener(
     }
   });
 }
+
+/**
+ * Wrapper on registerRootListener for nicer ergo on adding a single event
+ * listener to the root div of a lexical editor.
+ */
+export function registerRootEventListener<K extends keyof HTMLElementEventMap>(
+  editor: LexicalEditor,
+  type: K,
+  listener: (event: HTMLElementEventMap[K]) => void,
+  options?: boolean | AddEventListenerOptions
+) {
+  return editor.registerRootListener((root, prevRoot) => {
+    if (prevRoot) {
+      prevRoot.removeEventListener(type, listener, options);
+    }
+    if (root) {
+      root.addEventListener(type, listener, options);
+    }
+  });
+}

@@ -101,27 +101,26 @@ export const TextValue: Component<TextValueProps> = (props) => {
             supportsInline()
               ? 'hover:bg-hover cursor-pointer bg-transparent text-ink'
               : 'bg-transparent text-ink-muted cursor-default'
-          } inline-block max-w-full break-words`}
+          } block max-w-full break-words`}
           title={displayValue}
         >
-          <span class="block truncate max-w-full">{displayValue}</span>
+          <span class="block max-w-full">{displayValue}</span>
         </button>
       }
     >
-      <input
+      <textarea
         ref={(el) => {
           setTimeout(() => {
             el.focus();
             el.setSelectionRange(el.value.length, el.value.length);
           }, 0);
         }}
-        type="text"
         value={editor.inputValue()}
         onInput={(e) => editor.setInputValue(e.currentTarget.value)}
         onBlur={editor.save}
         onKeyDown={handleKeyDown}
         disabled={editor.isSaving()}
-        class="w-full text-left text-ink text-xs px-2 py-1 border border-edge bg-transparent focus:outline-none focus:border-accent"
+        class="w-full field-sizing-content resize-none text-left text-ink text-xs px-2 py-1 border border-edge bg-transparent focus:outline-none focus:border-accent"
       />
     </Show>
   );

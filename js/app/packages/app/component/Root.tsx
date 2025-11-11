@@ -1,3 +1,4 @@
+import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { useEmailLinksStatus } from '@app/signal/emailAuth';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
@@ -56,7 +57,6 @@ import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
 import { useMobileEffect, useMobileNavigate } from './settings/Mobile';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
-import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -274,8 +274,6 @@ export function Root() {
 
   clearBodyInlineStyleColor();
 
-  clearBodyInlineStyleColor();
-
   createEffect(() => {
     const isAuth = isAuthenticated();
 
@@ -328,6 +326,7 @@ export function Root() {
           <ConfiguredGlobalAppStateProvider>
             <ChannelsContextProvider>
               <Title>{tabTitle()}</Title>
+              <MacroJump />
               <Suspense fallback={''}>
                 <IsomorphicRouter
                   transformUrl={transformShortIdInUrlPathname}
@@ -346,7 +345,6 @@ export function Root() {
               <Show when={ENABLE_WEBSOCKET_DEBUGGER}>
                 <WebsocketDebugger />
               </Show>
-              <MacroJump />
             </ChannelsContextProvider>
           </ConfiguredGlobalAppStateProvider>
         </EntityProvider>

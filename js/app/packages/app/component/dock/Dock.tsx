@@ -17,7 +17,7 @@ import {
   useSettingsState,
 } from '@core/constant/SettingsState';
 import { runCommand } from '@core/hotkey/hotkeys';
-import { activeScopeStack, hotkeyScopeTree } from '@core/hotkey/state';
+import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
@@ -49,9 +49,9 @@ export function Dock() {
   });
   // This method of opening the correct help drawer is disgusting, but it works and doesn't require changing anything else.
   const activeSoupDrawerCommand = () => {
-    const activeScope = activeScopeStack().at(-1);
-    if (!activeScope) return undefined;
-    let activeScopeNode = hotkeyScopeTree.get(activeScope);
+    const currentActiveScope = activeScope();
+    if (!currentActiveScope) return undefined;
+    let activeScopeNode = hotkeyScopeTree.get(currentActiveScope);
     if (!activeScopeNode) return undefined;
     if (activeScopeNode?.type !== 'dom') return;
     const dom = activeScopeNode.element;
@@ -101,17 +101,13 @@ export function Dock() {
             }}
             onClick={() => setDebugOpen((p) => !p)}
           >
-            <h3 class="right-full bottom-[14ch] absolute bg-ink px-1 py-px whitespace-nowrap -rotate-90 origin-bottom-right">
-              Active Scopes
+            <h3 class="right-full bottom-[7ch] absolute bg-ink px-1 py-px whitespace-nowrap -rotate-90 origin-bottom-right">
+              Debug
             </h3>
             <ol class="flex flex-col bg-ink/50 px-[1ch] py-[1lh] list-decimal list-inside">
-              <For each={activeScopeStack()}>
-                {(scope) => (
                   <li class="whitespace-nowrap list-item">
-                    <span class="bg-ink px-1 py-px">{scope}</span>
+                    <span class="bg-ink px-1 py-px">{activeScope()}</span>
                   </li>
-                )}
-              </For>
             </ol>
           </div>
         </Show>
@@ -176,11 +172,6 @@ export function Dock() {
             }}
             class="h-full aspect-square"
             data-settings-button
-            // need both onClick and onDeepClick for activation both keyboard and click
-            onClick={() => {
-              setSettingsOpen(true);
-            }}
-            // need both onClick and onDeepClick for activation both keyboard and click
             onDeepClick={() => {
               setSettingsOpen(true);
             }}

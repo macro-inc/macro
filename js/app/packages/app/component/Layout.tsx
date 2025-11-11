@@ -1,4 +1,4 @@
-import { setActiveElement } from '@app/signal/focus';
+import { mountGlobalFocusListener } from '@app/signal/focus';
 import { useIsAuthenticated } from '@core/auth';
 import { Resize } from '@core/component/Resize';
 import { useABTest } from '@core/constant/ABTest';
@@ -97,19 +97,7 @@ export function Layout(props: RouteSectionProps) {
     return currentAuth;
   }, isAuthenticated());
 
-  onMount(() => {
-    const handleFocusChange = () => {
-      setActiveElement(document.activeElement);
-    };
-
-    document.addEventListener('focusin', handleFocusChange);
-    document.addEventListener('focusout', handleFocusChange);
-
-    onCleanup(() => {
-      document.removeEventListener('focusin', handleFocusChange);
-      document.removeEventListener('focusout', handleFocusChange);
-    });
-  });
+  mountGlobalFocusListener();
 
   useABTest();
 

@@ -14,7 +14,7 @@ import {
   MODIFIER_LIST_NON_MAC,
 } from './constants';
 import {
-  activeScopeStack,
+  activeScope,
   hotkeyScopeTree,
   hotkeysAwaitingKeyUp,
   hotkeyTokenMap,
@@ -22,6 +22,7 @@ import {
   setExecutedTokens,
   setHotkeyTokenMap,
   setPressedKeys,
+  setActiveScope,
 } from './state';
 import type { HotkeyToken } from './tokens';
 import {
@@ -40,7 +41,6 @@ import {
   getScopeId,
   normalizeEventKeyPress,
   prettyPrintHotkeyString,
-  pushActiveScope,
   registerScope,
   removeScope,
 } from './utils';
@@ -305,7 +305,7 @@ export function useHotkeyDOMScope(
 
     const scopeNode = hotkeyScopeTree.get(scopeId);
     if (scopeNode && !scopeActivatedByFocusIn) {
-      pushActiveScope(scopeId);
+      setActiveScope(scopeId);
       if (e.currentTarget instanceof Element) {
         repairScopeBranch(scopeNode, e.currentTarget);
       }
@@ -384,7 +384,7 @@ export function attachGlobalDOMScope(el: Element) {
     });
 
     if (!scopeActivatedByFocusIn) {
-      pushActiveScope('global');
+      setActiveScope('global');
     }
     scopeActivatedByFocusIn = false;
   };
@@ -485,7 +485,7 @@ export function useHotKeyRoot() {
 
   const checkHotKeys = (e: KeyboardEvent) => {
     const scopeTree = hotkeyScopeTree;
-    const currentScopeId = activeScopeStack().at(-1);
+    const currentScopeId = activeScope();
     const currentPressedKeys = pressedKeys();
     if (currentPressedKeys.size === 0) {
       return;
@@ -540,7 +540,7 @@ export function useHotKeyRoot() {
           const newScope = hotkeyScopeTree.get(command.activateCommandScopeId);
           if (newScope) {
             setPressedKeys(new Set<string>());
-            pushActiveScope(newScope.id);
+            setActiveScope(newScope.id);
             if (!transitionOrCommandFound) {
               setExecutedTokens((prev) =>
                 prev.includes(command.hotkeyToken ?? '')
@@ -604,7 +604,7 @@ export function runCommand({
   if (activateCommandScopeId) {
     const newScope = hotkeyScopeTree.get(activateCommandScopeId);
     if (newScope) {
-      pushActiveScope(newScope.id);
+      setActiveScope(newScope.id);
     }
   }
 }
@@ -618,7 +618,7 @@ export function runCommandByToken(token: HotkeyToken) {
     if (command.activateCommandScopeId) {
       const newScope = hotkeyScopeTree.get(command.activateCommandScopeId);
       if (newScope) {
-        pushActiveScope(newScope.id);
+        setActiveScope(newScope.id);
       }
     }
   }

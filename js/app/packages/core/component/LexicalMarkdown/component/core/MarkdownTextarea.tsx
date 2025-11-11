@@ -32,6 +32,7 @@ import {
   type ItemMention,
   keyboardFocusPlugin,
   mentionsPlugin,
+  registerRootEventListener,
   type SelectionData,
   selectionDataPlugin,
   tabIndentationPlugin,
@@ -121,6 +122,14 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
       setEditorStateFromMarkdown(editor, props.initialValue);
     }
   });
+
+  // better focus in handling. preserves selection on regain focus!
+  autoRegister(
+    registerRootEventListener(editor, 'focusin', (e) => {
+      e.preventDefault();
+      editor.focus();
+    })
+  );
 
   createEffect(() => {
     editor.setEditable(props.editable());
@@ -263,11 +272,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
           e.stopPropagation();
         }}
       >
-        <div
-          class="h-full"
-          ref={mountRef}
-          contentEditable={props.editable()}
-        ></div>
+        <div ref={mountRef} contentEditable={props.editable()} />
         <DecoratorRenderer editor={editor} />
         <NodeAccessoryRenderer editor={editor} store={accessoryStore} />
         <Show when={showPlaceholder()}>

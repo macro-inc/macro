@@ -146,7 +146,11 @@ import { debounce, throttle } from '@solid-primitives/scheduled';
 import { useSearchParams } from '@solidjs/router';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { normalizeEnterPlugin } from 'core/component/LexicalMarkdown/plugins/normalize-enter/';
-import { lazyRegister } from 'core/component/LexicalMarkdown/plugins/shared/utils';
+import {
+  autoRegister,
+  lazyRegister,
+  registerRootEventListener,
+} from 'core/component/LexicalMarkdown/plugins/shared/utils';
 import { createMethodRegistration } from 'core/orchestrator';
 import {
   $getRoot,
@@ -775,6 +779,14 @@ export function MarkdownEditor() {
     });
   });
 
+  // better focus in handling. preserves selection on regain focus!
+  autoRegister(
+    registerRootEventListener(editor, 'focusin', (e) => {
+      e.preventDefault();
+      editor.focus(undefined, {defaultSelection: 'rootStart'});
+    })
+  );
+
   const additionalCleanups: Array<() => void> = [];
 
   onCleanup(() => {
@@ -1349,6 +1361,14 @@ export function InstructionsMarkdownEditor() {
       })
     );
   };
+
+  // better focus in handling. preserves selection on regain focus!
+  autoRegister(
+    registerRootEventListener(editor, 'focusin', (e) => {
+      e.preventDefault();
+      editor.focus();
+    })
+  );
 
   const [fileArrayBuffer, setFileArrayBuffer] = createSignal<ArrayBuffer>();
   createEffect(() => {

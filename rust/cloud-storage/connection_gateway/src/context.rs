@@ -1,6 +1,10 @@
 use crate::config::Config;
 use axum::extract::FromRef;
-use frecency::{domain::services::EventIngestorImpl, outbound::postgres::FrecencyPgStorage};
+use frecency::{
+    domain::services::EventIngestorImpl,
+    inbound::polling_aggregator::FrecencyAggregatorWorkerHandle,
+    outbound::postgres::FrecencyPgStorage,
+};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use redis::{RedisError, aio::MultiplexedConnection};
@@ -29,6 +33,7 @@ pub struct AppState {
     pub config: Arc<Config>,
     pub jwt_args: JwtValidationArgs,
     pub internal_auth_key: LocalOrRemoteSecret<InternalApiSecretKey>,
+    pub frecency_worker: Arc<FrecencyAggregatorWorkerHandle>,
 }
 
 impl AsRef<ApiContext> for AppState {
