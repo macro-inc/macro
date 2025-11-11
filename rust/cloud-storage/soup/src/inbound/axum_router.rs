@@ -9,7 +9,10 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
-use item_filters::EntityFilters;
+use item_filters::{
+    EntityFilters,
+    ast::{EntityFilterAst, ExpandErr},
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
@@ -89,7 +92,7 @@ where
     async fn handle(
         &self,
         macro_user_id: MacroUserIdStr<'static>,
-        #[expect(unused_variables)] PostSoupRequest { filters, params }: PostSoupRequest,
+        PostSoupRequest { filters, params }: PostSoupRequest,
         cursor: SoupCursor,
     ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr> {
         let create_fallback = move || {
@@ -130,6 +133,7 @@ where
                 limit: params.limit.unwrap_or(20),
                 cursor,
                 user: macro_user_id,
+                filters: EntityFilterAst::new_from_filters(filters)?,
             })
             .await?;
 
@@ -171,8 +175,12 @@ impl SoupApiItem {
 }
 
 #[derive(Debug, Error)]
-#[error("An internal server error has occurred")]
-pub struct SoupHandlerErr(#[from] SoupErr);
+pub enum SoupHandlerErr {
+    #[error("An internal server error has occurred")]
+    Internal(#[from] SoupErr),
+    #[error("Invalid filter arguments provided")]
+    ExpandErr(#[from] ExpandErr),
+}
 
 impl IntoResponse for SoupHandlerErr {
     fn into_response(self) -> axum::response::Response {
@@ -229,8 +237,10 @@ pub struct PostSoupRequest {
     params: Params,
 }
 
-type SoupCursor =
-    Either<CursorExtractor<String, SimpleSortMethod>, CursorExtractor<String, Frecency>>;
+type SoupCursor = Either<
+    CursorExtractor<String, SimpleSortMethod, EntityFilterAst>,
+    CursorExtractor<String, Frecency, EntityFilterAst>,
+>;
 
 /// Gets the items the user has access to
 #[utoipa::path(

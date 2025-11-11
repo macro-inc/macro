@@ -8,7 +8,7 @@ pub async fn get_all_user_notifications(
     db: &sqlx::PgPool,
     user_id: &str,
     limit: u32,
-    cursor: Query<Uuid, CreatedAt>,
+    cursor: Query<Uuid, CreatedAt, ()>,
 ) -> anyhow::Result<Vec<RawUserNotification>> {
     let query_limit = limit as i64;
     let (cursor_id, cursor_timestamp) = cursor.vals();
@@ -60,7 +60,7 @@ pub async fn get_all_user_notifications_by_event_item_ids(
     user_id: &str,
     event_item_id: &[impl ToString + std::fmt::Debug],
     limit: u32,
-    cursor: Query<Uuid, CreatedAt>,
+    cursor: Query<Uuid, CreatedAt, ()>,
 ) -> anyhow::Result<Vec<RawUserNotification>> {
     let query_limit = limit as i64;
     let (cursor_id, cursor_timestamp) = cursor.vals();
@@ -139,7 +139,8 @@ mod tests {
                         .last()
                         .unwrap()
                         .created_at
-                        .unwrap_or(DateTime::UNIX_EPOCH)
+                        .unwrap_or(DateTime::UNIX_EPOCH),
+                    filter: ()
                 }
             })
             .type_erase()
@@ -178,7 +179,8 @@ mod tests {
                         .last()
                         .unwrap()
                         .created_at
-                        .unwrap_or(DateTime::UNIX_EPOCH)
+                        .unwrap_or(DateTime::UNIX_EPOCH),
+                    filter: ()
                 }
             })
             .type_erase()
