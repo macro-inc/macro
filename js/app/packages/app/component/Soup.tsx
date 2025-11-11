@@ -139,7 +139,7 @@ const ConditionalViewTab: ParentComponent<{
   );
 };
 
-const UltimateView: Component<{ view: ViewId }> = (props) => {
+const ViewWithState: Component<{ view: ViewId }> = (props) => {
   const { getSelectedViewStore: viewData } =
     useSplitPanelOrThrow().unifiedListContext;
   const searchText = createMemo<string>(() => viewData().searchText ?? '');
@@ -412,7 +412,7 @@ export function Soup() {
               />
             </SplitHeaderLeft>
             <For each={Object.keys(viewsData)}>
-              {(viewId) => <UltimateView view={viewId} />}
+              {(viewId) => <ViewWithState view={viewId} />}
             </For>
           </Tabs>
         </SplitPanelContext.Provider>
