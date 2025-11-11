@@ -15,7 +15,7 @@ uuid = { workspace = true }
 [dependencies]
 anyhow = { workspace = true }
 opensearch = { version = "2.3.0" }
-opensearch_query_builder = { version = "0.0.5", default-features = false }
+opensearch_query_builder = { version = "0.1.0", default-features = false }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
