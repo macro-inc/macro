@@ -1,8 +1,10 @@
-import { themes, currentThemeId, setCurrentThemeId, setIsThemeSaved, userThemes, setUserThemes } from '../signals/themeSignals';
+import { themes, currentThemeId, setCurrentThemeId, setIsThemeSaved, userThemes, setUserThemes, themeShouldMatchSystem, systemMode, lightModeTheme, darkModeTheme } from '../signals/themeSignals';
 import type { ThemeV1, ThemeV1Tokens } from '../types/themeTypes';
 import { themeReactive } from '../signals/themeReactive';
 import { setHtmlColor } from '../signals/themeSignals';
-import { batch } from 'solid-js';
+import { batch, createEffect, on } from 'solid-js';
+import { DEFAULT_DARK_THEME } from '../constants';
+import { toast } from '@core/component/Toast/Toast';
 
 export function exportTheme(){
   let id = currentThemeId();
@@ -10,11 +12,19 @@ export function exportTheme(){
   navigator.clipboard.writeText(theme);
 }
 
+export function systemThemeEffect() {
+  createEffect(on([themeShouldMatchSystem, systemMode, darkModeTheme, lightModeTheme], () => {
+    if (themeShouldMatchSystem()) {
+      applyTheme(systemMode() === 'dark' ? darkModeTheme() : lightModeTheme());
+    }
+  }, {defer: true}))
+}
+
 export function applyTheme(id: string): void {
   let theme = themes().find((t) => t.id === id);
   if (!theme) {
     console.error(`theme not found: ${id}`);
-    theme = themes().find((t) => t.id === 'Macro Dark')!;
+    theme = themes().find((t) => t.id === DEFAULT_DARK_THEME)!;
   }
   setCurrentThemeId(theme.id);
 
@@ -89,4 +99,17 @@ export function deleteTheme(id: string): void {
   setUserThemes(userThemes().filter((theme) => theme.id !== id));
   setIsThemeSaved(false);
   setCurrentThemeId('');
+}
+
+/** Checks if the theme contrast is too low, and if so, applies a readable theme. This is to prevent malicious actors sending "Theme Viruses" which make a user's theme unusable. */
+export function ensureMinimalThemeContrast() {
+  const spec = themes().find((t) => t.id === currentThemeId())?.tokens;
+  if (!spec) return;
+  // Check if the contrast is too low, so that users can't get stuck with an unreadable theme
+  const lowContrastTheme =
+    Math.abs((spec.c0.l) - (spec.b0.l)) < 0.2;
+  if (lowContrastTheme) {
+    applyTheme(DEFAULT_DARK_THEME);
+    toast.alert('Tried to load a theme with low contrast, applying a readable theme.');
+  }
 }
