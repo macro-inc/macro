@@ -9,4 +9,5 @@ export type SendBuilder = Parameters<
 export type BlockChatSpec = {
   setQuote: (quote: string) => Promise<void>;
   sendMessage: (request: SendBuilder) => Promise<void>;
+  goToLocationFromParams: (params: Record<string, any>) => Promise<void>;
 };
