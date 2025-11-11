@@ -184,7 +184,7 @@ export class PropertiesService extends pulumi.ComponentResource {
                   Name: 'datadog',
                   Host: 'http-intake.logs.us5.datadoghq.com',
                   apikey: DATADOG_API_KEY,
-                  dd_service: `properties-service`,
+                  dd_service: `properties-service-${stack}`,
                   dd_source: 'fargate',
                   dd_tags: `project:properties-service, env:${stack}`,
                   provider: 'ecs',
