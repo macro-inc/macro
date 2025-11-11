@@ -18,7 +18,6 @@ import { SplitModalProvider } from './SplitModalContext';
 import { SplitToolbar } from './SplitToolbar';
 import './splitContainer.css';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import { useSplitLayout } from '../layout';
 
 function EdgeDecor(props: { isActive: boolean }) {
   return (
