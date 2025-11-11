@@ -1,2 +1,3 @@
 .direnv/*
 .envrc
+**/.env
