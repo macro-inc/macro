@@ -118,6 +118,7 @@ import {
   type SortOptions,
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_NAMES,
+  ViewConfigBase,
 } from './ViewConfig';
 
 const sortOptions = [
@@ -298,7 +299,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const sortTypeSignal = createSignal(
     view?.sort?.sortBy ?? defaultSortOptions.sortBy
   );
-  const [sortType] = sortTypeSignal;
+  const [sortType, setSortType] = sortTypeSignal;
 
   // sync view store from local signals
   createEffect(() => {
@@ -375,6 +376,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     setProjectFilter(
       view?.filters?.projectFilter ?? defaultFilterOptions.projectFilter
     );
+    setSortType(view?.sort.sortBy ?? defaultSortOptions.sortBy);
   });
 
   const searchText = createMemo(() => props.searchText?.trim() ?? '');
@@ -877,11 +879,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const isViewConfigChanged = createMemo(() => {
     if (!view) return false;
 
-    const configChanges = view.initialConfig;
-    if (configChanges == null || configChanges === '') return false;
+    const initialConfigStr = view.initialConfig;
+    if (initialConfigStr == null || initialConfigStr === '') return false;
 
     try {
-      const initialConfigObj = JSON.parse(configChanges);
+      const initialConfigObj = JSON.parse(initialConfigStr);
       const currentConfigObj = currentViewConfigBase();
 
       if (!currentConfigObj) return false;
@@ -898,6 +900,40 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const hasRefinementsFromBase = createMemo(() => {
     return isViewConfigChanged() || validSearchTerms() || validSearchFilters();
   });
+
+  const onClickSaveViewConfigChanges = () => {
+    if (!props.viewId) return;
+
+    saveViewMutation.mutate({
+      id: props.viewId,
+      name: view!.view,
+      config: currentViewConfigBase()!,
+    });
+    // only for default views
+    if (VIEWCONFIG_DEFAULTS_NAMES.includes(props.viewId as any)) {
+      // Reset initialConfigSignal to current config after save
+      const currentConfig = stringifiedCurrentViewConfigBase();
+      if (currentConfig !== null && currentConfig !== undefined) {
+        setViewDataStore(props.viewId, 'initialConfig', currentConfig);
+      }
+    }
+  };
+
+  const onClickResetViewConfigChanges = () => {
+    const viewId = props.viewId;
+    if (!viewId) return;
+
+    const initialConfigStr = view!.initialConfig;
+    if (initialConfigStr == null || initialConfigStr === '') return;
+
+    const initialConfigObj = JSON.parse(initialConfigStr) as ViewConfigBase;
+
+    batch(() => {
+      setViewDataStore(viewId, 'filters', initialConfigObj.filters);
+      setViewDataStore(viewId, 'sort', initialConfigObj.sort);
+      setViewDataStore(viewId, 'display', initialConfigObj.display);
+    });
+  };
 
   onMount(() => {
     if (props.viewId && view) {
@@ -921,28 +957,18 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               <Button
                 size="SM"
                 classList={{
+                  '!border-ink/25 !text-ink !bg-panel hover:!text-ink ml-1.5 font-normal': true,
+                }}
+                onClick={onClickResetViewConfigChanges}
+              >
+                CLEAR
+              </Button>
+              <Button
+                size="SM"
+                classList={{
                   '!border-ink/25 !text-ink !bg-panel hover:!text-ink mx-1.5 font-normal': true,
                 }}
-                onClick={() => {
-                  if (!props.viewId) return;
-                  saveViewMutation.mutate({
-                    id: props.viewId,
-                    name: view!.view,
-                    config: currentViewConfigBase()!,
-                  });
-                  // only for default views
-                  if (VIEWCONFIG_DEFAULTS_NAMES.includes(props.viewId as any)) {
-                    // Reset initialConfigSignal to current config after save
-                    const currentConfig = stringifiedCurrentViewConfigBase();
-                    if (currentConfig !== null && currentConfig !== undefined) {
-                      setViewDataStore(
-                        props.viewId,
-                        'initialConfig',
-                        currentConfig
-                      );
-                    }
-                  }
-                }}
+                onClick={onClickSaveViewConfigChanges}
               >
                 SAVE CHANGES
               </Button>
