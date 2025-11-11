@@ -1,0 +1,12 @@
+.mask-anim {
+  mask-image: linear-gradient(0deg, transparent 30%, black 50%);
+  mask-size: 100% 0;
+  transition: mask-size 0.5s, opacity 0.1s ease;
+  mask-repeat: no-repeat;
+  opacity: 0;
+}
+
+.mask-anim.active {
+  mask-size: 100% 100%;
+  opacity: 0.65;
+}

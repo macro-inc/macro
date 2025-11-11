@@ -7,7 +7,6 @@ import {
   createMemo,
   createSignal,
   on,
-  onCleanup,
   type ParentProps,
   type Setter,
   Show,
@@ -17,6 +16,23 @@ import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitModalProvider } from './SplitModalContext';
 import { SplitToolbar } from './SplitToolbar';
+import './splitContainer.css';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { useSplitLayout } from '../layout';
+
+function EdgeDecor(props: { isActive: boolean }) {
+  return (
+    <div
+      class="absolute inset-0 border border-accent opacity-50 pointer-events-none mask-anim"
+      classList={{ active: props.isActive }}
+      style={{
+        'clip-path': cornerClip('0.5rem', 0, 0, 0),
+      }}
+    >
+      <div class="size-2 bg-accent [clip-path:polygon(0%_0%,100%_0%,0%_100%)]"></div>
+    </div>
+  );
+}
 
 export function SplitContainer(
   props: ParentProps<{ id: string; ref: (elem: HTMLDivElement) => void }>
@@ -44,6 +60,11 @@ export function SplitContainer(
     return offset;
   });
 
+  const multipleSplits = () => {
+    const splits = globalSplitManager()?.splits?.();
+    return Boolean(splits && splits.length > 1);
+  };
+
   return (
     <SplitModalProvider>
       <SplitDrawerGroup
@@ -57,6 +78,18 @@ export function SplitContainer(
           />
           <div class="fixed inset-[4rem] bg-panel shadow-xl rounded-tl-[1.5rem]" />
         </Show>
+        <div
+          class="pointer-events-none text-accent"
+          classList={{
+            'absolute inset-0 z-1': !isSpotLight(),
+          }}
+        >
+          <EdgeDecor
+            isActive={
+              panel.handle.isActive() && multipleSplits() && !isSpotLight()
+            }
+          />
+        </div>
         <div
           data-split-id={props.id}
           data-split-container
