@@ -42,10 +42,8 @@ html-escape = "0.2"
 http-body-util = { workspace = true }
 infer = "0.19.0"
 insight_service_client = { path = "../insight_service_client" }
-lazy_static = { workspace = true }
 lol_html = "2.4.0"
 macro_auth = { path = "../macro_auth" }
-macro_axum_utils = { path = "../macro_axum_utils" }
 macro_cors = { path = "../macro_cors" }
 macro_entrypoint = { path = "../macro_entrypoint" }
 macro_env = { path = "../macro_env" }
@@ -65,7 +63,6 @@ redis = { workspace = true, features = [
   "cluster-async",
   "tokio-native-tls-comp",
 ] }
-regex = { workspace = true }
 reqwest = { workspace = true, features = ["stream"] }
 s3_client = { path = "../s3_client" }
 schemars = { workspace = true }
