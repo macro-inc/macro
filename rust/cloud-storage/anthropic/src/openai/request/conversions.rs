@@ -1,4 +1,7 @@
-use crate::types::request::{self, SystemPrompt};
+use crate::{
+    prelude::ImageSource,
+    types::request::{self, SystemPrompt},
+};
 use async_openai::types::{
     ChatCompletionRequestAssistantMessage, ChatCompletionRequestDeveloperMessage,
     ChatCompletionRequestFunctionMessage, ChatCompletionRequestMessage,
@@ -205,11 +208,9 @@ impl From<ChatCompletionRequestUserMessage> for request::RequestMessage {
                     .filter_map(|part| {
                         match part {
                             async_openai::types::ChatCompletionRequestUserMessageContentPart::ImageUrl(url) => {
-                                Some(if is_url(&url.image_url.url)  {
-                                    request::RequestContentKind::Url { url: url.image_url.url }
-                                } else {
-                                    let kind = media_type(&url.image_url.url);
-                                    request::RequestContentKind::Base64 { data: url.image_url.url, media_type: kind }
+                                Some(request::RequestContentKind::Image {
+                                    cache_control: None,
+                                    source: url_to_image_source(url.image_url.url)
                                 })
                             },
                             async_openai::types::ChatCompletionRequestUserMessageContentPart::Text(text) =>
@@ -329,6 +330,25 @@ impl From<ChatCompletionTool> for request::Tool {
             description: value.function.description,
             input_schema: value.function.parameters.unwrap_or_default(),
             name: value.function.name,
+        }
+    }
+}
+
+fn url_to_image_source(url: String) -> ImageSource {
+    if is_url(&url) {
+        ImageSource::Url { url }
+    } else {
+        let kind = media_type(&url);
+        if let Some(data) = url.split("base64,").take(2).collect::<Vec<_>>().get(1) {
+            ImageSource::Base64 {
+                data: data.to_string(),
+                media_type: kind,
+            }
+        } else {
+            ImageSource::Base64 {
+                data: url.to_owned(),
+                media_type: kind,
+            }
         }
     }
 }
