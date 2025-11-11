@@ -53,7 +53,7 @@ pub async fn handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     Query(Params { limit }): Query<Params>,
-    cursor: CursorExtractor<Uuid, CreatedAt>,
+    cursor: CursorExtractor<Uuid, CreatedAt, ()>,
     Json(req): Json<BulkGetUserNotificationsByEventItemIdRequest>,
 ) -> BulkResponse {
     tracing::info!("bulk_get_user_notifications_by_event_item_id");

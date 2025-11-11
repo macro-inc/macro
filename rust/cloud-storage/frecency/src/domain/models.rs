@@ -1,5 +1,6 @@
 //! This crate provides the utilities to compute aggregate frecency scores from some input event
 use chrono::{DateTime, Utc};
+use item_filters::ast::EntityFilterAst;
 use macro_user_id::{
     cowlike::CowLike,
     user_id::{MacroUserIdStr, ParseErr},
@@ -304,6 +305,8 @@ pub struct FrecencyPageRequest<'a> {
     pub from_score: Option<f64>,
     /// the limit to the number of results to return on the page
     pub limit: u32,
+    /// the filter ast that should remove values from the output
+    pub filters: EntityFilterAst,
 }
 
 /// the response which contains the single page of frecency from the service

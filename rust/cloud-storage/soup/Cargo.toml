@@ -18,6 +18,7 @@ axum = [
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 either = { version = "1" }
+filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
 item_filters = { path = "../item_filters", optional = true }
 macro_user_id = { path = "../macro_user_id" }
@@ -26,11 +27,13 @@ model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
 models_soup = { path = "../models_soup" }
+non_empty = { path = "../non_empty" }
 serde = { workspace = true }
 sqlx = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
 
 [dev-dependencies]
 chrono = { workspace = true }
