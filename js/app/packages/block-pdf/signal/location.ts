@@ -576,7 +576,9 @@ export async function goToLinkLocation(params: LocationSearchParams) {
 export async function goToLinkLocationFromParams(
   params: Record<string, string>
 ) {
+  console.log(' go to link location, ', params);
   const location = parseLocationFromBlockParams(params);
+  console.log({ location });
   if (location) {
     return await goToPdfLocation(location);
   }

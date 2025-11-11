@@ -45,7 +45,7 @@ import { useGlobalBlockOrchestrator } from '../GlobalAppState';
 import { useSplitLayout } from '../split-layout/layout';
 import { EmailCommandItem } from './EmailKonsoleItem';
 import {
-  rawQuery,
+  cleanQuery,
   resetKonsoleMode,
   resetQuery,
   setKonsoleOpen,
@@ -223,7 +223,7 @@ async function gotoSnippetLocation(
     case 'docx':
       handle.goToLocationFromParams({
         [PDF_PARAMS.searchPage]: snippet.locationId,
-        [PDF_PARAMS.searchMatchNumOnPage]: snippet.matchIndex ?? 0,
+        [PDF_PARAMS.searchMatchNumOnPage]: (snippet.matchIndex ?? 0).toString(),
         [PDF_PARAMS.searchTerm]: searchTerm,
       });
       break;
@@ -269,7 +269,7 @@ export function useCommandItemAction(args: {
     if (blockName) {
       split({ type: blockName, id });
       if (item.snippet) {
-        gotoSnippetLocation(blockOrchestrator, id, item.snippet, rawQuery());
+        gotoSnippetLocation(blockOrchestrator, id, item.snippet, cleanQuery());
       }
     } else {
       switch (item.type) {
