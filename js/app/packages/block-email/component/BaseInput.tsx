@@ -14,11 +14,11 @@ import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
 import { useDisplayName } from '@core/user';
 import { isErr, isOk } from '@core/util/maybeResult';
+import PaperPlaneRight from '@icon/fill/paper-plane-right-fill.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
 import DotsThree from '@icon/regular/dots-three.svg';
-import PaperPlaneRight from '@icon/regular/paper-plane-right.svg';
 import Plus from '@icon/regular/plus.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
@@ -36,6 +36,7 @@ import type {
 import { useEmail, useUserId } from '@service-gql/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
+import { raceTimeout } from '@solid-primitives/promise';
 import {
   defaultSelectionData,
   lazyRegister,
@@ -65,7 +66,6 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
-import { sendEmail } from '../signal/email';
 import { deleteEmailDraft, saveEmailDraft } from '../signal/emailDraft';
 import { handleFileUpload } from '../util/handleFileUpload';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
@@ -148,6 +148,7 @@ export function BaseInput(props: {
     createSignal<boolean>(false);
   const [isDragging, setIsDragging] = createSignal<boolean>();
   const [isPendingUpload, setIsPendingUpload] = createSignal<boolean>(false);
+  const [isPendingSend, setIsPendingSend] = createSignal<boolean>(false);
   const [showFormatRibbon, setShowFormatRibbon] = createSignal<boolean>(
     props.newMessage ?? false
   );
@@ -353,7 +354,10 @@ export function BaseInput(props: {
     useHotkeyDOMScope('compose-message');
   let composeContainerRef: HTMLDivElement | undefined;
 
-  const sendEmail_ = async () => {
+  const sendEmail = async () => {
+    if (isPendingSend() || isPendingUpload() || bodyMacro().trim().length === 0)
+      return;
+    setIsPendingSend(true);
     const to = form().recipients.to.map(convertEmailRecipientToContactInfo);
     const cc = form().recipients.cc.map(convertEmailRecipientToContactInfo);
     const bcc = form().recipients.bcc.map(convertEmailRecipientToContactInfo);
@@ -395,38 +399,55 @@ export function BaseInput(props: {
     });
     if (!prepared) return;
 
-    const response = await sendEmail({
-      bcc,
-      body_html: prepared.bodyHtml,
-      body_macro: bodyMacro(),
-      body_text: prepared.bodyText,
-      cc,
-      provider_id: props.draft?.provider_id,
-      provider_thread_id: currentThread?.provider_id,
-      replying_to_id: props.replyingTo()?.db_id,
-      subject: form().subject(),
-      thread_db_id: currentThread?.db_id,
-      to,
-      link_id: linkId!,
-    });
-    if (isOk(response)) {
-      const [, { message }] = response;
-      prepared.mentions.forEach((mention) => {
-        trackMention(blockId, 'document', mention.documentId);
-      });
-      editor()?.update(
-        () => {
-          const root = $getRoot();
-          const paragraph = $createParagraphNode();
-          root.clear();
-          root.append(paragraph);
-        },
-        { tag: 'external' }
+    try {
+      const response = await raceTimeout(
+        emailClient.sendMessage({
+          message: {
+            bcc,
+            body_html: prepared.bodyHtml,
+            body_macro: bodyMacro(),
+            body_text: prepared.bodyText,
+            cc,
+            provider_id: props.draft?.provider_id,
+            provider_thread_id: currentThread?.provider_id,
+            replying_to_id: props.replyingTo()?.db_id,
+            subject: form().subject(),
+            thread_db_id: currentThread?.db_id,
+            to,
+            link_id: linkId!,
+          },
+        }),
+        2000,
+        true,
+        new Error('Email send timed out')
       );
-      resetState();
-      if (props.sideEffectOnSend) {
-        props.sideEffectOnSend(message.db_id ?? null);
+      if (isOk(response)) {
+        toast.success('Email sent');
+        const [, { message }] = response;
+        prepared.mentions.forEach((mention) => {
+          trackMention(blockId, 'document', mention.documentId);
+        });
+        editor()?.update(
+          () => {
+            const root = $getRoot();
+            const paragraph = $createParagraphNode();
+            root.clear();
+            root.append(paragraph);
+          },
+          { tag: 'external' }
+        );
+        resetState();
+        if (props.sideEffectOnSend) {
+          props.sideEffectOnSend(message.db_id ?? null);
+        }
+      } else {
+        toast.failure('Failed to send email. Please try again.');
+        logger.error(new Error('Failed to send email'));
       }
+    } catch (_) {
+      toast.failure('Failed to send email. Please try again.');
+    } finally {
+      setIsPendingSend(false);
     }
   };
 
@@ -517,7 +538,7 @@ export function BaseInput(props: {
         scopeId: composeHotkeyScope,
         description: 'Send email',
         keyDownHandler: () => {
-          sendEmail_();
+          sendEmail();
           return true;
         },
         runWithInputFocused: true,
@@ -833,19 +854,28 @@ export function BaseInput(props: {
             />
           </Show>
           <div class="ml-auto flex flex-row">
-            <Show
-              when={!isPendingUpload()}
-              fallback={
-                <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
-              }
+            <button
+              disabled={isPendingUpload() || isPendingSend()}
+              onClick={() => {
+                sendEmail();
+              }}
+              class="text-ink-muted bg-transparent rounded-full hover:scale-110! transition ease-in-out delay-150 flex flex-col justify-center items-center"
             >
-              <IconButton
-                theme="clear"
-                icon={PaperPlaneRight}
-                tooltip={{ label: 'Send' }}
-                onClick={sendEmail_}
-              />
-            </Show>
+              <div class="bg-transparent rounded-full size-8 flex flex-row justify-center items-center">
+                <Show
+                  when={!isPendingUpload() && !isPendingSend()}
+                  fallback={
+                    <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
+                  }
+                >
+                  <PaperPlaneRight
+                    width={20}
+                    height={20}
+                    class="!text-accent-ink !fill-accent"
+                  />
+                </Show>
+              </div>
+            </button>
           </div>
         </div>
       </div>
