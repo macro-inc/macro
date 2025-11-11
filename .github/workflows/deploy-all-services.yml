@@ -10,6 +10,23 @@ on:
           - dev
           - prod
         description: The environment we are deploying to.
+  workflow_call:
+    inputs:
+      environment:
+        type: string
+        required: true
+        description: The environment we are deploying to.
+    secrets:
+      AWS_ACCESS_KEY:
+        required: true
+      AWS_SECRET_ACCESS_KEY:
+        required: true
+      PULUMI_ACCESS_TOKEN:
+        required: true
+      DD_APP_KEY:
+        required: true
+      DD_API_KEY:
+        required: true
 
 # Only run 1 deploy-all workflow at a time per environment
 concurrency:

@@ -29,6 +29,14 @@ on:
         required: true
       PULUMI_ACCESS_TOKEN:
         required: true
+      DD_APP_KEY:
+        required: true
+      DD_API_KEY:
+        required: true
+      DD_WEB_APP_ID:
+        required: true
+      DD_WEB_APP_TOKEN:
+        required: true
 
 concurrency:
   group: ${{ github.workflow }}-web-app-${{ inputs.environment }}
