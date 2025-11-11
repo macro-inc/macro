@@ -1,6 +1,7 @@
 use crate::Result;
 use crate::SearchOn;
 use crate::error::OpensearchClientError;
+use crate::search::model::MacroEm;
 use crate::search::query::Keys;
 use crate::search::query::QueryKey;
 use crate::search::query::generate_name_content_query;
@@ -70,8 +71,8 @@ pub trait SearchQueryConfig {
             "content",
             HighlightField::new()
                 .highlight_type("unified")
-                .pre_tags(vec!["<macro_em>".to_string()])
-                .post_tags(vec!["</macro_em>".to_string()])
+                .pre_tags(vec![MacroEm::Open.to_string()])
+                .post_tags(vec![MacroEm::Close.to_string()])
                 .number_of_fragments(500),
         )
     }
@@ -224,8 +225,8 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                 T::TITLE_KEY,
                 HighlightField::new()
                     .highlight_type("unified")
-                    .pre_tags(vec!["<macro_em>".to_string()])
-                    .post_tags(vec!["</macro_em>".to_string()])
+                    .pre_tags(vec![MacroEm::Open.to_string()])
+                    .post_tags(vec![MacroEm::Close.to_string()])
                     .number_of_fragments(1),
             ),
             SearchOn::NameContent => Highlight::new()
@@ -234,16 +235,16 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                     T::TITLE_KEY,
                     HighlightField::new()
                         .highlight_type("unified")
-                        .pre_tags(vec!["<macro_em>".to_string()])
-                        .post_tags(vec!["</macro_em>".to_string()])
+                        .pre_tags(vec![MacroEm::Open.to_string()])
+                        .post_tags(vec![MacroEm::Close.to_string()])
                         .number_of_fragments(1),
                 )
                 .field(
                     T::CONTENT_KEY,
                     HighlightField::new()
                         .highlight_type("unified")
-                        .pre_tags(vec!["<macro_em>".to_string()])
-                        .post_tags(vec!["</macro_em>".to_string()])
+                        .pre_tags(vec![MacroEm::Open.to_string()])
+                        .post_tags(vec![MacroEm::Close.to_string()])
                         .number_of_fragments(1),
                 ),
         };

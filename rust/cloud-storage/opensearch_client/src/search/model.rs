@@ -1,6 +1,24 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, fmt::Display};
 
 use crate::{SearchOn, search::query::Keys};
+
+/// macro open/close tags for highlight matches
+#[derive(Debug, PartialEq)]
+pub enum MacroEm {
+    /// Open tag <macro_em>
+    Open,
+    /// Close tag </macro_em>
+    Close,
+}
+
+impl Display for MacroEm {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Open => write!(f, "<macro_em>"),
+            Self::Close => write!(f, "</macro_em>"),
+        }
+    }
+}
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct Hit<T> {

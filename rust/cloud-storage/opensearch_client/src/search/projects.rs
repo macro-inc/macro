@@ -3,7 +3,7 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{SearchResponse, parse_highlight_hit},
+        model::{MacroEm, SearchResponse, parse_highlight_hit},
         query::Keys,
     },
 };
@@ -38,8 +38,8 @@ impl SearchQueryConfig for ProjectSearchConfig {
             HighlightField::new()
                 .highlight_type("unified")
                 .number_of_fragments(1)
-                .pre_tags(vec!["<macro_em>".to_string()])
-                .post_tags(vec!["</macro_em>".to_string()]),
+                .pre_tags(vec![MacroEm::Open.to_string()])
+                .post_tags(vec![MacroEm::Close.to_string()]),
         )
     }
 }
