@@ -77,7 +77,6 @@ export function ComposeEmailInput(props: {
   const panel = useSplitPanel();
 
   const focusSibling = (direction: 'next' | 'prev') => {
-    console.log('FOCUS SIBLING!');
     const panelRef = panel?.panelRef();
     if (!panelRef) return;
     const tabbableEls = tabbable(panelRef);
