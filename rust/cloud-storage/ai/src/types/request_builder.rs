@@ -90,7 +90,7 @@ impl RequestBuilder<Model, Vec<ChatMessage>, String> {
             .collect::<(Vec<_>, Vec<_>)>();
 
         let image_attachments = image_attachments.into_iter().flatten().collect::<Vec<_>>();
-        let prompt_attachments = prompt_attachments.into_iter().flatten().collect();
+        let prompt_attachments = prompt_attachments.into_iter().flatten().collect::<Vec<_>>();
         let system_prompt = SystemPrompt {
             attachments: prompt_attachments,
             content: std::mem::take(&mut self.system_prompt),
