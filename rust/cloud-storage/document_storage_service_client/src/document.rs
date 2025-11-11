@@ -3,6 +3,7 @@ use crate::constants::MACRO_INTERNAL_USER_ID_HEADER_KEY;
 use super::DocumentStorageServiceClient;
 use anyhow::Result;
 use model::document::list::ListDocumentsWithAccessResponse;
+use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
 use model::document::{
     DocumentBasic,
     response::{GetDocumentResponse, LocationResponseData, LocationResponseV3},
@@ -354,6 +355,36 @@ impl DocumentStorageServiceClient {
         }
 
         let response_data = res.json::<ListDocumentsWithAccessResponse>().await?;
+        Ok(response_data)
+    }
+
+    /// Create a document
+    #[tracing::instrument(skip(self, jwt_token))]
+    pub async fn create_document(
+        &self,
+        req: CreateDocumentRequest,
+        jwt_token: &str,
+    ) -> Result<CreateDocumentResponse> {
+        let res = self
+            .external_request(reqwest::Method::POST, "/documents", jwt_token)
+            .json(&req)
+            .send()
+            .await?;
+
+        let status_code = res.status();
+
+        if !status_code.is_success() {
+            let body = res.text().await.unwrap_or("no body".to_string());
+            tracing::error!(
+                body=%body,
+                status=%status_code,
+                document_name=%req.document_name,
+                "external API error when creating document"
+            );
+            return Err(anyhow::anyhow!("HTTP {}: {}", status_code, body));
+        }
+
+        let response_data = res.json::<CreateDocumentResponse>().await?;
         Ok(response_data)
     }
 }

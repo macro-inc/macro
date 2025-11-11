@@ -1,9 +1,7 @@
-use crate::{
-    api::context::ApiContext,
-    model::response::documents::{DocumentResponse, DocumentResponseMetadata},
-};
+use crate::api::context::ApiContext;
 use axum::{http::StatusCode, response::Response};
 use macro_db_client::history::upsert_user_history;
+use model::document::response::{DocumentResponse, DocumentResponseMetadata};
 use model::sync_service::SyncServiceVersionID;
 use model::{
     document::{

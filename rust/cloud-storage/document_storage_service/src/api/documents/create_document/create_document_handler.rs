@@ -2,26 +2,21 @@ use axum::{Extension, extract::State, http::StatusCode, response::IntoResponse};
 use macro_middleware::cloud_storage::ensure_access::project::ProjectBodyAccessLevelExtractor;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
-use crate::{
-    api::{
-        context::ApiContext,
-        documents::{
-            create_document::create_document_v2,
-            utils::{self},
-        },
+use crate::api::{
+    context::ApiContext,
+    documents::{
+        create_document::create_document_v2,
+        utils::{self},
     },
-    model::{
-        request::documents::create::CreateDocumentRequest,
-        response::documents::create::CreateDocumentResponseData,
-    },
+};
+use model::document::response::{
+    CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
 };
 use model::{
     document::FileType,
     response::{GenericErrorResponse, GenericResponse, TypedSuccessResponse},
     user::UserContext,
 };
-
-pub type CreateDocumentResponse = TypedSuccessResponse<CreateDocumentResponseData>;
 
 /// Handles creating a document
 #[utoipa::path(

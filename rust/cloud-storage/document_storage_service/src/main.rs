@@ -32,8 +32,8 @@ mod service;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
+    MacroEntrypoint::default().init();
     let env = Environment::new_or_prod();
-    MacroEntrypoint::new(env).init();
 
     let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
         .region("us-east-1")

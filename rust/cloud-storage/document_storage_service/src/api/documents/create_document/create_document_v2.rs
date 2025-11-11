@@ -1,7 +1,7 @@
 use crate::api::context::ApiContext;
-use crate::model::response::documents::create::CreateDocumentResponseData;
-use crate::model::response::documents::{DocumentResponse, DocumentResponseMetadata};
 use axum::http::StatusCode;
+use model::document::response::CreateDocumentResponseData;
+use model::document::response::{DocumentResponse, DocumentResponseMetadata};
 use model::document::{ContentType, FileType, build_cloud_storage_bucket_document_key};
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::{IS_PUBLIC_DEFAULT, SharePermissionV2};
