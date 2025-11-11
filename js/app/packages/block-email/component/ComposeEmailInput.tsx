@@ -38,7 +38,6 @@ import {
 import { createSignal, onMount, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { type FocusableElement, tabbable } from 'tabbable';
-import { sendEmail } from '../signal/email';
 import { handleFileUpload } from '../util/handleFileUpload';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
 import {
@@ -46,6 +45,8 @@ import {
   prepareEmailBody,
 } from '../util/prepareEmailBody';
 import { AttachMenu } from './AttachMenu';
+import { emailClient } from '@service-email/client';
+import { toast } from '@core/component/Toast/Toast';
 
 false && fileDrop;
 
@@ -202,13 +203,16 @@ export function ComposeEmailInput(props: {
         attachments: [],
       };
 
-      const result = await sendEmail(messageToSend);
+      const result = await emailClient.sendMessage({
+        message: messageToSend,
+      });
 
       if (isErr(result)) {
         const e = 'Failed to send email';
         failure(e);
         return;
       }
+      toast.success('Email sent');
 
       const [, { message }] = result;
 
