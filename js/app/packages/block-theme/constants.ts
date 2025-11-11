@@ -1,6 +1,9 @@
 import type { ThemeV1 } from './types/themeTypes';
 
-export const DEFAULT_THEMES: Array<ThemeV1> = [
+export const DEFAULT_DARK_THEME: DefaultTheme = 'Macro Dark';
+export const DEFAULT_LIGHT_THEME: DefaultTheme = 'Macro Light';
+
+export const DEFAULT_THEMES = [
   {
     id: 'Macro Dark',
     name: 'Macro Dark',
@@ -177,4 +180,6 @@ export const DEFAULT_THEMES: Array<ThemeV1> = [
       c4:{ l: 0.63, c: 0.192, h: 287 }
    }
 }
-];
+] as const satisfies ReadonlyArray<ThemeV1>;
+
+type DefaultTheme = (typeof DEFAULT_THEMES)[number]['id'];
