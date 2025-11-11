@@ -237,19 +237,21 @@ where
                             user_id: req.user,
                             filters: match req.filters.is_empty() {
                                 true => None,
-                                false => Some(SoupFilter::Ast(AstFilter::Normal(req.filters))),
+                                false => {
+                                    Some(SoupFilter::Ast(AstFilter::Normal(req.filters.clone())))
+                                }
                             },
                         },
                     )
                     .await?
-                    .paginate_on(limit.into(), sort_method)
+                    .paginate_filter_on(limit.into(), sort_method, req.filters)
                     .into_page()
                     .type_erase())
             }
             SoupQuery::Frecency(cursor) => Ok(self
                 .handle_advanced_sort(cursor, req.soup_type, req.user, limit)
                 .await?
-                .paginate_on(limit.into(), Frecency)
+                .paginate_filter_on(limit.into(), Frecency, req.filters)
                 .into_page()
                 .type_erase()),
         }

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use frecency::domain::{models::AggregateFrecency, ports::FrecencyQueryErr};
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -25,8 +27,8 @@ pub(crate) enum SoupFilter {
 #[derive(Debug)]
 #[expect(dead_code)]
 pub(crate) enum AstFilter {
-    Normal(EntityFilterAst),
-    Frecency(EntityFilterAst),
+    Normal(Arc<EntityFilterAst>),
+    Frecency(Arc<EntityFilterAst>),
 }
 
 /// the parameters required for a [SimpleSortMethod]
@@ -58,7 +60,7 @@ pub struct SoupRequest {
     pub limit: u16,
     pub cursor: SoupQuery,
     pub user: MacroUserIdStr<'static>,
-    pub filters: EntityFilterAst,
+    pub filters: Arc<EntityFilterAst>,
 }
 
 /// a [SoupItem] with an associated frecency score
