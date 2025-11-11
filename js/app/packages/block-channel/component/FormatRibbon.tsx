@@ -20,7 +20,7 @@ export type FormatRibbonProps = {
 
 export function FormatRibbon(props: FormatRibbonProps) {
   return (
-    <div class="flex flex-row w-full gap-2 items-center bg-input rounded-t-md p-2">
+    <div class="flex flex-row w-full gap-2 items-center p-2">
       <ActionButton
         tooltip="Bold"
         shortcut="meta+b"
