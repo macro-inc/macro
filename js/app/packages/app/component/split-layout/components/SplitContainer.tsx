@@ -29,7 +29,7 @@ function EdgeDecor(props: { isActive: boolean }) {
         'clip-path': cornerClip('0.5rem', 0, 0, 0),
       }}
     >
-      <div class="size-2 bg-accent [clip-path:polygon(0%_0%,100%_0%,0%_100%)]"></div>
+      <div class="size-[0.465rem] bg-accent [clip-path:polygon(0%_0%,100%_0%,0%_100%)]"></div>
     </div>
   );
 }
