@@ -5,8 +5,7 @@ use crate::pubsub::context::PubSubContext;
 use crate::util::gmail::auth::fetch_gmail_access_token_from_link;
 use anyhow::Context;
 use models_email::email::service::backfill::{
-    BackfillJobStatus, BackfillMessageStatus, BackfillOperation, BackfillPubsubMessage,
-    BackfillThreadStatus,
+    BackfillJobStatus, BackfillOperation, BackfillPubsubMessage,
 };
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqs_worker::cleanup_message;
@@ -44,7 +43,7 @@ pub async fn process_message(
 
         // A temporary failure occurred. We log it and don't clean up the message, so it gets retried
         Err(ProcessingError::Retryable(e)) => {
-            error_handlers::handle_retryable_error(&ctx, &data, &e).await
+            error_handlers::handle_retryable_error(&data, &e).await
         }
     }
 }
@@ -145,88 +144,22 @@ async fn handle_cancel_backfill_job(
     ctx: &PubSubContext,
     data: &BackfillPubsubMessage,
 ) -> anyhow::Result<()> {
+    let _ = ctx
+        .redis_client
+        .delete_backfill_job_progress(data.job_id)
+        .await;
+
     match &data.backfill_operation {
         BackfillOperation::Init => Ok(()),
         BackfillOperation::ListThreads(_) => Ok(()),
-        BackfillOperation::BackfillThread(p) => {
-            let _ = email_db_client::backfill::thread::update_backfill_thread_status(
-                &ctx.db,
-                data.job_id,
-                &p.thread_provider_id,
-                BackfillThreadStatus::Cancelled,
-                None,
-            )
-            .await
-            .inspect_err(|e| {
-                tracing::warn!(
-                    "Failed to set thread status to cancelled \
-            for job_id {} and thread_provider_id {}: {}",
-                    data.job_id,
-                    p.thread_provider_id,
-                    e
-                )
-            });
-            Ok(())
-        }
+        BackfillOperation::BackfillThread(_) => Ok(()),
         BackfillOperation::BackfillMessage(p) => {
-            let _ = email_db_client::backfill::thread::update_backfill_thread_status(
-                &ctx.db,
-                data.job_id,
-                &p.thread_provider_id,
-                BackfillThreadStatus::Cancelled,
-                None,
-            )
-            .await
-            .inspect_err(|e| {
-                tracing::warn!(
-                    "Failed to set thread status to cancelled \
-            for job_id {} and thread_provider_id {}: {}",
-                    data.job_id,
-                    p.thread_provider_id,
-                    e
-                )
-            });
-
-            let _ = email_db_client::backfill::message::update_backfill_message_status(
-                &ctx.db,
-                data.job_id,
-                &p.thread_provider_id,
-                &p.message_provider_id,
-                BackfillMessageStatus::Cancelled,
-                None,
-            )
-            .await
-            .inspect_err(|e| {
-                tracing::warn!(
-                    "Failed to set message status to cancelled \
-            for job_id {} and thread_provider_id {} and message_provider_id {}: {}",
-                    data.job_id,
-                    p.thread_provider_id,
-                    p.message_provider_id,
-                    e
-                )
-            });
+            let _ = ctx
+                .redis_client
+                .delete_backfill_thread_progress(data.job_id, &p.thread_provider_id)
+                .await;
             Ok(())
         }
-        BackfillOperation::UpdateThreadMetadata(p) => {
-            let _ = email_db_client::backfill::thread::update_backfill_thread_status(
-                &ctx.db,
-                data.job_id,
-                &p.thread_provider_id,
-                BackfillThreadStatus::Cancelled,
-                None,
-            )
-            .await
-            .inspect_err(|e| {
-                tracing::warn!(
-                    "Failed to set thread status to cancelled \
-            for job_id {} and thread_provider_id {}: {}",
-                    data.job_id,
-                    p.thread_provider_id,
-                    e
-                )
-            });
-            Ok(())
-        }
+        BackfillOperation::UpdateThreadMetadata(_) => Ok(()),
     }
 }

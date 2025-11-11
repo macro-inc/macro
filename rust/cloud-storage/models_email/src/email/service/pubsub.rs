@@ -24,6 +24,7 @@ pub enum ProcessingError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, EnumString)]
 pub enum FailureReason {
     DatabaseQueryFailed,
+    RedisQueryFailed,
     SqsEnqueueFailed,
     AccessTokenFetchFailed,
     MessageNotFoundInProvider,
