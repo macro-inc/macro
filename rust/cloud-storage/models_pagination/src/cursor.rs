@@ -57,6 +57,7 @@ pub struct CursorVal<C: Sortable, F> {
     /// the last value of the [Sortable] from the previous page
     pub last_val: C::Value,
     /// the value that we are filtering on
+    #[serde(default)]
     pub filter: F,
 }
 
@@ -165,8 +166,7 @@ where
 }
 
 /// Type alias for a [Paginated] where we still know the underlying type information of the encoded cursor
-pub type PaginatedTypedCursor<T, I, C, F> =
-    Paginated<T, Base64Str<CursorWithValAndFilter<I, C, F>>>;
+pub type PaginatedCursor<T, I, C, F> = Paginated<T, Base64Str<CursorWithValAndFilter<I, C, F>>>;
 
 /// Type alias for a [Paginated] where the type information of the cursor has been erased. This is identical in memory layout and serialization shape as [PaginatedTypedCursor]
 pub type PaginatedOpaqueCursor<T> = Paginated<T, String>;
@@ -183,7 +183,7 @@ where
 {
     /// Turn self into a [PaginatedTypedCursor].
     /// This ensures that the page has the correct number of items and encodes the last element of the page into a base64 json encoded representation of the cursor.
-    pub fn into_page(self) -> PaginatedTypedCursor<Iter::Item, <Iter::Item as Identify>::Id, S, F> {
+    pub fn into_page(self) -> PaginatedCursor<Iter::Item, <Iter::Item as Identify>::Id, S, F> {
         let Paginator {
             iter, limit, cb, ..
         } = self;
@@ -210,7 +210,7 @@ where
     }
 }
 
-impl<T, I, C: Sortable, F> PaginatedTypedCursor<T, I, C, F> {
+impl<T, I, C: Sortable, F> PaginatedCursor<T, I, C, F> {
     /// Erase the type of self.
     /// This doesn't actually change any data it just makes the type less sepcific
     pub fn type_erase(self) -> PaginatedOpaqueCursor<T> {

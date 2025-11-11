@@ -68,7 +68,7 @@ where
     Sort: Sortable + DeserializeOwned,
     Sort::Value: DeserializeOwned,
     Id: DeserializeOwned,
-    F: DeserializeOwned,
+    F: DeserializeOwned + Default,
 {
     type Rejection = CusorExtractErr;
 

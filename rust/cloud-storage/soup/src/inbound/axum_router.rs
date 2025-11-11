@@ -25,6 +25,9 @@ use std::sync::Arc;
 use thiserror::Error;
 use utoipa::{IntoParams, ToSchema};
 
+#[cfg(test)]
+mod tests;
+
 #[derive(Debug, Default, serde::Deserialize, IntoParams, ToSchema)]
 #[into_params(parameter_in = Query)]
 pub struct Params {
@@ -133,7 +136,7 @@ where
                 limit: params.limit.unwrap_or(20),
                 cursor,
                 user: macro_user_id,
-                filters: EntityFilterAst::new_from_filters(filters)?,
+                filters: Arc::new(EntityFilterAst::new_from_filters(filters)?),
             })
             .await?;
 
