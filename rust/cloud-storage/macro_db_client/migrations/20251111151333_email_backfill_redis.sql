@@ -1,8 +1,8 @@
 -- we now use redis to track backfill progress instead of postgres
 
-drop table email_backfill_messages;
+DROP TABLE email_backfill_messages;
 
-drop table email_backfill_threads;
+DROP TABLE email_backfill_threads;
 
 ALTER TABLE email_backfill_jobs
 DROP COLUMN threads_processed_count,
