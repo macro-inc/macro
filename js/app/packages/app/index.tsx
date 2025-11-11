@@ -7,6 +7,7 @@ import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import * as Observability from '@observability';
 import { ErrorBoundary, render } from 'solid-js/web';
 import { FatalError } from './component/FatalError';
+import { ReactiveFavicon } from './component/ReactiveFavicon';
 import { Root } from './component/Root';
 
 initializeLexical();
@@ -32,6 +33,7 @@ const renderApp = () => {
           )}
         >
           <Root />
+          <ReactiveFavicon />
         </ErrorBoundary>
       ),
       root
