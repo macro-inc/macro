@@ -516,7 +516,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   createEffect(() => {
     let filterFns: EntityFilter<EntityData>[] = [];
 
-    // TODO: use the project id filter the search service
     const projectFilter_ = projectFilter();
     if (projectFilter_) {
       filterFns.push(createProjectFilterFn(projectFilter_));
