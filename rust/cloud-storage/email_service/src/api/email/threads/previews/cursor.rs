@@ -99,8 +99,11 @@ impl Identify for ThreadPreviewFrecency {
 }
 
 impl SortOn<SimpleSortMethod> for ThreadPreviewFrecency {
-    fn sort_on(sort: SimpleSortMethod) -> impl FnOnce(&Self) -> CursorVal<SimpleSortMethod> {
-        let cb = ThreadPreviewCursor::sort_on(sort);
+    fn sort_on<F>(
+        sort: SimpleSortMethod,
+        filter: F,
+    ) -> impl FnOnce(&Self) -> CursorVal<SimpleSortMethod, F> {
+        let cb = ThreadPreviewCursor::sort_on(sort, filter);
         move |v| cb(&v.preview)
     }
 }
@@ -142,7 +145,7 @@ pub async fn previews_handler(
     link: Extension<Link>,
     PreviewViewExtractor(preview_view): PreviewViewExtractor,
     extract::Query(params): extract::Query<GetPreviewsCursorParams>,
-    cursor: CursorExtractor<Uuid, SimpleSortMethod>,
+    cursor: CursorExtractor<Uuid, SimpleSortMethod, ()>,
 ) -> Result<Json<GetPreviewsFrecencyResponse>, GetPreviewsCursorError> {
     let params = GetPreviewsPaginationCursorParams::new_from_params(params);
 

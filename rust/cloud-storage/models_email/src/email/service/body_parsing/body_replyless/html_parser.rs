@@ -106,8 +106,7 @@ fn find_outlook_splitter(document: &Html) -> Option<ElementRef<'_>> {
     // As a final fallback, find the deepest element matching the text pattern.
     document
         .select(&ANY_ELEMENT_SELECTOR)
-        .filter(|el| FROM_SENT_RE.is_match(&el.text().collect::<String>()))
-        .next_back()
+        .rfind(|el| FROM_SENT_RE.is_match(&el.text().collect::<String>()))
 }
 
 fn find_blockquote_splitter(document: &Html) -> Option<ElementRef<'_>> {
