@@ -6,6 +6,7 @@ use axum::{Json, RequestPartsExt, async_trait};
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
+use thiserror::Error;
 
 /// An enum which denotes either the client did not provide a cursor value
 /// or the cursor was provided and parsed.
@@ -35,9 +36,10 @@ impl<Id, S: Sortable, F> CursorExtractor<Id, S, F> {
 
 /// represents an error that can occur while extracting a [CursorExtractor]
 /// from the axum request parts
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum CusorExtractErr {
     /// an error occurred while decoding the input value
+    #[error(transparent)]
     DecodeErr(Base64SerdeErr<serde_json::Error>),
 }
 
@@ -72,6 +74,7 @@ where
 {
     type Rejection = CusorExtractErr;
 
+    #[tracing::instrument(err, skip(parts, state))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         #[derive(Deserialize)]
         struct Params {
