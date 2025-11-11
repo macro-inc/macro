@@ -9,7 +9,16 @@
     <meta name="mobile-web-app-capable" content="yes" />
     <meta name="theme-color" content="#FFFFFF" />
     <meta name="description" content="Macro AI Workspace" />
-    <link rel="shortcut icon" href="%ASSETS_PATH%/icon.png" />
+    <link
+      rel="shortcut icon"
+      href="%ASSETS_PATH%/macro-favicon.svg"
+      type="image/svg+xml"
+    />
+    <link
+      rel="icon"
+      href="%ASSETS_PATH%/macro-favicon.svg"
+      type="image/svg+xml"
+    />
     <link rel="apple-touch-icon" href="%ASSETS_PATH%/logo192.png" />
     <!--
       manifest.json provides metadata used when your web app is installed on a
@@ -39,13 +48,13 @@
     <!-- Sets blank page to theme surface color to prevent background color flash -->
     <script>
       try {
-        let htmlColorString = localStorage.getItem('html-color-theme');
-        if(htmlColorString){
+        let htmlColorString = localStorage.getItem("html-color-theme");
+        if (htmlColorString) {
           let htmlColor = JSON.parse(htmlColorString);
           document.body.style.backgroundColor = htmlColor.color;
         }
-      } catch(err) {
-        console.error('Failed parse macro-selected-theme: ', err)
+      } catch (err) {
+        console.error("Failed parse macro-selected-theme: ", err);
       }
     </script>
   </body>
