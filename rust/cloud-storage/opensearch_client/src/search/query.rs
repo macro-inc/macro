@@ -5,13 +5,16 @@ use crate::{Result, error::OpensearchClientError};
 use opensearch_query_builder::*;
 use unicode_segmentation::UnicodeSegmentation;
 
+/// Containing keys for the title and content fields
 pub struct Keys<'a> {
+    /// The title field key
     pub title_key: &'a str,
+    /// The content field key
     pub content_key: &'a str,
 }
 
 /// The different types of ways we can match terms
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum QueryKey {
     /// Match phrase
     MatchPhrase,
@@ -40,7 +43,7 @@ impl QueryKey {
     }
 
     /// Creates a query given a field and term
-    fn create_query(&self, field: &str, term: &str) -> QueryType {
+    pub fn create_query(&self, field: &str, term: &str) -> QueryType {
         // Fixes https://linear.app/macro-eng/issue/M-5094/unified-search-match-prefix-on-phrase-should-not-constrain-terms
         // We need to create a more complex combo query if the last word in a term is less than 3 characters.
         let mut terms = term.split(' ').collect::<Vec<_>>();
@@ -106,7 +109,14 @@ pub(crate) fn generate_terms_must_query(
         .flat_map(|field| terms.iter().map(|term| query_key.create_query(field, term)))
         .collect();
 
-    // populate in in "should" field
+    // If we only have 1 query returned, we can just return that singular query
+    // to go into the main bool must
+    if queries.len() == 1 {
+        return queries[0].clone();
+    }
+
+    // Otherwise, we need to add all the queries to a new bool should in order to properly search
+    // over multiple terms
     for query in queries {
         terms_must_query.should(query);
     }
@@ -151,9 +161,20 @@ pub(crate) fn generate_name_content_query(keys: &Keys, terms: &[String]) -> Quer
         })
         .collect();
 
+    // If we only have 1 query created, we can just return that singular query to be added to the
+    // main bool must query
+    if queries.len() == 1 {
+        return queries[0].clone();
+    }
+
+    // Otherwise, we need to add all the queries to a new bool should in order to properly search
+    // over multiple terms
     for query in queries {
         terms_must_query.should(query);
     }
 
     terms_must_query.build().into()
 }
+
+#[cfg(test)]
+mod test;

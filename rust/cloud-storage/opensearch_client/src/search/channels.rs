@@ -80,8 +80,8 @@ impl ChannelMessageQueryBuilder {
         }
     }
 
-    pub fn org_id(mut self, org_id: i64) -> Self {
-        self.org_id = Some(org_id);
+    pub fn org_id(mut self, org_id: Option<i64>) -> Self {
+        self.org_id = org_id;
         self
     }
 
@@ -177,7 +177,7 @@ pub struct ChannelMessageSearchArgs {
 
 impl ChannelMessageSearchArgs {
     pub fn build(self) -> Result<Value> {
-        let mut builder = ChannelMessageQueryBuilder::new(self.terms)
+        Ok(ChannelMessageQueryBuilder::new(self.terms)
             .match_type(&self.match_type)
             .page_size(self.page_size)
             .page(self.page)
@@ -188,14 +188,10 @@ impl ChannelMessageSearchArgs {
             .search_on(self.search_on)
             .collapse(self.collapse)
             .ids_only(self.ids_only)
-            .sender_ids(self.sender_ids);
-
-        // Only add org_id if there is a value provided
-        if let Some(org_id) = self.org_id {
-            builder = builder.org_id(org_id);
-        }
-
-        Ok(builder.build_search_request()?.to_json())
+            .sender_ids(self.sender_ids)
+            .org_id(self.org_id)
+            .build_search_request()?
+            .to_json())
     }
 }
 
@@ -250,3 +246,6 @@ pub(crate) async fn search_channel_messages(
         })
         .collect())
 }
+
+#[cfg(test)]
+mod test;

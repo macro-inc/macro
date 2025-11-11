@@ -296,3 +296,6 @@ pub(crate) async fn search_emails(
         })
         .collect())
 }
+
+#[cfg(test)]
+mod test;

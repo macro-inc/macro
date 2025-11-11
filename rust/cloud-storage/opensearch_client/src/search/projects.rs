@@ -37,7 +37,7 @@ impl SearchQueryConfig for ProjectSearchConfig {
             Self::TITLE_KEY,
             HighlightField::new()
                 .highlight_type("unified")
-                .number_of_fragments(500)
+                .number_of_fragments(1)
                 .pre_tags(vec!["<macro_em>".to_string()])
                 .post_tags(vec!["</macro_em>".to_string()]),
         )
@@ -184,3 +184,6 @@ pub(crate) async fn search_projects(
         })
         .collect())
 }
+
+#[cfg(test)]
+mod test;

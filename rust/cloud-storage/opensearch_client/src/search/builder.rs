@@ -285,7 +285,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             search_request.track_total_hits(true);
             search_request.add_agg(
                 "total_uniques".to_string(),
-                AggregationType::Cardinality(CardinalityAggregation::new("document_id")),
+                AggregationType::Cardinality(CardinalityAggregation::new(T::ID_KEY)),
             );
         }
 
@@ -334,3 +334,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         Ok(must_array)
     }
 }
+
+#[cfg(test)]
+mod test;

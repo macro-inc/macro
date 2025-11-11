@@ -184,3 +184,6 @@ pub(crate) async fn search_chats(
         })
         .collect())
 }
+
+#[cfg(test)]
+mod test;

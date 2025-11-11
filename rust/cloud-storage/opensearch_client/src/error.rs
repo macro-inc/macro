@@ -3,7 +3,7 @@ use opensearch::{
     http::{StatusCode, response::Response},
 };
 
-#[derive(thiserror::Error, Debug, serde::Serialize)]
+#[derive(thiserror::Error, Debug, serde::Serialize, PartialEq)]
 #[serde(tag = "type")]
 pub enum OpensearchClientError {
     #[error("error deserializing response body. method: {method:?} details: {details}")]

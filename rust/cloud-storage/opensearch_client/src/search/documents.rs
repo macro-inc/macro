@@ -190,3 +190,6 @@ pub(crate) async fn search_documents(
         })
         .collect())
 }
+
+#[cfg(test)]
+mod test;
