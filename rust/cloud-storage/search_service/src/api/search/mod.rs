@@ -23,6 +23,6 @@ pub fn router() -> Router<ApiContext> {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct SearchPaginationParams {
-    pub page: Option<i64>,
-    pub page_size: Option<i64>,
+    pub page: Option<u32>,
+    pub page_size: Option<u32>,
 }

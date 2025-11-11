@@ -17,7 +17,6 @@ services:
       - ./database/Clear.sql:/etc/Clear.sql
     networks:
       - macro_api_network
-
   macrocache:
     image: 'redis/redis-stack:latest'
     container_name: macrocache
