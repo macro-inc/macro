@@ -119,7 +119,7 @@ where
                     CursorVal {
                         sort_type: Frecency,
                         last_val: FrecencyValue::FrecencyScore(score),
-                        filter: filter,
+                        filter,
                     },
                 ..
             }) => Some((score, filter)),
