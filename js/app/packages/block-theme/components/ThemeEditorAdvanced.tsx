@@ -1,14 +1,22 @@
+import type { ThemeReactiveColor } from '../types/themeTypes';
+import { getOklch, validateColor } from '../utils/colorUtil';
 import { themeReactive } from '../signals/themeReactive';
+import { convertOklchTo } from '../utils/colorUtil';
+import { createSignal, For } from 'solid-js';
 import { ColorSwatch } from './ColorSwatch';
-import { For } from 'solid-js';
 
-// function setInput(){
-//   get content colorValue
-//   check if value is a valid css color
-//   if not valid, console.log(`${color} not valid`) and early return
-//   convert color to oklch
-//   console.log(converted color);
-// }
+const [ displayType, setDisplayType ] = createSignal('hex');
+
+function setColor(colorValue: ThemeReactiveColor, colorString: string){
+  if(colorString && colorString.length < 6 && !validateColor(colorString)){
+    console.log(`${colorValue} not valid color`);
+    return;
+  }
+  let oklch = getOklch(colorString);
+  colorValue.l[1](oklch.l);
+  colorValue.c[1](oklch.c);
+  colorValue.h[1](oklch.h);
+}
 
 export function ThemeEditorAdvanced() {
   return (
@@ -87,8 +95,7 @@ export function ThemeEditorAdvanced() {
           width: min
           gap: 2px;
         }
-
-        `}</style>
+      `}</style>
 
       <div class="advanced-theme-wrapper">
         <div class="advanced-theme-color-grid">
@@ -97,65 +104,15 @@ export function ThemeEditorAdvanced() {
               <div class="advanced-theme-color-wrapper">
                 <div class="advanced-theme-color">
                   <ColorSwatch
-                    width={'100px'}
                     color={`oklch(${colorValue.l[0]()} ${colorValue.c[0]()} ${colorValue.h[0]()}deg)`}
+                    width={'100px'}
                   />
-
-                  <div class="input-group">
-                    <div>oklch(</div>
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="1"
-                      value={colorValue.l[0]().toFixed(2)}
-                      onInput={(e) =>
-                        colorValue.l[1](
-                          Math.max(
-                            Math.min(parseFloat(e.target.value), 1),
-                            0
-                          ) || 0
-                        )
-                      }
-                      class="input number-input"
-                    />
-                    <input
-                      type="number"
-                      step="0.01"
-                      min="0"
-                      max="0.37"
-                      value={colorValue.c[0]().toFixed(2)}
-                      onInput={(e) =>
-                        colorValue.c[1](
-                          Math.max(
-                            Math.min(parseFloat(e.target.value), 0.37),
-                            0
-                          ) || 0
-                        )
-                      }
-                      class="input number-input"
-                    />
-                    <input
-                      type="number"
-                      step="0.5"
-                      min="0"
-                      max="360"
-                      value={colorValue.h[0]().toFixed(1)}
-                      onInput={(e) =>
-                        colorValue.h[1](
-                          Math.max(
-                            Math.min(parseFloat(e.target.value), 360),
-                            0
-                          ) || 0
-                        )
-                      }
-                      class="input number-input"
-                    />
-                    <div>deg)</div>
-                  </div>
-
+                  <input
+                    value={convertOklchTo(`oklch(${colorValue.l[0]()} ${colorValue.c[0]()} ${colorValue.h[0]()}deg)`, displayType())}
+                    onInput={e => {setColor(colorValue, e.target.value)}}
+                    type="text"
+                  />
                   <hr />
-
                   <div>--{colorKey}</div>
                 </div>
               </div>
