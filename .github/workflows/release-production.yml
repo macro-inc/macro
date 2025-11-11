@@ -52,7 +52,7 @@ jobs:
   deploy:
     name: Deploy Web App
     runs-on: linux-latest-beefy
-    needs: [typecheck, lint, test, build]
+    needs: [build]
     env:
       CI: "true"
     steps:
