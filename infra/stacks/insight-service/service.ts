@@ -11,6 +11,7 @@ import { EcrImage } from '@service';
 import { BASE_DOMAIN, stack } from '@shared';
 
 const BASE_NAME = 'insight-service';
+const BASE_PATH = '../../../rust/cloud-storage';
 
 export const USER_INSIGHT_DOMAIN_NAME = `insight-service${
   stack === 'prod' ? '' : `-${stack}`
@@ -61,7 +62,7 @@ export class InsightService extends pulumi.ComponentResource {
         repositoryId: `${BASE_NAME}-ecr-${stack}`,
         repositoryName: `${BASE_NAME}-${stack}`,
         imageId: `${BASE_NAME}-image-${stack}`,
-        imagePath: '../../../',
+        imagePath: BASE_PATH,
         dockerfile: 'Dockerfile',
         platform,
         buildArgs: {
