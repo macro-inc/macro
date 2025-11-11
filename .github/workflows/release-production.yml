@@ -1,0 +1,156 @@
+name: Deploy Production Release
+on:
+  release:
+    types: [released]
+
+concurrency:
+  group: ${{ github.workflow }}
+  cancel-in-progress: false
+
+env:
+  MODE: "production"
+  WEB_APP_VERSION: ${{ github.ref_name }}
+
+jobs:
+  deploy-cloud-storage:
+    name: Deploy Cloud Storage Services
+    uses: ./.github/workflows/deploy-all-services.yml
+    with:
+      environment: prod
+    secrets:
+      AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+      DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+      DD_API_KEY: ${{ secrets.DD_API_KEY }}
+
+  typecheck:
+    name: Typecheck
+    needs: [deploy-cloud-storage]
+    runs-on: linux-latest-beefy
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v5
+      - name: Setup Prereqs
+        uses: ./.github/actions/setup-reqs-web
+      - name: Generate API Types
+        working-directory: js/app
+        run: bun run gen-api
+      - name: Check Types
+        working-directory: js/app
+        run: bun run --bun --silent tsc --project packages/app/tsconfig.json
+
+  lint:
+    name: Lint
+    needs: [deploy-cloud-storage]
+    runs-on: linux-latest-middy
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v5
+      - name: Setup Biome CLI
+        uses: biomejs/setup-biome@v2
+      - name: Lint
+        working-directory: js/app
+        run: biome lint
+
+  test:
+    name: Test
+    needs: [deploy-cloud-storage]
+    runs-on: linux-latest-middy
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v5
+      - name: Setup Prereqs
+        uses: ./.github/actions/setup-reqs-web
+      - name: Test
+        working-directory: js/app
+        run: bun run test
+
+  build:
+    name: Build
+    needs: [deploy-cloud-storage]
+    runs-on: linux-latest-beefy
+    env:
+      CI: "true"
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v5
+      - name: Setup Prereqs
+        uses: ./.github/actions/setup-reqs-web
+      - name: Build for Production
+        working-directory: js/app
+        run: bun run build:prod
+        env:
+          VITE_DD_WEB_APP_ID: ${{ secrets.DD_WEB_APP_ID }}
+          VITE_DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
+          VITE_DD_HASH: ${{ github.sha }}
+      - name: Upload Build Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-app-prod-build
+          path: js/app/packages/app/dist
+          retention-days: 7
+
+  deploy:
+    name: Deploy Web App
+    runs-on: linux-latest-beefy
+    needs: [typecheck, lint, test, build]
+    env:
+      CI: "true"
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v5
+      - name: Setup Prereqs
+        uses: ./.github/actions/setup-reqs-web
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: web-app-prod-build
+          path: js/app/packages/app/dist
+      - name: Install infra dependencies
+        run: |
+          cd infra
+          bun install
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v5
+        with:
+          aws-access-key-id: ${{ secrets.AWS_DEPLOYMENT_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_DEPLOYMENT_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: Deploy with Pulumi
+        uses: pulumi/actions@v6
+        with:
+          command: up
+          stack-name: macro-inc/prod
+          work-dir: ./infra/stacks/web-app
+        env:
+          PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
+          DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+          DD_HOST: https://api.us5.datadoghq.com/
+      - name: Upload sourcemaps to Datadog
+        working-directory: js/app/packages/app
+        run: bun run ddupload:prod
+        env:
+          DATADOG_API_KEY: ${{ secrets.DD_API_KEY }}
+          DATADOG_SITE: us5.datadoghq.com
+          DATADOG_API_HOST: api.us5.datadoghq.com
+
+  upload:
+    name: Upload Release Artifacts
+    runs-on: ubuntu-latest
+    needs: [build, deploy]
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v5
+      - name: Download Build Artifact
+        uses: actions/download-artifact@v5
+        with:
+          name: web-app-prod-build
+          path: js/app/packages/app/dist
+      - name: Create Web App Artifact
+        run: tar -czf web-app-${{ env.WEB_APP_VERSION }}.tar.gz -C js/app/packages/app/dist .
+      - name: Upload Release Artifacts
+        uses: softprops/action-gh-release@v2
+        with:
+          files: web-app-${{ env.WEB_APP_VERSION }}.tar.gz
