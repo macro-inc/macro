@@ -184,19 +184,6 @@ export function BaseInput(props: BaseInputProps) {
         }
       }, 0);
     }
-
-    viewportObserver = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        if (!entry.isIntersecting) {
-          if (containerRef.contains(document.activeElement)) {
-            blurMarkdownArea();
-          }
-        }
-      },
-      { threshold: 0 }
-    );
-    viewportObserver.observe(containerRef);
   });
 
   const onFocusLeaveEnd = (e: KeyboardEvent) => {
