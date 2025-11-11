@@ -2,20 +2,18 @@ import { isInBlock } from '@core/block';
 import { blockLoroManagerSignal } from '@core/signal/load';
 import { createEmptyHistoryState, registerHistory } from '@lexical/history';
 import { registerList } from '@lexical/list';
-import { registerMarkdownShortcuts } from '@lexical/markdown';
+import { CODE } from '@lexical/markdown';
 import { registerPlainText } from '@lexical/plain-text';
 import { registerRichText } from '@lexical/rich-text';
-import {
-  ALL_TRANSFORMERS,
-  type EditorType,
-  RegisteredNodesByType,
-} from '@lexical-core';
+import { ALL_TRANSFORMERS, type EditorType } from '@lexical-core';
+import { HR } from '@lexical-core/transformers/transformers';
 import type { EditorState, LexicalEditor, UpdateListener } from 'lexical';
 import type { Setter } from 'solid-js';
 import { registerLoroHistory } from '../collaboration/undo';
 import { bindStateAs } from '../utils';
 import { checklistPlugin } from './checklist/';
 import { customDeletePlugin } from './custom-delete';
+import { markdownShortcutsPlugin } from './markdown-shortcuts';
 
 /**
  * Create a binding between a LexicalEditor and the ability to register plugins
@@ -60,19 +58,12 @@ export function createPluginManager(editor: LexicalEditor, type: EditorType) {
     },
 
     markdownShortcuts() {
-      // Not all editor flavors support all nodes. Filter the available markdown shortcuts
-      // to only those with all dependencies available.
-      const transformers = ALL_TRANSFORMERS.filter((transformer) => {
-        if (
-          transformer.type === 'element' ||
-          transformer.type === 'multiline-element'
-        ) {
-          const deps = transformer.dependencies;
-          return deps.every((dep) => RegisteredNodesByType[type].includes(dep));
-        }
-        return true;
-      });
-      cleanupFunctions.push(registerMarkdownShortcuts(editor, transformers));
+      cleanupFunctions.push(
+        markdownShortcutsPlugin({
+          transformers: ALL_TRANSFORMERS,
+          triggerOnEnterTransformers: [HR, CODE],
+        })(editor)
+      );
       return pluginManager;
     },
 
