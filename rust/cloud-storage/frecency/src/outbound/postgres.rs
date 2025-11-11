@@ -13,7 +13,7 @@ use macro_user_id::{
 };
 use model_entity::{Entity, EntityType, TrackAction, TrackingData};
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction, prelude::FromRow};
-use std::{borrow::Cow, collections::VecDeque, str::FromStr, time::Duration};
+use std::{borrow::Cow, collections::VecDeque, str::FromStr};
 use thiserror::Error;
 
 #[cfg(test)]
@@ -388,6 +388,9 @@ pub struct FrecencyPgProcessor {
     tx: tokio::sync::Mutex<Option<Transaction<'static, Postgres>>>,
 }
 
+// Define a unique lock ID for frecency polling
+const FRECENCY_POLLER_LOCK_ID: i64 = 999_999_001;
+
 impl FrecencyPgProcessor {
     /// create a new instance of self from a [PgPool]
     pub fn new(pool: PgPool) -> Self {
@@ -396,11 +399,58 @@ impl FrecencyPgProcessor {
             tx: tokio::sync::Mutex::new(None),
         }
     }
+}
 
-    async fn get_unprocessed_events_inner(
+type ExistingEventRow = EventRow<'static, i64>;
+
+/// the types of errors that can occur with the poller
+#[derive(Debug, Error)]
+pub enum PollerErr {
+    /// there was an issue accessing the db tx
+    #[error("Expected to be inside a transaction, but no transaction was present")]
+    TxErr,
+    /// failed to acquire advisory lock on db
+    #[error("another poller currently holds the frecency lock")]
+    DbLockErr,
+    /// failed to acquire mutex lock
+    #[error(transparent)]
+    MutexErr(#[from] tokio::sync::TryLockError),
+    /// sqlx database error
+    #[error(transparent)]
+    Sqlx(#[from] sqlx::Error),
+    /// error parsing macro user id
+    #[error(transparent)]
+    ParseErr(#[from] ParseErr),
+    /// some other error
+    #[error(transparent)]
+    OtherErr(#[from] anyhow::Error),
+}
+
+/// we need to bind 7 parameters per event we need to process to insert 1 [AggregateFrecency].
+/// Due to the u16 max upper bound on query parameters this is the limit for items that can be processed in one batch.
+/// Leftover entries just get processed later
+static FETCH_LIMIT: u16 = u16::MAX / 7;
+
+impl UnprocessedEventsRepo for FrecencyPgProcessor {
+    type Err = PollerErr;
+    type EventId = i64;
+
+    async fn get_unprocessed_events(
         &self,
-    ) -> Result<Vec<EventRecordWithId<'static, i64>>, anyhow::Error> {
+    ) -> Result<Vec<EventRecordWithId<'static, i64>>, Self::Err> {
         let mut tx = self.pool.begin().await?;
+        let true = sqlx::query_scalar!(
+            r#"
+               SELECT pg_try_advisory_xact_lock($1)
+            "#,
+            FRECENCY_POLLER_LOCK_ID
+        )
+        .fetch_one(&mut *tx)
+        .await?
+        .unwrap_or(false) else {
+            return Err(PollerErr::DbLockErr);
+        };
+
         let res: Vec<ExistingEventRow> = sqlx::query_as!(
             ExistingEventRow,
             r#"
@@ -409,7 +459,6 @@ impl FrecencyPgProcessor {
                 frecency_events
             WHERE was_processed = false
             LIMIT $1
-            FOR UPDATE
             "#,
             FETCH_LIMIT as i64
         )
@@ -420,37 +469,7 @@ impl FrecencyPgProcessor {
 
         let mut guard = self.tx.try_lock()?;
         *guard = Some(tx);
-        res
-    }
-}
-
-type ExistingEventRow = EventRow<'static, i64>;
-
-#[derive(Debug, Error)]
-#[error("Expected to be inside a transaction, but no transaction was present")]
-struct LockErr;
-
-/// we need to bind 7 parameters per event we need to process to insert 1 [AggregateFrecency].
-/// Due to the u16 max upper bound on query parameters this is the limit for items that can be processed in one batch.
-/// Leftover entries just get processed later
-static FETCH_LIMIT: u16 = u16::MAX / 7;
-
-impl UnprocessedEventsRepo for FrecencyPgProcessor {
-    type Err = anyhow::Error;
-    type EventId = i64;
-
-    async fn get_unprocessed_events(
-        &self,
-    ) -> Result<Vec<EventRecordWithId<'static, i64>>, Self::Err> {
-        const TIMEOUT_SECS: u64 = 2;
-        tokio::select! {
-            res = self.get_unprocessed_events_inner() => {
-                res
-            },
-            _ = tokio::time::sleep(Duration::from_secs(TIMEOUT_SECS)) => {
-                Err(anyhow::anyhow!("Failed to acquire row level lock after {TIMEOUT_SECS} seconds. Timeout reached"))
-            }
-        }
+        res.map_err(PollerErr::from)
     }
 
     async fn mark_processed<'a>(
@@ -459,7 +478,7 @@ impl UnprocessedEventsRepo for FrecencyPgProcessor {
     ) -> Result<(), Self::Err> {
         let mut guard = self.tx.try_lock()?;
 
-        let mut tx = guard.take().ok_or(LockErr)?;
+        let mut tx = guard.take().ok_or(PollerErr::TxErr)?;
 
         if event.is_empty() {
             tx.commit().await?;
@@ -493,7 +512,7 @@ impl UnprocessedEventsRepo for FrecencyPgProcessor {
         aggregates: Vec<AggregateId<'_>>,
     ) -> Result<Vec<AggregateFrecency>, Self::Err> {
         let mut guard = self.tx.try_lock()?;
-        let tx = guard.as_deref_mut().ok_or(LockErr)?;
+        let tx = guard.as_deref_mut().ok_or(PollerErr::TxErr)?;
 
         let mut query_builder = QueryBuilder::<Postgres>::new(
             r#"
@@ -532,7 +551,7 @@ impl UnprocessedEventsRepo for FrecencyPgProcessor {
 
     async fn set_aggregates(&self, aggregates: Vec<AggregateFrecency>) -> Result<(), Self::Err> {
         let mut guard = self.tx.try_lock()?;
-        let tx = guard.as_deref_mut().ok_or(LockErr)?;
+        let tx = guard.as_deref_mut().ok_or(PollerErr::TxErr)?;
 
         if aggregates.is_empty() {
             return Ok(());
