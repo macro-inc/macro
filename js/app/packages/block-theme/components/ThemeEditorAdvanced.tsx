@@ -4,6 +4,7 @@ import { themeReactive } from '../signals/themeReactive';
 import { convertOklchTo } from '../utils/colorUtil';
 import { createSignal, For } from 'solid-js';
 import { ColorSwatch } from './ColorSwatch';
+import { DropdownMenu } from '@kobalte/core';
 
 const [ displayType, setDisplayType ] = createSignal('hex');
 
@@ -33,11 +34,11 @@ export function ThemeEditorAdvanced() {
         .advanced-theme-host {
           font-family: "Forma DJR Mono";
           scrollbar-width: none;
+          position: relative;
           overflow: hidden;
           font-size: 14px;
           display: block;
           height: 100%;
-          position: relative;
         }
         .advanced-theme-host *::selection {
           background-color: var(--a0);
@@ -104,19 +105,36 @@ export function ThemeEditorAdvanced() {
 
       <div class="advanced-theme-wrapper">
         <div class="advanced-theme-color-grid">
+
+          <div style="
+            border-bottom: 1px solid var(--b4);
+            background-color: var(--b0);
+            width: calc(100% - 2px);
+            align-items: center;
+            position: absolute;
+            padding: 0 20px;
+            display: grid;
+            height: 42px;
+            left: 1px;
+            top: 1px;
+          ">
+            format: {displayType()}
+          </div>
+          <div style="height: 41px;"/>
+
           <For each={Object.entries(themeReactive)}>
             {([colorKey, colorValue]) => (
               <div class="advanced-theme-color-wrapper">
                 <div class="advanced-theme-color">
 
-                  <div style="padding-left: 20px; padding-right: 20px; box-sizing: border-box; display: grid; width: 100%; height: 100%; align-items: center; background-color: var(--b0);">
+                  <div style="padding: 0 20px; box-sizing: border-box; display: grid; width: 100%; height: 100%; align-items: center; background-color: var(--b0);">
                     <ColorSwatch
                       color={`oklch(${colorValue.l[0]()} ${colorValue.c[0]()} ${colorValue.h[0]()}deg)`}
                       width={'100px'}
                     />
                   </div>
 
-                  <div style="padding-left: 20px; padding-right: 20px; box-sizing: border-box; display: grid; width: 100%; height: 100%; align-items: center; background-color: var(--b0);">
+                  <div style="padding: 0 20px; box-sizing: border-box; display: grid; width: 100%; height: 100%; align-items: center; background-color: var(--b0);">
                     <input
                       value={convertOklchTo(`oklch(${colorValue.l[0]()} ${colorValue.c[0]()} ${colorValue.h[0]()}deg)`, displayType())}
                       onInput={e => {setColor(colorValue, e.target.value)}}
@@ -124,7 +142,7 @@ export function ThemeEditorAdvanced() {
                     />
                   </div>
 
-                  <div style="padding-left: 20px; padding-right: 20px; box-sizing: border-box; display: grid; width: 100%; height: 100%; align-items: center; background-color: var(--b0);">
+                  <div style="padding: 0 20px; box-sizing: border-box; display: grid; width: 100%; height: 100%; align-items: center; background-color: var(--b0);">
                     --{colorKey}
                   </div>
                 </div>
