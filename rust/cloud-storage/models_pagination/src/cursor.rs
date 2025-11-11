@@ -43,16 +43,21 @@ pub struct Cursor<Id, C> {
 }
 
 /// Type alias for a [Cursor] with a [CursorVal] which is [Sortable]
-pub type CursorWithVal<Id, V> = Cursor<Id, CursorVal<V>>;
+pub type CursorWithVal<Id, V> = Cursor<Id, CursorVal<V, ()>>;
+
+/// Type alias for a [Cursor] with a [CursorVal] which is [Sortable] and some filter value F
+pub type CursorWithValAndFilter<Id, V, F> = Cursor<Id, CursorVal<V, F>>;
 
 /// The value of the [Cursor]. That is, the type of sort we are performing
 /// as well as the value of that sort on the last item of the page.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CursorVal<C: Sortable> {
+pub struct CursorVal<C: Sortable, F> {
     /// the type that we are sorting on, must implement [Sortable]
     pub sort_type: C,
     /// the last value of the [Sortable] from the previous page
     pub last_val: C::Value,
+    /// the value that we are filtering on
+    pub filter: F,
 }
 
 /// defines type to be sortable, sortable types must have an associated [Sortable::Value]
@@ -63,32 +68,46 @@ pub trait Sortable: std::fmt::Debug {
 
 /// Intermediary struct which holds information about the page we are going to create.
 /// The only use for this struct is to call [Paginator::into_page]
-pub struct Paginator<Iter, Cb, S> {
+pub struct Paginator<Iter, Cb, S, F> {
     iter: Iter,
     limit: usize,
     cb: Cb,
     sort_on: PhantomData<S>,
+    filter_on: PhantomData<F>,
 }
 
 /// The base trait which extends [Iterator] to create a [Paginator] if the trait bounds are met
 pub trait Paginate: Iterator + Sized {
     /// turn the iterator into a [Paginator]
-    fn paginate<Cb, S>(self, limit: usize, cb: Cb) -> Paginator<Self, Cb, S>
+    fn paginate<Cb, S, F>(self, limit: usize, cb: Cb) -> Paginator<Self, Cb, S, F>
     where
-        Cb: FnOnce(&<Self as Iterator>::Item) -> CursorVal<S>,
+        Cb: FnOnce(&<Self as Iterator>::Item) -> CursorVal<S, F>,
         S: Sortable;
 }
 
 /// extension to [Paginate] with the further requirement that the iterator item implements [SortOn] for this sort value T
 pub trait PaginateOn<T: Sortable>: Paginate {
     /// wrapper over [Paginate::paginate]
+    fn paginate_filter_on<F>(
+        self,
+        limit: usize,
+        sort: T,
+        filter: F,
+    ) -> Paginator<Self, impl FnOnce(&<Self as Iterator>::Item) -> CursorVal<T, F>, T, F>
+    where
+        <Self as Iterator>::Item: SortOn<T>;
+
+    /// wrapper over [PaginateOn::paginate_filter_on] to create cursor without a filter
     fn paginate_on(
         self,
         limit: usize,
         sort: T,
-    ) -> Paginator<Self, impl FnOnce(&<Self as Iterator>::Item) -> CursorVal<T>, T>
+    ) -> Paginator<Self, impl FnOnce(&<Self as Iterator>::Item) -> CursorVal<T, ()>, T, ()>
     where
-        <Self as Iterator>::Item: SortOn<T>;
+        <Self as Iterator>::Item: SortOn<T>,
+    {
+        PaginateOn::paginate_filter_on(self, limit, sort, ())
+    }
 }
 
 /// the trait used to uniquely identify a record
@@ -104,7 +123,7 @@ pub trait Identify {
 /// This should be implemented on the item that we iterate over, for the sortable method T that we are trying to paginate on
 pub trait SortOn<T: Sortable> {
     /// Given the input sort method T, return a function which produces the [CursorVal] for that T, from an input Self
-    fn sort_on(sort: T) -> impl FnOnce(&Self) -> CursorVal<T>;
+    fn sort_on<F>(sort: T, filter: F) -> impl FnOnce(&Self) -> CursorVal<T, F>;
 }
 
 impl<T> Paginate for T
@@ -112,9 +131,9 @@ where
     T: Iterator,
     T::Item: Identify,
 {
-    fn paginate<Cb, S>(self, limit: usize, cb: Cb) -> Paginator<Self, Cb, S>
+    fn paginate<Cb, S, F>(self, limit: usize, cb: Cb) -> Paginator<Self, Cb, S, F>
     where
-        Cb: FnOnce(&<Self as Iterator>::Item) -> CursorVal<S>,
+        Cb: FnOnce(&<Self as Iterator>::Item) -> CursorVal<S, F>,
         S: Sortable,
     {
         Paginator {
@@ -122,6 +141,7 @@ where
             limit,
             cb,
             sort_on: PhantomData,
+            filter_on: PhantomData,
         }
     }
 }
@@ -130,37 +150,40 @@ impl<Iter, T: Sortable> PaginateOn<T> for Iter
 where
     Iter: Paginate,
 {
-    fn paginate_on(
+    fn paginate_filter_on<F>(
         self,
         limit: usize,
         sort: T,
-    ) -> Paginator<Self, impl FnOnce(&<Self as Iterator>::Item) -> CursorVal<T>, T>
+        filter: F,
+    ) -> Paginator<Self, impl FnOnce(&<Self as Iterator>::Item) -> CursorVal<T, F>, T, F>
     where
         <Self as Iterator>::Item: SortOn<T>,
     {
-        let cb = <<Self as Iterator>::Item as SortOn<T>>::sort_on(sort);
+        let cb = <<Self as Iterator>::Item as SortOn<T>>::sort_on(sort, filter);
         self.paginate(limit, cb)
     }
 }
 
 /// Type alias for a [Paginated] where we still know the underlying type information of the encoded cursor
-pub type PaginatedTypedCursor<T, I, C> = Paginated<T, Base64Str<CursorWithVal<I, C>>>;
+pub type PaginatedTypedCursor<T, I, C, F> =
+    Paginated<T, Base64Str<CursorWithValAndFilter<I, C, F>>>;
 
 /// Type alias for a [Paginated] where the type information of the cursor has been erased. This is identical in memory layout and serialization shape as [PaginatedTypedCursor]
 pub type PaginatedOpaqueCursor<T> = Paginated<T, String>;
 
-impl<Iter, Cb, S> Paginator<Iter, Cb, S>
+impl<Iter, Cb, S, F> Paginator<Iter, Cb, S, F>
 where
     Iter: Iterator,
     Iter::Item: Identify,
-    Cb: FnOnce(&Iter::Item) -> CursorVal<S>,
+    Cb: FnOnce(&Iter::Item) -> CursorVal<S, F>,
     S: Sortable + Serialize,
     S::Value: Serialize,
+    F: Serialize,
     <Iter::Item as Identify>::Id: Serialize,
 {
     /// Turn self into a [PaginatedTypedCursor].
     /// This ensures that the page has the correct number of items and encodes the last element of the page into a base64 json encoded representation of the cursor.
-    pub fn into_page(self) -> PaginatedTypedCursor<Iter::Item, <Iter::Item as Identify>::Id, S> {
+    pub fn into_page(self) -> PaginatedTypedCursor<Iter::Item, <Iter::Item as Identify>::Id, S, F> {
         let Paginator {
             iter, limit, cb, ..
         } = self;
@@ -187,7 +210,7 @@ where
     }
 }
 
-impl<T, I, C: Sortable> PaginatedTypedCursor<T, I, C> {
+impl<T, I, C: Sortable, F> PaginatedTypedCursor<T, I, C, F> {
     /// Erase the type of self.
     /// This doesn't actually change any data it just makes the type less sepcific
     pub fn type_erase(self) -> PaginatedOpaqueCursor<T> {
@@ -282,18 +305,19 @@ where
 /// A [Query] is either a sort method T
 /// Or a [CursorWithVal]
 #[derive(Debug)]
-pub enum Query<I, T: Sortable> {
+pub enum Query<I, T: Sortable, F> {
     /// a Sort method T
     Sort(T),
     /// a [CursorWithVal]
-    Cursor(CursorWithVal<I, T>),
+    Cursor(CursorWithValAndFilter<I, T, F>),
 }
 
-impl<I, T> Clone for Query<I, T>
+impl<I, T, F> Clone for Query<I, T, F>
 where
     T: Sortable + Clone,
     T::Value: Clone,
     I: Clone,
+    F: Clone,
 {
     fn clone(&self) -> Self {
         match self {
@@ -303,9 +327,9 @@ where
     }
 }
 
-impl<I, T: Sortable> Query<I, T> {
+impl<I, T: Sortable, F> Query<I, T, F> {
     /// create an instance of [Query] from optionally a [CursorWithVal], fallling back to T if it does not exist
-    pub fn new(maybe_cursor: Option<CursorWithVal<I, T>>, fallback: T) -> Self {
+    pub fn new(maybe_cursor: Option<CursorWithValAndFilter<I, T, F>>, fallback: T) -> Self {
         match maybe_cursor {
             Some(c) => Self::Cursor(c),
             None => Self::Sort(fallback),
