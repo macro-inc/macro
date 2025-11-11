@@ -80,17 +80,17 @@ import {
 false && fileFolderDrop;
 
 const ViewTab: ParentComponent<{
-  view: ViewId;
+  viewId: ViewId;
   isLoading: Accessor<boolean>;
   setIsLoading: Setter<boolean>;
 }> = (props) => {
   return (
-    <Tabs.Content class="flex flex-col size-full" value={props.view}>
+    <Tabs.Content class="flex flex-col size-full" value={props.viewId}>
       {/* If Kobalte TabContent recieves Suspense as direct child, Suspense owner doesn't cleanup and causes memory leak */}
       {/* Make sure Suspense isn't root child by by wrapping children with DOM node */}
       <div class="contents">{props.children}</div>
       <SearchBar
-        viewId={props.view}
+        viewId={props.viewId}
         isLoading={props.isLoading}
         setIsLoading={props.setIsLoading}
       />
@@ -99,20 +99,20 @@ const ViewTab: ParentComponent<{
 };
 
 const DefaultViewTab: Component<{
-  view: ViewId;
+  viewId: ViewId;
   searchText: string;
   isLoading: Accessor<boolean>;
   setIsLoading: Setter<boolean>;
 }> = (props) => {
   return (
     <ViewTab
-      view={props.view}
+      viewId={props.viewId}
       isLoading={props.isLoading}
       setIsLoading={props.setIsLoading}
     >
       <Suspense>
         <UnifiedListView
-          viewId={props.view}
+          viewId={props.viewId}
           searchText={props.searchText}
           onLoadingChange={props.setIsLoading}
         />
@@ -129,7 +129,7 @@ const ConditionalViewTab: ParentComponent<{
   return (
     <Show when={VIEWS.includes(props.view)}>
       <ViewTab
-        view={props.view}
+        viewId={props.view}
         isLoading={props.isLoading}
         setIsLoading={props.setIsLoading}
       >
@@ -139,7 +139,9 @@ const ConditionalViewTab: ParentComponent<{
   );
 };
 
-const ViewWithState: Component<{ view: ViewId }> = (props) => {
+export const ViewWithSearch: Component<{
+  viewId: ViewId;
+}> = (props) => {
   const { getSelectedViewStore: viewData } =
     useSplitPanelOrThrow().unifiedListContext;
   const searchText = createMemo<string>(() => viewData().searchText ?? '');
@@ -147,7 +149,7 @@ const ViewWithState: Component<{ view: ViewId }> = (props) => {
 
   return (
     <Switch>
-      <Match when={props.view === 'emails'}>
+      <Match when={props.viewId === 'emails'}>
         <ConditionalViewTab
           view="emails"
           isLoading={isLoading}
@@ -158,7 +160,7 @@ const ViewWithState: Component<{ view: ViewId }> = (props) => {
           </Suspense>
         </ConditionalViewTab>
       </Match>
-      <Match when={props.view === 'all'}>
+      <Match when={props.viewId === 'all'}>
         <ConditionalViewTab
           view="all"
           isLoading={isLoading}
@@ -171,7 +173,7 @@ const ViewWithState: Component<{ view: ViewId }> = (props) => {
       </Match>
       <Match when={true}>
         <DefaultViewTab
-          view={props.view}
+          viewId={props.viewId}
           searchText={searchText()}
           isLoading={isLoading}
           setIsLoading={setIsLoading}
@@ -412,7 +414,7 @@ export function Soup() {
               />
             </SplitHeaderLeft>
             <For each={Object.keys(viewsData)}>
-              {(viewId) => <ViewWithState view={viewId} />}
+              {(viewId) => <ViewWithSearch viewId={viewId} />}
             </For>
           </Tabs>
         </SplitPanelContext.Provider>
