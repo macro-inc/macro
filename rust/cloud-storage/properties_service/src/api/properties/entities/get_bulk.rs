@@ -11,7 +11,6 @@ use crate::api::{
     context::ApiContext,
     properties::entities::types::{BulkEntityPropertiesRequest, EntityPropertiesResponse},
 };
-use model::user::UserContext;
 use properties_db_client::{
     entity_properties::get as entity_properties_get, error::PropertiesDatabaseError,
 };
@@ -49,19 +48,18 @@ impl IntoResponse for GetBulkEntityPropertiesErr {
 /// Get properties for multiple entities in bulk
 #[utoipa::path(
     post,
-    path = "/properties/entities/bulk",
+    path = "/internal/properties/entities/bulk",
     request_body = BulkEntityPropertiesRequest,
     responses(
         (status = 200, description = "Bulk entity properties retrieved successfully", body = HashMap<String, EntityPropertiesResponse>),
         (status = 400, description = "Invalid request body"),
         (status = 500, description = "Internal server error")
     ),
-    tag = "Properties"
+    tag = "Internal"
 )]
-#[tracing::instrument(skip(context, user_context, request), fields(user_id = %user_context.user_id, entity_count = request.entities.len()))]
+#[tracing::instrument(skip(context, request), fields(entity_count = request.entities.len()))]
 pub async fn get_bulk_entity_properties(
     State(context): State<ApiContext>,
-    Extension(user_context): Extension<UserContext>,
     Json(request): Json<BulkEntityPropertiesRequest>,
 ) -> Result<Json<HashMap<String, EntityPropertiesResponse>>, GetBulkEntityPropertiesErr> {
     if request.entities.is_empty() {
@@ -81,7 +79,6 @@ pub async fn get_bulk_entity_properties(
                 tracing::error!(
                     error = ?e,
                     entity_count = request.entities.len(),
-                    user_id = %user_context.user_id,
                     "failed to retrieve bulk entity properties"
                 );
             })?;
@@ -99,7 +96,6 @@ pub async fn get_bulk_entity_properties(
 
     tracing::info!(
         successful_entities = result.len(),
-        user_id = %user_context.user_id,
         "successfully retrieved bulk entity properties"
     );
 
