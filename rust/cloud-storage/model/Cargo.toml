@@ -22,7 +22,7 @@ models_comms = { path = "../models_comms" }
 models_email = { path = "../models_email" }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions" }
-once_cell = { workspace = true }
+model_file_type = { path = "../model_file_type" }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true, features = ["raw_value"] }

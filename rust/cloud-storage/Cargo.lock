@@ -5104,13 +5104,13 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "model-error-response",
+ "model_file_type",
  "model_user",
  "models_bulk_upload",
  "models_comms",
  "models_email",
  "models_pagination",
  "models_permissions",
- "once_cell",
  "schemars",
  "serde",
  "serde_json",
@@ -5140,6 +5140,15 @@ name = "model-error-response"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "utoipa",
+]
+
+[[package]]
+name = "model_file_type"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "thiserror 2.0.17",
  "utoipa",
 ]
 
