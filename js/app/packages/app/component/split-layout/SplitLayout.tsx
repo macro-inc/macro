@@ -101,7 +101,7 @@ function createSplitFocusTracker(props: {
   panelRefs: Map<SplitId, HTMLDivElement>;
   splits: Accessor<ReadonlyArray<SplitState>>;
 }) {
-  const DEBOUNCE = 100;
+  const DEBOUNCE = 40;
   const activeSplitId = () => props.splitManager.activeSplitId();
 
   const currentSplitsIds = () => new Set(props.splits().map((s) => s.id));
