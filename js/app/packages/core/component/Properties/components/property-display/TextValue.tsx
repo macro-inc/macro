@@ -4,7 +4,6 @@ import { Show } from 'solid-js';
 import { useInlineEditor } from '../../hooks';
 import type { Property } from '../../types';
 import { formatPropertyValue } from '../../utils';
-import { getEditMethod } from '../../utils/typeGuards';
 
 type TextValueProps = {
   property: Property;
@@ -26,7 +25,7 @@ export const TextValue: Component<TextValueProps> = (props) => {
   const supportsInline = () =>
     props.canEdit &&
     !props.property.isMetadata &&
-    getEditMethod(props.property.valueType) === 'inline';
+    props.property.valueType === 'STRING';
 
   const handleClick = () => {
     if (supportsInline()) {
