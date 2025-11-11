@@ -1,5 +1,4 @@
 mod ai_request;
-mod attachment;
 mod toolset;
 
 use crate::api::ws::connection::{
