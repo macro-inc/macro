@@ -24,6 +24,7 @@ import { invalidateUserQuota } from '@service-auth/userQuota';
 import { cognitionWebsocketServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { createEffect, createSignal, Show } from 'solid-js';
+import { pendingLocationParamsSignal } from '../signal/pendingLocationParams';
 
 export function Chat(props: { data: ChatData }) {
   const canEdit = useCanEdit();
@@ -47,6 +48,7 @@ export function Chat(props: { data: ChatData }) {
     messages: props.data.chat.messages,
     chatId: props.data.chat.id,
     editDisabled: disabled,
+    pendingLocationParams: pendingLocationParamsSignal.get,
   });
   const blockHandle = blockHandleSignal.get;
 
@@ -121,11 +123,16 @@ export function Chat(props: { data: ChatData }) {
     saveChatState({ attachments: attached, input, model: model_ });
   });
 
+  const setPendingLocation = pendingLocationParamsSignal.set;
   const buildChatSendRequest = useBuildChatSendRequest();
+
   createMethodRegistration(blockHandle, {
     sendMessage: async (sendRequest: SendBuilder) => {
       const send = await buildChatSendRequest(sendRequest);
       onSend(send);
+    },
+    goToLocationFromParams: (params: Record<string, string>) => {
+      setPendingLocation(params);
     },
   });
 
