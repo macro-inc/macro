@@ -14,11 +14,11 @@ import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
 import { useDisplayName } from '@core/user';
 import { isErr, isOk } from '@core/util/maybeResult';
+import PaperPlaneRight from '@icon/fill/paper-plane-right-fill.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
 import DotsThree from '@icon/regular/dots-three.svg';
-import PaperPlaneRight from '@icon/fill/paper-plane-right-fill.svg';
 import Plus from '@icon/regular/plus.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
@@ -36,6 +36,7 @@ import type {
 import { useEmail, useUserId } from '@service-gql/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
+import { raceTimeout } from '@solid-primitives/promise';
 import {
   defaultSelectionData,
   lazyRegister,
@@ -80,7 +81,6 @@ import { getReplyTypeFromDraft } from '../util/replyType';
 import { AttachMenu } from './AttachMenu';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
-import { raceTimeout } from '@solid-primitives/promise';
 
 false && fileDrop;
 

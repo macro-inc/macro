@@ -5,6 +5,7 @@ import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
+import { toast } from '@core/component/Toast/Toast';
 import { fileDrop } from '@core/directive/fileDrop';
 import type { WithCustomUserInput } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
@@ -13,6 +14,7 @@ import Plus from '@icon/regular/plus.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import type { DocumentMentionInfo } from '@lexical-core';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import { emailClient } from '@service-email/client';
 import type {
   ContactInfo,
   Link as EmailAccountLink,
@@ -45,8 +47,6 @@ import {
   prepareEmailBody,
 } from '../util/prepareEmailBody';
 import { AttachMenu } from './AttachMenu';
-import { emailClient } from '@service-email/client';
-import { toast } from '@core/component/Toast/Toast';
 
 false && fileDrop;
 
