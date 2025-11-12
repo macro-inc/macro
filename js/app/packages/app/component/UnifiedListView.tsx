@@ -12,11 +12,7 @@ import DropdownMenu from '@core/component/FormControls/DropdownMenu';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ToggleButton } from '@core/component/FormControls/ToggleButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
-import {
-  ContextMenuContent,
-  MenuItem,
-  MenuSeparator,
-} from '@core/component/Menu';
+import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import {
   blockAcceptsFileExtension,
@@ -1357,94 +1353,77 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                 />
                 <MenuSeparator />
               </Show>
-              <Show when={markEntityAsDone}>
-                {(fnAccessor) => (
-                  <MenuItem
-                    text="Mark as Done"
-                    onClick={() =>
-                      fnAccessor()(contextAndModalState.selectedEntity!)
+              <EntityActionsMenuItems
+                onSelectAction={(type) => {
+                  const entity = contextAndModalState.selectedEntity;
+                  if (!entity) return;
+
+                  switch (type) {
+                    case 'mark_as_done': {
+                      markEntityAsDone(entity);
+                      break;
                     }
-                    disabled={
-                      contextAndModalState.selectedEntity?.type === 'email'
-                        ? contextAndModalState.selectedEntity.done
-                        : contextAndModalState.selectedEntity
-                            ?.notifications?.()
-                            .every(({ done }) => done)
+                    case 'rename': {
+                      openEntityModal('rename');
+                      break;
                     }
-                  />
-                )}
-              </Show>
-              <MenuItem
-                text="Delete"
-                onClick={() =>
-                  deleteDssItem(contextAndModalState.selectedEntity!)
-                }
-                disabled={
-                  contextAndModalState.selectedEntity?.type !== 'document' &&
-                  contextAndModalState.selectedEntity?.type !== 'project' &&
-                  contextAndModalState.selectedEntity?.type !== 'chat'
-                }
-              />
-              <MenuItem
-                text="Rename"
-                onClick={() => openEntityModal('rename')}
-                disabled={
-                  contextAndModalState.selectedEntity?.type !== 'document' &&
-                  contextAndModalState.selectedEntity?.type !== 'chat'
-                }
-              />
-              <MenuItem
-                text="Move to Project"
-                onClick={() => {
-                  openEntityModal('moveToProject');
-                }}
-                disabled={
-                  contextAndModalState.selectedEntity?.type !== 'document' &&
-                  contextAndModalState.selectedEntity?.type !== 'project' &&
-                  contextAndModalState.selectedEntity?.type !== 'chat'
-                  // https://github.com/macro-inc/macro-api/pull/2395
-                  //  || !hasProjectPermissions()
-                }
-              />
-              <MenuItem
-                text="Copy"
-                onClick={() => {
-                  copyDssItem({ entity: contextAndModalState.selectedEntity! });
-                }}
-                disabled={
-                  contextAndModalState.selectedEntity?.type !== 'document' &&
-                  contextAndModalState.selectedEntity?.type !== 'chat'
-                }
-              />
-              <MenuItem
-                text="Open in new split"
-                onClick={() => {
-                  const splitManager = globalSplitManager();
-                  if (!splitManager) {
-                    console.error('No split manager available');
-                    return;
-                  }
-                  if (
-                    contextAndModalState.selectedEntity?.type === 'document'
-                  ) {
-                    const { fileType, id } =
-                      contextAndModalState.selectedEntity!;
-                    splitManager.createNewSplit({
-                      type: fileTypeToBlockName(fileType),
-                      id,
-                    });
-                  } else {
-                    const { id, type } = contextAndModalState.selectedEntity!;
-                    splitManager.createNewSplit({
-                      type,
-                      id,
-                    });
+                    case 'delete': {
+                      deleteDssItem(entity);
+                      break;
+                    }
+                    case 'move_to_project': {
+                      openEntityModal('moveToProject');
+                      break;
+                    }
+                    case 'copy': {
+                      copyDssItem({ entity });
+                      break;
+                    }
+                    case 'move_to_split': {
+                      const splitManager = globalSplitManager();
+                      if (!splitManager) {
+                        console.error('No split manager available');
+                        return;
+                      }
+
+                      if (
+                        contextAndModalState.selectedEntity?.type === 'document'
+                      ) {
+                        const { fileType, id } =
+                          contextAndModalState.selectedEntity!;
+                        splitManager.createNewSplit({
+                          type: fileTypeToBlockName(fileType),
+                          id,
+                        });
+                      } else {
+                        const { id, type } =
+                          contextAndModalState.selectedEntity!;
+                        splitManager.createNewSplit({
+                          type,
+                          id,
+                        });
+                      }
+
+                      break;
+                    }
+
+                    default:
+                      break;
                   }
                 }}
+                disabled={disabledActions()}
               />
             </ContextMenuContent>
           </ContextMenu.Portal>
         </ContextMenu.Trigger>
+        <Show when={view?.selectedEntities.length}>
+          <EntitySelectionToolbarModal
+            selectedEntities={view?.selectedEntities ?? []}
+            onClose={() =>
+              unifiedListContext.setSelectedViewStore('selectedEntities', [])
+            }
+          />
+        </Show>{' '}
       </ContextMenu>
     </>
   );
