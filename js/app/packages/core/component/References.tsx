@@ -1,7 +1,7 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { useSplitNavigationHandler } from '@app/component/split-layout/useSplitNavigationHandlers';
 import type { BlockName } from '@core/block';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {

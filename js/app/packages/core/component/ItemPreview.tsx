@@ -1,5 +1,5 @@
-import { useSplitNavigationHandler } from '@app/component/split-layout/useSplitNavigationHandlers';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { isAccessiblePreviewItem, useItemPreview } from '@core/signal/preview';
 import { matches } from '@core/util/match';
 import { truncateString } from '@core/util/string';

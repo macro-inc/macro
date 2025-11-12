@@ -1,8 +1,8 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { idToEmail } from '@core/user';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import type { Component } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
-import { useSplitNavigationHandler } from '../../app/component/split-layout/useSplitNavigationHandlers';
 
 interface UserIconWithContactProps {
   userId: string;

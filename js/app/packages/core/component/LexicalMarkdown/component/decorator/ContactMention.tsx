@@ -6,7 +6,7 @@ import { createSignal, Show, useContext } from 'solid-js';
 import { Portal } from 'solid-js/web';
 
 import { useSplitLayout } from '../../../../../app/component/split-layout/layout';
-import { useSplitNavigationHandler } from '../../../../../app/component/split-layout/useSplitNavigationHandlers';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { autoRegister } from '../../plugins';

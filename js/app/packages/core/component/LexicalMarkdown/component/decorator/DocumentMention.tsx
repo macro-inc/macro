@@ -1,9 +1,9 @@
-import { useSplitNavigationHandler } from '@app/component/split-layout/useSplitNavigationHandlers';
 import {
   type BlockName,
   useMaybeBlockId,
   useMaybeBlockName,
 } from '@core/block';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
   getMentionsIcon,
   mentionsAccessories,

@@ -1,5 +1,5 @@
-import { useSplitNavigationHandler } from '@app/component/split-layout/useSplitNavigationHandlers';
 import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
+import { useSplitNavigationHandler } from 'core/util/useSplitNavigationHandler';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
 import { getIconConfig } from 'core/component/EntityIcon';
