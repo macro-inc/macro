@@ -3,7 +3,6 @@ import {
   useMaybeBlockId,
   useMaybeBlockName,
 } from '@core/block';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
   getMentionsIcon,
   mentionsAccessories,
@@ -26,6 +25,7 @@ import {
   useItemPreview,
 } from '@core/signal/preview';
 import { matches } from '@core/util/match';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import EyeSlashDuo from '@icon/duotone/eye-slash-duotone.svg';
 import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';

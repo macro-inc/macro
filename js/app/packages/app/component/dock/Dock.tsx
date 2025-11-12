@@ -105,9 +105,9 @@ export function Dock() {
               Debug
             </h3>
             <ol class="flex flex-col bg-ink/50 px-[1ch] py-[1lh] list-decimal list-inside">
-                  <li class="whitespace-nowrap list-item">
-                    <span class="bg-ink px-1 py-px">{activeScope()}</span>
-                  </li>
+              <li class="whitespace-nowrap list-item">
+                <span class="bg-ink px-1 py-px">{activeScope()}</span>
+              </li>
             </ol>
           </div>
         </Show>

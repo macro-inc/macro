@@ -665,7 +665,7 @@ export function MarkdownEditor() {
   autoRegister(
     registerRootEventListener(editor, 'focusin', (e) => {
       e.preventDefault();
-      editor.focus(undefined, {defaultSelection: 'rootStart'});
+      editor.focus(undefined, { defaultSelection: 'rootStart' });
     })
   );
 

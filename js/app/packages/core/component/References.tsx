@@ -1,7 +1,6 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import type { BlockName } from '@core/block';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
@@ -12,6 +11,7 @@ import {
 } from '@core/signal/preview';
 import { useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { commsServiceClient } from '@service-comms/client';
 import type { EntityReference } from '@service-comms/generated/models/entityReference';
 import type { GenericReference } from '@service-comms/generated/models/genericReference';

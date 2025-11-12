@@ -1,9 +1,9 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import type { Entity } from '@core/types';
 import { formatDate } from '@core/util/date';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { notificationWithMetadata } from '@notifications/notificationMetadata';
 import { navigateToNotification } from '@notifications/notificationNavigation';
 import {

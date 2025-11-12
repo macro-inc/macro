@@ -1,5 +1,4 @@
 import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
-import { useSplitNavigationHandler } from 'core/util/useSplitNavigationHandler';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
 import { getIconConfig } from 'core/component/EntityIcon';
@@ -7,6 +6,7 @@ import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/St
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { useDisplayName } from 'core/user';
 import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
+import { useSplitNavigationHandler } from 'core/util/useSplitNavigationHandler';
 import { notificationWithMetadata } from 'notifications/notificationMetadata';
 import type { ParentProps, Ref } from 'solid-js';
 import {

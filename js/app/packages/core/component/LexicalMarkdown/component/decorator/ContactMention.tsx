@@ -1,12 +1,11 @@
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import BuildingIcon from '@icon/regular/buildings.svg';
 import UserIcon from '@icon/regular/user.svg';
 import type { ContactMentionDecoratorProps } from '@lexical-core';
 import { COMMAND_PRIORITY_NORMAL, KEY_ENTER_COMMAND } from 'lexical';
 import { createSignal, Show, useContext } from 'solid-js';
 import { Portal } from 'solid-js/web';
-
 import { useSplitLayout } from '../../../../../app/component/split-layout/layout';
-import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { autoRegister } from '../../plugins';
