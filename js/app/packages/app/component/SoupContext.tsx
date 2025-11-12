@@ -42,6 +42,7 @@ import {
   type ViewData,
   type ViewDataMap,
 } from './ViewConfig';
+import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 export type UnifiedListContext = {
   viewsDataStore: Store<ViewDataMap>;
@@ -65,6 +66,7 @@ export function createSoupContext(): UnifiedListContext {
   const [viewsDataStore, setViewDataStore_] = useAllViews({
     selectedViewSignal: [selectedView, setSelectedView],
   });
+  // replaceOrInsertSplit({ type: entity.type, id: entity.id })
   const getSelectedViewStore = createLazyMemo(
     () => viewsDataStore[selectedView()]
   );
@@ -327,6 +329,18 @@ export function createNavigationEntityListShortcut({
 
       const selectedEntity = entities()?.at(index);
       if (selectedEntity) {
+        if (splitHandle.content().type !== 'component') {
+          const { type, id } = selectedEntity;
+          if (type === 'document') {
+            const { fileType } = selectedEntity;
+            splitHandle.replace(
+              { type: fileTypeToBlockName(fileType), id },
+              true
+            );
+          } else {
+            splitHandle.replace({ type, id }, true);
+          }
+        }
         batch(() => {
           setSelectedViewStore('highlightedId', selectedEntity.id);
           setSelectedViewStore('selectedEntity', selectedEntity);
@@ -449,7 +463,7 @@ export function createNavigationEntityListShortcut({
   );
 
   registerHotkey({
-    hotkey: ['arrowdown', 'j'],
+    hotkey: ['j', 'arrowdown'],
     scopeId: splitHotkeyScope,
     description: 'Down',
     hotkeyToken: TOKENS.entity.step.end,
@@ -460,7 +474,7 @@ export function createNavigationEntityListShortcut({
     hide: true,
   });
   registerHotkey({
-    hotkey: ['arrowup', 'k'],
+    hotkey: ['k', 'arrowup'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.step.start,
     description: 'Up',
@@ -624,6 +638,23 @@ export function createNavigationEntityListShortcut({
 
     attachEntityHotkeys(ref);
   });
+}
+
+export function useNavigatedFromJK() {
+  const {
+    unifiedListContext: {
+      entitiesSignal: [_entities],
+    },
+  } = useSplitPanelOrThrow();
+  const navigatedFromJK = createMemo(() => {
+    const entities = _entities();
+    if (!entities) return false;
+    return (
+      entities.length > 0 &&
+      document.documentElement.getAttribute('data-modality') === 'keyboard'
+    );
+  });
+  return { navigatedFromJK };
 }
 
 const useAllViews = ({

@@ -45,6 +45,7 @@ import { pdfDocumentProxy } from '../signal/document';
 import { LocationType, useCreateShareUrl } from '../signal/location';
 import { MarkupToolbar } from './MarkupToolbar';
 import { PageNumberInput } from './PageNumberInput';
+import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 
 export function TopBar() {
   const isAuth = useIsAuthenticated();
@@ -171,7 +172,10 @@ export function TopBar() {
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
       <SplitHeaderRight>
-        <BlockLiveIndicators />
+        <div class="flex h-full">
+          <EntityNavigationIndicator />
+          <BlockLiveIndicators />
+        </div>
       </SplitHeaderRight>
       <SplitToolbarLeft>
         <Show when={pdfDocumentProxy()}>

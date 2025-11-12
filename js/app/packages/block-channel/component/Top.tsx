@@ -22,6 +22,7 @@ import { useUserId } from '@service-gql/client';
 import { Show } from 'solid-js';
 import { AttachmentsModal } from './AttachmentsModal';
 import { ParticipantManager } from './ParticipantManager';
+import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 
 type TopIconProps = {
   channelType: ChannelType;
@@ -87,7 +88,10 @@ export function Top() {
         />
       </SplitHeaderLeft>
       <SplitHeaderRight>
-        <BlockLiveIndicators />
+        <div class="flex h-full">
+          <EntityNavigationIndicator />
+          <BlockLiveIndicators />
+        </div>
       </SplitHeaderRight>
       <SplitToolbarRight>
         <div class="p-1 flex flex-row gap-1 items-center h-full">

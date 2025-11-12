@@ -42,6 +42,7 @@ import { blockNameToItemType } from '@service-storage/client';
 import { Show } from 'solid-js';
 import { HistoryModal } from './History';
 import { MarkdownPropertiesModal } from './MarkdownPropertiesModal';
+import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 
 export function TopBar() {
   const canEdit = useCanEdit();
@@ -76,7 +77,10 @@ export function TopBar() {
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
       <SplitHeaderRight>
-        <BlockLiveIndicators />
+        <div class="flex h-full">
+          <EntityNavigationIndicator />
+          <BlockLiveIndicators />
+        </div>
       </SplitHeaderRight>
       <SplitToolbarLeft>
         <SplitFileMenu

@@ -1,5 +1,4 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { TOKENS } from '@core/hotkey/tokens';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -19,7 +18,6 @@ import type { MessageWithBodyReplyless } from '@service-email/generated/schemas'
 import type { Thread } from '@service-email/generated/schemas/thread';
 import { createCallback } from '@solid-primitives/rootless';
 import { useSearchParams } from '@solidjs/router';
-import { registerHotkey } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   createEffect,
@@ -45,6 +43,7 @@ import { EmailFormContextProvider } from './EmailFormContext';
 import { EmailInput } from './EmailInput';
 import { MessageList } from './MessageList';
 import { TopBar } from './TopBar';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 
 type EmailProps = {
   title: Accessor<string>;
@@ -56,6 +55,8 @@ type EmailProps = {
 
 export function Email(props: EmailProps) {
   const scopeId = blockHotkeyScopeSignal.get;
+
+  console.log('scopeId()', scopeId());
   const setIsScrollingToMessage = isScrollingToMessage.set;
   const { navigateThread } = useThreadNavigation();
   const blockElement = blockElementSignal.get;
@@ -487,23 +488,6 @@ export function Email(props: EmailProps) {
       navigateToPreviousMessage,
       navigateToNextMessage,
     });
-    registerHotkey({
-      hotkey: 'k',
-      scopeId: scopeId(),
-      description: 'Next email',
-      keyDownHandler: () => navigateThread('down'),
-      hotkeyToken: TOKENS.email.nextThread,
-      displayPriority: 10,
-    });
-
-    registerHotkey({
-      hotkey: 'j',
-      scopeId: scopeId(),
-      description: 'Previous email',
-      keyDownHandler: () => navigateThread('up'),
-      hotkeyToken: TOKENS.email.previousThread,
-      displayPriority: 9,
-    });
   });
 
   createEffect(() => {
@@ -539,6 +523,25 @@ export function Email(props: EmailProps) {
       }
     }
   );
+  let markdownDomRef!: HTMLDivElement;
+
+  createEffect(() => {
+    if (scopeId()) {
+      registerHotkey({
+        hotkey: 'enter',
+        scopeId: scopeId(),
+        description: 'Focus Email Input',
+        keyDownHandler: () => {
+          if (markdownDomRef) {
+            markdownDomRef.focus();
+            return true;
+          }
+          return false;
+        },
+        hide: true,
+      });
+    }
+  });
 
   return (
     <EmailProvider
@@ -575,6 +578,9 @@ export function Email(props: EmailProps) {
                 <EmailInput
                   replyingTo={lastMessage}
                   draft={messageDbIdToDraftChildren[lastMessage().db_id ?? '']}
+                  markdownDomRef={(el) => {
+                    markdownDomRef = el;
+                  }}
                 />
               </div>
             )}

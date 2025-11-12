@@ -127,7 +127,7 @@ function titleNavigationPlugin(
 
 export const TitlePlaceholderSignal = createBlockSignal<string | undefined>();
 
-export function TitleEditor() {
+export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const mdData = mdStore.get;
   const setMdData = mdStore.set;
   const blockData = blockDataSignal.get;
@@ -259,6 +259,15 @@ export function TitleEditor() {
   // Autofocus the title if it is empty.
   createEffect(() => {
     if (dataReady()) {
+      if (untrack(mdDocumentName) === '') {
+        editor.focus();
+      }
+    }
+  });
+
+  // Auto-focus on mount if enabled and title is empty.
+  createEffect(() => {
+    if (props.autoFocusOnMount && dataReady()) {
       if (untrack(mdDocumentName) === '') {
         editor.focus();
       }

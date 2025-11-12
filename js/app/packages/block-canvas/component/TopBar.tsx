@@ -37,6 +37,7 @@ import { URL_PARAMS } from '../constants';
 import { useToolManager } from '../signal/toolManager';
 import { currentSavedFile } from '../store/canvasData';
 import { useRenderState } from '../store/RenderState';
+import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 
 const { track, TrackingEvents } = withAnalytics();
 
@@ -108,7 +109,10 @@ export function TopBar() {
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
       <SplitHeaderRight>
-        <BlockLiveIndicators />
+        <div class="flex h-full">
+          <EntityNavigationIndicator />
+          <BlockLiveIndicators />
+        </div>
       </SplitHeaderRight>
       <SplitToolbarLeft>
         <div class="p-1">
