@@ -131,7 +131,7 @@ where
                     CursorVal {
                         sort_type: Frecency,
                         last_val: FrecencyValue::UpdatedAt(updated),
-                        filter,
+                        filter: _,
                     },
             }) => {
                 return Ok(Either::Left(

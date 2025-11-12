@@ -16,23 +16,22 @@ pub enum SoupType {
 
 /// the parameters required for a [SimpleSortMethod]
 #[derive(Debug)]
-pub(crate) struct SimpleSortRequest<'a> {
+pub struct SimpleSortRequest<'a> {
     /// the limit of the number of items to return
-    pub limit: u16,
+    pub(crate) limit: u16,
     /// the [Query] the client passes (if any)
-    pub cursor: Query<String, SimpleSortMethod, Option<SimpleSortFilter>>,
+    pub(crate) cursor: Query<String, SimpleSortMethod, Option<SimpleSortFilter>>,
     /// the id of the user
-    pub user_id: MacroUserIdStr<'a>,
+    pub(crate) user_id: MacroUserIdStr<'a>,
 }
 
 /// the types of values we can potentially filter out of a [SimpleSortRequest]
 #[derive(Debug)]
-pub(crate) enum SimpleSortFilter {
+pub enum SimpleSortFilter {
     /// remove frecency values from output
     Frecency(Frecency),
     /// remove the ast values from output
     Ast(EntityFilterAst),
-    ///
     FrecencyAst(Frecency, EntityFilterAst),
 }
 

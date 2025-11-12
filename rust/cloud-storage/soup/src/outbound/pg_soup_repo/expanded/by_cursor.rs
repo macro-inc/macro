@@ -1,4 +1,3 @@
-use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Frecency, Query, SimpleSortMethod};
 use models_soup::project::map_soup_project;
