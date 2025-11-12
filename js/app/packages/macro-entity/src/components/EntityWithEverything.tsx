@@ -166,12 +166,12 @@ export function EntityWithEverything<
           </div>
           {/* Subject */}
           <ImportantBadge active={props.importantIndicatorActive} />
-          <div class="font-semibold shrink-0 truncate opacity-70">
-            {props.entity.name}
-          </div>
-          {/* Body  */}
-          <div class="truncate shrink grow opacity-70">
-            {props.entity.snippet}
+          <div class="flex items-center w-full gap-4 flex-1 min-w-0">
+            <div class="font-medium shrink-0 truncate">{props.entity.name}</div>
+            {/* Body  */}
+            <div class="truncate shrink grow opacity-60">
+              {props.entity.snippet}
+            </div>
           </div>
         </div>
       );
@@ -260,9 +260,9 @@ export function EntityWithEverything<
     <div
       use:draggable
       use:droppable
-      class={`relative group py-[7px] px-2 ${ITEM_WRAPPER_CLASS()}`}
+      class={`relative group py-[5px] px-2 ${ITEM_WRAPPER_CLASS()}`}
       classList={{
-        'bg-hover': props.highlighted,
+        'bg-hover ring-1 ring-inset ring-edge-muted/50': props.highlighted,
         bracket: props.selected,
       }}
       onMouseDown={(e) => {
@@ -413,7 +413,7 @@ export function EntityWithEverything<
                   if (
                     notification.notificationEventType === 'document_mention' ||
                     notification.notificationEventType ===
-                      'channel_message_document'
+                    'channel_message_document'
                   ) {
                     return 'shared';
                   }
@@ -436,7 +436,7 @@ export function EntityWithEverything<
                   if (
                     notification.notificationEventType === 'document_mention' ||
                     notification.notificationEventType ===
-                      'channel_message_document'
+                    'channel_message_document'
                   ) {
                     return '';
                   }
@@ -472,12 +472,12 @@ export function EntityWithEverything<
                     onClick={
                       props.onClickNotification
                         ? [
-                            props.onClickNotification,
-                            {
-                              ...props.entity,
-                              notification,
-                            },
-                          ]
+                          props.onClickNotification,
+                          {
+                            ...props.entity,
+                            notification,
+                          },
+                        ]
                         : undefined
                     }
                   >
