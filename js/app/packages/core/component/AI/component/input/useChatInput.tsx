@@ -28,7 +28,7 @@ import { ActiveTabAttachment } from './ActiveTabAttachment';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { SendMessageButton, StopButton } from './SendMessageButton';
-import { ToolsetSelector } from './ToolsetSelector';
+import { type Source, ToolsetSelector } from './ToolsetSelector';
 import {
   type UseChatMarkdown,
   useChatMarkdownArea,
