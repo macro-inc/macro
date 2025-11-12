@@ -5,7 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use model::response::ErrorResponse;
+use model::response::{EmptyResponse, ErrorResponse};
 use model::user::UserContext;
 use models_email::email::service::backfill::BackfillJob;
 use models_email::email::service::link::Link;
@@ -89,8 +89,8 @@ pub struct GetActiveBackfillJobResponse {
     operation_id = "get_backfill_gmail_active",
     responses(
             (status = 200, body=GetActiveBackfillJobResponse),
+            (status = 204, body=EmptyResponse),
             (status = 401, body=ErrorResponse),
-            (status = 404, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )
 )]
