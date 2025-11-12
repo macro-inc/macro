@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use anyhow::Context;
 use chrono::Utc;
 use model::document::{
@@ -107,12 +109,12 @@ pub async fn update_search_with_raw_document(
         return Ok(());
     }
 
-    let file_type: FileType = document_info
-        .file_type
-        .context("expected a file type")?
-        .as_str()
-        .try_into()
-        .context("unable to parse file type")?;
+    let file_type = FileType::from_str(
+        document_info
+            .file_type
+            .context("expected a file type")?
+            .as_str(),
+    )?;
 
     // This is a check to see if the document version id in the message matches the document version
     if let Some(search_message_document_version_id) =
@@ -236,12 +238,12 @@ fn generate_upserts(
 ) -> anyhow::Result<Vec<UpsertDocumentArgs>> {
     let result = markdown_result;
     let updated_at = EpochSeconds::new(Utc::now().timestamp())?;
-    let file_type: FileType = document_info
-        .file_type
-        .context("expected a file type")?
-        .as_str()
-        .try_into()
-        .context("unable to parse file type")?;
+    let file_type = FileType::from_str(
+        document_info
+            .file_type
+            .context("expected a file type")?
+            .as_str(),
+    )?;
     let document_name = document_info.document_name;
 
     let upserts = result
