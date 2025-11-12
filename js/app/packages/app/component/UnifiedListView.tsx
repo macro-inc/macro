@@ -1492,7 +1492,7 @@ function SearchBar(props: {
 
   return (
     <SplitToolbarLeft>
-      <div class="flex mx-2 h-full items-center gap-1">
+      <div class="flex ml-2 h-full items-center gap-1">
         <Show
           when={!props.isLoading() || !searchText()}
           fallback={

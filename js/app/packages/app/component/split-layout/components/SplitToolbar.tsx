@@ -1,6 +1,7 @@
 import {
   createRenderEffect,
   createSignal,
+  JSX,
   onCleanup,
   onMount,
   type ParentProps,
@@ -62,7 +63,11 @@ export function SplitToolbar(props: { ref: Setter<HTMLDivElement | null> }) {
   );
 }
 
-export function SplitToolbarLeft(props: ParentProps<{ order?: number }>) {
+export function SplitToolbarLeft(
+  props: ParentProps<{
+    class?: string;
+  }>
+) {
   const panel = useSplitPanelOrThrow();
   const [portalRef, setPortalRef] = createSignal<HTMLDivElement | null>(null);
 
@@ -72,13 +77,15 @@ export function SplitToolbarLeft(props: ParentProps<{ order?: number }>) {
   createRenderEffect(() => {
     const ref = portalRef();
     if (!ref) return;
-    ref.style.order = props.order?.toString() ?? '0';
     ref.style.width = '100%';
     const halfSplitState = panel.halfSplitState?.();
     if (halfSplitState?.side === 'right') {
       ref.classList.add(...halfWidthClasses());
     } else {
       ref.classList.remove(...halfWidthClasses());
+    }
+    if (props.class) {
+      ref.classList.add(props.class);
     }
   });
 
