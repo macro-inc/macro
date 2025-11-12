@@ -118,7 +118,7 @@ import {
   type SortOptions,
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_NAMES,
-  ViewConfigBase,
+  type ViewConfigBase,
 } from './ViewConfig';
 
 const sortOptions = [

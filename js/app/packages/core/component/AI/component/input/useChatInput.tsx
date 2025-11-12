@@ -21,7 +21,7 @@ import { isMobileWidth } from '@core/mobile/mobileWidth';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import { createCallback } from '@solid-primitives/rootless';
-import { LexicalEditor } from 'lexical';
+import type { LexicalEditor } from 'lexical';
 import type { Accessor, Component, Setter } from 'solid-js';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { ActiveTabAttachment } from './ActiveTabAttachment';

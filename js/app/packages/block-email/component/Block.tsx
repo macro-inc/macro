@@ -3,9 +3,9 @@ import { withAnalytics } from '@coparse/analytics';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { EmailDebouncedReadMarker } from '@notifications/components/DebouncedNotificationReadMarker';
 import { createEffect, createMemo, onMount, Show } from 'solid-js';
-import { markThreadAsSeen } from '../util/markThreadAsSeen';
 import { blockDataSignal } from '../signal/emailBlockData';
 import { createThreadMessagesResource } from '../signal/threadMessages';
+import { markThreadAsSeen } from '../util/markThreadAsSeen';
 import { Email } from './Email';
 
 const { track, TrackingEvents } = withAnalytics();
