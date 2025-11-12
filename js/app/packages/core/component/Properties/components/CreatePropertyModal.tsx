@@ -8,7 +8,13 @@ import { useUserId } from '@service-gql/client';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { PropertyDataType } from '@service-properties/generated/schemas/propertyDataType';
-import { createMemo, createSignal, Index, Show } from 'solid-js';
+import {
+  type Component,
+  createMemo,
+  createSignal,
+  Index,
+  Show,
+} from 'solid-js';
 import { Portal } from 'solid-js/web';
 import {
   BUTTON_BASE_CLASSES,
@@ -33,7 +39,9 @@ interface CreatePropertyModalProps {
   onPropertyCreated?: () => void;
 }
 
-export function CreatePropertyModal(props: CreatePropertyModalProps) {
+export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
+  props
+) => {
   const [isCreatingProperty, setIsCreatingProperty] = createSignal(false);
   const [newPropertyName, setNewPropertyName] = createSignal('');
   const [selectedDataType, setSelectedDataType] =
@@ -594,4 +602,4 @@ export function CreatePropertyModal(props: CreatePropertyModalProps) {
       </div>
     </Portal>
   );
-}
+};
