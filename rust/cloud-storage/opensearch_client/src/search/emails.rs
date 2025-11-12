@@ -243,6 +243,7 @@ impl EmailSearchArgs {
     }
 }
 
+#[tracing::instrument(skip(client, args), err)]
 pub(crate) async fn search_emails(
     client: &opensearch::OpenSearch,
     args: EmailSearchArgs,

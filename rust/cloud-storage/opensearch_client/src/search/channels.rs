@@ -195,6 +195,7 @@ impl ChannelMessageSearchArgs {
     }
 }
 
+#[tracing::instrument(skip(client, args), err)]
 pub(crate) async fn search_channel_messages(
     client: &opensearch::OpenSearch,
     args: ChannelMessageSearchArgs,

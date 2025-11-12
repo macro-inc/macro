@@ -89,7 +89,7 @@ const searchService = new SearchService(`${BASE_NAME}-${stack}`, {
       name: 'RUST_LOG',
       value: `search_service=${
         stack === 'prod' ? 'info' : 'trace'
-      },macro_db_client=info`,
+      },macro_db_client=info,opensearch_client=error`,
     },
     {
       name: 'DATABASE_URL',
