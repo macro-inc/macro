@@ -14,9 +14,13 @@ import stringify from 'json-stable-stringify';
 import { queryClient } from '../../macro-entity/src/queries/client';
 import type { UnifiedListContext } from './SoupContext';
 
+// for custom views that extend the unified list view
+export type ViewType = 'project';
+
 export type ViewData = {
   id: ViewId;
   view: View;
+  viewType?: ViewType;
   highlightedId: string | undefined;
   selectedEntity: EntityData | undefined;
   scrollOffset: number | undefined;
@@ -111,6 +115,29 @@ export const VIEWCONFIG_BASE: ViewConfigBase = {
     unrollNotifications: false,
     showUnreadIndicator: false,
     showProjects: false,
+    preview: false,
+    limit: 100,
+  },
+};
+
+export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
+  sort: {
+    sortBy: 'viewed_at',
+    sortOrder: 'descending',
+  },
+  filters: {
+    notificationFilter: 'all',
+    importantFilter: false,
+    typeFilter: ['document', 'chat', 'project'],
+    documentTypeFilter: [],
+    projectFilter: undefined,
+    fromFilter: [],
+  },
+  display: {
+    layout: 'compact',
+    unrollNotifications: false,
+    showUnreadIndicator: true,
+    showProjects: true,
     preview: false,
     limit: 100,
   },

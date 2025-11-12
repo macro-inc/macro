@@ -3,13 +3,15 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{DefaultSearchResponse, parse_highlight_hit},
+        model::{DefaultSearchResponse, Highlight, parse_highlight_hit},
         query::Keys,
     },
 };
 
 use crate::SearchOn;
-use opensearch_query_builder::{FieldSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson};
+use opensearch_query_builder::{
+    FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
+};
 use serde_json::Value;
 
 #[derive(Clone)]
@@ -23,7 +25,7 @@ impl SearchQueryConfig for DocumentSearchConfig {
 
     fn default_sort_types() -> Vec<SortType> {
         vec![
-            SortType::Field(FieldSort::new("updated_at_seconds", SortOrder::Desc)),
+            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
             SortType::Field(FieldSort::new("node_id", SortOrder::Asc)),
         ]
@@ -85,7 +87,8 @@ pub struct DocumentSearchResponse {
     pub owner_id: String,
     pub file_type: String,
     pub updated_at: i64,
-    pub content: Option<Vec<String>>,
+    /// Contains the highlight matches for the document name and content
+    pub highlight: Highlight,
     pub raw_content: Option<String>,
 }
 
@@ -118,11 +121,11 @@ impl DocumentSearchArgs {
     }
 }
 
+#[tracing::instrument(skip(client, args), err)]
 pub(crate) async fn search_documents(
     client: &opensearch::OpenSearch,
     args: DocumentSearchArgs,
 ) -> Result<Vec<DocumentSearchResponse>> {
-    let search_on = args.search_on;
     let query_body = args.build()?;
 
     tracing::trace!("query: {}", query_body);
@@ -155,16 +158,18 @@ pub(crate) async fn search_documents(
             file_type: hit._source.file_type,
             updated_at: hit._source.updated_at_seconds,
             raw_content: hit._source.raw_content,
-            content: hit.highlight.map(|h| {
-                parse_highlight_hit(
-                    h,
-                    Keys {
-                        title_key: DocumentSearchConfig::TITLE_KEY,
-                        content_key: DocumentSearchConfig::CONTENT_KEY,
-                    },
-                    search_on,
-                )
-            }),
+            highlight: hit
+                .highlight
+                .map(|h| {
+                    parse_highlight_hit(
+                        h,
+                        Keys {
+                            title_key: DocumentSearchConfig::TITLE_KEY,
+                            content_key: DocumentSearchConfig::CONTENT_KEY,
+                        },
+                    )
+                })
+                .unwrap_or_default(),
         })
         .collect())
 }

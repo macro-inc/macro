@@ -266,6 +266,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
         }}
         on:click={(e) => {
           e.stopPropagation();
+          editor.focus();
         }}
         on:mousedown={(e) => {
           e.stopPropagation();

@@ -8,6 +8,7 @@ version = "0.1.0"
 chrono = { workspace = true }
 filter_ast = { path = "../filter_ast" }
 macro_user_id = { path = "../macro_user_id" }
+model_file_type = { path = "../model_file_type" }
 non_empty = { path = "../non_empty" }
 schemars = { workspace = true }
 serde = { workspace = true }

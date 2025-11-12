@@ -1,6 +1,9 @@
 import type { ThemeV1 } from './types/themeTypes';
 
-export const DEFAULT_THEMES: Array<ThemeV1> = [
+export const DEFAULT_DARK_THEME: DefaultTheme = 'Macro Dark';
+export const DEFAULT_LIGHT_THEME: DefaultTheme = 'Macro Light';
+
+export const DEFAULT_THEMES = [
   {
     id: 'Macro Dark',
     name: 'Macro Dark',
@@ -156,25 +159,27 @@ export const DEFAULT_THEMES: Array<ThemeV1> = [
     },
   },
   {
-   id:"Spell",
-   name:"Spell",
-   version:1,
-   tokens:{
+    id: 'Spell',
+    name: 'Spell',
+    version: 1,
+    tokens: {
       a0: { l: 0.88, c: 0.1427, h: 71 },
       a1: { l: 0.88, c: 0.1427, h: 111 },
       a2: { l: 0.88, c: 0.1427, h: 151 },
       a3: { l: 0.88, c: 0.1427, h: 191 },
       a4: { l: 0.88, c: 0.1427, h: 231 },
-      b0: { l: 0.34, c: 0.1000, h: 287 },
+      b0: { l: 0.34, c: 0.1, h: 287 },
       b1: { l: 0.27, c: 0.05, h: 287 },
       b2: { l: 0.24, c: 0.0697, h: 287 },
-      b3: { l: 0.20, c: 0.05, h: 287 },
+      b3: { l: 0.2, c: 0.05, h: 287 },
       b4: { l: 0.6, c: 0.2, h: 287 },
-      c0:{ l: 0.90, c: 0.192, h: 287 },
-      c1:{ l: 0.83, c: 0.22, h: 287 },
-      c2:{ l: 0.78, c: 0.192, h: 287 },
-      c3:{ l: 0.63, c: 0.192, h: 287 },
-      c4:{ l: 0.63, c: 0.192, h: 287 }
-   }
-}
-];
+      c0: { l: 0.9, c: 0.192, h: 287 },
+      c1: { l: 0.83, c: 0.22, h: 287 },
+      c2: { l: 0.78, c: 0.192, h: 287 },
+      c3: { l: 0.63, c: 0.192, h: 287 },
+      c4: { l: 0.63, c: 0.192, h: 287 },
+    },
+  },
+] as const satisfies ReadonlyArray<ThemeV1>;
+
+type DefaultTheme = (typeof DEFAULT_THEMES)[number]['id'];

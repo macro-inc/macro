@@ -74,26 +74,19 @@ async function copyFieldData(
       body: {
         query: {
           bool: {
-            must: [{ exists: { field: oldField } }],
-            should: [
-              { bool: { must_not: [{ exists: { field: newField } }] } },
-              {
-                script: {
-                  script: {
-                    source: `doc['${oldField}'].value != doc['${newField}'].value`,
-                    lang: 'painless',
-                  },
-                },
-              },
+            must: [
+              { exists: { field: oldField } }
             ],
-            minimum_should_match: 1,
+            must_not: [
+              { exists: { field: newField } }
+            ]
           },
         },
       },
     });
     const docCount = countResponse.body.count;
     console.log(
-      `  [DRY-RUN] Would update ${docCount} documents where ${oldField} != ${newField}`
+      `  [DRY-RUN] Would update ${docCount} documents where ${newField} does not exist`
     );
     return docCount;
   }
@@ -101,23 +94,19 @@ async function copyFieldData(
   const response = await opensearchClient.updateByQuery({
     index: indexName,
     wait_for_completion: false,
+    scroll_size: 5000,        // Larger batches for better performance
+    slices: 'auto',           // Enable parallel processing
+    refresh: false,           // Don't refresh after each batch
     body: {
       script,
       query: {
         bool: {
-          must: [{ exists: { field: oldField } }],
-          should: [
-            { bool: { must_not: [{ exists: { field: newField } }] } },
-            {
-              script: {
-                script: {
-                  source: `doc['${oldField}'].value != doc['${newField}'].value`,
-                  lang: 'painless',
-                },
-              },
-            },
+          must: [
+            { exists: { field: oldField } }
           ],
-          minimum_should_match: 1,
+          must_not: [
+            { exists: { field: newField } }
+          ]
         },
       },
     },
@@ -126,13 +115,13 @@ async function copyFieldData(
   const body = response.body;
 
   if ('task' in body) {
-    const taskId = body.task;
+    const taskId = body.task!;
     console.log(`  ⏳ Started async task: ${taskId}`);
     console.log(`  ⏳ Polling for completion...`);
 
     // Poll for task completion
     let completed = false;
-    let taskResponse;
+    let taskResponse: any;
 
     while (!completed) {
       await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
@@ -236,8 +225,11 @@ async function verifyMigration(
     body: {
       size: 3,
       query: {
-        exists: {
-          field: oldField,
+        bool: {
+          must: [
+            { exists: { field: oldField } },
+            { exists: { field: newField } }
+          ]
         },
       },
       fields: [
@@ -257,7 +249,7 @@ async function verifyMigration(
   const hits = response.body.hits.hits;
 
   if (hits.length === 0) {
-    console.log(`  ⚠️  No documents found with field "${oldField}"`);
+    console.log(`  ⚠️  No documents found with both "${oldField}" and "${newField}"`);
     return;
   }
 
@@ -355,7 +347,7 @@ async function copyData(dryRun: boolean = true) {
   console.log(
     '\nThis script copies timestamp data from old fields to *_seconds fields.'
   );
-  console.log('It only updates documents where values differ or are missing.');
+  console.log('It only updates documents where the new field does not exist.');
   console.log('\n💡 Safe to run multiple times - it\'s idempotent!');
 
   if (dryRun) {

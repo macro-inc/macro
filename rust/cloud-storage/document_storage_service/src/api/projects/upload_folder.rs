@@ -1,4 +1,4 @@
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 
 use crate::{
     api::context::{ApiContext, InternalFlag},
@@ -271,7 +271,8 @@ async fn build_documents(
         let file_type: Option<FileType> = document
             .file_type
             .as_deref()
-            .and_then(|file_type| file_type.try_into().ok());
+            .map(FileType::from_str)
+            .transpose()?;
         let sha = document.sha.clone().context("document needs a sha")?;
         if file_type != Some(FileType::Docx) {
             let key = build_cloud_storage_bucket_document_key(

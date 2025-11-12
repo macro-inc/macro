@@ -1,6 +1,6 @@
 import { useBlockId } from '@core/block';
 import { DatePicker } from '@core/component/DatePicker';
-import { createMemo } from 'solid-js';
+import { type Component, createMemo } from 'solid-js';
 import { Portal, Show } from 'solid-js/web';
 import { savePropertyValue } from '../apiUtils';
 import { usePropertiesContext } from '../context/PropertiesContext';
@@ -9,7 +9,7 @@ import { PropertySelector } from '../PropertySelector';
 import type { Property } from '../types';
 import { CreatePropertyModal } from './CreatePropertyModal';
 
-export function PropertiesModals() {
+export const PropertiesModals: Component = () => {
   const blockId = useBlockId();
   const {
     entityType,
@@ -111,4 +111,4 @@ export function PropertiesModals() {
       </Show>
     </>
   );
-}
+};

@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, str::FromStr};
 
 use crate::api::context::ApiContext;
 
@@ -48,7 +48,7 @@ pub async fn handler(
 ) -> impl IntoResponse {
     // Get the file type, needed to short circuit if the file type is docx
     let file_type: FileType = if let Some(file_type) = document_context.file_type.as_ref() {
-        if let Ok(file_type) = file_type.as_str().try_into() {
+        if let Ok(file_type) = FileType::from_str(file_type.as_str()) {
             file_type
         } else {
             tracing::error!("unable to parse file type");

@@ -10,6 +10,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
         .route("/gmail", delete(cancel::handler))
         .route("/gmail/:id", get(get::handler))
+        .route("/gmail/active", get(get::active_handler))
         .layer(axum::middleware::from_fn_with_state(
             state,
             crate::api::middleware::link::attach_link_context,

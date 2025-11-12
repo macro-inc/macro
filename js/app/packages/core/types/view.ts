@@ -1,7 +1,4 @@
-import {
-  ENABLE_EMAIL_VIEW,
-  ENABLE_SEARCH_VIEW,
-} from 'core/constant/featureFlags';
+import { ENABLE_EMAIL_VIEW } from 'core/constant/featureFlags';
 
 export const DEFAULT_VIEWS = [
   'inbox',
@@ -19,7 +16,7 @@ export type ConditionalView = (typeof CONDITIONAL_VIEWS)[number];
 export type View = DefaultView | ConditionalView;
 
 const VIEW_DEFINITIONS: Array<{ key: View; disabled?: boolean }> = [
-  { key: 'all', disabled: !ENABLE_SEARCH_VIEW },
+  { key: 'all' },
   { key: 'inbox' },
   { key: 'emails', disabled: !ENABLE_EMAIL_VIEW },
   { key: 'comms' },

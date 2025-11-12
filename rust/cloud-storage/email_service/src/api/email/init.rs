@@ -68,9 +68,9 @@ impl IntoResponse for InitError {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
-struct InitResponse {
-    link_id: Uuid,
-    backfill_job_id: Uuid,
+pub struct InitResponse {
+    pub link_id: Uuid,
+    pub backfill_job_id: Uuid,
 }
 
 /// Initialize email functionality for the user. Populates initial threads and enables inbox syncing.

@@ -44,6 +44,64 @@ export function formatBoolean(value: boolean): string {
 }
 
 /**
+ * Extract domain from a URL for display
+ */
+export function extractDomain(url: string): string {
+  try {
+    const urlObj = new URL(url);
+    return urlObj.hostname;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Normalize a URL by adding https:// if no protocol is present
+ */
+export function normalizeUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+
+  // Check if URL has a protocol
+  if (!/^https?:\/\//i.test(trimmed)) {
+    return `https://${trimmed}`;
+  }
+
+  return trimmed;
+}
+
+/**
+ * Validate if a string is a valid URL
+ * Requires a proper domain with TLD (e.g., example.com)
+ */
+export function isValidUrl(url: string): boolean {
+  try {
+    const urlObj = new URL(url);
+
+    // Check if hostname has at least one dot (for TLD) or is localhost
+    const hostname = urlObj.hostname;
+    if (hostname === 'localhost' || hostname === '127.0.0.1') {
+      return true;
+    }
+
+    // Must have at least one dot for TLD
+    if (!hostname.includes('.')) {
+      return false;
+    }
+
+    // Must have something before and after the dot
+    const parts = hostname.split('.');
+    if (parts.some((part) => part.length === 0)) {
+      return false;
+    }
+
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Format a property value for display
  * Handles all value types including looking up select options by ID
  * Returns '—' for undefined/null values
@@ -54,7 +112,7 @@ export const formatPropertyValue = (
 ): string => {
   // Handle undefined/null values
   if (value === undefined || value === null) {
-    return '—';
+    return '';
   }
 
   // For select types, value is an option ID - look it up in property.options
@@ -155,10 +213,10 @@ export const getPropertyDataTypeDropdownOptions = () => [
   { value: 'number' as const, label: 'Input (Number)' },
   { value: 'boolean' as const, label: 'Checkbox' },
   { value: 'date' as const, label: 'Date' },
-  // { value: 'link' as const, label: 'Link' }, // Not yet supported
-  { value: 'select_string' as const, label: 'Select' },
-  { value: 'select_number' as const, label: 'Select (Number)' },
-  { value: 'entity:USER' as const, label: 'People' },
+  { value: 'link' as const, label: 'Link' },
+  { value: 'select_string' as const, label: 'Option' },
+  { value: 'select_number' as const, label: 'Option (Number)' },
+  { value: 'entity:USER' as const, label: 'User' },
   { value: 'entity:DOCUMENT' as const, label: 'Document' },
   { value: 'entity:CHANNEL' as const, label: 'Channel' },
   { value: 'entity:PROJECT' as const, label: 'Project' },
@@ -190,24 +248,17 @@ export const getPropertyDefinitionTypeDisplay = (property: {
 
   // Normalize to lowercase for comparison with dropdown options
   const dataTypeLower = data_type.toLowerCase();
-  const specificEntityTypeLower = specific_entity_type?.toLowerCase();
 
   // Get the base label from dropdown options
   const dropdownOptions = getPropertyDataTypeDropdownOptions();
   let display: string;
 
-  if (dataTypeLower === 'entity' && specificEntityTypeLower) {
+  if (dataTypeLower === 'entity') {
     // For specific entity types, find the matching dropdown option
-    // Try both uppercase and lowercase for backwards compatibility
-    const option = dropdownOptions.find(
-      (opt) =>
-        opt.value === `entity:${specificEntityTypeLower.toUpperCase()}` ||
-        opt.value === `entity:${specificEntityTypeLower}`
-    );
-    display = option?.label || `Entity (${specificEntityTypeLower})`;
-  } else if (dataTypeLower === 'link') {
-    // Handle the new LINK type
-    display = 'Link';
+    display =
+      dropdownOptions.find(
+        (opt) => opt.value === `entity:${specific_entity_type}`
+      )?.label || `${dataTypeLower[0].toUpperCase() + dataTypeLower.slice(1)}`;
   } else {
     // For other types, find the matching dropdown option
     const option = dropdownOptions.find((opt) => opt.value === dataTypeLower);
@@ -219,10 +270,10 @@ export const getPropertyDefinitionTypeDisplay = (property: {
   }
 
   // Add multi indicator
-  if (dataTypeLower === 'select_string' || dataTypeLower === 'select_number') {
-    display = `${is_multi_select === true ? 'Multi' : 'Single'}  ${display}`;
+  if (['select_string', 'select_number', 'link'].includes(dataTypeLower)) {
+    display = `${is_multi_select === true ? 'Multi' : 'Single'} ${display}`;
   } else if (dataTypeLower === 'entity') {
-    display = `${is_multi_select === true ? 'Multi' : 'Single'} Select ${display}`;
+    display = `${is_multi_select === true ? 'Multi' : 'Single'}-Select ${display}`;
   }
 
   return display;

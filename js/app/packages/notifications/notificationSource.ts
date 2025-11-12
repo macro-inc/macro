@@ -90,9 +90,6 @@ export function createNotificationSource(
     Object.values(trackStore(store)).flat()
   );
 
-  // TODO: remove
-  console.log('creating notification source!!');
-
   const [mutedEntities, setMutedEntities] = createSignal<UserUnsubscribe[]>([]);
 
   const notificationsQuery = createNotificationQuery({ limit: QUERY_LIMIT });

@@ -1,6 +1,6 @@
+import { For } from 'solid-js';
 import { themeReactive } from '../signals/themeReactive';
 import { ColorSwatch } from './ColorSwatch';
-import { For } from 'solid-js';
 
 // function setInput(){
 //   get content colorValue
