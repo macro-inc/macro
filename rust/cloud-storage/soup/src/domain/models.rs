@@ -27,8 +27,8 @@ pub(crate) enum SoupFilter {
 #[derive(Debug)]
 #[expect(dead_code)]
 pub(crate) enum AstFilter {
-    Normal(Arc<EntityFilterAst>),
-    Frecency(Arc<EntityFilterAst>),
+    Normal(EntityFilterAst),
+    Frecency(EntityFilterAst),
 }
 
 /// the parameters required for a [SimpleSortMethod]
@@ -60,7 +60,7 @@ pub struct SoupRequest {
     pub limit: u16,
     pub cursor: SoupQuery,
     pub user: MacroUserIdStr<'static>,
-    pub filters: Arc<EntityFilterAst>,
+    pub filters: EntityFilterAst,
 }
 
 /// a [SoupItem] with an associated frecency score

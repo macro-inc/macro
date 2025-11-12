@@ -7,6 +7,7 @@ use frecency::{domain::models::AggregateFrecency, outbound::mock::MockFrecencySt
 use model_entity::EntityType;
 use models_pagination::{
     Base64Str, Cursor, CursorVal, CursorWithValAndFilter, FrecencyValue, SimpleSortMethod,
+    TypeEraseCursor,
 };
 use models_soup::document::SoupDocument;
 use ordered_float::OrderedFloat;
@@ -83,7 +84,8 @@ async fn it_should_not_query_frecency() {
         filters: Default::default(),
     })
     .await
-    .unwrap();
+    .unwrap()
+    .type_erase();
 
     dbg!(&res);
 
@@ -151,7 +153,8 @@ async fn it_should_query_frecency() {
             filters: Default::default(),
         })
         .await
-        .unwrap();
+        .unwrap()
+        .type_erase();
 
     dbg!(&res);
 
@@ -219,7 +222,8 @@ async fn it_should_sort_frecency_descending() {
             filters: Default::default(),
         })
         .await
-        .unwrap();
+        .unwrap()
+        .type_erase();
 
     dbg!(&res);
 
@@ -303,7 +307,8 @@ async fn frecency_should_fallback() {
             filters: Default::default(),
         })
         .await
-        .unwrap();
+        .unwrap()
+        .type_erase();
 
     // output should be the limit
     assert_eq!(res.items.len(), 100);
@@ -372,7 +377,8 @@ async fn frecency_should_paginate() {
             filters: Default::default(),
         })
         .await
-        .unwrap();
+        .unwrap()
+        .type_erase();
 
     // output should be the limit
     assert_eq!(res.items.len(), 100);
@@ -451,7 +457,8 @@ async fn frecency_should_resume_cursor() {
             filters: Default::default(),
         })
         .await
-        .unwrap();
+        .unwrap()
+        .type_erase();
 
     // first all items should be frecency
     assert!(
@@ -495,11 +502,7 @@ async fn frecency_fallback_cursor_should_resume() {
                         val: CursorVal {
                             sort_type: SimpleSortMethod::UpdatedAt,
                             last_val,
-                            filter: EntityFilterAst {
-                                document_filter: None,
-                                project_filter: None,
-                                chat_filter: None
-                            }
+                            filter: _
                         }
                     }),
                     filters,
@@ -544,7 +547,8 @@ async fn frecency_fallback_cursor_should_resume() {
             filters: Default::default(),
         })
         .await
-        .unwrap();
+        .unwrap()
+        .type_erase();
 
     assert!(res.items.iter().all(|v| v.frecency_score.is_none()));
     let cursor =

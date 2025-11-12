@@ -5,6 +5,7 @@ members = [
   "ai",
   "ai_format",
   "ai_tools",
+  "anthropic",
   "authentication_service",
   "authentication_service_client",
   "comms_db_client",
@@ -60,7 +61,8 @@ members = [
   "metering_service",
   "metering_service_client",
   "model",
-  "model_notifications", "model_user",
+  "model_notifications",
+  "model_user",
   "models_dcs",
   "models_email",
   "models_metering",
@@ -95,7 +97,8 @@ members = [
   "ses_client",
   "sha_cleanup_worker",
   "sha_ref_count_resetter",
-  "sns_client", "soup",
+  "sns_client",
+  "soup",
   "sqs_client",
   "sqs_worker",
   "static_file_service",
@@ -108,7 +111,6 @@ members = [
   "user_link_cleanup_handler",
   "user_quota",
   "worker_trigger",
-  "anthropic"
 ]
 
 [workspace.dependencies]
@@ -139,6 +141,7 @@ cookie = "0.18.1"
 dashmap = "6.1.0"
 dotenv = "0.15.0"
 ego-tree = "0.6.2"
+either = "1"
 futures = "0.3.31"
 hex = "0.4.3"
 http-body-util = "0.1.2"
