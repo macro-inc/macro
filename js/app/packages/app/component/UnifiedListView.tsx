@@ -689,6 +689,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return !validSearch;
   });
 
+  const isSearchActive = createMemo(() => {
+    return validSearchTerms() || validSearchFilters();
+  });
+
   const emailActive = useEmailLinksStatus();
 
   const disableEmailQuery = createMemo(() => {
@@ -790,6 +794,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const { SortComponent, sortFn: entitySort } = createSort({
     sortOptions,
     sortTypeSignal: [sortType, setSortType],
+    disabled: isSearchActive,
   });
 
   const { UnifiedListComponent, entities, isLoading } =
@@ -818,6 +823,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       searchFilter: nameFuzzySearchFilter,
       showProjects,
       projectFilter,
+      isSearchActive,
     });
 
   createEffect(() => setEntities(entities()));
