@@ -3,7 +3,7 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{DefaultSearchResponse, parse_highlight_hit},
+        model::{DefaultSearchResponse, Highlight, parse_highlight_hit},
         query::Keys,
     },
 };
@@ -41,7 +41,8 @@ pub struct ChannelMessageSearchResponse {
     pub mentions: Vec<String>,
     pub created_at: i64,
     pub updated_at: i64,
-    pub content: Option<Vec<String>>,
+    /// Contains the highlight matches for the channel name and content
+    pub highlight: Highlight,
 }
 
 #[derive(Default)]
@@ -200,7 +201,6 @@ pub(crate) async fn search_channel_messages(
     client: &opensearch::OpenSearch,
     args: ChannelMessageSearchArgs,
 ) -> Result<Vec<ChannelMessageSearchResponse>> {
-    let search_on = args.search_on;
     let query_body = args.build()?;
 
     let response = client
@@ -234,16 +234,18 @@ pub(crate) async fn search_channel_messages(
             mentions: hit._source.mentions,
             created_at: hit._source.created_at_seconds,
             updated_at: hit._source.updated_at_seconds,
-            content: hit.highlight.map(|h| {
-                parse_highlight_hit(
-                    h,
-                    Keys {
-                        title_key: ChannelMessageSearchConfig::TITLE_KEY,
-                        content_key: ChannelMessageSearchConfig::CONTENT_KEY,
-                    },
-                    search_on,
-                )
-            }),
+            highlight: hit
+                .highlight
+                .map(|h| {
+                    parse_highlight_hit(
+                        h,
+                        Keys {
+                            title_key: ChannelMessageSearchConfig::TITLE_KEY,
+                            content_key: ChannelMessageSearchConfig::CONTENT_KEY,
+                        },
+                    )
+                })
+                .unwrap_or_default(),
         })
         .collect())
 }
