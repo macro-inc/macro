@@ -658,29 +658,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       view: selectedView() === 'emails' ? emailView() : 'inbox',
     };
   });
-  const searchUnifiedContentQueryParams = createMemo(
+  const searchUnifiedNameContentQueryParams = createMemo(
     (): PaginatedSearchArgs => ({
       params: {
         page: 0,
         page_size: 100,
       },
       request: {
-        search_on: 'content',
-        match_type: 'partial',
-        terms: searchText().length > 0 ? [searchText()] : undefined,
-        filters: unifiedSearchFilters(),
-        include: unifiedSearchIncludeArray(),
-      },
-    })
-  );
-  const searchUnifiedNameQueryParams = createMemo(
-    (): PaginatedSearchArgs => ({
-      params: {
-        page: 0,
-        page_size: 100,
-      },
-      request: {
-        search_on: 'name',
+        search_on: 'name_content',
         match_type: 'partial',
         terms: searchText().length > 0 ? [searchText()] : undefined,
         filters: unifiedSearchFilters(),
@@ -730,12 +715,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return false;
   });
 
-  const disableNameOnlySearch = createMemo(() => {
-    if (disableSearchService()) return true;
-    // if terms is empty, we only need to search once
-    return !validSearchTerms();
-  });
-
   const channelsQuery = createChannelsQuery({
     disabled: disableChannelsQuery,
   });
@@ -746,13 +725,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     refetchInterval: () => emailRefetchInterval(),
     disabled: disableEmailQuery,
   });
-  const searchContentInfiniteQuery = createUnifiedSearchInfiniteQuery(
-    searchUnifiedContentQueryParams,
+  const searchNameContentInfiniteQuery = createUnifiedSearchInfiniteQuery(
+    searchUnifiedNameContentQueryParams,
     { disabled: disableSearchService }
-  );
-  const searchNameInfiniteQuery = createUnifiedSearchInfiniteQuery(
-    searchUnifiedNameQueryParams,
-    { disabled: disableNameOnlySearch }
   );
 
   // TODO: fix email source
@@ -829,11 +804,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           operations: { filter: true, search: false },
         },
         {
-          query: searchContentInfiniteQuery,
-          operations: { filter: false, search: false },
-        },
-        {
-          query: searchNameInfiniteQuery,
+          query: searchNameContentInfiniteQuery,
           operations: { filter: false, search: false },
         },
       ],
