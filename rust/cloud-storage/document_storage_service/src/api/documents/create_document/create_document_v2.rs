@@ -8,24 +8,39 @@ use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::{IS_PUBLIC_DEFAULT, SharePermissionV2};
 use uuid::Uuid;
 
+/// Parameters for creating a document
+pub struct CreateDocumentParams<'a> {
+    pub id: Option<&'a str>,
+    pub sha: &'a str,
+    pub document_name: &'a str,
+    pub owner: &'a str,
+    pub file_type: Option<FileType>,
+    pub job_id: Option<&'a str>,
+    pub project_id: Option<&'a str>,
+    pub email_message_id: Option<Uuid>,
+    pub created_at: Option<&'a DateTime<Utc>>,
+}
+
 /// Creates a document in the database
 /// Creates a presigned post url to upload the document to the required bucket
 /// In the event of an error, returns status code, error message and optional document id.
 /// **note** If document id is present, cleanup is necessary.
-#[tracing::instrument(skip(ctx, owner), fields(user_id=?owner))]
-#[expect(clippy::too_many_arguments, reason = "too annoying to fix")]
+#[tracing::instrument(skip(ctx, params), fields(user_id=?params.owner))]
 pub async fn create_document(
     ctx: &ApiContext,
-    id: Option<&str>,
-    sha: &str,
-    document_name: &str,
-    owner: &str,
-    file_type: Option<FileType>,
-    job_id: Option<&str>,
-    project_id: Option<&str>,
-    email_message_id: Option<Uuid>,
-    created_at: Option<&DateTime<Utc>>,
+    params: CreateDocumentParams<'_>,
 ) -> Result<CreateDocumentResponseData, (StatusCode, String, Option<String>)> {
+    let CreateDocumentParams {
+        id,
+        sha,
+        document_name,
+        owner,
+        file_type,
+        job_id,
+        project_id,
+        email_message_id,
+        created_at,
+    } = params;
     tracing::trace!("creating document v2");
 
     let share_permission = if let Some(file_type) = file_type {

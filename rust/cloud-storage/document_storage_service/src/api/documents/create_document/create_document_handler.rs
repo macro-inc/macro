@@ -85,15 +85,17 @@ pub(in crate::api) async fn create_document_handler(
 
     let create_document_response_data = create_document_v2::create_document(
         &state,
-        req.id.as_deref(),
-        &req.sha,
-        &document_name,
-        &user_context.user_id,
-        file_type,
-        req.job_id.as_deref(),
-        req.project_id.as_deref(),
-        req.email_message_id,
-        req.created_at.as_ref(),
+        create_document_v2::CreateDocumentParams {
+            id: req.id.as_deref(),
+            sha: &req.sha,
+            document_name: &document_name,
+            owner: &user_context.user_id,
+            file_type,
+            job_id: req.job_id.as_deref(),
+            project_id: req.project_id.as_deref(),
+            email_message_id: req.email_message_id,
+            created_at: req.created_at.as_ref(),
+        },
     )
     .await;
 
