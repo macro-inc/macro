@@ -44,6 +44,45 @@ export function formatBoolean(value: boolean): string {
 }
 
 /**
+ * Extract domain from a URL for display
+ */
+export function extractDomain(url: string): string {
+  try {
+    const urlObj = new URL(url);
+    return urlObj.hostname;
+  } catch {
+    return url;
+  }
+}
+
+/**
+ * Normalize a URL by adding https:// if no protocol is present
+ */
+export function normalizeUrl(url: string): string {
+  const trimmed = url.trim();
+  if (!trimmed) return '';
+
+  // Check if URL has a protocol
+  if (!/^https?:\/\//i.test(trimmed)) {
+    return `https://${trimmed}`;
+  }
+
+  return trimmed;
+}
+
+/**
+ * Validate if a string is a valid URL
+ */
+export function isValidUrl(url: string): boolean {
+  try {
+    new URL(url);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Format a property value for display
  * Handles all value types including looking up select options by ID
  * Returns '—' for undefined/null values
@@ -155,7 +194,7 @@ export const getPropertyDataTypeDropdownOptions = () => [
   { value: 'number' as const, label: 'Input (Number)' },
   { value: 'boolean' as const, label: 'Checkbox' },
   { value: 'date' as const, label: 'Date' },
-  // { value: 'link' as const, label: 'Link' }, // Not yet supported
+  { value: 'link' as const, label: 'Link' },
   { value: 'select_string' as const, label: 'Select' },
   { value: 'select_number' as const, label: 'Select (Number)' },
   { value: 'entity:USER' as const, label: 'People' },
