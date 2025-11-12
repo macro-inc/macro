@@ -1,7 +1,6 @@
 import { exportTheme, deleteTheme, invertTheme, saveTheme } from '../utils/themeUtils';
 import { currentThemeId, themes, isThemeSaved } from '../signals/themeSignals';
 import { createEffect, createMemo, createSignal, Show } from 'solid-js';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import IconLightDark from '@macro-icons/macro-light-dark.svg';
 import IconClipboard from '@macro-icons/macro-clipboard.svg';
 import { DEV_MODE_ENV } from '@core/constant/featureFlags';
@@ -57,63 +56,62 @@ export function ThemeTools() {
     >
       <div ref={themeName} contentEditable style="white-space: nowrap;">{currentThemeName()}</div>
 
-      <hr />
+      <hr style="
+        border: none;
+        border-top: 1px dashed var(--b4);
+        box-sizing: border-box;
+        width: 100%;
+      "/>
 
       <Show when={showTrash()}>
-        <Tooltip placement="top" tooltip={<LabelAndHotKey label="Delete Theme"/>}>
-          <IconButton
-            onPointerDown={() => { deleteTheme(currentThemeId()) }}
-            icon={IconTrash}
-            theme="base"
-          />
-        </Tooltip>
+        <IconButton
+          onPointerDown={() => { deleteTheme(currentThemeId()) }}
+          // tooltip={{label: "Delete Theme"}}
+          icon={IconTrash}
+          theme="base"
+        />
       </Show>
 
       <Show when={!isThemeSaved()}>
-        <Tooltip placement="top" tooltip={<LabelAndHotKey label="Save Theme"/>}>
-          <IconButton
-            onPointerDown={() => { saveTheme(themeName.innerText) }}
-            icon={IconSave}
-            theme="base"
-          />
-        </Tooltip>
+        <IconButton
+          onPointerDown={() => { saveTheme(themeName.innerText) }}
+          // tooltip={{label: "Save Theme"}}
+          icon={IconSave}
+          theme="base"
+        />
       </Show>
 
       {/*<Show when={DEV_MODE_ENV}>
-        <Tooltip placement="top" tooltip={<LabelAndHotKey label="Randomize Theme"/>}>
-          <IconButton
-            onPointerDown={copyTokens}
-            icon={IconFigma}
-            theme="base"
-          />
-        </Tooltip>
+        <IconButton
+          tooltip={{label: "Copy Tokens"}}
+          onPointerDown={copyTokens}
+          icon={IconFigma}
+          theme="base"
+        />
       </Show>*/}
 
       <Show when={DEV_MODE_ENV}>
-        <Tooltip placement="top" tooltip={<LabelAndHotKey label="Copy To Clipboard"/>}>
-          <IconButton
-            onPointerDown={exportTheme}
-            icon={IconClipboard}
-            theme="base"
-          />
-        </Tooltip>
+        <IconButton
+          // tooltip={{label: "Copy To Clipboard"}}
+          onPointerDown={exportTheme}
+          icon={IconClipboard}
+          theme="base"
+        />
       </Show>
 
-      <Tooltip placement="top" tooltip={<LabelAndHotKey label="Tooggle Light / Dark"/>}>
-        <IconButton
-          onPointerDown={invertTheme}
-          icon={IconLightDark}
-          theme="base"
-        />
-      </Tooltip>
+      <IconButton
+        // tooltip={{label: "Toggle Light / Dark"}}
+        onPointerDown={invertTheme}
+        icon={IconLightDark}
+        theme="base"
+      />
 
-      <Tooltip placement="top" tooltip={<LabelAndHotKey label="Randomize Theme"/>}>
-        <IconButton
-          onPointerDown={randomizeTheme}
-          icon={IconDice}
-          theme="base"
-        />
-    </Tooltip>
+      <IconButton
+        // tooltip={{label: "Randomize Theme"}}
+        onPointerDown={randomizeTheme}
+        icon={IconDice}
+        theme="base"
+      />
     </div>
   );
 }
