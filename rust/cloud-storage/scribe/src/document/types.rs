@@ -3,7 +3,7 @@ use base64::{Engine as _, engine::general_purpose};
 use bytes::Bytes;
 use lexical_client::types::CognitionResponseData;
 use model::document::response::LocationResponseV3;
-use model::document::{DocumentBasic, FileType};
+use model::document::{DocumentBasic, FileType, FileTypeExt};
 
 #[derive(Debug, Clone)]
 pub struct DocumentContent {

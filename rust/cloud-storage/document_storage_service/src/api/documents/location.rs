@@ -3,7 +3,10 @@ use anyhow::anyhow;
 use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
 use models_permissions::share_permission::access_level::ViewAccessLevel;
 use rayon::prelude::*;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::{
+    str::FromStr,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
 use crate::{
     model::request::documents::location::LocationQueryParams,
@@ -20,9 +23,9 @@ use cloudfront_sign::{SignedOptions, get_signed_url};
 use futures::{FutureExt, pin_mut, select};
 use model::{
     document::{
-        CONVERTED_DOCUMENT_FILE_NAME, DocumentBasic, FileType,
-        build_cloud_storage_bucket_document_key, response::LocationResponseData,
-        response::LocationResponseV3,
+        CONVERTED_DOCUMENT_FILE_NAME, DocumentBasic, FileType, FileTypeExt,
+        build_cloud_storage_bucket_document_key,
+        response::{LocationResponseData, LocationResponseV3},
     },
     response::{GenericErrorResponse, GenericResponse, PresignedUrl},
     user::UserContext,
@@ -201,7 +204,7 @@ pub async fn get_location_handler(
     let file_type: Option<FileType> = document_context
         .file_type
         .as_deref()
-        .and_then(|f| f.try_into().ok());
+        .and_then(|f| FileType::from_str(f).ok());
 
     let response_data = get_presigned_url_by_type(
         &state,

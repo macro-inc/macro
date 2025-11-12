@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use chrono::serde::ts_seconds_option;
 use model::document::{BomPart, DocumentMetadata, FileType};
 use tracing::instrument;
@@ -94,7 +96,7 @@ impl DocumentResponseMetadata {
         if let Some(FileType::Docx) = document_metadata
             .file_type
             .as_deref()
-            .and_then(|file_type| file_type.try_into().ok())
+            .and_then(|file_type| FileType::from_str(file_type).ok())
             && let Some(document_bom) = &document_metadata.document_bom
         {
             let document_bom: Vec<BomPart> = match serde_json::from_value(document_bom.clone()) {
