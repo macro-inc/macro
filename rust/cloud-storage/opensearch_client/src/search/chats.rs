@@ -3,7 +3,7 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{DefaultSearchResponse, parse_highlight_hit},
+        model::{DefaultSearchResponse, Highlight, parse_highlight_hit},
         query::Keys,
         utils::should_wildcard_field_query_builder,
     },
@@ -34,7 +34,7 @@ pub struct ChatSearchResponse {
     pub role: String,
     pub updated_at: i64,
     pub title: String,
-    pub content: Option<Vec<String>>,
+    pub highlight: Highlight,
 }
 
 struct ChatSearchConfig;
@@ -144,7 +144,6 @@ pub(crate) async fn search_chats(
     client: &opensearch::OpenSearch,
     args: ChatSearchArgs,
 ) -> Result<Vec<ChatSearchResponse>> {
-    let search_on = args.search_on;
     let query_body = args.build()?;
 
     let response = client
@@ -173,16 +172,18 @@ pub(crate) async fn search_chats(
             user_id: hit._source.user_id,
             role: hit._source.role,
             title: hit._source.title,
-            content: hit.highlight.map(|h| {
-                parse_highlight_hit(
-                    h,
-                    Keys {
-                        title_key: ChatSearchConfig::TITLE_KEY,
-                        content_key: ChatSearchConfig::CONTENT_KEY,
-                    },
-                    search_on,
-                )
-            }),
+            highlight: hit
+                .highlight
+                .map(|h| {
+                    parse_highlight_hit(
+                        h,
+                        Keys {
+                            title_key: ChatSearchConfig::TITLE_KEY,
+                            content_key: ChatSearchConfig::CONTENT_KEY,
+                        },
+                    )
+                })
+                .unwrap_or_default(),
             updated_at: hit._source.updated_at_seconds,
         })
         .collect())
