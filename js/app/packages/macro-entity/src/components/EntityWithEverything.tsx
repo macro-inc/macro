@@ -67,6 +67,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   onMouseLeave?: () => void;
   onFocusIn?: () => void;
   onContextMenu?: () => void;
+  onChecked?: (checked: boolean) => void;
   properties?: Record<string, string>;
   contentPlacement?: 'middle' | 'bottom-row';
   unreadIndicatorActive?: boolean;
@@ -77,6 +78,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   showDoneButton?: boolean;
   highlighted?: boolean;
   selected?: boolean;
+  checked?: boolean;
   ref?: Ref<HTMLDivElement>;
 }
 
@@ -260,7 +262,7 @@ export function EntityWithEverything<
     <div
       use:draggable
       use:droppable
-      class={`relative group py-[7px] px-2 ${ITEM_WRAPPER_CLASS()}`}
+      class={`everything-entity relative group py-[7px] px-2 ${ITEM_WRAPPER_CLASS()}`}
       classList={{
         'bg-hover': props.highlighted,
         bracket: props.selected,
@@ -270,6 +272,7 @@ export function EntityWithEverything<
         // The click handler will properly handle navigation
         e.preventDefault();
       }}
+      data-checked={props.checked}
       onMouseOver={(e) => {
         if (!didCursorMove(e)) {
           return;
@@ -302,8 +305,8 @@ export function EntityWithEverything<
         // class="@md:flex grid w-full min-w-0 flex-1 grid-cols-2 @md:flex-row @md:items-center @md:gap-4"
         class="min-h-[40px] grid w-full min-w-0 flex-1 gap-2 grid-rows-1 @md:items-center suppress-css-bracket"
         classList={{
-          'grid-cols-[auto_1fr_auto]': props.showLeftColumnIndicator,
-          'grid-cols-[1fr_auto]': !props.showLeftColumnIndicator,
+          'grid-cols-[auto_auto_1fr_auto]': props.showLeftColumnIndicator,
+          'grid-cols-[auto_1fr_auto]': !props.showLeftColumnIndicator,
         }}
         onClick={props.onClick ? [props.onClick, props.entity] : undefined}
         // Action List is also rendered based on focus, but when focused via Shift+Tab, parent is focused due to Action List dom not present. Here we check if current browser task has captured Shift+Tab focus on Action List
@@ -330,6 +333,19 @@ export function EntityWithEverything<
           tabbableEl = el;
         })}
       >
+        <button
+          type="button"
+          class={`size-4 p-0.5 rounded-xs flex items-center justify-center ${props.checked ? 'bg-accent' : 'border border-edge'}`}
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onChecked?.(!props.checked);
+          }}
+        >
+          <Show when={props.checked}>
+            <CheckIcon class="w-full h-full" />
+          </Show>
+        </button>
+
         {/* Left Column Indicator(s) */}
         <Show when={props.showLeftColumnIndicator}>
           <UnreadIndicator active={props.unreadIndicatorActive} />
@@ -354,8 +370,8 @@ export function EntityWithEverything<
         <div
           class="relative row-1 ml-2 @md:ml-4 self-center min-w-0"
           classList={{
-            'col-3': props.showLeftColumnIndicator,
-            'col-2': !props.showLeftColumnIndicator,
+            'col-4': props.showLeftColumnIndicator,
+            'col-3': !props.showLeftColumnIndicator,
             'opacity-50': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >

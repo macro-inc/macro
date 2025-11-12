@@ -23,6 +23,7 @@ export type ViewData = {
   initialConfig: string | undefined;
   hasUserInteractedEntity: boolean;
   searchText: string | undefined;
+  selectedEntities: EntityData[];
 } & ViewConfigBase;
 
 /** maps view id to view data */

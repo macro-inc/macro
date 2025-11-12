@@ -101,7 +101,9 @@ import { createStore, unwrap } from 'solid-js/store';
 import { EntityWithEverything } from '../../macro-entity/src/components/EntityWithEverything';
 import { createCopyDssEntityMutation } from '../../macro-entity/src/queries/dss';
 import type { FetchPaginatedEmailsParams } from '../../macro-entity/src/queries/email';
+import { EntityActionsMenuItems } from './EntityActionsMenuItems';
 import { EntityModal } from './EntityModal/EntityModal';
+import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
 import { useUpsertSavedViewMutation } from './Soup';
 import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
 import { useSplitLayout } from './split-layout/layout';
@@ -872,7 +874,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const highlightedSelector = createSelector(() => view?.highlightedId);
 
-  const selectedSelector = createSelector(() => selectedEntity()?.id);
+  const focusedSelector = createSelector(() => selectedEntity()?.id);
+  const selectedSelector = createSelector(
+    () => view?.selectedEntities,
+    (a: string, b: EntityData[]) => b.find((e) => e.id === a) !== undefined
+  );
 
   const saveViewMutation = useUpsertSavedViewMutation();
 
@@ -947,6 +953,41 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       }
     }
   });
+
+  const disabledActions = () => {
+    const entity = contextAndModalState.selectedEntity;
+    const type = entity?.type;
+
+    if (!type) {
+      return {
+        markAsDone: true,
+        delete: true,
+        rename: true,
+        moveToProject: true,
+        copy: true,
+        moveToSplit: true,
+      };
+    }
+
+    return {
+      markAsDone:
+        type === 'email'
+          ? entity.done
+          : // @ts-ignore TODO: fix this
+            entity
+              // @ts-ignore TODO: fix this
+              ?.notifications?.()
+              // @ts-ignore TODO: fix this
+              .every(({ done }) => done),
+
+      delete: type !== 'document' && type !== 'chat',
+      rename: type !== 'document' && type !== 'chat',
+      moveToProject:
+        type !== 'project' && type !== 'document' && type !== 'chat',
+      copy: type !== 'document' && type !== 'chat',
+      moveToSplit: false,
+    };
+  };
 
   return (
     <>
@@ -1145,6 +1186,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         </SplitToolbarRight>
       </Show>
       <ContextMenu
+        forceMount={contextAndModalState.contextMenuOpen}
         onOpenChange={(open) => {
           setContextAndModalState((prev) => {
             if (open) {
@@ -1162,7 +1204,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           });
         }}
       >
-        <ContextMenu.Trigger class="size-full">
+        <ContextMenu.Trigger class="size-full unified-list-root">
           <UnifiedListComponent
             entityListRef={setLocalEntityListRef}
             virtualizerHandle={setVirtualizerHandle}
@@ -1267,8 +1309,19 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   showDoneButton={displayDoneButton()}
                   highlighted={highlightedSelector?.(innerProps.entity.id)}
                   selected={
-                    isPanelActive() && selectedSelector(innerProps.entity.id)
+                    isPanelActive() && focusedSelector(innerProps.entity.id)
                   }
+                  checked={selectedSelector(innerProps.entity.id)}
+                  onChecked={(next) => {
+                    console.log('TODO (seamus) onChecked');
+                    // setSelectedViewStore('selectedEntities', (p) => {
+                    //   if (!next) {
+                    //     return p.filter((e) => e.id !== innerProps.entity.id);
+                    //   }
+
+                    //   return [...p, innerProps.entity];
+                    // });
+                  }}
                 />
               );
             }}
