@@ -842,6 +842,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       entitySort,
       searchFilter: nameFuzzySearchFilter,
       showProjects,
+      projectFilter,
     });
 
   createEffect(() => setEntities(entities()));

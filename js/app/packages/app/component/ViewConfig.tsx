@@ -137,7 +137,7 @@ export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
     layout: 'compact',
     unrollNotifications: false,
     showUnreadIndicator: true,
-    showProjects: false,
+    showProjects: true,
     preview: false,
     limit: 100,
   },

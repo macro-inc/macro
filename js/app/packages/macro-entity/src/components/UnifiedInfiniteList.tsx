@@ -70,6 +70,7 @@ interface UnifiedInfiniteListContext<T extends EntityData> {
   requiredFilter?: Accessor<EntityFilter<T>>;
   optionalFilter?: Accessor<EntityFilter<T>>;
   entitySort?: Accessor<EntityComparator<T>>;
+  projectFilter?: Accessor<string | undefined>;
   searchFilter?: Accessor<EntitiesFilter<T> | undefined>;
   // TODO: deduplicate entities for same match
   deduplicate?: Accessor<(prev: T, next: T) => boolean>;
@@ -83,6 +84,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
   optionalFilter,
   entitySort,
   showProjects,
+  projectFilter,
   searchFilter,
 }: UnifiedInfiniteListContext<T>) {
   const [sortedEntitiesStore, setSortedEntitiesStore] = createStore<T[]>([]);
@@ -196,6 +198,10 @@ export function createUnifiedInfiniteList<T extends EntityData>({
       const projectEntityIds = new Set(
         entities.filter((e) => e.type === 'project').map((p) => p.id)
       );
+      const currentProjectId = projectFilter?.();
+      if (currentProjectId) {
+        projectEntityIds.add(currentProjectId);
+      }
 
       // filter out all entities that have a projectid included in projectEntities
       return entities.filter((e) => {
