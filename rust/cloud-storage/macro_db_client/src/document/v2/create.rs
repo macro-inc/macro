@@ -276,6 +276,7 @@ async fn insert_document_with_id(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{TimeZone, Utc};
     use sqlx::{Pool, Postgres};
 
     #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]
@@ -289,6 +290,7 @@ mod tests {
         .execute(&pool)
         .await?;
 
+        let ts = chrono::Utc.with_ymd_and_hms(1998, 1, 16, 0, 0, 0).unwrap();
         // document exists
         let document_metadata = create_document(
             &pool,
@@ -302,7 +304,7 @@ mod tests {
                 project_name: None,
                 share_permission: &SharePermissionV2::default(),
                 skip_history: false,
-                created_at: None,
+                created_at: Some(&ts),
             },
         )
         .await?;
@@ -312,6 +314,7 @@ mod tests {
         assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
         assert_eq!(document_metadata.project_id.as_deref(), Some("project-one"));
         assert_eq!(document_metadata.project_name.as_deref(), Some("name"));
+        assert_eq!(document_metadata.created_at, Some(ts));
 
         // document exists
         let document_metadata = create_document(
@@ -349,6 +352,7 @@ mod tests {
         .execute(&pool)
         .await?;
 
+        let ts = chrono::Utc.with_ymd_and_hms(1998, 1, 16, 0, 0, 0).unwrap();
         // document exists
         let document_metadata = create_document(
             &pool,
@@ -362,7 +366,7 @@ mod tests {
                 project_name: None,
                 share_permission: &SharePermissionV2::default(),
                 skip_history: false,
-                created_at: None,
+                created_at: Some(&ts),
             },
         )
         .await?;
@@ -375,6 +379,7 @@ mod tests {
         assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
         assert_eq!(document_metadata.project_id.as_deref(), Some("project-one"));
         assert_eq!(document_metadata.project_name.as_deref(), Some("name"));
+        assert_eq!(document_metadata.created_at, Some(ts));
 
         // document exists
         let document_metadata = create_document(
@@ -439,6 +444,8 @@ mod tests {
         // First, create a document with the test ID
         let mut transaction = pool.begin().await?;
 
+        let ts = chrono::Utc.with_ymd_and_hms(1998, 1, 16, 0, 0, 0).unwrap();
+
         // Insert the first document
         insert_document_with_id(
             &mut transaction,
@@ -447,7 +454,7 @@ mod tests {
             "First Document",
             Some(FileType::Pdf),
             None,
-            None,
+            &ts,
         )
         .await?;
 
@@ -463,7 +470,7 @@ mod tests {
             "Second Document with Same ID",
             Some(FileType::Pdf),
             None,
-            None,
+            &ts,
         )
         .await;
 
