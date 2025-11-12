@@ -139,6 +139,7 @@ impl ChatSearchArgs {
     }
 }
 
+#[tracing::instrument(skip(client, args), err)]
 pub(crate) async fn search_chats(
     client: &opensearch::OpenSearch,
     args: ChatSearchArgs,
