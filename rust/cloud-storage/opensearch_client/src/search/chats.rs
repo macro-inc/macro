@@ -10,7 +10,9 @@ use crate::{
 };
 
 use crate::SearchOn;
-use opensearch_query_builder::{FieldSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson};
+use opensearch_query_builder::{
+    FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
+};
 use serde_json::Value;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
@@ -45,7 +47,7 @@ impl SearchQueryConfig for ChatSearchConfig {
 
     fn default_sort_types() -> Vec<SortType> {
         vec![
-            SortType::Field(FieldSort::new("updated_at_seconds", SortOrder::Desc)),
+            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
             SortType::Field(FieldSort::new("chat_message_id", SortOrder::Asc)),
         ]
