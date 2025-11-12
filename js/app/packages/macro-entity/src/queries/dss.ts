@@ -264,7 +264,6 @@ export function createDeleteDssItemMutation() {
 }
 
 export function createBulkDeleteDssItemsMutation() {
-  const authQuery = createApiTokenQuery();
   const isUnsupportedEntity = (entity: EntityData) => {
     const type = entity.type;
     return type !== 'chat' && type !== 'document';
@@ -275,15 +274,9 @@ export function createBulkDeleteDssItemsMutation() {
         throw new Error(`Unsupported entity types`);
       }
 
-      const apiToken = await authQuery.promise;
-
       return await Promise.all(
         entities.map((e) => {
-          if (e.type === 'chat') {
-            return deleteChat(e.id, apiToken);
-          }
-
-          return deleteDocument(e.id, apiToken);
+          return deleteItem({ id: e.id, itemType: e.type });
         })
       );
     },
@@ -374,7 +367,7 @@ export function createRenameDssEntityMutation() {
 }
 
 export function createBulkRenameDssEntityMutation() {
-  const itemOperations = useItemOperations();
+  // const itemOperations = useItemOperations();
 
   const isUnsupportedEntity = (entity: EntityData) => {
     const type = entity.type;
@@ -393,10 +386,14 @@ export function createBulkRenameDssEntityMutation() {
         throw new Error(`Unsupported entity type provided`);
       }
 
-      const success = await itemOperations.bulkRenameItems(entities, newName);
+      // const success = await itemOperations.bulkRename(
+      //   entities.map((entity) => ({}))
+      // );
+      //
+      const success = false;
 
       if (!success) {
-        throw new Error(`Failed to rename entities`);
+        throw new Error(`TODO (SEAMUS): bulk rename! – ${newName}`);
       }
 
       return { success: true };
