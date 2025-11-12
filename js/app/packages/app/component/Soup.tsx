@@ -7,7 +7,6 @@ import { useIsAuthenticated } from '@core/auth';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { Button } from '@core/component/FormControls/Button';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
-import { IconButton } from '@core/component/IconButton';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
@@ -25,9 +24,6 @@ import {
   type ViewId,
 } from '@core/types/view';
 import { handleFileFolderDrop } from '@core/util/upload';
-import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
-import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
-import XIcon from '@icon/regular/x.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Tabs } from '@kobalte/core/tabs';
 import {
@@ -36,14 +32,11 @@ import {
 } from '@macro-entity';
 import { createEffectOnEntityTypeNotification } from '@notifications/notificationHelpers';
 import { storageServiceClient } from '@service-storage/client';
-import { debounce } from '@solid-primitives/scheduled';
 import { Navigate } from '@solidjs/router';
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import {
-  type Accessor,
-  batch,
   type Component,
   createMemo,
   createRenderEffect,
@@ -53,7 +46,6 @@ import {
   onCleanup,
   onMount,
   type ParentComponent,
-  type Setter,
   Show,
   Suspense,
   Switch,
@@ -63,10 +55,7 @@ import { EntityModal } from './EntityModal/EntityModal';
 import { HelpDrawer } from './HelpDrawer';
 import { SplitHeaderLeft } from './split-layout/components/SplitHeader';
 import { SplitTabs } from './split-layout/components/SplitTabs';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from './split-layout/components/SplitToolbar';
+import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
 import { SplitPanelContext } from './split-layout/context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { UnifiedListView } from './UnifiedListView';
@@ -81,41 +70,23 @@ false && fileFolderDrop;
 
 const ViewTab: ParentComponent<{
   viewId: ViewId;
-  isLoading: Accessor<boolean>;
-  setIsLoading: Setter<boolean>;
 }> = (props) => {
   return (
     <Tabs.Content class="flex flex-col size-full" value={props.viewId}>
       {/* If Kobalte TabContent recieves Suspense as direct child, Suspense owner doesn't cleanup and causes memory leak */}
       {/* Make sure Suspense isn't root child by by wrapping children with DOM node */}
       <div class="contents">{props.children}</div>
-      <SearchBar
-        viewId={props.viewId}
-        isLoading={props.isLoading}
-        setIsLoading={props.setIsLoading}
-      />
     </Tabs.Content>
   );
 };
 
 const DefaultViewTab: Component<{
   viewId: ViewId;
-  searchText: string;
-  isLoading: Accessor<boolean>;
-  setIsLoading: Setter<boolean>;
 }> = (props) => {
   return (
-    <ViewTab
-      viewId={props.viewId}
-      isLoading={props.isLoading}
-      setIsLoading={props.setIsLoading}
-    >
+    <ViewTab viewId={props.viewId}>
       <Suspense>
-        <UnifiedListView
-          viewId={props.viewId}
-          searchText={props.searchText}
-          onLoadingChange={props.setIsLoading}
-        />
+        <UnifiedListView viewId={props.viewId} />
       </Suspense>
     </ViewTab>
   );
@@ -123,18 +94,10 @@ const DefaultViewTab: Component<{
 
 const ConditionalViewTab: ParentComponent<{
   view: Exclude<View, DefaultView>;
-  isLoading: Accessor<boolean>;
-  setIsLoading: Setter<boolean>;
 }> = (props) => {
   return (
     <Show when={VIEWS.includes(props.view)}>
-      <ViewTab
-        viewId={props.view}
-        isLoading={props.isLoading}
-        setIsLoading={props.setIsLoading}
-      >
-        {props.children}
-      </ViewTab>
+      <ViewTab viewId={props.view}>{props.children}</ViewTab>
     </Show>
   );
 };
@@ -142,42 +105,24 @@ const ConditionalViewTab: ParentComponent<{
 const ViewWithSearch: Component<{
   viewId: ViewId;
 }> = (props) => {
-  const { getSelectedViewStore: viewData } =
-    useSplitPanelOrThrow().unifiedListContext;
-  const searchText = createMemo<string>(() => viewData().searchText ?? '');
-  const [isLoading, setIsLoading] = createSignal(false);
-
   return (
     <Switch>
       <Match when={props.viewId === 'emails'}>
-        <ConditionalViewTab
-          view="emails"
-          isLoading={isLoading}
-          setIsLoading={setIsLoading}
-        >
+        <ConditionalViewTab view="emails">
           <Suspense>
-            <EmailView searchText={searchText()} setIsLoading={setIsLoading} />
+            <EmailView />
           </Suspense>
         </ConditionalViewTab>
       </Match>
       <Match when={props.viewId === 'all'}>
-        <ConditionalViewTab
-          view="all"
-          isLoading={isLoading}
-          setIsLoading={setIsLoading}
-        >
+        <ConditionalViewTab view="all">
           <Suspense>
-            <AllView searchText={searchText()} setIsLoading={setIsLoading} />
+            <AllView />
           </Suspense>
         </ConditionalViewTab>
       </Match>
       <Match when={true}>
-        <DefaultViewTab
-          viewId={props.viewId}
-          searchText={searchText()}
-          isLoading={isLoading}
-          setIsLoading={setIsLoading}
-        />
+        <DefaultViewTab viewId={props.viewId} />
       </Match>
     </Switch>
   );
@@ -492,177 +437,23 @@ export function Soup() {
   );
 }
 
-function SearchBar(props: {
-  viewId: ViewId;
-  isLoading: Accessor<boolean>;
-  setIsLoading: Setter<boolean>;
-}) {
-  const {
-    getSelectedViewStore: viewData,
-    setSelectedViewStore,
-    entitiesSignal: [entities],
-    virtualizerHandleSignal: [virtualizerHandle],
-    entityListRefSignal: [entityListRef],
-  } = useSplitPanelOrThrow().unifiedListContext;
-
-  let inputRef: HTMLInputElement | undefined;
-
-  const searchText = createMemo<string>(() => viewData().searchText ?? '');
-  const setSearchText = (text: string) => {
-    setSelectedViewStore('searchText', text);
-  };
-
-  const debouncedSetSearch = debounce(setSearchText, 200);
-
-  const isElementInViewport = (element: Element): Promise<boolean> => {
-    return new Promise((resolve) => {
-      const observer = new IntersectionObserver(
-        (entries) => {
-          resolve(entries[0].isIntersecting);
-          observer.disconnect();
-        },
-        { threshold: 0.1 }
-      );
-      observer.observe(element);
-    });
-  };
-
-  const focusFirstEntity = async () => {
-    const highlightedId = viewData()?.highlightedId;
-    const id = highlightedId;
-
-    if (id) {
-      const highlightedEntityEl = entityListRef()?.querySelector(
-        `[data-entity-id="${id}"]`
-      );
-
-      if (
-        highlightedEntityEl instanceof HTMLElement &&
-        (await isElementInViewport(highlightedEntityEl))
-      ) {
-        highlightedEntityEl.focus();
-        const entity = entities()?.find(({ id: entityId }) => entityId === id);
-        if (entity) {
-          setSelectedViewStore('selectedEntity', entity);
-          return;
-        }
-      }
-    }
-
-    // Fallback to first entity
-    const firstEntity = entityListRef()?.querySelector('[data-entity]');
-    if (firstEntity instanceof HTMLElement) firstEntity.focus();
-  };
-
-  const [waitForLoadingEnd, setWaitForLoadingEnd] = createSignal(false);
-
-  // When search text changes, mark that we're waiting for loading to end
-  createRenderEffect((prevText: string) => {
-    const text = searchText().trim();
-    if (text !== prevText) {
-      batch(() => {
-        setSelectedViewStore('selectedEntity', undefined);
-        setSelectedViewStore('highlightedId', undefined);
-      });
-      virtualizerHandle()?.scrollToIndex(0);
-      setWaitForLoadingEnd(true);
-    }
-    return text;
-  }, searchText());
-
-  // When we're no longer loading but still waiting, reset the list
-  createRenderEffect((prevLoading: boolean) => {
-    const loading = props.isLoading();
-
-    if (prevLoading && !loading && waitForLoadingEnd()) {
-      // Loading just ended and we were waiting for it
-      setWaitForLoadingEnd(false);
-      virtualizerHandle()?.scrollToIndex(0);
-    }
-
-    return loading;
-  }, props.isLoading());
-
-  return (
-    <SplitToolbarLeft>
-      <div class="flex mx-2 h-full items-center gap-1">
-        <Show
-          when={!props.isLoading() || !searchText()}
-          fallback={
-            <LoadingSpinner class="w-4 h-4 text-ink-muted animate-spin shrink-0" />
-          }
-        >
-          <SearchIcon class="w-4 h-4 text-ink-muted shrink-0" />
-        </Show>
-        <input
-          ref={inputRef}
-          id={`search-input-${props.viewId}`}
-          placeholder="Search"
-          value={searchText()}
-          onInput={(e) => {
-            debouncedSetSearch(e.target.value);
-          }}
-          onKeyDown={(e) => {
-            if (
-              e.key === 'Escape' ||
-              e.key === 'ArrowDown' ||
-              e.key === 'Enter'
-            ) {
-              e.preventDefault();
-              e.currentTarget.blur();
-              focusFirstEntity();
-            }
-          }}
-          class="p-1 pr-0 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 flex-1 text-ink text-sm truncate"
-        />
-        <Show when={searchText()}>
-          <IconButton
-            theme="clear"
-            size="sm"
-            tooltip={{ label: 'Clear search' }}
-            icon={XIcon}
-            onClick={() => {
-              setSearchText('');
-              setTimeout(() => {
-                inputRef?.focus();
-              }, 0);
-            }}
-          />
-        </Show>
-      </div>
-    </SplitToolbarLeft>
-  );
+function AllView() {
+  return <UnifiedListView viewId="all" />;
 }
 
-function AllView(props: { searchText: string; setIsLoading: Setter<boolean> }) {
-  return (
-    <UnifiedListView
-      viewId="all"
-      searchText={props.searchText}
-      onLoadingChange={props.setIsLoading}
-    />
-  );
-}
-
-function EmailView(props: {
-  searchText: string;
-  setIsLoading: Setter<boolean>;
-}) {
+function EmailView() {
   const {
     emailViewSignal: [emailView, setEmailView],
+    getSelectedViewStore: viewData,
   } = useSplitPanelOrThrow().unifiedListContext;
 
   return (
     <>
-      <UnifiedListView
-        viewId="emails"
-        searchText={props.searchText}
-        onLoadingChange={props.setIsLoading}
-      />
+      <UnifiedListView viewId="emails" />
       <SplitToolbarRight>
         <div class="flex flex-row items-center pr-2">
           <SegmentedControl
-            disabled={props.searchText.length > 0}
+            disabled={!!viewData().searchText}
             size="SM"
             label="View"
             list={['inbox', 'sent', 'drafts']}

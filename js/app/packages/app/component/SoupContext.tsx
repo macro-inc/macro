@@ -92,7 +92,7 @@ export function createSoupContext(): UnifiedListContext {
     // @ts-ignore narrowing set store function is annoying due to function overloading
     setViewDataStore_(...args);
   };
-  const setSelectedViewStore: SetStoreFunction<ViewData> = (...args: any[]) => {
+  const setSelectedViewStore = (...args: any[]) => {
     // need to create new reference, causes bug where first entity persits highlighting
     if (
       args.length === 2 &&
@@ -101,8 +101,7 @@ export function createSoupContext(): UnifiedListContext {
     ) {
       args[1] = { ...args[1] };
     }
-    // @ts-ignore narrowing set store function is annoying due to function overloading
-    setViewDataStore(selectedView(), ...args);
+    (setViewDataStore as any)(selectedView(), ...args);
   };
 
   return {
@@ -682,7 +681,10 @@ const useAllViews = ({
         const defaultViewIds = new Set(Object.keys(VIEWCONFIG_DEFAULTS));
         const filteredViewsData = Object.fromEntries(
           Object.entries(viewsData).filter(
-            ([viewId]) => savedViewIds.has(viewId) || defaultViewIds.has(viewId)
+            ([viewId, viewData]) =>
+              savedViewIds.has(viewId) ||
+              defaultViewIds.has(viewId) ||
+              viewData.viewType !== undefined
           )
         );
 
