@@ -121,6 +121,7 @@ pub struct ProjectSearchResponse {
     pub content: Option<Vec<String>>,
 }
 
+#[tracing::instrument(skip(client, args), err)]
 pub(crate) async fn search_projects(
     client: &opensearch::OpenSearch,
     args: ProjectSearchArgs,

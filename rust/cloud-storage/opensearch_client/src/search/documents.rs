@@ -120,6 +120,7 @@ impl DocumentSearchArgs {
     }
 }
 
+#[tracing::instrument(skip(client, args), err)]
 pub(crate) async fn search_documents(
     client: &opensearch::OpenSearch,
     args: DocumentSearchArgs,
