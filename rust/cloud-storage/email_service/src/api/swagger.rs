@@ -25,6 +25,7 @@ use utoipa::OpenApi;
         email::attachments::get::handler,
         email::backfill::cancel::handler,
         email::backfill::get::handler,
+        email::backfill::get::active_handler,
         email::init::handler,
         email::drafts::create::handler,
         email::drafts::delete::handler,

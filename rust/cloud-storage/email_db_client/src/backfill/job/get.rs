@@ -67,6 +67,36 @@ pub async fn get_backfill_job_with_link_id(
     Ok(record.map(Into::into))
 }
 
+#[tracing::instrument(skip(pool), level = "info", err)]
+pub async fn get_active_backfill_job(
+    pool: &PgPool,
+    link_id: Uuid,
+) -> anyhow::Result<Option<service::backfill::BackfillJob>> {
+    let record = sqlx::query_as!(
+        db::backfill::BackfillJob,
+        r#"
+        SELECT
+            id,
+            link_id,
+            fusionauth_user_id,
+            threads_requested_limit,
+            total_threads,
+            threads_retrieved_count,
+            status as "status: db::backfill::BackfillJobStatus",
+            created_at,
+            updated_at
+        FROM email_backfill_jobs
+        WHERE link_id = $1 AND status IN ('Init', 'InProgress')
+        "#,
+        link_id
+    )
+    .fetch_optional(pool)
+    .await
+    .with_context(|| "Failed to query for active backfill job".to_string())?;
+
+    Ok(record.map(Into::into))
+}
+
 /// Retrieves all backfill jobs created in the last 24 hours for a given macro ID
 #[tracing::instrument(skip(pool), level = "info")]
 pub async fn get_recent_jobs_by_fusionauth_user_id(
