@@ -4,7 +4,7 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SimpleEmailSearchResponseBaseItemTimestampSecondsContent } from './simpleEmailSearchResponseBaseItemTimestampSecondsContent';
+import type { SearchHighlight } from './searchHighlight';
 import type { SimpleEmailSearchResponseBaseItemTimestampSecondsSentAt } from './simpleEmailSearchResponseBaseItemTimestampSecondsSentAt';
 import type { SimpleEmailSearchResponseBaseItemTimestampSecondsSubject } from './simpleEmailSearchResponseBaseItemTimestampSecondsSubject';
 
@@ -13,8 +13,8 @@ export interface SimpleEmailSearchResponseBaseItemTimestampSeconds {
   bcc: string[];
   /** The cc */
   cc: string[];
-  /** The opensearch matches on the email */
-  content?: SimpleEmailSearchResponseBaseItemTimestampSecondsContent;
+  /** The highlights on the email */
+  highlight: SearchHighlight;
   /** The labels */
   labels: string[];
   /** The link id */
