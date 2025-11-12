@@ -94,24 +94,23 @@ pub struct GetActiveBackfillJobResponse {
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx), err)]
 pub async fn active_handler(
     State(ctx): State<ApiContext>,
     link: Extension<Link>,
-) -> Result<Json<GetActiveBackfillJobResponse>, GetActiveBackfillError> {
+) -> Result<Response, GetActiveBackfillError> {
     let job = email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
         .await
-        .map_err(GetActiveBackfillError::QueryError)?
-        .ok_or_else(|| GetActiveBackfillError::NotFound(link.id))?;
+        .map_err(GetActiveBackfillError::QueryError)?;
 
-    Ok(Json(GetActiveBackfillJobResponse { job }))
+    match job {
+        Some(job) => Ok(Json(GetActiveBackfillJobResponse { job }).into_response()),
+        None => Ok(StatusCode::NO_CONTENT.into_response()),
+    }
 }
 
 #[derive(Debug, Error, AsRefStr)]
 pub enum GetActiveBackfillError {
-    #[error("No active backfill job found for link {0}")]
-    NotFound(Uuid),
-
     #[error("Failed to get active backfill job from database")]
     QueryError(#[from] anyhow::Error),
 }
@@ -119,17 +118,8 @@ pub enum GetActiveBackfillError {
 impl IntoResponse for GetActiveBackfillError {
     fn into_response(self) -> Response {
         let status_code = match self {
-            GetActiveBackfillError::NotFound(_) => StatusCode::NOT_FOUND,
             GetActiveBackfillError::QueryError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
-
-        if status_code.is_server_error() {
-            tracing::error!(
-                nested_error = ?self,
-                error_type = "GetActiveBackfillError", 
-                variant = self.as_ref(),
-                "Internal server error");
-        }
 
         (
             status_code,
