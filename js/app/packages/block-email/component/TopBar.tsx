@@ -3,9 +3,18 @@ import {
   SplitHeaderBadge,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
-import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitToolbar';
+import {
+  SplitToolbarLeft,
+  SplitToolbarRight,
+} from '@app/component/split-layout/components/SplitToolbar';
+import { useBlockId } from '@core/block';
+import { ENABLE_PROPERTIES_METADATA } from '@core/constant/featureFlags';
+import { Show } from 'solid-js';
+import { EmailPropertiesModal } from './EmailPropertiesModal';
 
 export function TopBar(props: { title: string }) {
+  const blockId = useBlockId();
+
   return (
     <>
       <SplitHeaderLeft>
@@ -16,6 +25,11 @@ export function TopBar(props: { title: string }) {
           <SplitHeaderBadge text="beta" tooltip="Email is in Beta" />
         </div>
       </SplitToolbarLeft>
+      <SplitToolbarRight>
+        <Show when={ENABLE_PROPERTIES_METADATA}>
+          <EmailPropertiesModal documentId={blockId} buttonSize="sm" />
+        </Show>
+      </SplitToolbarRight>
     </>
   );
 }
