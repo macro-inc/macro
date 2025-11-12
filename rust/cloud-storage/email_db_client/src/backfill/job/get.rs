@@ -67,7 +67,7 @@ pub async fn get_backfill_job_with_link_id(
     Ok(record.map(Into::into))
 }
 
-#[tracing::instrument(skip(pool), level = "info", err)]
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_active_backfill_job(
     pool: &PgPool,
     link_id: Uuid,

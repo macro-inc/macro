@@ -30,8 +30,8 @@ pub struct GetBackfillJobResponse {
         ("id" = Uuid, Path, description = "Job ID."),
     ),
     responses(
-            (status = 201, body=GetBackfillJobResponse),
-            (status = 429, body=ErrorResponse),
+            (status = 200, body=GetBackfillJobResponse),
+            (status = 401, body=ErrorResponse),
             (status = 404, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )
@@ -88,8 +88,8 @@ pub struct GetActiveBackfillJobResponse {
     path = "/email/backfill/gmail/active",
     operation_id = "get_backfill_gmail_active",
     responses(
-            (status = 201, body=GetActiveBackfillJobResponse),
-            (status = 429, body=ErrorResponse),
+            (status = 200, body=GetActiveBackfillJobResponse),
+            (status = 401, body=ErrorResponse),
             (status = 404, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )
@@ -98,13 +98,13 @@ pub struct GetActiveBackfillJobResponse {
 pub async fn active_handler(
     State(ctx): State<ApiContext>,
     link: Extension<Link>,
-) -> Result<Response, GetActiveBackfillError> {
+) -> Result<Json<GetActiveBackfillJobResponse>, GetActiveBackfillError> {
     let job = email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
         .await
         .map_err(GetActiveBackfillError::QueryError)?
         .ok_or_else(|| GetActiveBackfillError::NotFound(link.id))?;
 
-    Ok(Json(GetActiveBackfillJobResponse { job }).into_response())
+    Ok(Json(GetActiveBackfillJobResponse { job }))
 }
 
 #[derive(Debug, Error, AsRefStr)]
