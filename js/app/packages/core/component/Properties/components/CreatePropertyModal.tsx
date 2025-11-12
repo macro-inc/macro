@@ -331,7 +331,10 @@ export function CreatePropertyModal(props: CreatePropertyModalProps) {
   const shouldShowMultiSelect = createMemo(() => {
     const { type } = parseDataTypeValue(selectedDataType());
     return (
-      type === 'select_string' || type === 'select_number' || type === 'entity'
+      type === 'select_string' ||
+      type === 'select_number' ||
+      type === 'entity' ||
+      type === 'link'
     );
   });
 
