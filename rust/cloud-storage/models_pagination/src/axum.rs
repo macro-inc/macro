@@ -30,8 +30,8 @@ impl<Id, S: Sortable, F> CursorExtractor<Id, S, F> {
         }
     }
     /// convert self into a [Query] by supplying a fallback
-    pub fn into_query(self, sort: S) -> crate::cursor::Query<Id, S, F> {
-        crate::cursor::Query::new(self.into_option(), sort)
+    pub fn into_query(self, sort: S, filter: F) -> crate::cursor::Query<Id, S, F> {
+        crate::cursor::Query::new(self.into_option(), sort, filter)
     }
 }
 
@@ -71,7 +71,7 @@ where
     Sort: Sortable + DeserializeOwned,
     Sort::Value: DeserializeOwned,
     Id: DeserializeOwned,
-    F: DeserializeOwned + Default,
+    F: DeserializeOwned,
 {
     type Rejection = CusorExtractErr;
 

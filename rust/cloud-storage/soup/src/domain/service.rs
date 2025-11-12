@@ -1,6 +1,6 @@
 use crate::domain::{
     models::{
-        AdvancedSortParams, AstFilter, FrecencySoupItem, SimpleSortRequest, SoupErr, SoupFilter,
+        AdvancedSortParams, FrecencySoupItem, SimpleSortFilter, SimpleSortRequest, SoupErr,
         SoupQuery, SoupRequest, SoupType,
     },
     ports::{SoupOutput, SoupRepo, SoupService},
@@ -17,7 +17,6 @@ use models_pagination::{
     Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod,
 };
 use models_soup::item::SoupItem;
-use non_empty::IsEmpty;
 use std::cmp::Ordering;
 
 #[cfg(test)]
@@ -95,9 +94,11 @@ where
                 soup_type,
                 SimpleSortRequest {
                     limit: remainder_to_fetch.try_into().unwrap_or(500),
-                    cursor: Query::Sort(SimpleSortMethod::UpdatedAt),
+                    cursor: Query::Sort(
+                        SimpleSortMethod::UpdatedAt,
+                        Some(SimpleSortFilter::Frecency(Frecency)),
+                    ),
                     user_id: user,
-                    filters: Some(SoupFilter::Frecency),
                 },
             )
             .await?;
@@ -106,13 +107,13 @@ where
 
     async fn handle_advanced_sort(
         &self,
-        cursor: Query<String, Frecency, EntityFilterAst>,
+        cursor: Query<String, Frecency, Option<EntityFilterAst>>,
         soup_type: SoupType,
         user: MacroUserIdStr<'static>,
         limit: u16,
     ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
         let from_score = match cursor {
-            Query::Sort(_) => None,
+            Query::Sort(_, _) => None,
             Query::Cursor(Cursor {
                 val:
                     CursorVal {
@@ -144,11 +145,10 @@ where
                                 val: CursorVal {
                                     sort_type: SimpleSortMethod::UpdatedAt,
                                     last_val: updated,
-                                    filter,
+                                    filter: Some(SimpleSortFilter::Frecency(Frecency)),
                                 },
                             }),
                             user_id: user,
-                            filters: Some(SoupFilter::Frecency),
                         },
                     )
                     .await?,
@@ -164,7 +164,7 @@ where
 
     async fn handle_frecency_cursor(
         &self,
-        #[expect(unused_variables)] from_value: Option<(f64, EntityFilterAst)>,
+        #[expect(unused_variables)] from_value: Option<(f64, Option<EntityFilterAst>)>,
         soup_type: SoupType,
         user: MacroUserIdStr<'static>,
         limit: u16,
@@ -175,7 +175,7 @@ where
                 user_id: user.copied(),
                 from_score: None,
                 limit: limit as u32,
-                filters: Default::default(),
+                filters: None,
             })
             .await?;
 
@@ -220,6 +220,7 @@ where
 {
     async fn get_user_soup(&self, req: SoupRequest) -> Result<SoupOutput, SoupErr> {
         let limit = req.limit.clamp(20, 500);
+        let paginate_filter = req.cursor.filter().cloned();
         match req.cursor {
             SoupQuery::Simple(cursor) => {
                 let sort_method = *cursor.sort_method();
@@ -229,25 +230,19 @@ where
                         req.soup_type,
                         SimpleSortRequest {
                             limit,
-                            cursor,
+                            cursor: cursor.map_filter(|cur| cur.map(SimpleSortFilter::Ast)),
                             user_id: req.user,
-                            filters: match req.filters.is_empty() {
-                                true => None,
-                                false => {
-                                    Some(SoupFilter::Ast(AstFilter::Normal(req.filters.clone())))
-                                }
-                            },
                         },
                     )
                     .await?
-                    .paginate_filter_on(limit.into(), sort_method, req.filters)
+                    .paginate_filter_on(limit.into(), sort_method, paginate_filter)
                     .into_page(),
                 ))
             }
             SoupQuery::Frecency(cursor) => Ok(Either::Right(
                 self.handle_advanced_sort(cursor, req.soup_type, req.user, limit)
                     .await?
-                    .paginate_filter_on(limit.into(), Frecency, req.filters)
+                    .paginate_filter_on(limit.into(), Frecency, paginate_filter)
                     .into_page(),
             )),
         }

@@ -306,7 +306,7 @@ pub struct FrecencyPageRequest<'a> {
     /// the limit to the number of results to return on the page
     pub limit: u32,
     /// the filter ast that should remove values from the output
-    pub filters: EntityFilterAst,
+    pub filters: Option<EntityFilterAst>,
 }
 
 /// the response which contains the single page of frecency from the service
