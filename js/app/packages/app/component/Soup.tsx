@@ -421,9 +421,9 @@ export function Soup() {
         <Show when={preview()}>
           <div class="flex flex-row size-full w-[70%] shrink-0">
             {/* must access property, id, on selectedEntity in order to make it reactive   */}
-            <Show when={selectedEntity()?.id && selectedEntity()}>
-              {(_) => {
-                const entity = selectedEntity()!;
+            <Show when={!!selectedEntity()?.id && selectedEntity()}>
+              {(selectedEntity) => {
+                const entity = selectedEntity();
                 const blockInstance = () =>
                   orchestrator.createBlockInstance(
                     entity.type === 'document'
