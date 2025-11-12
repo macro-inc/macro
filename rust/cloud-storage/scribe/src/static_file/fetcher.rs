@@ -1,9 +1,10 @@
 use crate::static_file::types::{StaticFileContent, StaticFileData};
 use anyhow::{Context, Error};
-use model::document::ContentType;
+use model::document::{ContentType, ContentTypeExt};
 use models_sfs::FileMetadata;
 use static_file_service_client::StaticFileServiceClient;
 use std::fmt::Debug;
+use std::str::FromStr;
 use std::sync::Arc;
 
 pub type NoData = ();
@@ -78,7 +79,7 @@ impl<T> StaticFileFetcher<Fetched<FileMetadata>, T> {
 
     pub fn content_type(&self) -> Result<ContentType, Error> {
         ContentType::from_str(&self.metadata.content_type)
-            .ok_or_else(|| anyhow::anyhow!("Invalid content type: {}", self.metadata.content_type))
+            .map_err(|_| anyhow::anyhow!("Invalid content type: {}", self.metadata.content_type))
     }
 }
 

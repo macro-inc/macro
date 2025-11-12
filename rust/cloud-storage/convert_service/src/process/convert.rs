@@ -3,7 +3,7 @@ use nix::{
     unistd::{ForkResult, fork},
 };
 use rs_libreoffice_bindings::Office;
-use std::{borrow::Cow, fs::File, io::Write, thread, time::Duration};
+use std::{borrow::Cow, fs::File, io::Write, str::FromStr, thread, time::Duration};
 
 use anyhow::Context;
 use model::{convert::ConvertQueueMessage, document::FileType};
@@ -136,16 +136,14 @@ pub async fn convert(
         .split('.')
         .next_back()
         .context("expected key to contain a file type")
-        .and_then(|s| s.try_into())
-        .context("unable to get from_file_type")?;
+        .and_then(|s| Ok(FileType::from_str(s)?))?;
 
     let to_file_type: FileType = req
         .to_key
         .split('.')
         .next_back()
         .context("expected key to contain a file type")
-        .and_then(|s| s.try_into())
-        .context("unable to get to_file_type")?;
+        .and_then(|s| Ok(FileType::from_str(s)?))?;
 
     let filter = get_lok_filter_from_file_types(&from_file_type, &to_file_type)
         .context("unable to get lok filter")?;

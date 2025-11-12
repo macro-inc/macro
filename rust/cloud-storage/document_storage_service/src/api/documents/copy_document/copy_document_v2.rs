@@ -4,7 +4,7 @@ use crate::{
 };
 use axum::{http::StatusCode, response::Response};
 use macro_db_client::history::upsert_user_history;
-use model::sync_service::SyncServiceVersionID;
+use model::{document::FileTypeExt, sync_service::SyncServiceVersionID};
 use model::{
     document::{
         BomPart, CONVERTED_DOCUMENT_FILE_NAME, DocumentMetadata, FileType,
