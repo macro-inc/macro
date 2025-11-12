@@ -9,9 +9,7 @@ use crate::{
 };
 
 use crate::SearchOn;
-use opensearch_query_builder::{
-    FieldSort, Highlight, HighlightField, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
-};
+use opensearch_query_builder::{Highlight, HighlightField, SearchRequest, ToOpenSearchJson};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -23,13 +21,6 @@ impl SearchQueryConfig for ProjectSearchConfig {
     const INDEX: &'static str = PROJECT_INDEX;
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "project_name";
-
-    fn default_sort_types() -> Vec<SortType> {
-        vec![
-            SortType::Field(FieldSort::new("updated_at_seconds", SortOrder::Desc)),
-            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
-        ]
-    }
 
     // Projects have no "content" to highlight match on, so match on the TITLE_KEY instead
     fn default_highlight() -> Highlight {

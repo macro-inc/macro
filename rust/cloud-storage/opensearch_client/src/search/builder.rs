@@ -59,10 +59,10 @@ pub trait SearchQueryConfig {
     /// Returns the default sort types that are used on the search query.
     /// Override this method if you need custom sort logic
     fn default_sort_types() -> Vec<SortType> {
-        vec![SortType::Field(FieldSort::new(
-            "updated_at_seconds",
-            SortOrder::Desc,
-        ))]
+        vec![
+            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
+            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
+        ]
     }
 
     /// Override this method if you need custom highlight logic
@@ -208,17 +208,6 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             search_request.collapse(Collapse::new(T::ID_KEY));
         }
 
-        // We need to set the sort and highlight and any aggs depending on the search_on
-        let sort_types = match self.search_on {
-            SearchOn::Name | SearchOn::Content => T::default_sort_types(),
-            SearchOn::NameContent => {
-                vec![
-                    SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-                    SortType::Field(FieldSort::new(T::ID_KEY, SortOrder::Asc)),
-                ]
-            }
-        };
-
         let highlight = match self.search_on {
             SearchOn::Content => T::default_highlight(),
             SearchOn::Name => Highlight::new().require_field_match(true).field(
@@ -250,7 +239,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         };
 
         search_request.highlight(highlight);
-        search_request.set_sorts(sort_types);
+        search_request.set_sorts(T::default_sort_types());
 
         search_request.from(self.page * self.page_size);
         search_request.size(self.page_size);
