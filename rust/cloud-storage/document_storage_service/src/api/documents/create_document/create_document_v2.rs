@@ -55,7 +55,7 @@ pub async fn create_document(
             project_id,
             project_name: None,
             share_permission: &share_permission,
-            skip_history: false,
+            skip_history: created_at.is_some(), // don't add to history if it's a backfill
             created_at,
         },
     )
