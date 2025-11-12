@@ -89,14 +89,6 @@ export function createSoupContext(): UnifiedListContext {
     setViewDataStore_(...args);
   };
   const setSelectedViewStore = (...args: any[]) => {
-    // need to create new reference, causes bug where first entity persits highlighting
-    if (
-      args.length === 2 &&
-      args[0] === 'selectedEntity' &&
-      typeof args[1] !== 'function'
-    ) {
-      args[1] = { ...args[1] };
-    }
     (setViewDataStore as any)(selectedView(), ...args);
   };
 

@@ -1405,18 +1405,19 @@ function SearchBar(props: {
   setIsLoading: Setter<boolean>;
 }) {
   const {
-    getSelectedViewStore: viewData,
-    setSelectedViewStore,
+    viewsDataStore,
+    setViewDataStore,
     entitiesSignal: [entities],
     virtualizerHandleSignal: [virtualizerHandle],
     entityListRefSignal: [entityListRef],
   } = useSplitPanelOrThrow().unifiedListContext;
+  const viewData = createMemo(() => viewsDataStore[props.viewId]);
 
   let inputRef: HTMLInputElement | undefined;
 
   const searchText = createMemo<string>(() => viewData().searchText ?? '');
   const setSearchText = (text: string) => {
-    setSelectedViewStore('searchText', text);
+    setViewDataStore(props.viewId, 'searchText', text);
   };
 
   const debouncedSetSearch = debounce(setSearchText, 200);
@@ -1450,7 +1451,7 @@ function SearchBar(props: {
         highlightedEntityEl.focus();
         const entity = entities()?.find(({ id: entityId }) => entityId === id);
         if (entity) {
-          setSelectedViewStore('selectedEntity', entity);
+          setViewDataStore(props.viewId, 'selectedEntity', entity);
           return;
         }
       }
@@ -1468,8 +1469,8 @@ function SearchBar(props: {
     const text = searchText().trim();
     if (text !== prevText) {
       batch(() => {
-        setSelectedViewStore('selectedEntity', undefined);
-        setSelectedViewStore('highlightedId', undefined);
+        setViewDataStore(props.viewId, 'selectedEntity', undefined);
+        setViewDataStore(props.viewId, 'highlightedId', undefined);
       });
       virtualizerHandle()?.scrollToIndex(0);
       setWaitForLoadingEnd(true);
