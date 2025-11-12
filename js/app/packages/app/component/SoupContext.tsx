@@ -46,7 +46,6 @@ import {
 export type UnifiedListContext = {
   viewsDataStore: Store<ViewDataMap>;
   setViewDataStore: SetStoreFunction<ViewDataMap>;
-  getSelectedViewStore: Accessor<Store<ViewData>>;
   setSelectedViewStore: SetStoreFunction<ViewData>;
   selectedView: Accessor<ViewId>;
   setSelectedView: Setter<ViewId>;
@@ -65,9 +64,6 @@ export function createSoupContext(): UnifiedListContext {
   const [viewsDataStore, setViewDataStore_] = useAllViews({
     selectedViewSignal: [selectedView, setSelectedView],
   });
-  const getSelectedViewStore = createLazyMemo(
-    () => viewsDataStore[selectedView()]
-  );
   const virtualizerHandleSignal = createSignal<VirtualizerHandle>();
   const entityListRefSignal = createSignal<HTMLDivElement>();
   const entitiesSignal = createSignal<EntityData[]>();
@@ -107,7 +103,6 @@ export function createSoupContext(): UnifiedListContext {
   return {
     viewsDataStore,
     setViewDataStore,
-    getSelectedViewStore,
     setSelectedViewStore,
     selectedView,
     setSelectedView,
@@ -188,7 +183,6 @@ export function createNavigationEntityListShortcut({
 }) {
   const {
     viewsDataStore: viewsData,
-    getSelectedViewStore: viewData,
     setSelectedViewStore,
     entityListRefSignal: [entityListRef],
     virtualizerHandleSignal: [virtualizerHandle],
@@ -197,6 +191,7 @@ export function createNavigationEntityListShortcut({
     // selectedEntitySignal: [selectedEntity, setSelectedEntity],
     entitiesSignal: [entities],
   } = unifiedListContext;
+  const viewData = createMemo(() => viewsData[selectedView()]);
   const viewIds = createMemo<ViewId[]>(() => Object.keys(viewsData));
 
   const selectedEntity = () => viewData().selectedEntity;

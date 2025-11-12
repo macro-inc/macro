@@ -444,8 +444,9 @@ function AllView() {
 function EmailView() {
   const {
     emailViewSignal: [emailView, setEmailView],
-    getSelectedViewStore: viewData,
+    viewsDataStore,
   } = useSplitPanelOrThrow().unifiedListContext;
+  const viewData = createMemo(() => viewsDataStore['emails']);
 
   return (
     <>
