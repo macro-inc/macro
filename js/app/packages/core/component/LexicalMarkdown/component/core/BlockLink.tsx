@@ -80,5 +80,16 @@ export function BlockLink(
     let newSplit = e.altKey;
     openDocument(props.blockOrFileName, props.id, props.params, newSplit);
   });
-  return <span onClick={open}>{props.children}</span>;
+  return (
+    <span
+      onMouseDown={(e) => {
+        // Prevent focus change on mousedown to avoid split activation flash
+        // The click handler will properly handle navigation
+        e.preventDefault();
+      }}
+      onClick={open}
+    >
+      {props.children}
+    </span>
+  );
 }

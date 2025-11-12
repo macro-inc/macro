@@ -228,6 +228,11 @@ export function ItemPreview(props: ItemPreviewProps) {
                         />
                       );
                     }}
+                    onMouseDown={(e) => {
+                      // Prevent focus change on mousedown to avoid split activation flash
+                      // The click handler will properly handle navigation
+                      e.preventDefault();
+                    }}
                     onClick={(e) =>
                       onPreviewClick(
                         itemData.type,
