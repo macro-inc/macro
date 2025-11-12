@@ -11,6 +11,7 @@ import {
 } from '@core/signal/preview';
 import { useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import { commsServiceClient } from '@service-comms/client';
 import type { EntityReference } from '@service-comms/generated/models/entityReference';
 import type { GenericReference } from '@service-comms/generated/models/genericReference';
@@ -166,12 +167,14 @@ export function References(props: ReferenceProps) {
               const hasMessageContent =
                 ref.message_content && ref.message_content.trim().length > 0;
 
+              const navHandlers = useSplitNavigationHandler(() =>
+                navigateToMessage(ref.channel_id, ref.message_id)
+              );
+
               return (
                 <button
                   class="bg-menu hover:bg-hover p-2 pb-3 border-edge-muted border-b w-full text-left"
-                  onClick={() =>
-                    navigateToMessage(ref.channel_id, ref.message_id)
-                  }
+                  {...navHandlers}
                 >
                   <div class="flex justify-start items-center gap-2 mb-4 font-mono text-ink-muted text-xs uppercase">
                     <div class="bg-ink-extra-muted size-2" />
@@ -208,10 +211,14 @@ export function References(props: ReferenceProps) {
                 type: ref.source_entity_type as any,
               });
 
+              const navHandlers = useSplitNavigationHandler(() =>
+                navigateToGenericReference(item())
+              );
+
               return (
                 <button
                   class="bg-menu hover:bg-hover p-2 pb-3 border-edge-muted border-b w-full text-left"
-                  onClick={() => navigateToGenericReference(item())}
+                  {...navHandlers}
                 >
                   <div class="flex justify-start items-center gap-2 mb-4 font-mono text-ink-muted text-xs uppercase">
                     <div class="bg-ink-extra-muted size-2" />

@@ -356,7 +356,7 @@ export function Rightbar(props: {
     } else {
       globalSplitManager()?.returnFocus();
     }
-  }
+  };
 
   createEffect(() => {
     if (props.isBig) {

@@ -43,53 +43,6 @@ export const TextValue: Component<TextValueProps> = (props) => {
     }
   };
 
-  // Empty state
-  if (
-    !props.property.value ||
-    (typeof props.property.value === 'string' &&
-      props.property.value.length === 0)
-  ) {
-    return (
-      <Show
-        when={editor.isEditing()}
-        fallback={
-          <button
-            onClick={handleClick}
-            class={`text-left text-xs px-2 py-1 border border-edge ${
-              supportsInline()
-                ? 'hover:bg-hover cursor-pointer bg-transparent text-ink'
-                : 'bg-transparent text-ink-muted cursor-default'
-            } inline-block max-w-full`}
-          >
-            —
-          </button>
-        }
-      >
-        <input
-          ref={(el) => {
-            setTimeout(() => {
-              el.focus();
-              el.setSelectionRange(el.value.length, el.value.length);
-            }, 0);
-          }}
-          type="text"
-          value={editor.inputValue()}
-          onInput={(e) => editor.setInputValue(e.currentTarget.value)}
-          onBlur={editor.save}
-          onKeyDown={handleKeyDown}
-          disabled={editor.isSaving()}
-          placeholder="Enter text..."
-          class="w-full text-left text-ink text-xs px-2 py-1 border border-edge bg-transparent focus:outline-none focus:border-accent"
-        />
-      </Show>
-    );
-  }
-
-  const displayValue = formatPropertyValue(
-    props.property,
-    props.property.value as string
-  );
-
   return (
     <Show
       when={editor.isEditing()}
@@ -101,9 +54,22 @@ export const TextValue: Component<TextValueProps> = (props) => {
               ? 'hover:bg-hover cursor-pointer bg-transparent text-ink'
               : 'bg-transparent text-ink-muted cursor-default'
           } block max-w-full break-words`}
-          title={displayValue}
         >
-          <span class="block max-w-full">{displayValue}</span>
+          <Show
+            when={
+              props.property.value &&
+              typeof props.property.value === 'string' &&
+              props.property.value.length > 0
+            }
+            fallback={<>—</>}
+          >
+            <span class="block max-w-full">
+              {formatPropertyValue(
+                props.property,
+                props.property.value as string
+              )}
+            </span>
+          </Show>
         </button>
       }
     >

@@ -26,7 +26,7 @@ async fn main() -> anyhow::Result<()> {
 
     for document in result {
         println!("{:?}", document.document_id);
-        println!("{:?}", document.content);
+        println!("{:?}", document.highlight);
     }
 
     Ok(())

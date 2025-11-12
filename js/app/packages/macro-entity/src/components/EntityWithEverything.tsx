@@ -6,6 +6,7 @@ import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/St
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { useDisplayName } from 'core/user';
 import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
+import { useSplitNavigationHandler } from 'core/util/useSplitNavigationHandler';
 import { notificationWithMetadata } from 'notifications/notificationMetadata';
 import type { ParentProps, Ref } from 'solid-js';
 import {
@@ -67,7 +68,6 @@ interface EntityProps<T extends WithNotification<EntityData>>
   onMouseLeave?: () => void;
   onFocusIn?: () => void;
   onContextMenu?: () => void;
-  onChecked?: (checked: boolean) => void;
   properties?: Record<string, string>;
   contentPlacement?: 'middle' | 'bottom-row';
   unreadIndicatorActive?: boolean;
@@ -78,7 +78,6 @@ interface EntityProps<T extends WithNotification<EntityData>>
   showDoneButton?: boolean;
   highlighted?: boolean;
   selected?: boolean;
-  checked?: boolean;
   ref?: Ref<HTMLDivElement>;
 }
 
@@ -92,7 +91,7 @@ export function EntityWithEverything<
     createSignal(false);
 
   const { keydownDataDuringTask } = trackKeydownDuringTask();
-  let tabbableEl!: HTMLDivElement;
+  let _tabbableEl!: HTMLDivElement;
 
   // onMount(() => {
   //   if (document.activeElement === document.body) {
@@ -198,13 +197,8 @@ export function EntityWithEverything<
     });
 
     const userName = createMemo(() => {
-      const [userName] = useDisplayName(notification()?.senderId!);
+      const [userName] = useDisplayName(notification()?.senderId);
       return userName();
-    });
-    const _isNameEmailAddress = createMemo(() => {
-      return !!userName().match(
-        /^(?!\.)(?!.*\.\.)([a-z0-9_'+\-\.]*)[a-z0-9_'+\-]@([a-z0-9][a-z0-9\-]*\.)+[a-z]{2,}$/i
-      );
     });
 
     return (
@@ -258,21 +252,23 @@ export function EntityWithEverything<
 
   const { didCursorMove } = useCursorMove();
 
+  const navHandlers = createMemo(() => {
+    const onClick = props.onClick;
+    if (!onClick) return;
+    return useSplitNavigationHandler<HTMLDivElement>((e) =>
+      onClick(props.entity, e)
+    );
+  });
+
   return (
     <div
       use:draggable
       use:droppable
-      class={`everything-entity relative group py-[7px] px-2 ${ITEM_WRAPPER_CLASS()}`}
+      class={`relative group py-[7px] px-2 ${ITEM_WRAPPER_CLASS()}`}
       classList={{
         'bg-hover': props.highlighted,
         bracket: props.selected,
       }}
-      onMouseDown={(e) => {
-        // Prevent focus change on mousedown to avoid split activation flash
-        // The click handler will properly handle navigation
-        e.preventDefault();
-      }}
-      data-checked={props.checked}
       onMouseOver={(e) => {
         if (!didCursorMove(e)) {
           return;
@@ -305,10 +301,10 @@ export function EntityWithEverything<
         // class="@md:flex grid w-full min-w-0 flex-1 grid-cols-2 @md:flex-row @md:items-center @md:gap-4"
         class="min-h-[40px] grid w-full min-w-0 flex-1 gap-2 grid-rows-1 @md:items-center suppress-css-bracket"
         classList={{
-          'grid-cols-[auto_auto_1fr_auto]': props.showLeftColumnIndicator,
-          'grid-cols-[auto_1fr_auto]': !props.showLeftColumnIndicator,
+          'grid-cols-[auto_1fr_auto]': props.showLeftColumnIndicator,
+          'grid-cols-[1fr_auto]': !props.showLeftColumnIndicator,
         }}
-        onClick={props.onClick ? [props.onClick, props.entity] : undefined}
+        {...navHandlers()}
         // Action List is also rendered based on focus, but when focused via Shift+Tab, parent is focused due to Action List dom not present. Here we check if current browser task has captured Shift+Tab focus on Action List
         onFocusIn={(e) => {
           if (
@@ -330,22 +326,9 @@ export function EntityWithEverything<
         role="button"
         tabIndex={0}
         ref={mergeRefs(props.ref, (el) => {
-          tabbableEl = el;
+          _tabbableEl = el;
         })}
       >
-        <button
-          type="button"
-          class={`size-4 p-0.5 rounded-xs flex items-center justify-center ${props.checked ? 'bg-accent' : 'border border-edge'}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            props.onChecked?.(!props.checked);
-          }}
-        >
-          <Show when={props.checked}>
-            <CheckIcon class="w-full h-full" />
-          </Show>
-        </button>
-
         {/* Left Column Indicator(s) */}
         <Show when={props.showLeftColumnIndicator}>
           <UnreadIndicator active={props.unreadIndicatorActive} />
@@ -370,8 +353,8 @@ export function EntityWithEverything<
         <div
           class="relative row-1 ml-2 @md:ml-4 self-center min-w-0"
           classList={{
-            'col-4': props.showLeftColumnIndicator,
-            'col-3': !props.showLeftColumnIndicator,
+            'col-3': props.showLeftColumnIndicator,
+            'col-2': !props.showLeftColumnIndicator,
             'opacity-50': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >

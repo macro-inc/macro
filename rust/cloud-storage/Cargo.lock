@@ -4219,6 +4219,7 @@ dependencies = [
  "cool_asserts",
  "filter_ast",
  "macro_user_id",
+ "model_file_type",
  "non_empty",
  "schemars",
  "serde",
@@ -5104,13 +5105,13 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "model-error-response",
+ "model_file_type",
  "model_user",
  "models_bulk_upload",
  "models_comms",
  "models_email",
  "models_pagination",
  "models_permissions",
- "once_cell",
  "schemars",
  "serde",
  "serde_json",
@@ -5140,6 +5141,15 @@ name = "model-error-response"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "utoipa",
+]
+
+[[package]]
+name = "model_file_type"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "thiserror 2.0.17",
  "utoipa",
 ]
 
@@ -7206,6 +7216,7 @@ dependencies = [
  "aws_lambda_events",
  "lambda_runtime",
  "macro_entrypoint",
+ "model_file_type",
  "openssl",
  "sqs_client",
  "tokio",
