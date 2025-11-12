@@ -8,6 +8,7 @@ import type { ChannelType } from '@service-comms/generated/models/channelType';
 import { useHistory } from '@service-storage/history';
 import { createMemo } from 'solid-js';
 import type { CommandItemCard } from './KonsoleItem';
+import { useEntityActionItems } from './useEntityActionItems';
 
 const FILTER_PERSISTENT_CHATS = false;
 
@@ -31,6 +32,7 @@ export function useCommandItems() {
   const channelsContext = useChannelsContext();
   const channels = () => channelsContext.channels();
   const contactItems = useEmailContacts();
+  const entityActionItems = useEntityActionItems();
   const activeCommands = getActiveCommandsFromScope(activeScope(), {
     sortByScopeLevel: false,
     hideShadowedCommands: false,
@@ -120,12 +122,15 @@ export function useCommandItems() {
       }
     });
 
+    const entityActions = entityActionItems();
+
     return mapFromListsByKey<CommandItemCard>(
       (item) => item.data.id,
       items,
       channels_,
       contacts,
-      commands
+      commands,
+      entityActions
     );
   });
 }

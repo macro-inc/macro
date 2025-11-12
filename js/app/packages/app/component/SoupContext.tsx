@@ -32,6 +32,18 @@ import {
   type Store,
 } from 'solid-js/store';
 import type { VirtualizerHandle } from 'virtua/solid';
+import {
+  resetCommandCategoryIndex,
+  searchCategories,
+  setCommandCategoryIndex,
+  setKonsoleContextInformation,
+} from './command/KonsoleItem';
+import {
+  konsoleOpen,
+  resetKonsoleMode,
+  setKonsoleMode,
+  toggleKonsoleVisibility,
+} from './command/state';
 import { useGlobalNotificationSource } from './GlobalAppState';
 import type { SplitHandle } from './split-layout/layoutManager';
 import {
@@ -171,10 +183,22 @@ function createViewData(
     selectedEntity: undefined,
     scrollOffset: undefined,
     initialConfig: undefined,
+    selectedEntities: [],
     hasUserInteractedEntity: false,
     searchText: viewProps?.searchText,
   };
 }
+
+type NavigationInput = {
+  axis: 'start' | 'end'; // movement direction
+  mode: 'step' | 'jump'; // how far: one step or to the end
+  highlight?: boolean;
+};
+
+type NavigationResult = {
+  success: boolean;
+  entity: EntityData | undefined;
+};
 
 export function createNavigationEntityListShortcut({
   splitName,
@@ -265,14 +289,42 @@ export function createNavigationEntityListShortcut({
     return highlightedEntity.index >= entityList.length - 1;
   });
 
+  const calculateEntityIndex = (
+    startIndex: number,
+    { axis, mode }: NavigationInput
+  ) => {
+    let index = startIndex;
+
+    const maxLength = (entities()?.length || 1) - 1;
+    if (mode === 'jump') {
+      if (axis === 'start') {
+        // setIndex(0);
+        index = 0;
+      } else {
+        // setIndex(maxLength);
+        index = maxLength;
+      }
+    } else {
+      if (axis === 'start') {
+        // setIndex(Math.max(index() - 1, 0));
+        index = Math.max(index - 1, 0);
+      } else {
+        // setIndex(Math.min(index() + 1, maxLength));
+        index = Math.min(index + 1, maxLength);
+      }
+    }
+
+    return index;
+  };
+
   const navigateThroughList = async ({
     axis,
     mode,
-  }: {
-    axis: 'start' | 'end'; // movement direction
-    mode: 'step' | 'jump'; // how far: one step or to the end
-  }) => {
-    let index = getHighlightedEntity()?.index ?? -1;
+  }: NavigationInput): Promise<NavigationResult> => {
+    let index = calculateEntityIndex(getHighlightedEntity()?.index ?? -1, {
+      axis,
+      mode,
+    });
     setJumpedToEnd(false);
 
     setSelectedViewStore('hasUserInteractedEntity', true);
@@ -281,25 +333,6 @@ export function createNavigationEntityListShortcut({
     const scrollParent = getScrollParent(entityEl);
 
     const getAdjecentEl = async () => {
-      const maxLength = (entities()?.length || 1) - 1;
-      if (mode === 'jump') {
-        if (axis === 'start') {
-          // setIndex(0);
-          index = 0;
-        } else {
-          // setIndex(maxLength);
-          index = maxLength;
-        }
-      } else {
-        if (axis === 'start') {
-          // setIndex(Math.max(index() - 1, 0));
-          index = Math.max(index - 1, 0);
-        } else {
-          // setIndex(Math.min(index() + 1, maxLength));
-          index = Math.min(index + 1, maxLength);
-        }
-      }
-
       virtualizerHandle()?.scrollToIndex(index, {
         // align: mode === 'jump' && axis === 'end' ? 'end' : undefined,
         // align: align(),
@@ -345,10 +378,13 @@ export function createNavigationEntityListShortcut({
         });
       }
 
-      return newSelectedEntityEl;
+      return {
+        element: newSelectedEntityEl,
+        entity: selectedEntity,
+      };
     };
 
-    const adjacentEl = await getAdjecentEl();
+    const { element: adjacentEl, entity } = await getAdjecentEl();
 
     // Logic fails to focus entity element due to EntityList shuffling items after fetching new page
     // *ReSelectEntity effect logic covers this failure
@@ -356,9 +392,15 @@ export function createNavigationEntityListShortcut({
     if (adjacentEl instanceof HTMLElement) {
       adjacentEl.focus();
       setTimeout(() => adjacentEl.focus());
-      return true;
+      return {
+        success: true,
+        entity,
+      };
     }
-    return false;
+    return {
+      success: false,
+      entity,
+    };
   };
 
   const scrollToEntityFromId = async () => {
@@ -388,6 +430,71 @@ export function createNavigationEntityListShortcut({
     };
 
     listScrollEl?.addEventListener('scroll', onListScroll);
+  };
+
+  const isEntitySelected = (entityID: string) => {
+    return (
+      viewData()?.selectedEntities.find((e) => e.id === entityID) !== undefined
+    );
+  };
+
+  const toggleEntity = (entity: EntityData) => {
+    setSelectedViewStore('selectedEntities', (s) => {
+      if (isEntitySelected(entity.id)) {
+        return s.filter((e) => e.id !== entity.id);
+      }
+
+      return [...s, entity];
+    });
+  };
+
+  const navigateAndSelectEntity = async (input: NavigationInput) => {
+    const { success, entity } = await navigateThroughList(input);
+
+    if (!success || !entity) return;
+
+    toggleEntity(entity);
+  };
+
+  const handleNavigationSelection = (input: NavigationInput) => {
+    // Start selection - select self and next
+    // Next not selected - go next and select
+    // Next selected - unselect self and go next
+
+    const highlightedEntity = getHighlightedEntity();
+
+    const currentIndex = highlightedEntity?.index ?? -1;
+
+    const nextIndex = calculateEntityIndex(currentIndex, input);
+
+    const nextEntity = entities()?.at(nextIndex);
+
+    if (!nextEntity) return true;
+
+    if (!highlightedEntity) {
+      navigateAndSelectEntity(input);
+      return true;
+    }
+
+    if (
+      !isEntitySelected(highlightedEntity.entity.id) &&
+      !isEntitySelected(nextEntity.id)
+    ) {
+      toggleEntity(highlightedEntity.entity);
+      navigateAndSelectEntity(input);
+
+      return true;
+    }
+
+    if (isEntitySelected(nextEntity.id)) {
+      toggleEntity(highlightedEntity.entity);
+      navigateThroughList(input);
+      return true;
+    }
+
+    navigateAndSelectEntity(input);
+
+    return true;
   };
 
   let virtuaMount = true;
@@ -449,6 +556,42 @@ export function createNavigationEntityListShortcut({
   );
 
   registerHotkey({
+    scopeId: splitHotkeyScope,
+    description: 'Root Modify selection',
+    hotkey: 'cmd+k',
+    condition: () => !konsoleOpen(),
+    keyDownHandler: (e) => {
+      e?.preventDefault();
+      const selectedEntities = viewData().selectedEntities;
+
+      const hasSelection = selectedEntities.length > 0;
+
+      if (hasSelection) {
+        setKonsoleMode('SELECTION_MODIFICATION');
+        const selectionIndex = searchCategories.getCateoryIndex('Selection');
+
+        if (selectionIndex === undefined) return false;
+
+        setCommandCategoryIndex(selectionIndex);
+
+        searchCategories.showCategory('Selection');
+
+        setKonsoleContextInformation({
+          selectedEntities: selectedEntities.slice(),
+        });
+
+        toggleKonsoleVisibility();
+        return true;
+      }
+      searchCategories.hideCategory('Selection');
+      resetCommandCategoryIndex();
+      resetKonsoleMode();
+
+      return false;
+    },
+  });
+
+  registerHotkey({
     hotkey: ['arrowdown', 'j'],
     scopeId: splitHotkeyScope,
     description: 'Down',
@@ -460,6 +603,17 @@ export function createNavigationEntityListShortcut({
     hide: true,
   });
   registerHotkey({
+    hotkey: ['shift+arrowdown', 'shift+j'],
+    scopeId: splitHotkeyScope,
+    description: 'Select down',
+    hotkeyToken: TOKENS.entity.step.end,
+    keyDownHandler: () => {
+      const navigationInput: NavigationInput = { axis: 'end', mode: 'step' };
+      return handleNavigationSelection(navigationInput);
+    },
+    hide: true,
+  });
+  registerHotkey({
     hotkey: ['arrowup', 'k'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.step.start,
@@ -467,6 +621,18 @@ export function createNavigationEntityListShortcut({
     keyDownHandler: () => {
       navigateThroughList({ axis: 'start', mode: 'step' });
       return true;
+    },
+    hide: true,
+  });
+
+  registerHotkey({
+    hotkey: ['shift+arrowup', 'shift+k'],
+    scopeId: splitHotkeyScope,
+    hotkeyToken: TOKENS.entity.step.start,
+    description: 'Select up',
+    keyDownHandler: () => {
+      const navigationInput: NavigationInput = { axis: 'start', mode: 'step' };
+      return handleNavigationSelection(navigationInput);
     },
     hide: true,
   });
