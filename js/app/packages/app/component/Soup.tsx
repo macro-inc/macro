@@ -9,10 +9,7 @@ import { Button } from '@core/component/FormControls/Button';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import {
-  ENABLE_FOLDER_UPLOAD,
-  ENABLE_SEARCH_VIEW,
-} from '@core/constant/featureFlags';
+import { ENABLE_FOLDER_UPLOAD } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
@@ -44,7 +41,6 @@ import {
   For,
   Match,
   onCleanup,
-  onMount,
   type ParentComponent,
   Show,
   Suspense,
@@ -151,30 +147,6 @@ export function Soup() {
   const orchestrator = useGlobalBlockOrchestrator();
 
   const entityQueryClient = useEntityQueryClient();
-
-  onMount(() => {
-    if (!ENABLE_SEARCH_VIEW) return;
-
-    const { dispose } = registerHotkey({
-      hotkey: ['/'],
-      scopeId: splitHotkeyScope,
-      description: 'Search in current view',
-      hotkeyToken: TOKENS.soup.openSearch,
-      keyDownHandler: () => {
-        setTimeout(() => {
-          const searchInput = document.getElementById(
-            `search-input-${selectedView()}`
-          ) as HTMLInputElement;
-          searchInput?.focus();
-        }, 0);
-        return true;
-      },
-      displayPriority: 5,
-    });
-    onCleanup(() => {
-      dispose();
-    });
-  });
 
   registerHotkey({
     hotkey: ['shift+/'],
