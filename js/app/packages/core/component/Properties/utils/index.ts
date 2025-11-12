@@ -18,4 +18,3 @@ export {
 } from '../utils';
 export * from './entityConversion';
 export * from './errorHandling';
-export * from './typeGuards';
