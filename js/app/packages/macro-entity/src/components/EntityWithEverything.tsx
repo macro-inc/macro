@@ -413,7 +413,7 @@ export function EntityWithEverything<
                   if (
                     notification.notificationEventType === 'document_mention' ||
                     notification.notificationEventType ===
-                    'channel_message_document'
+                      'channel_message_document'
                   ) {
                     return 'shared';
                   }
@@ -436,7 +436,7 @@ export function EntityWithEverything<
                   if (
                     notification.notificationEventType === 'document_mention' ||
                     notification.notificationEventType ===
-                    'channel_message_document'
+                      'channel_message_document'
                   ) {
                     return '';
                   }
@@ -472,12 +472,12 @@ export function EntityWithEverything<
                     onClick={
                       props.onClickNotification
                         ? [
-                          props.onClickNotification,
-                          {
-                            ...props.entity,
-                            notification,
-                          },
-                        ]
+                            props.onClickNotification,
+                            {
+                              ...props.entity,
+                              notification,
+                            },
+                          ]
                         : undefined
                     }
                   >
