@@ -1,3 +1,4 @@
+import type { Component } from 'solid-js';
 import type { Property } from '../types';
 import { PropertyLabel } from './PropertyLabel';
 import { PropertyValue } from './property-display/PropertyValue';
@@ -7,7 +8,7 @@ interface PropertyRowProps {
   onValueClick: (property: Property, anchor?: HTMLElement) => void;
 }
 
-export function PropertyRow(props: PropertyRowProps) {
+export const PropertyRow: Component<PropertyRowProps> = (props) => {
   return (
     <>
       <div class="flex items-start min-w-0">
@@ -18,4 +19,4 @@ export function PropertyRow(props: PropertyRowProps) {
       </div>
     </>
   );
-}
+};

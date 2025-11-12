@@ -4,7 +4,7 @@ use anyhow::{Context, Result};
 use metering_service_client::{CreateUsageRecordRequest, OperationType, ServiceName};
 use model::document::FileType;
 use regex::Regex;
-use std::sync::Arc;
+use std::{str::FromStr, sync::Arc};
 use tracing::instrument;
 use uuid::Uuid;
 
@@ -85,10 +85,10 @@ async fn build_completion_request(
                 let file_type = FileType::from_str(&document.file_type);
 
                 match file_type {
-                    None => {
+                    Err(_) => {
                         tracing::warn!(document_id=%attachment_id, "document type is missing");
                     }
-                    Some(FileType::Pdf) | Some(FileType::Docx) => {
+                    Ok(f @ FileType::Pdf) | Ok(f @ FileType::Docx) => {
                         let document_text =
                             get_pdf_docx_document_text(ctx.db.clone(), attachment_id).await?;
                         if let Some(context) =
@@ -96,10 +96,7 @@ async fn build_completion_request(
                         {
                             prompt_attachments.push(PromptAttachment {
                                 id: attachment_id.to_string(),
-                                file_type: file_type
-                                    .ok_or(anyhow::anyhow!("unkown file type"))?
-                                    .as_str()
-                                    .to_string(),
+                                file_type: f.as_str().to_string(),
                                 name: document.name,
                                 content: context,
                             });
@@ -111,7 +108,7 @@ async fn build_completion_request(
                             );
                         }
                     }
-                    Some(file_type) => {
+                    Ok(file_type) => {
                         let content = get_document_plaintext_content(&ctx, attachment_id)
                             .await?
                             .text_content()?;

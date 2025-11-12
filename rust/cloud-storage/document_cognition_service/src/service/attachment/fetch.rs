@@ -3,7 +3,10 @@ use crate::core::constants::CHANNEL_TRANSCRIPT_MAX_MESSAGES;
 use ai::types::{Attachment, PromptAttachment};
 use ai_tools::read::EmailMessage;
 use anyhow::Context;
-use model::chat::{AttachmentType, ChatAttachmentWithName};
+use model::{
+    chat::{AttachmentType, ChatAttachmentWithName},
+    document::FileTypeExt,
+};
 use std::sync::Arc;
 
 pub const EMAIL_THREAD_MESSAGE_LIMIT: i64 = 20;

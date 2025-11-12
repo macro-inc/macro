@@ -44,46 +44,11 @@ export const NumberValue: Component<NumberValueProps> = (props) => {
     }
   };
 
-  // Empty state
-  if (props.property.value === undefined || props.property.value === null) {
-    return (
-      <Show
-        when={editor.isEditing()}
-        fallback={
-          <button
-            onClick={handleClick}
-            class={`text-left text-xs px-2 py-1 border border-edge ${
-              supportsInline()
-                ? 'hover:bg-hover cursor-pointer bg-transparent text-ink'
-                : 'bg-transparent text-ink-muted cursor-default'
-            } inline-block max-w-full`}
-          >
-            —
-          </button>
-        }
-      >
-        <input
-          ref={(el) => {
-            setTimeout(() => {
-              el.focus();
-              el.setSelectionRange(el.value.length, el.value.length);
-            }, 0);
-          }}
-          type="number"
-          step="0.0001"
-          value={editor.inputValue()}
-          onInput={(e) => editor.setInputValue(e.currentTarget.value)}
-          onBlur={editor.save}
-          onKeyDown={handleKeyDown}
-          disabled={editor.isSaving()}
-          placeholder="Enter number..."
-          class="w-full text-left text-ink text-xs px-2 py-1 border border-edge bg-transparent focus:outline-none focus:border-accent"
-        />
-      </Show>
-    );
-  }
-
-  const displayValue = formatNumber(props.property.value as number);
+  const hasValue = () =>
+    !(props.property.value === undefined || props.property.value === null);
+  const displayValue = hasValue()
+    ? formatNumber(props.property.value as number)
+    : '';
 
   return (
     <Show
@@ -95,10 +60,11 @@ export const NumberValue: Component<NumberValueProps> = (props) => {
             supportsInline()
               ? 'hover:bg-hover cursor-pointer bg-transparent text-ink'
               : 'bg-transparent text-ink-muted cursor-default'
-          } inline-block max-w-full break-words`}
-          title={displayValue}
+          } block max-w-full break-words`}
         >
-          <span class="block truncate max-w-full">{displayValue}</span>
+          <Show when={hasValue()} fallback={<>—</>}>
+            <span class="block truncate max-w-full">{displayValue}</span>
+          </Show>
         </button>
       }
     >
@@ -115,6 +81,7 @@ export const NumberValue: Component<NumberValueProps> = (props) => {
         onBlur={editor.save}
         onKeyDown={handleKeyDown}
         disabled={editor.isSaving()}
+        placeholder="Enter number..."
         class="w-full text-left text-ink text-xs px-2 py-1 border border-edge bg-transparent focus:outline-none focus:border-accent"
       />
     </Show>
