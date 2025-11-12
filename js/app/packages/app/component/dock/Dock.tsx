@@ -127,22 +127,23 @@ export function Dock() {
         </div>
 
         <div class="flex items-stretch border-edge-muted border-t border-r">
-          <Show when={isSoupActive()}>
-            <IconButton
-              icon={IconQuestion}
-              theme="clear"
-              class="h-full aspect-square"
-              tooltip={{
-                label: 'Help',
-                hotkeyToken: TOKENS.split.showHelpDrawer,
-              }}
-              onClick={() => {
-                const showHelp = activeSoupDrawerCommand();
-                if (!showHelp) return;
-                runCommand(showHelp);
-              }}
-            />
-          </Show>
+          <IconButton
+            icon={IconQuestion}
+            theme="clear"
+            class="h-full aspect-square"
+            classList={{
+              'opacity-0 pointer-events-none': !isSoupActive(),
+            }}
+            tooltip={{
+              label: 'Help',
+              hotkeyToken: TOKENS.split.showHelpDrawer,
+            }}
+            onClick={() => {
+              const showHelp = activeSoupDrawerCommand();
+              if (!showHelp) return;
+              runCommand(showHelp);
+            }}
+          />
           <Show when={ENABLE_RIGHTHAND_SIDEBAR}>
             <IconButton
               icon={IconAtom}
