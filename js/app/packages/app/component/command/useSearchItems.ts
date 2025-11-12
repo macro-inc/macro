@@ -18,7 +18,7 @@ function createDocumentItems(
 
   // TODO: de-duplicate: see logic in useDocumentItems
   for (const result of doc.document_search_results) {
-    const contents = Array.isArray(result.content) ? result.content : [''];
+    const contents = result.highlight.content ?? [];
     contents.forEach((content, index) => {
       // TODO: Canvas returns some nasty partial <m-foo> tags in plaintext
       //         so they are banned from search display for now.
@@ -54,7 +54,7 @@ function createEmailItems(email: UnifiedSearchResponseItem): CommandItemCard[] {
 
   // TODO: de-duplicate: see logic in useEmailItems
   for (const result of email.email_message_search_results) {
-    const contents = Array.isArray(result.content) ? result.content : [''];
+    const contents = result.highlight.content ?? [];
     contents.forEach((content, index) => {
       items.push({
         type: 'email',
@@ -89,9 +89,7 @@ function createChatItems(chat: UnifiedSearchResponseItem): CommandItemCard[] {
 
   // TODO: de-duplicate: see logic in useChatItems
   for (const result of chat.chat_search_results) {
-    const contents = Array.isArray(result.content)
-      ? result.content
-      : [result.content || ''];
+    const contents = result.highlight.content ?? [];
     contents.forEach((content, index) => {
       items.push({
         type: 'item',
@@ -124,9 +122,7 @@ function createChannelItems(
   if (channel.channel_message_search_results.length === 0) return [];
 
   for (const result of channel.channel_message_search_results) {
-    const contents = Array.isArray(result.content)
-      ? result.content
-      : [result.content || ''];
+    const contents = result.highlight.content ?? [];
     contents.forEach((content, index) => {
       items.push({
         type: 'channel',
@@ -158,9 +154,7 @@ function createProjectItems(
   if (project.project_search_results.length === 0) return [];
 
   for (const result of project.project_search_results) {
-    const contents = Array.isArray(result.content)
-      ? result.content
-      : [result.content || ''];
+    const contents = result.highlight.content ?? [];
     contents.forEach((_content, _index) => {
       items.push({
         type: 'item',
