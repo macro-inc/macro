@@ -128,7 +128,7 @@ export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
   filters: {
     notificationFilter: 'all',
     importantFilter: false,
-    typeFilter: [],
+    typeFilter: ['document', 'chat', 'project'],
     documentTypeFilter: [],
     projectFilter: undefined,
     fromFilter: [],
