@@ -210,8 +210,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const { isPanelActive, unifiedListContext, panelRef } = splitContext;
   const {
     viewsDataStore: viewsData,
+    setViewDataStore,
     selectedView: storeSelectedViewId,
-    setSelectedViewStore,
     virtualizerHandleSignal: [, setVirtualizerHandle],
     entityListRefSignal: [, setEntityListRef],
     entitiesSignal: [_entities, setEntities],
@@ -239,8 +239,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         if (!_entities() || !_entities()?.length) return;
         const firstEntity = _entities()![0];
 
-        setSelectedViewStore('highlightedId', firstEntity.id);
-        setSelectedViewStore('selectedEntity', firstEntity);
+        setViewDataStore(selectedView(), 'highlightedId', firstEntity.id);
+        setViewDataStore(selectedView(), 'selectedEntity', firstEntity);
 
         setTimeout(() => {
           // don't steal focus outside of entityList
@@ -273,7 +273,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const setNotificationFilter = (
     notificationFilter: FilterOptions['notificationFilter']
   ) => {
-    setSelectedViewStore('filters', 'notificationFilter', notificationFilter);
+    setViewDataStore(selectedView(), 'filters', 'notificationFilter', notificationFilter);
   };
 
   const importantFilter = createMemo(
@@ -281,7 +281,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       view()?.filters?.importantFilter ?? defaultFilterOptions.importantFilter
   );
   const setImportantFilter = (importantFilter: boolean) => {
-    setSelectedViewStore('filters', 'importantFilter', importantFilter);
+    setViewDataStore(selectedView(), 'filters', 'importantFilter', importantFilter);
   };
 
   const entityTypeFilter = createMemo(
@@ -290,7 +290,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const setEntityTypeFilter: SetStoreFunction<
     ViewData['filters']['typeFilter']
   > = (...entityTypeFilter: any[]) => {
-    setSelectedViewStore('filters', 'typeFilter', entityTypeFilter);
+    setViewDataStore(selectedView(), 'filters', 'typeFilter', entityTypeFilter);
   };
 
   const fileTypeFilter = createMemo(
@@ -301,7 +301,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const setFileTypeFilter: SetStoreFunction<
     ViewData['filters']['documentTypeFilter']
   > = (...fileTypeFilter: any[]) => {
-    setSelectedViewStore('filters', 'documentTypeFilter', fileTypeFilter);
+    setViewDataStore(selectedView(), 'filters', 'documentTypeFilter', fileTypeFilter);
   };
 
   const projectFilter = createMemo(
@@ -328,7 +328,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const setFromFilterUsers: SetStoreFunction<
     ViewData['filters']['fromFilter']
   > = (...fromFilterUsers: any[]) => {
-    setSelectedViewStore('filters', 'fromFilter', fromFilterUsers);
+    setViewDataStore(selectedView(), 'filters', 'fromFilter', fromFilterUsers);
   };
 
   const sortType = createMemo(
@@ -337,7 +337,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const setSortType: SetStoreFunction<SortOptions['sortBy']> = (
     sortType: any
   ) => {
-    setSelectedViewStore('sort', 'sortBy', sortType);
+    setViewDataStore(selectedView(), 'sort', 'sortBy', sortType);
   };
 
   const showUnrollNotifications = createMemo(
@@ -348,7 +348,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const setShowUnrollNotifications = (
     showUnrollNotifications: DisplayOptions['unrollNotifications']
   ) => {
-    setSelectedViewStore(
+    setViewDataStore(
+      selectedView(),
       'display',
       'unrollNotifications',
       showUnrollNotifications
@@ -359,7 +360,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     () => view()?.display?.showProjects ?? defaultDisplayOptions.showProjects
   );
   const setShowProjects = (showProjects: DisplayOptions['showProjects']) => {
-    setSelectedViewStore('display', 'showProjects', showProjects);
+    setViewDataStore(selectedView(), 'display', 'showProjects', showProjects);
   };
 
   const showUnreadIndicator = createMemo(
@@ -370,14 +371,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const setShowUnreadIndicator = (
     showUnreadIndicator: DisplayOptions['showUnreadIndicator']
   ) => {
-    setSelectedViewStore('display', 'showUnreadIndicator', showUnreadIndicator);
+    setViewDataStore(selectedView(), 'display', 'showUnreadIndicator', showUnreadIndicator);
   };
 
   const preview = createMemo(
     () => view()?.display.preview ?? defaultDisplayOptions.preview
   );
   const setPreview = (preview: DisplayOptions['preview']) => {
-    setSelectedViewStore('display', 'preview', preview);
+    setViewDataStore(selectedView(), 'display', 'preview', preview);
   };
 
   const rawSearchText = createMemo<string>(() => view()?.searchText ?? '');
@@ -399,7 +400,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   });
 
   const setHighlightedId = (id: string) => {
-    setSelectedViewStore('highlightedId', id);
+    setViewDataStore(selectedView(), 'highlightedId', id);
   };
 
   const { setFilters: setOptionalFilters, filterFn: optionalFilter } =
@@ -833,7 +834,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     event
   ) => {
     if (preview()) {
-      setSelectedViewStore('selectedEntity', entity);
+      setViewDataStore(selectedView(), 'selectedEntity', entity);
       return;
     }
 
@@ -900,7 +901,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       // Reset initialConfigSignal to current config after save
       const currentConfig = stringifiedCurrentViewConfigBase();
       if (currentConfig !== null && currentConfig !== undefined) {
-        setSelectedViewStore('initialConfig', currentConfig);
+        setViewDataStore(selectedView(), 'initialConfig', currentConfig);
       }
     }
   };
@@ -915,9 +916,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const initialConfigObj = JSON.parse(initialConfigStr) as ViewConfigBase;
 
     batch(() => {
-      setSelectedViewStore('filters', initialConfigObj.filters);
-      setSelectedViewStore('sort', initialConfigObj.sort);
-      setSelectedViewStore('display', initialConfigObj.display);
+      setViewDataStore(selectedView(), 'filters', initialConfigObj.filters);
+      setViewDataStore(selectedView(), 'sort', initialConfigObj.sort);
+      setViewDataStore(selectedView(), 'display', initialConfigObj.display);
     });
   };
 
@@ -930,7 +931,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     const stringifiedConfig = stringifiedCurrentViewConfigBase();
     if (stringifiedConfig) {
-      setSelectedViewStore('initialConfig', stringifiedConfig);
+      setViewDataStore(selectedView(), 'initialConfig', stringifiedConfig);
     }
   });
 
@@ -1184,7 +1185,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     setHighlightedId(innerProps.entity.id);
 
                     if (isPanelActive() && !preview()) {
-                      setSelectedViewStore('selectedEntity', innerProps.entity);
+                      setViewDataStore(selectedView(), 'selectedEntity', innerProps.entity);
                     }
 
                     setContextAndModalState((prev) => {
@@ -1213,12 +1214,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       gotoChannelNotification(notification);
                   }}
                   onMouseOver={() => {
-                    setSelectedViewStore('hasUserInteractedEntity', true);
+                    setViewDataStore(selectedView(), 'hasUserInteractedEntity', true);
 
                     setHighlightedId(innerProps.entity.id);
 
                     if (isPanelActive() && !preview()) {
-                      setSelectedViewStore('selectedEntity', innerProps.entity);
+                      setViewDataStore(selectedView(), 'selectedEntity', innerProps.entity);
                     }
                   }}
                   onMouseLeave={() => {}}
@@ -1226,7 +1227,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     setHighlightedId(innerProps.entity.id);
 
                     if (isPanelActive() && !preview()) {
-                      setSelectedViewStore('selectedEntity', innerProps.entity);
+                      setViewDataStore(selectedView(), 'selectedEntity', innerProps.entity);
                     }
                   }}
                   showLeftColumnIndicator={
