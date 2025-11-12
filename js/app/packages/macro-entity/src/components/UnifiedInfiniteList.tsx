@@ -412,9 +412,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
                   {(entity, index) => {
                     if (
                       untrack(index) ===
-                      Math.floor(
-                        untrack(sortedEntities).length * 0.9
-                      )
+                      Math.floor(untrack(sortedEntities).length * 0.9)
                     )
                       debouncedFetchMore();
                     return <EntityRenderer entity={entity} index={index()} />;
