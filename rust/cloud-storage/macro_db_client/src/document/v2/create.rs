@@ -94,8 +94,6 @@ pub async fn create_document_txn(
 
     let project_name: Option<&str> = provided_project_name.or(fetched_project_name.as_deref());
 
-    let asdf = created_at.to_string();
-
     // insert document with id if included in request
     let document_id = if let Some(id) = id {
         insert_document_with_id(

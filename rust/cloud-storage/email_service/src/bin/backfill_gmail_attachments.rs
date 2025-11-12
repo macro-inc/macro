@@ -352,7 +352,7 @@ ORDER BY
         // Run all queries concurrently for better performance.
         let (res1, res2, res3, res4) = tokio::try_join!(
             sqlx::query_as(&q1).bind(link_id).fetch_all(db),
-            sqlx::query_as(&q2).bind(link_id).fetch_all(db),
+            sqlx::query_as(q2).bind(link_id).fetch_all(db),
             sqlx::query_as(&q3).bind(link_id).fetch_all(db),
             sqlx::query_as(&q4).bind(link_id).fetch_all(db),
         )?;
