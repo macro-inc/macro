@@ -357,7 +357,7 @@ const Block: Component = () => {
           </div>
         </Show>
         <TopBar />
-        <UnifiedListView viewId={projectId} />
+        <UnifiedListView />
       </div>
     </DocumentBlockContainer>
   );

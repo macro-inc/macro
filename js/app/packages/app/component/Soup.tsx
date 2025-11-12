@@ -86,7 +86,7 @@ const DefaultViewTab: Component<{
   return (
     <ViewTab viewId={props.viewId}>
       <Suspense>
-        <UnifiedListView viewId={props.viewId} />
+        <UnifiedListView />
       </Suspense>
     </ViewTab>
   );
@@ -438,7 +438,7 @@ export function Soup() {
 }
 
 function AllView() {
-  return <UnifiedListView viewId="all" />;
+  return <UnifiedListView />;
 }
 
 function EmailView() {
@@ -451,7 +451,7 @@ function EmailView() {
 
   return (
     <>
-      <UnifiedListView viewId="emails" />
+      <UnifiedListView />
       <SplitToolbarRight>
         <div class="flex flex-row items-center pr-2">
           <SegmentedControl

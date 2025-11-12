@@ -30,7 +30,6 @@ import {
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
-import type { ViewId } from '@core/types/view';
 import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
 import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
 import XIcon from '@icon/regular/x.svg?component-solid';
@@ -152,7 +151,6 @@ const sortOptions = [
 ] satisfies SortOption<EntityData, SortOptions['sortBy']>[];
 
 export type UnifiedListViewProps = {
-  viewId?: ViewId;
   defaultFilterOptions?: Partial<FilterOptions>;
   defaultSortOptions?: Partial<SortOptions>;
   defaultDisplayOptions?: Partial<DisplayOptions>;
@@ -211,13 +209,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const {
     viewsDataStore: viewsData,
     setViewDataStore,
-    selectedView: storeSelectedViewId,
+    selectedView,
     virtualizerHandleSignal: [, setVirtualizerHandle],
     entityListRefSignal: [, setEntityListRef],
     entitiesSignal: [_entities, setEntities],
     emailViewSignal: [emailView],
   } = unifiedListContext;
-  const selectedView = createMemo(() => props.viewId ?? storeSelectedViewId());
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
 
@@ -273,7 +270,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const setNotificationFilter = (
     notificationFilter: FilterOptions['notificationFilter']
   ) => {
-    setViewDataStore(selectedView(), 'filters', 'notificationFilter', notificationFilter);
+    setViewDataStore(
+      selectedView(),
+      'filters',
+      'notificationFilter',
+      notificationFilter
+    );
   };
 
   const importantFilter = createMemo(
@@ -281,7 +283,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       view()?.filters?.importantFilter ?? defaultFilterOptions.importantFilter
   );
   const setImportantFilter = (importantFilter: boolean) => {
-    setViewDataStore(selectedView(), 'filters', 'importantFilter', importantFilter);
+    setViewDataStore(
+      selectedView(),
+      'filters',
+      'importantFilter',
+      importantFilter
+    );
   };
 
   const entityTypeFilter = createMemo(
@@ -301,7 +308,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const setFileTypeFilter: SetStoreFunction<
     ViewData['filters']['documentTypeFilter']
   > = (...fileTypeFilter: any[]) => {
-    setViewDataStore(selectedView(), 'filters', 'documentTypeFilter', fileTypeFilter);
+    setViewDataStore(
+      selectedView(),
+      'filters',
+      'documentTypeFilter',
+      fileTypeFilter
+    );
   };
 
   const projectFilter = createMemo(
@@ -371,7 +383,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const setShowUnreadIndicator = (
     showUnreadIndicator: DisplayOptions['showUnreadIndicator']
   ) => {
-    setViewDataStore(selectedView(), 'display', 'showUnreadIndicator', showUnreadIndicator);
+    setViewDataStore(
+      selectedView(),
+      'display',
+      'showUnreadIndicator',
+      showUnreadIndicator
+    );
   };
 
   const preview = createMemo(
@@ -939,7 +956,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     <>
       <Show when={!props.hideToolbar}>
         <SearchBar
-          viewId={selectedView()}
           isLoading={isSearchLoading}
           setIsLoading={setIsSearchLoading}
         />
@@ -1185,7 +1201,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     setHighlightedId(innerProps.entity.id);
 
                     if (isPanelActive() && !preview()) {
-                      setViewDataStore(selectedView(), 'selectedEntity', innerProps.entity);
+                      setViewDataStore(
+                        selectedView(),
+                        'selectedEntity',
+                        innerProps.entity
+                      );
                     }
 
                     setContextAndModalState((prev) => {
@@ -1214,12 +1234,20 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       gotoChannelNotification(notification);
                   }}
                   onMouseOver={() => {
-                    setViewDataStore(selectedView(), 'hasUserInteractedEntity', true);
+                    setViewDataStore(
+                      selectedView(),
+                      'hasUserInteractedEntity',
+                      true
+                    );
 
                     setHighlightedId(innerProps.entity.id);
 
                     if (isPanelActive() && !preview()) {
-                      setViewDataStore(selectedView(), 'selectedEntity', innerProps.entity);
+                      setViewDataStore(
+                        selectedView(),
+                        'selectedEntity',
+                        innerProps.entity
+                      );
                     }
                   }}
                   onMouseLeave={() => {}}
@@ -1227,7 +1255,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     setHighlightedId(innerProps.entity.id);
 
                     if (isPanelActive() && !preview()) {
-                      setViewDataStore(selectedView(), 'selectedEntity', innerProps.entity);
+                      setViewDataStore(
+                        selectedView(),
+                        'selectedEntity',
+                        innerProps.entity
+                      );
                     }
                   }}
                   showLeftColumnIndicator={
@@ -1401,24 +1433,24 @@ const EntityTypeToggle = (props: {
 };
 
 function SearchBar(props: {
-  viewId: ViewId;
   isLoading: Accessor<boolean>;
   setIsLoading: Setter<boolean>;
 }) {
   const {
     viewsDataStore,
+    selectedView,
     setViewDataStore,
     entitiesSignal: [entities],
     virtualizerHandleSignal: [virtualizerHandle],
     entityListRefSignal: [entityListRef],
   } = useSplitPanelOrThrow().unifiedListContext;
-  const viewData = createMemo(() => viewsDataStore[props.viewId]);
+  const viewData = createMemo(() => viewsDataStore[selectedView()]);
 
   let inputRef: HTMLInputElement | undefined;
 
   const searchText = createMemo<string>(() => viewData().searchText ?? '');
   const setSearchText = (text: string) => {
-    setViewDataStore(props.viewId, 'searchText', text);
+    setViewDataStore(selectedView(), 'searchText', text);
   };
 
   const debouncedSetSearch = debounce(setSearchText, 200);
@@ -1452,7 +1484,7 @@ function SearchBar(props: {
         highlightedEntityEl.focus();
         const entity = entities()?.find(({ id: entityId }) => entityId === id);
         if (entity) {
-          setViewDataStore(props.viewId, 'selectedEntity', entity);
+          setViewDataStore(selectedView(), 'selectedEntity', entity);
           return;
         }
       }
@@ -1470,8 +1502,8 @@ function SearchBar(props: {
     const text = searchText().trim();
     if (text !== prevText) {
       batch(() => {
-        setViewDataStore(props.viewId, 'selectedEntity', undefined);
-        setViewDataStore(props.viewId, 'highlightedId', undefined);
+        setViewDataStore(selectedView(), 'selectedEntity', undefined);
+        setViewDataStore(selectedView(), 'highlightedId', undefined);
       });
       virtualizerHandle()?.scrollToIndex(0);
       setWaitForLoadingEnd(true);
@@ -1505,7 +1537,7 @@ function SearchBar(props: {
         </Show>
         <input
           ref={inputRef}
-          id={`search-input-${props.viewId}`}
+          id={`search-input-${selectedView()}`}
           placeholder="Search"
           value={searchText()}
           onInput={(e) => {
