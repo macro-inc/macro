@@ -11,13 +11,13 @@ use crate::api::{
         utils::{self},
     },
 };
+use model::document::FileTypeExt;
 use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
 use model::{
-    document::{FileType, FileTypeExt},
-    response::{GenericErrorResponse, GenericResponse, TypedSuccessResponse},
+    document::FileType,
+    response::{GenericErrorResponse, GenericResponse},
     user::UserContext,
 };
-use model::document::FileTypeExt;
 
 /// Handles creating a document
 #[utoipa::path(
