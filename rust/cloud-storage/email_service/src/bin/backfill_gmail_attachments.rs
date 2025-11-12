@@ -40,9 +40,11 @@ async fn main() -> anyhow::Result<()> {
     let gmail_client = gmail_client::GmailClient::new("unused".to_string());
 
     // 4. Fetch the link_id associated with the user's account.
-    let link_id = database::get_link_id(&db_pool, &config.macro_account_source)
-        .await
-        .context("Could not find a link_id for the specified MACRO_ACCOUNT_SOURCE")?;
+    let link_id =
+        email_db_client::links::get::fetch_link_by_macro_id(&db_pool, &config.macro_account_source)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("No link found for macro account source"))?
+            .id;
 
     // 5. Fetch all relevant attachment metadata from the database, running queries concurrently.
     println!("Fetching unique attachment metadata from database...");
@@ -128,7 +130,6 @@ mod models {
 
 mod config {
     use anyhow::{Context, Result};
-    use url::form_urlencoded::parse;
 
     /// Holds all configuration loaded from environment variables.
     pub struct Config {
@@ -328,14 +329,6 @@ ORDER BY
             .context("Could not connect to db")
     }
 
-    /// Fetches the `link_id` for a given `macro_id`.
-    pub async fn get_link_id(db: &PgPool, macro_id: &str) -> anyhow::Result<Uuid> {
-        sqlx::query_scalar!("SELECT id FROM email_links WHERE macro_id = $1", macro_id)
-            .fetch_one(db)
-            .await
-            .context("Failed to find link_id for macro_account")
-    }
-
     /// Fetches attachments from the database that match one of several conditions.
     /// The queries are run concurrently, and the results are de-duplicated.
     pub async fn fetch_unique_attachments(
@@ -505,6 +498,7 @@ mod processing {
                         branched_from_version_id: None,
                         job_id: None,
                         project_id: None,
+                        created_at: Some(attachment.internal_date_ts),
                     },
                     &self.macro_access_token,
                 )

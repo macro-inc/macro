@@ -118,6 +118,7 @@ async fn traverse_with_ids(
                         project_name: Some(project_name),
                         share_permission,
                         skip_history: true,
+                        created_at: None,
                     },
                 )
                 .await?;
