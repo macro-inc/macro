@@ -139,7 +139,7 @@ const ConditionalViewTab: ParentComponent<{
   );
 };
 
-export const ViewWithSearch: Component<{
+const ViewWithSearch: Component<{
   viewId: ViewId;
 }> = (props) => {
   const { getSelectedViewStore: viewData } =
