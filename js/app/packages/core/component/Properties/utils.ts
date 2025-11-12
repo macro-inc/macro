@@ -112,7 +112,7 @@ export const formatPropertyValue = (
 ): string => {
   // Handle undefined/null values
   if (value === undefined || value === null) {
-    return '—';
+    return '';
   }
 
   // For select types, value is an option ID - look it up in property.options

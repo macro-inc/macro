@@ -1,8 +1,10 @@
+import type { Component } from 'solid-js';
+
 interface AddPropertyButtonProps {
   onClick: () => void;
 }
 
-export function AddPropertyButton(props: AddPropertyButtonProps) {
+export const AddPropertyButton: Component<AddPropertyButtonProps> = (props) => {
   return (
     <button
       class="w-full flex items-center justify-center gap-2 px-4 py-3 text-sm font-medium text-ink-muted hover:text-ink border-2 border-edge hover:border-ink-muted font-mono"
@@ -11,4 +13,4 @@ export function AddPropertyButton(props: AddPropertyButtonProps) {
       <span class="text-md leading-none">+ ADD PROPERTY</span>
     </button>
   );
-}
+};
