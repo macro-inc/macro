@@ -58,7 +58,6 @@ pub async fn fetchium(
                     .document_content()
                     .await
                     .context("failed to fetch document content")?;
-
                 if document.file_type().is_image() {
                     Ok(Attachment::ImageUrl(
                         document.content.base64_image_content()?,

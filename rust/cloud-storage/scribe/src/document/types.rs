@@ -13,11 +13,21 @@ pub struct DocumentContent {
     pub location: LocationResponseV3,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Data {
     Text(String),
     Binary(Bytes),
     Markdown(CognitionResponseData),
+}
+
+impl std::fmt::Debug for Data {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Data::Binary(bytes) => write!(f, "Data::Binary(<{} bytes>)", bytes.len()),
+            Data::Text(chars) => write!(f, "Data::Text(<{} characters>)", chars.len()),
+            Data::Markdown(nodes) => write!(f, "Data::Markdown(<{} nodes>)", nodes.data.len()),
+        }
+    }
 }
 
 impl DocumentContent {
