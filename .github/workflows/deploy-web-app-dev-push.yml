@@ -26,6 +26,7 @@ jobs:
   deploy_web_app:
     needs: [check-to-deploy]
     if: ${{ needs.check-to-deploy.outputs.web-app == 'true' }}
+    environment: dev
     uses: ./.github/workflows/deploy-web-app.yml
     with:
       notify: false
@@ -35,6 +36,7 @@ jobs:
   deploy_web_services:
     needs: [check-to-deploy]
     if: ${{ needs.check-to-deploy.outputs.web-services == 'true' }}
+    environment: dev
     uses: ./.github/workflows/deploy-web-services.yml
     with:
       notify: false
