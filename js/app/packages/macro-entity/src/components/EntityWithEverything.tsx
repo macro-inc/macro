@@ -91,8 +91,8 @@ export function EntityWithEverything<
     createSignal(false);
 
   const { keydownDataDuringTask } = trackKeydownDuringTask();
+  let tabbableEl!: HTMLDivElement;
 
-  // let tabbableEl!: HTMLDivElement;
   // onMount(() => {
   //   if (document.activeElement === document.body) {
   //     if (props.selected && props.highlighted) {
