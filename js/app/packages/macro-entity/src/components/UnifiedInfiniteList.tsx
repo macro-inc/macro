@@ -270,7 +270,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
   let noResultsTimeoutId: ReturnType<typeof setTimeout> | undefined;
   createEffect(
     on(
-      [() => sortedEntitiesStore.length, debouncedIsLoading],
+      [() => sortedEntities().length, debouncedIsLoading],
       ([entitiesLength, loading]) => {
         if (noResultsTimeoutId) clearTimeout(noResultsTimeoutId);
 
@@ -364,7 +364,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     // because it's possible that the match exists on the server
     createEffect(
       on(
-        [() => sortedEntitiesStore, viewportItemCount, loadingCount],
+        [sortedEntities, viewportItemCount, loadingCount],
         ([sortedEntities, viewportItemCount, loadingCount]) => {
           if (sortedEntities.length >= viewportItemCount) return;
           if (loadingCount > 0) return;
@@ -413,7 +413,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
                     if (
                       untrack(index) ===
                       Math.floor(
-                        untrack(() => sortedEntitiesStore).length * 0.9
+                        untrack(sortedEntities).length * 0.9
                       )
                     )
                       debouncedFetchMore();
