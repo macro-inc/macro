@@ -43,11 +43,6 @@ export const TextValue: Component<TextValueProps> = (props) => {
     }
   };
 
-  const displayValue = formatPropertyValue(
-    props.property,
-    props.property.value as string
-  );
-
   return (
     <Show
       when={editor.isEditing()}
@@ -62,15 +57,18 @@ export const TextValue: Component<TextValueProps> = (props) => {
         >
           <Show
             when={
-              !(
-                !props.property.value ||
-                (typeof props.property.value === 'string' &&
-                  props.property.value.length === 0)
-              )
+              props.property.value &&
+              typeof props.property.value === 'string' &&
+              props.property.value.length > 0
             }
-            fallback={<>-</>}
+            fallback={<>—</>}
           >
-            <span class="block max-w-full">{displayValue}</span>
+            <span class="block max-w-full">
+              {formatPropertyValue(
+                props.property,
+                props.property.value as string
+              )}
+            </span>
           </Show>
         </button>
       }
