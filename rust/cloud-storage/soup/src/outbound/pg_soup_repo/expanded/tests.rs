@@ -2,6 +2,7 @@ use crate::outbound::pg_soup_repo::expanded::{
     by_cursor::{expanded_generic_cursor_soup, no_frecency_expanded_generic_soup},
     by_ids::expanded_soup_by_ids,
 };
+use item_filters::ast::EntityFilterAst;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
@@ -146,7 +147,7 @@ async fn test_get_user_items_expanded_cursor(pool: Pool<Postgres>) -> anyhow::Re
     )
     .await?
     .into_iter()
-    .paginate_on(1, SimpleSortMethod::ViewedAt)
+    .paginate_filter_on(1, SimpleSortMethod::ViewedAt, EntityFilterAst::default())
     .into_page();
     let items = result.items;
 
@@ -592,7 +593,7 @@ async fn test_no_frecency_expanded_cursor_pagination(pool: Pool<Postgres>) -> an
     )
     .await?
     .into_iter()
-    .paginate_on(2, SimpleSortMethod::UpdatedAt)
+    .paginate_filter_on(2, SimpleSortMethod::UpdatedAt, EntityFilterAst::default())
     .into_page();
 
     assert_eq!(result.items.len(), 2, "Should get 2 items in first page");

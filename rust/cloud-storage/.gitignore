@@ -9,6 +9,7 @@
 !/target/lambda/**/bootstrap.zip
 
 !*/**/.env.sample
+*/**/.env
 
 # Jetbrains IDE files
 **/.idea/

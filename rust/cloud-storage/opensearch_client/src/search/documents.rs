@@ -3,14 +3,14 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{DefaultSearchResponse, parse_highlight_hit},
+        model::{DefaultSearchResponse, Highlight, parse_highlight_hit},
         query::Keys,
     },
 };
 
 use crate::SearchOn;
 use opensearch_query_builder::{
-    FieldSort, QueryType, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
+    FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
 };
 use serde_json::Value;
 
@@ -25,7 +25,7 @@ impl SearchQueryConfig for DocumentSearchConfig {
 
     fn default_sort_types() -> Vec<SortType> {
         vec![
-            SortType::Field(FieldSort::new("updated_at_seconds", SortOrder::Desc)),
+            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
             SortType::Field(FieldSort::new("node_id", SortOrder::Asc)),
         ]
@@ -34,15 +34,12 @@ impl SearchQueryConfig for DocumentSearchConfig {
 
 struct DocumentQueryBuilder {
     inner: SearchQueryBuilder<DocumentSearchConfig>,
-    /// File types to filter by
-    file_types: Vec<String>,
 }
 
 impl DocumentQueryBuilder {
     pub fn new(terms: Vec<String>) -> Self {
         Self {
             inner: SearchQueryBuilder::new(terms),
-            file_types: Vec::new(),
         }
     }
 
@@ -58,28 +55,13 @@ impl DocumentQueryBuilder {
         fn ids_only(ids_only: bool) -> Self;
     }
 
-    pub fn file_types(mut self, file_types: Vec<String>) -> Self {
-        self.file_types = file_types;
-        self
-    }
-
     fn build_search_request(self) -> Result<SearchRequest> {
-        // Build the main bool query containing all terms and any other filters
-        let mut bool_query = self.inner.build_bool_query()?;
-
-        // CUSTOM ATTRIBUTES SECTION
-
-        // If file types are provided, add them to the must query
-        if !self.file_types.is_empty() {
-            bool_query.must(QueryType::terms("file_type", self.file_types));
-        }
-
-        // END CUSTOM ATTRIBUTES SECTION
-
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
         // SearchOn::NameContent is used
-        let search_request = self.inner.build_search_request(bool_query.build())?;
+        let search_request = self
+            .inner
+            .build_search_request(self.inner.build_bool_query()?.build())?;
 
         Ok(search_request)
     }
@@ -105,7 +87,8 @@ pub struct DocumentSearchResponse {
     pub owner_id: String,
     pub file_type: String,
     pub updated_at: i64,
-    pub content: Option<Vec<String>>,
+    /// Contains the highlight matches for the document name and content
+    pub highlight: Highlight,
     pub raw_content: Option<String>,
 }
 
@@ -114,7 +97,6 @@ pub struct DocumentSearchArgs {
     pub terms: Vec<String>,
     pub user_id: String,
     pub document_ids: Vec<String>,
-    pub file_types: Vec<String>,
     pub page: u32,
     pub page_size: u32,
     pub match_type: String,
@@ -131,7 +113,6 @@ impl DocumentSearchArgs {
             .page(self.page)
             .user_id(&self.user_id)
             .ids(self.document_ids)
-            .file_types(self.file_types)
             .search_on(self.search_on)
             .collapse(self.collapse)
             .ids_only(self.ids_only)
@@ -140,11 +121,11 @@ impl DocumentSearchArgs {
     }
 }
 
+#[tracing::instrument(skip(client, args), err)]
 pub(crate) async fn search_documents(
     client: &opensearch::OpenSearch,
     args: DocumentSearchArgs,
 ) -> Result<Vec<DocumentSearchResponse>> {
-    let search_on = args.search_on;
     let query_body = args.build()?;
 
     tracing::trace!("query: {}", query_body);
@@ -177,16 +158,18 @@ pub(crate) async fn search_documents(
             file_type: hit._source.file_type,
             updated_at: hit._source.updated_at_seconds,
             raw_content: hit._source.raw_content,
-            content: hit.highlight.map(|h| {
-                parse_highlight_hit(
-                    h,
-                    Keys {
-                        title_key: DocumentSearchConfig::TITLE_KEY,
-                        content_key: DocumentSearchConfig::CONTENT_KEY,
-                    },
-                    search_on,
-                )
-            }),
+            highlight: hit
+                .highlight
+                .map(|h| {
+                    parse_highlight_hit(
+                        h,
+                        Keys {
+                            title_key: DocumentSearchConfig::TITLE_KEY,
+                            content_key: DocumentSearchConfig::CONTENT_KEY,
+                        },
+                    )
+                })
+                .unwrap_or_default(),
         })
         .collect())
 }

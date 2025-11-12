@@ -65,27 +65,29 @@ const useMapSearchResponseItem = () => {
           .toSorted((a, b) => a.created_at - b.created_at)
           .at(-1);
 
+        const channelWithLatest = channels().find(
+          (c) => c.id === result.channel_id
+        );
+        // TODO: distinguish latest message from content match
+        const contentMatch = channelResult
+          ? {
+              content: channelResult?.highlight.content?.at(0) ?? '',
+              senderId: channelResult?.sender_id,
+              createdAt: channelResult?.created_at,
+            }
+          : undefined;
+
         return {
           type: 'channel',
           // TODO: distinguish channel name match from channel message match
           id: result.channel_id,
-          name:
-            result.name ??
-            // TODO: we will need to hydrate dynamic name from the backend
-            channels().find((c) => c.id === result.channel_id)?.name ??
-            '',
+          name: result.name ?? channelWithLatest?.name ?? '',
           ownerId: result.owner_id ?? '',
           createdAt: result.created_at,
           updatedAt: result.updated_at,
           channelType: result.channel_type as ChannelType,
           interactedAt: result.interacted_at ?? undefined,
-          latestMessage: channelResult
-            ? {
-                content: channelResult.content.at(0) ?? '',
-                senderId: channelResult.sender_id,
-                createdAt: channelResult.created_at,
-              }
-            : undefined,
+          latestMessage: contentMatch,
         };
 
       case 'project':

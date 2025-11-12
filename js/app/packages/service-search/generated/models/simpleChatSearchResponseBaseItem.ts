@@ -4,15 +4,15 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SimpleChatSearchResponseBaseItemContent } from './simpleChatSearchResponseBaseItemContent';
+import type { SearchHighlight } from './searchHighlight';
 
 export interface SimpleChatSearchResponseBaseItem {
   /** The chat id */
   chat_id: string;
   /** The chat message id */
   chat_message_id: string;
-  /** The opensearch matches on the chat */
-  content?: SimpleChatSearchResponseBaseItemContent;
+  /** The highlights on the chat */
+  highlight: SearchHighlight;
   /** The role */
   role: string;
   /** The title */

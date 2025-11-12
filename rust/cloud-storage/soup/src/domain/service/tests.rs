@@ -6,7 +6,8 @@ use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::{domain::models::AggregateFrecency, outbound::mock::MockFrecencyStorage};
 use model_entity::EntityType;
 use models_pagination::{
-    Base64Str, Cursor, CursorVal, CursorWithVal, FrecencyValue, SimpleSortMethod,
+    Base64Str, Cursor, CursorVal, CursorWithVal, CursorWithValAndFilter, FrecencyValue,
+    SimpleSortMethod,
 };
 use models_soup::document::SoupDocument;
 use ordered_float::OrderedFloat;
@@ -51,9 +52,9 @@ async fn it_should_not_query_frecency() {
                         limit: 20,
                         user_id,
                         cursor: models_pagination::Query::Sort(SimpleSortMethod::ViewedUpdated),
-                        exclude
+                        filters
                     } => {
-                        assert_matches!(exclude, []);
+                        assert_matches!(filters, None);
                         assert_eq!(user_id.as_ref(), "macro|test@example.com");
                         true
                     }
@@ -80,6 +81,7 @@ async fn it_should_not_query_frecency() {
         limit: 0,
         cursor: SoupQuery::Simple(Query::Sort(SimpleSortMethod::ViewedUpdated)),
         user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        filters: Default::default(),
     })
     .await
     .unwrap();
@@ -147,6 +149,7 @@ async fn it_should_query_frecency() {
             limit: u16::MAX,
             cursor: SoupQuery::Frecency(Query::Sort(Frecency)),
             user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+            filters: Default::default(),
         })
         .await
         .unwrap();
@@ -214,6 +217,7 @@ async fn it_should_sort_frecency_descending() {
             limit: u16::MAX,
             cursor: SoupQuery::Frecency(Query::Sort(Frecency)),
             user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+            filters: Default::default(),
         })
         .await
         .unwrap();
@@ -268,10 +272,10 @@ async fn frecency_should_fallback() {
                 SimpleSortRequest {
                     limit: 75,
                     cursor: Query::Sort(SimpleSortMethod::UpdatedAt),
-                    exclude,
+                    filters,
                     ..
                 } => {
-                    assert_matches!(exclude, [SoupExclude::Frecency]);
+                    assert_matches!(filters, Some(SoupFilter::Frecency));
                     true
                 }
             )
@@ -297,6 +301,7 @@ async fn frecency_should_fallback() {
             limit: 100,
             cursor: SoupQuery::Frecency(Query::Sort(Frecency)),
             user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+            filters: Default::default(),
         })
         .await
         .unwrap();
@@ -313,12 +318,14 @@ async fn frecency_should_fallback() {
     });
     // cursor should encode correct info
     let typed_cursor =
-        <Base64Str<CursorWithVal<String, Frecency>>>::new_from_string(res.next_cursor.unwrap())
-            .decode_json()
-            .unwrap();
+        <Base64Str<CursorWithValAndFilter<String, Frecency, EntityFilterAst>>>::new_from_string(
+            res.next_cursor.unwrap(),
+        )
+        .decode_json()
+        .unwrap();
     assert_matches!(
         typed_cursor,
-        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated) }} => {
+        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated), filter: EntityFilterAst { document_filter: None } }} => {
         assert_eq!(id, "doc-100");
         assert_eq!(updated, <DateTime<Utc>>::default() + Days::new(100));
 
@@ -363,6 +370,7 @@ async fn frecency_should_paginate() {
             limit: 100,
             cursor: SoupQuery::Frecency(Query::Sort(Frecency)),
             user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+            filters: Default::default(),
         })
         .await
         .unwrap();
@@ -381,12 +389,14 @@ async fn frecency_should_paginate() {
 
     // cursor should encode correct info
     let typed_cursor =
-        <Base64Str<CursorWithVal<String, Frecency>>>::new_from_string(res.next_cursor.unwrap())
-            .decode_json()
-            .unwrap();
+        <Base64Str<CursorWithValAndFilter<String, Frecency, EntityFilterAst>>>::new_from_string(
+            res.next_cursor.unwrap(),
+        )
+        .decode_json()
+        .unwrap();
     assert_matches!(
         typed_cursor,
-        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score) }} => {
+        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score), filter: EntityFilterAst { document_filter: None } }} => {
         assert_eq!(id, "doc-1");
         // last item should be the lowest score because we sort desc
         assert_eq!(score as u32, 1u32);
@@ -435,9 +445,11 @@ async fn frecency_should_resume_cursor() {
                 val: CursorVal {
                     sort_type: Frecency,
                     last_val: FrecencyValue::FrecencyScore(5.0),
+                    filter: Default::default(),
                 },
             })),
             user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+            filters: Default::default(),
         })
         .await
         .unwrap();
@@ -453,12 +465,14 @@ async fn frecency_should_resume_cursor() {
 
     // cursor should encode correct info
     let typed_cursor =
-        <Base64Str<CursorWithVal<String, Frecency>>>::new_from_string(res.next_cursor.unwrap())
-            .decode_json()
-            .unwrap();
+        <Base64Str<CursorWithValAndFilter<String, Frecency, EntityFilterAst>>>::new_from_string(
+            res.next_cursor.unwrap(),
+        )
+        .decode_json()
+        .unwrap();
     assert_matches!(
         typed_cursor,
-        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score) }} => {
+        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score), filter: EntityFilterAst { document_filter: None } }} => {
         assert_eq!(id, "doc-next-100");
         // last item should be the lowest score because we sort desc
         assert_eq!(score as u32, 4u32);
@@ -472,8 +486,8 @@ async fn frecency_fallback_cursor_should_resume() {
 
     soup.expect_unexpanded_generic_cursor_soup()
         .withf(|params| {
-            assert_matches!(params, SimpleSortRequest { limit: 100, cursor: Query::Cursor(Cursor { id, limit: 100, val: CursorVal { sort_type: SimpleSortMethod::UpdatedAt, last_val } }), exclude, .. } => {
-                assert_matches!(exclude, [SoupExclude::Frecency]);
+            assert_matches!(params, SimpleSortRequest { limit: 100, cursor: Query::Cursor(Cursor { id, limit: 100, val: CursorVal { sort_type: SimpleSortMethod::UpdatedAt, last_val, filter: EntityFilterAst { document_filter: None } } }), filters, .. } => {
+                assert_matches!(filters, Some(SoupFilter::Frecency));
                 let expected_time = <DateTime<Utc>>::default() + Days::new(5);
                 assert_eq!(last_val, &expected_time);
                 assert_eq!(id, "doc-100");
@@ -505,19 +519,23 @@ async fn frecency_fallback_cursor_should_resume() {
                 val: CursorVal {
                     sort_type: Frecency,
                     last_val: FrecencyValue::UpdatedAt(DateTime::default() + Days::new(5)),
+                    filter: Default::default(),
                 },
             })),
             user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+            filters: Default::default(),
         })
         .await
         .unwrap();
 
     assert!(res.items.iter().all(|v| v.frecency_score.is_none()));
     let cursor =
-        <Base64Str<CursorWithVal<String, Frecency>>>::new_from_string(res.next_cursor.unwrap())
-            .decode_json()
-            .unwrap();
-    assert_matches!(cursor, Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated) } } => {
+        <Base64Str<CursorWithValAndFilter<String, Frecency, EntityFilterAst>>>::new_from_string(
+            res.next_cursor.unwrap(),
+        )
+        .decode_json()
+        .unwrap();
+    assert_matches!(cursor, Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated), filter: EntityFilterAst { document_filter: None } } } => {
         assert_eq!(id, "doc-next-100");
         let expected_date = <DateTime<Utc>>::default() + Days::new(100);
         assert_eq!(updated, expected_date);

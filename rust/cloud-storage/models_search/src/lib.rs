@@ -90,8 +90,21 @@ pub trait Metadata<T> {
     fn metadata(&self, id: &str) -> T;
 }
 
-// TODO: SearchReponse needs two generics, must be SearchResponseItem
-// pub struct SearchResponse<T, S> {
-//     /// List containing results from a request
-//     pub results: Vec<SearchResponseItem<T, S>>,
-// }
+#[derive(Debug, Serialize, Deserialize, ToSchema, JsonSchema, Default)]
+pub struct SearchHighlight {
+    /// The highlight match on the name field
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+    /// The highlight match on the content field
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub content: Vec<String>,
+}
+
+impl From<opensearch_client::search::model::Highlight> for SearchHighlight {
+    fn from(highlight: opensearch_client::search::model::Highlight) -> Self {
+        Self {
+            name: highlight.name,
+            content: highlight.content,
+        }
+    }
+}

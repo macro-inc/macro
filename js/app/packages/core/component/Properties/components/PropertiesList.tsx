@@ -1,4 +1,4 @@
-import { createMemo, For, Show } from 'solid-js';
+import { type Component, createMemo, For, Show } from 'solid-js';
 import { usePropertiesContext } from '../context/PropertiesContext';
 import type { Property } from '../types';
 import { PropertyRow } from './PropertyRow';
@@ -7,7 +7,7 @@ interface PropertiesListProps {
   properties: Property[];
 }
 
-export function PropertiesList(props: PropertiesListProps) {
+export const PropertiesList: Component<PropertiesListProps> = (props) => {
   const { openModal } = usePropertiesContext();
 
   const metadataProperties = createMemo(() =>
@@ -30,9 +30,14 @@ export function PropertiesList(props: PropertiesListProps) {
   const handleValueClick = (property: Property, anchor?: HTMLElement) => {
     if (property.valueType === 'DATE') {
       openModal('date-picker', property, anchor);
-    } else {
+    } else if (
+      property.valueType === 'SELECT_STRING' ||
+      property.valueType === 'SELECT_NUMBER' ||
+      property.valueType === 'ENTITY'
+    ) {
       openModal('edit-property', property, anchor);
     }
+    // LINK, STRING, NUMBER, BOOLEAN handle their own inline editing
   };
 
   return (
@@ -73,4 +78,4 @@ export function PropertiesList(props: PropertiesListProps) {
       </div>
     </Show>
   );
-}
+};

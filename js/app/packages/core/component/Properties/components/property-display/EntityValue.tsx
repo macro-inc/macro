@@ -24,7 +24,7 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
   };
 
   const isReadOnly = () => props.property.isMetadata || !props.canEdit;
-  const entities = props.property.value as EntityReference[];
+  const entities = (props.property.value as EntityReference[]) ?? [];
   return (
     <div class="flex flex-wrap gap-1 justify-start items-start w-full min-w-0">
       <For each={entities}>
@@ -52,7 +52,19 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
           );
         }}
       </For>
-      <Show when={!isReadOnly()}>
+      <Show
+        when={!isReadOnly()}
+        fallback={
+          <Show when={entities.length === 0}>
+            <div
+              onClick={handleEditClick}
+              class="text-ink-muted text-xs px-2 py-1 border border-edge bg-transparent inline-block shrink-0"
+            >
+              {<>—</>}
+            </div>
+          </Show>
+        }
+      >
         <button
           onClick={handleEditClick}
           class="text-ink-muted hover:text-ink text-xs hover:bg-hover px-2 py-1 cursor-pointer border border-edge bg-transparent inline-block shrink-0"

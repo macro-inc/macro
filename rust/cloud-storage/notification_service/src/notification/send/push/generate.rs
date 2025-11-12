@@ -1,7 +1,7 @@
 use crate::config::APPLE_BUNDLE_ID;
 use anyhow::Context;
 use aws_sdk_sns::types::MessageAttributeValue;
-use model::document::FileType;
+use model::document::{FileType, FileTypeExt};
 use model_notifications::NotificationWithRecipient;
 use model_notifications::{
     APNSPushNotification, ChannelInviteMetadata, ChannelMentionMetadata,
@@ -9,6 +9,7 @@ use model_notifications::{
     NotificationEventType, PushNotificationData,
 };
 use models_comms::ChannelType;
+use std::str::FromStr;
 use std::{
     collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
@@ -236,10 +237,7 @@ pub fn generate_push_notification(
                         "{} mentioned you in {}.{}",
                         email, metadata.document_name, file_type
                     );
-                    let file_type: FileType = file_type
-                        .as_str()
-                        .try_into()
-                        .context("file type is not a valid file type")?;
+                    let file_type = FileType::from_str(file_type.as_str())?;
 
                     let block_route = if file_type.is_image() {
                         "image"

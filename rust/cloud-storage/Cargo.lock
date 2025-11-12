@@ -3064,6 +3064,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "filter_ast"
+version = "0.1.0"
+dependencies = [
+ "recursion",
+ "serde",
+]
+
+[[package]]
 name = "flate2"
 version = "1.0.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3135,6 +3143,7 @@ dependencies = [
  "chrono",
  "cool_asserts",
  "futures",
+ "item_filters",
  "lambda_runtime",
  "macro_db_migrator",
  "macro_env",
@@ -4209,12 +4218,18 @@ name = "item_filters"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "cool_asserts",
+ "filter_ast",
+ "macro_user_id",
+ "model_file_type",
  "non_empty",
  "schemars",
  "serde",
  "serde_json",
  "strum",
+ "thiserror 2.0.17",
  "utoipa",
+ "uuid",
 ]
 
 [[package]]
@@ -5092,13 +5107,13 @@ dependencies = [
  "base64 0.22.1",
  "chrono",
  "model-error-response",
+ "model_file_type",
  "model_user",
  "models_bulk_upload",
  "models_comms",
  "models_email",
  "models_pagination",
  "models_permissions",
- "once_cell",
  "schemars",
  "serde",
  "serde_json",
@@ -5128,6 +5143,15 @@ name = "model-error-response"
 version = "0.1.0"
 dependencies = [
  "serde",
+ "utoipa",
+]
+
+[[package]]
+name = "model_file_type"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "thiserror 2.0.17",
  "utoipa",
 ]
 
@@ -6513,6 +6537,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "recursion"
+version = "0.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9dba2197bf7b1d87b4dd460c195f4edeb45a94e82e8054f8d5f317c1f0e93ca1"
+
+[[package]]
 name = "redis"
 version = "0.29.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7188,6 +7218,7 @@ dependencies = [
  "aws_lambda_events",
  "lambda_runtime",
  "macro_entrypoint",
+ "model_file_type",
  "openssl",
  "sqs_client",
  "tokio",
@@ -7735,7 +7766,10 @@ dependencies = [
  "chrono",
  "cool_asserts",
  "either",
+ "filter_ast",
  "frecency",
+ "futures",
+ "http-body-util",
  "item_filters",
  "macro_db_migrator",
  "macro_user_id",
@@ -7745,13 +7779,17 @@ dependencies = [
  "model_user",
  "models_pagination",
  "models_soup",
+ "non_empty",
  "ordered-float",
  "serde",
+ "serde_json",
  "sqlx",
  "thiserror 2.0.17",
  "tokio",
+ "tower 0.5.2",
  "tracing",
  "utoipa",
+ "uuid",
 ]
 
 [[package]]
