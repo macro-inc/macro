@@ -11,7 +11,7 @@ import ChannelIcon from '@icon/duotone/hash-duotone.svg';
 import User from '@icon/duotone/user-duotone.svg';
 import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import { createMemo, type ParentProps, Show } from 'solid-js';
+import { type Component, createMemo, type ParentProps, Show } from 'solid-js';
 import type { Property } from './types';
 
 type EntityValueDisplayProps = ParentProps<{
@@ -23,7 +23,9 @@ type EntityValueDisplayProps = ParentProps<{
 
 const ICON_CLASSES = 'size-4 text-ink-muted';
 
-export function EntityValueDisplay(props: EntityValueDisplayProps) {
+export const EntityValueDisplay: Component<EntityValueDisplayProps> = (
+  props
+) => {
   // Get preview for items that need it (document, project, chat, channel for icon)
   const previewTypes: EntityType[] = ['DOCUMENT', 'PROJECT', 'CHAT', 'CHANNEL'];
   const needsPreview = previewTypes.includes(props.entityType);
@@ -168,4 +170,4 @@ export function EntityValueDisplay(props: EntityValueDisplayProps) {
       )}
     </Show>
   );
-}
+};

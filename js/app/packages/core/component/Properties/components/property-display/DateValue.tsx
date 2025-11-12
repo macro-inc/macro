@@ -1,4 +1,5 @@
 import type { Component } from 'solid-js';
+import { Show } from 'solid-js';
 import type { Property } from '../../types';
 import { formatDate } from '../../utils';
 
@@ -21,23 +22,9 @@ export const DateValue: Component<DateValueProps> = (props) => {
 
   const isReadOnly = () => props.property.isMetadata || !props.canEdit;
 
-  // Empty state
-  if (!props.property.value) {
-    return (
-      <button
-        onClick={handleClick}
-        class={`text-left text-xs px-2 py-1 border border-edge ${
-          isReadOnly()
-            ? 'bg-transparent text-ink-muted cursor-default'
-            : 'hover:bg-hover cursor-pointer bg-transparent text-ink'
-        } inline-block max-w-full`}
-      >
-        —
-      </button>
-    );
-  }
-
-  const displayValue = formatDate(props.property.value as Date);
+  const displayValue = props.property.value
+    ? formatDate(props.property.value as Date)
+    : '';
 
   return (
     <button
@@ -47,9 +34,10 @@ export const DateValue: Component<DateValueProps> = (props) => {
           ? 'bg-transparent text-ink-muted cursor-default'
           : 'hover:bg-hover cursor-pointer bg-transparent text-ink'
       } inline-block max-w-full break-words`}
-      title={displayValue}
     >
-      <span class="block truncate max-w-full">{displayValue}</span>
+      <Show when={displayValue} fallback={<>—</>}>
+        <span class="block truncate max-w-full">{displayValue}</span>
+      </Show>
     </button>
   );
 };
