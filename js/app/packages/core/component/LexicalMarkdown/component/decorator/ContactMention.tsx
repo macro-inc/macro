@@ -6,6 +6,7 @@ import { createSignal, Show, useContext } from 'solid-js';
 import { Portal } from 'solid-js/web';
 
 import { useSplitLayout } from '../../../../../app/component/split-layout/layout';
+import { useSplitNavigationHandler } from '../../../../../app/component/split-layout/useSplitNavigationHandlers';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
 import { floatWithElement } from '../../directive/floatWithElement';
 import { autoRegister } from '../../plugins';
@@ -102,6 +103,8 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
     );
   }
 
+  const navHandlers = useSplitNavigationHandler(openContact);
+
   return (
     <>
       <span
@@ -110,12 +113,7 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
         classList={{
           'bracket-offset-2': isSelectedAsNode(),
         }}
-        onMouseDown={(e) => {
-          // Prevent focus change on mousedown to avoid split activation flash
-          // The click handler will properly handle navigation
-          e.preventDefault();
-        }}
-        onClick={openContact}
+        {...navHandlers}
         onMouseEnter={() => setPopupOpen(true)}
         onMouseLeave={() => setPopupOpen(false)}
       >

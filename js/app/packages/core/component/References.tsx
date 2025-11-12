@@ -1,5 +1,6 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitNavigationHandler } from '@app/component/split-layout/useSplitNavigationHandlers';
 import type { BlockName } from '@core/block';
 import { toast } from '@core/component/Toast/Toast';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
@@ -166,17 +167,14 @@ export function References(props: ReferenceProps) {
               const hasMessageContent =
                 ref.message_content && ref.message_content.trim().length > 0;
 
+              const navHandlers = useSplitNavigationHandler(() =>
+                navigateToMessage(ref.channel_id, ref.message_id)
+              );
+
               return (
                 <button
                   class="bg-menu hover:bg-hover p-2 pb-3 border-edge-muted border-b w-full text-left"
-                  onMouseDown={(e) => {
-                    // Prevent focus change on mousedown to avoid split activation flash
-                    // The click handler will properly handle navigation
-                    e.preventDefault();
-                  }}
-                  onClick={() =>
-                    navigateToMessage(ref.channel_id, ref.message_id)
-                  }
+                  {...navHandlers}
                 >
                   <div class="flex justify-start items-center gap-2 mb-4 font-mono text-ink-muted text-xs uppercase">
                     <div class="bg-ink-extra-muted size-2" />
@@ -213,15 +211,14 @@ export function References(props: ReferenceProps) {
                 type: ref.source_entity_type as any,
               });
 
+              const navHandlers = useSplitNavigationHandler(() =>
+                navigateToGenericReference(item())
+              );
+
               return (
                 <button
                   class="bg-menu hover:bg-hover p-2 pb-3 border-edge-muted border-b w-full text-left"
-                  onMouseDown={(e) => {
-                    // Prevent focus change on mousedown to avoid split activation flash
-                    // The click handler will properly handle navigation
-                    e.preventDefault();
-                  }}
-                  onClick={() => navigateToGenericReference(item())}
+                  {...navHandlers}
                 >
                   <div class="flex justify-start items-center gap-2 mb-4 font-mono text-ink-muted text-xs uppercase">
                     <div class="bg-ink-extra-muted size-2" />

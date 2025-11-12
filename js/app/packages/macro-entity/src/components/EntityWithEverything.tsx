@@ -1,3 +1,4 @@
+import { useSplitNavigationHandler } from '@app/component/split-layout/useSplitNavigationHandlers';
 import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
@@ -90,8 +91,8 @@ export function EntityWithEverything<
     createSignal(false);
 
   const { keydownDataDuringTask } = trackKeydownDuringTask();
-  let tabbableEl!: HTMLDivElement;
 
+  // let tabbableEl!: HTMLDivElement;
   // onMount(() => {
   //   if (document.activeElement === document.body) {
   //     if (props.selected && props.highlighted) {
@@ -196,13 +197,8 @@ export function EntityWithEverything<
     });
 
     const userName = createMemo(() => {
-      const [userName] = useDisplayName(notification()?.senderId!);
+      const [userName] = useDisplayName(notification()?.senderId);
       return userName();
-    });
-    const _isNameEmailAddress = createMemo(() => {
-      return !!userName().match(
-        /^(?!\.)(?!.*\.\.)([a-z0-9_'+\-\.]*)[a-z0-9_'+\-]@([a-z0-9][a-z0-9\-]*\.)+[a-z]{2,}$/i
-      );
     });
 
     return (
@@ -256,6 +252,14 @@ export function EntityWithEverything<
 
   const { didCursorMove } = useCursorMove();
 
+  const navHandlers = createMemo(() => {
+    const onClick = props.onClick;
+    if (!onClick) return;
+    return useSplitNavigationHandler<HTMLDivElement>((e) =>
+      onClick(props.entity, e)
+    );
+  });
+
   return (
     <div
       use:draggable
@@ -264,11 +268,6 @@ export function EntityWithEverything<
       classList={{
         'bg-hover': props.highlighted,
         bracket: props.selected,
-      }}
-      onMouseDown={(e) => {
-        // Prevent focus change on mousedown to avoid split activation flash
-        // The click handler will properly handle navigation
-        e.preventDefault();
       }}
       onMouseOver={(e) => {
         if (!didCursorMove(e)) {
@@ -305,7 +304,7 @@ export function EntityWithEverything<
           'grid-cols-[auto_1fr_auto]': props.showLeftColumnIndicator,
           'grid-cols-[1fr_auto]': !props.showLeftColumnIndicator,
         }}
-        onClick={props.onClick ? [props.onClick, props.entity] : undefined}
+        {...navHandlers()}
         // Action List is also rendered based on focus, but when focused via Shift+Tab, parent is focused due to Action List dom not present. Here we check if current browser task has captured Shift+Tab focus on Action List
         onFocusIn={(e) => {
           if (

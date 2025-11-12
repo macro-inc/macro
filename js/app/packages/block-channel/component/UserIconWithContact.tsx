@@ -2,6 +2,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { idToEmail } from '@core/user';
 import type { Component } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
+import { useSplitNavigationHandler } from '../../app/component/split-layout/useSplitNavigationHandlers';
 
 interface UserIconWithContactProps {
   userId: string;
@@ -25,17 +26,10 @@ export const UserIconWithContact: Component<UserIconWithContactProps> = (
     replaceOrInsertSplit({ type: 'contact', id: email });
   };
 
+  const navHandlers = useSplitNavigationHandler(handleClick);
+
   return (
-    <div
-      onMouseDown={(e) => {
-        // Prevent focus change on mousedown to avoid split activation flash
-        // The click handler will properly handle navigation
-        e.preventDefault();
-      }}
-      onClick={handleClick}
-      class="cursor-pointer"
-      title="View contact"
-    >
+    <div {...navHandlers} class="cursor-pointer" title="View contact">
       <UserIcon id={props.userId} size={props.size} isDeleted={false} />
     </div>
   );

@@ -1,5 +1,6 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitNavigationHandler } from '@app/component/split-layout/useSplitNavigationHandlers';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import type { Entity } from '@core/types';
 import { formatDate } from '@core/util/date';
@@ -76,18 +77,16 @@ export function Notifications(props: NotificationsProps) {
         <For each={notifications()}>
           {(notification) => {
             const isUnread = !notification.viewedAt;
+            const navHandlers = useSplitNavigationHandler(() =>
+              handleNotificationClick(notification)
+            );
 
             return (
               <button
                 class={`w-full p-2 pb-3 border-b border-edge-muted hover:bg-hover text-left ${
                   isUnread ? 'bg-menu-hover' : 'bg-menu'
                 }`}
-                onMouseDown={(e) => {
-                  // Prevent focus change on mousedown to avoid split activation flash
-                  // The click handler will properly handle navigation
-                  e.preventDefault();
-                }}
-                onClick={() => handleNotificationClick(notification)}
+                {...navHandlers}
               >
                 <div class="flex justify-start items-center gap-2 mb-4 font-mono text-ink-muted text-xs uppercase">
                   <div
