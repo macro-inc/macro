@@ -328,12 +328,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const fromFilter = createMemo(() => view()?.filters.fromFilter);
   const hasFromFilter = createMemo(() => fromFilter() !== undefined);
   const shouldFilterEmails = createMemo(() => {
-    if (!hasFromFilter) return false;
+    if (!hasFromFilter()) return false;
     const types = entityTypeFilter();
     return types.length === 0 || types.includes('email');
   });
   const shouldFilterOwnedEntities = createMemo(() => {
-    if (!hasFromFilter) return false;
+    if (!hasFromFilter()) return false;
     const types = entityTypeFilter();
     return types.length === 0 || types.some((t) => t !== 'email');
   });
