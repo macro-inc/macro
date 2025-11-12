@@ -1,4 +1,10 @@
-import { batch, createEffect, createSignal, onCleanup, onMount } from 'solid-js';
+import {
+  batch,
+  createEffect,
+  createSignal,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import { themeReactive } from '../signals/themeReactive';
 
 function setLightness(lightness: number) {
@@ -27,8 +33,8 @@ function setChroma(chroma: number, saturation: number) {
 function setHue(hue: number) {
   batch(() => {
     themeReactive.a0.h[1](hue);
-    themeReactive.a1.h[1](hue +  40);
-    themeReactive.a2.h[1](hue +  80);
+    themeReactive.a1.h[1](hue + 40);
+    themeReactive.a2.h[1](hue + 80);
     themeReactive.a3.h[1](hue + 120);
     themeReactive.a4.h[1](hue + 160);
 
@@ -422,13 +428,18 @@ export function ThemeEditorBasic() {
         ></div>
 
         <div
-          style={{left: `${themeReactive.a0.c[0]() * (100 / 0.37)}%`, 'background-color': 'var(--a0)'}}
+          style={{
+            left: `${themeReactive.a0.c[0]() * (100 / 0.37)}%`,
+            'background-color': 'var(--a0)',
+          }}
           class="thumb"
         />
 
         <input
           value={themeReactive.a0.c[0]().toString()}
-          onInput={(e) => {handleChromaChange(e)}}
+          onInput={(e) => {
+            handleChromaChange(e);
+          }}
           class="slider"
           step="0.001"
           type="range"
@@ -438,12 +449,23 @@ export function ThemeEditorBasic() {
       </div>
 
       <div class="slider-container">
-        <div class="slider-track wrapper-saturation"><
-          div/><div/><div/><div/><div/><div/><div/><div/><div/><div/>
+        <div class="slider-track wrapper-saturation">
+          <div />
+          <div />
+          <div />
+          <div />
+          <div />
+          <div />
+          <div />
+          <div />
+          <div />
+          <div />
         </div>
 
         <div
-          style={{left: `${(themeReactive.b0.c[0]() / (themeReactive.a0.c[0]() * 0.8) / 0.37) * 100}%`}}
+          style={{
+            left: `${(themeReactive.b0.c[0]() / (themeReactive.a0.c[0]() * 0.8) / 0.37) * 100}%`,
+          }}
           class="thumb"
         />
 
@@ -461,7 +483,9 @@ export function ThemeEditorBasic() {
         */}
 
         <input
-          onInput={(e) => {handleSaturationChange(e)}}
+          onInput={(e) => {
+            handleSaturationChange(e);
+          }}
           ref={sliderSaturationRef}
           class="slider"
           step="0.001"
@@ -474,11 +498,26 @@ export function ThemeEditorBasic() {
 
       <div class="slider-container">
         <div class="slider-track wrapper-contrast">
-          <div/><div/><div/><div/><div/><div/><div/><div/><div/><div/><div/><div/><div/><div/>
+          <div />
+          <div />
+          <div />
+          <div />
+          <div />
+          <div />
+          <div />
+          <div />
+          <div />
+          <div />
+          <div />
+          <div />
+          <div />
+          <div />
         </div>
 
         <div
-          style={{left: `${getContrastFromY(themeReactive.b0.l[0]()) * 100}%`}}
+          style={{
+            left: `${getContrastFromY(themeReactive.b0.l[0]()) * 100}%`,
+          }}
           class="thumb"
         />
 
@@ -497,7 +536,9 @@ export function ThemeEditorBasic() {
         */}
 
         <input
-          onInput={(e) => {handleContrastChange(e)}}
+          onInput={(e) => {
+            handleContrastChange(e);
+          }}
           ref={sliderContrastRef}
           class="slider"
           type="range"

@@ -2,6 +2,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isAccessiblePreviewItem, useItemPreview } from '@core/signal/preview';
 import { matches } from '@core/util/match';
 import { truncateString } from '@core/util/string';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import BuildingIcon from '@icon/duotone/building-office-duotone.svg';
 import EyeSlash from '@icon/duotone/eye-slash-duotone.svg';
 import GlobeIcon from '@icon/duotone/globe-duotone.svg';
@@ -204,6 +205,15 @@ export function ItemPreview(props: ItemPreviewProps) {
               {(accessibleItem) => {
                 const itemData = accessibleItem();
                 const fileType = itemData.fileType;
+                const navHandlers =
+                  useSplitNavigationHandler<HTMLButtonElement>((e) =>
+                    onPreviewClick(
+                      itemData.type,
+                      itemData.id,
+                      fileType,
+                      e.altKey
+                    )
+                  );
                 return (
                   <TextButton
                     theme="base"
@@ -228,14 +238,7 @@ export function ItemPreview(props: ItemPreviewProps) {
                         />
                       );
                     }}
-                    onClick={(e) =>
-                      onPreviewClick(
-                        itemData.type,
-                        itemData.id,
-                        fileType,
-                        e.altKey
-                      )
-                    }
+                    {...navHandlers}
                     text={truncateString(name(), 80)}
                     width="min-w-0"
                   />
