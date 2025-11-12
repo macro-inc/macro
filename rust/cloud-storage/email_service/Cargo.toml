@@ -54,7 +54,6 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
 macro_notify = { path = "../macro_notify" }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
-mime_guess = "2.0.5"
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
@@ -68,7 +67,6 @@ reqwest = { workspace = true, features = ["stream"] }
 s3_client = { path = "../s3_client" }
 schemars = { workspace = true }
 scraper = { workspace = true }
-sha2 = { workspace = true }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
