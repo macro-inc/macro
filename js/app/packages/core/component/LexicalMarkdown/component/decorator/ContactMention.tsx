@@ -110,6 +110,11 @@ export function ContactMention(props: ContactMentionDecoratorProps) {
         classList={{
           'bracket-offset-2': isSelectedAsNode(),
         }}
+        onMouseDown={(e) => {
+          // Prevent focus change on mousedown to avoid split activation flash
+          // The click handler will properly handle navigation
+          e.preventDefault();
+        }}
         onClick={openContact}
         onMouseEnter={() => setPopupOpen(true)}
         onMouseLeave={() => setPopupOpen(false)}

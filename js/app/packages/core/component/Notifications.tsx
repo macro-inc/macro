@@ -82,6 +82,11 @@ export function Notifications(props: NotificationsProps) {
                 class={`w-full p-2 pb-3 border-b border-edge-muted hover:bg-hover text-left ${
                   isUnread ? 'bg-menu-hover' : 'bg-menu'
                 }`}
+                onMouseDown={(e) => {
+                  // Prevent focus change on mousedown to avoid split activation flash
+                  // The click handler will properly handle navigation
+                  e.preventDefault();
+                }}
                 onClick={() => handleNotificationClick(notification)}
               >
                 <div class="flex justify-start items-center gap-2 mb-4 font-mono text-ink-muted text-xs uppercase">

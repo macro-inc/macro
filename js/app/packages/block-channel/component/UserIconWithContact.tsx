@@ -26,7 +26,16 @@ export const UserIconWithContact: Component<UserIconWithContactProps> = (
   };
 
   return (
-    <div onClick={handleClick} class="cursor-pointer" title="View contact">
+    <div
+      onMouseDown={(e) => {
+        // Prevent focus change on mousedown to avoid split activation flash
+        // The click handler will properly handle navigation
+        e.preventDefault();
+      }}
+      onClick={handleClick}
+      class="cursor-pointer"
+      title="View contact"
+    >
       <UserIcon id={props.userId} size={props.size} isDeleted={false} />
     </div>
   );

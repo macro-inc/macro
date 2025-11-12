@@ -169,6 +169,11 @@ export function References(props: ReferenceProps) {
               return (
                 <button
                   class="bg-menu hover:bg-hover p-2 pb-3 border-edge-muted border-b w-full text-left"
+                  onMouseDown={(e) => {
+                    // Prevent focus change on mousedown to avoid split activation flash
+                    // The click handler will properly handle navigation
+                    e.preventDefault();
+                  }}
                   onClick={() =>
                     navigateToMessage(ref.channel_id, ref.message_id)
                   }
@@ -211,6 +216,11 @@ export function References(props: ReferenceProps) {
               return (
                 <button
                   class="bg-menu hover:bg-hover p-2 pb-3 border-edge-muted border-b w-full text-left"
+                  onMouseDown={(e) => {
+                    // Prevent focus change on mousedown to avoid split activation flash
+                    // The click handler will properly handle navigation
+                    e.preventDefault();
+                  }}
                   onClick={() => navigateToGenericReference(item())}
                 >
                   <div class="flex justify-start items-center gap-2 mb-4 font-mono text-ink-muted text-xs uppercase">
