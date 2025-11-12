@@ -24,7 +24,7 @@ import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
 import IconQuestion from '@icon/regular/question.svg';
 import IconAtom from '@macro-icons/macro-atom.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
-import { createMemo, createSignal, For, Show } from 'solid-js';
+import { createMemo, createSignal, Show } from 'solid-js';
 import { setKonsoleOpen } from '../command/state';
 import { useGlobalNotificationSource } from '../GlobalAppState';
 import { BasicTierLimit } from './BasicTierLimit';

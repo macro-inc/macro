@@ -44,13 +44,7 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import {
-  currentThemeId,
-  darkModeTheme,
-  lightModeTheme,
-  systemMode,
-  themeShouldMatchSystem,
-} from '../../block-theme/signals/themeSignals';
+import { currentThemeId } from '../../block-theme/signals/themeSignals';
 import {
   applyTheme,
   ensureMinimalThemeContrast,

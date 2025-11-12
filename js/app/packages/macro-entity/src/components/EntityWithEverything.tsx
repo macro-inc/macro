@@ -91,7 +91,7 @@ export function EntityWithEverything<
     createSignal(false);
 
   const { keydownDataDuringTask } = trackKeydownDuringTask();
-  let tabbableEl!: HTMLDivElement;
+  let _tabbableEl!: HTMLDivElement;
 
   // onMount(() => {
   //   if (document.activeElement === document.body) {
@@ -326,7 +326,7 @@ export function EntityWithEverything<
         role="button"
         tabIndex={0}
         ref={mergeRefs(props.ref, (el) => {
-          tabbableEl = el;
+          _tabbableEl = el;
         })}
       >
         {/* Left Column Indicator(s) */}

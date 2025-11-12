@@ -18,14 +18,7 @@ import { ok } from '@core/util/maybeResult';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import MacroCreateIcon from '@macro-icons/macro-create-b.svg';
 import { useCreateProject } from '@service-storage/projects';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  onMount,
-  Show,
-} from 'solid-js';
+import { createMemo, For, onMount, Show } from 'solid-js';
 import { useSplitLayout } from '../split-layout/layout';
 
 export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal();
