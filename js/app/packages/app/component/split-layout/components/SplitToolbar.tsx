@@ -1,7 +1,6 @@
 import {
   createRenderEffect,
   createSignal,
-  JSX,
   onCleanup,
   onMount,
   type ParentProps,
