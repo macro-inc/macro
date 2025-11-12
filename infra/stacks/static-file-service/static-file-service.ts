@@ -18,7 +18,7 @@ export const SERVICE_DOMAIN_NAME = `static-file-service${stack === 'prod' ? '' :
 export const SERVICE_URL = `https://${SERVICE_DOMAIN_NAME}.${BASE_DOMAIN}`;
 export const STATIC_FILE_BUCKET = `static-file-storage-${stack}`;
 
-const IMAGE_PATH = '../../../';
+const BASE_PATH = '../../../rust/cloud-storage';
 
 const NOT_FOUND_FILE = './error_404.html';
 const NOT_FOUND_KEY = 'error_404.html';
@@ -98,7 +98,7 @@ export class StaticFileService extends pulumi.ComponentResource {
         repositoryId: `${SERVICE_NAME}-ecr-${stack}`,
         repositoryName: `${SERVICE_NAME}-${stack}`,
         imageId: `${SERVICE_NAME}-image-${stack}`,
-        imagePath: IMAGE_PATH,
+        imagePath: BASE_PATH,
         dockerfile: 'Dockerfile',
         platform: args.platform,
         buildArgs: {
