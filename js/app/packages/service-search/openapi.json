@@ -974,20 +974,19 @@
         "required": [
           "message_id",
           "sender_id",
-          "content",
+          "highlight",
           "created_at",
           "updated_at"
         ],
         "properties": {
-          "content": {
-            "type": "array",
-            "items": { "type": "string" },
-            "description": "The array of content matches for the channel message"
-          },
           "created_at": {
             "type": "integer",
             "format": "int64",
             "description": "When the channel message was created"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights for the channel message"
           },
           "message_id": {
             "type": "string",
@@ -1037,7 +1036,7 @@
         "required": [
           "chat_message_id",
           "role",
-          "content",
+          "highlight",
           "updated_at",
           "title"
         ],
@@ -1046,10 +1045,9 @@
             "type": "string",
             "description": "The chat message id for the chat"
           },
-          "content": {
-            "type": "array",
-            "items": { "type": "string" },
-            "description": "The array of content matches for the message"
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights for the chat message"
           },
           "role": {
             "type": "string",
@@ -1300,12 +1298,11 @@
       "DocumentSearchResult": {
         "type": "object",
         "description": "A document match for a given node",
-        "required": ["node_id", "content", "updated_at"],
+        "required": ["node_id", "highlight", "updated_at"],
         "properties": {
-          "content": {
-            "type": "array",
-            "items": { "type": "string" },
-            "description": "The array of content matches for the document"
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights for the document"
           },
           "node_id": {
             "type": "string",
@@ -1462,16 +1459,15 @@
           "cc",
           "bcc",
           "labels",
-          "content",
+          "highlight",
           "updated_at"
         ],
         "properties": {
           "bcc": { "type": "array", "items": { "type": "string" } },
           "cc": { "type": "array", "items": { "type": "string" } },
-          "content": {
-            "type": "array",
-            "items": { "type": "string" },
-            "description": "The array of content matches for the email message"
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights for the email message"
           },
           "labels": { "type": "array", "items": { "type": "string" } },
           "message_id": {
@@ -2057,12 +2053,22 @@
       },
       "ProjectSearchResult": {
         "type": "object",
-        "required": ["content"],
+        "required": ["highlight"],
+        "properties": {
+          "highlight": { "$ref": "#/components/schemas/SearchHighlight" }
+        }
+      },
+      "SearchHighlight": {
+        "type": "object",
         "properties": {
           "content": {
             "type": "array",
             "items": { "type": "string" },
-            "description": "array of content matches for a project"
+            "description": "The highlight match on the content field"
+          },
+          "name": {
+            "type": ["string", "null"],
+            "description": "The highlight match on the name field"
           }
         }
       },
@@ -2092,7 +2098,8 @@
           "sender_id",
           "mentions",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "highlight"
         ],
         "properties": {
           "channel_id": { "type": "string", "description": "The channel id" },
@@ -2104,14 +2111,13 @@
             "type": "string",
             "description": "The channel type"
           },
-          "content": {
-            "type": ["array", "null"],
-            "items": { "type": "string" },
-            "description": "The opensearch matches on the channel message"
-          },
           "created_at": {
             "oneOf": [{ "type": "integer", "format": "int64" }],
             "description": "The time the channel message was created"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the channel message"
           },
           "mentions": {
             "type": "array",
@@ -2144,7 +2150,8 @@
           "sender_id",
           "mentions",
           "created_at",
-          "updated_at"
+          "updated_at",
+          "highlight"
         ],
         "properties": {
           "channel_id": { "type": "string", "description": "The channel id" },
@@ -2156,14 +2163,13 @@
             "type": "string",
             "description": "The channel type"
           },
-          "content": {
-            "type": ["array", "null"],
-            "items": { "type": "string" },
-            "description": "The opensearch matches on the channel message"
-          },
           "created_at": {
             "oneOf": [{ "type": "integer", "format": "int64" }],
             "description": "The time the channel message was created"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the channel message"
           },
           "mentions": {
             "type": "array",
@@ -2221,7 +2227,8 @@
           "user_id",
           "role",
           "updated_at",
-          "title"
+          "title",
+          "highlight"
         ],
         "properties": {
           "chat_id": { "type": "string", "description": "The chat id" },
@@ -2229,10 +2236,9 @@
             "type": "string",
             "description": "The chat message id"
           },
-          "content": {
-            "type": ["array", "null"],
-            "items": { "type": "string" },
-            "description": "The opensearch matches on the chat"
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the chat"
           },
           "role": { "type": "string", "description": "The role" },
           "title": { "type": "string", "description": "The title" },
@@ -2251,7 +2257,8 @@
           "user_id",
           "role",
           "updated_at",
-          "title"
+          "title",
+          "highlight"
         ],
         "properties": {
           "chat_id": { "type": "string", "description": "The chat id" },
@@ -2259,10 +2266,9 @@
             "type": "string",
             "description": "The chat message id"
           },
-          "content": {
-            "type": ["array", "null"],
-            "items": { "type": "string" },
-            "description": "The opensearch matches on the chat"
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the chat"
           },
           "role": { "type": "string", "description": "The role" },
           "title": { "type": "string", "description": "The title" },
@@ -2294,20 +2300,20 @@
           "node_id",
           "owner_id",
           "file_type",
-          "updated_at"
+          "updated_at",
+          "highlight"
         ],
         "properties": {
-          "content": {
-            "type": ["array", "null"],
-            "items": { "type": "string" },
-            "description": "The opensearch matches on the document"
-          },
           "document_id": { "type": "string", "description": "The document id" },
           "document_name": {
             "type": "string",
             "description": "The document name"
           },
           "file_type": { "type": "string", "description": "The file type" },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the document"
+          },
           "node_id": { "type": "string", "description": "The node id" },
           "owner_id": { "type": "string", "description": "The owner id" },
           "raw_content": {
@@ -2328,20 +2334,20 @@
           "node_id",
           "owner_id",
           "file_type",
-          "updated_at"
+          "updated_at",
+          "highlight"
         ],
         "properties": {
-          "content": {
-            "type": ["array", "null"],
-            "items": { "type": "string" },
-            "description": "The opensearch matches on the document"
-          },
           "document_id": { "type": "string", "description": "The document id" },
           "document_name": {
             "type": "string",
             "description": "The document name"
           },
           "file_type": { "type": "string", "description": "The file type" },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the document"
+          },
           "node_id": { "type": "string", "description": "The node id" },
           "owner_id": { "type": "string", "description": "The owner id" },
           "raw_content": {
@@ -2379,7 +2385,8 @@
           "labels",
           "link_id",
           "user_id",
-          "updated_at"
+          "updated_at",
+          "highlight"
         ],
         "properties": {
           "bcc": {
@@ -2392,10 +2399,9 @@
             "items": { "type": "string" },
             "description": "The cc"
           },
-          "content": {
-            "type": ["array", "null"],
-            "items": { "type": "string" },
-            "description": "The opensearch matches on the email"
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the email"
           },
           "labels": {
             "type": "array",
@@ -2441,7 +2447,8 @@
           "labels",
           "link_id",
           "user_id",
-          "updated_at"
+          "updated_at",
+          "highlight"
         ],
         "properties": {
           "bcc": {
@@ -2454,10 +2461,9 @@
             "items": { "type": "string" },
             "description": "The cc"
           },
-          "content": {
-            "type": ["array", "null"],
-            "items": { "type": "string" },
-            "description": "The opensearch matches on the email"
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the email"
           },
           "labels": {
             "type": "array",
@@ -2511,17 +2517,17 @@
           "updated_at",
           "created_at",
           "project_name",
-          "user_id"
+          "user_id",
+          "highlight"
         ],
         "properties": {
-          "content": {
-            "type": ["array", "null"],
-            "items": { "type": "string" },
-            "description": "The opensearch matches on the project"
-          },
           "created_at": {
             "oneOf": [{ "type": "integer", "format": "int64" }],
             "description": "The time the project was created"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the project"
           },
           "project_id": { "type": "string", "description": "The project id" },
           "project_name": {
@@ -2545,17 +2551,17 @@
           "updated_at",
           "created_at",
           "project_name",
-          "user_id"
+          "user_id",
+          "highlight"
         ],
         "properties": {
-          "content": {
-            "type": ["array", "null"],
-            "items": { "type": "string" },
-            "description": "The opensearch matches on the project"
-          },
           "created_at": {
             "oneOf": [{ "type": "integer", "format": "int64" }],
             "description": "The time the project was created"
+          },
+          "highlight": {
+            "$ref": "#/components/schemas/SearchHighlight",
+            "description": "The highlights on the project"
           },
           "project_id": { "type": "string", "description": "The project id" },
           "project_name": {
