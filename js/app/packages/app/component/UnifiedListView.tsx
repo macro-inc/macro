@@ -612,6 +612,22 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       }
     }
 
+    const projectId = projectFilter();
+    if (projectId) {
+      documentFilters = {
+        ...(documentFilters ?? {}),
+        project_ids: [projectId],
+      };
+      chatFilters = {
+        ...(chatFilters ?? {}),
+        project_ids: [projectId],
+      };
+      projectFilters = {
+        ...(projectFilters ?? {}),
+        project_ids: [projectId],
+      };
+    }
+
     const filters = {
       document: documentFilters,
       chat: chatFilters,
