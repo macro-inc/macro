@@ -25,7 +25,6 @@ import {
 } from '@core/constant/allBlocks';
 import {
   ENABLE_PREVIEW,
-  ENABLE_SEARCH_VIEW,
   ENABLE_SOUP_FROM_FILTER,
 } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -1548,8 +1547,6 @@ function SearchBar(props: {
   }, props.isLoading());
 
   onMount(() => {
-    if (!ENABLE_SEARCH_VIEW) return;
-
     const { dispose } = registerHotkey({
       hotkey: ['/'],
       scopeId: splitContext.splitHotkeyScope,
