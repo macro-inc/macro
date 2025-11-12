@@ -72,6 +72,7 @@ interface UnifiedInfiniteListContext<T extends EntityData> {
   entitySort?: Accessor<EntityComparator<T>>;
   projectFilter?: Accessor<string | undefined>;
   searchFilter?: Accessor<EntitiesFilter<T> | undefined>;
+  isSearchActive?: Accessor<boolean>;
   // TODO: deduplicate entities for same match
   deduplicate?: Accessor<(prev: T, next: T) => boolean>;
 }
@@ -86,6 +87,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
   showProjects,
   projectFilter,
   searchFilter,
+  isSearchActive,
 }: UnifiedInfiniteListContext<T>) {
   const [sortedEntitiesStore, setSortedEntitiesStore] = createStore<T[]>([]);
   const allEntities = createMemo(() => {
@@ -219,9 +221,11 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     // TODO: process entities in a pipeline
     const entities = projectFilterEntities();
     const sortFn = entitySort?.();
-    if (sortFn) return entities.toSorted(sortFn);
+    const searching = isSearchActive?.();
 
-    return entities;
+    if (!sortFn || searching) return entities;
+
+    return entities.toSorted(sortFn);
   });
 
   const isLoading = createMemo(() => {
