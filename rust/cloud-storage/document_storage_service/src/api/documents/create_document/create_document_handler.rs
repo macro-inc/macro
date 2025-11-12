@@ -4,6 +4,7 @@ use axum::{Extension, extract::State, http::StatusCode, response::IntoResponse};
 use macro_middleware::cloud_storage::ensure_access::project::ProjectBodyAccessLevelExtractor;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
+use crate::api::middleware::internal_access::InternalUser;
 use crate::api::{
     context::ApiContext,
     documents::{
@@ -21,8 +22,8 @@ use model::{
 
 /// Handles creating a document
 #[utoipa::path(
-        tag = "document",
         post,
+        tag = "document",
         path = "/documents",
         request_body = CreateDocumentRequest,
         responses(
@@ -37,10 +38,19 @@ use model::{
 #[axum::debug_handler(state = ApiContext)]
 pub(in crate::api) async fn create_document_handler(
     State(state): State<ApiContext>,
+    internal_user: Option<Extension<InternalUser>>,
     user_context: Extension<UserContext>,
     project: ProjectBodyAccessLevelExtractor<EditAccessLevel, CreateDocumentRequest>,
 ) -> impl IntoResponse {
     let req = project.into_inner();
+
+    // email linking is internal only
+    if req.email_message_id.is_some() && internal_user.is_none() {
+        return GenericResponse::builder()
+            .message("can't link email in external request")
+            .is_error(true)
+            .send(StatusCode::UNAUTHORIZED);
+    }
 
     let user_provided_file_type: Option<FileType> = req
         .file_type
@@ -82,6 +92,7 @@ pub(in crate::api) async fn create_document_handler(
         file_type,
         req.job_id.as_deref(),
         req.project_id.as_deref(),
+        req.email_message_id,
         req.created_at.as_ref(),
     )
     .await;

@@ -6,6 +6,7 @@ use model::document::response::{DocumentResponse, DocumentResponseMetadata};
 use model::document::{ContentType, FileType, build_cloud_storage_bucket_document_key};
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::{IS_PUBLIC_DEFAULT, SharePermissionV2};
+use uuid::Uuid;
 
 /// Creates a document in the database
 /// Creates a presigned post url to upload the document to the required bucket
@@ -22,6 +23,7 @@ pub async fn create_document(
     file_type: Option<FileType>,
     job_id: Option<&str>,
     project_id: Option<&str>,
+    email_message_id: Option<Uuid>,
     created_at: Option<&DateTime<Utc>>,
 ) -> Result<CreateDocumentResponseData, (StatusCode, String, Option<String>)> {
     tracing::trace!("creating document v2");
@@ -56,6 +58,7 @@ pub async fn create_document(
             project_name: None,
             share_permission: &share_permission,
             skip_history: created_at.is_some(), // don't add to history if it's a backfill
+            email_message_id,
             created_at,
         },
     )
