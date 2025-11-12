@@ -27,6 +27,8 @@ import {
   ENABLE_PREVIEW,
   ENABLE_SOUP_FROM_FILTER,
 } from '@core/constant/featureFlags';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -96,6 +98,8 @@ import {
   createSignal,
   mergeProps,
   on,
+  onCleanup,
+  onMount,
   type ParentProps,
   type Setter,
   Show,
@@ -1453,6 +1457,7 @@ function SearchBar(props: {
   isLoading: Accessor<boolean>;
   setIsLoading: Setter<boolean>;
 }) {
+  const splitContext = useSplitPanelOrThrow();
   const {
     viewsDataStore,
     selectedView,
@@ -1460,7 +1465,7 @@ function SearchBar(props: {
     entitiesSignal: [entities],
     virtualizerHandleSignal: [virtualizerHandle],
     entityListRefSignal: [entityListRef],
-  } = useSplitPanelOrThrow().unifiedListContext;
+  } = splitContext.unifiedListContext;
   const viewData = createMemo(() => viewsDataStore[selectedView()]);
 
   let inputRef: HTMLInputElement | undefined;
@@ -1540,6 +1545,28 @@ function SearchBar(props: {
 
     return loading;
   }, props.isLoading());
+
+  onMount(() => {
+    const { dispose } = registerHotkey({
+      hotkey: ['/'],
+      scopeId: splitContext.splitHotkeyScope,
+      description: 'Search in current view',
+      hotkeyToken: TOKENS.soup.openSearch,
+      keyDownHandler: () => {
+        setTimeout(() => {
+          const searchInput = document.getElementById(
+            `search-input-${selectedView()}`
+          ) as HTMLInputElement;
+          searchInput?.focus();
+        }, 0);
+        return true;
+      },
+      displayPriority: 5,
+    });
+    onCleanup(() => {
+      dispose();
+    });
+  });
 
   return (
     <SplitToolbarLeft>
