@@ -1,3 +1,4 @@
+import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
   SplitHeaderLeft,
@@ -22,7 +23,6 @@ import { useUserId } from '@service-gql/client';
 import { Show } from 'solid-js';
 import { AttachmentsModal } from './AttachmentsModal';
 import { ParticipantManager } from './ParticipantManager';
-import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 
 type TopIconProps = {
   channelType: ChannelType;

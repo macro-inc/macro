@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -43,7 +44,6 @@ import { EmailFormContextProvider } from './EmailFormContext';
 import { EmailInput } from './EmailInput';
 import { MessageList } from './MessageList';
 import { TopBar } from './TopBar';
-import { registerHotkey } from '@core/hotkey/hotkeys';
 
 type EmailProps = {
   title: Accessor<string>;

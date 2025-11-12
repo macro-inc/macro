@@ -1,3 +1,4 @@
+import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
   type FileOperation,
@@ -42,7 +43,6 @@ import { blockNameToItemType } from '@service-storage/client';
 import { Show } from 'solid-js';
 import { HistoryModal } from './History';
 import { MarkdownPropertiesModal } from './MarkdownPropertiesModal';
-import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 
 export function TopBar() {
   const canEdit = useCanEdit();

@@ -1,3 +1,4 @@
+import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 import {
   type FileOperation,
   SplitFileMenu,
@@ -45,7 +46,6 @@ import { pdfDocumentProxy } from '../signal/document';
 import { LocationType, useCreateShareUrl } from '../signal/location';
 import { MarkupToolbar } from './MarkupToolbar';
 import { PageNumberInput } from './PageNumberInput';
-import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 
 export function TopBar() {
   const isAuth = useIsAuthenticated();

@@ -1,3 +1,4 @@
+import { useNavigatedFromJK } from '@app/component/SoupContext';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
   commentsStore,
@@ -11,6 +12,7 @@ import {
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_PROPERTIES_METADATA,
 } from '@core/constant/featureFlags';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -18,7 +20,6 @@ import {
 import { tempRedirectLocation } from '@core/signal/location';
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { registerHotkey } from '@core/hotkey/hotkeys';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import {
   createEffect,
@@ -32,7 +33,6 @@ import {
 import { FrontMatterProperties } from './FrontMatterProperties';
 import { InstructionsMarkdownEditor, MarkdownEditor } from './MarkdownEditor';
 import { TitleEditor } from './TitleEditor';
-import { useNavigatedFromJK } from '@app/component/SoupContext';
 
 const NoteTargetWidth = 768;
 const CommentTargetWidth = 320;

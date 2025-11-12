@@ -34,6 +34,7 @@ import {
 import type { VirtualizerHandle } from 'virtua/solid';
 import { useGlobalNotificationSource } from './GlobalAppState';
 import type { SplitHandle } from './split-layout/layoutManager';
+import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import {
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS,
@@ -42,7 +43,6 @@ import {
   type ViewData,
   type ViewDataMap,
 } from './ViewConfig';
-import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 export type UnifiedListContext = {
   viewsDataStore: Store<ViewDataMap>;

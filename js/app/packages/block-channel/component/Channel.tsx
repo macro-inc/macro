@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useNavigatedFromJK } from '@app/component/SoupContext';
 import type { ChannelData } from '@block-channel/definition';
 import {
   latestActivitySignal,
@@ -46,7 +47,6 @@ import { type FocusableElement, tabbable } from 'tabbable';
 import { ChannelInput } from './ChannelInput';
 import { MessageList } from './MessageList/MessageList';
 import { Top } from './Top';
-import { useNavigatedFromJK } from '@app/component/SoupContext';
 
 false && fileDrop;
 
