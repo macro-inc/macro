@@ -15,7 +15,7 @@ import {
   cognitionApiServiceClient,
   cognitionWebsocketServiceClient,
 } from '@service-cognition/client';
-import type { Source } from './Sources';
+import type { Source } from './ToolsetSelector';
 
 function sourceToPrompt(source?: Source): string {
   if (!source) return '';
