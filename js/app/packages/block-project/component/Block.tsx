@@ -293,8 +293,11 @@ const Block: Component = () => {
   };
 
   const splitContext = useSplitPanelOrThrow();
-  const { setViewDataStore } = splitContext.unifiedListContext;
+  const { selectedView, setSelectedView, setViewDataStore } =
+    splitContext.unifiedListContext;
   createRenderEffect(() => {
+    const previousView = untrack(selectedView);
+    setSelectedView(projectId);
     // NOTE: we don't use setSelectedView so that we can preserve the view config
     // instead we pass the view id directly to the UnifiedListView component
 
@@ -312,6 +315,7 @@ const Block: Component = () => {
     });
 
     onCleanup(() => {
+      setSelectedView(previousView);
       (setViewDataStore as any)(projectId, undefined);
     });
   });
