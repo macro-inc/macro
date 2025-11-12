@@ -31,14 +31,13 @@ export function getOklch(cssColor: string) {
   const convert = color.to('oklch');
   console.log(convert.oklch);
 
-  // Handle undefined values properly - pure white/black/gray have undefined chroma and hue
-  let l = convert.coords[0] !== undefined ? convert.coords[0] : 0;
-  let c = convert.coords[1] !== undefined ? convert.coords[1] : 0;
-  let h = convert.coords[2] !== undefined ? convert.coords[2] : 0;
+  // Handle undefined values pure white/black/gray have undefined chroma and hue
+  let l = convert.coords[0] ? convert.coords[0] : 0;
+  let c = convert.coords[1] ? convert.coords[1] : 0;
+  let h = convert.coords[2] ? convert.coords[2] : 0;
 
   let returnColor = { l: l, c: c, h: h }
-  console.log(returnColor);
-
+  // console.log(returnColor);
   return returnColor;
 }
 
@@ -47,13 +46,14 @@ export function convertOklchTo(oklch: string, type: string){
 
   try {
     const color = new Color(oklch);
+    console.log(color);
 
-    switch(type.toLowerCase()){
-      case 'hex': return color.to('srgb').toString({ format: 'hex' });
-      case 'rgb': return color.to('srgb').toString({ format: 'rgb' });
-      case 'oklab': return color.to('oklab').toString();
-      case 'hsl': return color.to('hsl').toString();
-      case 'oklch': return color.toString();
+    switch(type){
+      case 'hex': return color.to('srgb').toString({ format: 'hex', precision: 4  });
+      case 'rgb': return color.to('srgb').toString({ format: 'rgb', precision: 4 });
+      case 'oklab': return color.to('oklab').toString({precision: 4 });
+      case 'hsl': return color.to('hsl').toString({precision: 4 });
+      case 'oklch': return color.toString({precision: 4 });
       default: return color.to('srgb').toString({ format: 'hex' });
     }
   }
