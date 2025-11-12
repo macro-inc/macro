@@ -1,3 +1,4 @@
+import { useSplitNavigationHandler } from '@app/component/split-layout/useSplitNavigationHandlers';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isAccessiblePreviewItem, useItemPreview } from '@core/signal/preview';
 import { matches } from '@core/util/match';
@@ -204,6 +205,15 @@ export function ItemPreview(props: ItemPreviewProps) {
               {(accessibleItem) => {
                 const itemData = accessibleItem();
                 const fileType = itemData.fileType;
+                const navHandlers = useSplitNavigationHandler<HTMLButtonElement>(
+                  (e) =>
+                    onPreviewClick(
+                      itemData.type,
+                      itemData.id,
+                      fileType,
+                      e.altKey
+                    )
+                );
                 return (
                   <TextButton
                     theme="base"
@@ -228,19 +238,7 @@ export function ItemPreview(props: ItemPreviewProps) {
                         />
                       );
                     }}
-                    onMouseDown={(e) => {
-                      // Prevent focus change on mousedown to avoid split activation flash
-                      // The click handler will properly handle navigation
-                      e.preventDefault();
-                    }}
-                    onClick={(e) =>
-                      onPreviewClick(
-                        itemData.type,
-                        itemData.id,
-                        fileType,
-                        e.altKey
-                      )
-                    }
+                    {...navHandlers}
                     text={truncateString(name(), 80)}
                     width="min-w-0"
                   />

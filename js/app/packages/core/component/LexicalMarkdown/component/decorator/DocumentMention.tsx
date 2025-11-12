@@ -1,3 +1,4 @@
+import { useSplitNavigationHandler } from '@app/component/split-layout/useSplitNavigationHandlers';
 import {
   type BlockName,
   useMaybeBlockId,
@@ -313,6 +314,13 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
     });
   };
 
+  const navHandlers = useSplitNavigationHandler<HTMLSpanElement>((e) => {
+    e.stopPropagation();
+    if (matches(item(), (i) => !i.loading && i.access === 'access')) {
+      open(e);
+    }
+  });
+
   return (
     <>
       <span class="relative">
@@ -349,17 +357,7 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
               }
             }
           }}
-          onMouseDown={(e) => {
-            // Prevent focus change on mousedown to avoid split activation flash
-            // The click handler will properly handle navigation
-            e.preventDefault();
-          }}
-          on:click={(e) => {
-            e.stopPropagation();
-            if (matches(item(), (i) => !i.loading && i.access === 'access')) {
-              open(e);
-            }
-          }}
+          {...navHandlers}
         >
           <Switch>
             <Match when={item().loading}>

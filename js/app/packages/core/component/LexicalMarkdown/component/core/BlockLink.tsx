@@ -1,9 +1,10 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
+import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useSplitNavigationHandler } from '@app/component/split-layout/useSplitNavigationHandlers';
 import { useMaybeBlockId } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { createCallback } from '@solid-primitives/rootless';
 import type { ParentProps } from 'solid-js';
-import { useSplitLayout } from '../../../../../app/component/split-layout/layout';
 
 export const blockNamesWithLocations = [
   'pdf',
@@ -80,16 +81,6 @@ export function BlockLink(
     let newSplit = e.altKey;
     openDocument(props.blockOrFileName, props.id, props.params, newSplit);
   });
-  return (
-    <span
-      onMouseDown={(e) => {
-        // Prevent focus change on mousedown to avoid split activation flash
-        // The click handler will properly handle navigation
-        e.preventDefault();
-      }}
-      onClick={open}
-    >
-      {props.children}
-    </span>
-  );
+  const navHandlers = useSplitNavigationHandler<HTMLSpanElement>(open);
+  return <span {...navHandlers}>{props.children}</span>;
 }
