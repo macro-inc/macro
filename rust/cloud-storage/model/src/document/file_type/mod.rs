@@ -684,7 +684,7 @@ impl FileType {
     pub fn is_image(&self) -> bool {
         matches!(
             self,
-            FileType::Png | FileType::Jpg | FileType::Gif | FileType::Svg
+            FileType::Png | FileType::Jpg | FileType::Gif | FileType::Svg | FileType::Jpeg
         )
     }
 
