@@ -1,7 +1,8 @@
 import { useBlockId } from '@core/block';
+import { IconButton } from '@core/component/IconButton';
 import { useUnfurl } from '@core/signal/unfurl';
+import DeleteIcon from '@icon/bold/x-bold.svg';
 import LinkIcon from '@icon/regular/link.svg';
-import XIcon from '@icon/regular/x.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { proxyResource } from '@service-unfurl/client';
 import type { Component } from 'solid-js';
@@ -258,9 +259,7 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
     window.open(props.url, '_blank');
   };
 
-  const handleRemoveClick = (e: MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleRemoveClick = () => {
     props.onRemove();
   };
 
@@ -319,13 +318,16 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
         <span class="truncate flex-1 text-ink">{title()}</span>
 
         <Show when={props.canEdit && isHovered() && !props.isRemoving}>
-          <button
-            class="remove-button shrink-0 p-0.5 hover:bg-failure/20 rounded"
-            onClick={handleRemoveClick}
-            title="Remove link"
-          >
-            <XIcon class="w-3 h-3 text-ink-muted hover:text-failure-ink" />
-          </button>
+          <div class={`shrink-0 w-4 h-4 flex items-center justify-center`}>
+            <IconButton
+              icon={DeleteIcon}
+              theme="clear"
+              size="xs"
+              class="!text-failure hover:!bg-failure/15"
+              tooltip={{ label: 'Remove link' }}
+              onClick={handleRemoveClick}
+            />
+          </div>
         </Show>
       </button>
     </div>
