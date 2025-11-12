@@ -16,12 +16,9 @@ use anyhow::Context;
 use futures::{StreamExt, stream};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicUsize, Ordering};
-// --- Main Application Logic ---
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    // Initializes logging and other boilerplate.
-
     // 1. Load configuration from environment variables. Fails early if anything is missing.
     println!("Loading configuration...");
     let config = config::Config::from_env().context("Failed to load configuration")?;
@@ -78,6 +75,7 @@ async fn main() -> anyhow::Result<()> {
                         println!("Successfully uploaded '{}' (index: {})", attachment.filename, index);
                     }
                     Err(e) => {
+                        // ignore weird file types. annoying game of whack a mole
                         if e.to_string().contains("file extension") {
                             println!(
                                 "Skipping '{}' (index: {}) due to unsupported mime type {}",
@@ -85,7 +83,6 @@ async fn main() -> anyhow::Result<()> {
                             );
                             return;
                         }
-                        // Using structured logging is better for concurrent tasks
                         panic!(
                             "Failed to upload attachment - filename: {}, provider_attachment_id: {}, provider_message_id: {}, index: {}, error: {:?}",
                             attachment.filename,
@@ -174,6 +171,7 @@ mod database {
     use anyhow::Context;
     use sqlx::PgPool;
     use sqlx::postgres::PgPoolOptions;
+    use std::cmp::Reverse;
     use std::collections::HashMap;
     use uuid::Uuid;
 
@@ -206,7 +204,6 @@ mod database {
 
     // Condition 2: Thread involves a recipient the user has previously sent mail to.
     const PREVIOUSLY_CONTACTED_CONDITION: &str = r#"
--- Use CTEs to define our sets of data logically before joining them.
 WITH
 -- Step 1: Get the user's own email address from the link_id. This is our exclusion criteria.
 user_email AS (
@@ -281,17 +278,14 @@ JOIN
     public.email_contacts from_contact ON m.from_contact_id = from_contact.id
 WHERE
     m.thread_id IN (
-        -- This subquery now identifies the threads that ARE "familiar"
         SELECT DISTINCT
             tp.thread_id
         FROM
             thread_participants tp
-        -- An INNER JOIN finds the intersection between thread participants and known contacts.
-        -- This is the only part that changed.
         INNER JOIN
             previously_contacted_emails pce ON tp.email_address = pce.email_address
     )
-    -- Apply your standard filters at the very end
+    -- Apply standard filters at the very end
     AND a.mime_type NOT IN ('image/png', 'image/jpg', 'image/jpeg', 'image/gif', 'application/ics', 'application/zip', 'application/x-zip-compressed', 'application/x-sharing-metadata-xml')
     AND a.filename IS NOT NULL
 ORDER BY
@@ -380,8 +374,9 @@ ORDER BY
 
         let mut unique_attachments: Vec<AttachmentMetadata> =
             unique_attachments.into_values().collect();
-        // insert oldest attachments first, so they show up last
-        unique_attachments.sort_by_key(|a| a.internal_date_ts);
+
+        // populate newest attachments first
+        unique_attachments.sort_by_key(|a| Reverse(a.internal_date_ts));
 
         Ok(unique_attachments)
     }
