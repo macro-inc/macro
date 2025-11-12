@@ -29,7 +29,6 @@ export function validateColor(color: string): boolean {
 export function getOklch(cssColor: string) {
   const color = new Color(cssColor);
   const convert = color.to('oklch');
-  console.log(convert.oklch);
 
   // Handle undefined values pure white/black/gray have undefined chroma and hue
   let l = convert.coords[0] ? convert.coords[0] : 0;
@@ -37,17 +36,14 @@ export function getOklch(cssColor: string) {
   let h = convert.coords[2] ? convert.coords[2] : 0;
 
   let returnColor = { l: l, c: c, h: h }
-  // console.log(returnColor);
   return returnColor;
 }
 
 export function convertOklchTo(oklch: string, type: string){
-  console.log(oklch);
-
+  console.log('fuck');
   try {
     const color = new Color(oklch);
-    console.log(color);
-
+    console.log(color.to('srgb').toString({ format: 'hex', precision: 4  }));
     switch(type){
       case 'hex': return color.to('srgb').toString({ format: 'hex', precision: 4  });
       case 'rgb': return color.to('srgb').toString({ format: 'rgb', precision: 4 });
@@ -58,7 +54,7 @@ export function convertOklchTo(oklch: string, type: string){
     }
   }
   catch(error){
-    console.error('Error converting color:', error);
+    console.error(error);
     return '#000000';
   }
 }

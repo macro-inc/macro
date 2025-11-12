@@ -1,23 +1,26 @@
+import { createSignal, For, createEffect, type Setter, batch, untrack} from 'solid-js';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import type { ThemeReactiveColor } from '../types/themeTypes';
 import { getOklch, validateColor } from '../utils/colorUtil';
 import { themeReactive } from '../signals/themeReactive';
 import { convertOklchTo } from '../utils/colorUtil';
-import { createSignal, For } from 'solid-js';
 import { ColorSwatch } from './ColorSwatch';
 
 const formatArray = ['hex', 'rgb', 'hsl', 'oklch'];
 const [ displayType, setDisplayType ] = createSignal(formatArray[0]);
 
-function setColor(colorValue: ThemeReactiveColor, colorString: string) {
+function setColor(colorValue: ThemeReactiveColor, colorString: string, setIsSetByInput: Setter<boolean>) {
   if (!colorString || colorString.trim() === '' || colorString.length < 6 || !validateColor(colorString)) {return}
   try {
     let oklch = getOklch(colorString);
-    colorValue.l[1](oklch.l ? Math.round(oklch.l * 100) / 100 : 0);
-    colorValue.c[1](oklch.c ? Math.round(oklch.c * 100) / 100 : 0);
-    colorValue.h[1](oklch.h ? Math.round(oklch.h * 100) / 100 : 0);
+    batch(() => {
+      setIsSetByInput(true);
+      colorValue.l[1](oklch.l ? oklch.l : 0);
+      colorValue.c[1](oklch.c ? oklch.c : 0);
+      colorValue.h[1](oklch.h ? oklch.h : 0);
+    });
   }
-  catch (error) {
+  catch(error){
     console.log(`Error processing color "${colorString}":`, error);
   }
 }
@@ -90,12 +93,13 @@ export function ThemeEditorAdvanced() {
             {([colorKey, colorValue]) => {
 
               const [isSetByInput, setIsSetByInput] = createSignal(false);
+              const [inputValue, setInputValue] = createSignal('');
 
-              // createEffect(() => {
-              //   if (selected()) {
-              //     console.log(`Item ${item.id} is selected`);
-              //   }
-              // });
+              createEffect(() => {
+                const newValue = convertOklchTo(`oklch(${colorValue.l[0]()} ${colorValue.c[0]()} ${colorValue.h[0]()}deg)`, displayType());
+                if (untrack(isSetByInput)) {setIsSetByInput(false); console.log('blocked!!!!!!!!!!!!')}
+                else {setInputValue(newValue)}
+              });
 
               return (
                 <div style="background-color: var(--b0);">
@@ -133,14 +137,15 @@ export function ThemeEditorAdvanced() {
                       width: 100%;
                     ">
                       <input
-                        value={convertOklchTo(`oklch(${colorValue.l[0]()} ${colorValue.c[0]()} ${colorValue.h[0]()}deg)`, displayType())}
-                        onInput={e => {setColor(colorValue, e.target.value)}}
+                        onInput={e => {setColor(colorValue, e.target.value, setIsSetByInput)}}
+                        value={inputValue()}
                         type="text"
                         style="
                           outline: none;
                           border: none;
                           width: 100%;
-                        "/>
+                        "
+                      />
                     </div>
 
                     <div style="

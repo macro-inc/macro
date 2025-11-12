@@ -303,9 +303,12 @@ export function ThemeEditorBasic() {
     `}</style>
 
     <div style="
+      font-family: 'Forma DJR Mono';
       border: 1px solid var(--b4);
       box-sizing: border-box;
       height: min-content;
+      font-weight: 500;
+      font-size: 12px;
       display: grid;
       padding: 20px;
       gap: 20px;
@@ -344,6 +347,24 @@ export function ThemeEditorBasic() {
         />
       </div>
 
+      <div style="
+        grid-template-columns: 11ch 1fr;
+        height: min-content;
+        display: grid;
+        width: 100%;
+        gap: 20px 10px;
+      ">
+
+      <div style="position: relative;">
+        <div style="
+          transform: translateY(-50%);
+          position: absolute;
+          top: 50%;
+          left: 0;
+        ">
+          chroma:
+        </div>
+      </div>
       <div style="
         box-sizing: border-box;
         position: relative;
@@ -401,6 +422,16 @@ export function ThemeEditorBasic() {
         />
       </div>
 
+      <div style="position: relative;">
+        <div style="
+          transform: translateY(-50%);
+          position: absolute;
+          top: 50%;
+          left: 0;
+        ">
+          saturation:
+        </div>
+      </div>
       <div style="
         box-sizing: border-box;
         position: relative;
@@ -473,6 +504,16 @@ export function ThemeEditorBasic() {
         />
       </div>
 
+      <div style="position: relative;">
+        <div style="
+          transform: translateY(-50%);
+          position: absolute;
+          top: 50%;
+          left: 0;
+        ">
+          contrast:
+        </div>
+      </div>
       <div style="
         box-sizing: border-box;
         position: relative;
@@ -547,6 +588,8 @@ export function ThemeEditorBasic() {
           max="1.0"
           min="0.0"
         />
+      </div>
+
       </div>
     </div>
   </>
