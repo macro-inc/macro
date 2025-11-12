@@ -8,7 +8,7 @@ pub fn router() -> Router<ApiContext> {
     Router::new()
         // Internal-only: Delete all properties for an entity
         .route(
-            "/properties/:entity_type/entities/:entity_id",
+            "/properties/entities/:entity_type/:entity_id",
             delete(entities::delete_entity::delete_entity),
         )
         // Bulk operations (POST with body)

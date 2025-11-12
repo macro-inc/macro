@@ -2,6 +2,7 @@ use crate::outbound::pg_soup_repo::unexpanded::{
     by_cursor::{no_frecency_unexpanded_generic_cursor_soup, unexpanded_generic_cursor_soup},
     by_ids::unexpanded_soup_by_ids,
 };
+use item_filters::ast::EntityFilterAst;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
@@ -220,7 +221,7 @@ async fn test_get_user_items_unexpanded_cursor(pool: Pool<Postgres>) -> anyhow::
     )
     .await?
     .into_iter()
-    .paginate_on(1, SimpleSortMethod::ViewedAt)
+    .paginate_filter_on(1, SimpleSortMethod::ViewedAt, EntityFilterAst::default())
     .into_page();
 
     assert_eq!(result.items.len(), 1, "Should get 1 item");

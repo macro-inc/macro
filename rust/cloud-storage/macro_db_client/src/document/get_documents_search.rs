@@ -1,6 +1,8 @@
+use std::str::FromStr;
+
 use sqlx::{Pool, Postgres};
 
-use model::document::BackfillSearchDocumentInformation;
+use model::document::{BackfillSearchDocumentInformation, FileType};
 
 /// Used to get all documents in a paginated format
 /// This will get the latest version of the document for non-pdf documents
@@ -64,11 +66,18 @@ pub async fn get_documents_for_search(
             offset,
             file_types
         )
-        .map(|row| BackfillSearchDocumentInformation {
-            document_id: row.document_id,
-            document_version_id: row.document_version_id,
-            owner: row.owner,
-            file_type: row.file_type.as_str().try_into().unwrap(),
+        .try_map(|row| {
+            Ok(BackfillSearchDocumentInformation {
+                document_id: row.document_id,
+                document_version_id: row.document_version_id,
+                owner: row.owner,
+                file_type: FileType::from_str(row.file_type.as_str()).map_err(|e| {
+                    sqlx::Error::ColumnDecode {
+                        index: "file_type".to_string(),
+                        source: e.into(),
+                    }
+                })?,
+            })
         })
         .fetch_all(db)
         .await?
@@ -123,11 +132,18 @@ pub async fn get_documents_for_search(
             limit,
             offset
         )
-        .map(|row| BackfillSearchDocumentInformation {
-            document_id: row.document_id,
-            document_version_id: row.document_version_id,
-            owner: row.owner,
-            file_type: row.file_type.as_str().try_into().unwrap(),
+        .try_map(|row| {
+            Ok(BackfillSearchDocumentInformation {
+                document_id: row.document_id,
+                document_version_id: row.document_version_id,
+                owner: row.owner,
+                file_type: FileType::from_str(row.file_type.as_str()).map_err(|e| {
+                    sqlx::Error::ColumnDecode {
+                        index: "file_type".to_string(),
+                        source: e.into(),
+                    }
+                })?,
+            })
         })
         .fetch_all(db)
         .await?

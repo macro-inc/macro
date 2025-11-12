@@ -6,6 +6,7 @@ import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/St
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { useDisplayName } from 'core/user';
 import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
+import { useSplitNavigationHandler } from 'core/util/useSplitNavigationHandler';
 import { notificationWithMetadata } from 'notifications/notificationMetadata';
 import type { ParentProps, Ref } from 'solid-js';
 import {
@@ -90,7 +91,7 @@ export function EntityWithEverything<
     createSignal(false);
 
   const { keydownDataDuringTask } = trackKeydownDuringTask();
-  let tabbableEl!: HTMLDivElement;
+  let _tabbableEl!: HTMLDivElement;
 
   // onMount(() => {
   //   if (document.activeElement === document.body) {
@@ -196,13 +197,8 @@ export function EntityWithEverything<
     });
 
     const userName = createMemo(() => {
-      const [userName] = useDisplayName(notification()?.senderId!);
+      const [userName] = useDisplayName(notification()?.senderId);
       return userName();
-    });
-    const _isNameEmailAddress = createMemo(() => {
-      return !!userName().match(
-        /^(?!\.)(?!.*\.\.)([a-z0-9_'+\-\.]*)[a-z0-9_'+\-]@([a-z0-9][a-z0-9\-]*\.)+[a-z]{2,}$/i
-      );
     });
 
     return (
@@ -256,6 +252,14 @@ export function EntityWithEverything<
 
   const { didCursorMove } = useCursorMove();
 
+  const navHandlers = createMemo(() => {
+    const onClick = props.onClick;
+    if (!onClick) return;
+    return useSplitNavigationHandler<HTMLDivElement>((e) =>
+      onClick(props.entity, e)
+    );
+  });
+
   return (
     <div
       use:draggable
@@ -300,7 +304,7 @@ export function EntityWithEverything<
           'grid-cols-[auto_1fr_auto]': props.showLeftColumnIndicator,
           'grid-cols-[1fr_auto]': !props.showLeftColumnIndicator,
         }}
-        onClick={props.onClick ? [props.onClick, props.entity] : undefined}
+        {...navHandlers()}
         // Action List is also rendered based on focus, but when focused via Shift+Tab, parent is focused due to Action List dom not present. Here we check if current browser task has captured Shift+Tab focus on Action List
         onFocusIn={(e) => {
           if (
@@ -322,7 +326,7 @@ export function EntityWithEverything<
         role="button"
         tabIndex={0}
         ref={mergeRefs(props.ref, (el) => {
-          tabbableEl = el;
+          _tabbableEl = el;
         })}
       >
         {/* Left Column Indicator(s) */}

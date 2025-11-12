@@ -45,7 +45,7 @@ pub async fn handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     Query(Params { limit }): Query<Params>,
-    cursor: CursorExtractor<Uuid, CreatedAt>,
+    cursor: CursorExtractor<Uuid, CreatedAt, ()>,
 ) -> Result<Json<GetAllUserNotificationsResponse>, (StatusCode, Json<ErrorResponse<'static>>)> {
     tracing::info!("get_all_user_notifications");
 

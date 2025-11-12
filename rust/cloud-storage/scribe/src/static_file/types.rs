@@ -1,7 +1,7 @@
 use anyhow::Error;
 use base64::{Engine as _, engine::general_purpose};
 use bytes::Bytes;
-use model::document::ContentType;
+use model::document::{ContentType, ContentTypeExt};
 use models_sfs::FileMetadata;
 
 #[derive(Debug, Clone)]

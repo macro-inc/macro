@@ -287,7 +287,7 @@ impl<'c> Chat<'c> {
         request: I,
     ) -> ChatCompletionResponseStream
     where
-        I: Serialize,
+        I: Serialize + std::fmt::Debug,
     {
         map_stream(self.inner.post_stream("/v1/messages", request).await)
     }

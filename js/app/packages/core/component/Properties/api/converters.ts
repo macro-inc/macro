@@ -110,12 +110,18 @@ export function toApiFormat(
       };
 
     case 'LINK':
-      if (apiValues.value === null) {
+      if (!apiValues.values || apiValues.values.length === 0) {
         return null;
       }
+      if (isMultiSelect) {
+        return {
+          type: 'multi_link',
+          urls: apiValues.values,
+        };
+      }
       return {
-        type: 'string',
-        value: apiValues.value,
+        type: 'link',
+        url: apiValues.values[0],
       };
 
     default:
@@ -290,11 +296,12 @@ export function fromApiFormat(
       if (
         propertyValue &&
         'type' in propertyValue &&
-        propertyValue.type === 'String' &&
+        propertyValue.type === 'Link' &&
         'value' in propertyValue
       ) {
         const linkVal = propertyValue.value;
-        if (linkVal && typeof linkVal === 'string') {
+        // Link values are always returned as arrays from the API
+        if (Array.isArray(linkVal)) {
           return { ...baseProperty, valueType: 'LINK', value: linkVal };
         }
       }
