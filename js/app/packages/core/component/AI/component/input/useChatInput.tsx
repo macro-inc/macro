@@ -28,8 +28,7 @@ import { ActiveTabAttachment } from './ActiveTabAttachment';
 import { AttachmentList } from './Attachment';
 import { ChatAttachMenu } from './ChatAttachMenu';
 import { SendMessageButton, StopButton } from './SendMessageButton';
-import { type Source, SourceSelector } from './Sources';
-import { ToolsetSelector } from './ToolsetSelector';
+import { type Source, ToolsetSelector } from './ToolsetSelector';
 import {
   type UseChatMarkdown,
   useChatMarkdownArea,
@@ -225,7 +224,7 @@ function ChatInput(props: ChatInputInternalProps) {
             }
           />
         </div>
-        <div class="flex justify-between w-full px-2 pb-2">
+        <div class="flex justify-between w-full px-2">
           <Show when={showAttachMenu()}>
             <ChatAttachMenu
               anchorRef={attachMenuAnchorRef()!}
@@ -239,21 +238,14 @@ function ChatInput(props: ChatInputInternalProps) {
               uploadQueue={props.uploadQueue}
             />
           </Show>
-          <div class="flex items-center space-x-2">
+          <div class="flex items-center">
             <IconButton
               icon={showAttachMenu() ? XIcon : PlusIcon}
               theme="base"
+              size="sm"
               ref={setAttachMenuAnchorRef}
               onClick={() => setShowAttachMenu((prev) => !prev)}
             />
-
-            {/*
-              Removed (for now) - we're moving to gemini 2.5 to use GCP credits. This will probably come back soon
-              <ModelSelector
-              selectedModel={props.model()}
-              onSelect={(model) => props.setModel(model)}
-            />*/}
-            <ToolsetSelector toolset={toolsetSignal} />
             <Show when={props.showActiveTabs}>
               <ActiveTabAttachment
                 onAddAttachment={(attachment) => {
@@ -270,9 +262,10 @@ function ChatInput(props: ChatInputInternalProps) {
                 attachAllOnMount={!props.chatId()}
               />
             </Show>
-            <Show when={toolsetSignal[0]().type === 'all'}>
-              <SourceSelector sources={[source, setSource]} />
-            </Show>
+            <ToolsetSelector
+              toolset={toolsetSignal}
+              sources={[source, setSource]}
+            />
           </div>
           <Switch>
             <Match when={props.uploadQueue.uploading().length !== 0}>
