@@ -9,12 +9,10 @@ use crate::api::{
         utils::{self},
     },
 };
-use model::document::response::{
-    CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
-};
+use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
 use model::{
     document::FileType,
-    response::{GenericErrorResponse, GenericResponse, TypedSuccessResponse},
+    response::{GenericErrorResponse, GenericResponse},
     user::UserContext,
 };
 
@@ -76,10 +74,10 @@ pub(in crate::api) async fn create_document_handler(
         &req.sha,
         &document_name,
         &user_context.user_id,
-        user_context.organization_id,
         file_type,
         req.job_id.as_deref(),
         req.project_id.as_deref(),
+        req.created_at.as_ref(),
     )
     .await;
 
