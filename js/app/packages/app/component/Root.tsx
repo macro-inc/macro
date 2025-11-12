@@ -44,8 +44,12 @@ import {
   Show,
   Suspense,
 } from 'solid-js';
-import { currentThemeId, darkModeTheme, lightModeTheme, systemMode, themeShouldMatchSystem } from '../../block-theme/signals/themeSignals';
-import { applyTheme, ensureMinimalThemeContrast, systemThemeEffect } from '../../block-theme/utils/themeUtils';
+import { currentThemeId } from '../../block-theme/signals/themeSignals';
+import {
+  applyTheme,
+  ensureMinimalThemeContrast,
+  systemThemeEffect,
+} from '../../block-theme/utils/themeUtils';
 import { useNotificationState } from '../../notification-provider/src/NotificationProvider';
 import { TauriRouteListener } from '../../tauri/src/TauriProvider';
 import { updateCookie } from '../util/updateCookie';

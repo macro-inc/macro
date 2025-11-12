@@ -19,10 +19,10 @@ import {
   hotkeysAwaitingKeyUp,
   hotkeyTokenMap,
   pressedKeys,
+  setActiveScope,
   setExecutedTokens,
   setHotkeyTokenMap,
   setPressedKeys,
-  setActiveScope,
 } from './state';
 import type { HotkeyToken } from './tokens';
 import {
