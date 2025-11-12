@@ -298,8 +298,6 @@ const Block: Component = () => {
   createRenderEffect(() => {
     const previousView = untrack(selectedView);
     setSelectedView(projectId);
-    // NOTE: we don't use setSelectedView so that we can preserve the view config
-    // instead we pass the view id directly to the UnifiedListView component
 
     setViewDataStore(projectId, {
       id: projectId,
