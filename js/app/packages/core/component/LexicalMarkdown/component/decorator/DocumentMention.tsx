@@ -349,6 +349,11 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
               }
             }
           }}
+          onMouseDown={(e) => {
+            // Prevent focus change on mousedown to avoid split activation flash
+            // The click handler will properly handle navigation
+            e.preventDefault();
+          }}
           on:click={(e) => {
             e.stopPropagation();
             if (matches(item(), (i) => !i.loading && i.access === 'access')) {
