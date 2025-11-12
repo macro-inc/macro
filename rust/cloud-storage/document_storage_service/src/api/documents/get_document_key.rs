@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::model::response::documents::get::{GetDocumentKeyResponse, GetDocumentKeyResponseData};
 use axum::extract::State;
 use axum::{Extension, extract::Path, http::StatusCode, response::IntoResponse};
@@ -43,7 +45,7 @@ pub async fn get_document_key_handler(
     }): Path<Params>,
 ) -> impl IntoResponse {
     let file_type: FileType = if let Some(file_type) = &document_context.file_type {
-        match file_type.as_str().try_into() {
+        match FileType::from_str(file_type.as_str()) {
             Ok(file_type) => file_type,
             Err(e) => {
                 tracing::error!(error=?e, "invalid file type");
