@@ -265,6 +265,11 @@ export function EntityWithEverything<
         'bg-hover': props.highlighted,
         bracket: props.selected,
       }}
+      onMouseDown={(e) => {
+        // Prevent focus change on mousedown to avoid split activation flash
+        // The click handler will properly handle navigation
+        e.preventDefault();
+      }}
       onMouseOver={(e) => {
         if (!didCursorMove(e)) {
           return;
