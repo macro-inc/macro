@@ -1,3 +1,4 @@
+import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 import {
   type FileOperation,
   SplitFileMenu,
@@ -37,7 +38,6 @@ import { URL_PARAMS } from '../constants';
 import { useToolManager } from '../signal/toolManager';
 import { currentSavedFile } from '../store/canvasData';
 import { useRenderState } from '../store/RenderState';
-import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 
 const { track, TrackingEvents } = withAnalytics();
 
