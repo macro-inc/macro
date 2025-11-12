@@ -36,7 +36,7 @@ export function useInlineEditor(
     const val = property.value;
     if (val === undefined) return '';
 
-    // This hook only works with string and number properties
+    // This hook works with string and number properties
     // For these types, val is a single value, not an array
     return formatPropertyValue(property, val as string | number);
   };
