@@ -6,6 +6,6 @@
  */
 
 /**
- * The opensearch matches on the email
+ * The highlight match on the name field
  */
-export type SimpleEmailSearchResponseBaseItemContent = string[] | null;
+export type SearchHighlightName = string | null;

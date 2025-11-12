@@ -4,16 +4,17 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SearchHighlight } from './searchHighlight';
 import type { ChannelSearchResultThreadId } from './channelSearchResultThreadId';
 
 /**
  * A channel message match for a given channel id
  */
 export interface ChannelSearchResult {
-  /** The array of content matches for the channel message */
-  content: string[];
   /** When the channel message was created */
   created_at: number;
+  /** The highlights for the channel message */
+  highlight: SearchHighlight;
   /** The channel message id */
   message_id: string;
   /** The sender id */

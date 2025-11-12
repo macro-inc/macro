@@ -12,7 +12,7 @@ function transformEmailResultsToItems(
     if (email.email_message_search_results.length === 0) continue;
 
     for (const result of email.email_message_search_results) {
-      const contents = Array.isArray(result.content) ? result.content : [''];
+      const contents = result.highlight.content ?? [];
       contents.forEach((content, index) => {
         items.push({
           type: 'email',
