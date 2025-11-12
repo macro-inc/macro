@@ -46,7 +46,6 @@ import {
 export type UnifiedListContext = {
   viewsDataStore: Store<ViewDataMap>;
   setViewDataStore: SetStoreFunction<ViewDataMap>;
-  setSelectedViewStore: SetStoreFunction<ViewData>;
   selectedView: Accessor<ViewId>;
   setSelectedView: Setter<ViewId>;
   virtualizerHandleSignal: Signal<VirtualizerHandle | undefined>;
@@ -88,14 +87,10 @@ export function createSoupContext(): UnifiedListContext {
     // @ts-ignore narrowing set store function is annoying due to function overloading
     setViewDataStore_(...args);
   };
-  const setSelectedViewStore = (...args: any[]) => {
-    (setViewDataStore as any)(selectedView(), ...args);
-  };
 
   return {
     viewsDataStore,
     setViewDataStore,
-    setSelectedViewStore,
     selectedView,
     setSelectedView,
     virtualizerHandleSignal,
@@ -175,7 +170,7 @@ export function createNavigationEntityListShortcut({
 }) {
   const {
     viewsDataStore: viewsData,
-    setSelectedViewStore,
+    setViewDataStore,
     entityListRefSignal: [entityListRef],
     virtualizerHandleSignal: [virtualizerHandle],
     selectedView,
@@ -261,7 +256,7 @@ export function createNavigationEntityListShortcut({
     let index = getHighlightedEntity()?.index ?? -1;
     setJumpedToEnd(false);
 
-    setSelectedViewStore('hasUserInteractedEntity', true);
+    setViewDataStore(selectedView(), 'hasUserInteractedEntity', true);
 
     const entityEl = entityListRef()?.querySelector('[data-entity]');
     const scrollParent = getScrollParent(entityEl);
@@ -314,8 +309,8 @@ export function createNavigationEntityListShortcut({
       const selectedEntity = entities()?.at(index);
       if (selectedEntity) {
         batch(() => {
-          setSelectedViewStore('highlightedId', selectedEntity.id);
-          setSelectedViewStore('selectedEntity', selectedEntity);
+          setViewDataStore(selectedView(), 'highlightedId', selectedEntity.id);
+          setViewDataStore(selectedView(), 'selectedEntity', selectedEntity);
         });
       }
 
@@ -369,7 +364,11 @@ export function createNavigationEntityListShortcut({
 
     const onListScroll = () => {
       if (listScrollEl) {
-        setSelectedViewStore('scrollOffset', listScrollEl.scrollTop);
+        setViewDataStore(
+          selectedView(),
+          'scrollOffset',
+          listScrollEl.scrollTop
+        );
       }
     };
 
@@ -504,7 +503,7 @@ export function createNavigationEntityListShortcut({
     keyDownHandler: () => {
       if (!entityListRef()) return false;
 
-      setSelectedViewStore('display', 'preview', (prev) => !prev);
+      setViewDataStore(selectedView(), 'display', 'preview', (prev) => !prev);
       return true;
     },
     hide: true,
