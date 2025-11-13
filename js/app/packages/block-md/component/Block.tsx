@@ -43,7 +43,10 @@ export default function BlockMarkdown() {
 
   return (
     <DocumentBlockContainer>
-      <div class="w-full h-full select-none overscroll-none overflow-hidden flex flex-col relative">
+      <div
+        class="w-full h-full select-none overscroll-none overflow-hidden flex flex-col relative bracket-never"
+        tabIndex={-1}
+      >
         <div class="relative">
           <Show when={!isInstructionsMd()} fallback={<InstructionsTopBar />}>
             <TopBar />
