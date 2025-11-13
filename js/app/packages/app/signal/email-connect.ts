@@ -1,18 +1,30 @@
-import { updateUserAuth } from '@core/auth';
+import { updateUserAuth, useIsAuthenticated } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isErr, ok } from '@core/util/maybeResult';
+import { logger } from '@observability';
 import { emailClient } from '@service-email/client';
-import { updateUserInfo } from '@service-gql/client';
-import { raceTimeout } from '@solid-primitives/promise';
+import { updateUserInfo, useLicenseStatus } from '@service-gql/client';
+import { stripeServiceClient } from '@service-stripe/client';
+import { raceTimeout, until } from '@solid-primitives/promise';
 import { createSingletonRoot } from '@solid-primitives/rootless';
-import { createMemo, createResource, createSignal } from 'solid-js';
+import { useSearchParams } from '@solidjs/router';
+import {
+  type Accessor,
+  createMemo,
+  createResource,
+  createSignal,
+} from 'solid-js';
 import { broadcastChannels, setBroadcastChannels } from './broadcastChannels';
 
 export const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
   number | undefined
 >();
 
+/**
+ * Resource that tracks any email links that the user has.
+ */
 const emailLinksResource = createSingletonRoot(() => {
   const fetchLinks = async () => {
     return await emailClient.getLinks();
@@ -22,7 +34,9 @@ const emailLinksResource = createSingletonRoot(() => {
   });
 });
 
-// Returns true if user has at least one email link
+/**
+ * Returns true if user has at least one email link
+ */
 export const useEmailLinksStatus = createSingletonRoot(() => {
   const [resource] = emailLinksResource();
   return createMemo(() => {
@@ -32,6 +46,12 @@ export const useEmailLinksStatus = createSingletonRoot(() => {
   });
 });
 
+/**
+ * Refetches the email links resource.
+ *
+ * @param force - Forces a refetch even if the resource is already loading.
+ * @returns A promise that resolves when the resource has been refetched.
+ */
 export async function refetchEmailLinks(force = false) {
   const [resource, { refetch }] = emailLinksResource();
   if (force) return await refetch();
@@ -54,6 +74,13 @@ type EmailSyncState =
   | { type: 'syncing'; startTime: number; durationMs: number }
   | { type: 'finished' };
 
+/**
+ * Opens an oauth popup window for the given IDP.
+ *
+ * @param idpName - The name of the IDP to open.
+ * @param returnUrl - The URL to return to after authentication.
+ * @returns The window object of the opened popup, or null if it failed to open.
+ */
 function openAuthPopup(idpName: string, returnUrl: string): Window | null {
   const width = 600;
   const height = 600;
@@ -69,6 +96,11 @@ function openAuthPopup(idpName: string, returnUrl: string): Window | null {
   );
 }
 
+/**
+ * Gets or creates a broadcast channel for the authentication process.
+ *
+ * @returns The broadcast channel.
+ */
 function getOrCreateAuthChannel(): BroadcastChannel {
   let channel = broadcastChannels().get(AUTH_CHANNEL);
   if (!channel) {
@@ -88,8 +120,13 @@ function waitForAuthSuccess(channel: BroadcastChannel): Promise<void> {
   });
 }
 
-const AUTHENTICATION_TIMEOUT = 30_000;
+const AUTHENTICATION_TIMEOUT = 60_000;
 
+/**
+ * Signs up the user with email permissions.
+ *
+ * @returns A promise that resolves when the user has been signed up.
+ */
 async function signUpWithEmailPermissions(): Promise<
   void | 'authentication_timeout'
 > {
@@ -100,18 +137,27 @@ async function signUpWithEmailPermissions(): Promise<
 
   try {
     await raceTimeout(
-      async () => await waitForAuthSuccess(channel),
+      waitForAuthSuccess(channel),
       AUTHENTICATION_TIMEOUT,
       true
     );
   } catch (error) {
-    console.error(error);
+    logger.error(
+      '[email] failed to authenticate with google gmail after sign up',
+      { error }
+    );
     return 'authentication_timeout';
   }
 
   return;
 }
 
+/**
+ * Checks if the user has email links.
+ *
+ * @param links - The links to check.
+ * @returns True if the user has at least one email link, false otherwise.
+ */
 function hasEmailLinks(
   links: Awaited<ReturnType<typeof emailClient.getLinks>>[1]
 ) {
@@ -124,22 +170,46 @@ async function ensureSuccessfulLink(): Promise<
   const linksResponse = await emailClient.getLinks();
 
   if (isErr(linksResponse)) {
+    logger.error('[email] failed to get email links after sign up');
     return 'failed_to_get_links';
   }
 
   const [, links] = linksResponse;
 
   if (!hasEmailLinks(links)) {
+    logger.error('[email] expected at least one email link after sign up');
     return 'no_links';
   }
   return 'success';
 }
 
-export function useSignUpAndConnectEmail() {
+/**
+ * Hook that handles the email authentication process.
+ *
+ * @returns A tuple containing an accessor for the authentication state and a function to sign up and connect the email.
+ */
+export function useSignUpAndConnectEmail(): [
+  Accessor<AuthenticationState>,
+  () => Promise<void>,
+] {
+  const isAlreadyAuthenticated = useIsAuthenticated();
+
+  const DEFAULT_AUTHENTICATION_STATE: AuthenticationState = {
+    type: isAlreadyAuthenticated() ? 'authenticated' : 'not_authenticated',
+  };
+
   const [authenticationState, setAuthenticationState] =
-    createSignal<AuthenticationState>({ type: 'not_authenticated' });
+    createSignal<AuthenticationState>(DEFAULT_AUTHENTICATION_STATE);
 
   async function connect(): Promise<void> {
+    if (
+      authenticationState().type === 'authenticating' ||
+      authenticationState().type === 'authenticated'
+    ) {
+      console.warn('user is already authenticated');
+      return;
+    }
+
     const authResult = await signUpWithEmailPermissions();
 
     if (authResult === 'authentication_timeout') {
@@ -159,6 +229,8 @@ export function useSignUpAndConnectEmail() {
     await updateUserAuth();
     await updateUserInfo();
     await refetchEmailLinks();
+
+    setAuthenticationState({ type: 'authenticated' });
   }
 
   return [authenticationState, connect];
@@ -167,16 +239,23 @@ export function useSignUpAndConnectEmail() {
 const EMAIL_POLLING_INTERVAL = 1000;
 const EMAIL_POLLING_DURATION = 20_000;
 
-type PollingInterface = {
+type PollingConfig = {
   start: () => void;
   stop: () => void;
+  /** How long we should poll for new emails */
   pollingIntervalMs: number;
 };
 
+/**
+ * Initializes the email client and starts polling for syncing emails
+ *
+ * @param pollingInterface - The polling configuration.
+ * @returns A promise that resolves when the email client has been initialized and polling has started.
+ */
 async function initEmailAndStartPolling({
   pollingInterface,
 }: {
-  pollingInterface: PollingInterface;
+  pollingInterface: PollingConfig;
 }): Promise<void | 'already_initialized' | 'failed_to_initialize'> {
   const initResult = await emailClient.init();
 
@@ -186,6 +265,9 @@ async function initEmailAndStartPolling({
     if (badRequestError) {
       return 'already_initialized';
     } else {
+      logger.error('[email] failed to initialize email client after sign up', {
+        err: error,
+      });
       toast.failure('Failed to connect to Gmail account');
       return 'failed_to_initialize';
     }
@@ -198,12 +280,17 @@ async function initEmailAndStartPolling({
   }, pollingInterface.pollingIntervalMs);
 }
 
+/**
+ * Hook that initializes the email client and starts polling for syncing emails
+ *
+ * @returns A tuple containing the email sync state and a function to initialize and start polling.
+ */
 export function useEmailInitializeAndPoll() {
   const [emailSyncState, setEmailSyncState] = createSignal<EmailSyncState>({
     type: 'idle',
   });
 
-  const pollingInterface: PollingInterface = {
+  const pollingInterface: PollingConfig = {
     start: () => {
       setEmailRefetchInterval(EMAIL_POLLING_INTERVAL);
       setEmailSyncState({
@@ -219,4 +306,140 @@ export function useEmailInitializeAndPoll() {
   };
 
   return [emailSyncState, () => initEmailAndStartPolling({ pollingInterface })];
+}
+
+type SubscriptionTimeoutError = 'subscription_timeout';
+const SUBSCRIPTION_SUCCESS_TIMEOUT = 60_000;
+
+/**
+ * Waits for the license to be updated.
+ *
+ * @returns A promise that resolves when the license is updated.
+ */
+async function waitForLicenseUpdate(): Promise<void | SubscriptionTimeoutError> {
+  try {
+    await raceTimeout(
+      new Promise((resolve) => {
+        licenseChannel.subscribe(() => {
+          resolve(undefined);
+        });
+      }),
+      SUBSCRIPTION_SUCCESS_TIMEOUT,
+      true
+    );
+  } catch (error) {
+    logger.error(
+      '[email] failed to authenticate with google gmail after sign up',
+      { error }
+    );
+    return 'subscription_timeout';
+  }
+}
+
+/**
+ * Waits for the subscription to be successful.
+ *
+ * @returns A promise that resolves when the subscription is successful.
+ */
+async function waitForSubscriptionSuccess(): Promise<void | SubscriptionTimeoutError> {
+  const [searchParams] = useSearchParams();
+  try {
+    await raceTimeout(
+      until(() => searchParams.subscriptionSuccess === 'true'),
+      SUBSCRIPTION_SUCCESS_TIMEOUT,
+      true
+    );
+  } catch (error) {
+    logger.error(
+      '[email] failed to authenticate with google gmail after sign up',
+      { error }
+    );
+    return 'subscription_timeout';
+  }
+}
+
+/**
+ * Redirects to the checkout session.
+ *
+ * @returns A promise that resolves when the checkout session is created.
+ */
+async function redirectToCheckout(): Promise<
+  void | 'failed_to_create_checkout_session'
+> {
+  let url: string;
+  try {
+    url = await stripeServiceClient.createCheckoutSession('New subscription');
+  } catch (error) {
+    logger.error(
+      '[email] failed to authenticate with google gmail after sign up',
+      { error }
+    );
+    return 'failed_to_create_checkout_session';
+  }
+
+  if (!url) {
+    return 'failed_to_create_checkout_session';
+  }
+
+  window.location.href = url;
+}
+
+type CheckoutState =
+  | { type: 'idle' }
+  | { type: 'loading' }
+  | { type: 'failed' }
+  | { type: 'finished' };
+
+/**
+ * Hook that handles the checkout process.
+ *
+ * @returns A tuple containing the checkout state and a function to handle the checkout process.
+ */
+export function useCheckout() {
+  const previousLicenseStatus = useLicenseStatus();
+
+  const DEFAULT_CHECKOUT_STATE: CheckoutState = previousLicenseStatus()
+    ? { type: 'finished' }
+    : { type: 'idle' };
+
+  const [checkoutState, setCheckoutState] = createSignal<CheckoutState>(
+    DEFAULT_CHECKOUT_STATE
+  );
+
+  const checkout = async () => {
+    if (checkoutState().type !== 'idle') return;
+    setCheckoutState({ type: 'loading' });
+    const res = await redirectToCheckout();
+
+    if (res === 'failed_to_create_checkout_session') {
+      toast.failure('Failed to create checkout session');
+      setCheckoutState({ type: 'failed' });
+      return;
+    }
+
+    const result = await Promise.race([
+      waitForLicenseUpdate(),
+      waitForSubscriptionSuccess(),
+    ]);
+
+    if (result === 'subscription_timeout') {
+      toast.failure('Subscription timed out. Please email contact@macro.com');
+      setCheckoutState({ type: 'failed' });
+      return;
+    }
+
+    const userInfo = await updateUserInfo();
+
+    if (!userInfo || isErr(userInfo) || !userInfo[1]) {
+      toast.failure(
+        'Failed to create subscription. Please email contact@macro.com'
+      );
+      setCheckoutState({ type: 'failed' });
+      return;
+    }
+
+    setCheckoutState({ type: 'finished' });
+  };
+
+  return [checkoutState, checkout];
 }
