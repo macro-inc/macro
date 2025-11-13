@@ -716,15 +716,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const emailActive = useEmailLinksStatus();
 
   const disableEmailQuery = createMemo(() => {
-    // TODO: clean up
-    if (isSearchActive()) return true;
     // NOTE: at the moment emails are not supported in project blocks
     // so it doesn't make sense to do an expensive email query
     if (projectFilter()) return true;
+    if (isSearchActive()) return true;
     if (!emailActive()) return true;
     const typeFilter = entityTypeFilter();
     if (typeFilter.length > 0 && !typeFilter.includes('email')) return true;
-    return !disableSearchService();
+    return false;
   });
 
   const disableDssInfiniteQuery = createMemo(() => {
