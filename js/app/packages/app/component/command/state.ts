@@ -14,7 +14,7 @@ export const [lastCommandTime, setLastCommandTime] = createSignal(Date.now());
 export const [rawQuery, immediatelySetRawQuery] = createSignal('');
 export const setRawQuery = debounce((term: string) => {
   immediatelySetRawQuery(term);
-}, 30);
+}, 150);
 export const resetQuery = () => setRawQuery('');
 
 // If we aren't in default mode,
