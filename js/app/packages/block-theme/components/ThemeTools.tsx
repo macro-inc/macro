@@ -63,7 +63,7 @@ export function ThemeTools() {
         'grid-template-columns': `min-content 1fr repeat(${columnCount()}, min-content)`,
         padding: '0 12px 0 20px' /* (41 - 32) / 2 */,
         gap: '4.5px' /* (41 - 32) / 2 */,
-        'font-family': '"Forma DJR Mono"',
+        'font-family': 'var( --font-mono)',
         border: '1px solid var(--b4)',
         'scrollbar-width': 'none',
         'align-items': 'center',

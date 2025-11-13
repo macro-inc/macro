@@ -305,7 +305,7 @@ export function ThemeEditorBasic() {
       `}</style>
 
     <div style="
-      font-family: 'Forma DJR Mono';
+      font-family: var(--font-mono);
       border: 1px solid var(--b4);
       box-sizing: border-box;
       height: min-content;
