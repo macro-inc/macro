@@ -15,7 +15,9 @@ export default function ChatBlock() {
 
   return (
     <DocumentBlockContainer title={title()}>
-      <Show when={chatBlockData()}>{(data) => <Chat data={data()} />}</Show>
+      <div class="size-full bracket-never" tabIndex={-1}>
+        <Show when={chatBlockData()}>{(data) => <Chat data={data()} />}</Show>
+      </div>
     </DocumentBlockContainer>
   );
 }
