@@ -104,6 +104,17 @@ import { createStore, type SetStoreFunction, unwrap } from 'solid-js/store';
 import { EntityWithEverything } from '../../macro-entity/src/components/EntityWithEverything';
 import { createCopyDssEntityMutation } from '../../macro-entity/src/queries/dss';
 import type { FetchPaginatedEmailsParams } from '../../macro-entity/src/queries/email';
+import {
+  resetCommandCategoryIndex,
+  searchCategories,
+  setCommandCategoryIndex,
+  setKonsoleContextInformation,
+} from './command/KonsoleItem';
+import {
+  resetKonsoleMode,
+  setKonsoleMode,
+  toggleKonsoleVisibility,
+} from './command/state';
 import { EntityActionsMenuItems } from './EntityActionsMenuItems';
 import { EntityModal } from './EntityModal/EntityModal';
 import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
@@ -1438,6 +1449,40 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                 []
               )
             }
+            onAction={() => {
+              const selectedEntities =
+                viewsData[selectedView()].selectedEntities;
+              const hasSelection = selectedEntities.length > 0;
+              if (hasSelection) {
+                setKonsoleMode('SELECTION_MODIFICATION');
+                const selectionIndex =
+                  searchCategories.getCateoryIndex('Selection');
+
+                if (selectionIndex === undefined) return false;
+
+                setCommandCategoryIndex(selectionIndex);
+
+                searchCategories.showCategory('Selection');
+
+                setKonsoleContextInformation({
+                  selectedEntities: selectedEntities.slice(),
+                  clearSelection: () => {
+                    unifiedListContext.setViewDataStore(
+                      selectedView(),
+                      'selectedEntities',
+                      []
+                    );
+                  },
+                });
+
+                toggleKonsoleVisibility();
+                return true;
+              }
+              searchCategories.hideCategory('Selection');
+              resetCommandCategoryIndex();
+              resetKonsoleMode();
+              return false;
+            }}
           />
         </Show>{' '}
       </ContextMenu>

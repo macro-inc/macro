@@ -254,7 +254,6 @@ export function EntityWithEverything<
 
   const draggable = createDraggable(props.entity.id, props.entity);
   false && draggable;
-
   const droppable = createDroppable(props.entity.id, props.entity);
   false && droppable;
 
