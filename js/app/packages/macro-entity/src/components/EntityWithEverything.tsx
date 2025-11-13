@@ -29,14 +29,16 @@ import type { EntityClickHandler } from './Entity';
 
 function UnreadIndicator(props: { active?: boolean }) {
   return (
-    <div class="flex min-w-5 items-center justify-center">
+    <div class="flex size-4 items-center justify-center">
       <svg
         xmlns="http://www.w3.org/2000/svg"
         classList={{
-          'flex size-[10px] fill-accent': true,
+          'fill-accent': true,
           'opacity-0': !props.active,
         }}
         viewBox="0 0 8 8"
+        width="75%"
+        height="75%"
         fill="none"
       >
         <path d="M3.39622 8C3.29136 8 3.23894 7.94953 3.23894 7.84858L3.33068 5.13565L0.932129 6.58675C0.836012 6.63722 0.76174 6.6204 0.709312 6.53628L0.0801831 5.56467C0.0190178 5.47213 0.0364936 5.40063 0.132611 5.35016L2.58359 4.07571L0.09329 2.88959C-0.00282696 2.83912 -0.0246717 2.77182 0.0277557 2.6877L0.59135 1.58991C0.643778 1.49737 0.71805 1.47634 0.814167 1.52681L3.31758 2.95268L3.21272 0.151421C3.21272 0.0504735 3.26515 0 3.37 0H4.57583C4.68069 0 4.73312 0.0504735 4.73312 0.151421L4.64137 2.94006L7.14478 1.40063C7.2409 1.34175 7.3108 1.35857 7.35449 1.4511L7.97051 2.46057C8.02294 2.5531 8.00546 2.6204 7.91808 2.66246L5.40157 4L7.82633 5.18612C7.91371 5.23659 7.93556 5.30389 7.89187 5.38801L7.36759 6.4858C7.32391 6.58675 7.25837 6.60778 7.17099 6.54889L4.6938 5.13565L4.78554 7.84858C4.79428 7.94953 4.74185 8 4.62826 8H3.39622Z" />
@@ -79,6 +81,8 @@ interface EntityProps<T extends WithNotification<EntityData>>
   highlighted?: boolean;
   selected?: boolean;
   ref?: Ref<HTMLDivElement>;
+  onChecked?: (checked: boolean) => void;
+  checked?: boolean;
 }
 
 export function EntityWithEverything<
@@ -264,10 +268,13 @@ export function EntityWithEverything<
     <div
       use:draggable
       use:droppable
-      class={`relative group py-[7px] px-2 ${ITEM_WRAPPER_CLASS()}`}
+      data-checked={props.checked}
+      class="everything-entity relative group/entity"
       classList={{
-        'bg-hover': props.highlighted,
-        bracket: props.selected,
+        'bg-hover/20': props.highlighted && !props.checked,
+        'bg-accent/5': props.checked,
+        'bracket outline outline-accent/20 outline-offset-[-1px]':
+          props.selected,
       }}
       onMouseOver={(e) => {
         if (!didCursorMove(e)) {
@@ -298,12 +305,7 @@ export function EntityWithEverything<
       <div
         data-entity
         data-entity-id={props.entity.id}
-        // class="@md:flex grid w-full min-w-0 flex-1 grid-cols-2 @md:flex-row @md:items-center @md:gap-4"
-        class="min-h-[40px] grid w-full min-w-0 flex-1 gap-2 grid-rows-1 @md:items-center suppress-css-bracket"
-        classList={{
-          'grid-cols-[auto_1fr_auto]': props.showLeftColumnIndicator,
-          'grid-cols-[1fr_auto]': !props.showLeftColumnIndicator,
-        }}
+        class="w-full min-w-0 grid flex-1 grid-rows-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto]"
         {...navHandlers()}
         // Action List is also rendered based on focus, but when focused via Shift+Tab, parent is focused due to Action List dom not present. Here we check if current browser task has captured Shift+Tab focus on Action List
         onFocusIn={(e) => {
@@ -329,13 +331,41 @@ export function EntityWithEverything<
           _tabbableEl = el;
         })}
       >
+        <div
+          class="col-1 size-full relative group/button-zone flex items-center justify-center"
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onChecked?.(!props.checked);
+          }}
+        >
+          <button
+            type="button"
+            class="size-4 p-0.5 flex items-center justify-center rounded-xs
+              group-hover/entity:border-edge-muted group-hover/entity:border
+              group-hover/button-zone:ring group-hover/button-zone:ring-accent group-hover/button-zone:ring-offset-1"
+            classList={{
+              'bg-accent': props.checked,
+              'border border-edge-muted': props.highlighted,
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              props.onChecked?.(!props.checked);
+            }}
+          >
+            <Show when={props.checked}>
+              <CheckIcon class="w-full h-full text-panel" />
+            </Show>
+          </button>
+          <Show when={props.showLeftColumnIndicator && !props.checked}>
+            <div class="absolute inset-0">
+              <UnreadIndicator active={props.unreadIndicatorActive} />
+            </div>
+          </Show>
+        </div>
         {/* Left Column Indicator(s) */}
-        <Show when={props.showLeftColumnIndicator}>
-          <UnreadIndicator active={props.unreadIndicatorActive} />
-        </Show>
         {/* Icon and name - top left on mobile, first item on desktop */}
         <div
-          class="min-h-[40px] min-w-[50px] flex flex-row items-center gap-2"
+          class="min-h-10 min-w-[50px] flex flex-row items-center gap-2"
           classList={{
             grow: props.contentPlacement === 'bottom-row',
             'opacity-70': props.fadeIfRead && !props.unreadIndicatorActive,
@@ -353,8 +383,8 @@ export function EntityWithEverything<
         <div
           class="relative row-1 ml-2 @md:ml-4 self-center min-w-0"
           classList={{
-            'col-3': props.showLeftColumnIndicator,
-            'col-2': !props.showLeftColumnIndicator,
+            'col-4': props.showLeftColumnIndicator,
+            'col-3': !props.showLeftColumnIndicator,
             'opacity-50': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
