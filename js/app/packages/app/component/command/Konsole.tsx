@@ -79,7 +79,7 @@ export function KommandMenu() {
   const CommandWindow = (props: { children?: JSXElement }) => {
     return (
       <div
-        class="z-50 fixed inset-0 flex flex-row justify-center items-center bg-modal-overlay"
+        class="z-50 fixed inset-0 flex flex-row justify-center items-center bg-modal-overlay-konsole"
         ref={setCommandKRef}
       >
         {props.children}
