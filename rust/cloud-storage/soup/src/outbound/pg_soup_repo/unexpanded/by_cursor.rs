@@ -86,9 +86,7 @@ pub async fn unexpanded_generic_cursor_soup(
                 ORDER BY i."updatedAt" DESC 
                 LIMIT 1
             ) di ON true
-            LEFT JOIN "DocumentEmail" de ON de.document_id = d.id
             WHERE d."deletedAt" IS NULL
-                AND de.document_id IS NULL -- don't include email attachments in soup for now
 
             UNION ALL
         
@@ -302,9 +300,7 @@ pub async fn no_frecency_unexpanded_generic_cursor_soup(
                 ORDER BY i."updatedAt" DESC 
                 LIMIT 1
             ) di ON true
-            LEFT JOIN "DocumentEmail" de ON de.document_id = d.id
             WHERE d."deletedAt" IS NULL
-                AND de.document_id IS NULL -- don't include email attachments in soup for now
 
             UNION ALL
         
