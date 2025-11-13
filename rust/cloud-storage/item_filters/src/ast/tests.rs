@@ -33,7 +33,7 @@ fn it_expands_filters() {
         ..Default::default()
     };
 
-    let ast = EntityFilterAst::new_from_filters(f)
+    let ast = Arc::into_inner(EntityFilterAst::new_from_filters(f).unwrap().inner)
         .unwrap()
         .document_filter
         .unwrap();
