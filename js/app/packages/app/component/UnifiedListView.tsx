@@ -32,6 +32,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
+import { fuzzyNameMatch } from '@core/util/fuzzyName';
 import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
 import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
 import XIcon from '@icon/regular/x.svg?component-solid';
@@ -87,7 +88,6 @@ import type {
 } from '@service-search/generated/models';
 import type { GetItemsSoupParams } from '@service-storage/generated/schemas';
 import { debounce } from '@solid-primitives/scheduled';
-import fuzzy from 'fuzzy';
 import stringify from 'json-stable-stringify';
 import {
   type Accessor,
@@ -451,47 +451,17 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           if (!searchText() || searchText().length === 0) return items;
 
           const query = searchText();
-          const queryLower = query.toLowerCase();
 
           return items
             .map((item) => {
-              const matchResult = fuzzy.match(query, item.name, {
-                pre: '<macro_em>',
-                post: '</macro_em>',
-              });
+              const matchResult = fuzzyNameMatch(query, item.name);
 
               if (!matchResult) return null;
-
-              // Merge adjacent highlight tags
-              const mergedHighlight = matchResult.rendered.replace(
-                /<\/macro_em><macro_em>/g,
-                ''
-              );
-
-              const nameLower = item.name.toLowerCase();
-
-              // Always include exact matches, starts-with, or substring matches
-              const isGoodMatch =
-                nameLower === queryLower ||
-                nameLower.startsWith(queryLower) ||
-                nameLower.includes(queryLower);
-
-              if (!isGoodMatch) {
-                // Count how many separate highlight segments there are
-                const highlightSegments = (
-                  mergedHighlight.match(/<macro_em>/g) || []
-                ).length;
-
-                // Reject if more than 50% of characters are individual segments (too scattered)
-                if (highlightSegments > query.length * 0.5) {
-                  return null;
-                }
-              }
 
               return {
                 ...item,
                 search: {
-                  nameHighlight: mergedHighlight,
+                  nameHighlight: matchResult.nameHighlight,
                   contentHighlights: null,
                   source: 'local',
                 },
