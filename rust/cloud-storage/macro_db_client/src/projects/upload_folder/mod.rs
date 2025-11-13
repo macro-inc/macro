@@ -119,7 +119,7 @@ async fn traverse_with_ids(
                         project_name: Some(project_name),
                         share_permission,
                         skip_history: true,
-                        email_message_id: None,
+                        email_attachment_id: None,
                         created_at: None,
                     },
                 )

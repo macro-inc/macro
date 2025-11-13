@@ -4,15 +4,15 @@ use uuid::Uuid;
 pub async fn create_document_email_record(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     document_id: &str,
-    email_message_id: Uuid,
+    email_attachment_id: Uuid,
 ) -> anyhow::Result<()> {
     sqlx::query!(
         r#"
-            INSERT INTO "document_email" (document_id, email_message_id)
+            INSERT INTO "document_email" (document_id, email_attachment_id)
             VALUES ($1, $2)
         "#,
         document_id,
-        email_message_id,
+        email_attachment_id,
     )
     .execute(&mut **transaction)
     .await

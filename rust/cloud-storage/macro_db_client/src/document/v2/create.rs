@@ -25,7 +25,7 @@ pub struct CreateDocumentArgs<'a> {
     pub share_permission: &'a SharePermissionV2,
     pub skip_history: bool,
     /// Optional value. If set, creates entry in document_email
-    pub email_message_id: Option<Uuid>,
+    pub email_attachment_id: Option<Uuid>,
     /// Optional value. defaults to now if not included
     pub created_at: Option<&'a chrono::DateTime<chrono::Utc>>,
 }
@@ -67,7 +67,7 @@ pub async fn create_document_txn(
         share_permission,
         skip_history,
         created_at: _, // overwritten below
-        email_message_id,
+        email_attachment_id,
     } = args;
 
     // default to now if created_at argument not included
@@ -184,11 +184,11 @@ pub async fn create_document_txn(
     )
     .await?;
 
-    if email_message_id.is_some() {
+    if email_attachment_id.is_some() {
         crate::document::document_email::create_document_email_record(
             transaction,
             &document_id,
-            email_message_id.unwrap(),
+            email_attachment_id.unwrap(),
         )
         .await?;
     }
@@ -318,7 +318,7 @@ mod tests {
                 project_name: None,
                 share_permission: &SharePermissionV2::default(),
                 skip_history: false,
-                email_message_id: None,
+                email_attachment_id: None,
                 created_at: Some(&ts),
             },
         )
@@ -344,7 +344,7 @@ mod tests {
                 project_name: None,
                 share_permission: &SharePermissionV2::default(),
                 skip_history: false,
-                email_message_id: None,
+                email_attachment_id: None,
                 created_at: None,
             },
         )
@@ -382,7 +382,7 @@ mod tests {
                 project_name: None,
                 share_permission: &SharePermissionV2::default(),
                 skip_history: false,
-                email_message_id: None,
+                email_attachment_id: None,
                 created_at: Some(&ts),
             },
         )
@@ -411,7 +411,7 @@ mod tests {
                 project_name: None,
                 share_permission: &SharePermissionV2::default(),
                 skip_history: false,
-                email_message_id: None,
+                email_attachment_id: None,
                 created_at: None,
             },
         )
@@ -441,7 +441,7 @@ mod tests {
                 project_name: None,
                 share_permission: &SharePermissionV2::default(),
                 skip_history: false,
-                email_message_id: None,
+                email_attachment_id: None,
                 created_at: None,
             },
         )
