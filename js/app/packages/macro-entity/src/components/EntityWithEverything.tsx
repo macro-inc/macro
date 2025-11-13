@@ -1,6 +1,7 @@
 import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
+import { set } from 'colorjs.io/fn';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
@@ -89,6 +90,7 @@ export function EntityWithEverything<
   T extends WithNotification<EntityData> = WithNotification<EntityData>,
 >(props: EntityProps<T>) {
   const [showActionList, setShowActionList] = createSignal(false);
+  const [entityHovered, setEntityHovered] = createSignal(false);
   const [actionButtonRef, setActionButtonRef] =
     createSignal<HTMLButtonElement | null>(null);
   const [showRestOfNotifications, setShowRestOfNotifications] =
@@ -280,12 +282,14 @@ export function EntityWithEverything<
         if (!didCursorMove(e)) {
           return;
         }
-
         setShowActionList(true);
-
         props.onMouseOver?.();
       }}
+      onMouseEnter={() => {
+        setEntityHovered(true);
+      }}
       onMouseLeave={() => {
+        setEntityHovered(false);
         setShowActionList(false);
       }}
       onFocusIn={() => {
@@ -305,7 +309,7 @@ export function EntityWithEverything<
       <div
         data-entity
         data-entity-id={props.entity.id}
-        class="w-full min-w-0 grid flex-1 grid-rows-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto]"
+        class="w-full min-w-0 grid flex-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto]"
         {...navHandlers()}
         // Action List is also rendered based on focus, but when focused via Shift+Tab, parent is focused due to Action List dom not present. Here we check if current browser task has captured Shift+Tab focus on Action List
         onFocusIn={(e) => {
@@ -331,41 +335,36 @@ export function EntityWithEverything<
           _tabbableEl = el;
         })}
       >
-        <div
-          class="col-1 size-full relative group/button-zone flex items-center justify-center"
+        <button
+          type="button"
+          class="col-1 size-full relative group/button flex items-center justify-center"
           onClick={(e) => {
             e.stopPropagation();
             props.onChecked?.(!props.checked);
           }}
         >
-          <button
-            type="button"
-            class="size-4 p-0.5 flex items-center justify-center rounded-xs
-              group-hover/entity:border-edge-muted group-hover/entity:border
-              group-hover/button-zone:ring group-hover/button-zone:ring-accent group-hover/button-zone:ring-offset-1"
+          <div
+            class="size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-accent group-hover/button:border"
             classList={{
-              'bg-accent': props.checked,
-              'border border-edge-muted': props.highlighted,
-            }}
-            onClick={(e) => {
-              e.stopPropagation();
-              props.onChecked?.(!props.checked);
+              'ring ring-edge-muted': props.selected || entityHovered(),
+              'bg-panel': !props.checked && (props.selected || entityHovered()),
+              'bg-accent border border-accent': props.checked,
             }}
           >
             <Show when={props.checked}>
               <CheckIcon class="w-full h-full text-panel" />
             </Show>
-          </button>
+          </div>
           <Show when={props.showLeftColumnIndicator && !props.checked}>
-            <div class="absolute inset-0">
+            <div class="absolute inset-0 flex items-center justify-center -z-1">
               <UnreadIndicator active={props.unreadIndicatorActive} />
             </div>
           </Show>
-        </div>
+        </button>
         {/* Left Column Indicator(s) */}
         {/* Icon and name - top left on mobile, first item on desktop */}
         <div
-          class="min-h-10 min-w-[50px] flex flex-row items-center gap-2"
+          class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2"
           classList={{
             grow: props.contentPlacement === 'bottom-row',
             'opacity-70': props.fadeIfRead && !props.unreadIndicatorActive,
@@ -381,10 +380,8 @@ export function EntityWithEverything<
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
         <div
-          class="relative row-1 ml-2 @md:ml-4 self-center min-w-0"
+          class="relative row-1 ml-2 @md:ml-4 self-center min-w-0 col-3"
           classList={{
-            'col-4': props.showLeftColumnIndicator,
-            'col-3': !props.showLeftColumnIndicator,
             'opacity-50': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
@@ -421,11 +418,7 @@ export function EntityWithEverything<
         {/* Notifications */}
         <Show when={props.showUnrollNotifications && hasNotifications()}>
           <div
-            class="relative row-2 col-[2/-1] grid"
-            classList={{
-              'col-[2/-1]': props.showLeftColumnIndicator,
-              'col-[1/-1]': !props.showLeftColumnIndicator,
-            }}
+            class="relative row-2 col-2 col-end-4 200 pb-2"
             style={{
               gap: `${threadGap}px`,
             }}
@@ -532,7 +525,7 @@ export function EntityWithEverything<
                         <MessageContent />
                       </div>
                     </div>
-                    <div class="shrink-0 font-mono text-sm uppercase text-ink-extra-muted ml-2 @md:ml-4">
+                    <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
                       {formattedDate()}
                     </div>
                   </div>
