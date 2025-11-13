@@ -42,22 +42,32 @@ const isSearchEntity = (entity: EntityData): entity is WithSearch<EntityData> =>
   'search' in entity;
 
 /**
- * Merges nameHighlight from source entity into target entity if target doesn't have one
+ * Merges search data from two entities, preferring service source with local as fallback.
+ * - Uses service entity as base
+ * - Falls back to local nameHighlight if service doesn't have one
+ * - Falls back to local contentHighlights if service doesn't have any
  */
-const mergeNameHighlight = <T extends EntityData>(
-  target: T & WithSearch<EntityData>,
-  source: T & WithSearch<EntityData>
+const mergeSearchEntities = <T extends EntityData>(
+  first: T & WithSearch<EntityData>,
+  second: T & WithSearch<EntityData>
 ): T => {
-  if (!target.search.nameHighlight && source.search.nameHighlight) {
-    return {
-      ...target,
-      search: {
-        ...target.search,
-        nameHighlight: source.search.nameHighlight,
-      },
-    } as T;
-  }
-  return target;
+  const serviceEntity =
+    first.search.source === 'service' ? first : second;
+  const localEntity =
+    first.search.source === 'local' ? first : second;
+
+  return {
+    ...serviceEntity,
+    search: {
+      ...serviceEntity.search,
+      nameHighlight:
+        serviceEntity.search.nameHighlight || localEntity.search.nameHighlight,
+      contentHighlights:
+        serviceEntity.search.contentHighlights?.length
+          ? serviceEntity.search.contentHighlights
+          : localEntity.search.contentHighlights,
+    },
+  } as T;
 };
 
 /**
@@ -107,15 +117,12 @@ const deduplicateEntities = <T extends EntityData>(entities: T[]): T[] => {
       const existingSource = existing.search.source;
       const newSource = entity.search.source;
 
-      if (newSource === 'service' && existingSource === 'local') {
-        // Merge local nameHighlight if service doesn't have one
-        entityMap.set(entity.id, mergeNameHighlight(entity, existing));
-        continue;
-      }
-
-      if (existingSource === 'service' && newSource === 'local') {
-        // Merge local nameHighlight into existing service result if needed
-        entityMap.set(entity.id, mergeNameHighlight(existing, entity));
+      if (
+        (newSource === 'service' && existingSource === 'local') ||
+        (existingSource === 'service' && newSource === 'local')
+      ) {
+        // Merge service and local search data
+        entityMap.set(entity.id, mergeSearchEntities(entity, existing));
         continue;
       }
 
