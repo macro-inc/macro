@@ -18,6 +18,8 @@ export type ThemeReactive = {
   c4: { l: Signal<number>; c: Signal<number>; h: Signal<number> };
 };
 
+export type ThemeReactiveColor = ThemeReactive[keyof ThemeReactive];
+
 export type ThemePrevious = {
   a0: { l: number; c: number; h: number };
   a1: { l: number; c: number; h: number };
