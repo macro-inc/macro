@@ -129,8 +129,7 @@ pub async fn stream_chat_response(
     let now = std::time::Instant::now();
     let mut stream = chat
         .send_message(request, request_context, user_id.to_owned())
-        .await
-        .context("failed to send message to AI client")?;
+        .await?;
 
     // Register potential partial message with connection for disconnect-based saving
     register_partial_message(connection_id, message_id, chat_id, Some(model.to_string()));
@@ -144,7 +143,7 @@ pub async fn stream_chat_response(
             is_first_token = true;
             log::log_timing(log::LatencyMetric::TimeToFirstToken, model, now.elapsed());
         }
-        let response_chunk = response.context("failed to read stream chunk")?;
+        let response_chunk = response?;
         // Abort streaming for a message if it has been stopped
         if MESSAGE_ABORT_MAP.contains_key(stream_id) {
             MESSAGE_ABORT_MAP.remove(stream_id);
@@ -369,18 +368,15 @@ pub async fn handle_send_chat_message(
     )
     .await
     .map_err(|err| {
+        println!("STREAM ERROR {:?}", err);
         tracing::error!(error=?err, "failed to stream chat response");
         match err {
-            ai::types::AiError::ContextWindowExceeded =>{
-                StreamError::ModelContextOverflow {
-                    stream_id: incoming_message.stream_id.clone(),
-                }
-            }
-            ai::types::AiError::Generic(_) => {
-                StreamError::InternalError {
-                    stream_id: incoming_message.stream_id.clone(),
-                }
-            }
+            ai::types::AiError::ContextWindowExceeded => StreamError::ModelContextOverflow {
+                stream_id: incoming_message.stream_id.clone(),
+            },
+            ai::types::AiError::Generic(_) => StreamError::InternalError {
+                stream_id: incoming_message.stream_id.clone(),
+            },
         }
     })?;
 
