@@ -10,9 +10,10 @@ export type EntityQueryOperations = {
 };
 
 export type EntityQueryWithOperations<
-  Q extends EntityQuery | EntityInfiniteQuery =
+  T extends EntityData,
+  Q extends EntityQuery | EntityInfiniteQuery<T> =
     | EntityQuery
-    | EntityInfiniteQuery,
+    | EntityInfiniteQuery<T>,
 > = {
   query: Q;
   operations?: Partial<EntityQueryOperations>;
@@ -20,7 +21,8 @@ export type EntityQueryWithOperations<
 
 export type EntityQuery = UseQueryResult<EntityData[]>;
 
-export type EntityInfiniteQuery = UseInfiniteQueryResult<EntityData[]>;
+export type EntityInfiniteQuery<T extends EntityData = EntityData> =
+  UseInfiniteQueryResult<T[]>;
 
 export type EntityList<T extends EntityData = EntityData> = {
   data: T[];

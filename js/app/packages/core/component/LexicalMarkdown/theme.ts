@@ -206,6 +206,14 @@ export const unifiedListMarkdownTheme = createTheme({
     'code-container': 'font-mono md-code-box no-accessory overflow-hidden',
   },
   paragraph: `${theme.paragraph} inline`,
+  heading: {
+    h1: 'text-[1em] font-semibold',
+    h2: 'text-[1em] font-semibold',
+    h3: 'text-[1em] font-semibold',
+    h4: 'text-[1em] font-medium',
+    h5: 'text-[1em] font-medium',
+    h6: 'text-[1em] font-medium',
+  },
   // padding right to prevent italics being clipped by overflow properties such as truncation
   root: `${theme.root} inline pr-[2px] cursor-default`,
 });
