@@ -40,15 +40,6 @@ if (LOCAL_ONLY) {
     )
   );
   registerComponent(
-    'md-parse',
-    lazy(
-      () =>
-        import(
-          '@core/component/LexicalMarkdown/component/debug/MarkdownParseTestPage'
-        )
-    )
-  );
-  registerComponent(
     'data',
     lazy(() => import('@core/internal/DataDebug'))
   );
@@ -95,5 +86,14 @@ if (DEV_MODE_ENV) {
   registerComponent(
     'pixel-icon',
     lazy(() => import('@core/internal/PixelArtIconDemo'))
+  );
+  registerComponent(
+    'md-parse',
+    lazy(
+      () =>
+        import(
+          '@core/component/LexicalMarkdown/component/debug/MarkdownParseTestPage'
+        )
+    )
   );
 }
