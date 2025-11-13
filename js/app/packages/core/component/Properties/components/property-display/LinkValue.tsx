@@ -324,7 +324,6 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
               theme="clear"
               size="xs"
               class="!text-failure hover:!bg-failure/15"
-              tooltip={{ label: 'Remove link' }}
               onClick={handleRemoveClick}
             />
           </div>
