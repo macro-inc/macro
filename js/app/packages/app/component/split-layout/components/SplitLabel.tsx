@@ -29,9 +29,16 @@ export function StaticSplitLabel(props: {
   return (
     <div class="z-3 relative flex items-center gap-2 border-y border-edge-muted w-screen max-w-full h-full shrink">
       <Show when={props.iconType}>
-        <EntityIcon targetType={props.iconType} size="xs" theme="monochrome" />
+        <EntityIcon
+          class="shrink-0"
+          targetType={props.iconType}
+          size="xs"
+          theme="monochrome"
+        />
       </Show>
-      <Show when={props.icon}>{props.icon}</Show>
+      <Show when={props.icon}>
+        <div class="shrink-0">{props.icon}</div>
+      </Show>
       <Show when={props.badges}>{props.badges}</Show>
       <span class="inline-block text-sm truncate">{props.label}</span>
     </div>
@@ -135,7 +142,7 @@ export function BlockItemSplitLabel(props: {
 
   return (
     <div class="z-3 relative flex items-center gap-2 border-y border-edge-muted w-screen max-w-full h-full shrink">
-      <EntityIcon targetType={blockName} size="xs" />
+      <EntityIcon class="shrink-0" targetType={blockName} size="xs" />
       <Show when={props.badges}>{props.badges}</Show>
       <SplitLabel
         label={fileName()}
