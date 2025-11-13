@@ -21,7 +21,6 @@ import { toast } from 'core/component/Toast/Toast';
 import { Show } from 'solid-js';
 import { projectSignal } from '../signal/project';
 import { ProjectCreateMenu } from './ProjectCreateMenu';
-import { ViewSizeSelector } from './ViewSizeSelector';
 
 // TODO (SEAMUS) : Revisit this file when we figure out what we wanna do
 //     with folder block.
@@ -64,7 +63,7 @@ export function TopBar() {
       <SplitHeaderLeft>
         <BlockItemSplitLabel fallbackName={project()?.name} />
       </SplitHeaderLeft>
-      <SplitToolbarLeft>
+      <SplitToolbarLeft class="flex-0">
         <div class="flex gap-2 p-1">
           <Show when={ops.length > 0}>
             <SplitFileMenu
@@ -79,7 +78,6 @@ export function TopBar() {
       </SplitToolbarLeft>
       <SplitToolbarRight>
         <div class="flex items-center p-1">
-          <ViewSizeSelector />
           <div class="flex items-center">
             <SplitPermissionsBadge />
             <Show

@@ -235,10 +235,10 @@
  * declarations while still being able to override the color. */
 @utility util-bracket-bg-image {
   background-image:
-    conic-gradient(from 90deg at top 1.5px left 1.5px, #0000 90deg, var(--color-focus) 0),
-    conic-gradient(from 180deg at top 1.5px right 1.5px, #0000 90deg, var(--color-focus) 0),
-    conic-gradient(from 0deg at bottom 1.5px left 1.5px, #0000 90deg, var(--color-focus) 0),
-    conic-gradient(from -90deg at bottom 1.5px right 1.5px, #0000 90deg, var(--color-focus) 0);
+    conic-gradient(from 90deg at top 1px left 1px, #0000 90deg, var(--color-focus) 0),
+    conic-gradient(from 180deg at top 1px right 1px, #0000 90deg, var(--color-focus) 0),
+    conic-gradient(from 0deg at bottom 1px left 1px, #0000 90deg, var(--color-focus) 0),
+    conic-gradient(from -90deg at bottom 1px right 1px, #0000 90deg, var(--color-focus) 0);
 
   background-position:
     0 0,
@@ -310,10 +310,10 @@
 
 @utility bracket-* {
   background-image:
-    conic-gradient(from 90deg at top 1.5px left 1.5px, #0000 90deg, var(--color-focus) 0),
-    conic-gradient(from 180deg at top 1.5px right 1.5px, #0000 90deg, var(--color-focus) 0),
-    conic-gradient(from 0deg at bottom 1.5px left 1.5px, #0000 90deg, var(--color-focus) 0),
-    conic-gradient(from -90deg at bottom 1.5px right 1.5px, #0000 90deg, var(--color-focus) 0);
+    conic-gradient(from 90deg at top 1px left 1px, #0000 90deg, var(--color-focus) 0),
+    conic-gradient(from 180deg at top 1px right 1px, #0000 90deg, var(--color-focus) 0),
+    conic-gradient(from 0deg at bottom 1px left 1px, #0000 90deg, var(--color-focus) 0),
+    conic-gradient(from -90deg at bottom 1px right 1px, #0000 90deg, var(--color-focus) 0);
 
   background-position:
     0 0,

@@ -1,7 +1,8 @@
 use crate::api::context::ApiContext;
-use crate::model::response::documents::create::CreateDocumentResponseData;
-use crate::model::response::documents::{DocumentResponse, DocumentResponseMetadata};
 use axum::http::StatusCode;
+use chrono::{DateTime, Utc};
+use model::document::response::CreateDocumentResponseData;
+use model::document::response::{DocumentResponse, DocumentResponseMetadata};
 use model::document::{ContentType, FileType, build_cloud_storage_bucket_document_key};
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::{IS_PUBLIC_DEFAULT, SharePermissionV2};
@@ -18,10 +19,10 @@ pub async fn create_document(
     sha: &str,
     document_name: &str,
     owner: &str,
-    organization_id: Option<i32>,
     file_type: Option<FileType>,
     job_id: Option<&str>,
     project_id: Option<&str>,
+    created_at: Option<&DateTime<Utc>>,
 ) -> Result<CreateDocumentResponseData, (StatusCode, String, Option<String>)> {
     tracing::trace!("creating document v2");
 
@@ -54,7 +55,8 @@ pub async fn create_document(
             project_id,
             project_name: None,
             share_permission: &share_permission,
-            skip_history: false,
+            skip_history: created_at.is_some(), // don't add to history if it's a backfill
+            created_at,
         },
     )
     .await
