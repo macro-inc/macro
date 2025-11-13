@@ -201,7 +201,9 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
       // If both have search data, prefer 'service' over 'local'
       if (existingHasSearch && newHasSearch) {
-        const existingSource = (existing as WithSearch<EntityData>).search.source;
+        // TODO: fix typing of this function so we do not need to cast
+        const existingSource = (existing as WithSearch<EntityData>).search
+          .source;
         const newSource = (entity as WithSearch<EntityData>).search.source;
 
         if (newSource === 'service' && existingSource === 'local') {
@@ -267,7 +269,26 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     const sortFn = entitySort?.();
     const searching = isSearchActive?.();
 
-    if (!sortFn || searching) return entities;
+    if (searching) {
+      // When searching, sort local results first, then service results
+      return entities.toSorted((a, b) => {
+        const aHasSearch = 'search' in a;
+        const bHasSearch = 'search' in b;
+
+        if (aHasSearch && bHasSearch) {
+          const aSource = (a as WithSearch<EntityData>).search.source;
+          const bSource = (b as WithSearch<EntityData>).search.source;
+
+          // Local results come before service results
+          if (aSource === 'local' && bSource === 'service') return -1;
+          if (aSource === 'service' && bSource === 'local') return 1;
+        }
+
+        return 0;
+      });
+    }
+
+    if (!sortFn) return entities;
 
     return entities.toSorted(sortFn);
   });
