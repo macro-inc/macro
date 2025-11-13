@@ -183,7 +183,7 @@ export const EntityValueDisplay: Component<EntityValueDisplayProps> = (
 
   return (
     <div
-      class="relative inline-flex max-w-[150px] shrink-0"
+      class="relative inline-flex max-w-[140px] shrink-0"
       onMouseEnter={() => setIsHovered(true)}
       onMouseLeave={() => setIsHovered(false)}
     >
