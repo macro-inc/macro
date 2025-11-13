@@ -44,7 +44,7 @@ export function ThemeEditorAdvanced() {
       `}</style>
 
       <div style="
-        font-family: 'Forma DJR Mono';
+        font-family: var(--font-mono);
         scrollbar-width: none;
         position: relative;
         overflow: hidden;
