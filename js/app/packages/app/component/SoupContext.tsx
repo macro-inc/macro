@@ -308,7 +308,10 @@ export function createNavigationEntityListShortcut({
 
       const selectedEntity = entities()?.at(index);
       if (selectedEntity) {
-        if (splitHandle.content().type !== 'component') {
+        if (
+          splitHandle.content().type !== 'component' &&
+          splitHandle.content().type !== 'project'
+        ) {
           const { type, id } = selectedEntity;
           if (type === 'document') {
             const { fileType } = selectedEntity;
