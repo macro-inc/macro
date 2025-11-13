@@ -16,7 +16,6 @@ import {
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { BulkRenameEntitiesView } from './BulkRenameEntitiesView';
-import { MoveToProjectView } from './MoveToProjectView';
 
 export const BulkEditEntityModalTitle = (props: { title: string }) => {
   return <h2 class="text-lg mb-3">{props.title}</h2>;

@@ -1,7 +1,6 @@
 import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
-import { set } from 'colorjs.io/fn';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
@@ -21,7 +20,6 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { ITEM_WRAPPER } from '../constants/classStrings';
 import { createProfilePictureQuery } from '../queries/auth';
 import { createProjectQuery } from '../queries/project';
 import type { EntityData } from '../types/entity';
@@ -972,22 +970,6 @@ function _truncateChildren(
     });
   });
 }
-
-const ITEM_WRAPPER_CLASS = () => {
-  let input = ITEM_WRAPPER;
-  const excludeclasses = [
-    'focus-bracket-within',
-    'suppress-css-brackets',
-    'focus-within:bg-hover',
-    'hover:bg-hover',
-  ];
-  excludeclasses.forEach((pattern) => {
-    input = input.replace(new RegExp(pattern, 'g'), '');
-  });
-
-  // Optional: clean up extra spaces
-  input = input.replace(/\s+/g, ' ').trim();
-};
 
 let lastMouseX: number | null = null;
 let lastMouseY: number | null = null;
