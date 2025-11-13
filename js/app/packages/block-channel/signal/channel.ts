@@ -273,7 +273,7 @@ export async function sendMessage({
   if (isErr(result)) {
     console.error('failed to send message', result[0]);
     toast.failure('Failed to send message');
-    return;
+    return Promise.reject(result[0] ?? new Error('Failed to send message'));
   }
 
   const { id } = result[1]!;

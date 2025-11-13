@@ -703,14 +703,10 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
     }
 
     @container (width < 816px) {
-        margin-inline: calc(var(--spacing) * 4)
-            /* 1rem = 16px */
-        ;
+        margin-inline: calc(var(--spacing) * 4);
     }
     @container (width < 640px) {
-        margin-inline: calc(var(--spacing) * 2)
-            /* 1rem = 16px */
-        ;
+        margin-inline: calc(var(--spacing) * 2);
     }
 
 }
