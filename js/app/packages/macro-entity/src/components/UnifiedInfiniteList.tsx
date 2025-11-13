@@ -41,6 +41,100 @@ import { Entity } from './Entity';
 const isSearchEntity = (entity: EntityData): entity is WithSearch<EntityData> =>
   'search' in entity;
 
+/**
+ * Deduplicates entities by id, preferring entities with search data from 'service' source
+ * over 'local' source, and using latest timestamp as a tiebreaker
+ */
+const deduplicateEntities = <T extends EntityData>(entities: T[]): T[] => {
+  const entityMap = new Map<string, T>();
+
+  for (const entity of entities) {
+    const existing = entityMap.get(entity.id);
+
+    if (!existing) {
+      entityMap.set(entity.id, entity);
+      continue;
+    }
+
+    const existingHasSearch = isSearchEntity(existing);
+    const newHasSearch = isSearchEntity(entity);
+
+    // Prefer entities with search data
+    if (newHasSearch && !existingHasSearch) {
+      entityMap.set(entity.id, entity);
+      continue;
+    }
+
+    // If both have search data, prefer 'service' over 'local'
+    if (existingHasSearch && newHasSearch) {
+      const existingSource = existing.search.source;
+      const newSource = entity.search.source;
+
+      if (newSource === 'service' && existingSource === 'local') {
+        entityMap.set(entity.id, entity);
+        continue;
+      }
+
+      if (existingSource === 'service' && newSource === 'local') {
+        continue;
+      }
+
+      // If both are the same source, keep the one with latest timestamp
+      const existingTimestamp = existing.updatedAt ?? existing.createdAt ?? 0;
+      const newTimestamp = entity.updatedAt ?? entity.createdAt ?? 0;
+
+      if (newTimestamp > existingTimestamp) {
+        entityMap.set(entity.id, entity);
+      }
+      continue;
+    }
+
+    // If neither has search, keep the one with latest timestamp
+    if (!existingHasSearch && !newHasSearch) {
+      const existingTimestamp = existing.updatedAt ?? existing.createdAt ?? 0;
+      const newTimestamp = entity.updatedAt ?? entity.createdAt ?? 0;
+
+      if (newTimestamp > existingTimestamp) {
+        entityMap.set(entity.id, entity);
+      }
+    }
+    // Otherwise keep existing (it has search and new doesn't)
+  }
+
+  return Array.from(entityMap.values());
+};
+
+/**
+ * Sorts entities for search mode:
+ * 1. Channels first
+ * 2. Local search results before service results
+ */
+const sortEntitiesForSearch = <T extends EntityData>(
+  a: T,
+  b: T
+): number => {
+  const aHasSearch = isSearchEntity(a);
+  const bHasSearch = isSearchEntity(b);
+
+  if (aHasSearch && bHasSearch) {
+    // Channel results come before other results
+    const aIsChannel = a.type === 'channel';
+    const bIsChannel = b.type === 'channel';
+
+    if (aIsChannel && !bIsChannel) return -1;
+    if (!aIsChannel && bIsChannel) return 1;
+
+    // Local results come before service results
+    const aSource = a.search.source;
+    const bSource = b.search.source;
+
+    if (aSource === 'local' && bSource === 'service') return -1;
+    if (aSource === 'service' && bSource === 'local') return 1;
+  }
+
+  return 0;
+};
+
 const DEBOUNCE_FETCH_MORE_MS = 50;
 
 // note that this must be greater than DEBOUNCE_FETCH_MORE_MS
@@ -181,65 +275,9 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     return entities;
   });
 
-  // deduplicate by id, taking entity with search field, otherwise latest timestamp
-  const deduplicatedEntities = createMemo(() => {
-    const entityMap = new Map<string, T>();
-
-    for (const entity of filteredEntities()) {
-      const existing = entityMap.get(entity.id);
-
-      if (!existing) {
-        entityMap.set(entity.id, entity);
-        continue;
-      }
-
-      const existingHasSearch = isSearchEntity(existing);
-      const newHasSearch = isSearchEntity(entity);
-
-      // Prefer entities with search data
-      if (newHasSearch && !existingHasSearch) {
-        entityMap.set(entity.id, entity);
-        continue;
-      }
-
-      // If both have search data, prefer 'service' over 'local'
-      if (existingHasSearch && newHasSearch) {
-        const existingSource = existing.search.source;
-        const newSource = entity.search.source;
-
-        if (newSource === 'service' && existingSource === 'local') {
-          entityMap.set(entity.id, entity);
-          continue;
-        }
-
-        if (existingSource === 'service' && newSource === 'local') {
-          continue;
-        }
-
-        // If both are the same source, keep the one with latest timestamp
-        const existingTimestamp = existing.updatedAt ?? existing.createdAt ?? 0;
-        const newTimestamp = entity.updatedAt ?? entity.createdAt ?? 0;
-
-        if (newTimestamp > existingTimestamp) {
-          entityMap.set(entity.id, entity);
-        }
-        continue;
-      }
-
-      // If neither has search, keep the one with latest timestamp
-      if (!existingHasSearch && !newHasSearch) {
-        const existingTimestamp = existing.updatedAt ?? existing.createdAt ?? 0;
-        const newTimestamp = entity.updatedAt ?? entity.createdAt ?? 0;
-
-        if (newTimestamp > existingTimestamp) {
-          entityMap.set(entity.id, entity);
-        }
-      }
-      // Otherwise keep existing (it has search and new doesn't)
-    }
-
-    return Array.from(entityMap.values());
-  });
+  const deduplicatedEntities = createMemo(() =>
+    deduplicateEntities(filteredEntities())
+  );
 
   const projectFilterEntities = createMemo(() => {
     const entities = deduplicatedEntities();
@@ -265,36 +303,12 @@ export function createUnifiedInfiniteList<T extends EntityData>({
   });
 
   const sortedEntities = createMemo<T[]>(() => {
-    // TODO: process entities in a pipeline
     const entities = projectFilterEntities();
     const sortFn = entitySort?.();
     const searching = isSearchActive?.();
 
     if (searching) {
-      // When searching, sort local results first, then service results
-      // Channels come first
-      return entities.toSorted((a, b) => {
-        const aHasSearch = isSearchEntity(a);
-        const bHasSearch = isSearchEntity(b);
-
-        if (aHasSearch && bHasSearch) {
-          // Channel results come before other results
-          const aIsChannel = a.type === 'channel';
-          const bIsChannel = b.type === 'channel';
-
-          if (aIsChannel && !bIsChannel) return -1;
-          if (!aIsChannel && bIsChannel) return 1;
-
-          // Local results come before service results
-          const aSource = a.search.source;
-          const bSource = b.search.source;
-
-          if (aSource === 'local' && bSource === 'service') return -1;
-          if (aSource === 'service' && bSource === 'local') return 1;
-        }
-
-        return 0;
-      });
+      return entities.toSorted(sortEntitiesForSearch);
     }
 
     if (!sortFn) return entities;
