@@ -35,6 +35,7 @@ import {
   type Accessor,
   createEffect,
   createMemo,
+  createRenderEffect,
   createSignal,
   For,
   onCleanup,
@@ -91,6 +92,7 @@ type BaseInputProps = {
   setLocalTyping?: (isTyping: boolean) => void;
   /** the list of users in the channel  */
   channelUsers?: () => IUser[];
+  domRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 };
 
 /** the time after a user stops typing before we consider them idle */
@@ -163,7 +165,13 @@ export function BaseInput(props: BaseInputProps) {
     mentions,
     MarkdownArea,
     editor,
+    ref,
   } = useChannelMarkdownArea();
+
+  createRenderEffect(() => {
+    const _ref = ref();
+    if (_ref) props.domRef?.(_ref);
+  });
 
   const allMentions: Accessor<SimpleMention[]> = () =>
     mentions().map((m) => ({
@@ -430,6 +438,7 @@ export function BaseInput(props: BaseInputProps) {
           initialValue={props.initialValue?.()}
           useBlockBoundary={true}
           onEscape={onEscape}
+          dontFocusOnMount
           onFocusLeaveStart={props.onFocusLeaveStart}
           onFocusLeaveEnd={onFocusLeaveEnd}
         />

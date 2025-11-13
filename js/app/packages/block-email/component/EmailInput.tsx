@@ -12,6 +12,7 @@ interface EmailInputProps {
   replyingTo: Accessor<MessageWithBodyReplyless>;
   draft?: MessageWithBodyReplyless;
   setShowReply?: Setter<boolean>;
+  markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }
 
 export function EmailInput(props: EmailInputProps) {
@@ -63,6 +64,7 @@ export function EmailInput(props: EmailInputProps) {
         draftContainsAppendedReply={draftContainsAppendedReply()}
         sideEffectOnSend={afterSend}
         setShowReply={props.setShowReply}
+        markdownDomRef={props.markdownDomRef}
       />
     </Show>
   );

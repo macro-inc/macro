@@ -23,6 +23,8 @@ export type ChannelInputProps = {
   inputAttachmentsKey: string;
   channelName: string;
   onFocusLeaveStart?: (e: KeyboardEvent) => void;
+  autoFocusOnMount?: boolean;
+  domRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 };
 
 export function ChannelInput(props: ChannelInputProps) {
@@ -82,6 +84,8 @@ export function ChannelInput(props: ChannelInputProps) {
       }}
       onFocusLeaveStart={props.onFocusLeaveStart}
       channelUsers={channelUsers}
+      autoFocusOnMount={props.autoFocusOnMount}
+      domRef={props.domRef}
     />
   );
 }

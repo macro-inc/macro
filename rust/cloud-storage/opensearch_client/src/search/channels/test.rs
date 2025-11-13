@@ -11,7 +11,6 @@ fn test_build_search_request() -> anyhow::Result<()> {
         .search_on(SearchOn::Content)
         .collapse(true)
         .ids(vec!["id1".to_string(), "id2".to_string()])
-        .org_id(Some(123))
         .thread_ids(vec!["thread1".to_string(), "thread2".to_string()])
         .mentions(vec!["mention1".to_string(), "mention2".to_string()])
         .sender_ids(vec!["sender1".to_string(), "sender2".to_string()]);
@@ -32,11 +31,6 @@ fn test_build_search_request() -> anyhow::Result<()> {
                     {
                         "match_phrase": {
                             "content": "test"
-                        }
-                    },
-                    {
-                        "term": {
-                            "org_id": 123
                         }
                     },
                     {
