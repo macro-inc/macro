@@ -17,7 +17,7 @@ pub struct CreateDocumentParams<'a> {
     pub file_type: Option<FileType>,
     pub job_id: Option<&'a str>,
     pub project_id: Option<&'a str>,
-    pub email_message_id: Option<Uuid>,
+    pub email_attachment_id: Option<Uuid>,
     pub created_at: Option<&'a DateTime<Utc>>,
 }
 
@@ -38,7 +38,7 @@ pub async fn create_document(
         file_type,
         job_id,
         project_id,
-        email_message_id,
+        email_attachment_id,
         created_at,
     } = params;
     tracing::trace!("creating document v2");
@@ -73,7 +73,7 @@ pub async fn create_document(
             project_name: None,
             share_permission: &share_permission,
             skip_history: false,
-            email_message_id,
+            email_attachment_id,
             created_at,
         },
     )

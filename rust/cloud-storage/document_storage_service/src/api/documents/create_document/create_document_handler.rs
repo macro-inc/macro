@@ -45,7 +45,7 @@ pub(in crate::api) async fn create_document_handler(
     let req = project.into_inner();
 
     // email linking is internal only
-    if req.email_message_id.is_some() && internal_user.is_none() {
+    if req.email_attachment_id.is_some() && internal_user.is_none() {
         return GenericResponse::builder()
             .message("can't link email in external request")
             .is_error(true)
@@ -93,7 +93,7 @@ pub(in crate::api) async fn create_document_handler(
             file_type,
             job_id: req.job_id.as_deref(),
             project_id: req.project_id.as_deref(),
-            email_message_id: req.email_message_id,
+            email_attachment_id: req.email_attachment_id,
             created_at: req.created_at.as_ref(),
         },
     )
