@@ -4,10 +4,7 @@ use crate::{
     api::{context::ApiContext, documents::utils},
     model::{
         request::documents::save::SaveDocumentRequest,
-        response::documents::{
-            DocumentResponseMetadata,
-            save::{SaveDocumentResponse, SaveDocumentResponseData},
-        },
+        response::documents::save::{SaveDocumentResponse, SaveDocumentResponseData},
     },
 };
 use axum::{
@@ -19,6 +16,7 @@ use axum::{
 use macro_middleware::cloud_storage::ensure_access::{
     document::DocumentAccessExtractor, project::ProjectBodyAccessLevelExtractor,
 };
+use model::document::response::DocumentResponseMetadata;
 use model::{
     document::{DocumentBasic, FileType, FileTypeExt, build_cloud_storage_bucket_document_key},
     response::{ErrorResponse, GenericErrorResponse, GenericResponse},

@@ -14,9 +14,13 @@ import stringify from 'json-stable-stringify';
 import { queryClient } from '../../macro-entity/src/queries/client';
 import type { UnifiedListContext } from './SoupContext';
 
+// for custom views that extend the unified list view
+export type ViewType = 'project';
+
 export type ViewData = {
   id: ViewId;
   view: View;
+  viewType?: ViewType;
   highlightedId: string | undefined;
   selectedEntity: EntityData | undefined;
   scrollOffset: number | undefined;
@@ -80,6 +84,7 @@ export type HotkeyOptions = {
 };
 
 export type ViewConfigBase = {
+  viewType?: ViewType;
   filters: FilterOptions;
   sort: SortOptions;
   display: DisplayOptions;
@@ -112,6 +117,30 @@ export const VIEWCONFIG_BASE: ViewConfigBase = {
     unrollNotifications: false,
     showUnreadIndicator: false,
     showProjects: false,
+    preview: false,
+    limit: 100,
+  },
+};
+
+export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
+  viewType: 'project',
+  sort: {
+    sortBy: 'viewed_at',
+    sortOrder: 'descending',
+  },
+  filters: {
+    notificationFilter: 'all',
+    importantFilter: false,
+    typeFilter: ['document', 'chat', 'project'],
+    documentTypeFilter: [],
+    projectFilter: undefined,
+    fromFilter: [],
+  },
+  display: {
+    layout: 'compact',
+    unrollNotifications: false,
+    showUnreadIndicator: true,
+    showProjects: true,
     preview: false,
     limit: 100,
   },
@@ -204,14 +233,13 @@ const ALL_VIEWCONFIG_DEFAULTS = {
   docs: {
     view: 'docs',
     filters: {
-      typeFilter: ['document', 'project'],
-      documentTypeFilter: ['md', 'code', 'image', 'canvas', 'pdf', 'unknown'],
+      typeFilter: ['document'],
     },
   },
   ai: {
     view: 'ai',
     filters: {
-      typeFilter: ['chat', 'project'],
+      typeFilter: ['chat'],
     },
   },
   folders: {

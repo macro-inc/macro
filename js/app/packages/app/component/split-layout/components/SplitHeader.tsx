@@ -1,3 +1,4 @@
+import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 import { IconButton } from '@core/component/IconButton';
 import { ResizeZoneContext } from '@core/component/Resize/Resize';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -170,6 +171,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           }}
         />
         <div class="z-2 relative flex items-center bg-panel pr-2 border-t border-t-edge-muted border-b border-b-edge-muted h-full">
+          <EntityNavigationIndicator />
           <SplitSpotlightButton />
           <SplitCreateButton />
         </div>

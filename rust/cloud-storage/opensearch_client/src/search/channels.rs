@@ -66,7 +66,6 @@ impl SearchQueryConfig for ChannelMessageSearchConfig {
 #[derive(Default)]
 struct ChannelMessageQueryBuilder {
     inner: SearchQueryBuilder<ChannelMessageSearchConfig>,
-    org_id: Option<i64>,
     thread_ids: Vec<String>,
     mentions: Vec<String>,
     channel_ids: Vec<String>,
@@ -79,11 +78,6 @@ impl ChannelMessageQueryBuilder {
             inner: SearchQueryBuilder::new(terms),
             ..Default::default()
         }
-    }
-
-    pub fn org_id(mut self, org_id: Option<i64>) -> Self {
-        self.org_id = org_id;
-        self
     }
 
     pub fn thread_ids(mut self, thread_ids: Vec<String>) -> Self {
@@ -124,11 +118,6 @@ impl ChannelMessageQueryBuilder {
 
         // CUSTOM ATTRIBUTES SECTION
 
-        // Add org_id to must clause if provided
-        if let Some(org_id) = self.org_id {
-            bool_query.must(QueryType::term("org_id", org_id));
-        }
-
         // Add thread_ids to must clause if provided
         if !self.thread_ids.is_empty() {
             bool_query.must(QueryType::terms("thread_id", self.thread_ids));
@@ -167,7 +156,6 @@ pub struct ChannelMessageSearchArgs {
     pub page: u32,
     pub page_size: u32,
     pub match_type: String,
-    pub org_id: Option<i64>,
     pub thread_ids: Vec<String>,
     pub mentions: Vec<String>,
     pub sender_ids: Vec<String>,
@@ -190,7 +178,6 @@ impl ChannelMessageSearchArgs {
             .collapse(self.collapse)
             .ids_only(self.ids_only)
             .sender_ids(self.sender_ids)
-            .org_id(self.org_id)
             .build_search_request()?
             .to_json())
     }

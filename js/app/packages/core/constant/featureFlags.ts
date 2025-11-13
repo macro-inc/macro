@@ -147,8 +147,6 @@ export const ENABLE_PROPERTIES_METADATA = DEV_MODE_ENV;
 
 export const ENABLE_EMAIL_VIEW = true;
 
-export const ENABLE_SEARCH_VIEW = true;
-
 export const ENABLE_SOUP_FROM_FILTER = DEV_MODE_ENV;
 
 export const ENABLE_PREVIEW = true;

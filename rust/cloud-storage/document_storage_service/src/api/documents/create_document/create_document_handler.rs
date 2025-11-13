@@ -4,26 +4,20 @@ use axum::{Extension, extract::State, http::StatusCode, response::IntoResponse};
 use macro_middleware::cloud_storage::ensure_access::project::ProjectBodyAccessLevelExtractor;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
-use crate::{
-    api::{
-        context::ApiContext,
-        documents::{
-            create_document::create_document_v2,
-            utils::{self},
-        },
-    },
-    model::{
-        request::documents::create::CreateDocumentRequest,
-        response::documents::create::CreateDocumentResponseData,
+use crate::api::{
+    context::ApiContext,
+    documents::{
+        create_document::create_document_v2,
+        utils::{self},
     },
 };
+use model::document::FileTypeExt;
+use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
 use model::{
-    document::{FileType, FileTypeExt},
-    response::{GenericErrorResponse, GenericResponse, TypedSuccessResponse},
+    document::FileType,
+    response::{GenericErrorResponse, GenericResponse},
     user::UserContext,
 };
-
-pub type CreateDocumentResponse = TypedSuccessResponse<CreateDocumentResponseData>;
 
 /// Handles creating a document
 #[utoipa::path(
@@ -85,10 +79,10 @@ pub(in crate::api) async fn create_document_handler(
         &req.sha,
         &document_name,
         &user_context.user_id,
-        user_context.organization_id,
         file_type,
         req.job_id.as_deref(),
         req.project_id.as_deref(),
+        req.created_at.as_ref(),
     )
     .await;
 

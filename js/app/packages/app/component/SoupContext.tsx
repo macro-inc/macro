@@ -58,8 +58,6 @@ import {
 export type UnifiedListContext = {
   viewsDataStore: Store<ViewDataMap>;
   setViewDataStore: SetStoreFunction<ViewDataMap>;
-  getSelectedViewStore: Accessor<Store<ViewData>>;
-  setSelectedViewStore: SetStoreFunction<ViewData>;
   selectedView: Accessor<ViewId>;
   setSelectedView: Setter<ViewId>;
   virtualizerHandleSignal: Signal<VirtualizerHandle | undefined>;
@@ -77,9 +75,6 @@ export function createSoupContext(): UnifiedListContext {
   const [viewsDataStore, setViewDataStore_] = useAllViews({
     selectedViewSignal: [selectedView, setSelectedView],
   });
-  const getSelectedViewStore = createLazyMemo(
-    () => viewsDataStore[selectedView()]
-  );
   const virtualizerHandleSignal = createSignal<VirtualizerHandle>();
   const entityListRefSignal = createSignal<HTMLDivElement>();
   const entitiesSignal = createSignal<EntityData[]>();
@@ -104,24 +99,10 @@ export function createSoupContext(): UnifiedListContext {
     // @ts-ignore narrowing set store function is annoying due to function overloading
     setViewDataStore_(...args);
   };
-  const setSelectedViewStore: SetStoreFunction<ViewData> = (...args: any[]) => {
-    // need to create new reference, causes bug where first entity persits highlighting
-    if (
-      args.length === 2 &&
-      args[0] === 'selectedEntity' &&
-      typeof args[1] !== 'function'
-    ) {
-      args[1] = { ...args[1] };
-    }
-    // @ts-ignore narrowing set store function is annoying due to function overloading
-    setViewDataStore(selectedView(), ...args);
-  };
 
   return {
     viewsDataStore,
     setViewDataStore,
-    getSelectedViewStore,
-    setSelectedViewStore,
     selectedView,
     setSelectedView,
     virtualizerHandleSignal,
@@ -213,8 +194,7 @@ export function createNavigationEntityListShortcut({
 }) {
   const {
     viewsDataStore: viewsData,
-    getSelectedViewStore: viewData,
-    setSelectedViewStore,
+    setViewDataStore,
     entityListRefSignal: [entityListRef],
     virtualizerHandleSignal: [virtualizerHandle],
     selectedView,
@@ -222,6 +202,7 @@ export function createNavigationEntityListShortcut({
     // selectedEntitySignal: [selectedEntity, setSelectedEntity],
     entitiesSignal: [entities],
   } = unifiedListContext;
+  const viewData = createMemo(() => viewsData[selectedView()]);
   const viewIds = createMemo<ViewId[]>(() => Object.keys(viewsData));
 
   const selectedEntity = () => viewData().selectedEntity;
@@ -327,7 +308,7 @@ export function createNavigationEntityListShortcut({
     });
     setJumpedToEnd(false);
 
-    setSelectedViewStore('hasUserInteractedEntity', true);
+    setViewDataStore(selectedView(), 'hasUserInteractedEntity', true);
 
     const entityEl = entityListRef()?.querySelector('[data-entity]');
     const scrollParent = getScrollParent(entityEl);
@@ -360,9 +341,21 @@ export function createNavigationEntityListShortcut({
 
       const selectedEntity = entities()?.at(index);
       if (selectedEntity) {
+        if (splitHandle.content().type !== 'component') {
+          const { type, id } = selectedEntity;
+          if (type === 'document') {
+            const { fileType } = selectedEntity;
+            splitHandle.replace(
+              { type: fileTypeToBlockName(fileType), id },
+              true
+            );
+          } else {
+            splitHandle.replace({ type, id }, true);
+          }
+        }
         batch(() => {
-          setSelectedViewStore('highlightedId', selectedEntity.id);
-          setSelectedViewStore('selectedEntity', selectedEntity);
+          setViewDataStore(selectedView(), 'highlightedId', selectedEntity.id);
+          setViewDataStore(selectedView(), 'selectedEntity', selectedEntity);
         });
       }
 
@@ -425,7 +418,11 @@ export function createNavigationEntityListShortcut({
 
     const onListScroll = () => {
       if (listScrollEl) {
-        setSelectedViewStore('scrollOffset', listScrollEl.scrollTop);
+        setViewDataStore(
+          selectedView(),
+          'scrollOffset',
+          listScrollEl.scrollTop
+        );
       }
     };
 
@@ -592,7 +589,7 @@ export function createNavigationEntityListShortcut({
   });
 
   registerHotkey({
-    hotkey: ['arrowdown', 'j'],
+    hotkey: ['j', 'arrowdown'],
     scopeId: splitHotkeyScope,
     description: 'Down',
     hotkeyToken: TOKENS.entity.step.end,
@@ -614,7 +611,7 @@ export function createNavigationEntityListShortcut({
     hide: true,
   });
   registerHotkey({
-    hotkey: ['arrowup', 'k'],
+    hotkey: ['k', 'arrowup'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.step.start,
     description: 'Up',
@@ -684,7 +681,7 @@ export function createNavigationEntityListShortcut({
     keyDownHandler: () => {
       if (!entityListRef()) return false;
 
-      setSelectedViewStore('display', 'preview', (prev) => !prev);
+      setViewDataStore(selectedView(), 'display', 'preview', (prev) => !prev);
       return true;
     },
     hide: true,
@@ -873,7 +870,10 @@ const useAllViews = ({
         const defaultViewIds = new Set(Object.keys(VIEWCONFIG_DEFAULTS));
         const filteredViewsData = Object.fromEntries(
           Object.entries(viewsData).filter(
-            ([viewId]) => savedViewIds.has(viewId) || defaultViewIds.has(viewId)
+            ([viewId, viewData]) =>
+              savedViewIds.has(viewId) ||
+              defaultViewIds.has(viewId) ||
+              viewData.viewType !== undefined
           )
         );
 

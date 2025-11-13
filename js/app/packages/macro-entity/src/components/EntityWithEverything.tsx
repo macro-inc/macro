@@ -173,12 +173,12 @@ export function EntityWithEverything<
           </div>
           {/* Subject */}
           <ImportantBadge active={props.importantIndicatorActive} />
-          <div class="font-semibold shrink-0 truncate opacity-70">
-            {props.entity.name}
-          </div>
-          {/* Body  */}
-          <div class="truncate shrink grow opacity-70">
-            {props.entity.snippet}
+          <div class="flex items-center w-full gap-4 flex-1 min-w-0">
+            <div class="font-medium shrink-0 truncate">{props.entity.name}</div>
+            {/* Body  */}
+            <div class="truncate shrink grow opacity-60">
+              {props.entity.snippet}
+            </div>
           </div>
         </div>
       );
