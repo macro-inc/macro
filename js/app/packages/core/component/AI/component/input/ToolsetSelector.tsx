@@ -1,6 +1,6 @@
 import DropdownMenu from '@core/component/FormControls/DropdownMenu';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
-import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { Tooltip } from '@core/component/Tooltip';
 import type { ToolSet } from '@service-cognition/generated/schemas';
 import { type ParentProps, Show, type Signal } from 'solid-js';
 
