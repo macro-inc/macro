@@ -78,13 +78,17 @@ export function ThemeTools() {
         {currentThemeName()}
       </div>
 
-      <hr />
+      <hr style="
+        border: none;
+        border-top: 1px dashed var(--b4);
+        box-sizing: border-box;
+        width: 100%;
+      "/>
 
       <Show when={showTrash()}>
         <IconButton
-          onPointerDown={() => {
-            deleteTheme(currentThemeId());
-          }}
+          onPointerDown={() => { deleteTheme(currentThemeId()) }}
+          // tooltip={{label: "Delete Theme"}}
           icon={IconTrash}
           theme="base"
         />
@@ -92,20 +96,25 @@ export function ThemeTools() {
 
       <Show when={!isThemeSaved()}>
         <IconButton
-          onPointerDown={() => {
-            saveTheme(themeName.innerText);
-          }}
+          onPointerDown={() => { saveTheme(themeName.innerText) }}
+          // tooltip={{label: "Save Theme"}}
           icon={IconSave}
           theme="base"
         />
       </Show>
 
       {/*<Show when={DEV_MODE_ENV}>
-        <IconButton onPointerDown={copyTokens} icon={IconFigma} theme="base" />
+        <IconButton
+          tooltip={{label: "Copy Tokens"}}
+          onPointerDown={copyTokens}
+          icon={IconFigma}
+          theme="base"
+        />
       </Show>*/}
 
       <Show when={DEV_MODE_ENV}>
         <IconButton
+          // tooltip={{label: "Copy To Clipboard"}}
           onPointerDown={exportTheme}
           icon={IconClipboard}
           theme="base"
@@ -113,12 +122,18 @@ export function ThemeTools() {
       </Show>
 
       <IconButton
+        // tooltip={{label: "Toggle Light / Dark"}}
         onPointerDown={invertTheme}
         icon={IconLightDark}
         theme="base"
       />
 
-      <IconButton onPointerDown={randomizeTheme} icon={IconDice} theme="base" />
+      <IconButton
+        // tooltip={{label: "Randomize Theme"}}
+        onPointerDown={randomizeTheme}
+        icon={IconDice}
+        theme="base"
+      />
     </div>
   );
 }
