@@ -451,6 +451,28 @@ export function Email(props: EmailProps) {
     return true;
   });
 
+  // If there is a focused message id, but it does not currently exist in the message list, it is because the user has just sent a message. When it does come into existence, we want to scroll to the bottom. 
+  createEffect((prev: boolean | undefined) => {
+    const currentFocusedId = focusedMessageId();
+    const messages = filteredMessages();
+    if (!currentFocusedId || !messages) return true;
+
+    const currentIndex = messages.findIndex(
+      (m) => m.db_id === currentFocusedId
+    );
+    if (currentIndex < 0) return false;
+
+    if (prev === false) {
+      setTimeout(() => {
+        const container = messagesRef();
+        if (container) {
+          scrollToLastMessage(container, 'smooth');
+        }
+      }, 100);
+    }
+    return true;
+  });
+
   const navigateMessage = createCallback((dir: 'prev' | 'next') => {
     const currentFocusedId = focusedMessageId();
     const messages = filteredMessages();
@@ -571,11 +593,15 @@ export function Email(props: EmailProps) {
           {/* <div class="z-4 absolute left-[44px] bottom-[92px] w-[21px] rounded-bl-xl min-h-[84px] border-l border-b border-edge" /> */}
           <Show when={filteredMessages()?.at(-1)}>
             {(lastMessage) => (
-              <div class="w-full flex flex-row justify-center my-2 bg-panel ">
-                <EmailInput
-                  replyingTo={lastMessage}
-                  draft={messageDbIdToDraftChildren[lastMessage().db_id ?? '']}
-                />
+              <div class="shrink-0 w-full px-4 pb-2">
+                <div class="w-full flex flex-row justify-center bg-panel macro-message-width mx-auto">
+                  <EmailInput
+                    replyingTo={lastMessage}
+                    draft={
+                      messageDbIdToDraftChildren[lastMessage().db_id ?? '']
+                    }
+                  />
+                </div>
               </div>
             )}
           </Show>

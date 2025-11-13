@@ -36,7 +36,6 @@ import type {
 import { useEmail, useUserId } from '@service-gql/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
-import { raceTimeout } from '@solid-primitives/promise';
 import {
   defaultSelectionData,
   lazyRegister,
@@ -48,7 +47,6 @@ import {
 } from 'core/component/LexicalMarkdown/plugins/node-transform/nodeTransformPlugin';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
-  $createParagraphNode,
   $getRoot,
   FORMAT_TEXT_COMMAND,
   type LexicalEditor,
@@ -62,6 +60,7 @@ import {
   For,
   onCleanup,
   onMount,
+  type Setter,
   Show,
   untrack,
 } from 'solid-js';
@@ -73,6 +72,7 @@ import { getFirstName } from '../util/name';
 import {
   APPEND_PREVIOUS_EMAIL_COMMAND,
   appendItemsAsMacroMentions,
+  clearEmailBody,
   prepareEmailBody,
   registerAppendPreviousEmail,
 } from '../util/prepareEmailBody';
@@ -131,6 +131,7 @@ export function BaseInput(props: {
   draftContainsAppendedReply?: boolean;
   preloadedAttachments?: AttachmentMacro[];
   sideEffectOnSend?: (newMessageId: MessageToSendDbId | null) => void;
+  setShowReply?: Setter<boolean>;
 }) {
   const ctx = useEmailContext();
   const form = createMemo(() =>
@@ -234,7 +235,7 @@ export function BaseInput(props: {
   }
 
   async function executeSaveDraft() {
-    if (bodyMacro().trim().length === 0) {
+    if (bodyMacro().trim().length === 0 || isPendingSend()) {
       return;
     }
     const draftToSave = collectDraft();
@@ -399,56 +400,38 @@ export function BaseInput(props: {
     });
     if (!prepared) return;
 
-    try {
-      const response = await raceTimeout(
-        emailClient.sendMessage({
-          message: {
-            bcc,
-            body_html: prepared.bodyHtml,
-            body_macro: bodyMacro(),
-            body_text: prepared.bodyText,
-            cc,
-            provider_id: props.draft?.provider_id,
-            provider_thread_id: currentThread?.provider_id,
-            replying_to_id: props.replyingTo()?.db_id,
-            subject: form().subject(),
-            thread_db_id: currentThread?.db_id,
-            to,
-            link_id: linkId!,
-          },
-        }),
-        2000,
-        true,
-        new Error('Email send timed out')
-      );
-      if (isOk(response)) {
-        toast.success('Email sent');
-        const [, { message }] = response;
-        prepared.mentions.forEach((mention) => {
-          trackMention(blockId, 'document', mention.documentId);
-        });
-        editor()?.update(
-          () => {
-            const root = $getRoot();
-            const paragraph = $createParagraphNode();
-            root.clear();
-            root.append(paragraph);
-          },
-          { tag: 'external' }
-        );
-        resetState();
-        if (props.sideEffectOnSend) {
-          props.sideEffectOnSend(message.db_id ?? null);
-        }
-      } else {
-        toast.failure('Failed to send email. Please try again.');
-        logger.error(new Error('Failed to send email'));
+    const response = await emailClient.sendMessage({
+      message: {
+        bcc,
+        body_html: prepared.bodyHtml,
+        body_macro: bodyMacro(),
+        body_text: prepared.bodyText,
+        cc,
+        provider_id: props.draft?.provider_id,
+        provider_thread_id: currentThread?.provider_id,
+        replying_to_id: props.replyingTo()?.db_id,
+        subject: form().subject(),
+        thread_db_id: currentThread?.db_id,
+        to,
+        link_id: linkId!,
+      },
+    });
+    if (isOk(response)) {
+      toast.success('Email sent');
+      const [, { message }] = response;
+      prepared.mentions.forEach((mention) => {
+        trackMention(blockId, 'document', mention.documentId);
+      });
+      clearEmailBody(editor());
+      resetState();
+      if (props.sideEffectOnSend) {
+        props.sideEffectOnSend(message.db_id ?? null);
       }
-    } catch (_) {
-      toast.failure('Failed to send email. Please try again.');
-    } finally {
-      setIsPendingSend(false);
+    } else {
+      toast.failure('Failed to send email');
     }
+
+    setIsPendingSend(false);
   };
 
   const resetState = () => {
@@ -462,12 +445,10 @@ export function BaseInput(props: {
   const handleDeleteDraft = () => {
     const draftId = savedDraftId();
     if (!draftId) {
-      toast.failure('No draft to delete');
-      return;
+      return console.error('No draft to delete');
     }
     deleteEmailDraft(draftId).then((success) => {
       if (success) {
-        toast.success('Draft deleted');
         if (props.replyingTo()?.db_id) {
           ctx.setMessageDbIdToDraftChildren(
             produce((state) => {
@@ -476,16 +457,9 @@ export function BaseInput(props: {
             })
           );
         }
-        editor()?.update(
-          () => {
-            const root = $getRoot();
-            const paragraph = $createParagraphNode();
-            root.clear();
-            root.append(paragraph);
-          },
-          { tag: 'external' }
-        );
+        clearEmailBody(editor());
         resetState();
+        props.setShowReply?.(false);
       } else {
         toast.failure('Failed to delete draft');
       }
@@ -577,7 +551,7 @@ export function BaseInput(props: {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class={`macro-message-width relative flex-1 flex flex-col border border-edge px-3 py-2 bg-input`}
+      class={`relative flex-1 flex flex-col border border-edge px-3 py-2 bg-input`}
     >
       {/* Top Bar */}
       <div class="flex items-start gap-2">
@@ -788,7 +762,7 @@ export function BaseInput(props: {
           <MarkdownTextarea
             captureEditor={setEditor}
             class={`text-sm break-words text-ink ${isDragging() && 'blur'}`}
-            editable={() => true}
+            editable={() => !isPendingSend()}
             initialValue={props.preloadedBody}
             initialHtml={props.preloadedHtml}
             placeholder=""

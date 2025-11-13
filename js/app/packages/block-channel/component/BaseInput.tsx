@@ -7,6 +7,7 @@ import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { isInBlock } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
+import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { fileDrop } from '@core/directive/fileDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -60,7 +61,7 @@ type InputAttachmentsStore = {
 type BaseInputProps = {
   /** callback to be executed when the user clicks the send button
    * or presses enter */
-  onSend: typeof sendMessage;
+  onSend: (args: Parameters<typeof sendMessage>[0]) => Promise<void>;
   /** callback to be executed when the user changes the input */
   onChange: (content: string) => void;
   /** callback to be executed when the user clears the input */
@@ -100,7 +101,7 @@ export function BaseInput(props: BaseInputProps) {
   const key = props.inputAttachments.key;
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
   const [isDraggedOver, setIsDraggedOver] = createSignal(false);
-
+  const [isPendingSend, setIsPendingSend] = createSignal(false);
   const [isValidChannelDrag] = isInBlock()
     ? isValidChannelDragSignal
     : createSignal(false);
@@ -161,6 +162,7 @@ export function BaseInput(props: BaseInputProps) {
     setNodeFormat,
     mentions,
     MarkdownArea,
+    editor,
   } = useChannelMarkdownArea();
 
   const allMentions: Accessor<SimpleMention[]> = () =>
@@ -281,8 +283,12 @@ export function BaseInput(props: BaseInputProps) {
   }
 
   function handleSend() {
+    if (isPendingSend()) return false;
+    setIsPendingSend(true);
     const content = markdownState();
-    console.log('content', content);
+    clearMarkdownArea();
+    focusMarkdownArea();
+
     const args = {
       content: content,
       attachments: props.inputAttachments.store[key] ?? [],
@@ -293,13 +299,23 @@ export function BaseInput(props: BaseInputProps) {
       .onSend(args)
       .then(() => {
         props.inputAttachments.setStore(key, []);
-        clearMarkdownArea();
-        focusMarkdownArea();
         stopTyping();
         return props.afterSend?.();
       })
-      .catch((err) => {
-        logger.error('onSend failed', { error: err });
+      .catch((_) => {
+        // Restore the stashed editor state
+        clearMarkdownArea();
+        try {
+          setEditorStateFromMarkdown(editor, content);
+        } catch (e) {
+          logger.error('Failed to restore editor state after send error', {
+            error: e,
+          });
+        }
+        focusMarkdownArea();
+      })
+      .finally(() => {
+        setIsPendingSend(false);
       });
 
     return true;
@@ -399,9 +415,9 @@ export function BaseInput(props: BaseInputProps) {
           placeholder={props.placeholder}
           onEnter={
             isMobileWidth()
-              ? undefined
-              : () => {
-                  if (hasPendingAttachments()) {
+              ? (_e) => false
+              : (_e) => {
+                  if (hasPendingAttachments() || isPendingSend()) {
                     return true;
                   }
                   return handleSend();
@@ -484,7 +500,7 @@ export function BaseInput(props: BaseInputProps) {
         >
           <div class="bg-transparent rounded-full size-8 flex flex-row justify-center items-center">
             <Show
-              when={!hasPendingAttachments()}
+              when={!hasPendingAttachments() && !isPendingSend()}
               fallback={
                 <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
               }
