@@ -900,10 +900,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
   });
 
-  const hasRefinementsFromBase = createMemo(() => {
-    return isViewConfigChanged() || validSearchTerms() || validSearchFilters();
-  });
-
   const onClickSaveViewConfigChanges = () => {
     const view_ = view();
     const config = currentViewConfigBase();
@@ -1178,7 +1174,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             entityListRef={setLocalEntityListRef}
             virtualizerHandle={setVirtualizerHandle}
             emptyState={<EmptyState view={view()?.view} />}
-            hasRefinementsFromBase={hasRefinementsFromBase}
+            hasRefinementsFromBase={isViewConfigChanged}
           >
             {(innerProps) => {
               const displayDoneButton = () => {
