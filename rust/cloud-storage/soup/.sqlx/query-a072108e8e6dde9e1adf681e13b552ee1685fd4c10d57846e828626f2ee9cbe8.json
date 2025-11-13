@@ -1,0 +1,108 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH RECURSIVE ProjectHierarchy AS (\n            SELECT p.id, uia.access_level \n            FROM \"Project\" p\n            JOIN \"UserItemAccess\" uia ON p.id = uia.item_id AND uia.item_type = 'project'\n            WHERE uia.user_id = $1 AND p.\"deletedAt\" IS NULL\n            UNION ALL\n            SELECT p.id, ph.access_level\n            FROM \"Project\" p \n            JOIN ProjectHierarchy ph ON p.\"parentId\" = ph.id\n            WHERE p.\"deletedAt\" IS NULL\n        ),\n        AllAccessGrants AS (\n            SELECT item_id, item_type, access_level \n            FROM \"UserItemAccess\" \n            WHERE user_id = $1\n            UNION ALL\n            SELECT d.id AS item_id, 'document' AS item_type, ph.access_level\n            FROM \"Document\" d \n            JOIN ProjectHierarchy ph ON d.\"projectId\" = ph.id\n            WHERE d.\"projectId\" IS NOT NULL AND d.\"deletedAt\" IS NULL\n            UNION ALL\n            SELECT c.id AS item_id, 'chat' AS item_type, ph.access_level\n            FROM \"Chat\" c \n            JOIN ProjectHierarchy ph ON c.\"projectId\" = ph.id\n            WHERE c.\"projectId\" IS NOT NULL AND c.\"deletedAt\" IS NULL\n            UNION ALL\n            SELECT ph.id AS item_id, 'project' AS item_type, ph.access_level \n            FROM ProjectHierarchy ph\n        ),\n        UserAccessibleItems AS (\n            SELECT DISTINCT ON (item_id, item_type) item_id, item_type\n            FROM AllAccessGrants\n            ORDER BY item_id, item_type, \n                CASE access_level\n                    WHEN 'owner' THEN 4\n                    WHEN 'edit' THEN 3 \n                    WHEN 'comment' THEN 2\n                    WHEN 'view' THEN 1\n                    ELSE 0\n                END DESC\n        ),\n        Combined AS (\n            SELECT\n                'document' as \"item_type!\",\n                d.id as \"id!\",\n                CAST(COALESCE(di.id, db.id) as TEXT) as \"document_version_id\",\n                d.owner as \"user_id!\",\n                d.name as \"name!\",\n                d.\"branchedFromId\" as \"branched_from_id\",\n                d.\"branchedFromVersionId\" as \"branched_from_version_id\",\n                d.\"documentFamilyId\" as \"document_family_id\",\n                d.\"fileType\" as \"file_type\",\n                d.\"createdAt\"::timestamptz as \"created_at!\",\n                d.\"updatedAt\"::timestamptz as \"updated_at!\",\n                d.\"projectId\" as \"project_id\",\n                NULL as \"is_persistent\",\n                di.sha as \"sha\",\n                uh.\"updatedAt\"::timestamptz as \"viewed_at\"\n            FROM \"Document\" d\n            INNER JOIN UserAccessibleItems uai \n                ON uai.item_id = d.id \n                AND uai.item_type = 'document'\n            LEFT JOIN \"UserHistory\" uh \n                ON uh.\"itemId\" = d.id \n                AND uh.\"itemType\" = 'document' \n                AND uh.\"userId\" = $1\n            LEFT JOIN LATERAL (\n                SELECT b.id \n                FROM \"DocumentBom\" b \n                WHERE b.\"documentId\" = d.id \n                ORDER BY b.\"createdAt\" DESC \n                LIMIT 1\n            ) db ON true\n            LEFT JOIN LATERAL (\n                SELECT i.id, i.sha \n                FROM \"DocumentInstance\" i \n                WHERE i.\"documentId\" = d.id \n                ORDER BY i.\"updatedAt\" DESC \n                LIMIT 1\n            ) di ON true\n            LEFT JOIN \"DocumentEmail\" de ON de.document_id = d.id\n            WHERE d.\"deletedAt\" IS NULL\n            AND d.id = ANY($2::text[])\n            AND de.document_id IS NULL -- don't include email attachments in soup for now\n\n            UNION ALL\n        \n            SELECT\n                'chat' as \"item_type!\",\n                c.id as \"id!\",\n                NULL as \"document_version_id\",\n                c.\"userId\" as \"user_id!\",\n                c.name as \"name!\",\n                NULL as \"branched_from_id\",\n                NULL as \"branched_from_version_id\",\n                NULL as \"document_family_id\",\n                NULL as \"file_type\",\n                c.\"createdAt\"::timestamptz as \"created_at!\",\n                c.\"updatedAt\"::timestamptz as \"updated_at!\",\n                c.\"projectId\" as \"project_id\",\n                c.\"isPersistent\" as \"is_persistent\",\n                NULL as \"sha\",\n                uh.\"updatedAt\"::timestamptz as \"viewed_at\"\n            FROM \"Chat\" c\n            INNER JOIN UserAccessibleItems uai \n                ON uai.item_id = c.id \n                AND uai.item_type = 'chat'\n            LEFT JOIN \"UserHistory\" uh \n                ON uh.\"itemId\" = c.id \n                AND uh.\"itemType\" = 'chat' \n                AND uh.\"userId\" = $1\n            WHERE c.\"deletedAt\" IS NULL\n            AND c.id = ANY($3::text[])\n        )\n        SELECT * \n        FROM Combined\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "item_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "document_version_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "user_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "name!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "branched_from_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "branched_from_version_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 7,
+        "name": "document_family_id",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 8,
+        "name": "file_type",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 10,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 11,
+        "name": "project_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 12,
+        "name": "is_persistent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 13,
+        "name": "sha",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 14,
+        "name": "viewed_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "a072108e8e6dde9e1adf681e13b552ee1685fd4c10d57846e828626f2ee9cbe8"
+}
