@@ -131,7 +131,6 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const mdData = mdStore.get;
   const setMdData = mdStore.set;
   const blockData = blockDataSignal.get;
-  const isOwner = useIsDocumentOwner();
 
   const canEdit = useCanEdit();
   const renameMarkdownDocument = useRenameMarkdownDocument();
@@ -278,10 +277,10 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
     <div class="relative">
       <div
         ref={mountRef}
-        contentEditable={isOwner() ?? false}
+        contentEditable={canEdit() ?? false}
         class="text-4xl font-semibold **:optical-24!"
         classList={{
-          'select-auto': !isOwner(),
+          'select-auto': !canEdit(),
         }}
       />
       <EmojiMenu
