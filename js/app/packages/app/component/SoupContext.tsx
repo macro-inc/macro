@@ -453,22 +453,22 @@ export function createNavigationEntityListShortcut({
   };
 
   const handleNavigationSelection = (input: NavigationInput) => {
-    // Start selection - select self and next
-    // Next not selected - go next and select
-    // Next selected - unselect self and go next
-
     const highlightedEntity = getHighlightedEntity();
-
     const currentIndex = highlightedEntity?.index ?? -1;
-
     const nextIndex = calculateEntityIndex(currentIndex, input);
 
     const nextEntity = entities()?.at(nextIndex);
-
     if (!nextEntity) return true;
 
     if (!highlightedEntity) {
       navigateAndSelectEntity(input);
+      return true;
+    }
+
+    // If selectedEntities is empty, select current item first without moving
+    const selectedEntities = viewData()?.selectedEntities || [];
+    if (selectedEntities.length === 0) {
+      toggleEntity(highlightedEntity.entity);
       return true;
     }
 
