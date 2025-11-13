@@ -89,12 +89,14 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
           </Show>
         }
       >
-        <button
-          onClick={handleEditClick}
-          class="text-ink-muted hover:text-ink text-xs hover:bg-hover px-2 py-1 cursor-pointer border border-edge bg-transparent inline-block shrink-0"
-        >
-          {props.property.isMultiSelect ? '+' : '>'}
-        </button>
+        <Show when={entities.length === 0 || props.property.isMultiSelect}>
+          <button
+            onClick={handleEditClick}
+            class="text-ink-muted hover:text-ink text-xs hover:bg-hover px-2 py-1 cursor-pointer border border-edge bg-transparent inline-block shrink-0"
+          >
+            {<>+</>}
+          </button>
+        </Show>
       </Show>
     </div>
   );
