@@ -1,6 +1,6 @@
 use uuid::Uuid;
 
-/// create record in DocumentEmail table, linking the document (an email attachment) and email message
+/// create record in document_email table, linking the document (an email attachment) and email message
 pub async fn create_document_email_record(
     transaction: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     document_id: &str,
@@ -8,7 +8,7 @@ pub async fn create_document_email_record(
 ) -> anyhow::Result<()> {
     sqlx::query!(
         r#"
-            INSERT INTO "DocumentEmail" (document_id, email_message_id)
+            INSERT INTO "document_email" (document_id, email_message_id)
             VALUES ($1, $2)
         "#,
         document_id,
