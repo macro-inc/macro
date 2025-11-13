@@ -11,8 +11,8 @@ export function ColorSwatch(props: { width: string; color: string }) {
       <div
         style={{
           'background-color': props.color,
-          'width': props.width,
-          'height': '10px',
+          width: props.width,
+          height: '10px',
         }}
       />
     </div>
