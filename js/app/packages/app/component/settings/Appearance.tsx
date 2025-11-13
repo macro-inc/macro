@@ -12,7 +12,7 @@ export function Appearance() {
     <TabContent title="Appearance">
       <div
         style={{
-          'grid-template-rows': `min-content min-content ${isMobileWidth() ? '269px' : '205px'}`,
+          'grid-template-rows': `min-content min-content ${isMobileWidth() ? '205px' : '269px'}`,
           display: 'grid',
           gap: '8px',
         }}

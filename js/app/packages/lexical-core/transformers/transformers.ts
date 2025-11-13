@@ -210,8 +210,8 @@ export const SEARCH_MATCH: TextMatchTransformer = {
   export: (_: LexicalNode) => {
     return null;
   },
-  importRegExp: xmlMatcher('macro-em'),
-  regExp: xmlMatcher('macro-em'),
+  importRegExp: xmlMatcher('macro_em'),
+  regExp: xmlMatcher('macro_em'),
   replace: (textNode, match) => {
     try {
       const searchMatchNode = $createSearchMatchNode([]);

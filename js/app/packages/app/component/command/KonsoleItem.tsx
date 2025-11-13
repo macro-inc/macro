@@ -681,9 +681,7 @@ export function CommandItemCard(props: CommandItemProps) {
           <StaticMarkdown
             markdown={
               // TODO: This should be <m-search-match>
-              snippet.content
-                .replaceAll('macro_em', 'macro-em')
-                .replaceAll('\n', ' ')
+              snippet.content.replaceAll('\n', ' ')
             }
           />
         </Message.Body>

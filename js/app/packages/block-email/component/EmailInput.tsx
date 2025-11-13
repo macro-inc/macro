@@ -2,16 +2,16 @@ import type {
   MessageToSendDbId,
   MessageWithBodyReplyless,
 } from '@service-email/generated/schemas';
-import { type Accessor, createMemo, Show } from 'solid-js';
+import { type Accessor, createMemo, type Setter, Show } from 'solid-js';
 import { produce } from 'solid-js/store';
 import { decodeBase64Utf8 } from '../util/decodeBase64';
-import { scrollToLastMessage } from '../util/scrollToMessage';
 import { BaseInput } from './BaseInput';
 import { useEmailContext } from './EmailContext';
 
 interface EmailInputProps {
   replyingTo: Accessor<MessageWithBodyReplyless>;
   draft?: MessageWithBodyReplyless;
+  setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }
 
@@ -53,14 +53,6 @@ export function EmailInput(props: EmailInputProps) {
 
     // Set focus to new message if provided
     if (newMessageId) ctx.setFocusedMessageId(newMessageId);
-
-    // Scroll last message into view after DOM updates
-    setTimeout(() => {
-      const container = ctx.messagesRef();
-      if (container) {
-        scrollToLastMessage(container, 'smooth');
-      }
-    }, 100);
   }
 
   return (
@@ -71,6 +63,7 @@ export function EmailInput(props: EmailInputProps) {
         preloadedHtml={draftHTML()}
         draftContainsAppendedReply={draftContainsAppendedReply()}
         sideEffectOnSend={afterSend}
+        setShowReply={props.setShowReply}
         markdownDomRef={props.markdownDomRef}
       />
     </Show>

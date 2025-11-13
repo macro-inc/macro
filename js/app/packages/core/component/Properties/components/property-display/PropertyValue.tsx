@@ -68,7 +68,9 @@ export const PropertyValue: Component<PropertyValueProps> = (props) => {
         <SelectValue
           property={props.property}
           canEdit={canEdit}
+          entityType={entityType}
           onEdit={props.onEdit}
+          onRefresh={onRefresh}
         />
       );
 
@@ -79,6 +81,7 @@ export const PropertyValue: Component<PropertyValueProps> = (props) => {
           canEdit={canEdit}
           entityType={entityType}
           onEdit={props.onEdit}
+          onRefresh={onRefresh}
         />
       );
 
