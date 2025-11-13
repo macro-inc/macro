@@ -148,9 +148,6 @@ export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
 const ALL_VIEWCONFIG_DEFAULTS = {
   all: {
     view: 'all',
-    filters: {
-      typeFilter: ['channel', 'chat', 'document', 'email'],
-    },
     sort: {
       sortBy: 'viewed_at',
     },

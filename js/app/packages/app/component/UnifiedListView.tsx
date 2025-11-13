@@ -376,15 +376,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     );
   };
 
-  const showProjects = createMemo(() => {
-    if (notificationFilter() !== 'all') return false;
-    const hasProjectTypeFilter =
-      entityTypeFilter().length === 0 || entityTypeFilter().includes('project');
-    return hasProjectTypeFilter;
-  });
-  // TODO: deprecate show projects display option
-  setViewDataStore(selectedView(), 'display', 'showProjects', showProjects);
-  const _setShowProjects = (showProjects: DisplayOptions['showProjects']) => {};
+  const showProjects = createMemo(
+    () => view()?.display?.showProjects ?? defaultDisplayOptions.showProjects
+  );
+  const setShowProjects = (showProjects: DisplayOptions['showProjects']) => {
+    setViewDataStore(selectedView(), 'display', 'showProjects', showProjects);
+  };
 
   const showUnreadIndicator = createMemo(
     () =>
@@ -1140,6 +1137,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     <SortComponent size="SM" />
                   </section>
                   <section class="gap-1 grid p-2">
+                    <Show when={view()?.viewType !== 'project'}>
+                      <ToggleSwitch
+                        size="SM"
+                        label="Show Projects"
+                        checked={showProjects()}
+                        onChange={setShowProjects}
+                      />
+                    </Show>
                     <ToggleSwitch
                       size="SM"
                       label="Unroll Notifications"
