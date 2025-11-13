@@ -4,7 +4,7 @@ import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import type { BlockName } from '@core/block';
 import { BozzyBracket } from '@core/component/BozzyBracket';
 import type { ChannelsContext } from '@core/component/ChannelsProvider';
-import { BasicHotkey } from '@core/component/Hotkey';
+import { Hotkey } from '@core/component/Hotkey';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { Message } from '@core/component/Message';
 import { UserIcon } from '@core/component/UserIcon';
@@ -586,8 +586,13 @@ export function CommandItemCard(props: CommandItemProps) {
     if (props.item.type !== 'command') return null;
     if (props.item.data.hotkeys.length === 0) return null;
     return (
-      <div class="pr-2">
-        <BasicHotkey shortcut={props.item.data.hotkeys.at(0)} size="lg" />
+      <div class="pr-2 flex items-center justify-center text-[0.75rem] font-medium text-ink-extra-muted">
+        <div class="p-2 py-0.5 border border-edge-muted/50 rounded-xs">
+          <Hotkey
+            shortcut={props.item.data.hotkeys.at(0)}
+            class="flex gap-1 items-center"
+          />
+        </div>
       </div>
     );
   };
