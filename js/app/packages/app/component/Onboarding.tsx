@@ -1,55 +1,20 @@
-import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
-import {
-  useCheckout,
-  useSignUpAndConnectEmail,
-} from '@app/signal/email-connect';
-import { withAnalytics } from '@coparse/analytics';
-import { useHasPaidAccess } from '@core/auth/license';
+import { useOnboarding } from '@app/signal/onboarding/onboarding';
 import { BrightJoins } from '@core/component/BrightJoins';
 import BrightJoinsProgressMeter from '@core/component/BrightJoinsProgressMeter';
 import { ActionSequence } from '@core/component/FormControls/ActionSequence';
 import MacroLogo from '@core/component/MacroLogo';
 import { useNavigate } from '@solidjs/router';
-import { createEffect, createSignal, Show } from 'solid-js';
+import { Show } from 'solid-js';
 
 export default function Onboarding() {
-  const { track, TrackingEvents } = withAnalytics();
-
-  const [progress, setProgress] = createSignal(0);
-  const subscribed = useHasPaidAccess();
-
-  const [authenticatedState, signUpAndConnectEmail] =
-    useSignUpAndConnectEmail();
-
-  const [_, checkout] = useCheckout();
-
-  const authenticated = () => authenticatedState().type === 'authenticated';
-
   const navigate = useNavigate();
-
-  // TRACK PROGRESS, REDIRECT ON COMPLETE
-  createEffect(() => {
-    const steps = [authenticated(), subscribed()];
-
-    const p = steps
-      .map((b) => +!!b) // unary + converts bool to int
-      .reduce((a, b) => a + b);
-
-    setProgress((p / steps.length) * 100);
-
-    if (p === steps.length) {
-      complete();
-    }
-  });
-
-  function complete() {
-    // Redirect on completion
-    if (localStorage.getItem('new_user_onboarding')) {
-      track(TrackingEvents.ONBOARDING.COMPLETE);
-      localStorage.removeItem('new_user_onboarding');
-    }
-    return navigate(DEFAULT_ROUTE);
-  }
+  const {
+    progress,
+    checkout,
+    authenticatedState,
+    checkoutState,
+    signUpAndConnectEmail,
+  } = useOnboarding();
 
   return (
     <div class="relative flex flex-col gap-4 justify-between items-center p-4 md:p-8 m-1 md:m-8 border border-edge">
@@ -59,14 +24,14 @@ export default function Onboarding() {
       <header
         class="flex max-md:flex-col w-full items-center gap-8"
         classList={{
-          'justify-between': !authenticated(),
+          'justify-between': authenticatedState().type !== 'authenticated',
         }}
       >
         <div class="w-40">
           <MacroLogo class="fill-ink-muted" />
         </div>
 
-        <Show when={!authenticated()}>
+        <Show when={authenticatedState().type !== 'authenticated'}>
           <p class="font-mono text-ink-extra-muted text-xs">
             Already have an account?{' '}
             <a
@@ -101,8 +66,10 @@ export default function Onboarding() {
             {
               label: 'Start Your Subscription',
               onClick: checkout,
-              disabled: authenticatedState().type !== 'authenticated',
-              completed: subscribed(),
+              disabled:
+                authenticatedState().type !== 'authenticated' ||
+                checkoutState().type === 'loading',
+              completed: checkoutState().type === 'finished',
             },
           ]}
         />
