@@ -308,6 +308,18 @@ export function createNavigationEntityListShortcut({
 
       const selectedEntity = entities()?.at(index);
       if (selectedEntity) {
+        if (splitHandle.content().type !== 'component') {
+          const { type, id } = selectedEntity;
+          if (type === 'document') {
+            const { fileType } = selectedEntity;
+            splitHandle.replace(
+              { type: fileTypeToBlockName(fileType), id },
+              true
+            );
+          } else {
+            splitHandle.replace({ type, id }, true);
+          }
+        }
         batch(() => {
           setViewDataStore(selectedView(), 'highlightedId', selectedEntity.id);
           setViewDataStore(selectedView(), 'selectedEntity', selectedEntity);
@@ -434,7 +446,7 @@ export function createNavigationEntityListShortcut({
   );
 
   registerHotkey({
-    hotkey: ['arrowdown', 'j'],
+    hotkey: ['j', 'arrowdown'],
     scopeId: splitHotkeyScope,
     description: 'Down',
     hotkeyToken: TOKENS.entity.step.end,
@@ -445,7 +457,7 @@ export function createNavigationEntityListShortcut({
     hide: true,
   });
   registerHotkey({
-    hotkey: ['arrowup', 'k'],
+    hotkey: ['k', 'arrowup'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.step.start,
     description: 'Up',

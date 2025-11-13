@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import type { ChannelData } from '@block-channel/definition';
 import {
   latestActivitySignal,
@@ -40,7 +41,7 @@ import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { toast } from 'core/component/Toast/Toast';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMethodRegistration } from 'core/orchestrator';
-import { createSignal, onMount } from 'solid-js';
+import { createRenderEffect, createSignal, onMount } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { ChannelInput } from './ChannelInput';
@@ -174,6 +175,9 @@ export function Channel(props: { data: Required<ChannelData> }) {
   const focusPrevious = () => {
     const tabbableEls = tabbable(blockRef()!);
     const activeEl = document.activeElement;
+    if (activeEl === channelWrapperRef() || activeEl === document.body)
+      return false;
+
     const activeElIndex = tabbableEls.indexOf(activeEl as FocusableElement);
     if (activeElIndex !== -1) {
       const prevIndex = activeElIndex - 1;
@@ -193,6 +197,21 @@ export function Channel(props: { data: Required<ChannelData> }) {
     e.stopPropagation();
     return focusPrevious();
   };
+
+  registerHotkey({
+    hotkey: 'enter',
+    scopeId: scopeId(),
+    description: 'Focus Channel Input',
+    keyDownHandler: () => {
+      if (channelInputRef()) {
+        channelInputRef()?.focus();
+        return true;
+      }
+      return false;
+    },
+    hotkeyToken: TOKENS.channel.focusInput,
+    hide: true,
+  });
 
   registerHotkey({
     hotkey: ['arrowup', 'k', 'shift+tab'],
@@ -226,9 +245,35 @@ export function Channel(props: { data: Required<ChannelData> }) {
     hotkeyToken: TOKENS.channel.focusNextMessage,
     hide: true,
   });
+  const [channelInputRef, setChannelInputRef] = createSignal<
+    HTMLDivElement | undefined
+  >();
+  const [channelWrapperRef, setChannelWrapperRef] = createSignal<
+    HTMLDivElement | undefined
+  >();
+  const [autoFocusOnMount, setAutoFocusOnMount] = createSignal(true);
+
+  const { navigatedFromJK } = useNavigatedFromJK();
+
+  createRenderEffect(() => {
+    if (navigatedFromJK()) {
+      setAutoFocusOnMount(false);
+    }
+  });
+
+  onMount(() => {
+    if (autoFocusOnMount()) return;
+    if (!navigatedFromJK()) return;
+
+    channelWrapperRef()?.focus();
+  });
 
   return (
-    <div class={`relative flex flex-col w-full h-full bg-panel`}>
+    <div
+      class={`relative flex flex-col w-full h-full bg-panel bracket-never`}
+      tabIndex={-1}
+      ref={setChannelWrapperRef}
+    >
       <ChannelDebouncedNotificationReadMarker
         notificationSource={notificationSource}
         channelId={channelId}
@@ -278,6 +323,8 @@ export function Channel(props: { data: Required<ChannelData> }) {
                 setInputAttachmentsStore={setChannelInputAttachmentsStore}
                 inputAttachmentsKey={channelId}
                 onFocusLeaveStart={onChannelInputFocusLeaveStart}
+                autoFocusOnMount={autoFocusOnMount()}
+                domRef={setChannelInputRef}
               />
             </div>
           </div>

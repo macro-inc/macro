@@ -281,6 +281,7 @@ export type EntityIconProps = {
    * Render the icon with a subtle background color?
    */
   useBackground?: boolean;
+  class?: string;
 };
 
 export type EntityIconSelector = EntityIconProps['targetType'];
@@ -311,6 +312,7 @@ export function EntityIcon(props: EntityIconProps) {
         [config().background]: props.useBackground && !isMonochrome(),
         [config().background]: props.useBackground && isMonochrome(),
         'p-[20%]': props.useBackground,
+        [`${props.class}`]: !!props.class,
       }}
     >
       <Dynamic component={icon()} />

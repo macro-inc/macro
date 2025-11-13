@@ -12,6 +12,7 @@ import { useEmailContext } from './EmailContext';
 interface EmailInputProps {
   replyingTo: Accessor<MessageWithBodyReplyless>;
   draft?: MessageWithBodyReplyless;
+  markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }
 
 export function EmailInput(props: EmailInputProps) {
@@ -70,6 +71,7 @@ export function EmailInput(props: EmailInputProps) {
         preloadedHtml={draftHTML()}
         draftContainsAppendedReply={draftContainsAppendedReply()}
         sideEffectOnSend={afterSend}
+        markdownDomRef={props.markdownDomRef}
       />
     </Show>
   );
