@@ -26,14 +26,13 @@ import type {
   EntityQueryOperations,
   EntityQueryWithOperations,
 } from '../queries/entity';
-import {
-  type EntitiesFilter,
-  type EntityComparator,
-  type EntityData,
-  type EntityFilter,
-  type EntityMapper,
-  type EntityRenderer,
-  getEntityProjectId,
+import type {
+  EntitiesFilter,
+  EntityComparator,
+  EntityData,
+  EntityFilter,
+  EntityMapper,
+  EntityRenderer,
 } from '../types/entity';
 import type { WithSearch } from '../types/search';
 import { Entity } from './Entity';
@@ -262,7 +261,6 @@ const getOperations = <T extends Partial<EntityQueryOperations>>(
 };
 
 interface UnifiedInfiniteListContext<T extends EntityData> {
-  showProjects: Accessor<boolean>;
   entityInfiniteQueries: Array<
     EntityQueryWithOperations<
       EntityData | WithSearch<EntityData>,
@@ -274,7 +272,6 @@ interface UnifiedInfiniteListContext<T extends EntityData> {
   requiredFilter?: Accessor<EntityFilter<T>>;
   optionalFilter?: Accessor<EntityFilter<T>>;
   entitySort?: Accessor<EntityComparator<T>>;
-  projectFilter?: Accessor<string | undefined>;
   searchFilter?: Accessor<EntitiesFilter<T> | undefined>;
   isSearchActive?: Accessor<boolean>;
   // TODO: deduplicate entities for same match
@@ -288,8 +285,6 @@ export function createUnifiedInfiniteList<T extends EntityData>({
   requiredFilter,
   optionalFilter,
   entitySort,
-  showProjects,
-  projectFilter,
   searchFilter,
   isSearchActive,
 }: UnifiedInfiniteListContext<T>) {
@@ -380,31 +375,8 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     deduplicateEntities(filteredEntities())
   );
 
-  const projectFilterEntities = createMemo(() => {
-    const entities = deduplicatedEntities();
-    if (showProjects()) {
-      const projectEntityIds = new Set(
-        entities.filter((e) => e.type === 'project').map((p) => p.id)
-      );
-      const currentProjectId = projectFilter?.();
-      if (currentProjectId) {
-        projectEntityIds.add(currentProjectId);
-      }
-
-      // filter out all entities that have a projectid included in projectEntities
-      return entities.filter((e) => {
-        if (e.type === 'project') return true;
-        const projectId = getEntityProjectId(e);
-        if (projectId) return projectEntityIds.has(projectId);
-        return false;
-      });
-    } else {
-      return entities.filter((e) => e.type !== 'project');
-    }
-  });
-
   const sortedEntities = createMemo<T[]>(() => {
-    const entities = projectFilterEntities();
+    const entities = deduplicatedEntities();
     const sortFn = entitySort?.();
     const searching = isSearchActive?.();
 
