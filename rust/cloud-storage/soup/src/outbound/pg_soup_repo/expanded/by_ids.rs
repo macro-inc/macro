@@ -111,10 +111,8 @@ pub async fn expanded_soup_by_ids<'a>(
                 ORDER BY i."updatedAt" DESC 
                 LIMIT 1
             ) di ON true
-            LEFT JOIN "DocumentEmail" de ON de.document_id = d.id
             WHERE d."deletedAt" IS NULL
             AND d.id = ANY($2::text[])
-            AND de.document_id IS NULL -- don't include email attachments in soup for now
 
             UNION ALL
         
