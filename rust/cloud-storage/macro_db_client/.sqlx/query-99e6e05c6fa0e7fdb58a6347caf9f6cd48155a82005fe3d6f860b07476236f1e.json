@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            t.id\n        FROM\n            \"email_threads\" t\n        JOIN\n            \"email_links\" l ON t.\"link_id\" = l.id\n        WHERE\n            l.\"macro_id\" = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "99e6e05c6fa0e7fdb58a6347caf9f6cd48155a82005fe3d6f860b07476236f1e"
+}

@@ -7178,6 +7178,7 @@ dependencies = [
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
+ "macro_user_id",
  "model",
  "models_email",
  "models_search",

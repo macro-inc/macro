@@ -5,13 +5,12 @@ use crate::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
         model::{Highlight, parse_highlight_hit},
         query::Keys,
-        utils::should_wildcard_field_query_builder,
     },
 };
 
 use crate::SearchOn;
 use opensearch_query_builder::{
-    FieldSort, QueryType, ScoreWithOrderSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
+    FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
 };
 
 use crate::search::model::DefaultSearchResponse;
@@ -20,7 +19,7 @@ use serde_json::Value;
 struct EmailSearchConfig;
 
 impl SearchQueryConfig for EmailSearchConfig {
-    const ID_KEY: &'static str = "message_id";
+    const ID_KEY: &'static str = "thread_id";
     const INDEX: &'static str = EMAIL_INDEX;
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "subject";
@@ -36,30 +35,12 @@ impl SearchQueryConfig for EmailSearchConfig {
 
 struct EmailQueryBuilder {
     inner: SearchQueryBuilder<EmailSearchConfig>,
-    /// thread ids to query over
-    thread_ids: Vec<String>,
-    /// link ids to query over
-    link_ids: Vec<String>,
-    /// The sender of the email message
-    sender: Vec<String>,
-    /// The cc of the email message
-    cc: Vec<String>,
-    /// The bcc of the email message
-    bcc: Vec<String>,
-    /// The recipients of the email message
-    recipients: Vec<String>,
 }
 
 impl EmailQueryBuilder {
     pub fn new(terms: Vec<String>) -> Self {
         Self {
             inner: SearchQueryBuilder::new(terms),
-            thread_ids: Vec::new(),
-            link_ids: Vec::new(),
-            sender: Vec::new(),
-            cc: Vec::new(),
-            bcc: Vec::new(),
-            recipients: Vec::new(),
         }
     }
 
@@ -75,77 +56,9 @@ impl EmailQueryBuilder {
         fn ids_only(ids_only: bool) -> Self;
     }
 
-    pub fn thread_ids(mut self, thread_ids: Vec<String>) -> Self {
-        self.thread_ids = thread_ids;
-        self
-    }
-
-    pub fn link_ids(mut self, link_ids: Vec<String>) -> Self {
-        self.link_ids = link_ids;
-        self
-    }
-
-    pub fn sender(mut self, sender: Vec<String>) -> Self {
-        self.sender = sender;
-        self
-    }
-
-    pub fn cc(mut self, cc: Vec<String>) -> Self {
-        self.cc = cc;
-        self
-    }
-
-    pub fn bcc(mut self, bcc: Vec<String>) -> Self {
-        self.bcc = bcc;
-        self
-    }
-
-    pub fn recipients(mut self, recipients: Vec<String>) -> Self {
-        self.recipients = recipients;
-        self
-    }
-
     fn build_search_request(self) -> Result<SearchRequest> {
         // Build the main bool query containing all terms and any other filters
-        let mut bool_query = self.inner.build_bool_query()?;
-
-        // CUSTOM ATTRIBUTES SECTION
-
-        // If thread_ids are provided, add them to the query
-        if !self.thread_ids.is_empty() {
-            bool_query.must(QueryType::terms("thread_id", self.thread_ids));
-        }
-
-        // If link_ids are provided, add them to the query
-        if !self.link_ids.is_empty() {
-            bool_query.must(QueryType::terms("link_id", self.link_ids));
-        }
-
-        if !self.sender.is_empty() {
-            // Create new query for senders
-            let senders_query = should_wildcard_field_query_builder("sender", &self.sender);
-            bool_query.must(senders_query);
-        }
-
-        if !self.cc.is_empty() {
-            let ccs_query = should_wildcard_field_query_builder("cc", &self.cc);
-            bool_query.must(ccs_query);
-        }
-
-        if !self.bcc.is_empty() {
-            // Create new query for bccs
-            let bccs_query = should_wildcard_field_query_builder("bcc", &self.bcc);
-            bool_query.must(bccs_query);
-        }
-
-        if !self.recipients.is_empty() {
-            // Create new query for recipients
-            let recipients_query =
-                should_wildcard_field_query_builder("recipients", &self.recipients);
-            bool_query.must(recipients_query);
-        }
-
-        // END CUSTOM ATTRIBUTES SECTION
+        let bool_query = self.inner.build_bool_query()?;
 
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
@@ -206,13 +119,7 @@ pub struct EmailSearchResponse {
 pub struct EmailSearchArgs {
     pub terms: Vec<String>,
     pub user_id: String,
-    pub message_ids: Vec<String>,
     pub thread_ids: Vec<String>,
-    pub link_ids: Vec<String>,
-    pub sender: Vec<String>,
-    pub cc: Vec<String>,
-    pub bcc: Vec<String>,
-    pub recipients: Vec<String>,
     pub page: u32,
     pub page_size: u32,
     pub match_type: String,
@@ -228,14 +135,8 @@ impl EmailSearchArgs {
             .page_size(self.page_size)
             .page(self.page)
             .user_id(&self.user_id)
-            .ids(self.message_ids)
-            .thread_ids(self.thread_ids) // Now using the thread_ids parameter
-            .link_ids(self.link_ids)
-            .sender(self.sender)
-            .cc(self.cc)
-            .bcc(self.bcc)
+            .ids(self.thread_ids)
             .search_on(self.search_on)
-            .recipients(self.recipients)
             .collapse(self.collapse)
             .ids_only(self.ids_only)
             .build_search_request()?

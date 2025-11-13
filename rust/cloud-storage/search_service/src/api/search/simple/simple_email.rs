@@ -5,6 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use macro_user_id::user_id::MacroUserId;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::email::{EmailSearchRequest, SimpleEmailSearchResponse};
 use opensearch_client::search::emails::EmailSearchArgs;
@@ -58,6 +59,10 @@ pub(in crate::api::search) async fn search_emails(
         return Err(SearchError::NoUserId);
     }
 
+    let user_id = MacroUserId::parse_from_str(user_id)
+        .map_err(|_| SearchError::InvalidMacroUserId)?
+        .lowercase();
+
     let page = query_params.page.unwrap_or(0);
 
     let page_size = if let Some(page_size) = query_params.page_size {
@@ -86,24 +91,103 @@ pub(in crate::api::search) async fn search_emails(
 
     let filters = req.filters.unwrap_or_default();
 
+    let ids_only = !(filters.senders.is_empty()
+        || filters.cc.is_empty()
+        || filters.bcc.is_empty()
+        || filters.recipients.is_empty());
+
+    // We need to grab specific thread ids for the user if we have filters to apply
+    let thread_ids = if ids_only {
+        tracing::trace!("getting thread ids for user");
+        // Get the base thread ids for the user
+        let thread_ids = macro_db_client::items::filter::get_thread_ids_for_user(&ctx.db, &user_id)
+            .await
+            .map_err(SearchError::InternalError)?;
+
+        // Filter thread ids by senders
+        let thread_ids = if !filters.senders.is_empty() {
+            macro_db_client::items::filter::filter_thread_ids_by_senders(
+                &ctx.db,
+                &thread_ids,
+                &filters.senders,
+            )
+            .await
+            .map_err(SearchError::InternalError)?
+        } else {
+            thread_ids
+        };
+
+        if thread_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Filter thread ids by senders and recipients
+        let thread_ids = if !filters.recipients.is_empty() {
+            macro_db_client::items::filter::filter_thread_ids_by_recipients(
+                &ctx.db,
+                &thread_ids,
+                &filters.recipients,
+            )
+            .await
+            .map_err(SearchError::InternalError)?
+        } else {
+            thread_ids
+        };
+
+        if thread_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Filter thread ids by cc
+        let thread_ids = if !filters.cc.is_empty() {
+            macro_db_client::items::filter::filter_thread_ids_by_cc(
+                &ctx.db,
+                &thread_ids,
+                &filters.cc,
+            )
+            .await
+            .map_err(SearchError::InternalError)?
+        } else {
+            thread_ids
+        };
+
+        if thread_ids.is_empty() {
+            return Ok(vec![]);
+        }
+
+        // Filter thread ids by bcc
+        if !filters.bcc.is_empty() {
+            macro_db_client::items::filter::filter_thread_ids_by_bcc(
+                &ctx.db,
+                &thread_ids,
+                &filters.bcc,
+            )
+            .await
+            .map_err(SearchError::InternalError)?
+        } else {
+            thread_ids
+        }
+    } else {
+        vec![]
+    };
+
+    // If we have no thread_ids and ids_only is true, return an empty vec
+    if ids_only && thread_ids.is_empty() {
+        return Ok(vec![]);
+    }
+
     let results = ctx
         .opensearch_client
         .search_emails(EmailSearchArgs {
             terms,
-            user_id: user_id.to_string(),
-            message_ids: vec![],
-            thread_ids: vec![],
-            link_ids: vec![],
-            sender: filters.senders,
-            cc: filters.cc,
-            bcc: filters.bcc,
-            recipients: filters.recipients,
+            user_id: user_id.as_ref().to_string(),
+            thread_ids: thread_ids.iter().map(|t| t.to_string()).collect(),
             page,
             page_size,
             match_type: req.match_type.to_string(),
             search_on: req.search_on.into(),
             collapse: req.collapse.unwrap_or(false),
-            ids_only: false, // TODO: implement
+            ids_only,
         })
         .await
         .map_err(SearchError::Search)?;

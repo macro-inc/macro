@@ -30,6 +30,9 @@ pub enum SearchError {
     /// No user id found in user context
     #[error("no user id found in user context")]
     NoUserId,
+    /// Invalid macro user id
+    #[error("unable to parse user id")]
+    InvalidMacroUserId,
     /// Invalid page size
     #[error("page_size must be between 0 and 100")]
     InvalidPageSize,
@@ -53,7 +56,8 @@ impl IntoResponse for SearchError {
             SearchError::NoUserId => StatusCode::UNAUTHORIZED,
             SearchError::InvalidPageSize
             | SearchError::InvalidQuerySize
-            | SearchError::NoQueryOrTermsProvided => StatusCode::BAD_REQUEST,
+            | SearchError::NoQueryOrTermsProvided
+            | SearchError::InvalidMacroUserId => StatusCode::BAD_REQUEST,
             SearchError::Search(_) => StatusCode::INTERNAL_SERVER_ERROR,
             SearchError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT em.thread_id as id\n        FROM email_messages em\n        WHERE em.thread_id = ANY($1)\n        AND EXISTS (\n            SELECT 1\n            FROM email_message_recipients emr\n            JOIN email_contacts ec ON emr.contact_id = ec.id\n            WHERE emr.message_id = em.id\n            AND ec.email_address = ANY($2)\n            AND emr.recipient_type = 'TO'\n        )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d964942f66bd2df7a2427338a13747cf19a2801ae5a2bf2c0ccefd57a0c041b8"
+}
