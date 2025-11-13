@@ -230,14 +230,13 @@ const ALL_VIEWCONFIG_DEFAULTS = {
   docs: {
     view: 'docs',
     filters: {
-      typeFilter: ['document', 'project'],
-      documentTypeFilter: ['md', 'code', 'image', 'canvas', 'pdf', 'unknown'],
+      typeFilter: ['document'],
     },
   },
   ai: {
     view: 'ai',
     filters: {
-      typeFilter: ['chat', 'project'],
+      typeFilter: ['chat'],
     },
   },
   folders: {
