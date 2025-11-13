@@ -9,8 +9,8 @@ use tower::util::ServiceExt;
 
 use crate::{
     domain::{
-        models::{FrecencySoupItem, SoupErr},
-        ports::SoupService,
+        models::SoupErr,
+        ports::{SoupOutput, SoupService},
     },
     inbound::axum_router::{SoupRouterState, soup_router},
 };
@@ -23,7 +23,7 @@ impl SoupService for MockSoup {
     async fn get_user_soup(
         &self,
         _req: crate::domain::models::SoupRequest,
-    ) -> Result<models_pagination::PaginatedOpaqueCursor<FrecencySoupItem>, SoupErr> {
+    ) -> Result<SoupOutput, SoupErr> {
         Err(SoupErr::SoupDbErr(anyhow::anyhow!("Not implemented")))
     }
 }

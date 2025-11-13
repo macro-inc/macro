@@ -7,7 +7,6 @@ version = "0.1.0"
 [features]
 axum = [
   "dep:axum",
-  "dep:item_filters",
   "dep:model-error-response",
   "dep:model_user",
   "dep:utoipa",
@@ -18,10 +17,10 @@ axum = [
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
-either = { version = "1" }
+either = { workspace = true }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
-item_filters = { path = "../item_filters", optional = true }
+item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
@@ -40,11 +39,11 @@ uuid = { workspace = true }
 chrono = { workspace = true }
 cool_asserts = "2"
 frecency = { path = "../frecency", features = ["mock"] }
+futures = { workspace = true }
+http-body-util = { workspace = true }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
 ordered-float = "5"
+serde_json = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }
-futures = { workspace = true }
-http-body-util = { workspace = true }
-serde_json = { workspace = true }

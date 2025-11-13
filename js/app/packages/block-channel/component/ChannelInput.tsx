@@ -31,8 +31,8 @@ export function ChannelInput(props: ChannelInputProps) {
   const channelId = useBlockId();
 
   const sendMessage_ = createCallback(
-    async (args: Parameters<typeof sendMessage>[0]) => {
-      await sendMessage(args);
+    (args: Parameters<typeof sendMessage>[0]) => {
+      return sendMessage(args);
     }
   );
   const postTypingUpdate_ = createCallback(postTypingUpdate);

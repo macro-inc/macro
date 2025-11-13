@@ -8,15 +8,27 @@ pub async fn upsert_item_last_accessed(
     item_id: &str,
     item_type: &str,
 ) -> anyhow::Result<()> {
+    upsert_item_last_accessed_timestamp(transaction, item_id, item_type, &Utc::now()).await
+}
+
+/// Upserts an item into the ItemLastAccessed table with the specified timestamp
+#[tracing::instrument(skip(transaction))]
+pub async fn upsert_item_last_accessed_timestamp(
+    transaction: &mut Transaction<'_, Postgres>,
+    item_id: &str,
+    item_type: &str,
+    timestamp: &DateTime<Utc>,
+) -> anyhow::Result<()> {
     sqlx::query!(
         r#"
         INSERT INTO "ItemLastAccessed" ("item_id", "item_type", "last_accessed")
-        VALUES ($1, $2, NOW())
+        VALUES ($1, $2, $3)
         ON CONFLICT ("item_id", "item_type") DO UPDATE
-        SET "last_accessed" = NOW();
+        SET "last_accessed" = $3;
         "#,
         item_id,
         item_type,
+        timestamp.naive_utc()
     )
     .execute(transaction.as_mut())
     .await?;
@@ -32,16 +44,29 @@ pub async fn upsert_user_history(
     item_id: &str,
     item_type: &str,
 ) -> anyhow::Result<()> {
+    upsert_user_history_timestamp(transaction, user_id, item_id, item_type, &Utc::now()).await
+}
+
+/// Upserts an item into the user's history with the specified timestamp
+#[tracing::instrument(skip(transaction))]
+pub async fn upsert_user_history_timestamp(
+    transaction: &mut Transaction<'_, Postgres>,
+    user_id: &str,
+    item_id: &str,
+    item_type: &str,
+    timestamp: &DateTime<Utc>,
+) -> anyhow::Result<()> {
     sqlx::query!(
         r#"
         INSERT INTO "UserHistory" ("userId", "itemId", "itemType", "createdAt", "updatedAt")
-        VALUES ($1, $2, $3, NOW(), NOW())
+        VALUES ($1, $2, $3, $4, $4)
         ON CONFLICT ("userId", "itemId", "itemType") DO UPDATE
-        SET "updatedAt" = NOW();
+        SET "updatedAt" = $4;
         "#,
         user_id,
         item_id,
         item_type,
+        timestamp.naive_utc()
     )
     .execute(transaction.as_mut())
     .await?;
