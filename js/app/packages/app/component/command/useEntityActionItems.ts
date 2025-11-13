@@ -28,6 +28,7 @@ export const isEntityActionItem = (
 const getSelectedEntitiesContextInformation = () => {
   const context = konsoleContextInformation();
   const entities = context.selectedEntities;
+  const clearSelection = context.clearSelection as (() => void) | undefined;
 
   if (!context || !entities) return;
 
@@ -37,7 +38,7 @@ const getSelectedEntitiesContextInformation = () => {
     return;
   }
 
-  return entities;
+  return { entities, clearSelection };
 };
 
 export function useEntityActionItems(): Accessor<
@@ -50,14 +51,14 @@ export function useEntityActionItems(): Accessor<
         id: 'rename',
         name: 'Rename',
         handler() {
-          const selectedEntities = getSelectedEntitiesContextInformation();
+          const selectionInfo = getSelectedEntitiesContextInformation();
 
-          if (!selectedEntities || !selectedEntities.length) return true;
+          if (!selectionInfo || !selectionInfo.entities.length) return true;
 
           try {
             openBulkEditEntityModal({
               view: 'rename',
-              entities: () => selectedEntities,
+              entities: () => selectionInfo.entities,
             });
           } catch (err) {
             // Will throw an error if trying to use this action outside the unified list
@@ -77,14 +78,14 @@ export function useEntityActionItems(): Accessor<
         id: 'move_to_project',
         name: 'Move to project',
         handler() {
-          const selectedEntities = getSelectedEntitiesContextInformation();
+          const selectionInfo = getSelectedEntitiesContextInformation();
 
-          if (!selectedEntities || !selectedEntities.length) return true;
+          if (!selectionInfo || !selectionInfo.entities.length) return true;
 
           try {
             openBulkEditEntityModal({
               view: 'moveToProject',
-              entities: () => selectedEntities,
+              entities: () => selectionInfo.entities,
             });
           } catch (err) {
             // Will throw an error if trying to use this action outside the unified list
@@ -104,13 +105,13 @@ export function useEntityActionItems(): Accessor<
         id: 'mark_as_done',
         name: 'Mark as done',
         handler() {
-          const selectedEntities = getSelectedEntitiesContextInformation();
+          const selectionInfo = getSelectedEntitiesContextInformation();
 
-          if (!selectedEntities || !selectedEntities.length) return true;
+          if (!selectionInfo || !selectionInfo.entities.length) return true;
 
           try {
             // TODO - implement bulk mark as done
-            selectedEntities;
+            selectionInfo.entities;
           } catch (err) {
             console.error('Failed to mark entities', err);
           }
@@ -127,13 +128,13 @@ export function useEntityActionItems(): Accessor<
         id: 'copy',
         name: 'Duplicate',
         handler() {
-          const selectedEntities = getSelectedEntitiesContextInformation();
+          const selectionInfo = getSelectedEntitiesContextInformation();
 
-          if (!selectedEntities || !selectedEntities.length) return true;
+          if (!selectionInfo || !selectionInfo.entities.length) return true;
 
           try {
             // TODO - implement bulk duplicate
-            selectedEntities;
+            selectionInfo.entities;
           } catch (err) {
             console.error('Failed to duplicate entities', err);
           }
@@ -150,15 +151,18 @@ export function useEntityActionItems(): Accessor<
         id: 'delete',
         name: 'Delete',
         handler() {
-          const selectedEntities = getSelectedEntitiesContextInformation();
+          const selectionInfo = getSelectedEntitiesContextInformation();
 
-          if (!selectedEntities || !selectedEntities.length) return true;
+          if (!selectionInfo || !selectionInfo.entities.length) return true;
 
           try {
-            // TODO - implement bulk delete with confirmation
-            selectedEntities;
+            openBulkEditEntityModal({
+              view: 'delete',
+              entities: () => selectionInfo.entities,
+            });
+            // Selection will be cleared after successful deletion in the modal
           } catch (err) {
-            console.error('Failed to delete entities', err);
+            console.error('Failed to open bulk delete modal', err);
           }
 
           return true;

@@ -33,32 +33,32 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
 
   const canBulkMarkAsDone = () => {
     // TODO - See if we can disable this action ahead of time?
-    return true && props.disabled?.markAsDone === false;
+    return true && props.disabled?.markAsDone !== false;
   };
 
   const canBulkDelete = () => {
     // TODO - See if we can disable this action ahead of time?
-    return true && props.disabled?.delete === false;
+    return true && props.disabled?.delete !== false;
   };
 
   const canBulkRename = () => {
     // TODO - See if we can disable this action ahead of time?
-    return true && props.disabled?.rename === false;
+    return true && props.disabled?.rename !== false;
   };
 
   const canBulkMoveToProject = () => {
     // TODO - See if we can disable this action ahead of time?
-    return true && props.disabled?.moveToProject === false;
+    return true && props.disabled?.moveToProject !== false;
   };
 
   const canBulkCopy = () => {
     // TODO - See if we can disable this action ahead of time?
-    return true && props.disabled?.copy === false;
+    return true && props.disabled?.copy !== false;
   };
 
   const canBulkMoveToSplit = () => {
     // TODO - See if we can disable this action ahead of time?
-    return true && props.disabled?.moveToSplit === false;
+    return true && props.disabled?.moveToSplit !== false;
   };
 
   return (

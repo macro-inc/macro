@@ -361,7 +361,6 @@ export function useCommandItemAction(args: {
     const blockName = getCommandItemBlockName(item);
     const id = item.data.id;
     const split = action === 'new-split' ? insertSplit : replaceSplit;
-    console.log('GO TO LOCATION', id);
 
     if (blockName) {
       split({ type: blockName, id });
@@ -387,7 +386,6 @@ export function useCommandItemAction(args: {
                 limitToCurrentScope: true,
               }
             );
-            console.log(commandScopeCommands);
             resetQuery();
             setCommandScopeCommands(commandScopeCommands);
             break;

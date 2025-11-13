@@ -15,6 +15,7 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
+import { BulkDeleteView } from './BulkDeleteView';
 import { BulkRenameEntitiesView } from './BulkRenameEntitiesView';
 
 export const BulkEditEntityModalTitle = (props: { title: string }) => {
@@ -52,7 +53,7 @@ false && clickOutside;
 const BulkEditEntityModalContent = (props: {
   isOpen: Accessor<boolean>;
   setIsOpen: Setter<boolean>;
-  view: 'rename' | 'moveToProject' | null;
+  view: 'rename' | 'moveToProject' | 'delete' | null;
   entities: EntityData[];
 }) => {
   const handleFinish = () => {
@@ -91,6 +92,13 @@ const BulkEditEntityModalContent = (props: {
             {/* /> */}
             <div />
           </Show>
+          <Show when={props.view === 'delete'}>
+            <BulkDeleteView
+              entities={props.entities}
+              onFinish={handleFinish}
+              onCancel={handleCancel}
+            />
+          </Show>
         </div>
       </div>
     </SplitModal>
@@ -100,7 +108,7 @@ const BulkEditEntityModalContent = (props: {
 export type BulkEditEntityModalProps = {
   isOpen: Accessor<boolean>;
   setIsOpen: Setter<boolean>;
-  view: 'rename' | 'moveToProject';
+  view: 'rename' | 'moveToProject' | 'delete';
   entities: Accessor<EntityData[]>;
 };
 

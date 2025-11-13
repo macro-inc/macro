@@ -285,12 +285,13 @@ export function createBulkDeleteDssItemsMutation() {
       await queryClient.cancelQueries({
         queryKey: queryKeys.dss({ infinite: true }),
       });
+
       queryClient.setQueriesData(
         { queryKey: queryKeys.dss({ infinite: true }) },
         (prev: { pages: { items: EntityData[] }[] }) => {
           const pages = prev.pages.map((page) => ({
             ...page,
-            items: page.items.filter((item) => deletedIDs.includes(item.id)),
+            items: page.items.filter((item) => !deletedIDs.includes(item.id)),
           }));
           return {
             ...prev,
