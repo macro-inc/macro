@@ -1,5 +1,4 @@
-use crate::history::upsert_item_last_accessed;
-use crate::history::upsert_user_history;
+use crate::history::{upsert_item_last_accessed_timestamp, upsert_user_history_timestamp};
 use crate::share_permission::create::create_document_permission;
 use model::document::DocumentMetadata;
 use model::document::FileType;
@@ -11,6 +10,7 @@ use sqlx::Pool;
 use sqlx::Postgres;
 use sqlx::Transaction;
 use tracing::instrument;
+use uuid::Uuid;
 
 /// struct for creating a document
 #[derive(Debug)]
@@ -24,6 +24,8 @@ pub struct CreateDocumentArgs<'a> {
     pub project_name: Option<&'a str>,
     pub share_permission: &'a SharePermissionV2,
     pub skip_history: bool,
+    /// Optional value. If set, creates entry in document_email
+    pub email_attachment_id: Option<Uuid>,
     /// Optional value. defaults to now if not included
     pub created_at: Option<&'a chrono::DateTime<chrono::Utc>>,
 }
@@ -65,6 +67,7 @@ pub async fn create_document_txn(
         share_permission,
         skip_history,
         created_at: _, // overwritten below
+        email_attachment_id,
     } = args;
 
     // default to now if created_at argument not included
@@ -165,8 +168,10 @@ pub async fn create_document_txn(
 
     // Add item to user history for creator
     if !skip_history {
-        upsert_user_history(transaction, user_id, &document_id, "document").await?;
-        upsert_item_last_accessed(transaction, &document_id, "document").await?;
+        upsert_user_history_timestamp(transaction, user_id, &document_id, "document", created_at)
+            .await?;
+        upsert_item_last_accessed_timestamp(transaction, &document_id, "document", created_at)
+            .await?;
     }
 
     crate::item_access::insert::insert_user_item_access(
@@ -178,6 +183,15 @@ pub async fn create_document_txn(
         None,
     )
     .await?;
+
+    if email_attachment_id.is_some() {
+        crate::document::document_email::create_document_email_record(
+            transaction,
+            &document_id,
+            email_attachment_id.unwrap(),
+        )
+        .await?;
+    }
 
     Ok(DocumentMetadata::new_document(
         &document_id,
@@ -304,6 +318,7 @@ mod tests {
                 project_name: None,
                 share_permission: &SharePermissionV2::default(),
                 skip_history: false,
+                email_attachment_id: None,
                 created_at: Some(&ts),
             },
         )
@@ -329,6 +344,7 @@ mod tests {
                 project_name: None,
                 share_permission: &SharePermissionV2::default(),
                 skip_history: false,
+                email_attachment_id: None,
                 created_at: None,
             },
         )
@@ -366,6 +382,7 @@ mod tests {
                 project_name: None,
                 share_permission: &SharePermissionV2::default(),
                 skip_history: false,
+                email_attachment_id: None,
                 created_at: Some(&ts),
             },
         )
@@ -394,6 +411,7 @@ mod tests {
                 project_name: None,
                 share_permission: &SharePermissionV2::default(),
                 skip_history: false,
+                email_attachment_id: None,
                 created_at: None,
             },
         )
@@ -423,6 +441,7 @@ mod tests {
                 project_name: None,
                 share_permission: &SharePermissionV2::default(),
                 skip_history: false,
+                email_attachment_id: None,
                 created_at: None,
             },
         )

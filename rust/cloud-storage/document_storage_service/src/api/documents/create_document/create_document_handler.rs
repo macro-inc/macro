@@ -4,6 +4,7 @@ use axum::{Extension, extract::State, http::StatusCode, response::IntoResponse};
 use macro_middleware::cloud_storage::ensure_access::project::ProjectBodyAccessLevelExtractor;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
+use crate::api::middleware::internal_access::InternalUser;
 use crate::api::{
     context::ApiContext,
     documents::{
@@ -21,8 +22,8 @@ use model::{
 
 /// Handles creating a document
 #[utoipa::path(
-        tag = "document",
         post,
+        tag = "document",
         path = "/documents",
         request_body = CreateDocumentRequest,
         responses(
@@ -37,10 +38,19 @@ use model::{
 #[axum::debug_handler(state = ApiContext)]
 pub(in crate::api) async fn create_document_handler(
     State(state): State<ApiContext>,
+    internal_user: Option<Extension<InternalUser>>,
     user_context: Extension<UserContext>,
     project: ProjectBodyAccessLevelExtractor<EditAccessLevel, CreateDocumentRequest>,
 ) -> impl IntoResponse {
     let req = project.into_inner();
+
+    // email linking is internal only
+    if req.email_attachment_id.is_some() && internal_user.is_none() {
+        return GenericResponse::builder()
+            .message("can't link email in external request")
+            .is_error(true)
+            .send(StatusCode::UNAUTHORIZED);
+    }
 
     let user_provided_file_type: Option<FileType> = req
         .file_type
@@ -75,14 +85,17 @@ pub(in crate::api) async fn create_document_handler(
 
     let create_document_response_data = create_document_v2::create_document(
         &state,
-        req.id.as_deref(),
-        &req.sha,
-        &document_name,
-        &user_context.user_id,
-        file_type,
-        req.job_id.as_deref(),
-        req.project_id.as_deref(),
-        req.created_at.as_ref(),
+        create_document_v2::CreateDocumentParams {
+            id: req.id.as_deref(),
+            sha: &req.sha,
+            document_name: &document_name,
+            owner: &user_context.user_id,
+            file_type,
+            job_id: req.job_id.as_deref(),
+            project_id: req.project_id.as_deref(),
+            email_attachment_id: req.email_attachment_id,
+            created_at: req.created_at.as_ref(),
+        },
     )
     .await;
 
