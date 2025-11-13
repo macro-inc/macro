@@ -25,7 +25,7 @@ export const PropertiesContent: Component<PropertiesContentProps> = (props) => {
       </Show>
 
       <Show when={hasProperties()}>
-        <div class="flex-1 overflow-y-auto px-2 pb-2">
+        <div class="flex-1 overflow-y-auto overflow-x-auto px-2 pb-2">
           <PropertiesList properties={props.properties()} />
         </div>
       </Show>
