@@ -8,7 +8,7 @@ impl CommsServiceClient {
         &self,
         user_id: &str,
         user_org_id: Option<i32>,
-    ) -> Result<Vec<String>, ClientError> {
+    ) -> Result<Vec<uuid::Uuid>, ClientError> {
         let url = if let Some(user_org_id) = user_org_id {
             format!(
                 "{}/internal/user_channels/{}?org_id={}",
@@ -20,7 +20,7 @@ impl CommsServiceClient {
 
         let response = self.client.get(url).send().await.map_client_error().await?;
 
-        let result = response.json::<Vec<String>>().await.map_err(|e| {
+        let result = response.json::<Vec<uuid::Uuid>>().await.map_err(|e| {
             ClientError::Generic(anyhow::anyhow!(
                 "unable to parse response from get_user_channel_ids: {}",
                 e.to_string()

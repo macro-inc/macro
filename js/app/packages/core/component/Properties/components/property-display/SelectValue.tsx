@@ -1,5 +1,5 @@
 import type { Component } from 'solid-js';
-import { For } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { PROPERTY_STYLES } from '../../styles/propertyStyles';
 import type { Property } from '../../types';
 import { formatPropertyValue } from '../../utils';
@@ -22,88 +22,67 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
   };
 
   const isReadOnly = () => props.property.isMetadata || !props.canEdit;
-
-  // Type-safe value accessor for select types
   const displayValues = (props.property.value || []) as string[];
+  const isMultiValue = () => props.property.isMultiSelect;
 
-  // Empty state
-  if (displayValues.length === 0) {
-    return (
-      <button
-        onClick={handleClick}
-        class={`text-left text-xs px-2 py-1 border border-edge ${
-          isReadOnly()
-            ? 'bg-transparent text-ink-muted cursor-default'
-            : 'hover:bg-hover cursor-pointer bg-transparent text-ink'
-        } inline-block max-w-full`}
+  return (
+    <Show
+      when={isMultiValue()}
+      fallback={
+        <button
+          onClick={handleClick}
+          class={`text-left text-xs px-2 py-1 border border-edge ${
+            isReadOnly()
+              ? 'bg-transparent text-ink-muted cursor-default'
+              : 'hover:bg-hover cursor-pointer bg-transparent text-ink'
+          } inline-block max-w-full break-words`}
+        >
+          <Show when={displayValues.length > 0} fallback={<>—</>}>
+            <span class="block truncate max-w-full">
+              {formatPropertyValue(props.property, displayValues[0])}
+            </span>
+          </Show>
+        </button>
+      }
+    >
+      <div
+        class={`flex flex-wrap gap-1 justify-start items-start w-full min-w-0`}
       >
-        —
-      </button>
-    );
-  }
-
-  // Single value
-  if (!props.property.isMultiSelect || displayValues.length === 1) {
-    const displayValue = formatPropertyValue(props.property, displayValues[0]);
-
-    return (
-      <button
-        onClick={handleClick}
-        class={`text-left text-xs px-2 py-1 border border-edge ${
-          isReadOnly()
-            ? 'bg-transparent text-ink-muted cursor-default'
-            : 'hover:bg-hover cursor-pointer bg-transparent text-ink'
-        } inline-block max-w-full break-words`}
-        title={displayValue}
-      >
-        <span class="block truncate max-w-full">{displayValue}</span>
-      </button>
-    );
-  }
-
-  // Multiple values
-  if (isReadOnly()) {
-    return (
-      <div class="flex flex-wrap gap-1 justify-end items-start w-full min-w-0">
         <For each={displayValues}>
           {(value) => {
             const formatted = formatPropertyValue(props.property, value);
             return (
-              <div
-                class={`${PROPERTY_STYLES.value.multi} text-ink-muted`}
-                title={formatted}
+              <Show
+                when={isReadOnly()}
+                fallback={
+                  <button
+                    onClick={handleClick}
+                    class={PROPERTY_STYLES.value.multiButton}
+                    title={formatted}
+                  >
+                    <span class="block truncate">{formatted}</span>
+                  </button>
+                }
               >
-                <span class="block truncate">{formatted}</span>
-              </div>
+                <div
+                  class={`${PROPERTY_STYLES.value.multi} text-ink-muted`}
+                  title={formatted}
+                >
+                  <span class="block truncate">{formatted}</span>
+                </div>
+              </Show>
             );
           }}
         </For>
+        <Show when={!isReadOnly()}>
+          <button
+            onClick={handleClick}
+            class="text-ink-muted hover:text-ink text-xs hover:bg-hover px-2 py-1 cursor-pointer border border-edge bg-transparent inline-block shrink-0"
+          >
+            +
+          </button>
+        </Show>
       </div>
-    );
-  }
-
-  return (
-    <div class="flex flex-wrap gap-1 justify-start items-start w-full min-w-0">
-      <For each={displayValues}>
-        {(value) => {
-          const formatted = formatPropertyValue(props.property, value);
-          return (
-            <button
-              onClick={handleClick}
-              class={PROPERTY_STYLES.value.multiButton}
-              title={formatted}
-            >
-              <span class="block truncate">{formatted}</span>
-            </button>
-          );
-        }}
-      </For>
-      <button
-        onClick={handleClick}
-        class="text-ink-muted hover:text-ink text-xs hover:bg-hover px-2 py-1 cursor-pointer border border-edge bg-transparent inline-block shrink-0"
-      >
-        +
-      </button>
-    </div>
+    </Show>
   );
 };

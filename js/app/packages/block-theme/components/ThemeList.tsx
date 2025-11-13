@@ -1,7 +1,7 @@
-import { isThemeSaved, currentThemeId, themes } from '../signals/themeSignals';
+import { For } from 'solid-js';
+import { currentThemeId, isThemeSaved, themes } from '../signals/themeSignals';
 import { applyTheme } from '../utils/themeUtils';
 import { ColorSwatch } from './ColorSwatch';
-import { For } from 'solid-js';
 
 export function ThemeList() {
   return (

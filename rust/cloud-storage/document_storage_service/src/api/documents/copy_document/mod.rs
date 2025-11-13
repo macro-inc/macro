@@ -1,6 +1,8 @@
 mod copy_document_cleanup;
 mod copy_document_v2;
 
+use std::str::FromStr;
+
 use crate::{
     api::context::ApiContext,
     model::request::documents::copy::{CopyDocumentQueryParams, CopyDocumentRequest},
@@ -13,7 +15,9 @@ use axum::{
 };
 use macro_middleware::cloud_storage::ensure_access::document::DocumentAccessExtractor;
 use model::{
-    document::{DocumentBasic, DocumentMetadata, FileType, response::GetDocumentResponse},
+    document::{
+        DocumentBasic, DocumentMetadata, FileType, FileTypeExt, response::GetDocumentResponse,
+    },
     response::{ErrorResponse, GenericErrorResponse, GenericResponse},
     user::UserContext,
 };
@@ -70,7 +74,8 @@ pub(in crate::api) async fn copy_document_handler(
 
     // Overrides the document name cleaned document name (removing file extension)
     // if it was accidentally included
-    req.document_name = FileType::clean_document_name(req.document_name);
+    req.document_name =
+        FileType::clean_document_name(&req.document_name).unwrap_or(req.document_name);
 
     let mut document_metadata: DocumentMetadata = if let Some(version_id) = params.version_id {
         match macro_db_client::document::get_document_version(
@@ -126,7 +131,7 @@ pub(in crate::api) async fn copy_document_handler(
     let file_type: Option<FileType> = document_context
         .file_type
         .as_deref()
-        .and_then(|f| f.try_into().ok());
+        .and_then(|f| FileType::from_str(f).ok());
 
     // If the docx doesn't have a document bom associated with it, we cannot copy it
     if file_type == Some(FileType::Docx) && document_metadata.document_bom.is_none() {

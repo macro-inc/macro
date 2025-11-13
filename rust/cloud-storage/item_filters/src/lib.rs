@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
 use utoipa::ToSchema;
 
+pub mod ast;
+
 /// Fields that can be searched on in search queries
 #[derive(
     Serialize,

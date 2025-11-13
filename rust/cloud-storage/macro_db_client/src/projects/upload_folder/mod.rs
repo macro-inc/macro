@@ -6,7 +6,7 @@ use crate::{
 };
 use async_recursion::async_recursion;
 use model::{
-    document::{DocumentMetadata, FileType},
+    document::{DocumentMetadata, FileType, FileTypeExt},
     folder::{FileSystemNode, FileSystemNodeWithIds, UploadFolderWithIdsResponse},
     project::Project,
 };
@@ -111,13 +111,15 @@ async fn traverse_with_ids(
                     crate::document::v2::create::CreateDocumentArgs {
                         id: None,
                         sha: item.sha.as_str(),
-                        document_name: &FileType::clean_document_name(item.name.clone()),
+                        document_name: &FileType::clean_document_name(&item.name)
+                            .unwrap_or_else(|| item.name.clone()),
                         user_id,
                         file_type: item.file_type,
                         project_id: Some(project_id),
                         project_name: Some(project_name),
                         share_permission,
                         skip_history: true,
+                        created_at: None,
                     },
                 )
                 .await?;

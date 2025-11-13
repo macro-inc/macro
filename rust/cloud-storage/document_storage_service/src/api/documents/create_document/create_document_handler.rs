@@ -1,27 +1,23 @@
+use std::str::FromStr;
+
 use axum::{Extension, extract::State, http::StatusCode, response::IntoResponse};
 use macro_middleware::cloud_storage::ensure_access::project::ProjectBodyAccessLevelExtractor;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 
-use crate::{
-    api::{
-        context::ApiContext,
-        documents::{
-            create_document::create_document_v2,
-            utils::{self},
-        },
-    },
-    model::{
-        request::documents::create::CreateDocumentRequest,
-        response::documents::create::CreateDocumentResponseData,
+use crate::api::{
+    context::ApiContext,
+    documents::{
+        create_document::create_document_v2,
+        utils::{self},
     },
 };
+use model::document::FileTypeExt;
+use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
 use model::{
     document::FileType,
-    response::{GenericErrorResponse, GenericResponse, TypedSuccessResponse},
+    response::{GenericErrorResponse, GenericResponse},
     user::UserContext,
 };
-
-pub type CreateDocumentResponse = TypedSuccessResponse<CreateDocumentResponseData>;
 
 /// Handles creating a document
 #[utoipa::path(
@@ -46,18 +42,20 @@ pub(in crate::api) async fn create_document_handler(
 ) -> impl IntoResponse {
     let req = project.into_inner();
 
-    let user_provided_file_type: Option<FileType> =
-        req.file_type.as_deref().and_then(|f| f.try_into().ok());
+    let user_provided_file_type: Option<FileType> = req
+        .file_type
+        .as_deref()
+        .and_then(|f| FileType::from_str(f).ok());
 
     let (document_name, file_type) = match user_provided_file_type {
         Some(file_type) => {
             // Strips any accidentally added extension from document name
-            let document_name = FileType::clean_document_name(req.document_name);
-            (document_name, Some(file_type))
+            let document_name = FileType::clean_document_name(&req.document_name);
+            (document_name.unwrap_or(req.document_name), Some(file_type))
         }
         None => match FileType::split_suffix_match(req.document_name.as_str()) {
             Some((file_name, extension)) => {
-                let file_type: Option<FileType> = extension.try_into().ok();
+                let file_type: Option<FileType> = FileType::from_str(extension).ok();
                 (file_name.to_string(), file_type)
             }
             None => (req.document_name, None),
@@ -81,10 +79,10 @@ pub(in crate::api) async fn create_document_handler(
         &req.sha,
         &document_name,
         &user_context.user_id,
-        user_context.organization_id,
         file_type,
         req.job_id.as_deref(),
         req.project_id.as_deref(),
+        req.created_at.as_ref(),
     )
     .await;
 

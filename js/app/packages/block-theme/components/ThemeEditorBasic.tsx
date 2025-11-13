@@ -1,4 +1,10 @@
-import { batch, createEffect, createSignal, onCleanup, onMount } from 'solid-js';
+import {
+  batch,
+  createEffect,
+  createSignal,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import { themeReactive } from '../signals/themeReactive';
 
 function setLightness(lightness: number) {
@@ -27,8 +33,8 @@ function setChroma(chroma: number, saturation: number) {
 function setHue(hue: number) {
   batch(() => {
     themeReactive.a0.h[1](hue);
-    themeReactive.a1.h[1](hue +  40);
-    themeReactive.a2.h[1](hue +  80);
+    themeReactive.a1.h[1](hue + 40);
+    themeReactive.a2.h[1](hue + 80);
     themeReactive.a3.h[1](hue + 120);
     themeReactive.a4.h[1](hue + 160);
 

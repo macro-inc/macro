@@ -30,7 +30,7 @@ type AttachmentListProps = {
 
 export function AttachmentList(props: AttachmentListProps) {
   return (
-    <div class="flex flex-row w-full space-x-2 items-center flex-wrap overflow-x-hidden">
+    <div class="flex flex-row w-full space-x-2 items-end flex-wrap overflow-x-hidden pb-1">
       <For each={props.attached()}>
         {(attachment) => (
           <ChatAttachment
@@ -148,7 +148,7 @@ function ChatAttachment(props: {
       <Match when={true}>
         <div
           class={`
-      flex items-center p-1 space-x-2 rounded-lg
+      flex items-center p-1 space-x-2
       hover:bg-hover hover-transition-bg cursor-default
       text-sm
       `}

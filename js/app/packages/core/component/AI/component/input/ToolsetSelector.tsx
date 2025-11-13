@@ -1,42 +1,82 @@
-import { MenuItem } from '@core/component/Menu';
-import { TextButton } from '@core/component/TextButton';
-import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import DropdownMenu from '@core/component/FormControls/DropdownMenu';
+import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import type { ToolSet } from '@service-cognition/generated/schemas';
-import { For, type Signal } from 'solid-js';
+import { type ParentProps, Show, type Signal } from 'solid-js';
 
 type ToolSetName = ToolSet['type'];
-const DROPDOWN_OPTIONS: Record<ToolSetName, string> = {
-  all: 'Agent',
-  none: 'Ask',
-};
 
-export function ToolsetSelector(props: { toolset: Signal<ToolSet> }) {
+const TOOLSET_TO_DISPLAY = {
+  none: 'ASK',
+  all: 'AGENT',
+} as const satisfies Record<ToolSetName, string>;
+
+const TOOLSET_FROM_DISPLAY = {
+  ASK: 'none',
+  AGENT: 'all',
+} as const satisfies Record<string, ToolSetName>;
+
+export type Source = 'chat' | 'channel' | 'document' | 'email' | 'everything';
+
+const SOURCE_TO_DISPLAY = {
+  everything: 'ALL',
+  chat: 'CHATS',
+  channel: 'CHANNELS',
+  document: 'DOCUMENTS',
+  email: 'EMAILS',
+} as const satisfies Record<Source, string>;
+
+const SOURCE_FROM_DISPLAY = {
+  ALL: 'everything',
+  CHATS: 'chat',
+  CHANNELS: 'channel',
+  DOCUMENTS: 'document',
+  EMAILS: 'email',
+} as const satisfies Record<string, Source>;
+
+export function ToolsetSelector(props: {
+  toolset: Signal<ToolSet>;
+  sources: Signal<Source>;
+}) {
   const [toolset, setToolset] = props.toolset;
+  const [source, setSource] = props.sources;
 
+  const StyledTriggerLabel = (props: ParentProps) => {
+    return <span class="text-[.85rem] font-medium flex">{props.children}</span>;
+  };
   return (
-    <DropdownMenu>
-      <DropdownMenu.Trigger>
-        <TextButton
-          theme="clear"
-          onClick={() => {}}
-          text={DROPDOWN_OPTIONS[toolset().type]}
-          showChevron
-        />
-      </DropdownMenu.Trigger>
-      <DropdownMenu.Portal>
-        {/*there's probabably a real way to do this, but if I don't z index then big chat dropdown broke*/}
-        <DropdownMenu.Content class="z-100000">
-          <For each={Object.entries(DROPDOWN_OPTIONS)}>
-            {([k, v]) => (
-              <MenuItem
-                class="bg-panel"
-                text={v}
-                onClick={() => setToolset({ type: k as ToolSetName })}
-              />
-            )}
-          </For>
-        </DropdownMenu.Content>
-      </DropdownMenu.Portal>
-    </DropdownMenu>
+    <div class="flex items-center gap-x-1">
+      <SegmentedControl
+        defaultValue={TOOLSET_TO_DISPLAY[toolset().type]}
+        onChange={(s) => {
+          setToolset({
+            type: TOOLSET_FROM_DISPLAY[s as keyof typeof TOOLSET_FROM_DISPLAY],
+          });
+        }}
+        list={Object.keys(TOOLSET_FROM_DISPLAY)}
+      />
+
+      <Show when={toolset().type === 'all'}>
+        <div class="flex">
+          <DropdownMenu
+            theme="secondary"
+            triggerLabel={<StyledTriggerLabel>Filter</StyledTriggerLabel>}
+          >
+            <SegmentedControl
+              defaultValue={SOURCE_TO_DISPLAY[source()]}
+              onChange={(s) => {
+                setSource(
+                  SOURCE_FROM_DISPLAY[s as keyof typeof SOURCE_FROM_DISPLAY]
+                );
+              }}
+              list={Object.keys(SOURCE_FROM_DISPLAY)}
+            />
+          </DropdownMenu>
+
+          <span class="bg-accent text-panel font-mono text-xs font-medium p-1">
+            {SOURCE_TO_DISPLAY[source()]}
+          </span>
+        </div>
+      </Show>
+    </div>
   );
 }

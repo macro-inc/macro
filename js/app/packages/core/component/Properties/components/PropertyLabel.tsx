@@ -100,7 +100,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
               icon={DeleteIcon}
               theme="clear"
               size="xs"
-              class="!text-failure"
+              class="!text-failure hover:!bg-failure/15"
               tooltip={{ label: 'Remove property' }}
               onClick={handleDeleteClick}
             />

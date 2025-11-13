@@ -1,4 +1,4 @@
-use crate::{Base64SerdeErr, Base64Str, Cursor, CursorVal, CursorWithVal, Sortable};
+use crate::{Base64SerdeErr, Base64Str, Cursor, CursorVal, CursorWithValAndFilter, Sortable};
 use axum::extract::{FromRequestParts, Query};
 use axum::http::{StatusCode, request::Parts};
 use axum::response::IntoResponse;
@@ -6,38 +6,40 @@ use axum::{Json, RequestPartsExt, async_trait};
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
+use thiserror::Error;
 
 /// An enum which denotes either the client did not provide a cursor value
 /// or the cursor was provided and parsed.
 /// Provided but invalid cursors will be rejected as 401
 // TODO: in axum 0.8 there is OptionalFromRequestParts which is preferable to this
 #[derive(Debug)]
-pub enum CursorExtractor<Id, S: Sortable> {
+pub enum CursorExtractor<Id, S: Sortable, F> {
     /// the client provided a valid parsed cursor
-    Some(Cursor<Id, CursorVal<S>>),
+    Some(Cursor<Id, CursorVal<S, F>>),
     /// the client did not provide a cursor param
     None,
 }
 
-impl<Id, S: Sortable> CursorExtractor<Id, S> {
+impl<Id, S: Sortable, F> CursorExtractor<Id, S, F> {
     /// convert self into an [Option]
-    pub fn into_option(self) -> Option<CursorWithVal<Id, S>> {
+    pub fn into_option(self) -> Option<CursorWithValAndFilter<Id, S, F>> {
         match self {
             CursorExtractor::Some(parsed_cursor) => Some(parsed_cursor),
             CursorExtractor::None => None,
         }
     }
     /// convert self into a [Query] by supplying a fallback
-    pub fn into_query(self, sort: S) -> crate::cursor::Query<Id, S> {
+    pub fn into_query(self, sort: S) -> crate::cursor::Query<Id, S, F> {
         crate::cursor::Query::new(self.into_option(), sort)
     }
 }
 
 /// represents an error that can occur while extracting a [CursorExtractor]
 /// from the axum request parts
-#[derive(Debug)]
+#[derive(Debug, Error)]
 pub enum CusorExtractErr {
     /// an error occurred while decoding the input value
+    #[error(transparent)]
     DecodeErr(Base64SerdeErr<serde_json::Error>),
 }
 
@@ -62,15 +64,17 @@ impl IntoResponse for CusorExtractErr {
 }
 
 #[async_trait]
-impl<S, Id, Sort> FromRequestParts<S> for CursorExtractor<Id, Sort>
+impl<S, Id, Sort, F> FromRequestParts<S> for CursorExtractor<Id, Sort, F>
 where
     S: Send + Sync,
     Sort: Sortable + DeserializeOwned,
     Sort::Value: DeserializeOwned,
     Id: DeserializeOwned,
+    F: DeserializeOwned + Default,
 {
     type Rejection = CusorExtractErr;
 
+    #[tracing::instrument(err, skip(parts, state))]
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         #[derive(Deserialize)]
         struct Params {
@@ -81,7 +85,8 @@ where
             return Ok(CursorExtractor::None);
         };
 
-        let encoded: Base64Str<Cursor<Id, CursorVal<Sort>>> = Base64Str::new_from_string(cursor);
+        let encoded: Base64Str<CursorWithValAndFilter<Id, Sort, F>> =
+            Base64Str::new_from_string(cursor);
 
         let decoded = encoded
             .decode(|bytes| serde_json::from_slice(&bytes))

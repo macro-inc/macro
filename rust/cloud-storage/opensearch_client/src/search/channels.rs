@@ -3,14 +3,14 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{DefaultSearchResponse, parse_highlight_hit},
+        model::{DefaultSearchResponse, Highlight, parse_highlight_hit},
         query::Keys,
     },
 };
 
 use crate::SearchOn;
 use opensearch_query_builder::{
-    FieldSort, QueryType, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
+    FieldSort, QueryType, ScoreWithOrderSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
 };
 use serde_json::Value;
 
@@ -41,7 +41,8 @@ pub struct ChannelMessageSearchResponse {
     pub mentions: Vec<String>,
     pub created_at: i64,
     pub updated_at: i64,
-    pub content: Option<Vec<String>>,
+    /// Contains the highlight matches for the channel name and content
+    pub highlight: Highlight,
 }
 
 #[derive(Default)]
@@ -55,7 +56,7 @@ impl SearchQueryConfig for ChannelMessageSearchConfig {
 
     fn default_sort_types() -> Vec<SortType> {
         vec![
-            SortType::Field(FieldSort::new("updated_at_seconds", SortOrder::Desc)),
+            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
             SortType::Field(FieldSort::new("message_id", SortOrder::Asc)),
         ]
@@ -65,7 +66,6 @@ impl SearchQueryConfig for ChannelMessageSearchConfig {
 #[derive(Default)]
 struct ChannelMessageQueryBuilder {
     inner: SearchQueryBuilder<ChannelMessageSearchConfig>,
-    org_id: Option<i64>,
     thread_ids: Vec<String>,
     mentions: Vec<String>,
     channel_ids: Vec<String>,
@@ -78,11 +78,6 @@ impl ChannelMessageQueryBuilder {
             inner: SearchQueryBuilder::new(terms),
             ..Default::default()
         }
-    }
-
-    pub fn org_id(mut self, org_id: Option<i64>) -> Self {
-        self.org_id = org_id;
-        self
     }
 
     pub fn thread_ids(mut self, thread_ids: Vec<String>) -> Self {
@@ -123,11 +118,6 @@ impl ChannelMessageQueryBuilder {
 
         // CUSTOM ATTRIBUTES SECTION
 
-        // Add org_id to must clause if provided
-        if let Some(org_id) = self.org_id {
-            bool_query.must(QueryType::term("org_id", org_id));
-        }
-
         // Add thread_ids to must clause if provided
         if !self.thread_ids.is_empty() {
             bool_query.must(QueryType::terms("thread_id", self.thread_ids));
@@ -166,7 +156,6 @@ pub struct ChannelMessageSearchArgs {
     pub page: u32,
     pub page_size: u32,
     pub match_type: String,
-    pub org_id: Option<i64>,
     pub thread_ids: Vec<String>,
     pub mentions: Vec<String>,
     pub sender_ids: Vec<String>,
@@ -189,17 +178,16 @@ impl ChannelMessageSearchArgs {
             .collapse(self.collapse)
             .ids_only(self.ids_only)
             .sender_ids(self.sender_ids)
-            .org_id(self.org_id)
             .build_search_request()?
             .to_json())
     }
 }
 
+#[tracing::instrument(skip(client, args), err)]
 pub(crate) async fn search_channel_messages(
     client: &opensearch::OpenSearch,
     args: ChannelMessageSearchArgs,
 ) -> Result<Vec<ChannelMessageSearchResponse>> {
-    let search_on = args.search_on;
     let query_body = args.build()?;
 
     let response = client
@@ -233,16 +221,18 @@ pub(crate) async fn search_channel_messages(
             mentions: hit._source.mentions,
             created_at: hit._source.created_at_seconds,
             updated_at: hit._source.updated_at_seconds,
-            content: hit.highlight.map(|h| {
-                parse_highlight_hit(
-                    h,
-                    Keys {
-                        title_key: ChannelMessageSearchConfig::TITLE_KEY,
-                        content_key: ChannelMessageSearchConfig::CONTENT_KEY,
-                    },
-                    search_on,
-                )
-            }),
+            highlight: hit
+                .highlight
+                .map(|h| {
+                    parse_highlight_hit(
+                        h,
+                        Keys {
+                            title_key: ChannelMessageSearchConfig::TITLE_KEY,
+                            content_key: ChannelMessageSearchConfig::CONTENT_KEY,
+                        },
+                    )
+                })
+                .unwrap_or_default(),
         })
         .collect())
 }

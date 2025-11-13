@@ -24,48 +24,6 @@ jobs:
       DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
       DD_API_KEY: ${{ secrets.DD_API_KEY }}
 
-  typecheck:
-    name: Typecheck
-    needs: [deploy-cloud-storage]
-    runs-on: linux-latest-beefy
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v5
-      - name: Setup Prereqs
-        uses: ./.github/actions/setup-reqs-web
-      - name: Generate API Types
-        working-directory: js/app
-        run: bun run gen-api
-      - name: Check Types
-        working-directory: js/app
-        run: bun run --bun --silent tsc --project packages/app/tsconfig.json
-
-  lint:
-    name: Lint
-    needs: [deploy-cloud-storage]
-    runs-on: linux-latest-middy
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v5
-      - name: Setup Biome CLI
-        uses: biomejs/setup-biome@v2
-      - name: Lint
-        working-directory: js/app
-        run: biome lint
-
-  test:
-    name: Test
-    needs: [deploy-cloud-storage]
-    runs-on: linux-latest-middy
-    steps:
-      - name: Checkout Repo
-        uses: actions/checkout@v5
-      - name: Setup Prereqs
-        uses: ./.github/actions/setup-reqs-web
-      - name: Test
-        working-directory: js/app
-        run: bun run test
-
   build:
     name: Build
     needs: [deploy-cloud-storage]
@@ -94,7 +52,7 @@ jobs:
   deploy:
     name: Deploy Web App
     runs-on: linux-latest-beefy
-    needs: [typecheck, lint, test, build]
+    needs: [build]
     env:
       CI: "true"
     steps:

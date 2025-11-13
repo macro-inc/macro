@@ -159,14 +159,16 @@ impl Identify for SoupItem {
 }
 
 impl SortOn<SimpleSortMethod> for SoupItem {
-    fn sort_on(
+    fn sort_on<F>(
         sort: SimpleSortMethod,
-    ) -> impl FnOnce(&Self) -> models_pagination::CursorVal<SimpleSortMethod> {
+        filter: F,
+    ) -> impl FnOnce(&Self) -> models_pagination::CursorVal<SimpleSortMethod, F> {
         move |v| {
             let last_val = v.cursor_timestamp(sort);
             models_pagination::CursorVal {
                 sort_type: sort,
                 last_val,
+                filter,
             }
         }
     }

@@ -86,6 +86,7 @@ export interface MarkdownTextareaProps {
   onFocusLeaveEnd?: (e: KeyboardEvent) => void;
   formatState?: SelectionData;
   setFormatState?: SetStoreFunction<SelectionData>;
+  domRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }
 
 export function MarkdownTextarea(props: MarkdownTextareaProps) {
@@ -230,6 +231,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
 
   onMount(() => {
     editor.setRootElement(mountRef);
+    props.domRef?.(mountRef);
   });
 
   onCleanup(() => {
@@ -264,6 +266,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
         }}
         on:click={(e) => {
           e.stopPropagation();
+          editor.focus();
         }}
         on:mousedown={(e) => {
           e.stopPropagation();

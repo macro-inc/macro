@@ -3,7 +3,7 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::parse_highlight_hit,
+        model::{Highlight, parse_highlight_hit},
         query::Keys,
         utils::should_wildcard_field_query_builder,
     },
@@ -11,7 +11,7 @@ use crate::{
 
 use crate::SearchOn;
 use opensearch_query_builder::{
-    FieldSort, QueryType, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
+    FieldSort, QueryType, ScoreWithOrderSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
 };
 
 use crate::search::model::DefaultSearchResponse;
@@ -27,7 +27,7 @@ impl SearchQueryConfig for EmailSearchConfig {
 
     fn default_sort_types() -> Vec<SortType> {
         vec![
-            SortType::Field(FieldSort::new("updated_at_seconds", SortOrder::Desc)),
+            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
             SortType::Field(FieldSort::new("thread_id", SortOrder::Asc)),
         ]
@@ -200,7 +200,7 @@ pub struct EmailSearchResponse {
     pub updated_at: i64,
     pub sent_at: Option<i64>,
     pub subject: Option<String>,
-    pub content: Option<Vec<String>>,
+    pub highlight: Highlight,
 }
 
 pub struct EmailSearchArgs {
@@ -243,11 +243,11 @@ impl EmailSearchArgs {
     }
 }
 
+#[tracing::instrument(skip(client, args), err)]
 pub(crate) async fn search_emails(
     client: &opensearch::OpenSearch,
     args: EmailSearchArgs,
 ) -> Result<Vec<EmailSearchResponse>> {
-    let search_on = args.search_on;
     let query_body = args.build()?;
 
     let response = client
@@ -283,16 +283,18 @@ pub(crate) async fn search_emails(
             user_id: hit._source.user_id,
             updated_at: hit._source.updated_at_seconds,
             sent_at: hit._source.sent_at_seconds,
-            content: hit.highlight.map(|h| {
-                parse_highlight_hit(
-                    h,
-                    Keys {
-                        title_key: EmailSearchConfig::TITLE_KEY,
-                        content_key: EmailSearchConfig::CONTENT_KEY,
-                    },
-                    search_on,
-                )
-            }),
+            highlight: hit
+                .highlight
+                .map(|h| {
+                    parse_highlight_hit(
+                        h,
+                        Keys {
+                            title_key: EmailSearchConfig::TITLE_KEY,
+                            content_key: EmailSearchConfig::CONTENT_KEY,
+                        },
+                    )
+                })
+                .unwrap_or_default(),
         })
         .collect())
 }

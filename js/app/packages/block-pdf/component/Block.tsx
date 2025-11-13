@@ -170,6 +170,7 @@ export default function BlockPdf() {
 
   const goToLocationFromParams = createCallback(
     (params: Record<string, any>) => {
+      console.log('GO TO LOCATION FROM PARAMS', params);
       const setPendingLocationParamsSignal = pendingLocationParamsSignal.set;
       const setLocationChanged = locationChangedSignal.set;
 

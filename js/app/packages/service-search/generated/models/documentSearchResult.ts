@@ -4,14 +4,15 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SearchHighlight } from './searchHighlight';
 import type { DocumentSearchResultRawContent } from './documentSearchResultRawContent';
 
 /**
  * A document match for a given node
  */
 export interface DocumentSearchResult {
-  /** The array of content matches for the document */
-  content: string[];
+  /** The highlights for the document */
+  highlight: SearchHighlight;
   /** The node id for the document.
 This is only useful for markdown at the moment */
   node_id: string;

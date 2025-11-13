@@ -44,7 +44,6 @@ use crate::{
         annotations,
         documents::{
             self,
-            create_document::CreateDocumentResponse,
             export_document::ExportDocumentResponse,
             permissions_token::{
                 create_permission_token::DocumentPermissionsTokenResponse,
@@ -66,7 +65,6 @@ use crate::{
         request::{
             documents::{
                 copy::{CopyDocumentQueryParams, CopyDocumentRequest},
-                create::CreateDocumentRequest,
                 edit::EditDocumentRequestV2,
                 preview::GetBatchPreviewRequest,
                 save::{PreSaveDocumentRequest, SaveDocumentRequest},
@@ -78,11 +76,7 @@ use crate::{
         response::{
             activity::{GetActivitiesResponse, UserActivitiesResponse},
             documents::{
-                DocumentResponseMetadata,
-                create::{
-                    CreateBulkDocumentResponse, CreateBulkDocumentResponseData,
-                    CreateDocumentResponseData,
-                },
+                create::{CreateBulkDocumentResponse, CreateBulkDocumentResponseData},
                 get::{
                     GetDocumentKeyResponse, GetDocumentKeyResponseData,
                     GetDocumentPermissionsResponseDataV2, GetDocumentProcessingResult,
@@ -116,6 +110,10 @@ use models_soup::item::SoupItem;
 use models_soup::item::SoupItemType;
 use models_soup::project::SoupProject;
 
+use model::document::response::{
+    CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
+    DocumentResponseMetadata,
+};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
