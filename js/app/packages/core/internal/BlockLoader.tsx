@@ -10,6 +10,7 @@ import {
   type FileOrTextLike,
   type LoadFunction,
   NonDocumentBlockTypes,
+  useIsNestedBlock,
 } from '../block';
 import {
   blockEditPermissionEnabledSignal,
@@ -72,6 +73,7 @@ export function BlockLoader<
   const setSourceSignal = blockSourceSignal.set;
   const setEditPermissionEnabled = blockEditPermissionEnabledSignal.set;
   const setHandle = blockHandleSignal.set;
+  const isNested = useIsNestedBlock();
 
   setLiveTrackingEnabled(props.definition.liveTrackingEnabled ?? false);
   setEditPermissionEnabled(props.definition.editPermissionEnabled ?? false);
@@ -131,7 +133,7 @@ Check that the load function does not return a preload source when the intent is
       return null;
     });
 
-    if (data) {
+    if (!isNested && data) {
       // NOTE: refetch history causing full page reload so I am disabling it
       if (!NonDocumentBlockTypes.includes(data.__block)) {
         import('./trackAndReload').then(({ trackOpenAndRefetchHistory }) => {
