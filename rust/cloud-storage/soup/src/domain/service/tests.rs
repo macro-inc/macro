@@ -7,6 +7,7 @@ use frecency::{domain::models::AggregateFrecency, outbound::mock::MockFrecencySt
 use model_entity::EntityType;
 use models_pagination::{
     Base64Str, Cursor, CursorVal, CursorWithValAndFilter, FrecencyValue, SimpleSortMethod,
+    TypeEraseCursor,
 };
 use models_soup::document::SoupDocument;
 use ordered_float::OrderedFloat;
@@ -83,7 +84,8 @@ async fn it_should_not_query_frecency() {
         filters: Default::default(),
     })
     .await
-    .unwrap();
+    .unwrap()
+    .type_erase();
 
     dbg!(&res);
 
@@ -151,7 +153,8 @@ async fn it_should_query_frecency() {
             filters: Default::default(),
         })
         .await
-        .unwrap();
+        .unwrap()
+        .type_erase();
 
     dbg!(&res);
 
@@ -219,7 +222,8 @@ async fn it_should_sort_frecency_descending() {
             filters: Default::default(),
         })
         .await
-        .unwrap();
+        .unwrap()
+        .type_erase();
 
     dbg!(&res);
 
@@ -303,7 +307,8 @@ async fn frecency_should_fallback() {
             filters: Default::default(),
         })
         .await
-        .unwrap();
+        .unwrap()
+        .type_erase();
 
     // output should be the limit
     assert_eq!(res.items.len(), 100);
@@ -372,7 +377,8 @@ async fn frecency_should_paginate() {
             filters: Default::default(),
         })
         .await
-        .unwrap();
+        .unwrap()
+        .type_erase();
 
     // output should be the limit
     assert_eq!(res.items.len(), 100);
@@ -451,7 +457,8 @@ async fn frecency_should_resume_cursor() {
             filters: Default::default(),
         })
         .await
-        .unwrap();
+        .unwrap()
+        .type_erase();
 
     // first all items should be frecency
     assert!(
@@ -495,11 +502,7 @@ async fn frecency_fallback_cursor_should_resume() {
                         val: CursorVal {
                             sort_type: SimpleSortMethod::UpdatedAt,
                             last_val,
-                            filter: EntityFilterAst {
-                                document_filter: None,
-                                project_filter: None,
-                                chat_filter: None
-                            }
+                            filter: _
                         }
                     }),
                     filters,
@@ -544,7 +547,8 @@ async fn frecency_fallback_cursor_should_resume() {
             filters: Default::default(),
         })
         .await
-        .unwrap();
+        .unwrap()
+        .type_erase();
 
     assert!(res.items.iter().all(|v| v.frecency_score.is_none()));
     let cursor =
@@ -557,5 +561,111 @@ async fn frecency_fallback_cursor_should_resume() {
         assert_eq!(id, "doc-next-100");
         let expected_date = <DateTime<Utc>>::default() + Days::new(100);
         assert_eq!(updated, expected_date);
+    })
+}
+
+#[tokio::test]
+async fn cursor_should_return_simple_sort() {
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock
+        .expect_unexpanded_generic_cursor_soup()
+        .withf(|a| {
+            matches!(a.cursor.sort_method(), SimpleSortMethod::ViewedUpdated)
+                && assert_matches!(
+                    a,
+                    SimpleSortRequest {
+                        limit: 20,
+                        user_id,
+                        cursor: models_pagination::Query::Sort(SimpleSortMethod::ViewedUpdated),
+                        filters
+                    } => {
+                        assert_matches!(filters, None);
+                        assert_eq!(user_id.as_ref(), "macro|test@example.com");
+                        true
+                    }
+                )
+        })
+        .times(1)
+        .returning(|_params| {
+            let res = (0..100)
+                .map(|i| soup_document(format!("my-document-{i}")))
+                .map(SoupItem::Document)
+                .collect();
+            Box::pin(async move { Ok(res) })
+        });
+
+    let res = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+    )
+    .get_user_soup(SoupRequest {
+        soup_type: SoupType::UnExpanded,
+        limit: 0,
+        cursor: SoupQuery::Simple(Query::Sort(SimpleSortMethod::ViewedUpdated)),
+        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+        filters: Default::default(),
+    })
+    .await
+    .unwrap();
+
+    let simple_cursor = res.unwrap_left();
+    let cursor_decoded = simple_cursor.next_cursor.unwrap().decode_json().unwrap();
+    assert_matches!(cursor_decoded, Cursor { id, limit: 20, val: CursorVal { sort_type: SimpleSortMethod::ViewedUpdated, last_val, filter } } => {
+        assert_eq!(id, "my-document-19");
+        let date: DateTime<Utc> = Default::default();
+        assert_eq!(last_val, date);
+        assert!(filter.is_empty());
+    })
+}
+
+#[tokio::test]
+async fn cursor_should_return_frecency() {
+    let mut frecency = MockFrecencyQueryService::new();
+    let mut soup = MockSoupRepo::new();
+
+    frecency
+        .expect_get_frecency_page()
+        .withf(|params| assert_matches!(params, FrecencyPageRequest { limit: 100, .. } => true))
+        .times(1)
+        .returning(|params| {
+            let iter = (1..=params.limit).map(|v| {
+                AggregateFrecency::new_mock(
+                    EntityType::Document.with_entity_string(format!("doc-{v}")),
+                    v.into(),
+                )
+            });
+            let res = Ok(FrecencyPageResponse::new_mock(iter));
+            Box::pin(async move { res })
+        });
+
+    soup.expect_unexpanded_soup_by_ids()
+        .times(1)
+        .returning(|params| {
+            let vec = params
+                .entities
+                .iter()
+                .map(|id| soup_document(id.entity_id.to_string()))
+                .map(SoupItem::Document)
+                .collect();
+            Box::pin(async move { Ok(vec) })
+        });
+
+    let res = SoupImpl::new(soup, frecency)
+        .get_user_soup(SoupRequest {
+            soup_type: SoupType::UnExpanded,
+            limit: 100,
+            cursor: SoupQuery::Frecency(Query::Sort(Frecency)),
+            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+            filters: Default::default(),
+        })
+        .await
+        .unwrap();
+
+    let simple_cursor = res.unwrap_right();
+    let cursor_decoded = simple_cursor.next_cursor.unwrap().decode_json().unwrap();
+    assert_matches!(cursor_decoded, Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(1.0), filter } } => {
+        // frecency sort is descending so the last item is id 1
+        assert_eq!(id, "doc-1");
+        assert!(filter.is_empty());
     })
 }

@@ -12,7 +12,7 @@ use document::DocumentLiteral;
 use filter_ast::{ExpandFrame, Expr};
 use non_empty::IsEmpty;
 use serde::{Deserialize, Serialize};
-use std::marker::PhantomData;
+use std::{marker::PhantomData, sync::Arc};
 use thiserror::Error;
 
 mod channel;
@@ -52,7 +52,7 @@ pub enum ExpandErr {
 
 /// Describes a bundle of filters that should be applied across different entity types
 #[derive(Default, Debug, Serialize, Deserialize)]
-pub struct EntityFilterAst {
+pub struct EntityFilterInner {
     /// the filters that should be applied to the document entity
     #[serde(default)]
     pub document_filter: Option<Expr<DocumentLiteral>>,
@@ -64,6 +64,13 @@ pub struct EntityFilterAst {
     pub chat_filter: Option<Expr<ChatLiteral>>,
 }
 
+/// wrapper over [EntityFilterInner] which gives us cheaper clones
+#[derive(Default, Debug, Serialize, Deserialize, Clone)]
+pub struct EntityFilterAst {
+    /// we wrap the inner type in an arc to avoid large allocations when cloning boxed values
+    pub inner: Arc<EntityFilterInner>,
+}
+
 impl EntityFilterAst {
     /// expand the input [EntityFilters] into an ast representation
     pub fn new_from_filters(entity_filter: EntityFilters) -> Result<Self, ExpandErr> {
@@ -71,20 +78,22 @@ impl EntityFilterAst {
             return Ok(Self::default());
         }
         Ok(Self {
-            document_filter: DocumentFilters::expand_ast(entity_filter.document_filters)?,
-            project_filter: ProjectFilters::expand_ast(entity_filter.project_filters)?,
-            chat_filter: ChatFilters::expand_ast(entity_filter.chat_filters)?,
+            inner: Arc::new(EntityFilterInner {
+                document_filter: DocumentFilters::expand_ast(entity_filter.document_filters)?,
+                project_filter: ProjectFilters::expand_ast(entity_filter.project_filters)?,
+                chat_filter: ChatFilters::expand_ast(entity_filter.chat_filters)?,
+            }),
         })
     }
 }
 
 impl IsEmpty for EntityFilterAst {
     fn is_empty(&self) -> bool {
-        let EntityFilterAst {
+        let EntityFilterInner {
             document_filter,
             project_filter,
             chat_filter,
-        } = self;
+        } = &*self.inner;
         document_filter.is_none() && project_filter.is_none() && chat_filter.is_none()
     }
 }
