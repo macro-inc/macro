@@ -272,15 +272,23 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
     if (searching) {
       // When searching, sort local results first, then service results
+      // Channels come first
       return entities.toSorted((a, b) => {
         const aHasSearch = isSearchEntity(a);
         const bHasSearch = isSearchEntity(b);
 
         if (aHasSearch && bHasSearch) {
+          // Channel results come before other results
+          const aIsChannel = a.type === 'channel';
+          const bIsChannel = b.type === 'channel';
+
+          if (aIsChannel && !bIsChannel) return -1;
+          if (!aIsChannel && bIsChannel) return 1;
+
+          // Local results come before service results
           const aSource = a.search.source;
           const bSource = b.search.source;
 
-          // Local results come before service results
           if (aSource === 'local' && bSource === 'service') return -1;
           if (aSource === 'service' && bSource === 'local') return 1;
         }

@@ -742,7 +742,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   });
 
   const disableChannelsQuery = createMemo(() => {
-    if (isSearchActive()) return true;
     const typeFilter = entityTypeFilter();
     if (typeFilter.length > 0 && !typeFilter.includes('channel')) return true;
     return false;
