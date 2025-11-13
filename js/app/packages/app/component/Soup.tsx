@@ -341,6 +341,7 @@ export function Soup() {
             <Show when={!!selectedEntity()?.id && selectedEntity()}>
               {(selectedEntity) => {
                 const entity = selectedEntity();
+                if (entity.type === 'project') return null;
                 const blockInstance = () =>
                   orchestrator.createBlockInstance(
                     entity.type === 'document'
