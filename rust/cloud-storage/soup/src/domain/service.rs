@@ -1,6 +1,6 @@
 use crate::domain::{
     models::{
-        AdvancedSortParams, FrecencySoupItem, SimpleSortFilter, SimpleSortRequest, SoupErr,
+        AdvancedSortParams, FrecencySoupItem, SimpleSortQuery, SimpleSortRequest, SoupErr,
         SoupQuery, SoupRequest, SoupType,
     },
     ports::{SoupOutput, SoupRepo, SoupService},
@@ -94,10 +94,10 @@ where
                 soup_type,
                 SimpleSortRequest {
                     limit: remainder_to_fetch.try_into().unwrap_or(500),
-                    cursor: Query::Sort(
+                    cursor: SimpleSortQuery::FilterFrecency(Query::Sort(
                         SimpleSortMethod::UpdatedAt,
-                        Some(SimpleSortFilter::Frecency(Frecency)),
-                    ),
+                        Frecency,
+                    )),
                     user_id: user,
                 },
             )
@@ -119,8 +119,8 @@ where
                     CursorVal {
                         sort_type: Frecency,
                         last_val: FrecencyValue::FrecencyScore(score),
-                        filter,
                     },
+                filter,
                 ..
             }) => Some((score, filter)),
             // we have passed all the frecency values on this cursor so we pull from updated at
@@ -131,23 +131,23 @@ where
                     CursorVal {
                         sort_type: Frecency,
                         last_val: FrecencyValue::UpdatedAt(updated),
-                        filter: _,
                     },
+                filter,
             }) => {
                 return Ok(Either::Left(
                     self.handle_simple_request(
                         soup_type,
                         SimpleSortRequest {
                             limit,
-                            cursor: Query::Cursor(Cursor {
+                            cursor: SimpleSortQuery::FilterFrecency(Query::Cursor(Cursor {
                                 id,
                                 limit: cursor_limit,
                                 val: CursorVal {
                                     sort_type: SimpleSortMethod::UpdatedAt,
                                     last_val: updated,
-                                    filter: Some(SimpleSortFilter::Frecency(Frecency)),
                                 },
-                            }),
+                                filter: Frecency,
+                            })),
                             user_id: user,
                         },
                     )
@@ -230,19 +230,21 @@ where
                         req.soup_type,
                         SimpleSortRequest {
                             limit,
-                            cursor: cursor.map_filter(|cur| cur.map(SimpleSortFilter::Ast)),
+                            cursor: SimpleSortQuery::from_entity_cursor(cursor),
                             user_id: req.user,
                         },
                     )
                     .await?
-                    .paginate_filter_on(limit.into(), sort_method, paginate_filter)
+                    .paginate_on(limit.into(), sort_method)
+                    .filter_on(paginate_filter)
                     .into_page(),
                 ))
             }
             SoupQuery::Frecency(cursor) => Ok(Either::Right(
                 self.handle_advanced_sort(cursor, req.soup_type, req.user, limit)
                     .await?
-                    .paginate_filter_on(limit.into(), Frecency, paginate_filter)
+                    .paginate_on(limit.into(), Frecency)
+                    .filter_on(paginate_filter)
                     .into_page(),
             )),
         }

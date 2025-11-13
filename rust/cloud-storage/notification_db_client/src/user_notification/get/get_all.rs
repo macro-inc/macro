@@ -131,9 +131,10 @@ mod tests {
             .type_erase();
         assert_eq!(
             paginated.next_cursor.unwrap(),
-            Base64Str::encode_json(CursorWithVal {
+            Base64Str::encode_json(Cursor {
                 id: paginated.items.first().unwrap().notification_id,
                 limit: 1,
+                filter: (),
                 val: CursorVal {
                     sort_type: CreatedAt,
                     last_val: paginated
@@ -142,7 +143,6 @@ mod tests {
                         .unwrap()
                         .created_at
                         .unwrap_or(DateTime::UNIX_EPOCH),
-                    filter: ()
                 }
             })
             .type_erase()
@@ -174,6 +174,7 @@ mod tests {
             Base64Str::encode_json(Cursor {
                 id: paginated_result.items.last().unwrap().notification_id,
                 limit: 1,
+                filter: (),
                 val: CursorVal {
                     sort_type: CreatedAt,
                     last_val: paginated_result
@@ -182,8 +183,7 @@ mod tests {
                         .unwrap()
                         .created_at
                         .unwrap_or(DateTime::UNIX_EPOCH),
-                    filter: ()
-                }
+                },
             })
             .type_erase()
         );
