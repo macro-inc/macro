@@ -1,4 +1,4 @@
-use crate::types::{Usage, AiError};
+use crate::types::{AiError, Usage};
 use futures::stream::Stream;
 use serde::Serialize;
 use std::pin::Pin;

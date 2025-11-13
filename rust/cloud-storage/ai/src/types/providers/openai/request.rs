@@ -5,8 +5,7 @@ use async_openai::types::{
     ChatCompletionRequestMessage, ChatCompletionRequestMessageContentPartText,
     ChatCompletionRequestSystemMessage, ChatCompletionRequestSystemMessageContent,
     ChatCompletionRequestSystemMessageContentPart, CreateChatCompletionRequest,
-    CreateChatCompletionRequestArgs,
-    ResponseFormat, ResponseFormatJsonSchema,
+    CreateChatCompletionRequestArgs, ResponseFormat, ResponseFormatJsonSchema,
 };
 use schemars::{JsonSchema, schema_for};
 use serde::Deserialize;

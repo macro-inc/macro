@@ -6,9 +6,8 @@ use async_openai::types::{
     ChatCompletionRequestSystemMessage, ChatCompletionRequestSystemMessageContent,
     ChatCompletionRequestSystemMessageContentPart, CreateChatCompletionRequest,
     CreateChatCompletionRequestArgs, CreateChatCompletionStreamResponse,
-    FinishReason as OpenAIFinishReason, ReasoningEffort
+    FinishReason as OpenAIFinishReason, ReasoningEffort,
 };
-
 
 /// OPENAI
 impl TryFrom<ChatCompletionRequest> for CreateChatCompletionRequest {

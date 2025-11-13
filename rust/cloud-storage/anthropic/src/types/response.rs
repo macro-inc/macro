@@ -67,18 +67,17 @@ pub enum StopReason {
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
-pub struct ApiError  {
+pub struct ApiError {
     pub r#type: String,
     pub request_id: String,
-    pub error: Error
+    pub error: Error,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Error {
     pub r#type: String,
-    pub message: String
+    pub message: String,
 }
-
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Usage {

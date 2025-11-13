@@ -20,7 +20,7 @@ use crate::tool::types::{ChatCompletionStream, ToolResponse};
 use crate::types::Client;
 use crate::types::openai::message::convert_message;
 use crate::types::{
-    ChatCompletionRequest, ChatMessage, ChatMessages, MessageBuilder, SystemPrompt, Result
+    ChatCompletionRequest, ChatMessage, ChatMessages, MessageBuilder, Result, SystemPrompt,
 };
 use async_openai::types::{
     ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessage,
@@ -407,7 +407,7 @@ where
                             tool_calls = HashMap::new();
                         }
                     }
-                    Err(error) => yield Err(error.into())
+                    Err(error) => yield Err(error.into()),
                 }
             }
         }))

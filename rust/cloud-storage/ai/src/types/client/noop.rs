@@ -1,6 +1,6 @@
 use super::traits::Client;
-use anyhow::anyhow;
 use crate::types::AiError;
+use anyhow::anyhow;
 
 #[derive(Debug, Clone, Default)]
 pub struct NoOpClient;

@@ -1,7 +1,7 @@
+use crate::types::AiError;
 use anyhow::{Context, Result};
 use async_openai::types::{ChatCompletionResponseStream, CreateChatCompletionRequest};
 use serde::Serialize;
-use crate::types::AiError;
 
 #[derive(Clone, Debug)]
 pub struct RequestExtensions(serde_json::Value);

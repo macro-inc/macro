@@ -1,7 +1,7 @@
 use super::types::ToolCall;
 use super::types::tool_object::ToolObject;
+use crate::types::{AiError, Result};
 use crate::types::{ChatCompletionRequest, OpenRouterClient};
-use crate::types::{Result, AiError};
 use async_openai::types::{
     ChatCompletionTool, ChatCompletionToolChoiceOption, CreateChatCompletionRequest,
 };

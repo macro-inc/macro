@@ -1,7 +1,7 @@
-pub (crate) mod message;
+mod error;
+pub(crate) mod message;
 mod request;
 mod response;
-mod error;
 
 #[cfg(test)]
 mod test {

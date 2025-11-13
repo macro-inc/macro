@@ -368,7 +368,6 @@ pub async fn handle_send_chat_message(
     )
     .await
     .map_err(|err| {
-        println!("STREAM ERROR {:?}", err);
         tracing::error!(error=?err, "failed to stream chat response");
         match err {
             ai::types::AiError::ContextWindowExceeded => StreamError::ModelContextOverflow {

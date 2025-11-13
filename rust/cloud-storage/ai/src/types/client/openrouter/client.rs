@@ -1,6 +1,6 @@
 use super::config::OpenRouterConfig;
 use crate::types::client::traits::{Client, RequestExtensions};
-use crate::types::{Model, ModelWithMetadataAndProvider, AiError};
+use crate::types::{AiError, Model, ModelWithMetadataAndProvider};
 
 use anyhow::Context;
 use async_openai::Client as OpenAiClient;

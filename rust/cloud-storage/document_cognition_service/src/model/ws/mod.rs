@@ -296,9 +296,9 @@ impl StreamWebSocketError {
             StreamWebSocketError::StreamError(StreamError::ProviderError { stream_id, .. }) => {
                 stream_id
             }
-            StreamWebSocketError::StreamError(StreamError::ModelContextOverflow {
+            StreamWebSocketError::StreamError(StreamError::ModelContextOverflow { stream_id }) => {
                 stream_id
-            }) => stream_id,
+            }
             StreamWebSocketError::StreamError(StreamError::InternalError { stream_id, .. }) => {
                 stream_id
             }

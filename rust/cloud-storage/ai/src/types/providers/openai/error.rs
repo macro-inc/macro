@@ -7,10 +7,8 @@ impl From<OpenAIError> for AiError {
             OpenAIError::ApiError(api_err) => {
                 // for anthropic error formatting
                 if api_err.message.contains("tokens >") {
-                    println!("{:?} -> CONTEXT WIDOW", value);
                     Self::ContextWindowExceeded
                 } else {
-                    println!("{:?} -> GENERIC", value);
                     Self::Generic(value.into())
                 }
             }
