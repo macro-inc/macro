@@ -38,6 +38,9 @@ import {
 import type { WithSearch } from '../types/search';
 import { Entity } from './Entity';
 
+const isSearchEntity = (entity: EntityData): entity is WithSearch<EntityData> =>
+  'search' in entity;
+
 const DEBOUNCE_FETCH_MORE_MS = 50;
 
 // note that this must be greater than DEBOUNCE_FETCH_MORE_MS
@@ -190,8 +193,8 @@ export function createUnifiedInfiniteList<T extends EntityData>({
         continue;
       }
 
-      const existingHasSearch = 'search' in existing;
-      const newHasSearch = 'search' in entity;
+      const existingHasSearch = isSearchEntity(existing);
+      const newHasSearch = isSearchEntity(entity);
 
       // Prefer entities with search data
       if (newHasSearch && !existingHasSearch) {
@@ -201,10 +204,8 @@ export function createUnifiedInfiniteList<T extends EntityData>({
 
       // If both have search data, prefer 'service' over 'local'
       if (existingHasSearch && newHasSearch) {
-        // TODO: fix typing of this function so we do not need to cast
-        const existingSource = (existing as WithSearch<EntityData>).search
-          .source;
-        const newSource = (entity as WithSearch<EntityData>).search.source;
+        const existingSource = existing.search.source;
+        const newSource = entity.search.source;
 
         if (newSource === 'service' && existingSource === 'local') {
           entityMap.set(entity.id, entity);
@@ -272,12 +273,12 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     if (searching) {
       // When searching, sort local results first, then service results
       return entities.toSorted((a, b) => {
-        const aHasSearch = 'search' in a;
-        const bHasSearch = 'search' in b;
+        const aHasSearch = isSearchEntity(a);
+        const bHasSearch = isSearchEntity(b);
 
         if (aHasSearch && bHasSearch) {
-          const aSource = (a as WithSearch<EntityData>).search.source;
-          const bSource = (b as WithSearch<EntityData>).search.source;
+          const aSource = a.search.source;
+          const bSource = b.search.source;
 
           // Local results come before service results
           if (aSource === 'local' && bSource === 'service') return -1;
