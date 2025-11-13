@@ -227,10 +227,8 @@ export function ThemeEditorBasic() {
 
   function setCanvasColor(e: PointerEvent) {
     const rect = canvasContainerRef.getBoundingClientRect();
-    const x =
-      Math.min(Math.max(e.clientX - rect.left, 0), rect.width) / rect.width;
-    const y =
-      Math.min(Math.max(e.clientY - rect.top, 0), rect.height) / rect.height;
+    const x = Math.min(Math.max(e.clientX - rect.left, 0), rect.width) / rect.width;
+    const y = Math.min(Math.max(e.clientY - rect.top, 0), rect.height) / rect.height;
     batch(() => {
       setLightness(1 - y);
       setHue(x * 360);
@@ -280,10 +278,8 @@ export function ThemeEditorBasic() {
       canvasThumbRef.style.top = `${(1 - themeReactive.a0.l[0]()) * 100}%`;
     });
 
-    document.addEventListener('pointermove', handlePointerMove, {
-      passive: true,
-    });
-    document.addEventListener('pointerup', handlePointerUp);
+    document.addEventListener('pointermove', handlePointerMove, {passive: true});
+    document.addEventListener('pointerup', handlePointerUp, {passive: true});
   });
 
   onCleanup(() => {
@@ -293,14 +289,14 @@ export function ThemeEditorBasic() {
 
   return (
     <>
-    <style>{`
-      .theme-editor-basdic-slider::-webkit-slider-thumb {
-        opacity: 0;
-      }
-      .theme-editor-basdic-slider::-moz-range-thumb {
-        opacity: 0;
-      }
-    `}</style>
+      <style>{`
+        .theme-editor-basdic-slider::-webkit-slider-thumb {
+          opacity: 0;
+        }
+        .theme-editor-basdic-slider::-moz-range-thumb {
+          opacity: 0;
+        }
+      `}</style>
 
     <div style="
       font-family: 'Forma DJR Mono';
