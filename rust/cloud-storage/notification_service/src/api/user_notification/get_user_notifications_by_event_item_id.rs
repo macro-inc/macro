@@ -9,7 +9,7 @@ use axum::{
 use model::response::ErrorResponse;
 use model::user::UserContext;
 use model_notifications::UserNotification;
-use models_pagination::{CreatedAt, CursorExtractor, PaginateOn, Paginated};
+use models_pagination::{CreatedAt, CursorExtractor, PaginateOn, Paginated, TypeEraseCursor};
 use sqlx::types::Uuid;
 
 #[derive(serde::Deserialize)]
@@ -80,7 +80,11 @@ pub async fn handler(
                 message: "failed to convert notification",
             }),
         )
-    })?.into_iter().paginate_on(limit as usize, CreatedAt).into_page().type_erase();
+    })?
+    .into_iter()
+    .paginate_on(limit as usize, CreatedAt)
+    .into_page()
+    .type_erase();
 
     let Paginated {
         items, next_cursor, ..

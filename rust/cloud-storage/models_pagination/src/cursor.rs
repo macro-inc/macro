@@ -1,4 +1,5 @@
 use base64::{DecodeError, Engine, engine::general_purpose};
+use either::Either;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{cmp::Ordering, marker::PhantomData};
 use thiserror::Error;
@@ -210,14 +211,31 @@ where
     }
 }
 
-impl<T, I, C: Sortable, F> PaginatedCursor<T, I, C, F> {
+/// trait for erasing the strong typing of a Cursor
+/// This makes the type less specific but maintains the same inner data
+pub trait TypeEraseCursor<T> {
     /// Erase the type of self.
     /// This doesn't actually change any data it just makes the type less sepcific
-    pub fn type_erase(self) -> PaginatedOpaqueCursor<T> {
+    fn type_erase(self) -> PaginatedOpaqueCursor<T>;
+}
+
+impl<T, I, C: Sortable, F> TypeEraseCursor<T> for PaginatedCursor<T, I, C, F> {
+    fn type_erase(self) -> PaginatedOpaqueCursor<T> {
         let Self { items, next_cursor } = self;
         PaginatedOpaqueCursor {
             items,
             next_cursor: next_cursor.map(|c| c.type_erase()),
+        }
+    }
+}
+
+impl<T, I, I2, C: Sortable, C2: Sortable, F, F2> TypeEraseCursor<T>
+    for Either<PaginatedCursor<T, I, C, F>, PaginatedCursor<T, I2, C2, F2>>
+{
+    fn type_erase(self) -> PaginatedOpaqueCursor<T> {
+        match self {
+            Either::Left(l) => l.type_erase(),
+            Either::Right(r) => r.type_erase(),
         }
     }
 }
