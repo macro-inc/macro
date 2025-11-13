@@ -1,5 +1,6 @@
 import DropdownMenu from '@core/component/FormControls/DropdownMenu';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
+import { Tooltip } from '@core/component/Tooltip';
 import type { ToolSet } from '@service-cognition/generated/schemas';
 import { type ParentProps, Show, type Signal } from 'solid-js';
 
@@ -41,7 +42,15 @@ export function ToolsetSelector(props: {
   const [source, setSource] = props.sources;
 
   const StyledTriggerLabel = (props: ParentProps) => {
-    return <span class="text-[.85rem] font-medium flex">{props.children}</span>;
+    return (
+      <span class="text-[.85rem] font-medium font-mono">
+        <Tooltip
+          tooltip={"Tell the agent which sources to consider in it's search"}
+        >
+          {props.children}
+        </Tooltip>
+      </span>
+    );
   };
   return (
     <div class="flex items-center gap-x-1">
@@ -59,7 +68,7 @@ export function ToolsetSelector(props: {
         <div class="flex">
           <DropdownMenu
             theme="secondary"
-            triggerLabel={<StyledTriggerLabel>Filter</StyledTriggerLabel>}
+            triggerLabel={<StyledTriggerLabel>Source</StyledTriggerLabel>}
           >
             <SegmentedControl
               defaultValue={SOURCE_TO_DISPLAY[source()]}
