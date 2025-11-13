@@ -49,12 +49,12 @@ fn it_expands_filters() {
                                 "Or": [
                                     {
                                         "Literal": {
-                                            "FileType": "Pdf",
+                                            "FileType": "pdf",
                                         }
                                     },
                                     {
                                         "Literal": {
-                                            "FileType": "Txt"
+                                            "FileType": "txt"
                                         }
                                     }
                                 ]

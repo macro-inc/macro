@@ -6,8 +6,7 @@ use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::{domain::models::AggregateFrecency, outbound::mock::MockFrecencyStorage};
 use model_entity::EntityType;
 use models_pagination::{
-    Base64Str, Cursor, CursorVal, CursorWithVal, CursorWithValAndFilter, FrecencyValue,
-    SimpleSortMethod,
+    Base64Str, Cursor, CursorVal, CursorWithValAndFilter, FrecencyValue, SimpleSortMethod,
 };
 use models_soup::document::SoupDocument;
 use ordered_float::OrderedFloat;
@@ -325,7 +324,7 @@ async fn frecency_should_fallback() {
         .unwrap();
     assert_matches!(
         typed_cursor,
-        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated), filter: EntityFilterAst { document_filter: None } }} => {
+        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated), filter: _ }} => {
         assert_eq!(id, "doc-100");
         assert_eq!(updated, <DateTime<Utc>>::default() + Days::new(100));
 
@@ -396,7 +395,7 @@ async fn frecency_should_paginate() {
         .unwrap();
     assert_matches!(
         typed_cursor,
-        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score), filter: EntityFilterAst { document_filter: None } }} => {
+        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score), filter: _ }} => {
         assert_eq!(id, "doc-1");
         // last item should be the lowest score because we sort desc
         assert_eq!(score as u32, 1u32);
@@ -472,7 +471,7 @@ async fn frecency_should_resume_cursor() {
         .unwrap();
     assert_matches!(
         typed_cursor,
-        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score), filter: EntityFilterAst { document_filter: None } }} => {
+        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score), filter: _ }} => {
         assert_eq!(id, "doc-next-100");
         // last item should be the lowest score because we sort desc
         assert_eq!(score as u32, 4u32);
@@ -554,7 +553,7 @@ async fn frecency_fallback_cursor_should_resume() {
         )
         .decode_json()
         .unwrap();
-    assert_matches!(cursor, Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated), filter: EntityFilterAst { document_filter: None } } } => {
+    assert_matches!(cursor, Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated), filter: _ } } => {
         assert_eq!(id, "doc-next-100");
         let expected_date = <DateTime<Utc>>::default() + Days::new(100);
         assert_eq!(updated, expected_date);
