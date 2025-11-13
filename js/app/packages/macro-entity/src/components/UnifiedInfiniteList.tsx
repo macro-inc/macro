@@ -42,8 +42,42 @@ const isSearchEntity = (entity: EntityData): entity is WithSearch<EntityData> =>
   'search' in entity;
 
 /**
+ * Merges nameHighlight from source entity into target entity if target doesn't have one
+ */
+const mergeNameHighlight = <T extends EntityData>(
+  target: T & WithSearch<EntityData>,
+  source: T & WithSearch<EntityData>
+): T => {
+  if (!target.search.nameHighlight && source.search.nameHighlight) {
+    return {
+      ...target,
+      search: {
+        ...target.search,
+        nameHighlight: source.search.nameHighlight,
+      },
+    } as T;
+  }
+  return target;
+};
+
+/**
+ * Gets the timestamp of an entity (updatedAt or createdAt)
+ */
+const getEntityTimestamp = (entity: EntityData): number => {
+  return entity.updatedAt ?? entity.createdAt ?? 0;
+};
+
+/**
+ * Returns true if the new entity should replace the existing one based on timestamp
+ */
+const isNewerEntity = (newEntity: EntityData, existing: EntityData): boolean => {
+  return getEntityTimestamp(newEntity) > getEntityTimestamp(existing);
+};
+
+/**
  * Deduplicates entities by id, preferring entities with search data from 'service' source
- * over 'local' source, and using latest timestamp as a tiebreaker
+ * over 'local' source, and using latest timestamp as a tiebreaker.
+ * When preferring service results, merges local nameHighlight if service doesn't have one.
  */
 const deduplicateEntities = <T extends EntityData>(entities: T[]): T[] => {
   const entityMap = new Map<string, T>();
@@ -71,19 +105,19 @@ const deduplicateEntities = <T extends EntityData>(entities: T[]): T[] => {
       const newSource = entity.search.source;
 
       if (newSource === 'service' && existingSource === 'local') {
-        entityMap.set(entity.id, entity);
+        // Merge local nameHighlight if service doesn't have one
+        entityMap.set(entity.id, mergeNameHighlight(entity, existing));
         continue;
       }
 
       if (existingSource === 'service' && newSource === 'local') {
+        // Merge local nameHighlight into existing service result if needed
+        entityMap.set(entity.id, mergeNameHighlight(existing, entity));
         continue;
       }
 
       // If both are the same source, keep the one with latest timestamp
-      const existingTimestamp = existing.updatedAt ?? existing.createdAt ?? 0;
-      const newTimestamp = entity.updatedAt ?? entity.createdAt ?? 0;
-
-      if (newTimestamp > existingTimestamp) {
+      if (isNewerEntity(entity, existing)) {
         entityMap.set(entity.id, entity);
       }
       continue;
@@ -91,10 +125,7 @@ const deduplicateEntities = <T extends EntityData>(entities: T[]): T[] => {
 
     // If neither has search, keep the one with latest timestamp
     if (!existingHasSearch && !newHasSearch) {
-      const existingTimestamp = existing.updatedAt ?? existing.createdAt ?? 0;
-      const newTimestamp = entity.updatedAt ?? entity.createdAt ?? 0;
-
-      if (newTimestamp > existingTimestamp) {
+      if (isNewerEntity(entity, existing)) {
         entityMap.set(entity.id, entity);
       }
     }
