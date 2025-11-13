@@ -21,6 +21,7 @@ async fn main() -> anyhow::Result<()> {
             search_on: SearchOn::Content,
             ids_only: false,
             collapse: false,
+            disable_recency: false,
         })
         .await?;
 
