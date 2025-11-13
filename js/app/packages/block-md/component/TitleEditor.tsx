@@ -14,7 +14,7 @@ import {
   isRectFlushWith,
   trimWhitespace,
 } from '@core/component/LexicalMarkdown/utils';
-import { useCanEdit, useIsDocumentOwner } from '@core/signal/permissions';
+import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { mergeRegister } from '@lexical/utils';
 import { debounce } from '@solid-primitives/scheduled';
