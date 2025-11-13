@@ -686,19 +686,19 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return false;
   });
 
-  const disableSearchService = createMemo(() => {
-    // we only need to use search service when we have some sort of search text/filter
-    const validSearch = validSearchTerms() || validSearchFilters();
-    return !validSearch;
-  });
-
   const isSearchActive = createMemo(() => {
     return validSearchTerms() || validSearchFilters();
+  });
+
+  const disableSearchService = createMemo(() => {
+    return !isSearchActive();
   });
 
   const emailActive = useEmailLinksStatus();
 
   const disableEmailQuery = createMemo(() => {
+    // TODO: clean up
+    if (isSearchActive()) return true;
     // NOTE: at the moment emails are not supported in project blocks
     // so it doesn't make sense to do an expensive email query
     if (projectFilter()) return true;
@@ -709,6 +709,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   });
 
   const disableDssInfiniteQuery = createMemo(() => {
+    if (isSearchActive()) return true;
     const typeFilter = entityTypeFilter();
     if (typeFilter.length === 0) return false;
     const dssTypes = ['document', 'chat', 'project'];
@@ -717,6 +718,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   });
 
   const disableChannelsQuery = createMemo(() => {
+    if (isSearchActive()) return true;
     const typeFilter = entityTypeFilter();
     if (typeFilter.length > 0 && !typeFilter.includes('channel')) return true;
     return false;
