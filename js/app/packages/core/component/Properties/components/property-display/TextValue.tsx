@@ -43,6 +43,11 @@ export const TextValue: Component<TextValueProps> = (props) => {
     }
   };
 
+  const hasValue = () =>
+    props.property.value &&
+    typeof props.property.value === 'string' &&
+    props.property.value.length > 0;
+
   return (
     <Show
       when={editor.isEditing()}
@@ -55,14 +60,7 @@ export const TextValue: Component<TextValueProps> = (props) => {
               : 'bg-transparent text-ink-muted cursor-default'
           } block max-w-full break-words`}
         >
-          <Show
-            when={
-              props.property.value &&
-              typeof props.property.value === 'string' &&
-              props.property.value.length > 0
-            }
-            fallback={<>—</>}
-          >
+          <Show when={hasValue()} fallback={<>—</>}>
             <span class="block max-w-full">
               {formatPropertyValue(
                 props.property,

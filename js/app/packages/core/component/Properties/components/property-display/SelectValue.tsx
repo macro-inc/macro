@@ -77,7 +77,7 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
           const isHovered = () => hoveredValue() === value;
           return (
             <div
-              class="relative inline-flex max-w-[150px] shrink-0"
+              class="relative inline-flex max-w-[140px] shrink-0"
               onMouseEnter={() => setHoveredValue(value)}
               onMouseLeave={() => setHoveredValue(null)}
             >
