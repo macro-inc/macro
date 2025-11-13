@@ -1,12 +1,16 @@
+use std::str::FromStr;
+
 use super::*;
 use cool_asserts::assert_matches;
+use model_file_type::FileType;
 use serde_json::json;
+use uuid::Uuid;
 
 #[test]
 fn it_works_with_file_type() {
     let res: Result<Vec<_>, _> = ["pdf", "md", "txt", "html"]
         .into_iter()
-        .map(FileType::parse_from_str)
+        .map(FileType::from_str)
         .collect();
 
     assert_matches!(
@@ -45,12 +49,12 @@ fn it_expands_filters() {
                                 "Or": [
                                     {
                                         "Literal": {
-                                            "FileType": "Pdf",
+                                            "FileType": "pdf",
                                         }
                                     },
                                     {
                                         "Literal": {
-                                            "FileType": "Txt"
+                                            "FileType": "txt"
                                         }
                                     }
                                 ]
