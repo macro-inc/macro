@@ -783,6 +783,31 @@ export function createNavigationEntityListShortcut({
     },
     displayPriority: 10,
   });
+  registerHotkey({
+    hotkey: ['x'],
+    scopeId: entityHotkeyScope,
+    description: 'Toggle select item',
+    keyDownHandler: () => {
+      const entity = getHighlightedEntity()?.entity;
+      if (!entity) return false;
+      const prev = viewData().selectedEntities;
+      const ndx = prev.indexOf(entity);
+      const next = ndx > -1 ? prev.toSpliced(ndx, 1) : prev.concat(entity);
+      setSelectedViewStore('selectedEntities', next);
+      return true;
+    },
+    displayPriority: 10,
+  });
+  registerHotkey({
+    hotkey: ['escape'],
+    scopeId: splitHotkeyScope,
+    description: 'Clear Multi Selection',
+    keyDownHandler: () => {
+      const length = viewData().selectedEntities.length;
+      setSelectedViewStore('selectedEntities', []);
+      return length > 1;
+    },
+  });
 
   createEffect(() => {
     const ref = entityListRef();

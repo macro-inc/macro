@@ -1309,14 +1309,16 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   }
                   checked={selectedSelector(innerProps.entity.id)}
                   onChecked={(next) => {
-                    console.log('TODO (seamus) onChecked');
-                    // setSelectedViewStore('selectedEntities', (p) => {
-                    //   if (!next) {
-                    //     return p.filter((e) => e.id !== innerProps.entity.id);
-                    //   }
+                    unifiedListContext.setSelectedViewStore(
+                      'selectedEntities',
+                      (p) => {
+                        if (!next) {
+                          return p.filter((e) => e.id !== innerProps.entity.id);
+                        }
 
-                    //   return [...p, innerProps.entity];
-                    // });
+                        return [...p, innerProps.entity];
+                      }
+                    );
                   }}
                 />
               );
