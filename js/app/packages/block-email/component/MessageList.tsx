@@ -19,7 +19,8 @@ export function MessageList(props: MessageListProps) {
 
   return (
     <div
-      class="w-full flex-1 flex flex-col items-center overflow-y-scroll suppress-css-brackets"
+      class="pt-3 w-full flex-1 flex flex-col items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets"
+      ref={context.setMessagesRef}
       onscroll={(e) => {
         // Don't load more if we're programmatically scrolling to a message
         if (isScrollingToMessage() || !props.initialLoadComplete) return;
@@ -36,28 +37,23 @@ export function MessageList(props: MessageListProps) {
         }
       }}
     >
-      <div
-        class="w-full pt-3 flex flex-col items-center"
-        ref={context.setMessagesRef}
-      >
-        <Show when={context.threadMessagesResource()?.loading()}>
-          <div class="flex items-center justify-center h-16 w-full">
-            <CircleSpinner />
-          </div>
-        </Show>
-        <For each={context.filteredMessages()}>
-          {(message, index) => {
-            return (
-              <MessageContainer
-                message={message}
-                index={index}
-                expandedMessageBodyIds={expandedMessageBodyIds}
-                setExpandedMessageBodyIds={setExpandedMessageBodyIds}
-              />
-            );
-          }}
-        </For>
-      </div>
+      <Show when={context.threadMessagesResource()?.loading()}>
+        <div class="flex items-center justify-center h-16">
+          <CircleSpinner />
+        </div>
+      </Show>
+      <For each={context.filteredMessages()}>
+        {(message, index) => {
+          return (
+            <MessageContainer
+              message={message}
+              index={index}
+              expandedMessageBodyIds={expandedMessageBodyIds}
+              setExpandedMessageBodyIds={setExpandedMessageBodyIds}
+            />
+          );
+        }}
+      </For>
     </div>
   );
 }

@@ -27,15 +27,19 @@ interface MessageContainerProps {
 
 export function MessageContainer(props: MessageContainerProps) {
   const context = useEmailContext();
-  const draftChild = createMemo(
-    () => context.messageDbIdToDraftChildren[props.message.db_id ?? '']
-  );
+  const draftChild = createMemo(() => {
+    const draft = context.messageDbIdToDraftChildren[props.message.db_id ?? ''];
+    if (!draft) return undefined;
+    return draft;
+  });
 
   const [expandedHeader, setExpandedHeader] = createSignal<boolean>(false);
   const [threadAppendMountTarget, setThreadAppendMountTarget] = createSignal<
     HTMLElement | undefined
   >();
-  const [showReply, setShowReply] = createSignal<boolean>(false);
+  const [showReply, setShowReply] = createSignal<boolean>(
+    !!context.messageDbIdToDraftChildren[props.message.db_id ?? '']
+  );
   const userId = useUserId();
   const [currentUserName] = useDisplayName(userId());
 
@@ -101,68 +105,74 @@ export function MessageContainer(props: MessageContainerProps) {
   });
 
   return (
-    <div class="macro-message-width w-full">
-      <Message
-        focused={isFocused()}
-        isFirstMessage={isFirstMessage()}
-        isLastMessage={isLastMessage()}
-        senderId={props.message.from?.email}
-        isNewMessage={isNewMessage()}
-      >
-        <Message.TopBar>
-          <EmailMessageTopBar
-            message={props.message}
-            focused={isFocused()}
-            setExpandedMessageBodyIds={props.setExpandedMessageBodyIds}
-            isBodyExpanded={isBodyExpanded}
-            expandedHeader={expandedHeader}
-            setExpandedHeader={setExpandedHeader}
-            setFocusedMessageId={context.setFocusedMessageId}
-            setShowReply={setShowReply}
-            isLastMessage={isLastMessage()}
-          />
-        </Message.TopBar>
-        <Message.Body>
-          <EmailMessageBody
-            message={props.message}
-            isBodyExpanded={isBodyExpanded}
-            setExpandedMessageBody={(id) =>
-              props.setExpandedMessageBodyIds(id, true)
-            }
-            setFocusedMessageId={context.setFocusedMessageId}
-          />
-        </Message.Body>
-        <Show when={visibleAttachments().length > 0}>
-          <div class="flex flex-row overflow-x-scroll my-1">
-            <For each={visibleAttachments()}>
-              {(attachment) => {
-                if (attachment.db_id)
-                  return <EmailAttachmentPill attachment={attachment} />;
-              }}
-            </For>
-          </div>
-        </Show>
-      </Message>
-      <Show when={(showReply() || draftChild()) && !isLastMessage()}>
+    <div class="shrink-0 flex justify-center w-full">
+      <div class="macro-message-width w-full">
         <Message
-          focused={false}
-          unfocusable
-          senderId={userId()}
-          isFirstMessage={false}
-          isLastMessage={false}
-          threadDepth={1}
-          isFirstInThread
-          isLastInThread
-          shouldShowThreadAppendInput={createSignal(true)[0]}
-          setThreadAppendMountTarget={(el) => setThreadAppendMountTarget(el)}
+          focused={isFocused()}
+          isFirstMessage={isFirstMessage()}
+          isLastMessage={isLastMessage()}
+          senderId={props.message.from?.email}
+          isNewMessage={isNewMessage()}
         >
-          <Message.TopBar name={currentUserName()} />
-          <div class="h-4" />
+          <Message.TopBar>
+            <EmailMessageTopBar
+              message={props.message}
+              focused={isFocused()}
+              setExpandedMessageBodyIds={props.setExpandedMessageBodyIds}
+              isBodyExpanded={isBodyExpanded}
+              expandedHeader={expandedHeader}
+              setExpandedHeader={setExpandedHeader}
+              setFocusedMessageId={context.setFocusedMessageId}
+              setShowReply={setShowReply}
+              isLastMessage={isLastMessage()}
+            />
+          </Message.TopBar>
+          <Message.Body>
+            <EmailMessageBody
+              message={props.message}
+              isBodyExpanded={isBodyExpanded}
+              setExpandedMessageBody={(id) =>
+                props.setExpandedMessageBodyIds(id, true)
+              }
+              setFocusedMessageId={context.setFocusedMessageId}
+            />
+          </Message.Body>
+          <Show when={visibleAttachments().length > 0}>
+            <div class="flex flex-row overflow-x-scroll my-1">
+              <For each={visibleAttachments()}>
+                {(attachment) => {
+                  if (attachment.db_id)
+                    return <EmailAttachmentPill attachment={attachment} />;
+                }}
+              </For>
+            </div>
+          </Show>
         </Message>
-        <Portal mount={threadAppendMountTarget()}>
-          <EmailInput replyingTo={() => props.message} draft={draftChild()} />
-        </Portal>
-      </Show>
+        <Show when={showReply() && !isLastMessage()}>
+          <Message
+            focused={false}
+            unfocusable
+            senderId={userId()}
+            isFirstMessage={false}
+            isLastMessage={false}
+            threadDepth={1}
+            isFirstInThread
+            isLastInThread
+            shouldShowThreadAppendInput={createSignal(true)[0]}
+            setThreadAppendMountTarget={(el) => setThreadAppendMountTarget(el)}
+          >
+            <Message.TopBar name={currentUserName()} />
+            <div class="h-4" />
+          </Message>
+          <Portal mount={threadAppendMountTarget()}>
+            <EmailInput
+              replyingTo={() => props.message}
+              setShowReply={setShowReply}
+              draft={draftChild()}
+            />
+          </Portal>
+        </Show>
+      </div>
     </div>
   );
 }
