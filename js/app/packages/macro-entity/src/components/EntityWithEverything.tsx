@@ -1,10 +1,11 @@
 import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
+import { useEmail } from '@service-gql/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
-import { useDisplayName } from 'core/user';
+import { emailToId, useDisplayName } from 'core/user';
 import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
 import { useSplitNavigationHandler } from 'core/util/useSplitNavigationHandler';
 import { notificationWithMetadata } from 'notifications/notificationMetadata';
@@ -23,10 +24,16 @@ import { Dynamic } from 'solid-js/web';
 import { ITEM_WRAPPER } from '../constants/classStrings';
 import { createProfilePictureQuery } from '../queries/auth';
 import { createProjectQuery } from '../queries/project';
-import type { EntityData } from '../types/entity';
+import type { EntityData, EntityOf } from '../types/entity';
 import type { Notification, WithNotification } from '../types/notification';
 import type { WithSearch } from '../types/search';
 import type { EntityClickHandler } from './Entity';
+
+function isEmailEntity(
+  entity: WithNotification<EntityData>
+): entity is WithNotification<EntityOf<'email'>> {
+  return entity.type === 'email';
+}
 
 function UnreadIndicator(props: { active?: boolean }) {
   return (
@@ -93,6 +100,7 @@ export function EntityWithEverything(
 
   const { keydownDataDuringTask } = trackKeydownDuringTask();
   let _tabbableEl!: HTMLDivElement;
+  const userEmail = useEmail();
 
   // onMount(() => {
   //   if (document.activeElement === document.body) {
@@ -157,12 +165,56 @@ export function EntityWithEverything(
 
   const EntityTitle = () => {
     if (props.entity.type === 'email') {
+      const macroDisplayNames =
+        props.entity.participantEmails?.map((email) => {
+          return useDisplayName(emailToId(email))[0];
+        }) ?? [];
+      const isLikelyEmail = (value?: string) =>
+        typeof value === 'string' && value.includes('@');
+      const combinedParticipantFirstNames = createMemo(() => {
+        if (!isEmailEntity(props.entity)) return [];
+        const me = userEmail();
+        const participantNames = props.entity.participantNames ?? [];
+        return (
+          props.entity.participantEmails?.reduce<string[]>(
+            (acc, email, idx) => {
+              if (me && email === me) return acc;
+              const macroFirstName = macroDisplayNames[idx]?.().split(' ')[0];
+              const participantFirstName = participantNames[idx].split(' ')[0];
+              if (macroFirstName && !isLikelyEmail(macroFirstName)) {
+                acc.push(macroFirstName);
+              } else if (
+                isLikelyEmail(macroFirstName) &&
+                participantFirstName &&
+                !isLikelyEmail(participantFirstName)
+              ) {
+                acc.push(participantFirstName);
+              } else {
+                acc.push(email.split('@')[0]);
+              }
+              return acc;
+            },
+            []
+          ) ?? []
+        );
+      });
+
+      const displayedNames = () => {
+        const names = combinedParticipantFirstNames();
+        if (names.length <= 3 && names.length > 0) return names.join(', ');
+        if (names.length > 3)
+          return `${names[0]} .. ${names[names.length - 2]}, ${names[names.length - 1]}`;
+        return undefined;
+      };
+
       return (
         <div class="flex gap-2 items-center text-sm min-w-0 w-full truncate overflow-hidden">
           {/* sometimes senderName and senderEmail are the same */}
           <div class="flex w-[20cqw] gap-2 font-semibold shrink-0">
             {/* Sender Name */}
-            <div class="truncate">{props.entity.senderName}</div>
+            <div class="truncate">
+              {displayedNames() ?? props.entity.senderName}
+            </div>
             {/* Sender Email Address */}
             {/* <Show
               when={
