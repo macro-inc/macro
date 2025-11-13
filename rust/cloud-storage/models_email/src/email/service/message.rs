@@ -307,6 +307,7 @@ pub struct ThreadHistoryInfo {
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
     pub viewed_at: Option<DateTime<Utc>>,
+    pub snippet: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

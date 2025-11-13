@@ -121,6 +121,7 @@ pub fn construct_search_result(
                 created_at: message_history_info.created_at.timestamp(),
                 updated_at: message_history_info.updated_at.timestamp(),
                 viewed_at: message_history_info.viewed_at.map(|a| a.timestamp()),
+                snippet: message_history_info.snippet,
                 extra: item,
             }
         })
