@@ -241,7 +241,7 @@ function ChatInput(props: ChatInputInternalProps) {
               uploadQueue={props.uploadQueue}
             />
           </Show>
-          <div class="flex items-center">
+          <div class="flex items-center gap-x-1">
             <IconButton
               icon={showAttachMenu() ? XIcon : PlusIcon}
               theme="base"
