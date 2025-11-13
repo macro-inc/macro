@@ -178,23 +178,37 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     return entities;
   });
 
-  // deduplicate by id, taking latest timestamp
+  // deduplicate by id, taking entity with search field, otherwise latest timestamp
   const deduplicatedEntities = createMemo(() => {
     const entityMap = new Map<string, T>();
-    for (const entity of filteredEntities()) {
-      const id = entity.id;
-      const existing = entityMap.get(id);
 
-      if (existing) {
+    for (const entity of filteredEntities()) {
+      const existing = entityMap.get(entity.id);
+
+      if (!existing) {
+        entityMap.set(entity.id, entity);
+        continue;
+      }
+
+      const existingHasSearch = 'search' in existing;
+      const newHasSearch = 'search' in entity;
+
+      // Prefer entities with search data
+      if (newHasSearch && !existingHasSearch) {
+        entityMap.set(entity.id, entity);
+        continue;
+      }
+
+      // If both have search or neither has search, keep the one with latest timestamp
+      if (existingHasSearch === newHasSearch) {
         const existingTimestamp = existing.updatedAt ?? existing.createdAt ?? 0;
         const newTimestamp = entity.updatedAt ?? entity.createdAt ?? 0;
 
         if (newTimestamp > existingTimestamp) {
-          entityMap.set(id, entity);
+          entityMap.set(entity.id, entity);
         }
-      } else {
-        entityMap.set(id, entity);
       }
+      // Otherwise keep existing (it has search and new doesn't)
     }
 
     return Array.from(entityMap.values());

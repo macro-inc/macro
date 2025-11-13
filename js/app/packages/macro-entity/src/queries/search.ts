@@ -11,6 +11,7 @@ import type {
   ProjectSearchResult,
   UnifiedSearchResponseItem,
 } from '@service-search/generated/models';
+import { useHistory } from '@service-storage/history';
 import { useInfiniteQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { EntityData } from '../types/entity';
@@ -37,6 +38,8 @@ const getHighlights = (innerResults: InnerSearchResult[]) => {
 const useMapSearchResponseItem = () => {
   const channelsContext = useChannelsContext();
   const channels = () => channelsContext.channels();
+
+  const history = useHistory();
 
   return (result: UnifiedSearchResponseItem): Entity | undefined => {
     switch (result.type) {
@@ -79,10 +82,17 @@ const useMapSearchResponseItem = () => {
       }
       case 'chat': {
         const search = getHighlights(result.chat_search_results);
+        let name = result.name;
+        if (!name || name === 'New Chat') {
+          const chat = history().find((item) => item.id === result.chat_id);
+          if (chat) {
+            name = chat.name;
+          }
+        }
         return {
           type: 'chat',
           id: result.chat_id,
-          name: result.name,
+          name,
           ownerId: result.user_id,
           createdAt: result.created_at,
           updatedAt: result.updated_at,

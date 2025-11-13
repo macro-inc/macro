@@ -710,7 +710,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   });
 
   const disableDssInfiniteQuery = createMemo(() => {
-    if (isSearchActive()) return true;
     const typeFilter = entityTypeFilter();
     if (typeFilter.length === 0) return false;
     const dssTypes = ['document', 'chat', 'project'];
