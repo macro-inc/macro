@@ -179,7 +179,7 @@ const EDITOR_PADDING_BOTTOM = 200;
 
 const DRAG_EVENT_PADDING = 8;
 
-export function MarkdownEditor() {
+export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
 
@@ -836,6 +836,13 @@ export function MarkdownEditor() {
     }
 
     setEditorReady(true);
+  });
+
+  // Auto-focus on mount if enabled and editor is ready and empty.
+  createEffect(() => {
+    if (props.autoFocusOnMount && editorReady() && editorHasNoContent()) {
+      editor.focus(undefined, { defaultSelection: 'rootStart' });
+    }
   });
 
   const _generateContentCallback = createCallback((userRequest: string) => {

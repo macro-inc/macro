@@ -131,6 +131,7 @@ export function BaseInput(props: {
   draftContainsAppendedReply?: boolean;
   preloadedAttachments?: AttachmentMacro[];
   sideEffectOnSend?: (newMessageId: MessageToSendDbId | null) => void;
+  markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }) {
   const ctx = useEmailContext();
   const form = createMemo(() =>
@@ -800,6 +801,7 @@ export function BaseInput(props: {
             portalScope="local"
             formatState={formatState}
             setFormatState={setFormatState}
+            domRef={props.markdownDomRef}
           />
         </div>
         <Show when={!replyAppended()}>
