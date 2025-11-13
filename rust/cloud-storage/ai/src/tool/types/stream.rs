@@ -1,10 +1,10 @@
-use crate::types::Usage;
+use crate::types::{Usage, AiError};
 use futures::stream::Stream;
 use serde::Serialize;
 use std::pin::Pin;
 
 pub type ChatCompletionStream<'a> =
-    Pin<Box<dyn Stream<Item = Result<StreamPart, anyhow::Error>> + Send + 'a>>;
+    Pin<Box<dyn Stream<Item = Result<StreamPart, AiError>> + Send + 'a>>;
 
 #[derive(Debug, Clone)]
 pub enum StreamPart {

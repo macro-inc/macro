@@ -20,9 +20,8 @@ use crate::tool::types::{ChatCompletionStream, ToolResponse};
 use crate::types::Client;
 use crate::types::openai::message::convert_message;
 use crate::types::{
-    ChatCompletionRequest, ChatMessage, ChatMessages, MessageBuilder, SystemPrompt,
+    ChatCompletionRequest, ChatMessage, ChatMessages, MessageBuilder, SystemPrompt, Result
 };
-use anyhow::Result;
 use async_openai::types::{
     ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessage,
     ChatCompletionRequestAssistantMessageContent, ChatCompletionRequestMessage,
@@ -154,7 +153,8 @@ where
     async fn route_chained_calls(&self, part: ToolCall) -> Result<ToolCall> {
         tracing::debug!("route chained call {:#?}", part);
         let chained: ChainedTool = serde_json::from_value(part.json)
-            .inspect_err(|_| tracing::warn!("AI returned an invalid chained tool"))?;
+            .inspect_err(|_| tracing::warn!("AI returned an invalid chained tool"))
+            .map_err(anyhow::Error::from)?;
 
         let selected_tool = self
             .toolset
@@ -407,7 +407,7 @@ where
                             tool_calls = HashMap::new();
                         }
                     }
-                    Err(error) => yield Err(anyhow::Error::from(error)),
+                    Err(error) => yield Err(error.into())
                 }
             }
         }))
