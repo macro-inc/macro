@@ -1,4 +1,3 @@
-import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
   SplitHeaderLeft,
@@ -88,10 +87,7 @@ export function Top() {
         />
       </SplitHeaderLeft>
       <SplitHeaderRight>
-        <div class="flex h-full">
-          <EntityNavigationIndicator />
-          <BlockLiveIndicators />
-        </div>
+        <BlockLiveIndicators />
       </SplitHeaderRight>
       <SplitToolbarRight>
         <div class="p-1 flex flex-row gap-1 items-center h-full">

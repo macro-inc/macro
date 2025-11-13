@@ -13,13 +13,20 @@ const EntityNavigationIndicator = () => {
       selectedView,
       viewsDataStore,
     },
+    handle,
   } = useSplitPanelOrThrow();
   const selectedViewData = () => viewsDataStore[selectedView()];
   const selectedEntity = () => selectedViewData().selectedEntity;
   const selectedEntityIndex = () =>
     entities()?.findIndex((item) => item.id === selectedEntity()?.id) ?? -1;
   return (
-    <Show when={entities()?.length && selectedEntity()}>
+    <Show
+      when={
+        entities()?.length &&
+        selectedEntity() &&
+        handle.content().type !== 'component'
+      }
+    >
       <div class="flex gap-1 items-center font-mono text-sm text-ink/50 pl-2 pr-4">
         <div>
           [<span class="text-ink">{selectedEntityIndex() + 1}</span>/

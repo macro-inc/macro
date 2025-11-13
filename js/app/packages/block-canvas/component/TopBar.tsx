@@ -1,4 +1,3 @@
-import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 import {
   type FileOperation,
   SplitFileMenu,
@@ -109,10 +108,7 @@ export function TopBar() {
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
       <SplitHeaderRight>
-        <div class="flex h-full">
-          <EntityNavigationIndicator />
-          <BlockLiveIndicators />
-        </div>
+        <BlockLiveIndicators />
       </SplitHeaderRight>
       <SplitToolbarLeft>
         <div class="p-1">

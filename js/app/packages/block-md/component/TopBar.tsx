@@ -1,4 +1,3 @@
-import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
   type FileOperation,
@@ -77,10 +76,7 @@ export function TopBar() {
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
       <SplitHeaderRight>
-        <div class="flex h-full">
-          <EntityNavigationIndicator />
-          <BlockLiveIndicators />
-        </div>
+        <BlockLiveIndicators />
       </SplitHeaderRight>
       <SplitToolbarLeft>
         <SplitFileMenu

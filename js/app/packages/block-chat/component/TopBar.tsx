@@ -1,12 +1,8 @@
-import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 import {
   type FileOperation,
   SplitFileMenu,
 } from '@app/component/split-layout/components/SplitFileMenu';
-import {
-  SplitHeaderLeft,
-  SplitHeaderRight,
-} from '@app/component/split-layout/components/SplitHeader';
+import { SplitHeaderLeft } from '@app/component/split-layout/components/SplitHeader';
 import {
   BlockItemSplitLabel,
   SplitPermissionsBadge,
@@ -48,11 +44,6 @@ export function TopBar() {
       <SplitHeaderLeft>
         <BlockItemSplitLabel fallbackName={FALLBACK_NAME} lockRename={false} />
       </SplitHeaderLeft>
-      <SplitHeaderRight>
-        <div class="flex h-full">
-          <EntityNavigationIndicator />
-        </div>
-      </SplitHeaderRight>
       <SplitToolbarLeft>
         <div class="p-1">
           <SplitFileMenu
