@@ -1,5 +1,5 @@
-import { createMemo } from "solid-js";
-import { useSplitPanelOrThrow } from "./split-layout/layoutUtils";
+import { createMemo } from 'solid-js';
+import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 export function useNavigatedFromJK() {
   const {
