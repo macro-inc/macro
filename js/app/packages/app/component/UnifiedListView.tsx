@@ -32,6 +32,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
+import { fuzzyNameMatch } from '@core/util/fuzzyName';
 import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
 import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
 import XIcon from '@icon/regular/x.svg?component-solid';
@@ -62,6 +63,7 @@ import {
   sortByViewedAt,
   unreadFilterFn,
   type WithNotification,
+  type WithSearch,
 } from '@macro-entity';
 import {
   markNotificationsForEntityAsDone,
@@ -86,7 +88,6 @@ import type {
 } from '@service-search/generated/models';
 import type { GetItemsSoupParams } from '@service-storage/generated/schemas';
 import { debounce } from '@solid-primitives/scheduled';
-import fuzzy from 'fuzzy';
 import stringify from 'json-stable-stringify';
 import {
   type Accessor,
@@ -448,10 +449,28 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     rawSearchText()
       ? (items: WithNotification<EntityData>[]) => {
           if (!searchText() || searchText().length === 0) return items;
-          const fuzzyResults = fuzzy.filter(searchText(), items, {
-            extract: (item) => item.name,
-          });
-          return fuzzyResults.map((result) => result.original);
+
+          const query = searchText();
+
+          return items
+            .map((item) => {
+              const matchResult = fuzzyNameMatch(query, item.name);
+
+              if (!matchResult) return null;
+
+              return {
+                ...item,
+                search: {
+                  nameHighlight: matchResult.nameHighlight,
+                  contentHighlights: null,
+                  source: 'local',
+                },
+              } as WithNotification<WithSearch<EntityData>>;
+            })
+            .filter(
+              (item): item is WithNotification<WithSearch<EntityData>> =>
+                item !== null
+            );
         }
       : undefined
   );
@@ -686,14 +705,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return false;
   });
 
-  const disableSearchService = createMemo(() => {
-    // we only need to use search service when we have some sort of search text/filter
-    const validSearch = validSearchTerms() || validSearchFilters();
-    return !validSearch;
-  });
-
   const isSearchActive = createMemo(() => {
     return validSearchTerms() || validSearchFilters();
+  });
+
+  const disableSearchService = createMemo(() => {
+    return !isSearchActive();
   });
 
   const emailActive = useEmailLinksStatus();
@@ -702,10 +719,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     // NOTE: at the moment emails are not supported in project blocks
     // so it doesn't make sense to do an expensive email query
     if (projectFilter()) return true;
+    if (isSearchActive()) return true;
     if (!emailActive()) return true;
     const typeFilter = entityTypeFilter();
     if (typeFilter.length > 0 && !typeFilter.includes('email')) return true;
-    return !disableSearchService();
+    return false;
   });
 
   const disableDssInfiniteQuery = createMemo(() => {
@@ -801,7 +819,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   });
 
   const { UnifiedListComponent, entities, isLoading } =
-    createUnifiedInfiniteList<WithNotification<EntityData>>({
+    createUnifiedInfiniteList<
+      WithNotification<WithSearch<EntityData> | EntityData>
+    >({
       entityInfiniteQueries: [
         {
           query: dssInfiniteQuery,
@@ -898,10 +918,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       console.warn(e);
       return false;
     }
-  });
-
-  const hasRefinementsFromBase = createMemo(() => {
-    return isViewConfigChanged() || validSearchTerms() || validSearchFilters();
   });
 
   const onClickSaveViewConfigChanges = () => {
@@ -1178,7 +1194,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             entityListRef={setLocalEntityListRef}
             virtualizerHandle={setVirtualizerHandle}
             emptyState={<EmptyState view={view()?.view} />}
-            hasRefinementsFromBase={hasRefinementsFromBase}
+            hasRefinementsFromBase={isViewConfigChanged}
           >
             {(innerProps) => {
               const displayDoneButton = () => {
