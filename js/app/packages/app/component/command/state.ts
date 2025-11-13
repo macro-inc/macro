@@ -2,6 +2,8 @@ import { createControlledOpenSignal } from '@core/util/createControlledOpenSigna
 import { debounce } from '@solid-primitives/scheduled';
 import { createEffect, createSignal, untrack } from 'solid-js';
 
+const COMMAND_DEBOUNCE_MS = 200;
+
 export const [konsoleOpen, setKonsoleOpen] = createControlledOpenSignal();
 export const toggleKonsoleVisibility = () => {
   const isOpen = konsoleOpen();
@@ -14,7 +16,7 @@ export const [lastCommandTime, setLastCommandTime] = createSignal(Date.now());
 export const [rawQuery, immediatelySetRawQuery] = createSignal('');
 export const setRawQuery = debounce((term: string) => {
   immediatelySetRawQuery(term);
-}, 150);
+}, COMMAND_DEBOUNCE_MS);
 export const resetQuery = () => setRawQuery('');
 
 // If we aren't in default mode,
