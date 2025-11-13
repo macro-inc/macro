@@ -300,16 +300,12 @@ const Block: Component = () => {
     setSelectedView(projectId);
 
     setViewDataStore(projectId, {
-      id: projectId,
-      viewType: 'project',
       ...PROJECT_VIEWCONFIG_BASE,
+      id: projectId,
       filters: {
         ...PROJECT_VIEWCONFIG_BASE.filters,
         projectFilter: projectId,
       },
-      initialConfig: '',
-      searchText: '',
-      hasUserInteractedEntity: false,
     });
 
     onCleanup(() => {
