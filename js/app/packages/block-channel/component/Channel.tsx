@@ -1,5 +1,5 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { useNavigatedFromJK } from '@app/component/SoupContext';
+import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import type { ChannelData } from '@block-channel/definition';
 import {
   latestActivitySignal,

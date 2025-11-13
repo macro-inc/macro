@@ -34,7 +34,6 @@ import {
 import type { VirtualizerHandle } from 'virtua/solid';
 import { useGlobalNotificationSource } from './GlobalAppState';
 import type { SplitHandle } from './split-layout/layoutManager';
-import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import {
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS,
@@ -622,23 +621,6 @@ export function createNavigationEntityListShortcut({
 
     attachEntityHotkeys(ref);
   });
-}
-
-export function useNavigatedFromJK() {
-  const {
-    unifiedListContext: {
-      entitiesSignal: [_entities],
-    },
-  } = useSplitPanelOrThrow();
-  const navigatedFromJK = createMemo(() => {
-    const entities = _entities();
-    if (!entities) return false;
-    return (
-      entities.length > 0 &&
-      document.documentElement.getAttribute('data-modality') === 'keyboard'
-    );
-  });
-  return { navigatedFromJK };
 }
 
 const useAllViews = ({

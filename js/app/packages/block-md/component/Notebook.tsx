@@ -1,4 +1,4 @@
-import { useNavigatedFromJK } from '@app/component/SoupContext';
+import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
   commentsStore,
