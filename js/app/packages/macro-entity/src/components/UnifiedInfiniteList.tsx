@@ -35,7 +35,206 @@ import {
   type EntityRenderer,
   getEntityProjectId,
 } from '../types/entity';
+import type { WithSearch } from '../types/search';
 import { Entity } from './Entity';
+
+const isSearchEntity = (entity: EntityData): entity is WithSearch<EntityData> =>
+  'search' in entity;
+
+/**
+ * Merges search data from two entities, preferring service source with local as fallback.
+ * - Uses service entity as base
+ * - Falls back to local nameHighlight if service doesn't have one
+ * - Falls back to local contentHighlights if service doesn't have any
+ */
+const mergeSearchEntities = <T extends EntityData>(
+  first: T & WithSearch<EntityData>,
+  second: T & WithSearch<EntityData>
+): T => {
+  const serviceEntity = first.search.source === 'service' ? first : second;
+  const localEntity = first.search.source === 'local' ? first : second;
+
+  return {
+    ...serviceEntity,
+    search: {
+      ...serviceEntity.search,
+      nameHighlight:
+        serviceEntity.search.nameHighlight || localEntity.search.nameHighlight,
+      contentHighlights: serviceEntity.search.contentHighlights?.length
+        ? serviceEntity.search.contentHighlights
+        : localEntity.search.contentHighlights,
+    },
+  } as T;
+};
+
+/**
+ * Gets the timestamp of an entity (updatedAt or createdAt)
+ */
+const getEntityTimestamp = (entity: EntityData): number => {
+  return entity.updatedAt ?? entity.createdAt ?? 0;
+};
+
+/**
+ * Returns true if the new entity should replace the existing one based on timestamp
+ */
+const isNewerEntity = (
+  newEntity: EntityData,
+  existing: EntityData
+): boolean => {
+  return getEntityTimestamp(newEntity) > getEntityTimestamp(existing);
+};
+
+/**
+ * Deduplicates entities by id, preferring entities with search data from 'service' source
+ * over 'local' source, and using latest timestamp as a tiebreaker.
+ * When preferring service results, merges local nameHighlight if service doesn't have one.
+ */
+const deduplicateEntities = <T extends EntityData>(entities: T[]): T[] => {
+  const entityMap = new Map<string, T>();
+
+  for (const entity of entities) {
+    const existing = entityMap.get(entity.id);
+
+    if (!existing) {
+      entityMap.set(entity.id, entity);
+      continue;
+    }
+
+    const existingHasSearch = isSearchEntity(existing);
+    const newHasSearch = isSearchEntity(entity);
+
+    // Prefer entities with search data
+    if (newHasSearch && !existingHasSearch) {
+      entityMap.set(entity.id, entity);
+      continue;
+    }
+
+    // If both have search data, prefer 'service' over 'local'
+    if (existingHasSearch && newHasSearch) {
+      const existingSource = existing.search.source;
+      const newSource = entity.search.source;
+
+      if (
+        (newSource === 'service' && existingSource === 'local') ||
+        (existingSource === 'service' && newSource === 'local')
+      ) {
+        // Merge service and local search data
+        entityMap.set(entity.id, mergeSearchEntities(entity, existing));
+        continue;
+      }
+
+      // If both are the same source, keep the one with latest timestamp
+      if (isNewerEntity(entity, existing)) {
+        entityMap.set(entity.id, entity);
+      }
+      continue;
+    }
+
+    // If neither has search, keep the one with latest timestamp
+    if (!existingHasSearch && !newHasSearch) {
+      if (isNewerEntity(entity, existing)) {
+        entityMap.set(entity.id, entity);
+      }
+    }
+    // Otherwise keep existing (it has search and new doesn't)
+  }
+
+  return Array.from(entityMap.values());
+};
+
+/**
+ * Calculates match quality score for local search results.
+ * Higher score = better match.
+ * Prioritizes: exact match > starts with > word boundary > fuzzy match
+ */
+const getLocalMatchScore = (
+  entityName: string,
+  nameHighlight: string | null
+): number => {
+  if (!nameHighlight) return 0;
+
+  const name = entityName.toLowerCase();
+
+  // Extract the search query from the highlighted text
+  // The highlighted portion is wrapped in <macro_em>...</macro_em>
+  const highlightedText = nameHighlight
+    .replace(/<\/?macro_em>/g, '')
+    .toLowerCase();
+
+  // Count number of highlight segments (fewer segments = more contiguous match)
+  const highlightSegments = (nameHighlight.match(/<macro_em>/g) || []).length;
+
+  // Exact match (highest priority)
+  if (name === highlightedText) return 1000;
+
+  // Starts with match
+  if (name.startsWith(highlightedText)) return 900;
+
+  // Single contiguous match (not scattered)
+  if (highlightSegments === 1) {
+    // Word boundary match (after space, comma, etc.)
+    if (
+      name.match(
+        new RegExp(
+          `[\\s,+]${highlightedText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`
+        )
+      )
+    ) {
+      return 800;
+    }
+    return 700; // Contiguous substring
+  }
+
+  // Multiple segments (fuzzy/scattered match) - penalize based on number of segments
+  return Math.max(100, 500 - highlightSegments * 50);
+};
+
+/**
+ * Sorts entities for search mode:
+ * 1. Channels first
+ * 2. Local search results before service results
+ * 3. Within local results, better name matches come first
+ */
+const sortEntitiesForSearch = <T extends EntityData>(a: T, b: T): number => {
+  const aHasSearch = isSearchEntity(a);
+  const bHasSearch = isSearchEntity(b);
+
+  if (aHasSearch && bHasSearch) {
+    // Channel results come before other results
+    const aIsChannel = a.type === 'channel';
+    const bIsChannel = b.type === 'channel';
+
+    if (aIsChannel && !bIsChannel) return -1;
+    if (!aIsChannel && bIsChannel) return 1;
+
+    // Local results come before service results
+    const aSource = a.search.source;
+    const bSource = b.search.source;
+
+    if (aSource === 'local' && bSource === 'service') return -1;
+    if (aSource === 'service' && bSource === 'local') return 1;
+
+    // Within local results, sort by match quality
+    if (
+      aSource === 'local' &&
+      bSource === 'local' &&
+      aIsChannel &&
+      bIsChannel
+    ) {
+      const aScore = getLocalMatchScore(a.name, a.search.nameHighlight);
+      const bScore = getLocalMatchScore(b.name, b.search.nameHighlight);
+
+      if (aScore !== bScore) {
+        return bScore - aScore; // Higher score first
+      }
+
+      // If same score, prefer shorter names (more focused match)
+      return a.name.length - b.name.length;
+    }
+  }
+
+  return 0;
+};
 
 const DEBOUNCE_FETCH_MORE_MS = 50;
 
@@ -64,8 +263,13 @@ const getOperations = <T extends Partial<EntityQueryOperations>>(
 
 interface UnifiedInfiniteListContext<T extends EntityData> {
   showProjects: Accessor<boolean>;
-  entityInfiniteQueries: Array<EntityQueryWithOperations<EntityInfiniteQuery>>;
-  entityQueries?: Array<EntityQueryWithOperations<EntityQuery>>;
+  entityInfiniteQueries: Array<
+    EntityQueryWithOperations<
+      EntityData | WithSearch<EntityData>,
+      EntityInfiniteQuery
+    >
+  >;
+  entityQueries?: Array<EntityQueryWithOperations<EntityData, EntityQuery>>;
   entityMapper?: EntityMapper<T>;
   requiredFilter?: Accessor<EntityFilter<T>>;
   optionalFilter?: Accessor<EntityFilter<T>>;
@@ -172,27 +376,9 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     return entities;
   });
 
-  // deduplicate by id, taking latest timestamp
-  const deduplicatedEntities = createMemo(() => {
-    const entityMap = new Map<string, T>();
-    for (const entity of filteredEntities()) {
-      const id = entity.id;
-      const existing = entityMap.get(id);
-
-      if (existing) {
-        const existingTimestamp = existing.updatedAt ?? existing.createdAt ?? 0;
-        const newTimestamp = entity.updatedAt ?? entity.createdAt ?? 0;
-
-        if (newTimestamp > existingTimestamp) {
-          entityMap.set(id, entity);
-        }
-      } else {
-        entityMap.set(id, entity);
-      }
-    }
-
-    return Array.from(entityMap.values());
-  });
+  const deduplicatedEntities = createMemo(() =>
+    deduplicateEntities(filteredEntities())
+  );
 
   const projectFilterEntities = createMemo(() => {
     const entities = deduplicatedEntities();
@@ -218,12 +404,15 @@ export function createUnifiedInfiniteList<T extends EntityData>({
   });
 
   const sortedEntities = createMemo<T[]>(() => {
-    // TODO: process entities in a pipeline
     const entities = projectFilterEntities();
     const sortFn = entitySort?.();
     const searching = isSearchActive?.();
 
-    if (!sortFn || searching) return entities;
+    if (searching) {
+      return entities.toSorted(sortEntitiesForSearch);
+    }
+
+    if (!sortFn) return entities;
 
     return entities.toSorted(sortFn);
   });
