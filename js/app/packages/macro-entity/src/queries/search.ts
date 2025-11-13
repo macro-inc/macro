@@ -32,6 +32,7 @@ const getHighlights = (innerResults: InnerSearchResult[]) => {
   return {
     nameHighlight: innerResults.at(0)?.highlight.name ?? null,
     contentHighlights: innerResults.flatMap((r) => r.highlight.content ?? []),
+    source: 'service' as const,
   };
 };
 

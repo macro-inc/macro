@@ -445,6 +445,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       );
     });
 
+  const mergeAdjacentTags = (text: string): string => {
+    // Merge adjacent </macro_em><macro_em> sequences
+    return text.replace(/<\/macro_em><macro_em>/g, '');
+  };
+
   const nameFuzzySearchFilter = createMemo(() =>
     rawSearchText()
       ? (items: WithNotification<EntityData>[]) => {
@@ -462,8 +467,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               return {
                 ...item,
                 search: {
-                  nameHighlight: matchResult.rendered,
+                  nameHighlight: mergeAdjacentTags(matchResult.rendered),
                   contentHighlights: null,
+                  source: 'local',
                 },
               } as WithNotification<WithSearch<EntityData>>;
             })

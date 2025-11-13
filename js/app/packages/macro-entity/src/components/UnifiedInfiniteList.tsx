@@ -199,8 +199,32 @@ export function createUnifiedInfiniteList<T extends EntityData>({
         continue;
       }
 
-      // If both have search or neither has search, keep the one with latest timestamp
-      if (existingHasSearch === newHasSearch) {
+      // If both have search data, prefer 'service' over 'local'
+      if (existingHasSearch && newHasSearch) {
+        const existingSource = (existing as WithSearch<EntityData>).search.source;
+        const newSource = (entity as WithSearch<EntityData>).search.source;
+
+        if (newSource === 'service' && existingSource === 'local') {
+          entityMap.set(entity.id, entity);
+          continue;
+        }
+
+        if (existingSource === 'service' && newSource === 'local') {
+          continue;
+        }
+
+        // If both are the same source, keep the one with latest timestamp
+        const existingTimestamp = existing.updatedAt ?? existing.createdAt ?? 0;
+        const newTimestamp = entity.updatedAt ?? entity.createdAt ?? 0;
+
+        if (newTimestamp > existingTimestamp) {
+          entityMap.set(entity.id, entity);
+        }
+        continue;
+      }
+
+      // If neither has search, keep the one with latest timestamp
+      if (!existingHasSearch && !newHasSearch) {
         const existingTimestamp = existing.updatedAt ?? existing.createdAt ?? 0;
         const newTimestamp = entity.updatedAt ?? entity.createdAt ?? 0;
 
