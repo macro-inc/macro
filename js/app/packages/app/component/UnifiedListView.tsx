@@ -844,8 +844,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       optionalFilter,
       entitySort,
       searchFilter: nameFuzzySearchFilter,
-      showProjects,
-      projectFilter,
       isSearchActive,
     });
 
