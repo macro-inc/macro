@@ -83,6 +83,7 @@ export type HotkeyOptions = {
 };
 
 export type ViewConfigBase = {
+  viewType?: ViewType;
   filters: FilterOptions;
   sort: SortOptions;
   display: DisplayOptions;
@@ -121,6 +122,7 @@ export const VIEWCONFIG_BASE: ViewConfigBase = {
 };
 
 export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
+  viewType: 'project',
   sort: {
     sortBy: 'viewed_at',
     sortOrder: 'descending',
