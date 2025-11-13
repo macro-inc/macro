@@ -445,29 +445,53 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       );
     });
 
-  const mergeAdjacentTags = (text: string): string => {
-    // Merge adjacent </macro_em><macro_em> sequences
-    return text.replace(/<\/macro_em><macro_em>/g, '');
-  };
-
   const nameFuzzySearchFilter = createMemo(() =>
     rawSearchText()
       ? (items: WithNotification<EntityData>[]) => {
           if (!searchText() || searchText().length === 0) return items;
 
+          const query = searchText();
+          const queryLower = query.toLowerCase();
+
           return items
             .map((item) => {
-              const matchResult = fuzzy.match(searchText(), item.name, {
+              const matchResult = fuzzy.match(query, item.name, {
                 pre: '<macro_em>',
                 post: '</macro_em>',
               });
 
               if (!matchResult) return null;
 
+              // Merge adjacent highlight tags
+              const mergedHighlight = matchResult.rendered.replace(
+                /<\/macro_em><macro_em>/g,
+                ''
+              );
+
+              const nameLower = item.name.toLowerCase();
+
+              // Always include exact matches, starts-with, or substring matches
+              const isGoodMatch =
+                nameLower === queryLower ||
+                nameLower.startsWith(queryLower) ||
+                nameLower.includes(queryLower);
+
+              if (!isGoodMatch) {
+                // Count how many separate highlight segments there are
+                const highlightSegments = (
+                  mergedHighlight.match(/<macro_em>/g) || []
+                ).length;
+
+                // Reject if more than 50% of characters are individual segments (too scattered)
+                if (highlightSegments > query.length * 0.5) {
+                  return null;
+                }
+              }
+
               return {
                 ...item,
                 search: {
-                  nameHighlight: mergeAdjacentTags(matchResult.rendered),
+                  nameHighlight: mergedHighlight,
                   contentHighlights: null,
                   source: 'local',
                 },
