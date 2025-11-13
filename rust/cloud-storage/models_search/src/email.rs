@@ -51,6 +51,7 @@ pub struct EmailSearchResponseItemWithMetadata {
     pub created_at: i64,
     pub updated_at: i64,
     pub viewed_at: Option<i64>,
+    pub snippet: Option<String>,
     #[serde(flatten)]
     pub extra: EmailSearchResponseItem,
 }
