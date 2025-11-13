@@ -436,12 +436,11 @@ export function createNavigationEntityListShortcut({
   };
 
   const toggleEntity = (entity: EntityData) => {
-    setSelectedViewStore('selectedEntities', (s) => {
+    setViewDataStore(selectedView(), 'selectedEntities', (s) => {
       if (isEntitySelected(entity.id)) {
         return s.filter((e) => e.id !== entity.id);
       }
-
-      return [...s, entity];
+      return s.concat(entity);
     });
   };
 
@@ -785,12 +784,9 @@ export function createNavigationEntityListShortcut({
     scopeId: entityHotkeyScope,
     description: 'Toggle select item',
     keyDownHandler: () => {
-      const entity = getHighlightedEntity()?.entity;
+      const entity = getHighlightedEntity();
       if (!entity) return false;
-      const prev = viewData().selectedEntities;
-      const ndx = prev.indexOf(entity);
-      const next = ndx > -1 ? prev.toSpliced(ndx, 1) : prev.concat(entity);
-      setSelectedViewStore('selectedEntities', next);
+      toggleEntity(entity.entity);
       return true;
     },
     displayPriority: 10,
@@ -801,7 +797,7 @@ export function createNavigationEntityListShortcut({
     description: 'Clear Multi Selection',
     keyDownHandler: () => {
       const length = viewData().selectedEntities.length;
-      setSelectedViewStore('selectedEntities', []);
+      setViewDataStore(selectedView(), 'selectedEntities', []);
       return length > 1;
     },
   });
