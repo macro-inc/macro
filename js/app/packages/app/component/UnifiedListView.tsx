@@ -878,7 +878,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const focusedSelector = createSelector(() => selectedEntity()?.id);
   const selectedSelector = createSelector(
-    () => view?.selectedEntities,
+    () => view()?.selectedEntities,
     (a: string, b: EntityData[]) => b.find((e) => e.id === a) !== undefined
   );
 
@@ -1323,14 +1323,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   }
                   checked={selectedSelector(innerProps.entity.id)}
                   onChecked={(next) => {
-                    unifiedListContext.setSelectedViewStore(
+                    unifiedListContext.setViewDataStore(
+                      selectedView(),
                       'selectedEntities',
                       (p) => {
                         if (!next) {
                           return p.filter((e) => e.id !== innerProps.entity.id);
                         }
-
-                        return [...p, innerProps.entity];
+                        return p.concat(innerProps.entity);
                       }
                     );
                   }}
@@ -1432,11 +1432,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             </ContextMenuContent>
           </ContextMenu.Portal>
         </ContextMenu.Trigger>
-        <Show when={view?.selectedEntities.length}>
+        <Show when={view()?.selectedEntities.length}>
           <EntitySelectionToolbarModal
-            selectedEntities={view?.selectedEntities ?? []}
+            selectedEntities={view()?.selectedEntities ?? []}
             onClose={() =>
-              unifiedListContext.setSelectedViewStore('selectedEntities', [])
+              unifiedListContext.setViewDataStore(
+                selectedView(),
+                'selectedEntities',
+                []
+              )
             }
           />
         </Show>{' '}
@@ -1575,7 +1579,7 @@ function SearchBar(props: {
       keyDownHandler: () => {
         setTimeout(() => {
           const searchInput = document.getElementById(
-            `search-input-${selectedView()}`
+            `search-input-${splitContext.handle.id}-${selectedView()}`
           ) as HTMLInputElement;
           searchInput?.focus();
         }, 0);
@@ -1601,7 +1605,7 @@ function SearchBar(props: {
         </Show>
         <input
           ref={inputRef}
-          id={`search-input-${selectedView()}`}
+          id={`search-input-${splitContext.handle.id}-${selectedView()}`}
           placeholder="Search"
           value={searchText()}
           onInput={(e) => {

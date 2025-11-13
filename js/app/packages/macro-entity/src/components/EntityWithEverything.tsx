@@ -155,7 +155,7 @@ export function EntityWithEverything<
   const EntityTitle = () => {
     if (props.entity.type === 'email') {
       return (
-        <div class="flex gap-2 items-center text-sm min-w-0 w-full truncate overflow-hidden">
+        <div class="flex gap-1 items-center text-sm min-w-0 w-full truncate overflow-hidden">
           {/* sometimes senderName and senderEmail are the same */}
           <div class="flex w-[20cqw] gap-2 font-semibold shrink-0">
             {/* Sender Name */}
@@ -173,7 +173,7 @@ export function EntityWithEverything<
           </div>
           {/* Subject */}
           <ImportantBadge active={props.importantIndicatorActive} />
-          <div class="flex items-center w-full gap-4 flex-1 min-w-0">
+          <div class="flex items-center w-full gap-2 flex-1 min-w-0">
             <div class="font-medium shrink-0 truncate">{props.entity.name}</div>
             {/* Body  */}
             <div class="truncate shrink grow opacity-60">
@@ -209,7 +209,7 @@ export function EntityWithEverything<
 
     return (
       <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden">
-        <span class="flex gap-2 truncate font-medium text-sm shrink-0 items-center">
+        <span class="flex gap-1 truncate font-medium text-sm shrink-0 items-center">
           <span
             class="font-semibold truncate"
             classList={{
@@ -226,26 +226,30 @@ export function EntityWithEverything<
               !isDirectMessage()
             }
           >
-            <ImportantBadge active={props.importantIndicatorActive} />
-            <span class="inline-block">
-              <span class="text-ink">{userName()}</span>
-            </span>
+            <div class="flex items-center gap-1">
+              <ImportantBadge active={props.importantIndicatorActive} />
+              <span class="inline-block">
+                <span class="text-ink">{userName()}</span>
+              </span>
+            </div>
+          </Show>
+
+          <Show
+            when={
+              !props.showUnrollNotifications && notificationMessageContent()
+            }
+          >
+            {(messageContent) => (
+              <div class="text-sm truncate line-clamp-1 leading-none shrink text-ink-extra-muted py-1">
+                <StaticMarkdown
+                  markdown={messageContent()}
+                  theme={unifiedListMarkdownTheme}
+                  singleLine={false}
+                />
+              </div>
+            )}
           </Show>
         </span>
-
-        <Show
-          when={!props.showUnrollNotifications && notificationMessageContent()}
-        >
-          {(messageContent) => (
-            <div class="text-sm truncate line-clamp-1 leading-none shrink text-ink-extra-muted py-1">
-              <StaticMarkdown
-                markdown={messageContent()}
-                theme={unifiedListMarkdownTheme}
-                singleLine={false}
-              />
-            </div>
-          )}
-        </Show>
       </div>
     );
   };
@@ -273,7 +277,7 @@ export function EntityWithEverything<
       data-checked={props.checked}
       class="everything-entity relative group/entity"
       classList={{
-        'bg-hover/20': props.highlighted && !props.checked,
+        'bg-hover/30': props.highlighted && !props.checked,
         'bg-accent/5': props.checked,
         'bracket outline outline-accent/20 outline-offset-[-1px]':
           props.selected,
