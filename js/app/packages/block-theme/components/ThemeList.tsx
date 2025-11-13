@@ -50,27 +50,33 @@ export function ThemeList() {
         }
       `}</style>
 
-      <div style="
+      <div
+        style="
         font-family: var(--font-mono);
         border: 1px solid var(--b4);
         overscoll-behavior: none;
         scrollbar-width: none;
         overflow-y: scroll;
         font-size: 14px;
-      ">
-        <div style="
+      "
+      >
+        <div
+          style="
           background-color: var(--b4);
           overscroll-behavior: none;
           box-sizing: border-box;
           overflow-x: hidden;
           display: grid;
           gap: 1px;
-        ">
+        "
+        >
           <For each={themes()}>
             {(theme) => (
               <div
                 class={`theme-list-item ${theme.id === currentThemeId() && isThemeSaved() ? 'current-theme' : ''}`}
-                onPointerDown={() => {applyTheme(theme.id)}}
+                onPointerDown={() => {
+                  applyTheme(theme.id);
+                }}
                 style="
                   grid-template-columns: min-content 1fr min-content;
                   background-color: var(--b0);
@@ -81,11 +87,13 @@ export function ThemeList() {
                   gap: 20px;
                 "
               >
-                <div style="
+                <div
+                  style="
                   grid-template-columns: repeat(3, min-content);
                   display: grid;
                   gap: 5px;
-                ">
+                "
+                >
                   <ColorSwatch
                     width={'10px'}
                     color={`oklch(${theme.tokens.a0.l} ${theme.tokens.a0.c} ${theme.tokens.a0.h}deg)`}
@@ -100,23 +108,26 @@ export function ThemeList() {
                   />
                 </div>
 
-                <hr style="
+                <hr
+                  style="
                   border: none;
                   transition: border-color var(--transition);
                   border-top: 1px dashed var(--b4);
                   box-sizing: border-box;
                   width: 100%;
-                "/>
+                "
+                />
 
                 <div
                   class="theme-list-item-name"
                   style="
                     transition: color var(--transition);
                     white-space: nowrap;
-                ">
+                "
+                >
                   {theme.name}
                 </div>
-               </div>
+              </div>
             )}
           </For>
         </div>

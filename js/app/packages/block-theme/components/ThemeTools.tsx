@@ -78,16 +78,20 @@ export function ThemeTools() {
         {currentThemeName()}
       </div>
 
-      <hr style="
+      <hr
+        style="
         border: none;
         border-top: 1px dashed var(--b4);
         box-sizing: border-box;
         width: 100%;
-      "/>
+      "
+      />
 
       <Show when={showTrash()}>
         <IconButton
-          onPointerDown={() => { deleteTheme(currentThemeId()) }}
+          onPointerDown={() => {
+            deleteTheme(currentThemeId());
+          }}
           // tooltip={{label: "Delete Theme"}}
           icon={IconTrash}
           theme="base"
@@ -96,7 +100,9 @@ export function ThemeTools() {
 
       <Show when={!isThemeSaved()}>
         <IconButton
-          onPointerDown={() => { saveTheme(themeName.innerText) }}
+          onPointerDown={() => {
+            saveTheme(themeName.innerText);
+          }}
           // tooltip={{label: "Save Theme"}}
           icon={IconSave}
           theme="base"
