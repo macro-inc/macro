@@ -645,7 +645,7 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
     <Show when={isAuthenticated()}>
       <Resize.Panel
         id="sidebar-chat"
-        minSize={300}
+        minSize={324}
         maxSize={1000}
         hidden={() => !isRightPanelOpen()}
       >
