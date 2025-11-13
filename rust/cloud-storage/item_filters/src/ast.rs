@@ -15,11 +15,16 @@ use serde::{Deserialize, Serialize};
 use std::{marker::PhantomData, sync::Arc};
 use thiserror::Error;
 
-mod channel;
-mod chat;
-mod document;
-mod email;
-mod project;
+/// contains the ast literal value for channels
+pub mod channel;
+/// contains the ast literal value for chat
+pub mod chat;
+/// contains the ast literal value for documents
+pub mod document;
+/// contains the ast literal value for emails
+pub mod email;
+/// contains the ast literal value for projects
+pub mod project;
 
 #[cfg(test)]
 mod tests;
