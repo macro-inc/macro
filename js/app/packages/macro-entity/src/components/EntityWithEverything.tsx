@@ -26,6 +26,7 @@ import { createProfilePictureQuery } from '../queries/auth';
 import { createProjectQuery } from '../queries/project';
 import type { EntityData, EntityOf } from '../types/entity';
 import type { Notification, WithNotification } from '../types/notification';
+import type { WithSearch } from '../types/search';
 import type { EntityClickHandler } from './Entity';
 
 function isEmailEntity(
@@ -88,9 +89,9 @@ interface EntityProps<T extends WithNotification<EntityData>>
   ref?: Ref<HTMLDivElement>;
 }
 
-export function EntityWithEverything<
-  T extends WithNotification<EntityData> = WithNotification<EntityData>,
->(props: EntityProps<T>) {
+export function EntityWithEverything(
+  props: EntityProps<WithNotification<EntityData | WithSearch<EntityData>>>
+) {
   const [showActionList, setShowActionList] = createSignal(false);
   const [actionButtonRef, setActionButtonRef] =
     createSignal<HTMLButtonElement | null>(null);
@@ -152,6 +153,14 @@ export function EntityWithEverything<
     }
 
     return notifications.filter(({ done }) => !done);
+  };
+
+  const searchHighlightName = () =>
+    'search' in props.entity && props.entity.search.nameHighlight;
+
+  const contentHighlights = () => {
+    if (!('search' in props.entity)) return [];
+    return props.entity.search.contentHighlights ?? [];
   };
 
   const EntityTitle = () => {
@@ -220,7 +229,17 @@ export function EntityWithEverything<
           {/* Subject */}
           <ImportantBadge active={props.importantIndicatorActive} />
           <div class="flex items-center w-full gap-4 flex-1 min-w-0">
-            <div class="font-medium shrink-0 truncate">{props.entity.name}</div>
+            <div class="font-medium shrink-0 truncate">
+              <Show when={searchHighlightName()} fallback={props.entity.name}>
+                {(name) => (
+                  <StaticMarkdown
+                    markdown={name()}
+                    theme={unifiedListMarkdownTheme}
+                    singleLine={true}
+                  />
+                )}
+              </Show>
+            </div>
             {/* Body  */}
             <div class="truncate shrink grow opacity-60">
               {props.entity.snippet}
@@ -262,7 +281,15 @@ export function EntityWithEverything<
               'w-[20cqw]': hasNotifications() && !props.showUnrollNotifications,
             }}
           >
-            {props.entity.name}
+            <Show when={searchHighlightName()} fallback={props.entity.name}>
+              {(name) => (
+                <StaticMarkdown
+                  markdown={name()}
+                  theme={unifiedListMarkdownTheme}
+                  singleLine={true}
+                />
+              )}
+            </Show>
           </span>
 
           <Show
@@ -440,6 +467,28 @@ export function EntityWithEverything<
             </Show>
           </div>
         </div>
+        {/* Content Highlights from Search */}
+        <Show when={contentHighlights().length > 0}>
+          <div
+            class="relative row-2 grid gap-2"
+            classList={{
+              'col-[2/-1]': props.showLeftColumnIndicator,
+              'col-[1/-1]': !props.showLeftColumnIndicator,
+            }}
+          >
+            <For each={contentHighlights()}>
+              {(highlight) => (
+                <div class="text-sm text-ink-muted truncate">
+                  <StaticMarkdown
+                    markdown={highlight}
+                    theme={unifiedListMarkdownTheme}
+                    singleLine={true}
+                  />
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
         {/* Notifications */}
         <Show when={props.showUnrollNotifications && hasNotifications()}>
           <div

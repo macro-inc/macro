@@ -7,7 +7,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import type { View } from '@core/types/view';
 import { handleFolderSelect } from '@core/util/upload';
-import { Match, Show, Switch } from 'solid-js';
+import { Match, onMount, Show, Switch } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 false && fileSelector;
@@ -23,7 +23,9 @@ export function EmptyState(props: { view?: View }) {
     <Switch>
       <Match when={props.view === 'emails' && !emailActive()}>
         {(_) => {
-          setShowHelpDrawer((prev) => new Set([...prev, 'emails']));
+          onMount(() =>
+            setShowHelpDrawer((prev) => new Set([...prev, 'emails']))
+          );
           return <EmptyStateInner emptyMessage={'Email not connected.'} />;
         }}
       </Match>
@@ -36,7 +38,9 @@ export function EmptyState(props: { view?: View }) {
       </Match>
       <Match when={props.view === 'inbox' && !emailActive()}>
         {(_) => {
-          setShowHelpDrawer((prev) => new Set([...prev, 'inbox']));
+          onMount(() =>
+            setShowHelpDrawer((prev) => new Set([...prev, 'inbox']))
+          );
           return (
             <EmptyStateInner
               emptyMessage={'Nothing to show. Email not connected.'}
@@ -46,25 +50,31 @@ export function EmptyState(props: { view?: View }) {
       </Match>
       <Match when={props.view === 'comms'}>
         {(_) => {
-          setShowHelpDrawer((prev) => new Set([...prev, 'comms']));
+          onMount(() =>
+            setShowHelpDrawer((prev) => new Set([...prev, 'comms']))
+          );
           return <EmptyStateInner emptyMessage={'No messages to show.'} />;
         }}
       </Match>
       <Match when={props.view === 'docs'}>
         {(_) => {
-          setShowHelpDrawer((prev) => new Set([...prev, 'docs']));
+          onMount(() =>
+            setShowHelpDrawer((prev) => new Set([...prev, 'docs']))
+          );
           return <EmptyStateInner showDropZone />;
         }}
       </Match>
       <Match when={props.view === 'ai'}>
         {(_) => {
-          setShowHelpDrawer((prev) => new Set([...prev, 'ai']));
+          onMount(() => setShowHelpDrawer((prev) => new Set([...prev, 'ai'])));
           return <EmptyStateInner emptyMessage={'No AI chats to show.'} />;
         }}
       </Match>
       <Match when={props.view === 'folders'}>
         {(_) => {
-          setShowHelpDrawer((prev) => new Set([...prev, 'folders']));
+          onMount(() =>
+            setShowHelpDrawer((prev) => new Set([...prev, 'folders']))
+          );
           return <EmptyStateInner showDropZone />;
         }}
       </Match>
