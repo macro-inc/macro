@@ -4,7 +4,7 @@ import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import type { BlockName } from '@core/block';
 import { BozzyBracket } from '@core/component/BozzyBracket';
 import type { ChannelsContext } from '@core/component/ChannelsProvider';
-import { BasicHotkey, Hotkey } from '@core/component/Hotkey';
+import { Hotkey } from '@core/component/Hotkey';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { Message } from '@core/component/Message';
 import { UserIcon } from '@core/component/UserIcon';
