@@ -67,7 +67,7 @@ export type Property = {
   | { valueType: 'SELECT_STRING'; value?: string[] }
   | { valueType: 'SELECT_NUMBER'; value?: string[] }
   | { valueType: 'ENTITY'; value?: EntityReference[] }
-  | { valueType: 'LINK'; value?: string }
+  | { valueType: 'LINK'; value?: string[] }
 );
 
 /**
@@ -170,7 +170,7 @@ export type PropertyApiValues =
   | { valueType: 'SELECT_STRING'; values: string[] | null }
   | { valueType: 'SELECT_NUMBER'; values: string[] | null }
   | { valueType: 'ENTITY'; refs: EntityReference[] | null }
-  | { valueType: 'LINK'; value: string | null };
+  | { valueType: 'LINK'; values: string[] | null };
 
 // Result type for API responses
 export type ApiError = {
@@ -181,6 +181,3 @@ export type ApiError = {
 export type Result<T, E = ApiError> =
   | { ok: true; value: T }
   | { ok: false; error: E };
-
-// Edit method types
-export type EditMethod = 'inline' | 'multi' | 'modal' | 'no_edit';

@@ -101,6 +101,7 @@ export function createSort<T extends EntityData, S extends string>(context: {
 export function createSort<T extends EntityData, S extends string>(context: {
   sortOptions: SortOption<T, S>[];
   sortTypeSignal: Signal<S>;
+  disabled?: Accessor<boolean>;
 }): {
   sortFn: Accessor<InferSortFn<SortOption<T, S>[]>>;
   SortComponent: SortComponent;
@@ -111,11 +112,12 @@ export function createSort<
   sortOptions: Options;
   defaultSortOption?: Options[number]['value'];
   sortTypeSignal?: Signal<Options[number]['value']>;
+  disabled?: Accessor<boolean>;
 }): {
   sortFn: Accessor<InferSortFn<Options>>;
   SortComponent: SortComponent;
 } {
-  const { sortOptions, defaultSortOption } = {
+  const { sortOptions, defaultSortOption, disabled } = {
     sortOptions: defaultSortOptions,
     defaultSortOption: 'important',
     ...context,
@@ -144,6 +146,7 @@ export function createSort<
       onChange={setSortType}
       list={sortOptions}
       size={props.size}
+      disabled={disabled?.()}
     />
   );
 

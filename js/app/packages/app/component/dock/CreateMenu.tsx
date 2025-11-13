@@ -18,14 +18,7 @@ import { ok } from '@core/util/maybeResult';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import MacroCreateIcon from '@macro-icons/macro-create-b.svg';
 import { useCreateProject } from '@service-storage/projects';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  onMount,
-  Show,
-} from 'solid-js';
+import { createMemo, For, onMount, Show } from 'solid-js';
 import { useSplitLayout } from '../split-layout/layout';
 
 export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal();
@@ -318,9 +311,7 @@ export function CreateMenu() {
   // onMount(() => setCreateMenuOpen(true))
   return (
     <DropdownMenu open={createMenuOpen()} onOpenChange={setCreateMenuOpen}>
-      <DropdownMenu.Trigger
-        class="relative flex justify-between items-center gap-2 data-expanded:bg-accent px-3 py-2 border border-edge-muted data-expanded:border-accent **:border-none! font-medium text-ink-muted data-expanded:text-default-bg hover:text-accent text-base bracket-never"
-      >
+      <DropdownMenu.Trigger class="relative flex justify-between items-center gap-2 data-expanded:bg-accent px-3 py-2 border border-edge-muted data-expanded:border-accent **:border-none! font-medium text-ink-muted data-expanded:text-default-bg hover:text-accent text-base bracket-never">
         <span class="flex items-center">
           <MacroCreateIcon
             class={`h-2.5 ${createMenuOpen() ? 'fill-dialog/70' : 'fill-accent/70 transition-all duration-300'}`}

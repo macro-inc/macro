@@ -4,15 +4,15 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SimpleChatSearchResponseBaseItemTimestampSecondsContent } from './simpleChatSearchResponseBaseItemTimestampSecondsContent';
+import type { SearchHighlight } from './searchHighlight';
 
 export interface SimpleChatSearchResponseBaseItemTimestampSeconds {
   /** The chat id */
   chat_id: string;
   /** The chat message id */
   chat_message_id: string;
-  /** The opensearch matches on the chat */
-  content?: SimpleChatSearchResponseBaseItemTimestampSecondsContent;
+  /** The highlights on the chat */
+  highlight: SearchHighlight;
   /** The role */
   role: string;
   /** The title */

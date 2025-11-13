@@ -1,4 +1,6 @@
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { UnifiedListView } from '@app/component/UnifiedListView';
+import { PROJECT_VIEWCONFIG_BASE } from '@app/component/ViewConfig';
 import {
   blockExpandedProjectsStore,
   blockPreSearchExpandedProjectsStore,
@@ -46,7 +48,9 @@ import {
   type Component,
   createEffect,
   createMemo,
+  createRenderEffect,
   createSignal,
+  onCleanup,
   Show,
   untrack,
 } from 'solid-js';
@@ -288,6 +292,32 @@ const Block: Component = () => {
     }
   };
 
+  const splitContext = useSplitPanelOrThrow();
+  const { selectedView, setSelectedView, setViewDataStore } =
+    splitContext.unifiedListContext;
+  createRenderEffect(() => {
+    const previousView = untrack(selectedView);
+    setSelectedView(projectId);
+
+    setViewDataStore(projectId, {
+      id: projectId,
+      viewType: 'project',
+      ...PROJECT_VIEWCONFIG_BASE,
+      filters: {
+        ...PROJECT_VIEWCONFIG_BASE.filters,
+        projectFilter: projectId,
+      },
+      initialConfig: '',
+      searchText: '',
+      hasUserInteractedEntity: false,
+    });
+
+    onCleanup(() => {
+      setSelectedView(previousView);
+      (setViewDataStore as any)(projectId, undefined);
+    });
+  });
+
   return (
     <DocumentBlockContainer>
       <div
@@ -325,7 +355,7 @@ const Block: Component = () => {
           </div>
         </Show>
         <TopBar />
-        <UnifiedListView defaultFilterOptions={{ projectFilter: projectId }} />
+        <UnifiedListView />
       </div>
     </DocumentBlockContainer>
   );

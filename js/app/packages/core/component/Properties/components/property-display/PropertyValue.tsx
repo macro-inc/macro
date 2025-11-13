@@ -4,6 +4,7 @@ import type { Property } from '../../types';
 import { BooleanValue } from './BooleanValue';
 import { DateValue } from './DateValue';
 import { EntityValue } from './EntityValue';
+import { LinkValue } from './LinkValue';
 import { NumberValue } from './NumberValue';
 import { SelectValue } from './SelectValue';
 import { TextValue } from './TextValue';
@@ -83,7 +84,7 @@ export const PropertyValue: Component<PropertyValueProps> = (props) => {
 
     case 'LINK':
       return (
-        <TextValue
+        <LinkValue
           property={props.property}
           canEdit={canEdit}
           entityType={entityType}

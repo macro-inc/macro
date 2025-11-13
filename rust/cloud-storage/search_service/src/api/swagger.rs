@@ -29,7 +29,7 @@ use models_search::project::{
     ProjectSearchResult, SimpleProjectSearchResponse, SimpleProjectSearchResponseItem,
 };
 
-use models_search::MatchType;
+use models_search::{MatchType, SearchHighlight};
 
 #[derive(OpenApi)]
 #[openapi(
@@ -60,6 +60,7 @@ use models_search::MatchType;
             schemas(
                         EmptyResponse,
                         MatchType,
+                        SearchHighlight,
 
                         // Document
                         FileType, DocumentSearchRequest, DocumentSearchResult, DocumentSearchResponseItem, DocumentSearchResponse,

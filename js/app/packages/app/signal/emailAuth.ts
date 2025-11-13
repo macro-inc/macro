@@ -1,9 +1,8 @@
 import { updateUserAuth } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
-import { isErr, isOk, ok } from '@core/util/maybeResult';
+import { isErr, ok } from '@core/util/maybeResult';
 import { queryKeys } from '@macro-entity';
-import { authServiceClient } from '@service-auth/client';
 import { emailClient } from '@service-email/client';
 import { updateUserInfo } from '@service-gql/client';
 import { createSingletonRoot } from '@solid-primitives/rootless';

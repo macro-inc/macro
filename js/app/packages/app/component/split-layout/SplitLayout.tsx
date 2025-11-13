@@ -203,6 +203,7 @@ function createSplitFocusTracker(props: {
   // the button in the old split might trigger another focus event and re-active the old split.
   let focusTimeout: ReturnType<typeof setTimeout> | undefined;
   let activateTimeout: ReturnType<typeof setTimeout> | undefined;
+  let lastProgrammaticActivation = 0;
 
   /** Listens for explicit events from layoutManager that might trigger focus changes */
   createEffect(
@@ -226,6 +227,13 @@ function createSplitFocusTracker(props: {
     )
   );
 
+  /** Track when splits are programmatically activated */
+  createEffect(
+    on(activeSplitId, () => {
+      lastProgrammaticActivation = Date.now();
+    })
+  );
+
   /** Listens for focus changes on the document */
   createEffect(
     on(activeElement, (element) => {
@@ -240,6 +248,13 @@ function createSplitFocusTracker(props: {
       }
 
       activateTimeout = setTimeout(() => {
+        const timeSinceActivation = Date.now() - lastProgrammaticActivation;
+
+        // If a split was just programmatically activated, ignore this focus change
+        if (timeSinceActivation < DEBOUNCE + 50) {
+          return;
+        }
+
         activateFocusedSplit(element);
       }, DEBOUNCE);
     })

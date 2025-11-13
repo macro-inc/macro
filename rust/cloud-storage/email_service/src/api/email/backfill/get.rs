@@ -5,11 +5,13 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use model::response::ErrorResponse;
+use model::response::{EmptyResponse, ErrorResponse};
 use model::user::UserContext;
 use models_email::email::service::backfill::BackfillJob;
 use models_email::email::service::link::Link;
 use sqlx::types::Uuid;
+use strum_macros::AsRefStr;
+use thiserror::Error;
 use utoipa::ToSchema;
 
 /// The response returned from the get backfill job endpoint
@@ -28,8 +30,8 @@ pub struct GetBackfillJobResponse {
         ("id" = Uuid, Path, description = "Job ID."),
     ),
     responses(
-            (status = 201, body=GetBackfillJobResponse),
-            (status = 429, body=ErrorResponse),
+            (status = 200, body=GetBackfillJobResponse),
+            (status = 401, body=ErrorResponse),
             (status = 404, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )
@@ -71,4 +73,60 @@ pub async fn handler(
     })?;
 
     Ok(Json(GetBackfillJobResponse { job }).into_response())
+}
+
+/// The response returned from the get backfill job endpoint
+#[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
+pub struct GetActiveBackfillJobResponse {
+    pub job: BackfillJob,
+}
+
+/// Get any active backfill job for the user.
+#[utoipa::path(
+    get,
+    tag = "Init",
+    path = "/email/backfill/gmail/active",
+    operation_id = "get_backfill_gmail_active",
+    responses(
+            (status = 200, body=GetActiveBackfillJobResponse),
+            (status = 204, body=EmptyResponse),
+            (status = 401, body=ErrorResponse),
+            (status = 500, body=ErrorResponse),
+    )
+)]
+#[tracing::instrument(skip(ctx), err)]
+pub async fn active_handler(
+    State(ctx): State<ApiContext>,
+    link: Extension<Link>,
+) -> Result<Response, GetActiveBackfillError> {
+    let job = email_db_client::backfill::job::get::get_active_backfill_job(&ctx.db, link.id)
+        .await
+        .map_err(GetActiveBackfillError::QueryError)?;
+
+    match job {
+        Some(job) => Ok(Json(GetActiveBackfillJobResponse { job }).into_response()),
+        None => Ok(StatusCode::NO_CONTENT.into_response()),
+    }
+}
+
+#[derive(Debug, Error, AsRefStr)]
+pub enum GetActiveBackfillError {
+    #[error("Failed to get active backfill job from database")]
+    QueryError(#[from] anyhow::Error),
+}
+
+impl IntoResponse for GetActiveBackfillError {
+    fn into_response(self) -> Response {
+        let status_code = match self {
+            GetActiveBackfillError::QueryError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+        };
+
+        (
+            status_code,
+            Json(ErrorResponse {
+                message: self.to_string().as_str(),
+            }),
+        )
+            .into_response()
+    }
 }

@@ -1,5 +1,6 @@
 const isTouchDevice = (() => {
-  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return false;
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function')
+    return false;
 
   // Check if primary input is coarse (finger/stylus) rather than fine (mouse)
   const hasCoarsePointer = window.matchMedia('(pointer: coarse)').matches;

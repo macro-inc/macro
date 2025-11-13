@@ -15,15 +15,15 @@ use lambda_runtime::{
 };
 use macro_entrypoint::MacroEntrypoint;
 use model::{
-    document::FileType,
+    document::{FileType, FileTypeExt},
     folder::{FileSystemNodeWithIds, FolderItem, S3Destination, S3DestinationMap},
 };
 use model_entity::EntityType;
 use models_bulk_upload::{UploadDocumentStatus, UploadFolderStatus, UploadFolderStatusUpdate};
 use sha2::{Digest, Sha256};
 use sqs_client::upload_extractor::UploadExtractQueueMessage;
-use std::fs;
 use std::path::Path;
+use std::{fs, str::FromStr};
 use std::{path::PathBuf, sync::Arc};
 use tempfile::tempdir;
 use tokio::fs::File;
@@ -525,7 +525,7 @@ async fn build_file_system(extract_dir: &Path) -> Result<Vec<FolderItem>, Error>
 
             let (file_name, file_type) = match FileType::split_suffix_match(full_name) {
                 Some((file, extension)) => {
-                    let file_type: Option<FileType> = extension.try_into().ok();
+                    let file_type = FileType::from_str(extension).ok();
                     (file, file_type)
                 }
                 None => (full_name, None),
