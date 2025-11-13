@@ -10,6 +10,7 @@ use chrono::serde::ts_seconds_option;
 use models_permissions::share_permission::access_level::AccessLevel;
 use tracing::instrument;
 use utoipa::ToSchema;
+use uuid::Uuid;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, ToSchema)]
 #[serde(rename_all = "camelCase")]
@@ -212,6 +213,9 @@ pub struct CreateDocumentRequest {
     pub job_id: Option<String>,
     //// Optional project id to be used to what project the document belongs to.
     pub project_id: Option<String>,
+    /// Internal only field that links the document created to the specified email message by
+    /// creating a row in the DocumentEmail table.
+    pub email_message_id: Option<Uuid>,
     /// Optional time to set the document's created_at to. Set when backfilling email attachments.
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
