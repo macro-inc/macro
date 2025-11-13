@@ -94,25 +94,36 @@ pub(in crate::api::search) async fn search_channels(
         return Err(SearchError::NoQueryOrTermsProvided);
     };
 
+    // Get all channel ids for the user
     let channel_ids = ctx
         .comms_service_client
         .get_user_channel_ids(user_id, organization_id)
         .await
         .map_err(|e| SearchError::InternalError(e.into()))?;
 
+    // If the user has no channels, return an empty response
+    if channel_ids.is_empty() {
+        return Ok(vec![]);
+    }
+
     let filters = req.filters.unwrap_or_default();
 
-    let mut ids_only = false;
-    // if a request explicitly supplies channels, make sure they are ones
-    // the user has access to, and tell search to explictly search over these channels
+    // filter through specific channel ids if provided
     let channel_ids = if !filters.channel_ids.is_empty() {
-        ids_only = true;
-        let available_ids: HashSet<String> = channel_ids.into_iter().collect();
-        filters
-            .channel_ids
+        let available_ids: HashSet<String> = filters.channel_ids.into_iter().collect();
+
+        channel_ids
             .into_iter()
-            .filter(|id| available_ids.contains(id))
+            .filter(|id| available_ids.contains(&id.to_string()))
             .collect()
+    } else {
+        channel_ids
+    };
+
+    // filter through org_id if provided
+    let channel_ids = if let Some(org_id) = filters.org_id {
+        macro_db_client::items::filter::filter_channels_by_org_id(&ctx.db, &channel_ids, org_id)
+            .await?
     } else {
         channel_ids
     };
@@ -122,8 +133,7 @@ pub(in crate::api::search) async fn search_channels(
         .search_channel_messages(ChannelMessageSearchArgs {
             terms,
             user_id: user_id.to_string(),
-            channel_ids,
-            org_id: filters.org_id,
+            channel_ids: channel_ids.iter().map(|c| c.to_string()).collect(),
             thread_ids: filters.thread_ids,
             mentions: filters.mentions,
             page,
@@ -132,7 +142,7 @@ pub(in crate::api::search) async fn search_channels(
             sender_ids: filters.sender_ids,
             search_on: req.search_on.into(),
             collapse: req.collapse.unwrap_or(false),
-            ids_only,
+            ids_only: true, // For channel message search, we always want to search over the channel ids only
         })
         .await
         .map_err(SearchError::Search)?;
