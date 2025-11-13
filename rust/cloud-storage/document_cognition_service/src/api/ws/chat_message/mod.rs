@@ -5,7 +5,7 @@ use crate::api::ws::connection::{
     MESSAGE_ABORT_MAP, add_partial_message_part, clear_partial_message, register_partial_message,
     ws_send,
 };
-use crate::core::model::ONE_MODEL;
+use crate::core::model::FALLBACK_MODEL;
 use crate::model::chats::ChatResponse;
 use crate::model::ws::{StreamError, StreamWebSocketError};
 use crate::{
@@ -102,7 +102,7 @@ pub async fn stream_chat_response(
     connection_id: &str,
     stream_id: &str,
     jwt_token: &str,
-) -> Result<StreamChatResponse> {
+) -> Result<StreamChatResponse, ai::types::AiError> {
     if MESSAGE_ABORT_MAP.contains_key(stream_id) {
         MESSAGE_ABORT_MAP.remove(stream_id);
         // No database cleanup needed since we don't create partial messages until disconnect
@@ -139,6 +139,7 @@ pub async fn stream_chat_response(
     let mut usage_reqs = vec![];
     let mut is_first_token = false;
     while let Some(response) = stream.next().await {
+        tracing::trace!("{:#?}", response);
         if !is_first_token {
             is_first_token = true;
             log::log_timing(log::LatencyMetric::TimeToFirstToken, model, now.elapsed());
@@ -330,7 +331,7 @@ pub async fn handle_send_chat_message(
             }
         })?;
     let is_first_message = chat.messages.is_empty();
-    let model = ONE_MODEL;
+    let model = FALLBACK_MODEL;
 
     let user_message_id =
         store_incoming_message(ctx.clone(), user_id, &chat, model, &incoming_message)
@@ -369,8 +370,17 @@ pub async fn handle_send_chat_message(
     .await
     .map_err(|err| {
         tracing::error!(error=?err, "failed to stream chat response");
-        StreamError::InternalError {
-            stream_id: incoming_message.stream_id.clone(),
+        match err {
+            ai::types::AiError::ContextWindowExceeded =>{
+                StreamError::ModelContextOverflow {
+                    stream_id: incoming_message.stream_id.clone(),
+                }
+            }
+            ai::types::AiError::Generic(_) => {
+                StreamError::InternalError {
+                    stream_id: incoming_message.stream_id.clone(),
+                }
+            }
         }
     })?;
 
