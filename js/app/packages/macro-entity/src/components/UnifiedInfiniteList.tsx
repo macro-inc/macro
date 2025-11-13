@@ -70,7 +70,10 @@ const getEntityTimestamp = (entity: EntityData): number => {
 /**
  * Returns true if the new entity should replace the existing one based on timestamp
  */
-const isNewerEntity = (newEntity: EntityData, existing: EntityData): boolean => {
+const isNewerEntity = (
+  newEntity: EntityData,
+  existing: EntityData
+): boolean => {
   return getEntityTimestamp(newEntity) > getEntityTimestamp(existing);
 };
 
@@ -136,14 +139,59 @@ const deduplicateEntities = <T extends EntityData>(entities: T[]): T[] => {
 };
 
 /**
+ * Calculates match quality score for local search results.
+ * Higher score = better match.
+ * Prioritizes: exact match > starts with > word boundary > fuzzy match
+ */
+const getLocalMatchScore = (
+  entityName: string,
+  nameHighlight: string | null
+): number => {
+  if (!nameHighlight) return 0;
+
+  const name = entityName.toLowerCase();
+
+  // Extract the search query from the highlighted text
+  // The highlighted portion is wrapped in <macro_em>...</macro_em>
+  const highlightedText = nameHighlight
+    .replace(/<\/?macro_em>/g, '')
+    .toLowerCase();
+
+  // Count number of highlight segments (fewer segments = more contiguous match)
+  const highlightSegments = (nameHighlight.match(/<macro_em>/g) || []).length;
+
+  // Exact match (highest priority)
+  if (name === highlightedText) return 1000;
+
+  // Starts with match
+  if (name.startsWith(highlightedText)) return 900;
+
+  // Single contiguous match (not scattered)
+  if (highlightSegments === 1) {
+    // Word boundary match (after space, comma, etc.)
+    if (
+      name.match(
+        new RegExp(
+          `[\\s,+]${highlightedText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`
+        )
+      )
+    ) {
+      return 800;
+    }
+    return 700; // Contiguous substring
+  }
+
+  // Multiple segments (fuzzy/scattered match) - penalize based on number of segments
+  return Math.max(100, 500 - highlightSegments * 50);
+};
+
+/**
  * Sorts entities for search mode:
  * 1. Channels first
  * 2. Local search results before service results
+ * 3. Within local results, better name matches come first
  */
-const sortEntitiesForSearch = <T extends EntityData>(
-  a: T,
-  b: T
-): number => {
+const sortEntitiesForSearch = <T extends EntityData>(a: T, b: T): number => {
   const aHasSearch = isSearchEntity(a);
   const bHasSearch = isSearchEntity(b);
 
@@ -161,6 +209,24 @@ const sortEntitiesForSearch = <T extends EntityData>(
 
     if (aSource === 'local' && bSource === 'service') return -1;
     if (aSource === 'service' && bSource === 'local') return 1;
+
+    // Within local results, sort by match quality
+    if (
+      aSource === 'local' &&
+      bSource === 'local' &&
+      aIsChannel &&
+      bIsChannel
+    ) {
+      const aScore = getLocalMatchScore(a.name, a.search.nameHighlight);
+      const bScore = getLocalMatchScore(b.name, b.search.nameHighlight);
+
+      if (aScore !== bScore) {
+        return bScore - aScore; // Higher score first
+      }
+
+      // If same score, prefer shorter names (more focused match)
+      return a.name.length - b.name.length;
+    }
   }
 
   return 0;
