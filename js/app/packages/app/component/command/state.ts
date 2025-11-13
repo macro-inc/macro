@@ -36,11 +36,11 @@ export function cleanQuery() {
 }
 
 export const COMMAND_MODES = [
-  { id: 'SELECTION_MODIFICATION', sigil: '', label: 'Modify selection' },
   { id: 'FULL_TEXT_SEARCH', sigil: '%', label: 'Full Text Search' },
   // { id: "REGEX_SEARCH", sigil: "/", label: "Regex Search" },
   // { id: "RUN_COMMAND", sigil: ">", label: "Run" },
   // { id: "TEMP_CHAT", sigil: " ", label: "Temporary Chat" },
+  { id: 'SELECTION_MODIFICATION', sigil: '', label: 'Modify selection' },
 ];
 export const DEFAULT_MODE = {
   id: 'ENTITY_SEARCH',
