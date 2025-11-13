@@ -62,6 +62,7 @@ import {
   sortByViewedAt,
   unreadFilterFn,
   type WithNotification,
+  type WithSearch,
 } from '@macro-entity';
 import {
   markNotificationsForEntityAsDone,
@@ -108,7 +109,6 @@ import { createStore, type SetStoreFunction, unwrap } from 'solid-js/store';
 import { EntityWithEverything } from '../../macro-entity/src/components/EntityWithEverything';
 import { createCopyDssEntityMutation } from '../../macro-entity/src/queries/dss';
 import type { FetchPaginatedEmailsParams } from '../../macro-entity/src/queries/email';
-import type { WithSearch } from '../../macro-entity/src/types/search';
 import { EntityModal } from './EntityModal/EntityModal';
 import { useUpsertSavedViewMutation } from './Soup';
 import {
@@ -449,10 +449,28 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     rawSearchText()
       ? (items: WithNotification<EntityData>[]) => {
           if (!searchText() || searchText().length === 0) return items;
-          const fuzzyResults = fuzzy.filter(searchText(), items, {
-            extract: (item) => item.name,
-          });
-          return fuzzyResults.map((result) => result.original);
+
+          return items
+            .map((item) => {
+              const matchResult = fuzzy.match(searchText(), item.name, {
+                pre: '<macro_em>',
+                post: '</macro_em>',
+              });
+
+              if (!matchResult) return null;
+
+              return {
+                ...item,
+                search: {
+                  nameHighlight: matchResult.rendered,
+                  contentHighlights: null,
+                },
+              } as WithNotification<WithSearch<EntityData>>;
+            })
+            .filter(
+              (item): item is WithNotification<WithSearch<EntityData>> =>
+                item !== null
+            );
         }
       : undefined
   );
