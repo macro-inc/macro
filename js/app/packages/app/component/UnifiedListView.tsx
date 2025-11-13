@@ -300,8 +300,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   );
   const setEntityTypeFilter: SetStoreFunction<
     ViewData['filters']['typeFilter']
-  > = (...entityTypeFilter: any[]) => {
-    setViewDataStore(selectedView(), 'filters', 'typeFilter', entityTypeFilter);
+  > = (...args: any[]) => {
+    // @ts-ignore narrowing set store function is annoying due to function overloading
+    setViewDataStore(selectedView(), 'filters', 'typeFilter', ...args);
   };
 
   const fileTypeFilter = createMemo(
@@ -311,12 +312,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   );
   const setFileTypeFilter: SetStoreFunction<
     ViewData['filters']['documentTypeFilter']
-  > = (...fileTypeFilter: any[]) => {
+  > = (...args: any[]) => {
     setViewDataStore(
       selectedView(),
       'filters',
       'documentTypeFilter',
-      fileTypeFilter
+      // @ts-ignore narrowing set store function is annoying due to function overloading
+      ...args
     );
   };
 
@@ -343,8 +345,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const fromFilterUsers = createMemo(() => fromFilter() ?? []);
   const setFromFilterUsers: SetStoreFunction<
     ViewData['filters']['fromFilter']
-  > = (...fromFilterUsers: any[]) => {
-    setViewDataStore(selectedView(), 'filters', 'fromFilter', fromFilterUsers);
+  > = (...args: any[]) => {
+    // @ts-ignore narrowing set store function is annoying due to function overloading
+    setViewDataStore(selectedView(), 'filters', 'fromFilter', ...args);
   };
 
   const sortType = createMemo(
