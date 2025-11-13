@@ -64,7 +64,6 @@ export function TopBar() {
       <SplitHeaderLeft>
         <BlockItemSplitLabel fallbackName={project()?.name} />
       </SplitHeaderLeft>
-
       <SplitToolbarLeft class="flex-0">
         <div class="flex gap-2 p-1">
           <Show when={ops.length > 0}>

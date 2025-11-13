@@ -61,7 +61,6 @@ export const TopBar: Component = () => {
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
-
       <SplitToolbarLeft>
         <div class="p-1">
           <SplitFileMenu

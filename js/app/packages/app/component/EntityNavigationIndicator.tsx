@@ -27,7 +27,7 @@ const EntityNavigationIndicator = () => {
         handle.content().type !== 'component'
       }
     >
-      <div class="flex gap-1 items-center font-mono text-sm text-ink/50 pl-2 pr-4">
+      <div class="flex gap-1 items-center font-mono text-xs text-ink/50 pl-2 pr-4">
         <div>
           [<span class="text-ink">{selectedEntityIndex() + 1}</span>/
           {entities()?.length}]

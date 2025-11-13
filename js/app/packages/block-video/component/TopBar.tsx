@@ -58,7 +58,6 @@ export function TopBar() {
       <SplitHeaderLeft>
         <BlockItemSplitLabel />
       </SplitHeaderLeft>
-
       <SplitToolbarLeft>
         <div class="p-1">
           <SplitFileMenu

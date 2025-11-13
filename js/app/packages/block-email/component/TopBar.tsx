@@ -11,7 +11,6 @@ export function TopBar(props: { title: string }) {
       <SplitHeaderLeft>
         <StaticSplitLabel iconType="email" label={props.title} />
       </SplitHeaderLeft>
-
       <SplitToolbarLeft>
         <div class="flex items-center h-full p-1">
           <SplitHeaderBadge text="beta" tooltip="Email is in Beta" />
