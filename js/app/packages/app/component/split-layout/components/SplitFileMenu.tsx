@@ -96,6 +96,7 @@ export function SplitFileMenu(props: {
               };
 
             case 'delete':
+              if (!isOwner()) return null;
               return {
                 label: 'Delete',
                 action: async () => {
@@ -156,6 +157,7 @@ export function SplitFileMenu(props: {
               };
 
             case 'moveToProject':
+              if (!isOwner()) return null;
               return {
                 label: 'Move to Folder',
                 action: () => {

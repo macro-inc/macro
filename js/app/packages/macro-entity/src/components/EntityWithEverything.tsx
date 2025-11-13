@@ -50,7 +50,7 @@ function UnreadIndicator(props: { active?: boolean }) {
 function ImportantBadge(props: { active?: boolean }) {
   return (
     <Show when={props.active}>
-      <div class="font-mono user-select-none uppercase flex items-center text-accent bg-accent/10 p-0.5 px-2 text-[0.625rem] rounded-full border border-accent/10">
+      <div class="font-mono font-medium user-select-none uppercase flex items-center text-accent bg-accent/10 p-0.5 px-2 text-[0.625rem] rounded-full border border-accent/10">
         <span class="@max-xl/split:hidden">Important</span>
         <span class="hidden @max-xl/split:block font-bold">!</span>
       </div>
@@ -135,7 +135,7 @@ export function EntityWithEverything(
   const threadGap = 10;
   const ThreadBorder = () => (
     <div
-      class="absolute left-[9.5px] border-[0.5px] border-edge -top-1/2 "
+      class="absolute left-[9.5px] border-[0.5px] border-edge -top-1/2"
       style={{ height: `${threadGap}px` }}
     />
   );
@@ -445,13 +445,7 @@ export function EntityWithEverything(
         </div>
         {/* Content Highlights from Search */}
         <Show when={contentHighlights().length > 0}>
-          <div
-            class="relative row-2 grid gap-2"
-            classList={{
-              'col-[2/-1]': props.showLeftColumnIndicator,
-              'col-[1/-1]': !props.showLeftColumnIndicator,
-            }}
-          >
+          <div class="relative row-2 grid gap-2 col-2 col-end-4 pb-2">
             <For each={contentHighlights()}>
               {(highlight) => (
                 <div class="text-sm text-ink-muted truncate">
@@ -466,13 +460,14 @@ export function EntityWithEverything(
           </div>
         </Show>
         {/* Notifications */}
-        <Show when={props.showUnrollNotifications && hasNotifications()}>
-          <div
-            class="relative row-2 col-2 col-end-4 200 pb-2"
-            style={{
-              gap: `${threadGap}px`,
-            }}
-          >
+        <Show
+          when={
+            props.showUnrollNotifications &&
+            hasNotifications() &&
+            contentHighlights().length === 0
+          }
+        >
+          <div class="relative col-2 col-end-4 200 pb-2 gap-2">
             <For each={notDoneNotifications()}>
               {(notification) => {
                 const [userName] = useDisplayName(notification.senderId);
@@ -535,7 +530,7 @@ export function EntityWithEverything(
 
                 return (
                   <div
-                    class="relative flex gap-1 items-center min-w-0 h-5"
+                    class="relative flex gap-1 items-center min-w-0 h-7"
                     classList={{
                       'hover:bg-hover/20 hover:opacity-70':
                         !!props.onClickNotification,
