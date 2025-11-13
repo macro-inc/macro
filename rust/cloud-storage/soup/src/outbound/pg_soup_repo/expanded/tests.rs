@@ -1,14 +1,15 @@
 use crate::outbound::pg_soup_repo::expanded::{
     by_cursor::{expanded_generic_cursor_soup, no_frecency_expanded_generic_soup},
     by_ids::expanded_soup_by_ids,
+    dynamic::expanded_dynamic_cursor_soup,
 };
-use item_filters::ast::EntityFilterAst;
+use item_filters::{EntityFilters, ast::EntityFilterAst};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
 use models_pagination::{Frecency, PaginateOn, Query, SimpleSortMethod};
 use models_soup::item::SoupItem;
-use sqlx::{Pool, Postgres};
+use sqlx::{PgPool, Pool, Postgres};
 use std::collections::HashSet;
 
 // 2 items have no viewing history, so they should be last in the response when sorting by viewed_at
@@ -662,4 +663,32 @@ async fn test_no_frecency_expanded_cursor_pagination(pool: Pool<Postgres>) -> an
     }
 
     Ok(())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn empty_ast_returns_same_as_static_query(db: PgPool) {
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+    let ast_res = expanded_dynamic_cursor_soup(
+        &db,
+        user_id.clone(),
+        20,
+        Query::Sort(SimpleSortMethod::CreatedAt, EntityFilterAst::mock_empty()),
+    )
+    .await
+    .unwrap();
+    let static_res = expanded_generic_cursor_soup(
+        &db,
+        user_id,
+        20,
+        Query::Sort(SimpleSortMethod::CreatedAt, ()),
+    )
+    .await
+    .unwrap();
+    assert_eq!(ast_res, static_res);
 }
