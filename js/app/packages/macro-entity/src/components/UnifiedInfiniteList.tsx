@@ -51,10 +51,8 @@ const mergeSearchEntities = <T extends EntityData>(
   first: T & WithSearch<EntityData>,
   second: T & WithSearch<EntityData>
 ): T => {
-  const serviceEntity =
-    first.search.source === 'service' ? first : second;
-  const localEntity =
-    first.search.source === 'local' ? first : second;
+  const serviceEntity = first.search.source === 'service' ? first : second;
+  const localEntity = first.search.source === 'local' ? first : second;
 
   return {
     ...serviceEntity,
@@ -62,10 +60,9 @@ const mergeSearchEntities = <T extends EntityData>(
       ...serviceEntity.search,
       nameHighlight:
         serviceEntity.search.nameHighlight || localEntity.search.nameHighlight,
-      contentHighlights:
-        serviceEntity.search.contentHighlights?.length
-          ? serviceEntity.search.contentHighlights
-          : localEntity.search.contentHighlights,
+      contentHighlights: serviceEntity.search.contentHighlights?.length
+        ? serviceEntity.search.contentHighlights
+        : localEntity.search.contentHighlights,
     },
   } as T;
 };
