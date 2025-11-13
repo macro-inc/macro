@@ -24,7 +24,7 @@ pub struct CreateDocumentArgs<'a> {
     pub project_name: Option<&'a str>,
     pub share_permission: &'a SharePermissionV2,
     pub skip_history: bool,
-    /// Optional value. If set, creates entry in DocumentEmail
+    /// Optional value. If set, creates entry in document_email
     pub email_message_id: Option<Uuid>,
     /// Optional value. defaults to now if not included
     pub created_at: Option<&'a chrono::DateTime<chrono::Utc>>,
