@@ -360,7 +360,7 @@ impl DocumentStorageServiceClient {
 
     /// Create a document
     #[tracing::instrument(skip(self, jwt_token))]
-    pub async fn create_document(
+    pub async fn create_document_external(
         &self,
         req: CreateDocumentRequest,
         jwt_token: &str,
@@ -368,6 +368,40 @@ impl DocumentStorageServiceClient {
         let res = self
             .external_request(reqwest::Method::POST, "/documents", jwt_token)
             .json(&req)
+            .send()
+            .await?;
+
+        let status_code = res.status();
+
+        if !status_code.is_success() {
+            let body = res.text().await.unwrap_or("no body".to_string());
+            tracing::error!(
+                body=%body,
+                status=%status_code,
+                document_name=%req.document_name,
+                "external API error when creating document"
+            );
+            anyhow::bail!("HTTP {}: {}", status_code, body);
+        }
+
+        let response_data = res.json::<CreateDocumentResponse>().await?;
+        Ok(response_data)
+    }
+
+    /// Create a document
+    #[tracing::instrument(skip(self))]
+    pub async fn create_document_internal(
+        &self,
+        req: CreateDocumentRequest,
+        user_id: &str,
+    ) -> Result<CreateDocumentResponse> {
+        let url = format!("{}/internal/documents", self.url);
+
+        let res = self
+            .client
+            .post(&url)
+            .json(&req)
+            .header(MACRO_INTERNAL_USER_ID_HEADER_KEY, user_id)
             .send()
             .await?;
 
