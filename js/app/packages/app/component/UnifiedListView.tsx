@@ -13,11 +13,7 @@ import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ToggleButton } from '@core/component/FormControls/ToggleButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { IconButton } from '@core/component/IconButton';
-import {
-  ContextMenuContent,
-  MenuItem,
-  MenuSeparator,
-} from '@core/component/Menu';
+import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import {
   blockAcceptsFileExtension,
