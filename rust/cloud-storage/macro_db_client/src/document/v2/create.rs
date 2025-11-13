@@ -1,5 +1,4 @@
-use crate::history::upsert_item_last_accessed;
-use crate::history::upsert_user_history;
+use crate::history::{upsert_item_last_accessed_timestamp, upsert_user_history_timestamp};
 use crate::share_permission::create::create_document_permission;
 use model::document::DocumentMetadata;
 use model::document::FileType;
@@ -169,8 +168,10 @@ pub async fn create_document_txn(
 
     // Add item to user history for creator
     if !skip_history {
-        upsert_user_history(transaction, user_id, &document_id, "document").await?;
-        upsert_item_last_accessed(transaction, &document_id, "document").await?;
+        upsert_user_history_timestamp(transaction, user_id, &document_id, "document", created_at)
+            .await?;
+        upsert_item_last_accessed_timestamp(transaction, &document_id, "document", created_at)
+            .await?;
     }
 
     crate::item_access::insert::insert_user_item_access(
