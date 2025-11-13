@@ -135,9 +135,6 @@ function createViewData(
       showUnreadIndicator:
         viewProps?.display?.showUnreadIndicator ??
         VIEWCONFIG_BASE.display.showUnreadIndicator,
-      showProjects:
-        viewProps?.display?.showProjects ??
-        VIEWCONFIG_BASE.display.showProjects,
       unrollNotifications:
         viewProps?.display?.unrollNotifications ??
         VIEWCONFIG_BASE.display.unrollNotifications,

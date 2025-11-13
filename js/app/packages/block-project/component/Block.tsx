@@ -296,13 +296,13 @@ const Block: Component = () => {
   const { selectedView, setSelectedView, setViewDataStore, viewsDataStore } =
     splitContext.unifiedListContext;
 
-    const isPreview = viewsDataStore[selectedView()].display.preview
+  const isPreview = viewsDataStore[selectedView()].display.preview;
 
   createRenderEffect(() => {
     const previousView = untrack(selectedView);
 
-    if(isPreview) return
-    
+    if (isPreview) return;
+
     setSelectedView(projectId);
 
     setViewDataStore(projectId, {
