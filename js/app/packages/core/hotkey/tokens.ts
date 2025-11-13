@@ -155,6 +155,7 @@ export const TOKENS = {
     collapseThread: 'channel.collapseThread',
     focusPreviousMessage: 'channel.focusPreviousMessage',
     focusNextMessage: 'channel.focusNextMessage',
+    focusInput: 'channel.focusInput',
     sendMessage: 'channel.sendMessage',
   },
 

@@ -42,6 +42,7 @@ export type ChatInputProps = {
   isPersistent?: boolean;
   showActiveTabs?: boolean;
   captureEditor?: (editor: LexicalEditor) => void;
+  autoFocusOnMount?: boolean;
 };
 
 type ChatInputInternalProps = {
@@ -203,7 +204,9 @@ function ChatInput(props: ChatInputInternalProps) {
             onEnter={handleEnter}
             placeholder="Ask AI -  @mention anything"
             history={availableAttachments}
-            dontFocusOnMount={isMobileWidth()}
+            dontFocusOnMount={
+              isMobileWidth() || props.autoFocusOnMount === false
+            }
             onPasteFile={props.uploadQueue.upload}
             captureEditor={props.captureEditor}
           />
