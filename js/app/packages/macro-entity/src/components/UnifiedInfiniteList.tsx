@@ -35,6 +35,7 @@ import {
   type EntityRenderer,
   getEntityProjectId,
 } from '../types/entity';
+import type { WithSearch } from '../types/search';
 import { Entity } from './Entity';
 
 const DEBOUNCE_FETCH_MORE_MS = 50;
@@ -64,8 +65,13 @@ const getOperations = <T extends Partial<EntityQueryOperations>>(
 
 interface UnifiedInfiniteListContext<T extends EntityData> {
   showProjects: Accessor<boolean>;
-  entityInfiniteQueries: Array<EntityQueryWithOperations<EntityInfiniteQuery>>;
-  entityQueries?: Array<EntityQueryWithOperations<EntityQuery>>;
+  entityInfiniteQueries: Array<
+    EntityQueryWithOperations<
+      EntityData | WithSearch<EntityData>,
+      EntityInfiniteQuery
+    >
+  >;
+  entityQueries?: Array<EntityQueryWithOperations<EntityData, EntityQuery>>;
   entityMapper?: EntityMapper<T>;
   requiredFilter?: Accessor<EntityFilter<T>>;
   optionalFilter?: Accessor<EntityFilter<T>>;

@@ -108,6 +108,7 @@ import { createStore, type SetStoreFunction, unwrap } from 'solid-js/store';
 import { EntityWithEverything } from '../../macro-entity/src/components/EntityWithEverything';
 import { createCopyDssEntityMutation } from '../../macro-entity/src/queries/dss';
 import type { FetchPaginatedEmailsParams } from '../../macro-entity/src/queries/email';
+import type { WithSearch } from '../../macro-entity/src/types/search';
 import { EntityModal } from './EntityModal/EntityModal';
 import { useUpsertSavedViewMutation } from './Soup';
 import {
@@ -803,7 +804,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   });
 
   const { UnifiedListComponent, entities, isLoading } =
-    createUnifiedInfiniteList<WithNotification<EntityData>>({
+    createUnifiedInfiniteList<
+      WithNotification<WithSearch<EntityData> | EntityData>
+    >({
       entityInfiniteQueries: [
         {
           query: dssInfiniteQuery,
