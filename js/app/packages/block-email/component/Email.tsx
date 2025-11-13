@@ -451,7 +451,7 @@ export function Email(props: EmailProps) {
     return true;
   });
 
-  // If there is a focused message id, but it does not currently exist in the message list, it is because the user has just sent a message. When it does come into existence, we want to scroll to the bottom. 
+  // If there is a focused message id, but it does not currently exist in the message list, it is because the user has just sent a message. When it does come into existence, we want to scroll to the bottom.
   createEffect((prev: boolean | undefined) => {
     const currentFocusedId = focusedMessageId();
     const messages = filteredMessages();
