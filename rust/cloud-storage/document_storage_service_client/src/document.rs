@@ -381,7 +381,7 @@ impl DocumentStorageServiceClient {
                 document_name=%req.document_name,
                 "external API error when creating document"
             );
-            return Err(anyhow::anyhow!("HTTP {}: {}", status_code, body));
+            anyhow::bail!("HTTP {}: {}", status_code, body);
         }
 
         let response_data = res.json::<CreateDocumentResponse>().await?;
