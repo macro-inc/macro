@@ -5,7 +5,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use macro_user_id::user_id::MacroUserId;
+use item_filters::EmailFilters;
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::email::{EmailSearchRequest, SimpleEmailSearchResponse};
 use opensearch_client::search::emails::EmailSearchArgs;
@@ -96,77 +97,11 @@ pub(in crate::api::search) async fn search_emails(
         || filters.bcc.is_empty()
         || filters.recipients.is_empty());
 
-    // We need to grab specific thread ids for the user if we have filters to apply
+    // Filter thread ids if filters are provided
     let thread_ids = if ids_only {
-        tracing::trace!("getting thread ids for user");
-        // Get the base thread ids for the user
-        let thread_ids = macro_db_client::items::filter::get_thread_ids_for_user(&ctx.db, &user_id)
-            .await
-            .map_err(SearchError::InternalError)?;
-
-        // Filter thread ids by senders
-        let thread_ids = if !filters.senders.is_empty() {
-            macro_db_client::items::filter::filter_thread_ids_by_senders(
-                &ctx.db,
-                &thread_ids,
-                &filters.senders,
-            )
+        filter_thread_ids(&ctx.db, &user_id, filters)
             .await
             .map_err(SearchError::InternalError)?
-        } else {
-            thread_ids
-        };
-
-        if thread_ids.is_empty() {
-            return Ok(vec![]);
-        }
-
-        // Filter thread ids by senders and recipients
-        let thread_ids = if !filters.recipients.is_empty() {
-            macro_db_client::items::filter::filter_thread_ids_by_recipients(
-                &ctx.db,
-                &thread_ids,
-                &filters.recipients,
-            )
-            .await
-            .map_err(SearchError::InternalError)?
-        } else {
-            thread_ids
-        };
-
-        if thread_ids.is_empty() {
-            return Ok(vec![]);
-        }
-
-        // Filter thread ids by cc
-        let thread_ids = if !filters.cc.is_empty() {
-            macro_db_client::items::filter::filter_thread_ids_by_cc(
-                &ctx.db,
-                &thread_ids,
-                &filters.cc,
-            )
-            .await
-            .map_err(SearchError::InternalError)?
-        } else {
-            thread_ids
-        };
-
-        if thread_ids.is_empty() {
-            return Ok(vec![]);
-        }
-
-        // Filter thread ids by bcc
-        if !filters.bcc.is_empty() {
-            macro_db_client::items::filter::filter_thread_ids_by_bcc(
-                &ctx.db,
-                &thread_ids,
-                &filters.bcc,
-            )
-            .await
-            .map_err(SearchError::InternalError)?
-        } else {
-            thread_ids
-        }
     } else {
         vec![]
     };
@@ -193,4 +128,67 @@ pub(in crate::api::search) async fn search_emails(
         .map_err(SearchError::Search)?;
 
     Ok(results)
+}
+
+/// Creates a filtered list of thread ids for the provided user
+#[tracing::instrument(skip(db), err)]
+async fn filter_thread_ids(
+    db: &sqlx::PgPool,
+    user_id: &MacroUserId<Lowercase<'_>>,
+    filters: EmailFilters,
+) -> anyhow::Result<Vec<sqlx::types::Uuid>> {
+    // Get the base thread ids for the user
+    let thread_ids = macro_db_client::items::filter::get_thread_ids_for_user(db, user_id).await?;
+
+    // Filter thread ids by senders
+    let thread_ids = if !filters.senders.is_empty() {
+        macro_db_client::items::filter::filter_thread_ids_by_senders(
+            db,
+            &thread_ids,
+            &filters.senders,
+        )
+        .await?
+    } else {
+        thread_ids
+    };
+
+    if thread_ids.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Filter thread ids by senders and recipients
+    let thread_ids = if !filters.recipients.is_empty() {
+        macro_db_client::items::filter::filter_thread_ids_by_recipients(
+            db,
+            &thread_ids,
+            &filters.recipients,
+        )
+        .await?
+    } else {
+        thread_ids
+    };
+
+    if thread_ids.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Filter thread ids by cc
+    let thread_ids = if !filters.cc.is_empty() {
+        macro_db_client::items::filter::filter_thread_ids_by_cc(db, &thread_ids, &filters.cc)
+            .await?
+    } else {
+        thread_ids
+    };
+
+    if thread_ids.is_empty() {
+        return Ok(vec![]);
+    }
+
+    // Filter thread ids by bcc
+    if !filters.bcc.is_empty() {
+        macro_db_client::items::filter::filter_thread_ids_by_bcc(db, &thread_ids, &filters.bcc)
+            .await
+    } else {
+        Ok(thread_ids)
+    }
 }
