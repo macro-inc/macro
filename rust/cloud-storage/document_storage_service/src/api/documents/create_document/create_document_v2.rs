@@ -72,7 +72,7 @@ pub async fn create_document(
             project_id,
             project_name: None,
             share_permission: &share_permission,
-            skip_history: created_at.is_some(), // don't add to history if it's a backfill
+            skip_history: false,
             email_message_id,
             created_at,
         },

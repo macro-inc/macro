@@ -1,4 +1,3 @@
-use sqlx::Postgres;
 use uuid::Uuid;
 
 // create record in DocumentEmail table, linking the document (an email attachment) and email message
