@@ -38,9 +38,9 @@ export const PROPERTY_STYLES = {
     button:
       'text-right text-ink text-xs hover:bg-hover px-2 py-1 cursor-pointer border border-edge bg-transparent inline-block max-w-full',
     multi:
-      'text-right text-xs px-2 py-1 border border-edge bg-transparent inline-block shrink-0 max-w-[150px] break-words',
+      'text-right text-xs px-2 py-1 border border-edge bg-transparent inline-block shrink-0 max-w-[140px] break-words',
     multiButton:
-      'text-right text-ink text-xs hover:bg-hover px-2 py-1 cursor-pointer border border-edge bg-transparent inline-block shrink-0 max-w-[150px] break-words',
+      'text-right text-ink text-xs hover:bg-hover px-2 py-1 cursor-pointer border border-edge bg-transparent inline-block shrink-0 max-w-[140px] break-words',
   },
 
   checkbox: {
