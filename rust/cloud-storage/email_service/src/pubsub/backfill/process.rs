@@ -1,5 +1,7 @@
+use crate::pubsub::backfill::backfill_attachment::backfill_attachment;
 use crate::pubsub::backfill::{
-    backfill_message, backfill_thread, error_handlers, init, list_threads, update_metadata,
+    backfill_attachment, backfill_message, backfill_thread, error_handlers, init, list_threads,
+    update_metadata,
 };
 use crate::pubsub::context::PubSubContext;
 use crate::util::gmail::auth::fetch_gmail_access_token_from_link;
@@ -119,6 +121,9 @@ async fn inner_process_message(
         }
         BackfillOperation::UpdateThreadMetadata(p) => {
             update_metadata::update_thread_metadata(ctx, data, &link, p).await?
+        }
+        BackfillOperation::BackfillAttachment(p) => {
+            backfill_attachment::backfill_attachment(ctx, &access_token, &link, p).await?
         }
     };
 

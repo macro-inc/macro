@@ -236,6 +236,7 @@ async fn main() -> anyhow::Result<()> {
         let macro_notify_client_backfill = macro_notify_client.clone();
         let sfs_client_backfill = sfs_client.clone();
         let connection_gateway_client_backfill = connection_gateway_client.clone();
+        let dss_client_backfill = dss_client.clone();
         tokio::spawn(async move {
             pubsub::backfill::worker::run_worker(
                 db_backfill,

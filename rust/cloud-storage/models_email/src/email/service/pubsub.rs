@@ -33,6 +33,8 @@ pub enum FailureReason {
     GmailApiFailed,
     GmailApiRateLimited,
     OutdatedHistoryId,
+    AttachmentParsingFailed,
+    DSSUploadFailed,
 }
 
 /// The message we send from the email_refresh_handler lambda to the service via SQS to refresh
