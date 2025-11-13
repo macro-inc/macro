@@ -1,4 +1,7 @@
+use reqwest::StatusCode;
 use thiserror::Error;
+
+use crate::{prelude::ApiError };
 
 #[derive(Debug, Error)]
 pub enum AnthropicError {
@@ -11,6 +14,11 @@ pub enum AnthropicError {
     /// error from reqwest
     #[error("http error")]
     Reqwest(#[from] reqwest::Error),
+    #[error("API returned a bad status code")]
+    ApiError {
+        api_error: ApiError,
+        status_code: StatusCode
+    }
 }
 
 pub type Result<T> = std::result::Result<T, AnthropicError>;
