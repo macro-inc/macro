@@ -24,6 +24,7 @@ use models_email::service::link::Link;
 use models_email::service::thread::ThreadPreviewCursor;
 use models_pagination::{
     CursorExtractor, CursorVal, Identify, PaginateOn, Paginated, SimpleSortMethod, SortOn,
+    TypeEraseCursor,
 };
 use schemars::JsonSchema;
 use serde::Serialize;

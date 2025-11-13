@@ -17,7 +17,7 @@ axum = [
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
-either = { version = "1" }
+either = { workspace = true }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
 item_filters = { path = "../item_filters" }
