@@ -5,8 +5,8 @@ use model::item::ShareableItemType;
 
 use crate::projects::get_project::get_sub_items::bulk_get_all_sub_project_ids;
 
-mod document;
 mod channel;
+mod document;
 
 pub use channel::*;
 pub use document::*;
