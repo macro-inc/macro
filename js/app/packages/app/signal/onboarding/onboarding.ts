@@ -1,12 +1,11 @@
 import { useNavigate } from '@solidjs/router';
 import { createEffect, createSignal, on } from 'solid-js';
-import { CheckoutState, useCheckout } from './subscription';
+import { type CheckoutState, useCheckout } from './subscription';
 import {
-  EmailAuthenticationState,
+  type EmailAuthenticationState,
   useEmailInitializeAndPoll,
   useSignUpAndConnectEmail,
 } from './email-link';
-import { useHasPaidAccess } from '@core/auth';
 import { withAnalytics } from '@coparse/analytics';
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { match } from 'ts-pattern';
