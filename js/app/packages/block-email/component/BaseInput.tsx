@@ -231,7 +231,7 @@ export function BaseInput(props: {
   }
 
   async function executeSaveDraft() {
-    if (bodyMacro().trim().length === 0 || isPendingSend()) {
+    if (isPendingSend()) {
       return;
     }
     const draftToSave = collectDraft();
@@ -352,7 +352,7 @@ export function BaseInput(props: {
   let composeContainerRef: HTMLDivElement | undefined;
 
   const sendEmail = async () => {
-    if (isPendingSend() || isPendingUpload() || bodyMacro().trim().length === 0)
+    if (isPendingSend() || isPendingUpload())
       return;
     setIsPendingSend(true);
     const to = form().recipients.to.map(convertEmailRecipientToContactInfo);
