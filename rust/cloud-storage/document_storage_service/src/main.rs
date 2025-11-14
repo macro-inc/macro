@@ -81,16 +81,26 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Create DynamoDB client with local endpoint for local environment
+    // If DynamoEndpointUrl is not set, use AWS DynamoDB even in local mode
     let dynamo_db = if matches!(config.environment, Environment::Local) {
         env_var!(
             struct DynamoEndpointUrl;
         );
-        let local_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .endpoint_url(DynamoEndpointUrl::new()?.to_string())
-            .load()
-            .await;
-        aws_sdk_dynamodb::Client::new(&local_config)
+        match DynamoEndpointUrl::new() {
+            Ok(endpoint_url) => {
+                tracing::info!("Using local DynamoDB endpoint: {}", endpoint_url.as_ref());
+                let local_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+                    .region("us-east-1")
+                    .endpoint_url(endpoint_url.to_string())
+                    .load()
+                    .await;
+                aws_sdk_dynamodb::Client::new(&local_config)
+            }
+            Err(_) => {
+                tracing::info!("DynamoEndpointUrl not set, using AWS DynamoDB");
+                aws_sdk_dynamodb::Client::new(&aws_config)
+            }
+        }
     } else {
         aws_sdk_dynamodb::Client::new(&aws_config)
     };
