@@ -13,10 +13,7 @@ pub struct DynamodbClient {
 }
 
 impl DynamodbClient {
-    pub fn new(
-        aws_config: &SdkConfig,
-        bulk_upload_requests_table: Option<String>,
-    ) -> Self {
+    pub fn new(aws_config: &SdkConfig, bulk_upload_requests_table: Option<String>) -> Self {
         let client = aws_sdk_dynamodb::Client::new(aws_config);
 
         Self::new_from_client(client, bulk_upload_requests_table)

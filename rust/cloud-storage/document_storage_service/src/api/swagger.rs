@@ -36,8 +36,7 @@ use soup::inbound::axum_router::{SoupApiItem, SoupApiSort, SoupPage};
 
 use crate::{
     api::{
-        activity,
-        annotations,
+        activity, annotations,
         documents::{
             self,
             export_document::ExportDocumentResponse,
