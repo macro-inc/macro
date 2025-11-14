@@ -5,7 +5,7 @@ import type { ChatEntity, DocumentEntity, EntityData } from '../types/entity';
 import { createApiTokenQuery } from './auth';
 import { queryKeys } from './key';
 
-type ProjectContainedEntity = WithRequired<
+export type ProjectContainedEntity = WithRequired<
   Extract<EntityData, DocumentEntity | ChatEntity>,
   'projectId'
 >;
