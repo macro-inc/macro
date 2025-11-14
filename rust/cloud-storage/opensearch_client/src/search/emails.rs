@@ -253,6 +253,8 @@ pub(crate) async fn search_emails(
 ) -> Result<Vec<EmailSearchResponse>> {
     let query_body = args.build()?;
 
+    println!("query_body: {query_body}");
+
     let response = client
         .search(opensearch::SearchParts::Index(&[EMAIL_INDEX]))
         .body(query_body)

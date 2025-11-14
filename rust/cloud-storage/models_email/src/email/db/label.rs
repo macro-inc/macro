@@ -2,7 +2,6 @@ use crate::email::service;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
-use sqlx::postgres::{PgHasArrayType, PgTypeInfo};
 use strum::{AsRefStr, Display, EnumString};
 use uuid::Uuid;
 
@@ -29,12 +28,6 @@ pub enum MessageListVisibility {
     Hide,
 }
 
-impl PgHasArrayType for MessageListVisibility {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::with_name("_email_message_list_visibility_enum")
-    }
-}
-
 // Enum for label list visibility
 #[derive(
     Debug,
@@ -59,12 +52,6 @@ pub enum LabelListVisibility {
     LabelHide,
 }
 
-impl PgHasArrayType for LabelListVisibility {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::with_name("_email_label_list_visibility_enum")
-    }
-}
-
 // Enum for label type
 #[derive(
     Debug,
@@ -83,12 +70,6 @@ impl PgHasArrayType for LabelListVisibility {
 pub enum LabelType {
     System,
     User,
-}
-
-impl PgHasArrayType for LabelType {
-    fn array_type_info() -> PgTypeInfo {
-        PgTypeInfo::with_name("_email_label_type_enum")
-    }
 }
 
 #[derive(FromRow, Debug, Clone, Serialize, Deserialize)]
