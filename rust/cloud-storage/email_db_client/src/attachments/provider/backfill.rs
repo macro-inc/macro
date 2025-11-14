@@ -32,6 +32,8 @@ pub async fn fetch_thread_attachments_for_backfill(
         WHERE m.thread_id = $1
             AND a.mime_type NOT LIKE 'image/%'
             AND a.mime_type NOT LIKE '%zip%'
+            AND a.mime_type NOT LIKE 'video/%'
+            AND a.mime_type NOT LIKE 'audio/%'
             AND a.mime_type NOT IN ('application/ics', 'application/x-sharing-metadata-xml')
             AND EXISTS ( -- only fetch if at least one message in the thread meets any of the criteria
                 SELECT 1
@@ -145,6 +147,8 @@ pub async fn fetch_job_attachments_for_backfill(
             -- Apply standard filters at the very end
             AND a.mime_type NOT LIKE 'image/%'
             AND a.mime_type NOT LIKE '%zip%'
+            AND a.mime_type NOT LIKE 'video/%'
+            AND a.mime_type NOT LIKE 'audio/%'
             AND a.mime_type NOT IN ('application/ics', 'application/x-sharing-metadata-xml')
             AND a.filename IS NOT NULL
         ORDER BY m.internal_date_ts DESC
@@ -193,6 +197,8 @@ pub async fn fetch_insertable_attachments_for_new_email(
         WHERE m.provider_id = $1
             AND a.mime_type NOT LIKE 'image/%'
             AND a.mime_type NOT LIKE '%zip%'
+            AND a.mime_type NOT LIKE 'video/%'
+            AND a.mime_type NOT LIKE 'audio/%'
             AND a.mime_type NOT IN ('application/ics', 'application/x-sharing-metadata-xml')
             AND de.email_attachment_id IS NULL
             AND EXISTS ( -- only fetch if at least one message in the thread meets any of the criteria
@@ -299,6 +305,8 @@ pub async fn fetch_insertable_attachments_for_new_email(
             -- Apply standard filters at the very end
             AND a.mime_type NOT LIKE 'image/%'
             AND a.mime_type NOT LIKE '%zip%'
+            AND a.mime_type NOT LIKE 'video/%'
+            AND a.mime_type NOT LIKE 'audio/%'
             AND a.mime_type NOT IN ('application/ics', 'application/x-sharing-metadata-xml')
             AND a.filename IS NOT NULL
         ORDER BY a.id
