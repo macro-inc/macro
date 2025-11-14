@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { createBucket, DynamoDBTable } from '@resources';
+import { createBucket } from '@resources';
 import {
   config,
   getMacroApiToken,
@@ -199,17 +199,6 @@ export const deleteChatHandlerLambdaName = deleteChatHandler.lambda.name;
 export const deleteChatQueueArn = deleteChatHandler.queue.arn;
 export const deleteChatQueueName = deleteChatHandler.queue.name;
 
-/// Affiliate Tracking
-const affiliateTrackingTable = new DynamoDBTable('affiliate-tracking-table', {
-  baseName: 'affiliate-tracking-table',
-  attributes: [
-    { name: 'PK', type: 'S' },
-    { name: 'SK', type: 'S' },
-  ] as aws.types.input.dynamodb.TableAttribute[],
-  hashKey: 'PK',
-  rangeKey: 'SK',
-});
-
 const MACRO_API_TOKENS = getMacroApiToken();
 
 const cloudStorageService = new CloudStorageService(
@@ -237,7 +226,6 @@ const cloudStorageService = new CloudStorageService(
       MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
     ],
     notificationQueueArn,
-    affiliateTrackingTableArn: affiliateTrackingTable.table.arn,
     containerEnvVars: [
       {
         name: 'DATABASE_URL',
@@ -331,10 +319,6 @@ const cloudStorageService = new CloudStorageService(
       {
         name: 'DOCUMENT_PERMISSION_JWT_SECRET_KEY',
         value: pulumi.interpolate`${DOCUMENT_STORAGE_PERMISSIONS_KEY}`,
-      },
-      {
-        name: 'AFFILIATE_USERS_TABLE',
-        value: pulumi.interpolate`${affiliateTrackingTable.table.name}`,
       },
       {
         name: 'INTERNAL_API_SECRET_KEY',

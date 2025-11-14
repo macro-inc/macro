@@ -43,7 +43,6 @@ env_var! {
         pub SearchEventQueue,
         pub CommsServiceUrl,
         pub EmailServiceUrl,
-        pub AffiliateUsersTable,
         pub ConnectionGatewayUrl,
         pub BulkUploadRequestsTable,
         pub UploadStagingBucket,
