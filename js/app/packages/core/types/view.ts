@@ -16,13 +16,13 @@ export type ConditionalView = (typeof CONDITIONAL_VIEWS)[number];
 export type View = DefaultView | ConditionalView;
 
 const VIEW_DEFINITIONS: Array<{ key: View; disabled?: boolean }> = [
-  { key: 'all' },
   { key: 'inbox' },
   { key: 'emails', disabled: !ENABLE_EMAIL_VIEW },
   { key: 'comms' },
   { key: 'docs' },
   { key: 'ai' },
   { key: 'folders' },
+  { key: 'all' },
 ];
 
 export const VIEWS = VIEW_DEFINITIONS.filter((v) => !v.disabled).map(
