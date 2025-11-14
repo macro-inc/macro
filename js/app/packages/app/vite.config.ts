@@ -3,7 +3,7 @@ import importMetaUrlPlugin from '@codingame/esbuild-import-meta-url-plugin';
 import tailwind from '@tailwindcss/vite';
 import { Features } from 'lightningcss';
 // SolidDevtools retains disposed memos, causes memory leak
-// import solidDevtools from 'solid-devtools/vite';
+import solidDevtools from 'solid-devtools/vite';
 import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
@@ -29,7 +29,7 @@ export default defineConfig(({ command, mode }) => {
       },
     },
     plugins: [
-      // solidDevtools({ autoname: true }),
+      solidDevtools({ autoname: true, locator: { targetIDE: 'vscode', componentLocation: true, jsxLocation: true } }),
       solid(),
       wasm(),
       tailwind(),
@@ -72,17 +72,17 @@ export default defineConfig(({ command, mode }) => {
         },
         output: NO_MINIFY
           ? {
-              // remove hashes from output paths
-              // https://github.com/vitejs/vite/issues/378
-              entryFileNames: `assets/[name].js`,
-              chunkFileNames: `assets/[name].js`,
-              assetFileNames: `assets/[name].[ext]`,
-            }
+            // remove hashes from output paths
+            // https://github.com/vitejs/vite/issues/378
+            entryFileNames: `assets/[name].js`,
+            chunkFileNames: `assets/[name].js`,
+            assetFileNames: `assets/[name].[ext]`,
+          }
           : {
-              format: 'es',
-              chunkFileNames: '[name]-[hash].js',
-              entryFileNames: '[name]-[hash].js',
-            },
+            format: 'es',
+            chunkFileNames: '[name]-[hash].js',
+            entryFileNames: '[name]-[hash].js',
+          },
       },
       assetsInlineLimit: (filePath) => {
         if (filePath.includes('.wasm')) return false;
@@ -101,7 +101,7 @@ export default defineConfig(({ command, mode }) => {
       include: [
         'vscode-textmate',
         'vscode-oniguruma',
-        // 'solid-devtools/setup',
+        'solid-devtools/setup',
         'libheif-js/wasm-bundle',
       ],
       esbuildOptions: {
@@ -153,18 +153,18 @@ function define(mode: string, command: string) {
     'import.meta.env.__MACRO_GQL_SERVICE__':
       process.env.LOCAL_GQL_SERVER === 'true'
         ? (() => {
-            console.log('Using Local GQL server');
-            return '"http://localhost:8080/graphql/"';
-          })()
+          console.log('Using Local GQL server');
+          return '"http://localhost:8080/graphql/"';
+        })()
         : mode === 'development'
           ? (() => {
-              console.log('Using Dev GQL server');
-              return '"https://api-dev.macro.com/graphql/"';
-            })()
+            console.log('Using Dev GQL server');
+            return '"https://api-dev.macro.com/graphql/"';
+          })()
           : (() => {
-              console.log('Using Prod GQL server');
-              return '"https://api.macro.com/graphql/"';
-            })(),
+            console.log('Using Prod GQL server');
+            return '"https://api.macro.com/graphql/"';
+          })(),
     'import.meta.env.__LOCAL_DOCKER__': process.env.LOCAL_DOCKER === 'true',
     'import.meta.env.__LOCAL_JWT__': JSON.stringify(process.env.LOCAL_JWT),
   };
