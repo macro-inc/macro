@@ -128,7 +128,6 @@ export function BaseInput(props: {
   draft?: MessageWithBodyReplyless;
   preloadedBody?: string;
   preloadedHtml?: string;
-  draftContainsAppendedReply?: boolean;
   preloadedAttachments?: AttachmentMacro[];
   sideEffectOnSend?: (newMessageId: MessageToSendDbId | null) => void;
   setShowReply?: Setter<boolean>;
@@ -162,10 +161,6 @@ export function BaseInput(props: {
   const [bccRef, setBccRef] = createSignal<HTMLInputElement>();
   const [showCc, setShowCc] = createSignal<boolean>();
   const [showBcc, setShowBcc] = createSignal<boolean>();
-
-  const [replyAppended, setReplyAppended] = createSignal<boolean>(
-    props.draftContainsAppendedReply ?? false
-  );
 
   const [savedDraftId, setSavedDraftId] = createSignal<
     MessageToSendDbId | undefined
@@ -437,9 +432,7 @@ export function BaseInput(props: {
 
   const resetState = () => {
     setBodyMacro('');
-    setReplyAppended(props.draftContainsAppendedReply ?? false);
     setSavedDraftId(undefined);
-
     form().reset();
   };
 
@@ -761,7 +754,10 @@ export function BaseInput(props: {
             <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
           </div>
           <MarkdownTextarea
-            captureEditor={setEditor}
+            captureEditor={(editor) => {
+              setEditor(editor);
+              form().setCapturedEditor(editor);
+            }}
             class={`text-sm break-words text-ink ${isDragging() && 'blur'}`}
             editable={() => !isPendingSend()}
             initialValue={props.preloadedBody}
@@ -778,13 +774,13 @@ export function BaseInput(props: {
             domRef={props.markdownDomRef}
           />
         </div>
-        <Show when={!replyAppended()}>
+        <Show when={!form().replyAppended()}>
           <div class="flex flex-row items-center space-x-2">
             <IconButton
               theme="clear"
               icon={DotsThree}
               onclick={() => {
-                setReplyAppended(true);
+                form().setReplyAppended(true);
                 editor()?.dispatchCommand(APPEND_PREVIOUS_EMAIL_COMMAND, {
                   replyingTo: props.replyingTo(),
                   replyType: effectiveReplyType(),
