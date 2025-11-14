@@ -1,5 +1,7 @@
 use crate::pubsub::backfill::increment_counters;
-use crate::pubsub::backfill::increment_counters::incr_completed_threads;
+use crate::pubsub::backfill::increment_counters::{
+    incr_completed_messages, incr_completed_threads,
+};
 use crate::pubsub::context::PubSubContext;
 use models_email::email::service::backfill::{
     BackfillJobStatus, BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage,
@@ -53,11 +55,12 @@ pub async fn handle_non_retryable_error(
             handle_thread_failure(ctx, data.link_id, data.job_id).await;
         }
         BackfillOperation::BackfillMessage(p) => {
-            handle_message_failure(ctx, data, p).await?;
+            handle_message_failure(ctx, data, p).await;
         }
         BackfillOperation::UpdateThreadMetadata(_) => {
             handle_thread_failure(ctx, data.link_id, data.job_id).await;
         }
+        BackfillOperation::BackfillAttachment(_) => {}
     }
 
     cleanup_message(&ctx.sqs_worker, message).await?;
@@ -96,6 +99,12 @@ pub async fn handle_retryable_error(
                 "Retryable error backfilling thread"
             );
         }
+        BackfillOperation::BackfillAttachment(p) => {
+            tracing::debug!(
+                attachment_db_id = %p.metadata.attachment_db_id,
+                "Retryable error backfilling attachment"
+            )
+        }
     }
     Ok(())
 }
@@ -121,7 +130,7 @@ async fn handle_thread_failure(ctx: &PubSubContext, link_id: Uuid, job_id: Uuid)
         }
     };
 
-    if let Err(err) = incr_completed_threads(ctx, &link.macro_id, job_id).await {
+    if let Err(err) = incr_completed_threads(ctx, &link, job_id).await {
         tracing::error!(
             error = %err,
             job_id = job_id.to_string(),
@@ -135,6 +144,31 @@ pub async fn handle_message_failure(
     ctx: &PubSubContext,
     data: &BackfillPubsubMessage,
     p: &BackfillMessagePayload,
-) -> Result<(), ProcessingError> {
-    increment_counters::incr_completed_messages(ctx, data.link_id, data.job_id, p).await
+) {
+    let link = match email_db_client::links::get::fetch_link_by_id(&ctx.db, data.link_id).await {
+        Ok(Some(link)) => link,
+        Ok(None) => {
+            tracing::error!(
+                link_id = data.link_id.to_string(),
+                job_id = data.job_id.to_string(),
+                "Link not found"
+            );
+            return;
+        }
+        Err(db_err) => {
+            tracing::error!(
+                error = %db_err,
+                "Failed to fetch link"
+            );
+            return;
+        }
+    };
+
+    if let Err(err) = incr_completed_messages(ctx, &link, data.job_id, p).await {
+        tracing::error!(
+            error = %err,
+            job_id = data.job_id.to_string(),
+            "Failed to check if thread is completed in handle message failure"
+        );
+    }
 }

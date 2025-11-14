@@ -78,6 +78,8 @@ pub async fn update_thread_metadata(
         })
     })?;
 
+    incr_completed_threads(ctx, &link, data.job_id).await?;
+
     // notify search-service about the new thread
     let search_message = SearchQueueMessage::ExtractEmailThreadMessage(EmailThreadMessage {
         thread_id: p.thread_db_id.clone().to_string(),
@@ -93,8 +95,6 @@ pub async fn update_thread_metadata(
                 source: e.context("Failed to send message to search extractor queue"),
             })
         })?;
-
-    incr_completed_threads(ctx, &link.macro_id, data.job_id).await?;
 
     Ok(())
 }

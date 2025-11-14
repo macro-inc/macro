@@ -1,3 +1,5 @@
+pub mod backfill;
+
 use crate::parse::db_to_service::map_db_attachment_to_service;
 use crate::parse::service_to_db::map_service_attachments_to_db;
 use anyhow::Context;
@@ -304,4 +306,27 @@ pub async fn get_attachments_by_thread_ids(
     }
 
     Ok(result)
+}
+
+// return if record exists for email attachment
+pub async fn fetch_document_email_record(
+    db: &Pool<Postgres>,
+    email_attachment_id: Uuid,
+) -> anyhow::Result<bool> {
+    let exists = sqlx::query!(
+        r#"
+        SELECT document_id
+            FROM document_email
+            WHERE email_attachment_id = $1
+        "#,
+        email_attachment_id,
+    )
+    .fetch_optional(db)
+    .await
+    .map_err(|err| {
+        tracing::error!(error=?err, "unable to fetch document email record");
+        anyhow::anyhow!("unable to fetch document email record: {}", err)
+    })?;
+
+    Ok(exists.is_some())
 }

@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        -- Step 1: Get the user's own email address and thread_id from the message\n        WITH\n        message_info AS (\n            SELECT m.thread_id, l.email_address as user_email, m.link_id\n            FROM public.email_messages m\n            JOIN public.email_threads t ON m.thread_id = t.id\n            JOIN public.email_links l ON t.link_id = l.id\n            WHERE m.provider_id = $1\n        ),\n\n        -- Step 2: Create a distinct list of OTHER people this user has ever sent mail to.\n        previously_contacted_emails AS (\n            SELECT DISTINCT ec.email_address\n            FROM public.email_messages em\n            JOIN public.email_message_recipients emr ON em.id = emr.message_id\n            JOIN public.email_contacts ec ON emr.contact_id = ec.id\n            WHERE em.link_id = (SELECT link_id FROM message_info)\n                AND em.is_sent = true\n                AND ec.email_address != (SELECT user_email FROM message_info)\n        ),\n\n        -- Step 3: For the message's thread, create a complete list of OTHER participant email addresses.\n        thread_participants AS (\n            -- Get all senders in the thread (excluding the user)\n            SELECT DISTINCT ec.email_address\n            FROM public.email_messages em\n            JOIN public.email_contacts ec ON em.from_contact_id = ec.id\n            WHERE em.thread_id = (SELECT thread_id FROM message_info)\n                AND ec.email_address != (SELECT user_email FROM message_info)\n\n            UNION\n\n            -- Get all recipients in the thread (excluding the user)\n            SELECT DISTINCT ec.email_address\n            FROM public.email_messages em\n            JOIN public.email_message_recipients emr ON em.id = emr.message_id\n            JOIN public.email_contacts ec ON emr.contact_id = ec.id\n            WHERE em.thread_id = (SELECT thread_id FROM message_info)\n                AND ec.email_address != (SELECT user_email FROM message_info)\n        )\n\n        -- Final Step: Select attachments from the specific message if AT LEAST ONE of the OTHER participants\n        --             in the thread is in the list of OTHER previously_contacted_emails.\n        SELECT\n            a.id AS \"attachment_db_id!\",\n            m.provider_id as \"email_provider_id!\",\n            a.provider_attachment_id as \"provider_attachment_id!\",\n            a.filename as \"filename!\",\n            a.mime_type as \"mime_type!\",\n            m.internal_date_ts as \"internal_date_ts!\"\n        FROM public.email_attachments a\n        JOIN public.email_messages m ON a.message_id = m.id\n        LEFT JOIN public.document_email de ON de.email_attachment_id = a.id\n        WHERE m.provider_id = $1\n            AND de.email_attachment_id IS NULL\n            AND EXISTS (\n                SELECT 1\n                FROM thread_participants tp\n                INNER JOIN previously_contacted_emails pce ON tp.email_address = pce.email_address\n            )\n            -- Apply standard filters at the very end\n            AND a.mime_type NOT LIKE 'image/%'\n            AND a.mime_type NOT LIKE '%zip%'\n            AND a.mime_type NOT IN ('application/ics', 'application/x-sharing-metadata-xml')\n            AND a.filename IS NOT NULL\n        ORDER BY a.id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "attachment_db_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email_provider_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider_attachment_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "filename!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "mime_type!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "internal_date_ts!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "bec5cca9eae260805a5e84239e05774c3262c94717639fcc27229deed541593c"
+}
