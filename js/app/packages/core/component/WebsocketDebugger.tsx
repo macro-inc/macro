@@ -10,14 +10,15 @@ import {
   state as storageState,
   ws as storageWs,
 } from '@service-storage/websocket';
-import { WebSocketState } from '@websocket/index';
+// import { WebSocketState } from '@websocket/index';
+import { WebsocketConnectionState } from '@websocket/websocket-connection-state';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
 const WebSocketStateLabels = {
-  [WebSocketState.Connecting]: 'Connecting',
-  [WebSocketState.Open]: 'Open',
-  [WebSocketState.Closing]: 'Closing',
-  [WebSocketState.Closed]: 'Closed',
+  [WebsocketConnectionState.Connecting]: 'Connecting',
+  [WebsocketConnectionState.Open]: 'Open',
+  [WebsocketConnectionState.Closing]: 'Closing',
+  [WebsocketConnectionState.Closed]: 'Closed',
 } as const;
 
 export function WebsocketDebugger() {

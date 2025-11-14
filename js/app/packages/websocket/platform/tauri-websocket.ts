@@ -1,5 +1,5 @@
 import TauriWebsocket from '@tauri-apps/plugin-websocket';
-import type { MinimalWebSocket, WebSocketFactory } from './MinimalWebSocket';
+import type { MinimalWebSocket, WebSocketFactory } from './minimal-websocket';
 
 /**
  * Check if we're running in a Tauri environment
