@@ -88,7 +88,8 @@ export function MessageList(props: MessageListProps) {
 
   const [threadViewStore, setThreadViewStore] = createStore<ThreadViewData>({});
 
-  const [isNearBottom, setIsNearBottom] = createSignal(false);
+  const [isNearBottom, setIsNearBottom] = createSignal(true);
+  const [initialScrollComplete, setInitialScrollComplete] = createSignal(false);
 
   const openedChannel = openedChannelSignal.get;
 
@@ -167,14 +168,12 @@ export function MessageList(props: MessageListProps) {
       (isNearBottom() || forceBottom)
     ) {
       if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
-      scrollTimeoutId = setTimeout(() => {
-        virtualHandle()?.scrollToIndex(
-          (props.orderedMessages()?.length ?? 1) - 1,
-          {
-            align: 'end',
-          }
-        );
-      }, 0);
+      virtualHandle()?.scrollToIndex(
+        (props.orderedMessages()?.length ?? 1) - 1,
+        {
+          align: 'end',
+        }
+      );
       return;
     }
     if (params?.onlyBottom) return;
@@ -195,11 +194,9 @@ export function MessageList(props: MessageListProps) {
           }));
         }
         if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
-        scrollTimeoutId = setTimeout(() => {
-          virtualHandle()?.scrollToIndex(index, {
-            align: 'center',
-          });
-        }, 0);
+        virtualHandle()?.scrollToIndex(index, {
+          align: 'center',
+        });
         return;
       }
     }
@@ -326,6 +323,7 @@ export function MessageList(props: MessageListProps) {
   const checkIfNearBottom = () => {
     const handle = virtualHandle();
     if (!handle) return false;
+    if (!initialScrollComplete()) return true;
 
     const THRESHOLD = 100;
     const distanceFromBottom =
@@ -442,6 +440,8 @@ export function MessageList(props: MessageListProps) {
 
   // Handle vlistscroll events
   const handleScroll = () => {
+    if (!initialScrollComplete()) return;
+
     const nearBottom = checkIfNearBottom();
     setIsNearBottom(nearBottom);
 
@@ -511,6 +511,11 @@ export function MessageList(props: MessageListProps) {
               overscan={10}
               keepMounted={keepMountedIndices()}
               onScroll={handleScroll}
+              onScrollEnd={() => {
+                if (!initialScrollComplete()) {
+                  setInitialScrollComplete(true);
+                }
+              }}
             >
               {(row: { id: string; message: Message }, i) => {
                 const isParentless = !row.message.thread_id;
@@ -581,6 +586,7 @@ export function MessageList(props: MessageListProps) {
         </Show>
         <Show
           when={
+            initialScrollComplete() &&
             !dismissJumpToLatest() &&
             !showJumpToUnviewedMessages() &&
             !isNearBottom()
