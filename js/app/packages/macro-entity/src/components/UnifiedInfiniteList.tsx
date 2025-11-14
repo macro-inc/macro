@@ -35,6 +35,7 @@ import type {
   EntityRenderer,
 } from '../types/entity';
 import type { WithSearch } from '../types/search';
+import { CustomScrollbar } from './CustomScrollbar';
 import { Entity } from './Entity';
 
 const isSearchEntity = (entity: EntityData): entity is WithSearch<EntityData> =>
@@ -481,7 +482,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
           {/* TODO: Filtered Empty State */}
         </Match>
         <Match when={true}>
-          <div class="flex size-full" ref={setListRef}>
+          <div class="flex size-full relative" ref={setListRef}>
             <StaticMarkdownContext>
               <Fragment
                 ref={(el) => {
@@ -493,7 +494,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
                 <VList
                   ref={props.virtualizerHandle}
                   data={sortedEntitiesStore}
-                  class={LIST_WRAPPER}
+                  class={`${LIST_WRAPPER} scrollbar-hidden`}
                   data-unified-entity-list
                   overscan={computedOverscan()}
                 >
@@ -520,6 +521,17 @@ export function createUnifiedInfiniteList<T extends EntityData>({
               </div> */}
               </Fragment>
             </StaticMarkdownContext>
+            <CustomScrollbar
+              scrollContainer={() => {
+                // Find the actual scroll container (VList creates its own scroll container)
+                const listEl = listRef();
+                if (!listEl) return undefined;
+                const scrollContainer = listEl.querySelector(
+                  '[data-unified-entity-list]'
+                ) as HTMLElement;
+                return scrollContainer || undefined;
+              }}
+            />
           </div>
         </Match>
       </Switch>
