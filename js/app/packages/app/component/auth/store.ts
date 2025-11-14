@@ -6,7 +6,7 @@ export const [colorAccent, setColorAccent] = createSignal<THREE.Color>();
 export const [colorBase, setColorBase] = createSignal<THREE.Color>();
 export const rafSpeed = navigator.vendor?.includes('Apple') ? 2 : 1;
 export const [currentTheme, setCurrentTheme] = createSignal();
-export const [pixelation, setPixelation] = createSignal(0.78);
+export const [pixelation, setPixelation] = createSignal(1);
 export const [speed, setSpeed] = createSignal(1);
 
 export interface ThemeColor {
@@ -106,19 +106,19 @@ export function getCurrentTheme(): ThemeColor {
   const style = getComputedStyle(document.body);
   return {
     accent: oklchToRgb(
-      Number(style.getPropertyValue('--accent-l')),
-      Number(style.getPropertyValue('--accent-c')),
-      Number(style.getPropertyValue('--accent-h'))
+      Number(style.getPropertyValue('--a0l')),
+      Number(style.getPropertyValue('--a0c')),
+      Number.parseFloat(style.getPropertyValue('--a0h'))
     ),
     surface: oklchToRgb(
-      Number(style.getPropertyValue('--surface-l')),
-      Number(style.getPropertyValue('--surface-c')),
-      Number(style.getPropertyValue('--surface-h'))
+      Number(style.getPropertyValue('--b0l')),
+      Number(style.getPropertyValue('--b0c')),
+      Number.parseFloat(style.getPropertyValue('--b0h'))
     ),
     contrast: oklchToRgb(
-      Number(style.getPropertyValue('--contrast-l')),
-      Number(style.getPropertyValue('--contrast-c')),
-      Number(style.getPropertyValue('--contrast-h'))
+      Number(style.getPropertyValue('--c0l')),
+      Number(style.getPropertyValue('--c0c')),
+      Number.parseFloat(style.getPropertyValue('--c0h'))
     ),
   };
 }
