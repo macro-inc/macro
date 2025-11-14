@@ -23,10 +23,7 @@ import {
   blockAcceptsFileExtension,
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
-import {
-  ENABLE_PREVIEW,
-  ENABLE_SOUP_FROM_FILTER,
-} from '@core/constant/featureFlags';
+import { ENABLE_SOUP_FROM_FILTER } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
