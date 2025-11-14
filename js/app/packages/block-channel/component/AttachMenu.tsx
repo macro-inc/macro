@@ -6,7 +6,7 @@ import clickOutside from '@core/directive/clickOutside';
 import { fileSelector } from '@core/directive/fileSelector';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
-import { fuzzyFilter } from '@core/util/fuzzyName';
+import { fuzzyFilter } from '@core/util/fuzzy';
 import { getItemBlockName } from '@core/util/getItemBlockName';
 import {
   autoUpdate,

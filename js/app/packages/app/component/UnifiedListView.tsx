@@ -32,7 +32,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
-import { fuzzyMatch } from '@core/util/fuzzyName';
+import { fuzzyMatch } from '@core/util/fuzzy';
 import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
 import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
 import XIcon from '@icon/regular/x.svg?component-solid';
