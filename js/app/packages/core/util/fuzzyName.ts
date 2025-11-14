@@ -5,6 +5,12 @@ export interface FuzzyNameMatchResult {
   score: number;
 }
 
+export interface FuzzyNameMatchResultWithItem<T> {
+  item: T;
+  nameHighlight: string;
+  score: number;
+}
+
 const uf = new uFuzzy({});
 
 const mark = (part: string, matched: boolean) =>
@@ -12,48 +18,52 @@ const mark = (part: string, matched: boolean) =>
 
 const append = (accum: string, part: string) => accum + part;
 
-export function fuzzyNameMatch(
-  query: string,
-  name: string
-): FuzzyNameMatchResult | null {
-  const needle = query;
-  const haystack = [name];
-  const idxs = uf.filter(haystack, needle);
-
-  if (!idxs || idxs.length === 0) return null;
-
-  const info = uf.info(idxs, haystack, needle);
-  const order = uf.sort(info, haystack, needle);
-
-  if (!order || order.length === 0) return null;
-
-  const infoIdx = order[0];
-  const ranges = info.ranges[infoIdx];
-
-  if (!ranges) return null;
-
-  const nameHighlight = uFuzzy.highlight(
-    haystack[info.idx[infoIdx]],
-    ranges,
-    mark,
-    '',
-    append
-  );
-
-  return {
-    nameHighlight,
-    score: info.idx[infoIdx],
-  };
-}
-
-export function fuzzyFilterByName<T>(
+export function fuzzyMatch<T>(
   query: string,
   items: T[],
-  extractName: (item: T) => string
+  extract: (item: T) => string
+): FuzzyNameMatchResultWithItem<T>[] {
+  if (!query)
+    return items.map((item) => ({
+      item,
+      nameHighlight: extract(item),
+      score: 0,
+    }));
+
+  const haystack = items.map(extract);
+  const idxs = uf.filter(haystack, query);
+
+  if (!idxs || idxs.length === 0) return [];
+
+  const info = uf.info(idxs, haystack, query);
+  const order = uf.sort(info, haystack, query);
+
+  if (!order || order.length === 0) return [];
+
+  return order.map((orderIdx) => {
+    const infoIdx = info.idx[orderIdx];
+    const ranges = info.ranges[orderIdx];
+
+    const nameHighlight = ranges
+      ? uFuzzy.highlight(haystack[infoIdx], ranges, mark, '', append)
+      : haystack[infoIdx];
+
+    return {
+      item: items[infoIdx],
+      nameHighlight,
+      score: orderIdx,
+    };
+  });
+}
+
+export function fuzzyFilter<T>(
+  query: string,
+  items: T[],
+  extract: (item: T) => string
 ): T[] {
   if (!query) return items;
 
-  const haystack = items.map(extractName);
+  const haystack = items.map(extract);
   const idxs = uf.filter(haystack, query);
 
   if (!idxs || idxs.length === 0) return [];

@@ -6,7 +6,7 @@ import clickOutside from '@core/directive/clickOutside';
 import { fileSelector } from '@core/directive/fileSelector';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
-import { fuzzyFilterByName } from '@core/util/fuzzyName';
+import { fuzzyFilter } from '@core/util/fuzzyName';
 import { getItemBlockName } from '@core/util/getItemBlockName';
 import {
   autoUpdate,
@@ -90,7 +90,7 @@ export function AttachMenu(props: AttachMenuProps) {
 
   const rankedHistory = createMemo(() => {
     const searchQuery = input();
-    return fuzzyFilterByName(searchQuery, baseHistory(), (item) => item.name);
+    return fuzzyFilter(searchQuery, baseHistory(), (item) => item.name);
   });
 
   createEffect(() => {
