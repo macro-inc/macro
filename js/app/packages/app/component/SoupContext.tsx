@@ -138,7 +138,6 @@ function createViewData(
       unrollNotifications:
         viewProps?.display?.unrollNotifications ??
         VIEWCONFIG_BASE.display.unrollNotifications,
-      preview: viewProps?.display?.preview ?? VIEWCONFIG_BASE.display.preview,
       limit: viewProps?.display?.limit,
     },
     sort: {
@@ -506,19 +505,6 @@ export function createNavigationEntityListShortcut({
 
       return true;
     },
-  });
-  registerHotkey({
-    hotkey: ['p'],
-    scopeId: splitHotkeyScope,
-    description: 'Toggle Preview',
-    hotkeyToken: TOKENS.unifiedList.togglePreview,
-    keyDownHandler: () => {
-      if (!entityListRef()) return false;
-
-      setViewDataStore(selectedView(), 'display', 'preview', (prev) => !prev);
-      return true;
-    },
-    hide: true,
   });
 
   const navigateThroughViews = ({
