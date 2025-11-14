@@ -1,5 +1,6 @@
 import { createSignal } from 'solid-js';
 import * as THREE from 'three';
+import { themeReactive } from '../../../block-theme/signals/themeReactive';
 
 export const [colorContrast, setColorContrast] = createSignal<THREE.Color>();
 export const [colorAccent, setColorAccent] = createSignal<THREE.Color>();
@@ -106,19 +107,19 @@ export function getCurrentTheme(): ThemeColor {
   const style = getComputedStyle(document.body);
   return {
     accent: oklchToRgb(
-      Number(style.getPropertyValue('--a0l')),
-      Number(style.getPropertyValue('--a0c')),
-      Number.parseFloat(style.getPropertyValue('--a0h'))
+      themeReactive.a0.l[0](),
+      themeReactive.a0.c[0](),
+      themeReactive.a0.h[0]()
     ),
     surface: oklchToRgb(
-      Number(style.getPropertyValue('--b0l')),
-      Number(style.getPropertyValue('--b0c')),
-      Number.parseFloat(style.getPropertyValue('--b0h'))
+      themeReactive.b0.l[0](),
+      themeReactive.b0.c[0](),
+      themeReactive.b0.h[0]()
     ),
     contrast: oklchToRgb(
-      Number(style.getPropertyValue('--c0l')),
-      Number(style.getPropertyValue('--c0c')),
-      Number.parseFloat(style.getPropertyValue('--c0h'))
+      themeReactive.c0.l[0](),
+      themeReactive.c0.c[0](),
+      themeReactive.c0.h[0]()
     ),
   };
 }
