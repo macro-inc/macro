@@ -142,42 +142,6 @@ export function rgbaToOklch(rgba: RGBA | null): OKLCH | null {
   };
 }
 
-function parseOKLCHString(s: string): OKLCH | null {
-  const m = s.match(
-    /oklch\(\s*([^\s]+)\s+([^\s]+)\s+([^\s/]+)(?:\s*\/\s*([^\s)]+))?\s*\)/i
-  );
-  if (!m) return null;
-
-  const parsePctOrNumber = (x: string) => {
-    const t = x.trim().toLowerCase();
-    return t.endsWith('%') ? parseFloat(t) / 100 : parseFloat(t);
-  };
-
-  const parseAngleToDegrees = (x: string) => {
-    const t = x.trim().toLowerCase();
-    if (t === 'none') return 0;
-    if (t.endsWith('deg')) return parseFloat(t);
-    if (t.endsWith('rad')) return (parseFloat(t) * 180) / Math.PI;
-    if (t.endsWith('turn')) return parseFloat(t) * 360;
-    if (t.endsWith('grad')) return parseFloat(t) * 0.9; // 400grad = 360deg
-    return parseFloat(t); // unitless means degrees
-  };
-
-  const parseAlpha = (x?: string) => {
-    if (!x) return 1;
-    const t = x.trim().toLowerCase();
-    if (t === 'none') return 0;
-    return t.endsWith('%') ? parseFloat(t) / 100 : parseFloat(t);
-  };
-
-  return {
-    l: parsePctOrNumber(m[1]),
-    c: parsePctOrNumber(m[2]),
-    h: parseAngleToDegrees(m[3]),
-    a: parseAlpha(m[4]),
-  };
-}
-
 // parses the result of getComputedStyle().color
 function parseRGBA(color: string): RGBA | null {
   if (!color) return null;
