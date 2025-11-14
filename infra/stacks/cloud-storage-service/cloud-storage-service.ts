@@ -308,10 +308,11 @@ export class CloudStorageService extends pulumi.ComponentResource {
           },
           runtimePlatform: {
             operatingSystemFamily: `${platform.family.toUpperCase()}`,
-            cpuArchitecture: `${platform.architecture === 'amd64'
+            cpuArchitecture: `${
+              platform.architecture === 'amd64'
                 ? 'X86_64'
                 : platform.architecture.toUpperCase()
-              }`,
+            }`,
           },
         },
         desiredCount: stack === 'prod' ? 3 : 1,

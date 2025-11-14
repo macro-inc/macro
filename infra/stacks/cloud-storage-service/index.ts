@@ -235,9 +235,11 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'RUST_LOG',
-        value: `document_storage_service=${stack === 'prod' ? 'debug' : 'trace'
-          },tower_http=info,macro_share_permissions=${stack === 'prod' ? 'error' : 'trace'
-          },macro_project_utils=info,macro_notify=info`,
+        value: `document_storage_service=${
+          stack === 'prod' ? 'debug' : 'trace'
+        },tower_http=info,macro_share_permissions=${
+          stack === 'prod' ? 'error' : 'trace'
+        },macro_project_utils=info,macro_notify=info`,
       },
       {
         name: 'DOCUMENT_STORAGE_BUCKET',
@@ -298,13 +300,15 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'COMMS_SERVICE_URL',
-        value: `https://comms-service${stack === 'prod' ? '' : `-${stack}`
-          }.macro.com`,
+        value: `https://comms-service${
+          stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
       },
       {
         name: 'EMAIL_SERVICE_URL',
-        value: `https://email-service${stack === 'prod' ? '' : `-${stack}`
-          }.macro.com`,
+        value: `https://email-service${
+          stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
       },
       {
         name: 'DOCUMENT_PERMISSION_JWT_SECRET_KEY',
@@ -316,8 +320,9 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'CONNECTION_GATEWAY_URL',
-        value: `https://connection-gateway${stack === 'prod' ? '' : `-${stack}`
-          }.macro.com`,
+        value: `https://connection-gateway${
+          stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
       },
       {
         name: 'BULK_UPLOAD_REQUESTS_TABLE',
