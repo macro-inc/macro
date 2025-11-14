@@ -12,7 +12,7 @@ export type HalfSplitState = {
   side: 'left' | 'right';
 };
 
-export const SplitPanelContext = createContext<{
+export type SplitPanelContextType = {
   handle: SplitHandle;
   splitHotkeyScope: string;
   unifiedListContext: UnifiedListContext;
@@ -28,4 +28,6 @@ export const SplitPanelContext = createContext<{
     toolbarLeft?: HTMLDivElement;
     toolbarRight?: HTMLDivElement;
   };
-}>();
+};
+
+export const SplitPanelContext = createContext<SplitPanelContextType>();
