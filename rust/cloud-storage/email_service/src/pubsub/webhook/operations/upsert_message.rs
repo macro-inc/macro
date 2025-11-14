@@ -1,4 +1,5 @@
 use crate::pubsub::context::PubSubContext;
+use crate::pubsub::upload_attachment::upload_attachment;
 use crate::pubsub::util::{cg_refresh_email, check_gmail_rate_limit};
 use crate::pubsub::webhook::process;
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
@@ -127,6 +128,25 @@ pub async fn upsert_message(
 
     // notify downstream services of new messages
     notify_for_new_messages(ctx, link, new_message_provider_ids).await?;
+
+    // upload attachments to Macro
+    let attachments = email_db_client::attachments::provider::backfill::fetch_insertable_attachments_for_new_email(
+        &ctx.db,
+        &payload.provider_message_id
+    ).await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e.context("Failed to fetch attachments to insert".to_string()),
+            })
+        })?;
+
+    for attachment in attachments {
+        // keep processing if it fails, best effort
+        if let Err(e) = upload_attachment(ctx, &gmail_access_token, link, &attachment).await {
+            tracing::error!("Failed to upload attachment to Macro: {e}");
+        }
+    }
 
     Ok(())
 }

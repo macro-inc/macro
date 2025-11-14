@@ -1,4 +1,3 @@
-use crate::pubsub::backfill::backfill_attachment::backfill_attachment;
 use crate::pubsub::backfill::{
     backfill_attachment, backfill_message, backfill_thread, error_handlers, init, list_threads,
     update_metadata,
@@ -155,9 +154,6 @@ async fn handle_cancel_backfill_job(
         .await;
 
     match &data.backfill_operation {
-        BackfillOperation::Init => Ok(()),
-        BackfillOperation::ListThreads(_) => Ok(()),
-        BackfillOperation::BackfillThread(_) => Ok(()),
         BackfillOperation::BackfillMessage(p) => {
             let _ = ctx
                 .redis_client
@@ -165,6 +161,6 @@ async fn handle_cancel_backfill_job(
                 .await;
             Ok(())
         }
-        BackfillOperation::UpdateThreadMetadata(_) => Ok(()),
+        _ => Ok(()),
     }
 }

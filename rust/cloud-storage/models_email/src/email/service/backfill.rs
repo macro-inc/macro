@@ -1,5 +1,6 @@
 use crate::email::db::backfill as db_backfill;
 use crate::email::service::thread::ListThreadsPayload;
+use crate::service::attachment::AttachmentUploadMetadata;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -175,10 +176,5 @@ pub struct UpdateMetadataPayload {
 
 #[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
 pub struct BackfillAttachmentPayload {
-    pub attachment_db_id: Uuid,
-    pub email_provider_id: String,
-    pub provider_attachment_id: String,
-    pub mime_type: String,
-    pub filename: String,
-    pub internal_date_ts: DateTime<Utc>,
+    pub metadata: AttachmentUploadMetadata,
 }

@@ -58,6 +58,7 @@ pub async fn handle_non_retryable_error(
         BackfillOperation::UpdateThreadMetadata(_) => {
             handle_thread_failure(ctx, data.link_id, data.job_id).await;
         }
+        BackfillOperation::BackfillAttachment(_) => {}
     }
 
     cleanup_message(&ctx.sqs_worker, message).await?;
@@ -96,6 +97,12 @@ pub async fn handle_retryable_error(
                 "Retryable error backfilling thread"
             );
         }
+        BackfillOperation::BackfillAttachment(p) => {
+            tracing::debug!(
+                attachment_db_id = %p.metadata.attachment_db_id,
+                "Retryable error backfilling attachment"
+            )
+        }
     }
     Ok(())
 }
@@ -121,7 +128,7 @@ async fn handle_thread_failure(ctx: &PubSubContext, link_id: Uuid, job_id: Uuid)
         }
     };
 
-    if let Err(err) = incr_completed_threads(ctx, &link.macro_id, job_id).await {
+    if let Err(err) = incr_completed_threads(ctx, &link, job_id).await {
         tracing::error!(
             error = %err,
             job_id = job_id.to_string(),

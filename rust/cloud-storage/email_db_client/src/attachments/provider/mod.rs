@@ -1,3 +1,5 @@
+pub mod backfill;
+
 use crate::parse::db_to_service::map_db_attachment_to_service;
 use crate::parse::service_to_db::map_service_attachments_to_db;
 use anyhow::Context;

@@ -40,7 +40,7 @@ pub async fn backfill_thread(
 
     // if the thread already exists, skip backfilling and update redis counters
     if !existing_threads.is_empty() {
-        incr_completed_threads(ctx, &link.macro_id, data.job_id).await?;
+        incr_completed_threads(ctx, &link, data.job_id).await?;
         return Ok(());
     }
 
