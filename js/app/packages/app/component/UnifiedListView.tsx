@@ -32,7 +32,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
-import { fuzzyNameMatch } from '@core/util/fuzzyName';
+import { fuzzyMatch } from '@core/util/fuzzy';
 import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
 import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
 import XIcon from '@icon/regular/x.svg?component-solid';
@@ -444,26 +444,18 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           if (!searchText() || searchText().length === 0) return items;
 
           const query = searchText();
+          const matchResults = fuzzyMatch(query, items, (item) => item.name);
 
-          return items
-            .map((item) => {
-              const matchResult = fuzzyNameMatch(query, item.name);
-
-              if (!matchResult) return null;
-
-              return {
-                ...item,
-                search: {
-                  nameHighlight: matchResult.nameHighlight,
-                  contentHighlights: null,
-                  source: 'local',
-                },
-              } as WithNotification<WithSearch<EntityData>>;
-            })
-            .filter(
-              (item): item is WithNotification<WithSearch<EntityData>> =>
-                item !== null
-            );
+          return matchResults.map((result) => {
+            return {
+              ...result.item,
+              search: {
+                nameHighlight: result.nameHighlight,
+                contentHighlights: null,
+                source: 'local',
+              },
+            } as WithNotification<WithSearch<EntityData>>;
+          });
         }
       : undefined
   );
