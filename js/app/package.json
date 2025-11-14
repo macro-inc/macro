@@ -84,6 +84,7 @@
     "@solid-primitives/scheduled": "^1.5.2",
     "@solid-primitives/storage": "^4.3.3",
     "@solidjs/router": "^0.15.3",
+    "@solidjs/testing-library": "^0.8.10",
     "@tailwindcss/vite": "^4.1.14",
     "@tanstack/solid-query": "^5.90.3",
     "@tanstack/solid-query-devtools": "^5.90.3",
