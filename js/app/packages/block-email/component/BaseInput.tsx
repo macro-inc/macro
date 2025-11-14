@@ -352,8 +352,7 @@ export function BaseInput(props: {
   let composeContainerRef: HTMLDivElement | undefined;
 
   const sendEmail = async () => {
-    if (isPendingSend() || isPendingUpload())
-      return;
+    if (isPendingSend() || isPendingUpload()) return;
     setIsPendingSend(true);
     const to = form().recipients.to.map(convertEmailRecipientToContactInfo);
     const cc = form().recipients.cc.map(convertEmailRecipientToContactInfo);
