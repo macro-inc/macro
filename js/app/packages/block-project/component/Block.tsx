@@ -28,6 +28,7 @@ import { setExpandedProject } from '@core/component/FileList/fileTree';
 import { ENABLE_FOLDER_UPLOAD } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
+import { fuzzyTest } from '@core/util/fuzzy';
 import { isErr } from '@core/util/maybeResult';
 import {
   handleFileFolderDrop,
@@ -43,7 +44,6 @@ import { useHistoryTree } from '@service-storage/history';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { useSearchParams } from '@solidjs/router';
 import { toast } from 'core/component/Toast/Toast';
-import fuzzy from 'fuzzy';
 import {
   type Component,
   createEffect,
@@ -177,7 +177,7 @@ const Block: Component = () => {
       );
       const filteredItems = items.filter(
         (item) =>
-          fuzzy.test(fileSearchQuery(), item.name) &&
+          fuzzyTest(fileSearchQuery(), item.name) &&
           matchesActiveFilters(
             item,
             activeFilters(),

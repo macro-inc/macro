@@ -143,6 +143,7 @@ pub(in crate::api::search) async fn search_channels(
             search_on: req.search_on.into(),
             collapse: req.collapse.unwrap_or(false),
             ids_only: true, // For channel message search, we always want to search over the channel ids only
+            disable_recency: req.disable_recency,
         })
         .await
         .map_err(SearchError::Search)?;

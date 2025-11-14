@@ -103,6 +103,9 @@ pub struct SearchQueryBuilder<T: SearchQueryConfig> {
     pub ids_only: bool,
     /// The ids to search for defaults to an empty vector
     pub ids: Vec<String>,
+    /// If true, disable the recency filter.
+    /// This only applies to the NameContent search_on
+    pub disable_recency: bool,
 
     _phantom: std::marker::PhantomData<T>,
 }
@@ -119,6 +122,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             collapse: false,
             ids_only: false,
             ids: Vec::new(),
+            disable_recency: false,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -160,6 +164,11 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
     pub fn ids(mut self, ids: Vec<String>) -> Self {
         self.ids = ids;
+        self
+    }
+
+    pub fn disable_recency(mut self, disable_recency: bool) -> Self {
+        self.disable_recency = disable_recency;
         self
     }
 
@@ -247,31 +256,35 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         let built_query: QueryType = match self.search_on {
             SearchOn::Name | SearchOn::Content => query_object.into(),
             SearchOn::NameContent => {
-                let mut function_score_query = FunctionScoreQueryBuilder::new();
+                if self.disable_recency {
+                    query_object.into()
+                } else {
+                    let mut function_score_query = FunctionScoreQueryBuilder::new();
 
-                function_score_query.query(query_object.into());
+                    function_score_query.query(query_object.into());
 
-                function_score_query.function(ScoreFunction {
-                    function: ScoreFunctionType::Gauss(DecayFunction {
-                        field: "updated_at_seconds".to_string(),
-                        origin: Some("now".into()),
-                        scale: "21d".to_string(),
-                        offset: Some("3d".to_string()),
-                        decay: Some(0.5),
-                    }),
-                    filter: None,
-                    weight: Some(1.3),
-                });
+                    function_score_query.function(ScoreFunction {
+                        function: ScoreFunctionType::Gauss(DecayFunction {
+                            field: "updated_at_seconds".to_string(),
+                            origin: Some("now".into()),
+                            scale: "21d".to_string(),
+                            offset: Some("3d".to_string()),
+                            decay: Some(0.5),
+                        }),
+                        filter: None,
+                        weight: Some(1.3),
+                    });
 
-                function_score_query.boost_mode(BoostMode::Multiply);
-                function_score_query.score_mode(ScoreMode::Multiply);
+                    function_score_query.boost_mode(BoostMode::Multiply);
+                    function_score_query.score_mode(ScoreMode::Multiply);
 
-                function_score_query.build().into()
+                    function_score_query.build().into()
+                }
             }
         };
 
         // We need to add aggregration and tracking to the query if we are searching on NameContent
-        if self.search_on == SearchOn::NameContent {
+        if self.search_on == SearchOn::NameContent && !self.disable_recency {
             search_request.track_total_hits(true);
             search_request.add_agg(
                 "total_uniques".to_string(),

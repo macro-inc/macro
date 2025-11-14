@@ -238,6 +238,9 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     filters: {
       typeFilter: ['chat'],
     },
+    display: {
+      preview: true,
+    },
   },
   folders: {
     view: 'folders',
