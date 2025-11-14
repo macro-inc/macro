@@ -15,4 +15,4 @@ runs:
       with:
         shared-key: cloud-storage
         cache-all-crates: true
-        workspaces: "cloud-storage"
+        workspaces: "rust/cloud-storage"
