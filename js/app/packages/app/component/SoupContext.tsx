@@ -15,6 +15,7 @@ import { useTutorialCompleted } from '@service-gql/client';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { useQuery } from '@tanstack/solid-query';
+import { set } from 'colorjs.io/fn';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
@@ -209,8 +210,10 @@ export function createNavigationEntityListShortcut({
   const selectedEntity = () => viewData().selectedEntity;
 
   const notificationSource = useGlobalNotificationSource();
+
   const defaultHotkeyE = () =>
     VIEWCONFIG_DEFAULTS[selectedView() as View]?.hotkeyOptions?.e;
+
   const markEntityAsDone = (entity: EntityData) =>
     defaultHotkeyE()?.(entity, {
       notificationSource,
@@ -786,17 +789,18 @@ export function createNavigationEntityListShortcut({
     description: 'Mark done',
     keyDownHandler: () => {
       const entities = getEntitiesForAction();
-
-      if (!entity) return false;
-
+      if (entities.length === 0) {
+        return false;
+      }
       if (isEntityLastItem()) {
         navigateThroughList({ axis: 'start', mode: 'step' });
       } else {
         navigateThroughList({ axis: 'end', mode: 'step' });
       }
-
-      markEntityAsDone(entity);
-
+      for (const { entity } of entities) {
+        markEntityAsDone(entity);
+      }
+      setViewDataStore(selectedView(), 'selectedEntities', []);
       return true;
     },
     displayPriority: 10,
