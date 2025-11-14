@@ -67,7 +67,6 @@ export type DisplayOptions = {
   layout: 'compact' | 'expanded' | 'visual';
   unrollNotifications: boolean;
   showUnreadIndicator: boolean;
-  preview: boolean;
   limit?: number;
 };
 
@@ -114,7 +113,6 @@ export const VIEWCONFIG_BASE: ViewConfigBase = {
     layout: 'compact',
     unrollNotifications: false,
     showUnreadIndicator: false,
-    preview: false,
     limit: 100,
   },
 };
@@ -137,7 +135,6 @@ export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
     layout: 'compact',
     unrollNotifications: false,
     showUnreadIndicator: true,
-    preview: false,
     limit: 100,
   },
 };
@@ -222,9 +219,6 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     view: 'ai',
     filters: {
       typeFilter: ['chat'],
-    },
-    display: {
-      preview: true,
     },
   },
   folders: {

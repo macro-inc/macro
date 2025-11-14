@@ -423,6 +423,14 @@ function SplitPanel(props: SplitPanelProps) {
     unifiedListContext,
   });
 
+  // Create ephemeral preview state for unified-list component
+  const isUnifiedList = createMemo(() => splitName() === 'unified-list');
+  const [previewState, setPreviewState] = createSignal(false);
+  const previewStateSignal: [typeof previewState, typeof setPreviewState] = [
+    previewState,
+    setPreviewState,
+  ];
+
   return (
     <SplitPanelContext.Provider
       value={{
@@ -435,6 +443,7 @@ function SplitPanel(props: SplitPanelProps) {
         layoutRefs: {},
         contentOffsetTop,
         setContentOffsetTop,
+        previewState: isUnifiedList() ? previewStateSignal : undefined,
       }}
     >
       <SplitContainer
