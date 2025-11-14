@@ -451,7 +451,7 @@ export function Soup() {
         </Show>
       </div>
       <Show when={showHelpDrawer().has(selectedView())}>
-        <HelpDrawer view={view().view} />
+        <HelpDrawer view={view().id} />
       </Show>
     </div>
   );

@@ -5,7 +5,7 @@ import { fileSelector } from '@core/directive/fileSelector';
 import { folderSelector } from '@core/directive/folderSelector';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import type { View } from '@core/types/view';
+import type { ViewId } from '@core/types/view';
 import { handleFolderSelect } from '@core/util/upload';
 import { Match, onMount, Show, Switch } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
@@ -13,7 +13,7 @@ import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 false && fileSelector;
 false && folderSelector;
 
-export function EmptyState(props: { view?: View }) {
+export function EmptyState(props: { view?: ViewId }) {
   const emailActive = useEmailLinksStatus();
   const splitPanelContext = useSplitPanelOrThrow();
   const {

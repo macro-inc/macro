@@ -5,7 +5,7 @@ import { fileSelector } from '@core/directive/fileSelector';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import type { View } from '@core/types/view';
+import type { ViewId } from '@core/types/view';
 import CloseIcon from '@icon/regular/x.svg';
 import { authServiceClient } from '@service-auth/client';
 import { useTutorialCompleted } from '@service-gql/client';
@@ -15,7 +15,7 @@ import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 false && fileSelector;
 
-export function HelpDrawer(props: { view?: View }) {
+export function HelpDrawer(props: { view?: ViewId }) {
   const emailActive = useEmailLinksStatus();
 
   return (

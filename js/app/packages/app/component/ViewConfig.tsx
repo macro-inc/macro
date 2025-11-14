@@ -1,4 +1,4 @@
-import { VIEWS, type View, type ViewId } from '@core/types/view';
+import { VIEWS, type View, type ViewId, ViewLabel } from '@core/types/view';
 import type { WithCustomUserInput } from '@core/user';
 import type { DeepPartial } from '@core/util/withRequired';
 import {
@@ -19,7 +19,7 @@ export type ViewType = 'project';
 
 export type ViewData = {
   id: ViewId;
-  view: View;
+  view: ViewLabel;
   viewType?: ViewType;
   highlightedId: string | undefined;
   selectedEntity: EntityData | undefined;
@@ -88,8 +88,8 @@ export type ViewConfigBase = {
 };
 
 export type ViewConfigEnhanced = {
-  id: View | string;
-  view: View;
+  id: ViewId;
+  view: ViewLabel;
   searchText?: string;
   hideToolbar?: true;
   onLoadingChange?: (isLoading: boolean) => void;
@@ -141,7 +141,7 @@ export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
 
 const ALL_VIEWCONFIG_DEFAULTS = {
   inbox: {
-    view: 'inbox',
+    view: 'Inbox',
     filters: {
       notificationFilter: 'notDone',
       emailFilter: 'sent',
@@ -166,7 +166,7 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     },
   },
   emails: {
-    view: 'emails',
+    view: 'Emails',
     filters: {
       typeFilter: ['email'],
     },
@@ -201,7 +201,7 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     },
   },
   comms: {
-    view: 'comms',
+    view: 'Comms',
     filters: {
       typeFilter: ['channel'],
     },
@@ -210,25 +210,25 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     },
   },
   docs: {
-    view: 'docs',
+    view: 'Docs',
     filters: {
       typeFilter: ['document'],
     },
   },
   ai: {
-    view: 'ai',
+    view: 'Ai',
     filters: {
       typeFilter: ['chat'],
     },
   },
   folders: {
-    view: 'folders',
+    view: 'Folders',
     filters: {
       typeFilter: ['project'],
     },
   },
   all: {
-    view: 'all',
+    view: 'All',
     sort: {
       sortBy: 'viewed_at',
     },

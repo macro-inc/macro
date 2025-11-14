@@ -1183,7 +1183,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           <UnifiedListComponent
             entityListRef={setLocalEntityListRef}
             virtualizerHandle={setVirtualizerHandle}
-            emptyState={<EmptyState view={view()?.view} />}
+            emptyState={<EmptyState view={view()?.id} />}
             hasRefinementsFromBase={isViewConfigChanged}
           >
             {(innerProps) => {
@@ -1454,6 +1454,7 @@ function SearchBar(props: {
     entityListRefSignal: [entityListRef],
   } = splitContext.unifiedListContext;
   const viewData = createMemo(() => viewsDataStore[selectedView()]);
+  const viewName = createMemo(() => viewData().view);
 
   let inputRef: HTMLInputElement | undefined;
 
@@ -1569,7 +1570,7 @@ function SearchBar(props: {
         <input
           ref={inputRef}
           id={`search-input-${selectedView()}`}
-          placeholder="Search"
+          placeholder={`Search in ${viewName()}`}
           value={searchText()}
           onInput={(e) => {
             debouncedSetSearch(e.target.value);
