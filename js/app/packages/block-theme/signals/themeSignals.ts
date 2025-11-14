@@ -10,67 +10,59 @@ import { convertThemev0v1 } from '../utils/themeMigrations';
 
 export const [isThemeSaved, setIsThemeSaved] = createSignal<boolean>(true);
 
-export const [themeUpdate, setThemeUpdate] = createSignal<number>(1);
+export const [themeUpdate, setThemeUpdate] = createSignal<undefined>(undefined, {equals: () => false});
 
 export const [htmlColor, setHtmlColor] = makePersisted(
   createSignal({ color: '' }),
-  { name: 'html-color-theme' }
+  {name: 'html-color-theme'}
 );
 
 export const [userThemes, setUserThemes] = makePersisted(
   createSignal<ThemeV1[]>([]),
-  { name: 'macro-user-themes' }
+  {name: 'macro-user-themes'}
 );
 setUserThemes(
   userThemes().map((theme) => {
-    if (!theme.version) {
-      return convertThemev0v1(theme as unknown as ThemeV0);
-    } else {
-      return theme;
-    }
+    if(!theme.version){return convertThemev0v1(theme as unknown as ThemeV0)}
+    else{return theme}
   })
 );
 
 let convertedDefaultThemes = DEFAULT_THEMES.map((theme) => {
-  if (!theme.version) { return convertThemev0v1(theme as unknown as ThemeV0); }
-  else { return theme; }
+  if(!theme.version){return convertThemev0v1(theme as unknown as ThemeV0)}
+  else{return theme}
 });
 
 export const [currentThemeId, setCurrentThemeId_] = makePersisted(
   createSignal<string>(DEFAULT_DARK_THEME),
-  { name: 'macro-selected-theme' }
+  {name: 'macro-selected-theme'}
 );
 
 // If theme should match system, when we set current theme, we also set the corresponding mode's theme
 // This avoids the issue where a user sets a theme, and then refreshes, and gets reverted to their preferred mode's theme.
 export const setCurrentThemeId = ( ...args: Parameters<typeof setCurrentThemeId_> ) => {
   setCurrentThemeId_(...args);
-  if (themeShouldMatchSystem()) {
-    systemMode() === 'dark'
-      ? setDarkModeTheme(...args)
-      : setLightModeTheme(...args);
+  if(themeShouldMatchSystem()){
+    systemMode() === 'dark' ? setDarkModeTheme(...args) : setLightModeTheme(...args);
   }
 };
 
-export const themes = createMemo(() => [
-  ...convertedDefaultThemes,
-  ...userThemes(),
-]);
+export const themes = createMemo(() => [...convertedDefaultThemes, ...userThemes()]);
 
 export const [lightModeTheme, setLightModeTheme] = makePersisted(
   createSignal<string>(DEFAULT_LIGHT_THEME),
-  { name: 'macro-light-mode-theme' }
+  {name: 'macro-light-mode-theme'}
 );
 
 export const [darkModeTheme, setDarkModeTheme] = makePersisted(
   createSignal<string>(DEFAULT_DARK_THEME),
-  { name: 'macro-dark-mode-theme' }
+  {name: 'macro-dark-mode-theme'}
 );
 
-export const [themeShouldMatchSystem, setThemeShouldMatchSystem] =
-  makePersisted(createSignal<boolean>(true), {
-    name: 'macro-theme-should-match-system',
-  });
+export const [themeShouldMatchSystem, setThemeShouldMatchSystem] = makePersisted(
+  createSignal<boolean>(true),
+  {name: 'macro-theme-should-match-system'}
+);
 
 export const [systemMode, setSystemMode] = createSignal<'dark' | 'light'>(
   window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'
@@ -83,11 +75,11 @@ darkModeQuery.addEventListener('change', (e: MediaQueryListEvent) => {
 
 export const [monochromeIcons, setMonochromeIcons] = makePersisted(
   createSignal<boolean>(false),
-  { name: 'enable-monochrome-icons' }
+  {name: 'enable-monochrome-icons'}
 );
 
 createEffect(() => {
-  if (monochromeIcons()) {
+  if(monochromeIcons()){
     document.documentElement.style.setProperty('--theme-contact', 'var(--c0)');
     document.documentElement.style.setProperty('--theme-canvas' , 'var(--c0)');
     document.documentElement.style.setProperty('--theme-folder' , 'var(--c0)');
@@ -101,7 +93,7 @@ createEffect(() => {
     document.documentElement.style.setProperty('--theme-pdf'    , 'var(--c0)');
     document.documentElement.style.setProperty('--theme-rss'    , 'var(--c0)');
   }
-  else {
+  else{
     document.documentElement.style.setProperty( '--theme-folder', 'oklch(var(--a0l) var(--a0c) 240)');
     document.documentElement.style.setProperty( '--theme-canvas', 'oklch(var(--a0l) var(--a0c)  60)');
     document.documentElement.style.setProperty( '--theme-write' , 'oklch(var(--a0l) var(--a0c) 260)');
