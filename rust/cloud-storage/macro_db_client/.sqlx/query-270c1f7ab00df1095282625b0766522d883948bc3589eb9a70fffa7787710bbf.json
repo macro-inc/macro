@@ -11,7 +11,7 @@
         "Text",
         {
           "Custom": {
-            "name": "AccessLevel",
+            "name": "\"AccessLevel\"",
             "kind": {
               "Enum": [
                 "view",
