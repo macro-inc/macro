@@ -52,7 +52,7 @@ export function ToolsetSelector(props: {
   const [toolset, setToolset] = props.toolset;
   const [source, setSource] = props.sources;
 
-  const StyledTriggerLabel = (props: ParentProps) => {
+  const _StyledTriggerLabel = (props: ParentProps) => {
     return (
       <Tooltip
         tooltip={'Tell the agent which sources to consider in its search'}

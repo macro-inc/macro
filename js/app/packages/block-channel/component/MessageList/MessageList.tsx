@@ -88,7 +88,8 @@ export function MessageList(props: MessageListProps) {
 
   const [threadViewStore, setThreadViewStore] = createStore<ThreadViewData>({});
 
-  const [isNearBottom, setIsNearBottom] = createSignal(false);
+  const [isNearBottom, setIsNearBottom] = createSignal(true);
+  const [initialScrollComplete, setInitialScrollComplete] = createSignal(false);
 
   const openedChannel = openedChannelSignal.get;
 
@@ -167,14 +168,12 @@ export function MessageList(props: MessageListProps) {
       (isNearBottom() || forceBottom)
     ) {
       if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
-      scrollTimeoutId = setTimeout(() => {
-        virtualHandle()?.scrollToIndex(
-          (props.orderedMessages()?.length ?? 1) - 1,
-          {
-            align: 'end',
-          }
-        );
-      }, 0);
+      virtualHandle()?.scrollToIndex(
+        (props.orderedMessages()?.length ?? 1) - 1,
+        {
+          align: 'end',
+        }
+      );
       return;
     }
     if (params?.onlyBottom) return;
@@ -195,11 +194,9 @@ export function MessageList(props: MessageListProps) {
           }));
         }
         if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
-        scrollTimeoutId = setTimeout(() => {
-          virtualHandle()?.scrollToIndex(index, {
-            align: 'center',
-          });
-        }, 0);
+        virtualHandle()?.scrollToIndex(index, {
+          align: 'center',
+        });
         return;
       }
     }
@@ -326,6 +323,7 @@ export function MessageList(props: MessageListProps) {
   const checkIfNearBottom = () => {
     const handle = virtualHandle();
     if (!handle) return false;
+    if (!initialScrollComplete()) return true;
 
     const THRESHOLD = 100;
     const distanceFromBottom =
@@ -362,6 +360,7 @@ export function MessageList(props: MessageListProps) {
   const [unviewedMessages, setUnviewedMessages] = createSignal<Message[]>();
   const [dismissUnviewedMessages, setDismissUnviewedMessages] =
     createSignal(false);
+  const [dismissJumpToLatest, setDismissJumpToLatest] = createSignal(false);
   const [newMessageIndex, setNewMessageIndex] = createSignal<number>();
 
   // Record new unviewed messages
@@ -441,7 +440,14 @@ export function MessageList(props: MessageListProps) {
 
   // Handle vlistscroll events
   const handleScroll = () => {
-    setIsNearBottom(checkIfNearBottom());
+    if (!initialScrollComplete()) return;
+
+    const nearBottom = checkIfNearBottom();
+    setIsNearBottom(nearBottom);
+
+    if (!nearBottom && dismissJumpToLatest()) {
+      setDismissJumpToLatest(false);
+    }
 
     const messages = unviewedMessages();
     if (messages?.length) {
@@ -474,6 +480,10 @@ export function MessageList(props: MessageListProps) {
     }
   };
 
+  const showJumpToUnviewedMessages = createMemo(
+    () => !dismissUnviewedMessages() && !!unviewedMessages()?.length
+  );
+
   return (
     <div
       class="flex-1 overflow-y-hidden suppress-css-brackets"
@@ -501,6 +511,11 @@ export function MessageList(props: MessageListProps) {
               overscan={10}
               keepMounted={keepMountedIndices()}
               onScroll={handleScroll}
+              onScrollEnd={() => {
+                if (!initialScrollComplete()) {
+                  setInitialScrollComplete(true);
+                }
+              }}
             >
               {(row: { id: string; message: Message }, i) => {
                 const isParentless = !row.message.thread_id;
@@ -555,16 +570,39 @@ export function MessageList(props: MessageListProps) {
             </VList>
           </Match>
         </Switch>
-        <Show when={unviewedMessages() && !dismissUnviewedMessages()}>
+        <Show when={showJumpToUnviewedMessages() && unviewedMessages()}>
+          {(messages) => (
+            <TextButton
+              icon={ArrowDownIcon}
+              theme="base"
+              onMouseDown={jumpToUnviewedMessages}
+              text={`${messages().length} new message${messages().length === 1 ? '' : 's'}`}
+              secondaryIcon={XIcon}
+              onOptionClick={() => setDismissUnviewedMessages(true)}
+              showSeparator
+              class="absolute top-4 left-1/2 -translate-x-1/2"
+            />
+          )}
+        </Show>
+        <Show
+          when={
+            initialScrollComplete() &&
+            !dismissJumpToLatest() &&
+            !showJumpToUnviewedMessages() &&
+            !isNearBottom()
+          }
+        >
           <TextButton
             icon={ArrowDownIcon}
-            theme="accentOpaque"
-            onMouseDown={jumpToUnviewedMessages}
-            text={`${unviewedMessages()?.length} new message${unviewedMessages()?.length === 1 ? '' : 's'}`}
+            theme="base"
+            text="Jump to latest"
+            onMouseDown={() =>
+              scrollToBottomOrTarget({ forceBottom: true, onlyBottom: true })
+            }
             secondaryIcon={XIcon}
-            onOptionClick={() => setDismissUnviewedMessages(true)}
+            onOptionClick={() => setDismissJumpToLatest(true)}
             showSeparator
-            class="absolute top-4 left-1/2 -translate-x-1/2"
+            class="absolute top-4 left-1/2 -translate-x-1/2 transition-opacity duration-200"
           />
         </Show>
       </div>

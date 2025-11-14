@@ -1,3 +1,4 @@
+import { matches } from '@core/util/match';
 import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
 import { useEmail } from '@service-gql/client';
 import { mergeRefs } from '@solid-primitives/refs';
@@ -23,17 +24,15 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { ITEM_WRAPPER } from '../constants/classStrings';
 import { createProfilePictureQuery } from '../queries/auth';
-import { createProjectQuery } from '../queries/project';
-import type { EntityData, EntityOf } from '../types/entity';
+import {
+  createProjectQuery,
+  isProjectContainedEntity,
+  type ProjectContainedEntity,
+} from '../queries/project';
+import type { EntityData } from '../types/entity';
 import type { Notification, WithNotification } from '../types/notification';
 import type { WithSearch } from '../types/search';
 import type { EntityClickHandler } from './Entity';
-
-function isEmailEntity(
-  entity: WithNotification<EntityData>
-): entity is WithNotification<EntityOf<'email'>> {
-  return entity.type === 'email';
-}
 
 function UnreadIndicator(props: { active?: boolean }) {
   return (
@@ -172,7 +171,7 @@ export function EntityWithEverything(
       const isLikelyEmail = (value?: string) =>
         typeof value === 'string' && value.includes('@');
       const combinedParticipantFirstNames = createMemo(() => {
-        if (!isEmailEntity(props.entity)) return [];
+        if (props.entity.type !== 'email') return [];
         const me = userEmail();
         const participantNames = props.entity.participantNames ?? [];
         return (
@@ -439,7 +438,9 @@ export function EntityWithEverything(
         >
           <div class="flex flex-row items-center justify-end gap-4 min-w-0">
             <Show when={!showActionList()}>
-              <EntityProject entity={props.entity} />
+              <Show when={matches(props.entity, isProjectContainedEntity)}>
+                {(entity) => <EntityProject entity={entity()} />}
+              </Show>
               <Show when={props.timestamp ?? props.entity.updatedAt}>
                 {(date) => {
                   const formattedDate = createFormattedDate(date());
@@ -672,20 +673,8 @@ function NotificationUserIcon(props: { id: string; name?: string }) {
   );
 }
 
-function EntityProject(props: { entity: EntityData }) {
-  if (
-    !(
-      (props.entity.type === 'chat' || props.entity.type === 'document') &&
-      props.entity.projectId
-    )
-  ) {
-    return null;
-  }
-
+function EntityProject(props: { entity: ProjectContainedEntity }) {
   const projectQuery = createProjectQuery(props.entity);
-  const Loading = () => (
-    <div class="h-3 w-10 bg-ink-placeholder animate-pulse" />
-  );
   return (
     <div class="flex gap-1 items-center text-xs text-ink-extra-muted min-w-0">
       <svg
@@ -701,7 +690,9 @@ function EntityProject(props: { entity: EntityData }) {
           fill="currentColor"
         />
       </svg>
-      <Suspense fallback={<Loading />}>
+      <Suspense
+        fallback={<div class="h-3 w-10 bg-ink-placeholder animate-pulse" />}
+      >
         <Show when={projectQuery.data?.name}>
           {(name) => <div class="truncate">{name()}</div>}
         </Show>

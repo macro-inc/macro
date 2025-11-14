@@ -621,7 +621,7 @@ export function BaseInput(props: {
             </div>
           }
         >
-          <div ref={setExpandedRecipientsRef}>
+          <div ref={setExpandedRecipientsRef} class="w-full">
             {/* Expanded FROM */}
             <div class="flex flex-row items-baseline font-mono">
               <span class="text-sm text-ink-muted min-w-8">
