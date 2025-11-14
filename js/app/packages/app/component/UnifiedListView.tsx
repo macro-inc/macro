@@ -23,10 +23,7 @@ import {
   blockAcceptsFileExtension,
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
-import {
-  ENABLE_PREVIEW,
-  ENABLE_SOUP_FROM_FILTER,
-} from '@core/constant/featureFlags';
+import { ENABLE_SOUP_FROM_FILTER } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -210,7 +207,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   );
 
   const splitContext = useSplitPanelOrThrow();
-  const { isPanelActive, unifiedListContext, panelRef } = splitContext;
+  const { isPanelActive, unifiedListContext, panelRef, previewState } =
+    splitContext;
+  const preview = () => previewState?.[0]?.() ?? false;
   const {
     viewsDataStore: viewsData,
     setViewDataStore,
@@ -390,13 +389,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       'showUnreadIndicator',
       showUnreadIndicator
     );
-  };
-
-  const preview = createMemo(
-    () => view()?.display.preview ?? defaultDisplayOptions.preview
-  );
-  const setPreview = (preview: DisplayOptions['preview']) => {
-    setViewDataStore(selectedView(), 'display', 'preview', preview);
   };
 
   const rawSearchText = createMemo<string>(() => view()?.searchText ?? '');
@@ -962,7 +954,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         <SplitToolbarRight order={5}>
           <div class="flex flex-row items-center gap-1 p-1 h-full select-none">
             <Show when={isViewConfigChanged()}>
-              <Show when={view().display.preview}>
+              <Show when={preview()}>
                 <DropdownMenu
                   size="SM"
                   theme="secondary"
@@ -990,7 +982,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   </div>
                 </DropdownMenu>
               </Show>
-              <Show when={!view().display.preview}>
+              <Show when={!preview()}>
                 <Button
                   size="SM"
                   classList={{
@@ -1161,13 +1153,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       label="Indicate Unread"
                       checked={showUnreadIndicator()}
                       onChange={setShowUnreadIndicator}
-                    />
-                    <ToggleSwitch
-                      size="SM"
-                      label="Preview"
-                      disabled={!ENABLE_PREVIEW}
-                      checked={preview()}
-                      onChange={setPreview}
                     />
                   </section>
                 </div>
