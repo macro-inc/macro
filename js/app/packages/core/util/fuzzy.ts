@@ -18,6 +18,10 @@ const mark = (part: string, matched: boolean) =>
 
 const append = (accum: string, part: string) => accum + part;
 
+/**
+ * Fuzzy matches items against a query, returning filtered and ranked results with highlighted matches.
+ * Returns all items with no highlights if query is empty.
+ */
 export function fuzzyMatch<T>(
   query: string,
   items: T[],
@@ -56,6 +60,10 @@ export function fuzzyMatch<T>(
   });
 }
 
+/**
+ * Fuzzy filters and ranks items against a query without highlighting.
+ * Returns all items if query is empty.
+ */
 export function fuzzyFilter<T>(
   query: string,
   items: T[],
@@ -74,4 +82,17 @@ export function fuzzyFilter<T>(
   if (!order || order.length === 0) return [];
 
   return order.map((orderIdx) => items[info.idx[orderIdx]]);
+}
+
+/**
+ * Tests if text matches a fuzzy query.
+ * Returns true if query is empty or matches.
+ */
+export function fuzzyTest(query: string, text: string): boolean {
+  if (!query) return true;
+
+  const haystack = [text];
+  const idxs = uf.filter(haystack, query);
+
+  return idxs !== null && idxs.length > 0;
 }
