@@ -970,24 +970,54 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         <SplitToolbarRight order={5}>
           <div class="flex flex-row items-center gap-1 p-1 h-full select-none">
             <Show when={isViewConfigChanged()}>
-              <Button
-                size="SM"
-                classList={{
-                  '!border-ink/25 !text-ink !bg-panel hover:!text-ink ml-1.5 font-normal': true,
-                }}
-                onClick={onClickResetViewConfigChanges}
-              >
-                CLEAR
-              </Button>
-              <Button
-                size="SM"
-                classList={{
-                  '!border-ink/25 !text-ink !bg-panel hover:!text-ink mx-1.5 font-normal': true,
-                }}
-                onClick={onClickSaveViewConfigChanges}
-              >
-                SAVE CHANGES
-              </Button>
+              <Show when={view().display.preview}>
+                <DropdownMenu
+                  size="SM"
+                  theme="secondary"
+                  triggerLabel={<span class="font-extrabold">⋮</span>}
+                >
+                  <div class="flex flex-col gap-2 p-2">
+                    <Button
+                      size="SM"
+                      classList={{
+                        '!border-ink/25 !text-ink !bg-panel hover:!text-ink font-normal': true,
+                      }}
+                      onClick={onClickResetViewConfigChanges}
+                    >
+                      CLEAR
+                    </Button>
+                    <Button
+                      size="SM"
+                      classList={{
+                        '!border-ink/25 !text-ink !bg-panel hover:!text-ink font-normal': true,
+                      }}
+                      onClick={onClickSaveViewConfigChanges}
+                    >
+                      SAVE CHANGES
+                    </Button>
+                  </div>
+                </DropdownMenu>
+              </Show>
+              <Show when={!view().display.preview}>
+                <Button
+                  size="SM"
+                  classList={{
+                    '!border-ink/25 !text-ink !bg-panel hover:!text-ink ml-1.5 font-normal': true,
+                  }}
+                  onClick={onClickResetViewConfigChanges}
+                >
+                  CLEAR
+                </Button>
+                <Button
+                  size="SM"
+                  classList={{
+                    '!border-ink/25 !text-ink !bg-panel hover:!text-ink mx-1.5 font-normal': true,
+                  }}
+                  onClick={onClickSaveViewConfigChanges}
+                >
+                  SAVE CHANGES
+                </Button>
+              </Show>
             </Show>
             <DropdownMenu
               size="SM"
