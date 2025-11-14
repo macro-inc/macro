@@ -25,21 +25,20 @@ jobs:
   biome-check:
     needs: path-check
     if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
-    runs-on: ubuntu-latest
+    name: Biome Check
+    runs-on: linux-latest-middy
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: 
-          node-version: 21
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Setup Biome
         uses: biomejs/setup-biome@v2
         with:
-          # keep this in sync with package.json
           version: 2.2.6
       - name: Run Biome
-        run: |
-          cd infra
-          biome ci
+        working-directory: infra
+        run: biome ci --changed --no-errors-on-unmatched
 
   # Collector job that always runs - use this as the required status check
   status-check:
