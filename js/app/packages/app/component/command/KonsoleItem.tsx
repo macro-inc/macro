@@ -448,7 +448,6 @@ export function filterItemByCategory(item: CommandItemCard) {
     return true;
   }
 
-  // Action items should always appear in the "Everything" category
   if (
     category === 'Selection' &&
     currentKonsoleMode() === 'SELECTION_MODIFICATION'
