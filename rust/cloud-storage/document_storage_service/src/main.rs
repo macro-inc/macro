@@ -97,7 +97,6 @@ async fn main() -> anyhow::Result<()> {
 
     let dynamodb_client = DynamodbClient::new_from_client(
         dynamo_db.clone(),
-        Some(config.vars.affiliate_users_table.as_ref().to_string()),
         Some(config.vars.bulk_upload_requests_table.as_ref().to_string()),
     );
     tracing::trace!("initialized dynamodb client");
