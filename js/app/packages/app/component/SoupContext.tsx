@@ -36,7 +36,7 @@ import { useGlobalNotificationSource } from './GlobalAppState';
 import type { SplitHandle } from './split-layout/layoutManager';
 import {
   VIEWCONFIG_BASE,
-  VIEWCONFIG_DEFAULTS,
+  VIEWCONFIG_DEFAULTS_IDS,
   type ViewConfigBase,
   type ViewConfigEnhanced,
   type ViewData,
@@ -181,7 +181,7 @@ export function createNavigationEntityListShortcut({
 
   const notificationSource = useGlobalNotificationSource();
   const defaultHotkeyE = () =>
-    VIEWCONFIG_DEFAULTS[selectedView() as View]?.hotkeyOptions?.e;
+    VIEWCONFIG_DEFAULTS_IDS[selectedView() as View]?.hotkeyOptions?.e;
   const markEntityAsDone = (entity: EntityData) =>
     defaultHotkeyE()?.(entity, {
       notificationSource,
@@ -616,7 +616,7 @@ const useAllViews = ({
 }): ReturnType<typeof createStore<ViewDataMap>> => {
   const [selectedView, setSelectedView] = selectedViewSignal;
   const initialState: ViewDataMap = {};
-  for (const [view, viewProps] of Object.entries(VIEWCONFIG_DEFAULTS)) {
+  for (const [view, viewProps] of Object.entries(VIEWCONFIG_DEFAULTS_IDS)) {
     initialState[view] = createViewData(view as View, viewProps);
   }
 
@@ -662,7 +662,7 @@ const useAllViews = ({
 
         // Filter viewsData to exclude items that are not in savedViewConfigs, except for default views
         const savedViewIds = new Set(savedViewConfigs.map((view) => view.id));
-        const defaultViewIds = new Set(Object.keys(VIEWCONFIG_DEFAULTS));
+        const defaultViewIds = new Set(Object.keys(VIEWCONFIG_DEFAULTS_IDS));
         const filteredViewsData = Object.fromEntries(
           Object.entries(viewsData).filter(
             ([viewId, viewData]) =>

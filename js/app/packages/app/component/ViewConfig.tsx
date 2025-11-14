@@ -249,18 +249,9 @@ export const VIEWCONFIG_DEFAULTS = Object.fromEntries(
   )
 ) as Record<View, Omit<ViewConfigEnhanced, 'id'>>;
 
-export type ViewConfigDefaultsName = keyof typeof VIEWCONFIG_DEFAULTS;
-export const VIEWCONFIG_DEFAULTS_NAMES = Object.keys(
+export const VIEWCONFIG_DEFAULTS_IDS = Object.keys(
   VIEWCONFIG_DEFAULTS
-) as ViewConfigDefaultsName[];
-
-export type NewViewData =
-  | {
-      config: ViewConfigEnhanced;
-      id: ViewConfigDefaultsName;
-      name: ViewConfigDefaultsName;
-    }
-  | { config: ViewConfigEnhanced; id: string; name: string };
+) as View[];
 
 export const VIEWCONFIG_FILTER_SHOW_OPTIONS: readonly FilterOptions['notificationFilter'][] =
   ['all', 'unread', 'notDone'] as const;

@@ -124,7 +124,7 @@ import {
   KNOWN_FILE_TYPES,
   type SortOptions,
   VIEWCONFIG_BASE,
-  VIEWCONFIG_DEFAULTS_NAMES,
+  VIEWCONFIG_DEFAULTS_IDS,
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
@@ -906,7 +906,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       config,
     });
     // only for default views
-    if (VIEWCONFIG_DEFAULTS_NAMES.includes(view_.id as any)) {
+    if (VIEWCONFIG_DEFAULTS_IDS.includes(view_.id as any)) {
       // Reset initialConfigSignal to current config after save
       const currentConfig = stringifiedCurrentViewConfigBase();
       if (currentConfig !== null && currentConfig !== undefined) {
