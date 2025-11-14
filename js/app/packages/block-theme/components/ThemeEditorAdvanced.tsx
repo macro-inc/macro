@@ -1,32 +1,15 @@
+import { batch, createEffect, createSignal, For, type Setter, untrack } from 'solid-js';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
-import {
-  batch,
-  createEffect,
-  createSignal,
-  For,
-  type Setter,
-  untrack,
-} from 'solid-js';
-import { themeReactive } from '../signals/themeReactive';
-import type { ThemeReactiveColor } from '../types/themeTypes';
 import { convertOklchTo, getOklch, validateColor } from '../utils/colorUtil';
+import type { ThemeReactiveColor } from '../types/themeTypes';
+import { themeReactive } from '../signals/themeReactive';
 import { ColorSwatch } from './ColorSwatch';
 
 const formatArray = ['hex', 'rgb', 'hsl', 'oklch'];
 const [displayType, setDisplayType] = createSignal(formatArray[0]);
 
-function setColor(
-  colorValue: ThemeReactiveColor,
-  colorString: string,
-  inputElement: HTMLInputElement,
-  setIsSetByInput: Setter<boolean>
-) {
-  if (
-    !colorString ||
-    colorString.trim() === '' ||
-    colorString.length < 6 ||
-    !validateColor(colorString)
-  ) {
+function setColor(colorValue: ThemeReactiveColor, colorString: string, inputElement: HTMLInputElement, setIsSetByInput: Setter<boolean>){
+  if(!colorString || colorString.trim() === '' || colorString.length < 6 || !validateColor(colorString)){
     inputElement.classList.add('invalid');
     return;
   }
@@ -39,12 +22,13 @@ function setColor(
       colorValue.h[1](oklch.h ? oklch.h : 0);
     });
     inputElement.classList.remove('invalid');
-  } catch (error) {
+  }
+  catch(error) {
     console.error(`Error processing color "${colorString}":`, error);
   }
 }
 
-export function ThemeEditorAdvanced() {
+export function ThemeEditorAdvanced(){
   return (
     <>
       <style>{`

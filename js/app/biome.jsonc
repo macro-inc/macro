@@ -123,6 +123,19 @@
       "javascript": {
         "globals": ["Bun"]
       }
+    },
+    {
+      "includes": ["packages/block-theme/**"],
+      "formatter": {
+        "enabled": false
+      },
+      "assist": {
+        "actions": {
+          "source": {
+            "organizeImports": "off"
+          }
+        }
+      }
     }
   ]
 }
