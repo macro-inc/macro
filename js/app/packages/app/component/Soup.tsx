@@ -142,16 +142,13 @@ const PreviewPanelContent: Component<{
   const [interactedWithMouseDown, setInteractedWithMouseDown] =
     createSignal(false);
 
-  createRenderEffect(
-    (prevId: string | undefined) => {
-      const id = props.selectedEntity.id as string | undefined;
-      if (id !== prevId) {
-        setInteractedWithMouseDown(false);
-      }
-      return id;
-    },
-    props.selectedEntity.id as string | undefined
-  );
+  createRenderEffect((prevId: string) => {
+    const id = props.selectedEntity.id;
+    if (id !== prevId) {
+      setInteractedWithMouseDown(false);
+    }
+    return id;
+  }, props.selectedEntity.id);
 
   return (
     <div
