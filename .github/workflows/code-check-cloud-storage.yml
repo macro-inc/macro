@@ -2,16 +2,29 @@ name: cloud storage code check
 on:
   pull_request:
     branches: [ 'main' ]
-    paths:
-      - 'rust/cloud-storage/**'
-      - .github/workflows/code-check-cloud-storage.yml
 
 concurrency:
   group: code-check-cloud-storage-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  path-check:
+    runs-on: ubuntu-latest
+    outputs:
+      should_run: ${{ steps.filter.outputs.should_run }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            should_run:
+              - 'rust/cloud-storage/**'
+              - .github/workflows/code-check-cloud-storage.yml
+
   check:
+    needs: path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on:
       [
         runs-on,
@@ -21,7 +34,6 @@ jobs:
         ssh=false,
         'run-id=${{github.run_id}}',
       ]
-    if: github.event.pull_request.draft == false
     env:
       CARGO_TERM_COLOR: always
       RUSTFLAGS: "-Dwarnings"
@@ -41,6 +53,8 @@ jobs:
           cargo clippy
 
   test:
+    needs: path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on:
       [
         runs-on,
@@ -50,7 +64,6 @@ jobs:
         ssh=false,
         'run-id=${{github.run_id}}',
       ]
-    if: github.event.pull_request.draft == false
     services:
       postgres:
         image: postgres:16
@@ -90,8 +103,9 @@ jobs:
           cargo test
 
   diff-check:
+    needs: path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
     outputs:
       docx-unzip-handler: ${{ steps.changes.outputs.docx-unzip-handler }}
       worker-trigger: ${{ steps.changes.outputs.worker-trigger }}
@@ -170,3 +184,30 @@ jobs:
           echo "Code changes detected, but new bootstrap.zip for ${{matrix.service}} not found in PR. Please run: just rust/cloud-storage/${{matrix.service}}/build to build and commit bootstrap.zip. Alternatively you can run just rust/cloud-storage/build_lambads to build all lambdas."
             exit 1
           fi
+
+  # Collector job that always runs - use this as the required status check
+  status-check:
+    name: Cloud Storage Status Check
+    if: always()
+    needs: [path-check, check, test, diff-check, check-lambdas]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check job results
+        run: |
+          echo "path-check: ${{ needs.path-check.result }}"
+          echo "check: ${{ needs.check.result }}"
+          echo "test: ${{ needs.test.result }}"
+          echo "diff-check: ${{ needs.diff-check.result }}"
+          echo "check-lambdas: ${{ needs.check-lambdas.result }}"
+
+          # Fail if any job failed (skipped and success are both OK)
+          if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
+             [[ "${{ needs.check.result }}" == "failure" ]] || \
+             [[ "${{ needs.test.result }}" == "failure" ]] || \
+             [[ "${{ needs.diff-check.result }}" == "failure" ]] || \
+             [[ "${{ needs.check-lambdas.result }}" == "failure" ]]; then
+            echo "❌ One or more jobs failed"
+            exit 1
+          fi
+
+          echo "✅ All jobs passed or were skipped"
