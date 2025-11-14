@@ -9,12 +9,11 @@ build:
 watch:
     cargo lambda watch
 
-# invoke the lambda locally after watch-local is running
+# invoke the lambda locally after watch is running
 invoke:
     cargo lambda invoke {{lambda_name}} --data-file event.json 
 
 # Add a bulk upload request to DynamoDB (AWS)
-# Usage: just add_bulk_upload_request <request_id> <user_id> [name] [parent_id]
 add_bulk_upload_request request_id="d50676e2-0a12-4c62-bc07-4b1cb6d8e9bc" user_id="macro|gab@macro.com" name="Folder Name Override" parent_id="":
     #!/usr/bin/env bash
     set -euo pipefail
