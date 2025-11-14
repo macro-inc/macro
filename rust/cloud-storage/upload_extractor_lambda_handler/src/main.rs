@@ -207,8 +207,9 @@ async fn process_zipped_s3_object(
 
     if cfg!(feature = "local") {
         tracing::info!("using local zip file, remove local feature to download s3 object");
-        // let file_path = format!("/my/path/to/file.zip");
-        let file_path = "/Users/gabrielbirman/Development/macro/TestZipExtract.zip";
+        // Update this path to your zip file location
+        let file_path = std::env::var("LOCAL_ZIP_PATH").unwrap();
+        tracing::info!("Loading local zip file from: {}", file_path);
         let file = File::open(file_path).await?;
         let mut body = tokio::io::BufReader::new(file);
 
@@ -258,6 +259,7 @@ async fn process_zipped_s3_object(
         .get_project_id()
         .ok_or_else(|| anyhow::anyhow!("No project found for root folder"))?;
 
+    tracing::debug!("returned file system: {:?}", file_system);
     tracing::debug!("root project id: {:?}", root_project_id);
 
     let destination_map = upload_result.destination_map;
@@ -274,21 +276,6 @@ async fn process_zipped_s3_object(
     tracing::debug!("Request status: {:?}", request_status);
 
     return Ok((request_status, root_project_id.clone()));
-
-    // match request_status {
-    //     UploadFolderStatus::Completed => {
-    //         return Ok((UploadFolderStatus::Completed, Some(root_project_id.clone())));
-    //     }
-    //     _ => {
-    //         dynamodb_client
-    //             .bulk_upload
-    //             .update_bulk_upload_request_status(request_id, request_status.clone(), None, None)
-    //             .await
-    //             .inspect_err(|e| tracing::error!("Failed to update bulk upload status: {:?}", e))
-    //             .ok();
-    //         return Ok((request_status, None));
-    //     }
-    // }
 }
 
 #[tracing::instrument(skip_all, fields(request_id=request_id))]
@@ -589,8 +576,8 @@ async fn main() -> Result<(), Error> {
 
     let upload_staging_bucket =
         std::env::var("UPLOAD_BUCKET_NAME").context("UPLOAD_STAGING_BUCKET must be set")?;
-    let dss_auth_key = std::env::var("DSS_AUTH_KEY")
-        .context("DSS_AUTH_KEY must be set")
+    let internal_api_secret_key = std::env::var("INTERNAL_API_SECRET_KEY")
+        .context("INTERNAL_API_SECRET_KEY must be set")
         .unwrap();
     let dss_url = std::env::var("DSS_URL").context("DSS_URL must be set")?;
     let dynamo_table_name =
@@ -602,11 +589,12 @@ async fn main() -> Result<(), Error> {
     let config = aws_config::from_env().region(region_provider).load().await;
     let s3_client = S3Client::new(&config);
 
-    let dss_client = DocumentStorageServiceClient::new(dss_auth_key.clone(), dss_url);
+    let dss_client = DocumentStorageServiceClient::new(internal_api_secret_key.clone(), dss_url);
 
     let dynamodb_client = DynamodbClient::new(&config, None, Some(dynamo_table_name.clone()));
 
-    let conn_gateway_client = ConnectionGatewayClient::new(dss_auth_key, connection_gateway_url);
+    let conn_gateway_client =
+        ConnectionGatewayClient::new(internal_api_secret_key, connection_gateway_url);
 
     let shared_s3_client = Arc::new(s3_client);
     let shared_dss_client = Arc::new(dss_client);

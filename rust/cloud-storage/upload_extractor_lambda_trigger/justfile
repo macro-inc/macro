@@ -12,3 +12,36 @@ watch:
 # invoke the lambda locally after watch-local is running
 invoke:
     cargo lambda invoke {{lambda_name}} --data-file event.json 
+
+# Add a bulk upload request to DynamoDB (AWS)
+# Usage: just add_bulk_upload_request <request_id> <user_id> [name] [parent_id]
+add_bulk_upload_request request_id="d50676e2-0a12-4c62-bc07-4b1cb6d8e9bc" user_id="macro|gab@macro.com" name="Folder Name Override" parent_id="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Load DYNAMODB_TABLE from .env if it exists
+    if [ -f upload_extractor_lambda_trigger/.env ]; then
+        export $(grep -v '^#' upload_extractor_lambda_trigger/.env | grep DYNAMODB_TABLE | xargs)
+    fi
+    TABLE_NAME="${DYNAMODB_TABLE:-bulk-upload-test}"
+
+    NOW=$(date -u +"%Y-%m-%dT%H:%M:%S.%3NZ")
+    KEY="extract/{{ request_id }}"
+    PK="REQUEST#{{ request_id }}"
+    SK="META"
+
+    # Build JSON item
+    ITEM='{"PK":{"S":"'$PK'"},"SK":{"S":"'$SK'"},"request_id":{"S":"{{ request_id }}"},"user_id":{"S":"{{ user_id }}"},"key":{"S":"'$KEY'"},"status":{"S":"pending"},"created_at":{"S":"'$NOW'"},"updated_at":{"S":"'$NOW'"},"entity_type":{"S":"BulkUploadZipRequest"}}'
+
+    # Add optional fields using jq if provided
+    if [ -n "{{ name }}" ]; then
+        ITEM=$(echo "$ITEM" | jq '. + {"name":{"S":"{{ name }}"}}')
+    fi
+
+    if [ -n "{{ parent_id }}" ]; then
+        ITEM=$(echo "$ITEM" | jq '. + {"parent_id":{"S":"{{ parent_id }}"}}')
+    fi
+
+    aws dynamodb put-item \
+        --table-name "$TABLE_NAME" \
+        --item "$ITEM"
