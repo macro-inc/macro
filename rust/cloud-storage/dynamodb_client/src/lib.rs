@@ -1,10 +1,7 @@
 use aws_config::SdkConfig;
 
-mod affiliate_user;
 mod bulk_upload;
-mod get_affiliate_users;
 
-use model::affiliate::AffiliateUser;
 use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, EXTRACT_UPLOAD_FOLDER, UploadDocumentStatus,
     UploadFolderStatus,
@@ -12,82 +9,26 @@ use models_bulk_upload::{
 
 #[derive(Debug, Clone)]
 pub struct DynamodbClient {
-    pub affiliate_users: AffiliateUsers,
     pub bulk_upload: BulkUpload,
 }
 
 impl DynamodbClient {
-    pub fn new(
-        aws_config: &SdkConfig,
-        affiliate_users_table: Option<String>,
-        bulk_upload_requests_table: Option<String>,
-    ) -> Self {
+    pub fn new(aws_config: &SdkConfig, bulk_upload_requests_table: Option<String>) -> Self {
         let client = aws_sdk_dynamodb::Client::new(aws_config);
 
-        Self::new_from_client(client, affiliate_users_table, bulk_upload_requests_table)
+        Self::new_from_client(client, bulk_upload_requests_table)
     }
 
     pub fn new_from_client(
         client: aws_sdk_dynamodb::Client,
-        affiliate_users_table: Option<String>,
         bulk_upload_requests_table: Option<String>,
     ) -> Self {
         Self {
-            affiliate_users: AffiliateUsers {
-                table: affiliate_users_table,
-                client: client.clone(),
-            },
             bulk_upload: BulkUpload {
                 table: bulk_upload_requests_table,
                 client,
             },
         }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct AffiliateUsers {
-    table: Option<String>,
-    client: aws_sdk_dynamodb::Client,
-}
-
-impl AffiliateUsers {
-    fn table(&self) -> anyhow::Result<&str> {
-        self.table
-            .as_deref()
-            .ok_or_else(|| anyhow::anyhow!("affiliate_users_table is not configured"))
-    }
-
-    #[tracing::instrument(skip(self))]
-    pub async fn affiliate_user(&self, affiliate_code: &str, email: &str) -> anyhow::Result<()> {
-        let table = self.table()?;
-        affiliate_user::affiliate_user(&self.client, table, affiliate_code, email).await?;
-        affiliate_user::insert_referral(&self.client, table, affiliate_code, email).await?;
-        Ok(())
-    }
-
-    #[tracing::instrument(skip(self))]
-    pub async fn is_user_already_referred(&self, user_email: &str) -> anyhow::Result<bool> {
-        let table = self.table()?;
-        get_affiliate_users::is_user_already_referred(&self.client, table, user_email).await
-    }
-
-    #[tracing::instrument(skip(self))]
-    pub async fn get_user_referred(
-        &self,
-        user_email: &str,
-    ) -> anyhow::Result<Option<AffiliateUser>> {
-        let table = self.table()?;
-        get_affiliate_users::get_user_referred(&self.client, table, user_email).await
-    }
-
-    #[tracing::instrument(skip(self))]
-    pub async fn get_affiliate_users(
-        &self,
-        affiliate_code: &str,
-    ) -> anyhow::Result<Vec<AffiliateUser>> {
-        let table = self.table()?;
-        get_affiliate_users::get_affiliate_users(&self.client, table, affiliate_code).await
     }
 }
 
