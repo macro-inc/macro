@@ -37,10 +37,6 @@ use soup::inbound::axum_router::{SoupApiItem, SoupApiSort, SoupPage};
 use crate::{
     api::{
         activity,
-        affiliate::{
-            self, get_affiliate_referred_by::GetUsersAffiliateResponse,
-            get_affiliate_users::GetAffiliateUsersResponse,
-        },
         annotations,
         documents::{
             self,
@@ -211,11 +207,6 @@ use utoipa::OpenApi;
         // threads
         threads::edit_thread::edit_thread_handler,
 
-        // /affiliate
-        affiliate::affiliate_user::handler,
-        affiliate::get_affiliate_users::handler,
-        affiliate::get_affiliate_referred_by::handler,
-
         // /recents
         recents::recently_deleted::handler,
 
@@ -331,10 +322,6 @@ use utoipa::OpenApi;
 
             // Mentions
             UpsertUserMentionsRequest,
-
-            // Affiliate
-            GetAffiliateUsersResponse,
-            GetUsersAffiliateResponse,
 
             // Annotations
             AnnotationIncrementalUpdate,

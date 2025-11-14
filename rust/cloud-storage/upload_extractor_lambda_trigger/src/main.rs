@@ -102,7 +102,7 @@ async fn main() -> Result<(), Error> {
 
     let region_provider = RegionProviderChain::default_provider().or_else(Region::new("us-east-1"));
     let config = aws_config::from_env().region(region_provider).load().await;
-    let dynamodb_client = DynamodbClient::new(&config, None, Some(dynamo_table_name.clone()));
+    let dynamodb_client = DynamodbClient::new(&config, Some(dynamo_table_name.clone()));
 
     tracing::trace!("initialized dynamodb client");
 
