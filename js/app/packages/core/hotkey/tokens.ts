@@ -43,7 +43,12 @@ export const TOKENS = {
       message: 'global.quickCreate.message',
       menuFormat: 'global.quickCreate.menuFormat',
     },
-    macroJump: 'global.macroJump',
+    jumpCommand: 'global.jumpCommand',
+    jump: {
+      macroJump: 'global.jump.macroJump',
+      focusSplitRight: 'global.jump.focusSplitRight',
+      focusSplitLeft: 'global.jump.focusSplitLeft',
+    },
     toggleRightPanel: 'global.toggleRightPanel',
     commandMenu: 'global.commandMenu',
     toggleBigChat: 'global.toggleBigChat',

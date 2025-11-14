@@ -34,6 +34,7 @@ import {
   quickCreateMenuOpenSignal,
   selectedQuickCreateTypeSignal,
 } from './QuickCreateMenu';
+import { focusAdjacentSplit } from './split-layout/layoutUtils';
 
 export default function GlobalShortcuts() {
   const [bigChatOpen, setBigChatOpen] = useBigChat();
@@ -144,14 +145,46 @@ export default function GlobalShortcuts() {
     runWithInputFocused: true,
   });
 
-  registerHotkey({
-    hotkeyToken: TOKENS.global.macroJump,
-    hotkey: 'cmd+m',
+  const moveScope = registerHotkey({
+    hotkeyToken: TOKENS.global.jumpCommand,
+    hotkey: 'm',
     scopeId: 'global',
-    description: 'Macro jump',
-    runWithInputFocused: true,
+    description: 'Move',
+    keyDownHandler: () => {
+      return true;
+    },
+    activateCommandScope: true,
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.global.jump.macroJump,
+    hotkey: 'm',
+    scopeId: moveScope.commandScopeId,
+    description: 'Macro Jump',
     keyDownHandler: () => {
       fireMacroJump();
+      return true;
+    },
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.global.jump.focusSplitRight,
+    hotkey: 'arrowright',
+    scopeId: moveScope.commandScopeId,
+    description: 'Focus split right',
+    keyDownHandler: () => {
+      focusAdjacentSplit('right');
+      return true;
+    },
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.global.jump.focusSplitLeft,
+    hotkey: 'arrowleft',
+    scopeId: moveScope.commandScopeId,
+    description: 'Focus split left',
+    keyDownHandler: () => {
+      focusAdjacentSplit('left');
       return true;
     },
   });
