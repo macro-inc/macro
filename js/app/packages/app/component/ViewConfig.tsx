@@ -143,7 +143,6 @@ export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
 };
 
 const ALL_VIEWCONFIG_DEFAULTS = {
-
   inbox: {
     view: 'inbox',
     filters: {
@@ -263,10 +262,10 @@ export const VIEWCONFIG_DEFAULTS_NAMES = Object.keys(
 
 export type NewViewData =
   | {
-    config: ViewConfigEnhanced;
-    id: ViewConfigDefaultsName;
-    name: ViewConfigDefaultsName;
-  }
+      config: ViewConfigEnhanced;
+      id: ViewConfigDefaultsName;
+      name: ViewConfigDefaultsName;
+    }
   | { config: ViewConfigEnhanced; id: string; name: string };
 
 export const VIEWCONFIG_FILTER_SHOW_OPTIONS: readonly FilterOptions['notificationFilter'][] =
@@ -315,13 +314,13 @@ export async function archiveEmail(
         items: options.optimisticallyExclude
           ? page.items.filter((item) => item.id !== id)
           : page.items.map((item) => {
-            return item.id === id
-              ? {
-                ...item,
-                inboxVisible: false,
-              }
-              : item;
-          }),
+              return item.id === id
+                ? {
+                    ...item,
+                    inboxVisible: false,
+                  }
+                : item;
+            }),
       })),
     };
   };
