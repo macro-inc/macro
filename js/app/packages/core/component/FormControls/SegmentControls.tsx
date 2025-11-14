@@ -1,3 +1,4 @@
+import { Tooltip } from '@core/component/Tooltip';
 import {
   SegmentedControl as KSegmentedControl,
   type SegmentedControlRootProps,
@@ -6,8 +7,10 @@ import {
   createEffect,
   createSignal,
   For,
+  Match,
   type ParentComponent,
   Show,
+  Switch,
 } from 'solid-js';
 import { ToggleButton } from './ToggleButton';
 
@@ -19,7 +22,7 @@ const sizeClass: Record<Size, string> = {
 
 export const SegmentedControl: ParentComponent<
   {
-    list: string[] | { value: string; label: string }[];
+    list: string[] | { value: string; label: string; tooltip?: string }[];
     value?: string;
     label?: string;
     labelClass?: string;
@@ -48,7 +51,7 @@ export const SegmentedControl: ParentComponent<
 
   return (
     <KSegmentedControl
-      class="flex gap-3"
+      class="flex gap-3 text-sm"
       classList={{
         [`justify-between`]: !!props.label,
         'flex-row-reverse': props.labelPlacement === 'right',
@@ -79,6 +82,8 @@ export const SegmentedControl: ParentComponent<
                 typeof item === 'object' ? item.value : item;
               const itemLabel = () =>
                 typeof item === 'object' ? item.label : item;
+              const tooltip = (): undefined | string =>
+                typeof item === 'object' ? item.tooltip : undefined;
               return (
                 <KSegmentedControl.Item
                   value={itemValue()}
@@ -102,16 +107,34 @@ export const SegmentedControl: ParentComponent<
                   >
                     {item}
                   </div> */}
-                    <ToggleButton
-                      size={props.size}
-                      pressed={value() === itemValue()}
-                      animateFlickerOnDeactivate={false}
-                      tabIndex={-1}
-                      as="div"
-                      disabled={props.disabled}
-                    >
-                      {itemLabel()}
-                    </ToggleButton>
+                    <Switch>
+                      <Match when={tooltip()}>
+                        <Tooltip tooltip={tooltip()}>
+                          <ToggleButton
+                            size={props.size}
+                            pressed={value() === itemValue()}
+                            animateFlickerOnDeactivate={false}
+                            tabIndex={-1}
+                            as="div"
+                            disabled={props.disabled}
+                          >
+                            {itemLabel()}
+                          </ToggleButton>
+                        </Tooltip>
+                      </Match>
+                      <Match when={!tooltip()}>
+                        <ToggleButton
+                          size={props.size}
+                          pressed={value() === itemValue()}
+                          animateFlickerOnDeactivate={false}
+                          tabIndex={-1}
+                          as="div"
+                          disabled={props.disabled}
+                        >
+                          {itemLabel()}
+                        </ToggleButton>
+                      </Match>
+                    </Switch>
                   </KSegmentedControl.ItemLabel>
                 </KSegmentedControl.Item>
               );
