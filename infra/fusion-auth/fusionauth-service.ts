@@ -1,12 +1,12 @@
-import * as awsx from '@pulumi/awsx';
 import * as aws from '@pulumi/aws';
+import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
+import { serviceLoadBalancer } from './resources/load_balancer';
 import {
-  stack,
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
+  stack,
 } from './resources/shared';
-import { serviceLoadBalancer } from './resources/load_balancer';
 
 const BASE_NAME = 'fusionauth';
 
@@ -56,7 +56,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
       clusterName,
       tags,
     }: CreateFusionAuthServiceArgs,
-    opts?: pulumi.ComponentResourceOptions,
+    opts?: pulumi.ComponentResourceOptions
   ) {
     super('my:components:FusionAuthService', name, {}, opts);
     this.tags = tags;
@@ -86,7 +86,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
         tags: this.tags,
         managedPolicyArns: [],
       },
-      { parent: this },
+      { parent: this }
     );
 
     // sg
@@ -159,7 +159,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
         },
         desiredCount: stack === 'prod' ? 2 : 1,
       },
-      { parent: this },
+      { parent: this }
     );
 
     this.service = service;
@@ -183,7 +183,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
           },
         ],
       },
-      { parent: this },
+      { parent: this }
     );
     // We only setup auto scaling for prod
     if (stack === 'prod') {
@@ -206,7 +206,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
         vpcId,
         tags: this.tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
     const serviceSg = new aws.ec2.SecurityGroup(
@@ -217,7 +217,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
         description: `${BASE_NAME} security group that is attached directly to the service`,
         tags: this.tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
     new aws.vpc.SecurityGroupIngressRule(
@@ -231,7 +231,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
         ipProtocol: 'tcp',
         tags: this.tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
     new aws.vpc.SecurityGroupEgressRule(
@@ -243,7 +243,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
         ipProtocol: '-1',
         tags: this.tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
     // ALB SG rules
@@ -258,7 +258,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
         toPort: 80,
         tags: this.tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
     new aws.vpc.SecurityGroupIngressRule(
@@ -272,7 +272,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
         toPort: 443,
         tags: this.tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
     new aws.vpc.SecurityGroupEgressRule(
@@ -286,7 +286,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
         toPort: serviceContainerPort,
         tags: this.tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
     return { serviceAlbSg, serviceSg };
@@ -313,7 +313,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
         alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
         tags: this.tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
     new aws.cloudwatch.MetricAlarm(
@@ -336,7 +336,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
         alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
         tags: this.tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
     new aws.cloudwatch.MetricAlarm(
@@ -358,7 +358,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
         alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
         tags: this.tags,
       },
-      { parent: this },
+      { parent: this }
     );
   }
 
@@ -377,18 +377,20 @@ export class FusionAuthService extends pulumi.ComponentResource {
         serviceNamespace: 'ecs',
         tags: this.tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
-    const lbPortion: pulumi.Output<string> = this.lb.arn.apply(arn => {
+    const lbPortion: pulumi.Output<string> = this.lb.arn.apply((arn) => {
       const parts = arn.split(':loadbalancer/');
       return parts[1];
     });
 
-    const tgPortion: pulumi.Output<string> = this.targetGroup.arn.apply(arn => {
-      const parts = arn.split(':');
-      return parts[parts.length - 1];
-    });
+    const tgPortion: pulumi.Output<string> = this.targetGroup.arn.apply(
+      (arn) => {
+        const parts = arn.split(':');
+        return parts[parts.length - 1];
+      }
+    );
 
     const resourceLabel = pulumi.interpolate`${lbPortion}/${tgPortion}`;
 
@@ -410,7 +412,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
           scaleOutCooldown: 120,
         },
       },
-      { parent: this },
+      { parent: this }
     );
 
     // Create an Auto Scaling policy for CPU utilization.
@@ -430,7 +432,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
           scaleOutCooldown: 300,
         },
       },
-      { parent: this },
+      { parent: this }
     );
 
     new aws.appautoscaling.Policy(
@@ -449,7 +451,7 @@ export class FusionAuthService extends pulumi.ComponentResource {
           scaleOutCooldown: 300,
         },
       },
-      { parent: this },
+      { parent: this }
     );
   }
 }
