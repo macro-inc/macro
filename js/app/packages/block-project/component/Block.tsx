@@ -75,13 +75,11 @@ const Block: Component = () => {
   };
 
   const splitContext = useSplitPanelOrThrow();
-  const { selectedView, setSelectedView, setViewDataStore, viewsDataStore } =
+  const { selectedView, setSelectedView, setViewDataStore } =
     splitContext.unifiedListContext;
 
   createRenderEffect(() => {
     const previousView = untrack(selectedView);
-    const isPreview = viewsDataStore[previousView].display.preview;
-    if (isPreview) return;
 
     setSelectedView(projectId);
 
