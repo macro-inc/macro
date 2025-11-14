@@ -98,7 +98,7 @@ const Block: Component = () => {
 
     onCleanup(() => {
       setSelectedView(previousView);
-      (setViewDataStore as any)(projectId, undefined);
+      setViewDataStore(projectId, undefined);
     });
   });
 
