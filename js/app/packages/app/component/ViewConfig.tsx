@@ -143,20 +143,7 @@ export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
 };
 
 const ALL_VIEWCONFIG_DEFAULTS = {
-  all: {
-    view: 'all',
-    sort: {
-      sortBy: 'viewed_at',
-    },
-    hotkeyOptions: {
-      e: (entity: EntityData) => {
-        if (entity.type === 'email') {
-          archiveEmail(entity.id, { isDone: entity.done });
-        }
-        return true;
-      },
-    },
-  },
+
   inbox: {
     view: 'inbox',
     filters: {
@@ -247,6 +234,20 @@ const ALL_VIEWCONFIG_DEFAULTS = {
       typeFilter: ['project'],
     },
   },
+  all: {
+    view: 'all',
+    sort: {
+      sortBy: 'viewed_at',
+    },
+    hotkeyOptions: {
+      e: (entity: EntityData) => {
+        if (entity.type === 'email') {
+          archiveEmail(entity.id, { isDone: entity.done });
+        }
+        return true;
+      },
+    },
+  },
 } satisfies Record<View, Omit<DeepPartial<ViewConfigEnhanced>, 'id'>>;
 
 export const VIEWCONFIG_DEFAULTS = Object.fromEntries(
@@ -262,10 +263,10 @@ export const VIEWCONFIG_DEFAULTS_NAMES = Object.keys(
 
 export type NewViewData =
   | {
-      config: ViewConfigEnhanced;
-      id: ViewConfigDefaultsName;
-      name: ViewConfigDefaultsName;
-    }
+    config: ViewConfigEnhanced;
+    id: ViewConfigDefaultsName;
+    name: ViewConfigDefaultsName;
+  }
   | { config: ViewConfigEnhanced; id: string; name: string };
 
 export const VIEWCONFIG_FILTER_SHOW_OPTIONS: readonly FilterOptions['notificationFilter'][] =
@@ -314,13 +315,13 @@ export async function archiveEmail(
         items: options.optimisticallyExclude
           ? page.items.filter((item) => item.id !== id)
           : page.items.map((item) => {
-              return item.id === id
-                ? {
-                    ...item,
-                    inboxVisible: false,
-                  }
-                : item;
-            }),
+            return item.id === id
+              ? {
+                ...item,
+                inboxVisible: false,
+              }
+              : item;
+          }),
       })),
     };
   };
