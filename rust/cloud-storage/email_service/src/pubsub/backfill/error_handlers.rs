@@ -1,4 +1,3 @@
-use crate::pubsub::backfill::increment_counters;
 use crate::pubsub::backfill::increment_counters::{
     incr_completed_messages, incr_completed_threads,
 };
@@ -6,7 +5,7 @@ use crate::pubsub::context::PubSubContext;
 use models_email::email::service::backfill::{
     BackfillJobStatus, BackfillMessagePayload, BackfillOperation, BackfillPubsubMessage,
 };
-use models_email::email::service::pubsub::{DetailedError, ProcessingError};
+use models_email::email::service::pubsub::DetailedError;
 use sqs_worker::cleanup_message;
 use uuid::Uuid;
 
