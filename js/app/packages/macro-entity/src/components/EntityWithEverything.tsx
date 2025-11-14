@@ -29,16 +29,10 @@ import {
   isProjectContainedEntity,
   type ProjectContainedEntity,
 } from '../queries/project';
-import type { EntityData, EntityOf } from '../types/entity';
+import type { EntityData } from '../types/entity';
 import type { Notification, WithNotification } from '../types/notification';
 import type { WithSearch } from '../types/search';
 import type { EntityClickHandler } from './Entity';
-
-function isEmailEntity(
-  entity: WithNotification<EntityData>
-): entity is WithNotification<EntityOf<'email'>> {
-  return entity.type === 'email';
-}
 
 function UnreadIndicator(props: { active?: boolean }) {
   return (
@@ -177,7 +171,7 @@ export function EntityWithEverything(
       const isLikelyEmail = (value?: string) =>
         typeof value === 'string' && value.includes('@');
       const combinedParticipantFirstNames = createMemo(() => {
-        if (!isEmailEntity(props.entity)) return [];
+        if (props.entity.type !== 'email') return [];
         const me = userEmail();
         const participantNames = props.entity.participantNames ?? [];
         return (
