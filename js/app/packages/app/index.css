@@ -4,9 +4,9 @@
 @source '../../packages/core/component/LexicalMarkdown/theme.ts';
 @config '../../tailwind.config.ts';
 
-@property --a0l { syntax: "<number>"; inherits: false; initial-value:   0.61; }
-@property --a0c { syntax: "<number>"; inherits: false; initial-value:   0.37; }
-@property --a0h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
+@property --a0l { syntax: "<number>"; inherits: false; initial-value:   0.8854; }
+@property --a0c { syntax: "<number>"; inherits: false; initial-value:   0.2003; }
+@property --a0h { syntax: "<angle>";  inherits: false; initial-value:  145.5deg; }
 @property --a1l { syntax: "<number>"; inherits: false; initial-value:   0.61; }
 @property --a1c { syntax: "<number>"; inherits: false; initial-value:   0.37; }
 @property --a1h { syntax: "<angle>";  inherits: false; initial-value:  54deg; }
