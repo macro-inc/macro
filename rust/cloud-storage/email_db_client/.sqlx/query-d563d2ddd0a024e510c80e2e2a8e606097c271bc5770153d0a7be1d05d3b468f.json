@@ -9,7 +9,7 @@
         "UuidArray",
         {
           "Custom": {
-            "name": "_email_recipient_type",
+            "name": "email_recipient_type[]",
             "kind": {
               "Array": {
                 "Custom": {
