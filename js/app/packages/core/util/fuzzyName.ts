@@ -45,3 +45,23 @@ export function fuzzyNameMatch(
     score: info.idx[infoIdx],
   };
 }
+
+export function fuzzyFilterByName<T>(
+  query: string,
+  items: T[],
+  extractName: (item: T) => string
+): T[] {
+  if (!query) return items;
+
+  const haystack = items.map(extractName);
+  const idxs = uf.filter(haystack, query);
+
+  if (!idxs || idxs.length === 0) return [];
+
+  const info = uf.info(idxs, haystack, query);
+  const order = uf.sort(info, haystack, query);
+
+  if (!order || order.length === 0) return [];
+
+  return order.map((orderIdx) => items[info.idx[orderIdx]]);
+}
