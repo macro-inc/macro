@@ -1185,4 +1185,164 @@ mod tests {
 
         Ok(())
     }
+
+    #[sqlx::test]
+    async fn test_files_and_folders_with_same_name(pool: Pool<Postgres>) -> anyhow::Result<()> {
+        // This tests the scenario where you have both a file and folder with identical names
+        // Example: "Report.pdf" (file) and "Report" (folder)
+
+        let root_folder_name = "Conflicting Names Test";
+        let upload_request_id = "conflict_test_123";
+        let user_id = "macro|user@user.com";
+        let share_permission = create_test_permission(&pool).await?;
+
+        // Create a file called "Report.pdf"
+        let report_file = FolderItem {
+            name: "Report".to_string(),
+            full_name: "Report.pdf".to_string(),
+            file_type: Some(FileType::Pdf),
+            sha: "sha_report_file".to_string(),
+            relative_path: "/Conflicting Names Test".to_string(),
+        };
+
+        // Create a folder called "Report" with a file inside
+        let report_folder_file = FolderItem {
+            name: "contents".to_string(),
+            full_name: "contents.txt".to_string(),
+            file_type: Some(FileType::Txt),
+            sha: "sha_report_folder_contents".to_string(),
+            relative_path: "/Conflicting Names Test/Report".to_string(),
+        };
+
+        // Build the folder structure
+        let mut report_folder_content = HashMap::new();
+        report_folder_content.insert(
+            "contents.txt".to_string(),
+            FileSystemNode::File(report_folder_file),
+        );
+
+        let mut root_content = HashMap::new();
+        root_content.insert("Report.pdf".to_string(), FileSystemNode::File(report_file));
+        root_content.insert(
+            "Report".to_string(),
+            FileSystemNode::Folder(report_folder_content),
+        );
+
+        let folder_tree = FileSystemNode::Folder(root_content);
+
+        // Start transaction
+        let mut transaction = pool.begin().await?;
+
+        // Upload the folder structure
+        let UploadFolderWithIdsResponse {
+            file_system,
+            project_ids,
+            documents,
+            ..
+        } = upload_folder_with_ids(
+            &mut transaction,
+            user_id,
+            &share_permission,
+            &folder_tree,
+            root_folder_name,
+            upload_request_id,
+            None,
+        )
+        .await?;
+
+        // Commit the transaction
+        transaction.commit().await?;
+
+        // Verify the structure was created correctly
+        assert_eq!(
+            project_ids.len(),
+            2,
+            "Expected 2 projects: root folder + Report subfolder"
+        );
+        assert_eq!(
+            documents.len(),
+            2,
+            "Expected 2 documents: Report.pdf file + contents.txt inside Report folder"
+        );
+
+        // Verify the file system structure
+        match &file_system {
+            FileSystemNodeWithIds::File { .. } => {
+                panic!("Expected root to be a folder");
+            }
+            FileSystemNodeWithIds::Folder { content, .. } => {
+                // Should have both "Report.pdf" (file) and "Report" (folder)
+                assert_eq!(content.len(), 2, "Root should have 2 items");
+
+                // Verify the file exists
+                let report_file_node = content
+                    .get("Report.pdf")
+                    .expect("Report.pdf file should exist");
+                match report_file_node {
+                    FileSystemNodeWithIds::File { item, document_id } => {
+                        assert_eq!(item.name, "Report");
+                        assert_eq!(item.full_name, "Report.pdf");
+                        assert_eq!(item.file_type, Some(FileType::Pdf));
+
+                        // Verify document was created
+                        let doc = documents
+                            .iter()
+                            .find(|d| &d.document_id == document_id)
+                            .expect("Report.pdf document should exist in documents list");
+                        assert_eq!(doc.document_name, "Report");
+                    }
+                    _ => panic!("Report.pdf should be a file node"),
+                }
+
+                // Verify the folder exists
+                let report_folder_node = content.get("Report").expect("Report folder should exist");
+                match report_folder_node {
+                    FileSystemNodeWithIds::Folder {
+                        content: folder_content,
+                        project_id,
+                    } => {
+                        assert_eq!(folder_content.len(), 1, "Report folder should have 1 file");
+
+                        // Verify the file inside the folder
+                        let contents_file = folder_content
+                            .get("contents.txt")
+                            .expect("contents.txt should exist in Report folder");
+                        match contents_file {
+                            FileSystemNodeWithIds::File { item, document_id } => {
+                                assert_eq!(item.name, "contents");
+                                assert_eq!(item.full_name, "contents.txt");
+                                assert_eq!(item.relative_path, "/Conflicting Names Test/Report");
+
+                                // Verify document was created
+                                let doc = documents
+                                    .iter()
+                                    .find(|d| &d.document_id == document_id)
+                                    .expect("contents.txt document should exist");
+                                assert_eq!(doc.document_name, "contents");
+                            }
+                            _ => panic!("contents.txt should be a file node"),
+                        }
+
+                        // Verify the folder has a project_id
+                        assert!(
+                            project_ids.contains(project_id),
+                            "Report folder project_id should be in the project list"
+                        );
+                    }
+                    _ => panic!("Report should be a folder node"),
+                }
+            }
+        }
+
+        // Clean up
+        let mut cleanup_tx = pool.begin().await?;
+        for project_id in &project_ids {
+            let _ = sqlx::query!(r#"DELETE FROM "Project" WHERE id = $1"#, project_id)
+                .execute(&mut *cleanup_tx)
+                .await?;
+        }
+        cleanup_tx.commit().await?;
+
+        Ok(())
+    }
 }
