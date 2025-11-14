@@ -20,7 +20,7 @@ pub async fn handle_non_retryable_error(
     tracing::error!(error = %e, "Non-retryable error processing message. The message will be deleted.");
 
     match &data.backfill_operation {
-        BackfillOperation::Init => {
+        BackfillOperation::Init, BackfillOperation::ListThreads(_) => {
             // update backfill job status to failed
             if let Err(db_err) = email_db_client::backfill::job::update::update_backfill_job_status(
                 &ctx.db,
@@ -35,29 +35,11 @@ pub async fn handle_non_retryable_error(
                 );
             }
         }
-        BackfillOperation::ListThreads(_) => {
-            // update backfill job status to failed
-            if let Err(db_err) = email_db_client::backfill::job::update::update_backfill_job_status(
-                &ctx.db,
-                data.job_id,
-                BackfillJobStatus::Failed,
-            )
-            .await
-            {
-                tracing::error!(
-                    error = %db_err,
-                    "Failed to update backfill job status to Failed"
-                );
-            }
-        }
-        BackfillOperation::BackfillThread(_) => {
+        BackfillOperation::BackfillThread(_), BackfillOperation::UpdateThreadMetadata(_) => {
             handle_thread_failure(ctx, data.link_id, data.job_id).await;
         }
         BackfillOperation::BackfillMessage(p) => {
             handle_message_failure(ctx, data, p).await;
-        }
-        BackfillOperation::UpdateThreadMetadata(_) => {
-            handle_thread_failure(ctx, data.link_id, data.job_id).await;
         }
         BackfillOperation::BackfillAttachment(_) => {}
     }
