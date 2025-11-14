@@ -1,53 +1,47 @@
-import fuzzy from 'fuzzy';
+import uFuzzy from '@leeoniya/ufuzzy';
 
 export interface FuzzyNameMatchResult {
   nameHighlight: string;
   score: number;
 }
 
-/**
- * Performs fuzzy name matching with quality filtering.
- * Returns null if no match or if the match is too scattered.
- */
+const uf = new uFuzzy({});
+
+const mark = (part: string, matched: boolean) =>
+  matched ? `<macro_em>${part}</macro_em>` : part;
+
+const append = (accum: string, part: string) => accum + part;
+
 export function fuzzyNameMatch(
   query: string,
   name: string
 ): FuzzyNameMatchResult | null {
-  const matchResult = fuzzy.match(query, name, {
-    pre: '<macro_em>',
-    post: '</macro_em>',
-  });
+  const needle = query;
+  const haystack = [name];
+  const idxs = uf.filter(haystack, needle);
 
-  if (!matchResult) return null;
+  if (!idxs || idxs.length === 0) return null;
 
-  // Merge adjacent highlight tags
-  const mergedHighlight = matchResult.rendered.replace(
-    /<\/macro_em><macro_em>/g,
-    ''
+  const info = uf.info(idxs, haystack, needle);
+  const order = uf.sort(info, haystack, needle);
+
+  if (!order || order.length === 0) return null;
+
+  const infoIdx = order[0];
+  const ranges = info.ranges[infoIdx];
+
+  if (!ranges) return null;
+
+  const nameHighlight = uFuzzy.highlight(
+    haystack[info.idx[infoIdx]],
+    ranges,
+    mark,
+    '',
+    append
   );
 
-  const nameLower = name.toLowerCase();
-  const queryLower = query.toLowerCase();
-
-  // Always include exact matches, starts-with, or substring matches
-  const isGoodMatch =
-    nameLower === queryLower ||
-    nameLower.startsWith(queryLower) ||
-    nameLower.includes(queryLower);
-
-  if (!isGoodMatch) {
-    // Count how many separate highlight segments there are
-    const highlightSegments = (mergedHighlight.match(/<macro_em>/g) || [])
-      .length;
-
-    // Reject if more than 50% of characters are individual segments (too scattered)
-    if (highlightSegments > query.length * 0.5) {
-      return null;
-    }
-  }
-
   return {
-    nameHighlight: mergedHighlight,
-    score: matchResult.score,
+    nameHighlight,
+    score: info.idx[infoIdx],
   };
 }
