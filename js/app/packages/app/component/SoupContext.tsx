@@ -45,7 +45,7 @@ import {
 
 export type UnifiedListContext = {
   viewsDataStore: Store<ViewDataMap>;
-  setViewDataStore: SetStoreFunction<ViewDataMap>;
+  setViewDataStore: SetStoreFunction<Partial<ViewDataMap>>;
   selectedView: Accessor<ViewId>;
   setSelectedView: Setter<ViewId>;
   virtualizerHandleSignal: Signal<VirtualizerHandle | undefined>;
