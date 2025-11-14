@@ -25,15 +25,6 @@ export function EmailInput(props: EmailInputProps) {
     return decodedHtml;
   });
 
-  const draftContainsAppendedReply = createMemo(() => {
-    if (!draftHTML()) return false;
-    return (
-      new DOMParser()
-        .parseFromString(draftHTML(), 'text/html')
-        .body.querySelector('div.macro_quote') !== null
-    );
-  });
-
   function afterSend(newMessageId: MessageToSendDbId | null) {
     const resource = ctx.threadMessagesResource();
     if (!resource) return;
@@ -48,6 +39,8 @@ export function EmailInput(props: EmailInputProps) {
       );
     }
 
+    props.setShowReply?.(false);
+
     // Refresh to get the new message
     resource.refresh();
 
@@ -61,7 +54,6 @@ export function EmailInput(props: EmailInputProps) {
         replyingTo={props.replyingTo}
         draft={props.draft}
         preloadedHtml={draftHTML()}
-        draftContainsAppendedReply={draftContainsAppendedReply()}
         sideEffectOnSend={afterSend}
         setShowReply={props.setShowReply}
         markdownDomRef={props.markdownDomRef}

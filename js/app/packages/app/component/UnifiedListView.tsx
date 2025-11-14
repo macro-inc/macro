@@ -28,7 +28,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
-import { fuzzyNameMatch } from '@core/util/fuzzyName';
+import { fuzzyMatch } from '@core/util/fuzzy';
 import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
 import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
 import XIcon from '@icon/regular/x.svg?component-solid';
@@ -453,26 +453,18 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           if (!searchText() || searchText().length === 0) return items;
 
           const query = searchText();
+          const matchResults = fuzzyMatch(query, items, (item) => item.name);
 
-          return items
-            .map((item) => {
-              const matchResult = fuzzyNameMatch(query, item.name);
-
-              if (!matchResult) return null;
-
-              return {
-                ...item,
-                search: {
-                  nameHighlight: matchResult.nameHighlight,
-                  contentHighlights: null,
-                  source: 'local',
-                },
-              } as WithNotification<WithSearch<EntityData>>;
-            })
-            .filter(
-              (item): item is WithNotification<WithSearch<EntityData>> =>
-                item !== null
-            );
+          return matchResults.map((result) => {
+            return {
+              ...result.item,
+              search: {
+                nameHighlight: result.nameHighlight,
+                contentHighlights: null,
+                source: 'local',
+              },
+            } as WithNotification<WithSearch<EntityData>>;
+          });
         }
       : undefined
   );
@@ -1018,24 +1010,54 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         <SplitToolbarRight order={5}>
           <div class="flex flex-row items-center gap-1 p-1 h-full select-none">
             <Show when={isViewConfigChanged()}>
-              <Button
-                size="SM"
-                classList={{
-                  '!border-ink/25 !text-ink !bg-panel hover:!text-ink ml-1.5 font-normal': true,
-                }}
-                onClick={onClickResetViewConfigChanges}
-              >
-                CLEAR
-              </Button>
-              <Button
-                size="SM"
-                classList={{
-                  '!border-ink/25 !text-ink !bg-panel hover:!text-ink mx-1.5 font-normal': true,
-                }}
-                onClick={onClickSaveViewConfigChanges}
-              >
-                SAVE CHANGES
-              </Button>
+              <Show when={view().display.preview}>
+                <DropdownMenu
+                  size="SM"
+                  theme="secondary"
+                  triggerLabel={<span class="font-extrabold">⋮</span>}
+                >
+                  <div class="flex flex-col gap-2 p-2">
+                    <Button
+                      size="SM"
+                      classList={{
+                        '!border-ink/25 !text-ink !bg-panel hover:!text-ink font-normal': true,
+                      }}
+                      onClick={onClickResetViewConfigChanges}
+                    >
+                      CLEAR
+                    </Button>
+                    <Button
+                      size="SM"
+                      classList={{
+                        '!border-ink/25 !text-ink !bg-panel hover:!text-ink font-normal': true,
+                      }}
+                      onClick={onClickSaveViewConfigChanges}
+                    >
+                      SAVE CHANGES
+                    </Button>
+                  </div>
+                </DropdownMenu>
+              </Show>
+              <Show when={!view().display.preview}>
+                <Button
+                  size="SM"
+                  classList={{
+                    '!border-ink/25 !text-ink !bg-panel hover:!text-ink ml-1.5 font-normal': true,
+                  }}
+                  onClick={onClickResetViewConfigChanges}
+                >
+                  CLEAR
+                </Button>
+                <Button
+                  size="SM"
+                  classList={{
+                    '!border-ink/25 !text-ink !bg-panel hover:!text-ink mx-1.5 font-normal': true,
+                  }}
+                  onClick={onClickSaveViewConfigChanges}
+                >
+                  SAVE CHANGES
+                </Button>
+              </Show>
             </Show>
             <DropdownMenu
               size="SM"

@@ -59,6 +59,7 @@ impl ProjectQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
+        fn disable_recency(disable_recency: bool) -> Self;
     }
 
     fn build_search_request(self) -> Result<SearchRequest> {
@@ -95,11 +96,12 @@ pub struct ProjectSearchArgs {
     pub search_on: SearchOn,
     pub collapse: bool,
     pub ids_only: bool,
+    pub disable_recency: bool,
 }
 
 impl ProjectSearchArgs {
     pub fn build(self) -> Result<Value> {
-        let builder = ProjectQueryBuilder::new(self.terms)
+        Ok(ProjectQueryBuilder::new(self.terms)
             .match_type(&self.match_type)
             .page_size(self.page_size)
             .page(self.page)
@@ -107,9 +109,10 @@ impl ProjectSearchArgs {
             .search_on(self.search_on)
             .collapse(self.collapse)
             .ids(self.project_ids)
-            .ids_only(self.ids_only);
-
-        Ok(builder.build_search_request()?.to_json())
+            .ids_only(self.ids_only)
+            .disable_recency(self.disable_recency)
+            .build_search_request()?
+            .to_json())
     }
 }
 
