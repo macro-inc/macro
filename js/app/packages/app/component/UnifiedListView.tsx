@@ -1338,19 +1338,22 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     <MenuSeparator />
                   </Show>
                   <Show when={markEntityAsDone}>
-                    {(fnAccessor) => (
-                      <MenuItem
-                        text="Mark as Done"
-                        onClick={() => fnAccessor()(selectedEntity())}
-                        disabled={
-                          selectedEntity().type === 'email'
-                            ? selectedEntity().done
-                            : selectedEntity()
-                                .notifications?.()
-                                .every(({ done }) => done)
-                        }
-                      />
-                    )}
+                    {(fnAccessor) => {
+                      const entityDisabled = (
+                        entity: WithNotification<EntityData>
+                      ) => {
+                        return entity.type === 'email'
+                          ? entity.done
+                          : entity.notifications?.().every(({ done }) => done);
+                      };
+                      return (
+                        <MenuItem
+                          text="Mark as Done"
+                          onClick={() => fnAccessor()(selectedEntity())}
+                          disabled={entityDisabled(selectedEntity())}
+                        />
+                      );
+                    }}
                   </Show>
                   <MenuItem
                     text="Delete"
