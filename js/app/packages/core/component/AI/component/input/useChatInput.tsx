@@ -128,7 +128,6 @@ export function useChatInput(
 }
 
 function ChatInput(props: ChatInputInternalProps) {
-  console.log('CHAT INPUT', props);
   let containerRef!: HTMLDivElement;
   const generating = props.isGenerating ?? (() => false);
   const toolsetSignal = createSignal<ToolSet>({ type: 'all' });
