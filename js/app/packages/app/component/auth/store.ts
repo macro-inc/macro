@@ -104,7 +104,6 @@ export function oklchToRgb(
 }
 
 export function getCurrentTheme(): ThemeColor {
-  const style = getComputedStyle(document.body);
   return {
     accent: oklchToRgb(
       themeReactive.a0.l[0](),

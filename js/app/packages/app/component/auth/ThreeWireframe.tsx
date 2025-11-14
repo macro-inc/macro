@@ -3,10 +3,7 @@ import * as THREE from 'three';
 import isWebGL2Available from 'three/addons/capabilities/WebGL.js';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
 import { GLTFLoader } from 'three/examples/jsm/loaders/GLTFLoader.js';
-import {
-  createThemeEffect,
-  themeReactive,
-} from '../../../block-theme/signals/themeReactive';
+import { createThemeEffect } from '../../../block-theme/signals/themeReactive';
 import modelM from './model-m.glb?inline';
 import {
   colorAccent,
@@ -121,10 +118,7 @@ export default function ThreeWireframe(props: ThreeWireframeProps) {
       updateWireframeColors(currentWireframe);
     });
 
-    createThemeEffect(() => {
-      console.log('THEME EFFECT');
-      setColor();
-    });
+    createThemeEffect(setColor);
 
     onPointerMove = (event: PointerEvent) => {
       const rect = canvas.getBoundingClientRect();
