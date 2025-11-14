@@ -1,3 +1,4 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { createCallback } from '@solid-primitives/rootless';
 import { useContext } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from './context';
@@ -60,4 +61,28 @@ export function useSplitPanelOrThrow() {
  */
 export function useSplitPanel() {
   return useContext(SplitPanelContext);
+}
+
+export function focusAdjacentSplit(direction: 'left' | 'right') {
+  const splitManager = globalSplitManager();
+  if (!splitManager) return;
+  const activeSplitId = splitManager.activeSplitId();
+  if (!activeSplitId) return;
+  const currentSplitIds = splitManager.splits().map((s) => s.id);
+  const currentSplitIndex = currentSplitIds.indexOf(activeSplitId);
+  const getAdjacentSplitId = () => {
+    if (direction === 'left') {
+      if (currentSplitIndex === 0)
+        return currentSplitIds[currentSplitIds.length - 1];
+      return currentSplitIds[currentSplitIndex - 1];
+    } else {
+      if (currentSplitIndex === currentSplitIds.length - 1)
+        return currentSplitIds[0];
+      return currentSplitIds[currentSplitIndex + 1];
+    }
+  };
+  const adjacentSplitId = getAdjacentSplitId();
+  if (!adjacentSplitId) return;
+  splitManager.activateSplit(adjacentSplitId);
+  splitManager.returnFocus();
 }
