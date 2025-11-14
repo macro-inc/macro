@@ -15,12 +15,12 @@ import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 false && fileSelector;
 
-export function HelpDrawer(props: { view?: ViewId }) {
+export function HelpDrawer(props: { viewId?: ViewId }) {
   const emailActive = useEmailLinksStatus();
 
   return (
     <Switch>
-      <Match when={props.view === 'emails' && !emailActive()}>
+      <Match when={props.viewId === 'emails' && !emailActive()}>
         <HelpDrawerInner
           title={'Macro is better with email.'}
           subtitle={
@@ -46,7 +46,7 @@ export function HelpDrawer(props: { view?: ViewId }) {
           }}
         />
       </Match>
-      <Match when={props.view === 'emails' && emailActive()}>
+      <Match when={props.viewId === 'emails' && emailActive()}>
         <HelpDrawerInner
           title={'Email is better with Macro.'}
           subtitle={
@@ -78,7 +78,7 @@ export function HelpDrawer(props: { view?: ViewId }) {
           ]}
         />
       </Match>
-      <Match when={props.view === 'inbox'}>
+      <Match when={props.viewId === 'inbox'}>
         <HelpDrawerInner
           title={'Your unified inbox.'}
           subtitle={
@@ -108,7 +108,7 @@ export function HelpDrawer(props: { view?: ViewId }) {
           }
         />
       </Match>
-      <Match when={props.view === 'comms'}>
+      <Match when={props.viewId === 'comms'}>
         <HelpDrawerInner
           title={'Message teammates.'}
           subtitle={
@@ -129,7 +129,7 @@ export function HelpDrawer(props: { view?: ViewId }) {
           ]}
         />
       </Match>
-      <Match when={props.view === 'docs'}>
+      <Match when={props.viewId === 'docs'}>
         <HelpDrawerInner
           title={'Documents. Interlinked.'}
           subtitle={
@@ -150,7 +150,7 @@ export function HelpDrawer(props: { view?: ViewId }) {
           ]}
         />
       </Match>
-      <Match when={props.view === 'ai'}>
+      <Match when={props.viewId === 'ai'}>
         <HelpDrawerInner
           title={'Ask AI anything.'}
           subtitle={
@@ -177,7 +177,7 @@ export function HelpDrawer(props: { view?: ViewId }) {
           ]}
         />
       </Match>
-      <Match when={props.view === 'folders'}>
+      <Match when={props.viewId === 'folders'}>
         <HelpDrawerInner
           title={'All your files, organized.'}
           subtitle={
