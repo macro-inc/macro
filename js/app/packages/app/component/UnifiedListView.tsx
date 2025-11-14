@@ -1321,106 +1321,101 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             entity={contextAndModalState.selectedEntity}
           />
           <ContextMenu.Portal>
-            <ContextMenuContent mobileFullScreen>
-              <Show when={isTouchDevice && isMobileWidth()}>
-                <Entity
-                  entity={contextAndModalState.selectedEntity!}
-                  timestamp={
-                    sortType() === 'viewed_at'
-                      ? contextAndModalState.selectedEntity!.viewedAt
-                      : sortType() === 'created_at'
-                        ? contextAndModalState.selectedEntity!.createdAt
-                        : undefined
-                  }
-                />
-                <MenuSeparator />
-              </Show>
-              <Show when={markEntityAsDone}>
-                {(fnAccessor) => (
+            <Show when={contextAndModalState.selectedEntity}>
+              {(selectedEntity) => (
+                <ContextMenuContent mobileFullScreen>
+                  <Show when={isTouchDevice && isMobileWidth()}>
+                    <Entity
+                      entity={selectedEntity()}
+                      timestamp={
+                        sortType() === 'viewed_at'
+                          ? selectedEntity().viewedAt
+                          : sortType() === 'created_at'
+                            ? selectedEntity().createdAt
+                            : undefined
+                      }
+                    />
+                    <MenuSeparator />
+                  </Show>
+                  <Show when={markEntityAsDone}>
+                    {(fnAccessor) => (
+                      <MenuItem
+                        text="Mark as Done"
+                        onClick={() => fnAccessor()(selectedEntity())}
+                        disabled={
+                          selectedEntity().type === 'email'
+                            ? selectedEntity().done
+                            : selectedEntity()
+                                .notifications?.()
+                                .every(({ done }) => done)
+                        }
+                      />
+                    )}
+                  </Show>
                   <MenuItem
-                    text="Mark as Done"
-                    onClick={() =>
-                      fnAccessor()(contextAndModalState.selectedEntity!)
-                    }
+                    text="Delete"
+                    onClick={() => deleteDssItem(selectedEntity())}
                     disabled={
-                      contextAndModalState.selectedEntity?.type === 'email'
-                        ? contextAndModalState.selectedEntity.done
-                        : contextAndModalState.selectedEntity
-                            ?.notifications?.()
-                            .every(({ done }) => done)
+                      selectedEntity().type !== 'document' &&
+                      selectedEntity().type !== 'project' &&
+                      selectedEntity().type !== 'chat'
                     }
                   />
-                )}
-              </Show>
-              <MenuItem
-                text="Delete"
-                onClick={() =>
-                  deleteDssItem(contextAndModalState.selectedEntity!)
-                }
-                disabled={
-                  contextAndModalState.selectedEntity?.type !== 'document' &&
-                  contextAndModalState.selectedEntity?.type !== 'project' &&
-                  contextAndModalState.selectedEntity?.type !== 'chat'
-                }
-              />
-              <MenuItem
-                text="Rename"
-                onClick={() => openEntityModal('rename')}
-                disabled={
-                  contextAndModalState.selectedEntity?.type !== 'document' &&
-                  contextAndModalState.selectedEntity?.type !== 'chat'
-                }
-              />
-              <MenuItem
-                text="Move to Project"
-                onClick={() => {
-                  openEntityModal('moveToProject');
-                }}
-                disabled={
-                  contextAndModalState.selectedEntity?.type !== 'document' &&
-                  contextAndModalState.selectedEntity?.type !== 'project' &&
-                  contextAndModalState.selectedEntity?.type !== 'chat'
-                  // https://github.com/macro-inc/macro-api/pull/2395
-                  //  || !hasProjectPermissions()
-                }
-              />
-              <MenuItem
-                text="Copy"
-                onClick={() => {
-                  copyDssItem({ entity: contextAndModalState.selectedEntity! });
-                }}
-                disabled={
-                  contextAndModalState.selectedEntity?.type !== 'document' &&
-                  contextAndModalState.selectedEntity?.type !== 'chat'
-                }
-              />
-              <MenuItem
-                text="Open in new split"
-                onClick={() => {
-                  const splitManager = globalSplitManager();
-                  if (!splitManager) {
-                    console.error('No split manager available');
-                    return;
-                  }
-                  if (
-                    contextAndModalState.selectedEntity?.type === 'document'
-                  ) {
-                    const { fileType, id } =
-                      contextAndModalState.selectedEntity!;
-                    splitManager.createNewSplit({
-                      type: fileTypeToBlockName(fileType),
-                      id,
-                    });
-                  } else {
-                    const { id, type } = contextAndModalState.selectedEntity!;
-                    splitManager.createNewSplit({
-                      type,
-                      id,
-                    });
-                  }
-                }}
-              />
-            </ContextMenuContent>
+                  <MenuItem
+                    text="Rename"
+                    onClick={() => openEntityModal('rename')}
+                    disabled={
+                      selectedEntity().type !== 'document' &&
+                      selectedEntity().type !== 'chat'
+                    }
+                  />
+                  <MenuItem
+                    text="Move to Project"
+                    onClick={() => {
+                      openEntityModal('moveToProject');
+                    }}
+                    disabled={
+                      selectedEntity().type !== 'document' &&
+                      selectedEntity().type !== 'project' &&
+                      selectedEntity().type !== 'chat'
+                    }
+                  />
+                  <MenuItem
+                    text="Copy"
+                    onClick={() => {
+                      copyDssItem({ entity: selectedEntity() });
+                    }}
+                    disabled={
+                      selectedEntity().type !== 'document' &&
+                      selectedEntity().type !== 'chat'
+                    }
+                  />
+                  <MenuItem
+                    text="Open in new split"
+                    onClick={() => {
+                      const splitManager = globalSplitManager();
+                      if (!splitManager) {
+                        console.error('No split manager available');
+                        return;
+                      }
+                      if (selectedEntity().type === 'document') {
+                        const { fileType, id } = selectedEntity();
+                        splitManager.createNewSplit({
+                          type: fileTypeToBlockName(fileType),
+                          id,
+                        });
+                      } else {
+                        const { id, type } = selectedEntity();
+                        splitManager.createNewSplit({
+                          type,
+                          id,
+                        });
+                      }
+                    }}
+                  />
+                </ContextMenuContent>
+              )}
+            </Show>
           </ContextMenu.Portal>
         </ContextMenu.Trigger>
       </ContextMenu>
