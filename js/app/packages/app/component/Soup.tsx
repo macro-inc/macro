@@ -124,6 +124,88 @@ const ViewWithSearch: Component<{
   );
 };
 
+const PreviewPanelContent: Component<{
+  selectedEntity: NonNullable<ReturnType<typeof useSplitPanelOrThrow>['unifiedListContext']['viewsDataStore'][string]['selectedEntity']>;
+  orchestrator: ReturnType<typeof useGlobalBlockOrchestrator>;
+  splitPanelContext: ReturnType<typeof useSplitPanelOrThrow>;
+}> = (props) => {
+  const blockInstance = () =>
+    props.orchestrator.createBlockInstance(
+      props.selectedEntity.type === 'document'
+        ? fileTypeToBlockName(props.selectedEntity.fileType)
+        : props.selectedEntity.type,
+      props.selectedEntity.id
+    );
+  const [interactedWithMouseDown, setInteractedWithMouseDown] =
+    createSignal(false);
+
+  createRenderEffect(
+    (prevId: string | undefined) => {
+      const id = props.selectedEntity.id as string | undefined;
+      if (id !== prevId) {
+        setInteractedWithMouseDown(false);
+      }
+      return id;
+    },
+    props.selectedEntity.id as string | undefined
+  );
+
+  return (
+    <div
+      class="size-full"
+      onFocusIn={(event) => {
+        if (interactedWithMouseDown()) return;
+        const relatedTarget = event.relatedTarget as HTMLElement;
+        const currentTarget = event.currentTarget as HTMLElement;
+
+        if (!currentTarget.contains(relatedTarget)) {
+          relatedTarget.focus();
+        }
+      }}
+      onPointerDown={() => {
+        setInteractedWithMouseDown(true);
+      }}
+    >
+      <SplitPanelContext.Provider
+        value={{
+          ...props.splitPanelContext,
+          layoutRefs: {
+            ...props.splitPanelContext.layoutRefs,
+            headerLeft: undefined,
+            headerRight: undefined,
+          },
+          halfSplitState: () => ({
+            side: 'right',
+            percentage: 30,
+          }),
+        }}
+      >
+        <Dynamic component={blockInstance().element} />
+      </SplitPanelContext.Provider>
+    </div>
+  );
+};
+
+const PreviewPanel: Component<{
+  selectedEntity: ReturnType<typeof useSplitPanelOrThrow>['unifiedListContext']['viewsDataStore'][string]['selectedEntity'];
+  orchestrator: ReturnType<typeof useGlobalBlockOrchestrator>;
+  splitPanelContext: ReturnType<typeof useSplitPanelOrThrow>;
+}> = (props) => {
+  return (
+    <div class="flex flex-row size-full w-[70%] shrink-0">
+      <Show when={props.selectedEntity?.type !== 'project' && props.selectedEntity}>
+        {(selectedEntity) => (
+          <PreviewPanelContent
+            selectedEntity={selectedEntity()}
+            orchestrator={props.orchestrator}
+            splitPanelContext={props.splitPanelContext}
+          />
+        )}
+      </Show>
+    </div>
+  );
+};
+
 export function Soup() {
   const authenticated = useIsAuthenticated();
   if (!authenticated()) return <Navigate href="/" />;
@@ -336,72 +418,11 @@ export function Soup() {
           </Tabs>
         </SplitPanelContext.Provider>
         <Show when={preview()}>
-          <div class="flex flex-row size-full w-[70%] shrink-0">
-            {/* must access property, id, on selectedEntity in order to make it reactive   */}
-            <Show
-              when={selectedEntity()?.type !== 'project' && selectedEntity()}
-            >
-              {(selectedEntity) => {
-                const entity = selectedEntity();
-                const blockInstance = () =>
-                  orchestrator.createBlockInstance(
-                    entity.type === 'document'
-                      ? fileTypeToBlockName(entity.fileType)
-                      : entity.type,
-                    entity.id
-                  );
-                const [interactedWithMouseDown, setInteractedWithMouseDown] =
-                  createSignal(false);
-
-                // Reset interaction state whenever the previewed entity changes
-                createRenderEffect(
-                  (prevId: string | undefined) => {
-                    const id = entity.id as string | undefined;
-                    if (id !== prevId) {
-                      setInteractedWithMouseDown(false);
-                    }
-                    return id;
-                  },
-                  entity.id as string | undefined
-                );
-
-                return (
-                  <div
-                    class="size-full"
-                    onFocusIn={(event) => {
-                      if (interactedWithMouseDown()) return;
-                      const relatedTarget = event.relatedTarget as HTMLElement;
-                      const currentTarget = event.currentTarget as HTMLElement;
-
-                      if (!currentTarget.contains(relatedTarget)) {
-                        relatedTarget.focus();
-                      }
-                    }}
-                    onPointerDown={() => {
-                      setInteractedWithMouseDown(true);
-                    }}
-                  >
-                    <SplitPanelContext.Provider
-                      value={{
-                        ...splitPanelContext,
-                        layoutRefs: {
-                          ...splitPanelContext.layoutRefs,
-                          headerLeft: undefined,
-                          headerRight: undefined,
-                        },
-                        halfSplitState: () => ({
-                          side: 'right',
-                          percentage: 30,
-                        }),
-                      }}
-                    >
-                      <Dynamic component={blockInstance().element} />
-                    </SplitPanelContext.Provider>
-                  </div>
-                );
-              }}
-            </Show>
-          </div>
+          <PreviewPanel
+            selectedEntity={selectedEntity()}
+            orchestrator={orchestrator}
+            splitPanelContext={splitPanelContext}
+          />
         </Show>
       </div>
       <Show when={showHelpDrawer().has(selectedView())}>
