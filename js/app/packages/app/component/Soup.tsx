@@ -12,6 +12,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { ENABLE_FOLDER_UPLOAD } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
+import type { BlockOrchestrator } from '@core/orchestrator';
 import {
   CONDITIONAL_VIEWS,
   DEFAULT_VIEWS,
@@ -23,6 +24,7 @@ import {
 import { handleFileFolderDrop } from '@core/util/upload';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Tabs } from '@kobalte/core/tabs';
+import type { EntityData } from '@macro-entity';
 import {
   queryKeys,
   useQueryClient as useEntityQueryClient,
@@ -52,6 +54,7 @@ import { HelpDrawer } from './HelpDrawer';
 import { SplitHeaderLeft } from './split-layout/components/SplitHeader';
 import { SplitTabs } from './split-layout/components/SplitTabs';
 import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
+import type { SplitPanelContext as SplitPanelContextType } from './split-layout/context';
 import { SplitPanelContext } from './split-layout/context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { UnifiedListView } from './UnifiedListView';
@@ -125,9 +128,9 @@ const ViewWithSearch: Component<{
 };
 
 const PreviewPanelContent: Component<{
-  selectedEntity: NonNullable<ReturnType<typeof useSplitPanelOrThrow>['unifiedListContext']['viewsDataStore'][string]['selectedEntity']>;
-  orchestrator: ReturnType<typeof useGlobalBlockOrchestrator>;
-  splitPanelContext: ReturnType<typeof useSplitPanelOrThrow>;
+  selectedEntity: EntityData;
+  orchestrator: BlockOrchestrator;
+  splitPanelContext: SplitPanelContextType;
 }> = (props) => {
   const blockInstance = () =>
     props.orchestrator.createBlockInstance(
@@ -187,13 +190,15 @@ const PreviewPanelContent: Component<{
 };
 
 const PreviewPanel: Component<{
-  selectedEntity: ReturnType<typeof useSplitPanelOrThrow>['unifiedListContext']['viewsDataStore'][string]['selectedEntity'];
-  orchestrator: ReturnType<typeof useGlobalBlockOrchestrator>;
-  splitPanelContext: ReturnType<typeof useSplitPanelOrThrow>;
+  selectedEntity: EntityData | undefined;
+  orchestrator: BlockOrchestrator;
+  splitPanelContext: SplitPanelContextType;
 }> = (props) => {
   return (
     <div class="flex flex-row size-full w-[70%] shrink-0">
-      <Show when={props.selectedEntity?.type !== 'project' && props.selectedEntity}>
+      <Show
+        when={props.selectedEntity?.type !== 'project' && props.selectedEntity}
+      >
         {(selectedEntity) => (
           <PreviewPanelContent
             selectedEntity={selectedEntity()}
