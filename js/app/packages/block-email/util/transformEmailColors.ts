@@ -43,7 +43,11 @@ export function processEmailColors(root: Node) {
         'color',
         `oklch(${accentL} ${accentC} ${accentH})`
       );
-      setAnchorStyle(textNodeColor.node, 'text-decoration-color', `oklch(${accentL} ${accentC} ${accentH})`);
+      setAnchorStyle(
+        textNodeColor.node,
+        'text-decoration-color',
+        `oklch(${accentL} ${accentC} ${accentH})`
+      );
       return;
     }
 
