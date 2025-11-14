@@ -277,6 +277,7 @@ skip = [
   { crate = "windows_x86_64_gnullvm", reason = "Windows dependencies" },
   { crate = "windows_x86_64_msvc", reason = "Windows dependencies" },
   { crate = "zerocopy", reason = "Zero-copy serialization dependencies" },
+  { crate = "webpki-roots", reason = "sqlx dependency" },
 ]
 # Similarly to `skip` allows you to skip certain crates during duplicate
 # detection. Unlike skip, it also includes the entire tree of transitive
