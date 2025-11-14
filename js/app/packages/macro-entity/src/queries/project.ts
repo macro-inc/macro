@@ -1,8 +1,21 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
+import type { WithRequired } from '@core/util/withRequired';
 import { useQuery } from '@tanstack/solid-query';
 import type { ChatEntity, DocumentEntity, EntityData } from '../types/entity';
 import { createApiTokenQuery } from './auth';
 import { queryKeys } from './key';
+
+export type ProjectContainedEntity = WithRequired<
+  Extract<EntityData, DocumentEntity | ChatEntity>,
+  'projectId'
+>;
+
+export const isProjectContainedEntity = (
+  entity: EntityData
+): entity is ProjectContainedEntity => {
+  if (entity.type !== 'chat' && entity.type !== 'document') return false;
+  return !!entity.projectId;
+};
 
 const fetchProjectData = async (projectId: string, apiToken?: string) => {
   if (!apiToken) throw new Error('No API token provided');
@@ -83,15 +96,15 @@ const fetchProjectData = async (projectId: string, apiToken?: string) => {
   }
 };
 
-type DocumentOrChatEntity = Extract<EntityData, DocumentEntity | ChatEntity>;
-
-export function createProjectQuery<T extends DocumentOrChatEntity>(entity: T) {
+export function createProjectQuery<T extends ProjectContainedEntity>(
+  entity: T
+) {
   const authQuery = createApiTokenQuery();
 
   const projectQuery = useQuery(() => ({
-    queryKey: queryKeys.project({ projectId: entity.projectId! }),
-    queryFn: () => fetchProjectData(entity.projectId!, authQuery.data),
-    enabled: !!entity.projectId && authQuery.isSuccess,
+    queryKey: queryKeys.project({ projectId: entity.projectId }),
+    queryFn: () => fetchProjectData(entity.projectId, authQuery.data),
+    enabled: authQuery.isSuccess,
     gcTime: 1000 * 60 * 10, // 10 minutes
     staleTime: 1000 * 60 * 5, // 5 minutes
   }));
