@@ -2,28 +2,61 @@ name: infra code check
 on:
   pull_request:
     branches: [ 'main' ]
-    paths:
-      - 'rust/cloud-storage/infra/**'
-      - .github/workflows/code-check-infra.yml
 
 concurrency:
   group: code-check-infra-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  biome-check:
+  path-check:
     runs-on: ubuntu-latest
-    if: github.event.pull_request.draft == false
+    outputs:
+      should_run: ${{ steps.filter.outputs.should_run }}
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: 
-          node-version: 21
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            should_run:
+              - 'infra/**'
+              - .github/workflows/code-check-infra.yml
+
+  biome-check:
+    needs: path-check
+    if: needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false
+    name: Biome Check
+    runs-on: linux-latest-middy
+    steps:
+      - name: Checkout Repo
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - name: Setup Biome
         uses: biomejs/setup-biome@v2
         with:
-          # keep this in sync with package.json
           version: 2.2.6
       - name: Run Biome
+        working-directory: infra
+        run: biome ci --changed --no-errors-on-unmatched
+
+  # Collector job that always runs - use this as the required status check
+  status-check:
+    name: Infra Status Check
+    if: always()
+    needs: [path-check, biome-check]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check job results
         run: |
-          biome ci infra
+          echo "path-check: ${{ needs.path-check.result }}"
+          echo "biome-check: ${{ needs.biome-check.result }}"
+
+          # Fail if any job failed (skipped and success are both OK)
+          if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
+             [[ "${{ needs.biome-check.result }}" == "failure" ]]; then
+            echo "❌ One or more jobs failed"
+            exit 1
+          fi
+
+          echo "✅ All jobs passed or were skipped"

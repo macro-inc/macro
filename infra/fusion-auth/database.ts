@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { RDS_PORT, stack } from './resources/shared';
 
 type DatabaseArgs = {
@@ -26,7 +26,7 @@ export class Database extends pulumi.ComponentResource {
   constructor(
     name: string,
     args: DatabaseArgs,
-    opts?: pulumi.ComponentResourceOptions,
+    opts?: pulumi.ComponentResourceOptions
   ) {
     super('my:components:RdsDatabase', name, {}, opts);
     const { dbArgs, publiclyAccessible, tags, vpc } = args;
@@ -51,7 +51,7 @@ export class Database extends pulumi.ComponentResource {
         vpcId: vpc.vpcId,
         tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
     new aws.vpc.SecurityGroupIngressRule(
@@ -65,7 +65,7 @@ export class Database extends pulumi.ComponentResource {
         securityGroupId: securityGroup.id,
         tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
     if (publiclyAccessible) {
@@ -80,7 +80,7 @@ export class Database extends pulumi.ComponentResource {
           securityGroupId: securityGroup.id,
           tags,
         },
-        { parent: this },
+        { parent: this }
       );
     }
 
@@ -94,7 +94,7 @@ export class Database extends pulumi.ComponentResource {
           : vpc.publicSubnetIds,
         tags,
       },
-      { parent: this },
+      { parent: this }
     );
 
     // For prod we had to snapshot and then encrypt the db.
@@ -122,7 +122,7 @@ export class Database extends pulumi.ComponentResource {
           multiAz: true,
           tags,
         },
-        { parent: this },
+        { parent: this }
       );
       this.endpoint = this.db.endpoint;
     }
