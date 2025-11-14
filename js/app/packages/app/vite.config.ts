@@ -3,7 +3,7 @@ import importMetaUrlPlugin from '@codingame/esbuild-import-meta-url-plugin';
 import tailwind from '@tailwindcss/vite';
 import { Features } from 'lightningcss';
 // SolidDevtools retains disposed memos, causes memory leak
-import solidDevtools from 'solid-devtools/vite';
+// import solidDevtools from 'solid-devtools/vite';
 import { defineConfig } from 'vite';
 import solid from 'vite-plugin-solid';
 import solidSvg from 'vite-plugin-solid-svg';
@@ -29,7 +29,7 @@ export default defineConfig(({ command, mode }) => {
       },
     },
     plugins: [
-      solidDevtools({ autoname: true, locator: { targetIDE: 'vscode', componentLocation: true, jsxLocation: true } }),
+      // solidDevtools({ autoname: true }),
       solid(),
       wasm(),
       tailwind(),
@@ -101,7 +101,7 @@ export default defineConfig(({ command, mode }) => {
       include: [
         'vscode-textmate',
         'vscode-oniguruma',
-        'solid-devtools/setup',
+        // 'solid-devtools/setup',
         'libheif-js/wasm-bundle',
       ],
       esbuildOptions: {

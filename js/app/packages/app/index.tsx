@@ -1,6 +1,6 @@
 import './index.css';
 // SolidDevtools retains disposed memos, causes memory leak
-import 'solid-devtools';
+// import 'solid-devtools';
 
 import * as analytics from '@coparse/analytics';
 import { initializeLexical } from '@core/component/LexicalMarkdown/init';
