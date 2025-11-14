@@ -102,6 +102,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     messageDiv.innerHTML = parsedHTML().mainContent;
     messageDiv.style.userSelect = 'text';
     messageDiv.style.cursor = 'auto';
+    messageDiv.style.overflow = 'auto';
     shadow.appendChild(messageDiv);
     return hostContainer;
   });
