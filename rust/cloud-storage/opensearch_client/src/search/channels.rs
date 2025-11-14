@@ -110,6 +110,7 @@ impl ChannelMessageQueryBuilder {
         fn search_on(search_on: SearchOn) -> Self;
         fn ids_only(ids_only: bool) -> Self;
         fn collapse(collapse: bool) -> Self;
+        fn disable_recency(disable_recency: bool) -> Self;
     }
 
     fn build_search_request(self) -> Result<SearchRequest> {
@@ -162,6 +163,7 @@ pub struct ChannelMessageSearchArgs {
     pub search_on: SearchOn,
     pub collapse: bool,
     pub ids_only: bool,
+    pub disable_recency: bool,
 }
 
 impl ChannelMessageSearchArgs {
@@ -178,6 +180,7 @@ impl ChannelMessageSearchArgs {
             .collapse(self.collapse)
             .ids_only(self.ids_only)
             .sender_ids(self.sender_ids)
+            .disable_recency(self.disable_recency)
             .build_search_request()?
             .to_json())
     }

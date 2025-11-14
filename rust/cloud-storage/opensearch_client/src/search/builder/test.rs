@@ -51,7 +51,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
         .collapse(true)
         .ids(vec!["id1".to_string(), "id2".to_string()]);
 
-    let result = builder.build_search_request(bool_query)?;
+    let result = builder.build_search_request(bool_query.clone())?;
 
     let expected = serde_json::json!({
         "track_total_hits": true,
@@ -113,6 +113,56 @@ fn test_build_search_request() -> anyhow::Result<()> {
                 },
                 "score_mode": "multiply"
             }
+        }
+    });
+
+    assert_eq!(result.to_json(), expected);
+
+    let builder = SearchQueryBuilder::<TestSearchConfig>::new(vec!["test".to_string()])
+        .match_type("partial")
+        .page_size(20)
+        .page(1)
+        .user_id("user123")
+        .search_on(SearchOn::NameContent)
+        .collapse(true)
+        .disable_recency(true)
+        .ids(vec!["id1".to_string(), "id2".to_string()]);
+
+    let result = builder.build_search_request(bool_query)?;
+
+    let expected = serde_json::json!({
+        "from": 20,
+        "size": 20,
+        "collapse": {
+            "field": "test_id"
+        },
+        "sort": [
+            {
+                "_score": "desc"
+            },
+            {
+                "test_id": "asc"
+            }
+        ],
+        "highlight": {
+            "require_field_match": false,
+            "fields": {
+                "content": {
+                    "type": "unified",
+                    "number_of_fragments": 1,
+                    "pre_tags": ["<macro_em>"],
+                    "post_tags": ["</macro_em>"],
+                },
+                "test_title": {
+                    "type": "unified",
+                    "number_of_fragments": 1,
+                    "pre_tags": ["<macro_em>"],
+                    "post_tags": ["</macro_em>"],
+                }
+            }
+        },
+        "query": {
+            "bool": {}
         }
     });
 
