@@ -1,5 +1,5 @@
-import * as pulumi from '@pulumi/pulumi';
 import * as awsx from '@pulumi/awsx';
+import * as pulumi from '@pulumi/pulumi';
 
 export class EcrImage extends pulumi.ComponentResource {
   public ecr: awsx.ecr.Repository;
@@ -26,7 +26,7 @@ export class EcrImage extends pulumi.ComponentResource {
       tags: { [key: string]: string };
     },
 
-    opts?: pulumi.ComponentResourceOptions,
+    opts?: pulumi.ComponentResourceOptions
   ) {
     super('my:components:EcrImage', name, {}, opts);
     this.tags = tags;
@@ -38,7 +38,7 @@ export class EcrImage extends pulumi.ComponentResource {
         forceDelete: true,
         tags: this.tags,
       },
-      { parent: this },
+      { parent: this }
     );
     this.image = new awsx.ecr.Image(
       imageId,
@@ -50,7 +50,7 @@ export class EcrImage extends pulumi.ComponentResource {
         platform: `${platform.family}/${platform.architecture}`,
         repositoryUrl: this.ecr.url,
       },
-      { parent: this },
+      { parent: this }
     );
   }
 }
