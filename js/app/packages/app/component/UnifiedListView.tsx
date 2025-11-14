@@ -385,13 +385,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     );
   };
 
-  const showProjects = createMemo(
-    () => view()?.display?.showProjects ?? defaultDisplayOptions.showProjects
-  );
-  const setShowProjects = (showProjects: DisplayOptions['showProjects']) => {
-    setViewDataStore(selectedView(), 'display', 'showProjects', showProjects);
-  };
-
   const showUnreadIndicator = createMemo(
     () =>
       view()?.display?.showUnreadIndicator ??
@@ -853,8 +846,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       optionalFilter,
       entitySort,
       searchFilter: nameFuzzySearchFilter,
-      showProjects,
-      projectFilter,
       isSearchActive,
     });
 
@@ -1185,14 +1176,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     <SortComponent size="SM" />
                   </section>
                   <section class="gap-1 grid p-2">
-                    <Show when={view()?.viewType !== 'project'}>
-                      <ToggleSwitch
-                        size="SM"
-                        label="Show Projects"
-                        checked={showProjects()}
-                        onChange={setShowProjects}
-                      />
-                    </Show>
                     <ToggleSwitch
                       size="SM"
                       label="Unroll Notifications"

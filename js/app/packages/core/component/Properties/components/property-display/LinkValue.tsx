@@ -254,7 +254,7 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
 
   return (
     <div
-      class="relative inline-flex max-w-[225px] shrink-0"
+      class="relative inline-flex max-w-[200px] shrink-0"
       onMouseEnter={() => props.setHoveredLink(props.url)}
       onMouseLeave={() => props.setHoveredLink(null)}
     >
