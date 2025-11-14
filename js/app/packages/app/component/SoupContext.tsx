@@ -109,7 +109,7 @@ function createViewData(
 ): ViewData {
   return {
     id: (viewProps?.id || view) ?? '',
-    view,
+    view: viewProps?.view ?? view,
     filters: {
       notificationFilter:
         viewProps?.filters?.notificationFilter ??
