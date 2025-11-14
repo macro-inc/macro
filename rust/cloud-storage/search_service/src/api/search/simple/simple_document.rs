@@ -202,6 +202,7 @@ pub(in crate::api::search) async fn search_documents(
             search_on: req.search_on.into(),
             collapse: req.collapse.unwrap_or(false),
             ids_only,
+            disable_recency: req.disable_recency,
         })
         .await
         .map_err(SearchError::Search)?;
