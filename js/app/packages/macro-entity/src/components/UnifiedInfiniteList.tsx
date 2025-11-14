@@ -142,94 +142,14 @@ const deduplicateEntities = <T extends EntityData>(entities: T[]): T[] => {
 };
 
 /**
- * Calculates match quality score for local search results.
- * Higher score = better match.
- * Prioritizes: exact match > starts with > word boundary > fuzzy match
+ * Sorts entities for search mode
  */
-const getLocalMatchScore = (
-  entityName: string,
-  nameHighlight: string | null
-): number => {
-  if (!nameHighlight) return 0;
-
-  const name = entityName.toLowerCase();
-
-  // Extract the search query from the highlighted text
-  // The highlighted portion is wrapped in <macro_em>...</macro_em>
-  const highlightedText = nameHighlight
-    .replace(/<\/?macro_em>/g, '')
-    .toLowerCase();
-
-  // Count number of highlight segments (fewer segments = more contiguous match)
-  const highlightSegments = (nameHighlight.match(/<macro_em>/g) || []).length;
-
-  // Exact match (highest priority)
-  if (name === highlightedText) return 1000;
-
-  // Starts with match
-  if (name.startsWith(highlightedText)) return 900;
-
-  // Single contiguous match (not scattered)
-  if (highlightSegments === 1) {
-    // Word boundary match (after space, comma, etc.)
-    if (
-      name.match(
-        new RegExp(
-          `[\\s,+]${highlightedText.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`
-        )
-      )
-    ) {
-      return 800;
-    }
-    return 700; // Contiguous substring
-  }
-
-  // Multiple segments (fuzzy/scattered match) - penalize based on number of segments
-  return Math.max(100, 500 - highlightSegments * 50);
-};
-
-/**
- * Sorts entities for search mode:
- * 1. Channels first
- * 2. Local search results before service results
- * 3. Within local results, better name matches come first
- */
-const sortEntitiesForSearch = <T extends EntityData>(a: T, b: T): number => {
+const _sortEntitiesForSearch = <T extends EntityData>(a: T, b: T): number => {
   const aHasSearch = isSearchEntity(a);
   const bHasSearch = isSearchEntity(b);
 
   if (aHasSearch && bHasSearch) {
-    // Channel results come before other results
-    const aIsChannel = a.type === 'channel';
-    const bIsChannel = b.type === 'channel';
-
-    if (aIsChannel && !bIsChannel) return -1;
-    if (!aIsChannel && bIsChannel) return 1;
-
-    // Local results come before service results
-    const aSource = a.search.source;
-    const bSource = b.search.source;
-
-    if (aSource === 'local' && bSource === 'service') return -1;
-    if (aSource === 'service' && bSource === 'local') return 1;
-
-    // Within local results, sort by match quality
-    if (
-      aSource === 'local' &&
-      bSource === 'local' &&
-      aIsChannel &&
-      bIsChannel
-    ) {
-      const aScore = getLocalMatchScore(a.name, a.search.nameHighlight);
-      const bScore = getLocalMatchScore(b.name, b.search.nameHighlight);
-
-      if (aScore !== bScore) {
-        return bScore - aScore; // Higher score first
-      }
-
-      // If same score, prefer shorter names (more focused match)
-      return a.name.length - b.name.length;
-    }
+    // custom sort here
   }
 
   return 0;
@@ -381,7 +301,10 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     const searching = isSearchActive?.();
 
     if (searching) {
-      return entities.toSorted(sortEntitiesForSearch);
+      // NOTE: the default sort will be channels, then local fuzzy name, then serach service
+      // avoiding doing an extra sort as a speed optimization
+      return entities;
+      // return entities.toSorted(sortEntitiesForSearch);
     }
 
     if (!sortFn) return entities;
