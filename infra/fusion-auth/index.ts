@@ -1,9 +1,9 @@
-import * as pulumi from '@pulumi/pulumi';
-import { config, stack } from './resources/shared';
-import { get_coparse_api_vpc } from './resources/vpc';
 import * as aws from '@pulumi/aws';
+import * as pulumi from '@pulumi/pulumi';
 import { Database } from './database';
 import { FusionAuthService } from './fusionauth-service';
+import { config, stack } from './resources/shared';
+import { get_coparse_api_vpc } from './resources/vpc';
 
 const tags = {
   environment: stack,
@@ -18,7 +18,7 @@ const password = aws.secretsmanager
   .getSecretVersionOutput({
     secretId: config.require('db-password-secret-key'),
   })
-  .apply(secret => secret.secretString);
+  .apply((secret) => secret.secretString);
 
 const database = new Database('fusionauth-db', {
   publiclyAccessible: stack !== 'prod', // We keep the database publicly accessible in dev to make sure everything is working.
@@ -42,7 +42,7 @@ if (stack === 'prod') {
 } else {
   // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
   DATABASE_URL = database.endpoint!.apply(
-    endpoint => `jdbc:postgresql://${endpoint}/fusionauth`,
+    (endpoint) => `jdbc:postgresql://${endpoint}/fusionauth`
   );
 }
 
