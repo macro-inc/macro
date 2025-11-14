@@ -19,7 +19,6 @@ import {
 import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { LIST_WRAPPER } from '../constants/classStrings';
-import { CustomScrollbar } from './CustomScrollbar';
 import type {
   EntityInfiniteQuery,
   EntityList,
@@ -36,6 +35,7 @@ import type {
   EntityRenderer,
 } from '../types/entity';
 import type { WithSearch } from '../types/search';
+import { CustomScrollbar } from './CustomScrollbar';
 import { Entity } from './Entity';
 
 const isSearchEntity = (entity: EntityData): entity is WithSearch<EntityData> =>
