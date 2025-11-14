@@ -61,9 +61,6 @@ export function useEntityActionItems(): Accessor<
               entities: () => selectionInfo.entities,
             });
           } catch (err) {
-            // Will throw an error if trying to use this action outside the unified list
-            // Specifically outside a split panel context
-
             console.error('Failed to open unified list', err);
           }
 
@@ -105,12 +102,11 @@ export function useEntityActionItems(): Accessor<
         id: 'mark_as_done',
         name: 'Mark as done',
         handler() {
+          console.log('MARK AS DONE HANDLER');
           const selectionInfo = getSelectedEntitiesContextInformation();
-
           if (!selectionInfo || !selectionInfo.entities.length) return true;
 
           try {
-            // TODO - implement bulk mark as done
             selectionInfo.entities;
           } catch (err) {
             console.error('Failed to mark entities', err);

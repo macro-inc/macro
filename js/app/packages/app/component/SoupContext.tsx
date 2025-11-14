@@ -7,6 +7,7 @@ import {
   type View,
   type ViewId,
 } from '@core/types/view';
+import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
 import { getScrollParent } from '@core/util/scrollParent';
 import type { EntityData } from '@macro-entity';
@@ -147,6 +148,9 @@ function createViewData(
       showUnreadIndicator:
         viewProps?.display?.showUnreadIndicator ??
         VIEWCONFIG_BASE.display.showUnreadIndicator,
+      showProjects:
+        viewProps?.display?.showProjects ??
+        VIEWCONFIG_BASE.display.showProjects,
       unrollNotifications:
         viewProps?.display?.unrollNotifications ??
         VIEWCONFIG_BASE.display.unrollNotifications,
@@ -257,6 +261,28 @@ export function createNavigationEntityListShortcut({
     };
   });
 
+  const getEntitiesForAction = createLazyMemo(() => {
+    const entityList = entities();
+    if (!entityList) return [];
+    const idToIndexMap = new Map(entityList.map(({ id }, i) => [id, i]));
+    if (viewData().selectedEntities.length > 0) {
+      return filterMap(viewData().selectedEntities, (entity) => {
+        const index = idToIndexMap.get(entity.id);
+        if (index === undefined) {
+          return undefined;
+        }
+        return {
+          index,
+          entity,
+        };
+      });
+    } else {
+      const entity = getHighlightedEntity();
+      if (entity) return [entity];
+    }
+    return [];
+  });
+
   const isEntityLastItem = createLazyMemo(() => {
     const entityList = entities();
     if (!entityList) return false;
@@ -338,10 +364,7 @@ export function createNavigationEntityListShortcut({
 
       const selectedEntity = entities()?.at(index);
       if (selectedEntity) {
-        if (
-          splitHandle.content().type !== 'component' &&
-          splitHandle.content().type !== 'project'
-        ) {
+        if (splitHandle.content().type !== 'component') {
           const { type, id } = selectedEntity;
           if (type === 'document') {
             const { fileType } = selectedEntity;
@@ -582,7 +605,6 @@ export function createNavigationEntityListShortcut({
       searchCategories.hideCategory('Selection');
       resetCommandCategoryIndex();
       resetKonsoleMode();
-
       return false;
     },
   });
@@ -763,7 +785,7 @@ export function createNavigationEntityListShortcut({
     scopeId: entityHotkeyScope,
     description: 'Mark done',
     keyDownHandler: () => {
-      const entity = getHighlightedEntity()?.entity;
+      const entities = getEntitiesForAction();
 
       if (!entity) return false;
 
