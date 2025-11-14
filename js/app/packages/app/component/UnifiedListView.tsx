@@ -1401,14 +1401,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                         console.error('No split manager available');
                         return;
                       }
-                      if (selectedEntity().type === 'document') {
-                        const { fileType, id } = selectedEntity();
+                      const entity = selectedEntity();
+                      if (entity.type === 'document') {
+                        const { fileType, id } = entity;
                         splitManager.createNewSplit({
                           type: fileTypeToBlockName(fileType),
                           id,
                         });
                       } else {
-                        const { id, type } = selectedEntity();
+                        const { id, type } = entity;
                         splitManager.createNewSplit({
                           type,
                           id,
