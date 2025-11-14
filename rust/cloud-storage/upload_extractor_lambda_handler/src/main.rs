@@ -591,7 +591,7 @@ async fn main() -> Result<(), Error> {
 
     let dss_client = DocumentStorageServiceClient::new(internal_api_secret_key.clone(), dss_url);
 
-    let dynamodb_client = DynamodbClient::new(&config, None, Some(dynamo_table_name.clone()));
+    let dynamodb_client = DynamodbClient::new(&config, Some(dynamo_table_name.clone()));
 
     let conn_gateway_client =
         ConnectionGatewayClient::new(internal_api_secret_key, connection_gateway_url);

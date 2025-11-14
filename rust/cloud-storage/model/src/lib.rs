@@ -1,7 +1,6 @@
 use chrono::serde::ts_seconds_option;
 use serde::{Deserialize, Serialize};
 pub mod activity;
-pub mod affiliate;
 pub mod annotations;
 pub mod authentication;
 pub mod chat;

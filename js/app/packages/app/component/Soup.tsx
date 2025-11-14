@@ -225,7 +225,20 @@ export function Soup() {
     },
   } = splitPanelContext;
   const view = createMemo(() => viewsData[selectedView()]);
-  const preview = () => view().display.preview;
+  // Use preview state from SplitPanelContext (created in SplitLayout for unified-list)
+  const previewState = () => splitPanelContext.previewState;
+  const preview = () => previewState()?.[0]?.() ?? false;
+  const setPreview = (value: boolean | ((prev: boolean) => boolean)) => {
+    const state = previewState();
+    if (state) {
+      const [, setState] = state;
+      if (typeof value === 'function') {
+        setState((prev) => value(prev));
+      } else {
+        setState(value);
+      }
+    }
+  };
   const selectedEntity = () => view().selectedEntity;
 
   const orchestrator = useGlobalBlockOrchestrator();
@@ -246,6 +259,18 @@ export function Soup() {
       }
       return true;
     },
+  });
+
+  registerHotkey({
+    hotkey: ['p'],
+    scopeId: splitHotkeyScope,
+    description: 'Toggle Preview',
+    hotkeyToken: TOKENS.unifiedList.togglePreview,
+    keyDownHandler: () => {
+      setPreview((prev) => !prev);
+      return true;
+    },
+    hide: true,
   });
 
   const [isDragging, setIsDragging] = createSignal(false);
@@ -374,7 +399,7 @@ export function Soup() {
         >
           <Tabs
             ref={tabsRef}
-            class="@container/soup flex flex-col gap-1 size-full p-2 overflow-x-clip"
+            class="@container/soup flex flex-col gap-1 size-full overflow-x-clip"
             classList={{
               'border-r border-edge-muted': preview(),
               'pt-2 pb-0': showHelpDrawer().has(selectedView()),

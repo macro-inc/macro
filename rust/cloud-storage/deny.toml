@@ -72,7 +72,6 @@ feature-depth = 1
 ignore = [
   { id = "RUSTSEC-2021-0141", reason = "Consider implementing dotenv from scratch. Not done yet" },
   { id = "RUSTSEC-2023-0071", reason = "At the time of writing there is no patch for this" },
-  { id = "RUSTSEC-2024-0363", reason = "This is only fixed in sqlx 0.8.1. Which is a breaking update" },
   { id = "RUSTSEC-2024-0384", reason = "Cannot yet switch to web-time, due to a 3rd party openai dependency" },
   { id = "RUSTSEC-2024-0436", reason = "Paste is a 'finished' crate which is heavily depended on" },
   { id = "RUSTSEC-2025-0012", reason = "Cannot remove dep due to 3rd party openai dependency" },
@@ -108,6 +107,7 @@ allow = [
   "Unicode-3.0",
   "Zlib",
   "bzip2-1.0.6",
+  "CDLA-Permissive-2.0",
 ]
 # The confidence threshold for detecting a license from license text.
 # The higher the value, the more closely the license text must be to the

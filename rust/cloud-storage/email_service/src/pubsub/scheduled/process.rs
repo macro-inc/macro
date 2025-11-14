@@ -5,7 +5,7 @@ use anyhow::Context;
 use email_db_client::messages::scheduled::get_scheduled_message;
 use models_email::service::message::MessageToSend;
 use models_email::service::pubsub::ScheduledPubsubMessage;
-use sqlx::postgres::any::AnyConnectionBackend;
+use sqlx_core::any::AnyConnectionBackend;
 use sqs_worker::cleanup_message;
 
 pub async fn process_message(

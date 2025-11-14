@@ -22,6 +22,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
 import IconQuestion from '@icon/regular/question.svg';
+import SplitIcon from '@icon/regular/square-split-horizontal.svg';
 import IconAtom from '@macro-icons/macro-atom.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
 import { createMemo, createSignal, Show } from 'solid-js';
@@ -163,6 +164,25 @@ export function Dock() {
               }}
             />
           </Show>
+
+          <IconButton
+            icon={SplitIcon}
+            theme="clear"
+            tooltip={{
+              label: 'Create New Split',
+              hotkeyToken: TOKENS.global.createNewSplit,
+            }}
+            class="h-full aspect-square"
+            onClick={() => {
+              const manager = globalSplitManager();
+              if (manager) {
+                manager.createNewSplit({
+                  type: 'component',
+                  id: 'unified-list',
+                });
+              }
+            }}
+          />
 
           <IconButton
             icon={IconGear}
