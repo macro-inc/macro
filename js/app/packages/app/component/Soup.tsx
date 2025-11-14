@@ -297,17 +297,17 @@ export function Soup() {
 
   const TabContextMenu = (props: { value: ViewId; label: string }) => {
     const [isModalOpen, setIsModalOpen] = createSignal(false);
+    const isDefaultView = () =>
+      VIEWCONFIG_DEFAULTS_NAMES.includes(props.value as View);
     return (
-      <Show when={!VIEWCONFIG_DEFAULTS_NAMES.includes(props.value as any)}>
+      <Show when={!isDefaultView()}>
         <ContextMenu>
           <ContextMenu.Trigger class="absolute inset-0" />
           <ContextMenu.Portal>
             <ContextMenuContent mobileFullScreen>
               <MenuItem
                 text="Rename"
-                disabled={VIEWCONFIG_DEFAULTS_NAMES.includes(
-                  props.value as any
-                )}
+                disabled={isDefaultView()}
                 onClick={() => {
                   setTimeout(() => {
                     setIsModalOpen(true);
@@ -317,9 +317,7 @@ export function Soup() {
               />
               <MenuItem
                 text="Delete"
-                disabled={VIEWCONFIG_DEFAULTS_NAMES.includes(
-                  props.value as any
-                )}
+                disabled={isDefaultView()}
                 onClick={() => {
                   saveViewMutation.mutate({
                     id: props.value,
@@ -479,15 +477,18 @@ export const useUpsertSavedViewMutation = () => {
             id: ViewConfigDefaultsName | string;
           }
     ) => {
+      const isDefaultView = VIEWCONFIG_DEFAULTS_NAMES.includes(
+        viewData.id as View
+      );
       if ('config' in viewData) {
         // if data id is in defaults, exclude default, set up args to create new view
-        if (VIEWCONFIG_DEFAULTS_NAMES.includes(viewData.id as any)) {
+        if (isDefaultView) {
           // don't exclude default view on editing default view config
           // await storageServiceClient.views.excludeDefaultView({
           //   defaultViewId: viewData.id!,
           // });
           viewData.id = undefined;
-          viewData.name = 'My ' + viewData.name;
+          viewData.name = `My ${viewData.name}`;
         }
         // create new view
         if (!viewData.id) {
@@ -505,7 +506,7 @@ export const useUpsertSavedViewMutation = () => {
         }
       } else {
         // delete or exclude view
-        if (VIEWCONFIG_DEFAULTS_NAMES.includes(viewData.id as any)) {
+        if (isDefaultView) {
           // for now don't exclude default view
           // return await storageServiceClient.views.excludeDefaultView({
           //   defaultViewId: viewData.id,
