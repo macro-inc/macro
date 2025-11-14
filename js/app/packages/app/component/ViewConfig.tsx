@@ -1,4 +1,9 @@
-import { VIEWS, type View, type ViewId, ViewLabel } from '@core/types/view';
+import {
+  VIEWS,
+  type View,
+  type ViewId,
+  type ViewLabel,
+} from '@core/types/view';
 import type { WithCustomUserInput } from '@core/user';
 import type { DeepPartial } from '@core/util/withRequired';
 import {

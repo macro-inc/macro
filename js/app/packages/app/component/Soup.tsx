@@ -20,7 +20,7 @@ import {
   VIEWS,
   type View,
   type ViewId,
-  ViewLabel,
+  type ViewLabel,
 } from '@core/types/view';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { ContextMenu } from '@kobalte/core/context-menu';
