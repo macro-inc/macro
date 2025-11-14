@@ -68,7 +68,6 @@ export type DisplayOptions = {
   layout: 'compact' | 'expanded' | 'visual';
   unrollNotifications: boolean;
   showUnreadIndicator: boolean;
-  preview: boolean;
   limit?: number;
 };
 
@@ -115,7 +114,6 @@ export const VIEWCONFIG_BASE: ViewConfigBase = {
     layout: 'compact',
     unrollNotifications: false,
     showUnreadIndicator: false,
-    preview: false,
     limit: 100,
   },
 };
@@ -138,26 +136,11 @@ export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
     layout: 'compact',
     unrollNotifications: false,
     showUnreadIndicator: true,
-    preview: false,
     limit: 100,
   },
 };
 
 const ALL_VIEWCONFIG_DEFAULTS = {
-  all: {
-    view: 'all',
-    sort: {
-      sortBy: 'viewed_at',
-    },
-    hotkeyOptions: {
-      e: (entity: EntityData) => {
-        if (entity.type === 'email') {
-          archiveEmail(entity.id, { isDone: entity.done });
-        }
-        return true;
-      },
-    },
-  },
   inbox: {
     view: 'inbox',
     filters: {
@@ -238,14 +221,25 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     filters: {
       typeFilter: ['chat'],
     },
-    display: {
-      preview: true,
-    },
   },
   folders: {
     view: 'folders',
     filters: {
       typeFilter: ['project'],
+    },
+  },
+  all: {
+    view: 'all',
+    sort: {
+      sortBy: 'viewed_at',
+    },
+    hotkeyOptions: {
+      e: (entity: EntityData) => {
+        if (entity.type === 'email') {
+          archiveEmail(entity.id, { isDone: entity.done });
+        }
+        return true;
+      },
     },
   },
 } satisfies Record<View, Omit<DeepPartial<ViewConfigEnhanced>, 'id'>>;

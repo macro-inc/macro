@@ -59,7 +59,7 @@ import {
 
 export type UnifiedListContext = {
   viewsDataStore: Store<ViewDataMap>;
-  setViewDataStore: SetStoreFunction<ViewDataMap>;
+  setViewDataStore: SetStoreFunction<Partial<ViewDataMap>>;
   selectedView: Accessor<ViewId>;
   setSelectedView: Setter<ViewId>;
   virtualizerHandleSignal: Signal<VirtualizerHandle | undefined>;
@@ -155,7 +155,6 @@ function createViewData(
       unrollNotifications:
         viewProps?.display?.unrollNotifications ??
         VIEWCONFIG_BASE.display.unrollNotifications,
-      preview: viewProps?.display?.preview ?? VIEWCONFIG_BASE.display.preview,
       limit: viewProps?.display?.limit,
     },
     sort: {
@@ -696,19 +695,6 @@ export function createNavigationEntityListShortcut({
 
       return true;
     },
-  });
-  registerHotkey({
-    hotkey: ['p'],
-    scopeId: splitHotkeyScope,
-    description: 'Toggle Preview',
-    hotkeyToken: TOKENS.unifiedList.togglePreview,
-    keyDownHandler: () => {
-      if (!entityListRef()) return false;
-
-      setViewDataStore(selectedView(), 'display', 'preview', (prev) => !prev);
-      return true;
-    },
-    hide: true,
   });
 
   const navigateThroughViews = ({

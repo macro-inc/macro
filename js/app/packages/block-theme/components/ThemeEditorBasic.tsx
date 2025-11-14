@@ -1,10 +1,4 @@
-import {
-  batch,
-  createEffect,
-  createSignal,
-  onCleanup,
-  onMount,
-} from 'solid-js';
+import { batch, createEffect, createSignal, onCleanup, onMount } from 'solid-js';
 import { themeReactive } from '../signals/themeReactive';
 
 function setLightness(lightness: number) {
@@ -24,17 +18,15 @@ function setChroma(chroma: number, saturation: number) {
     themeReactive.a2.c[1](chroma);
     themeReactive.a3.c[1](chroma);
     themeReactive.a4.c[1](chroma);
-
-    //parseFloat(sliderSaturationRef.value)
     setSaturation(saturation);
   });
 }
 
 function setHue(hue: number) {
   batch(() => {
-    themeReactive.a0.h[1](hue);
-    themeReactive.a1.h[1](hue + 40);
-    themeReactive.a2.h[1](hue + 80);
+    themeReactive.a0.h[1](hue      );
+    themeReactive.a1.h[1](hue +  40);
+    themeReactive.a2.h[1](hue +  80);
     themeReactive.a3.h[1](hue + 120);
     themeReactive.a4.h[1](hue + 160);
 
@@ -72,31 +64,11 @@ function setSaturation(saturation: number) {
 
 let q = 8;
 function sigmoid(x: number, b: number): number {
-  return (
-    -(
-      (1 / (1 + Math.exp(b * (x - 0.5))) - 0.5) *
-      (0.5 / (1 / (1 + Math.exp(q / 2)) - 0.5))
-    ) + 0.5
-  );
+  return (-((1 / (1 + Math.exp(b * (x - 0.5))) - 0.5) * (0.5 / (1 / (1 + Math.exp(q / 2)) - 0.5))) + 0.5);
 }
 
 function getContrastFromY(y: number): number {
-  return (
-    (-2 *
-      Math.log(
-        1 / (-(y - 0.5) / (0.5 / (1 / (1 + Math.exp(q / 2)) - 0.5)) + 0.5) - 1
-      ) -
-      (-2 *
-        Math.log(
-          1 / (-(y - 0.5) / (0.5 / (1 / (1 + Math.exp(q / 2)) - 0.5)) + 0.5) - 1
-        ) <
-      0
-        ? -1
-        : 1)) /
-      (q - 1) /
-      2 +
-    0.5
-  );
+  return ((-2 * Math.log(1 / (-(y - 0.5) / (0.5 / (1 / (1 + Math.exp(q / 2)) - 0.5)) + 0.5) - 1) - (-2 * Math.log(1 / (-(y - 0.5) / (0.5 / (1 / (1 + Math.exp(q / 2)) - 0.5)) + 0.5) - 1) < 0 ? -1 : 1)) / (q - 1) / 2 + 0.5);
 }
 
 function setContrast(contrast: number) {
@@ -119,7 +91,7 @@ function setContrast(contrast: number) {
   });
 }
 
-export function randomizeTheme() {
+export function randomizeTheme(){
   batch(() => {
     const randLightness = Math.random();
     const randHue = Math.random();
@@ -136,7 +108,7 @@ export function randomizeTheme() {
   });
 }
 
-export function ThemeEditorBasic() {
+export function ThemeEditorBasic(){
   const [canvasThumbDrag, setCanvasThumbDrag] = createSignal(false);
 
   let sliderSaturationRef!: HTMLInputElement;
@@ -148,13 +120,9 @@ export function ThemeEditorBasic() {
   let gl: WebGL2RenderingContext;
   let program: WebGLProgram;
 
-  function setupWebGL() {
-    const context = canvasRef.getContext('webgl2', {
-      colorSpace: 'display-p3',
-    });
-    if (!context || !(context instanceof WebGL2RenderingContext)) {
-      throw new Error('WebGL2 not supported');
-    }
+  function setupWebGL(){
+    const context = canvasRef.getContext('webgl2', {colorSpace: 'display-p3'});
+    if(!context || !(context instanceof WebGL2RenderingContext)){throw new Error('WebGL2 not supported')}
     gl = context;
     gl.viewport(0, 0, canvasRef.width, canvasRef.height);
     program = gl.createProgram()!;
@@ -231,7 +199,7 @@ export function ThemeEditorBasic() {
     chromaLocation = gl.getUniformLocation(program, 'chroma')!;
   }
 
-  function setCanvasColor(e: PointerEvent) {
+  function setCanvasColor(e: PointerEvent){
     const rect = canvasContainerRef.getBoundingClientRect();
     const x =
       Math.min(Math.max(e.clientX - rect.left, 0), rect.width) / rect.width;
@@ -243,33 +211,33 @@ export function ThemeEditorBasic() {
     });
   }
 
-  function handleCanvasPointerDown(e: PointerEvent) {
+  function handleCanvasPointerDown(e: PointerEvent){
     setCanvasThumbDrag(true);
     setCanvasColor(e);
   }
 
-  function handlePointerMove(e: PointerEvent) {
-    if (canvasThumbDrag()) {
+  function handlePointerMove(e: PointerEvent){
+    if(canvasThumbDrag()){
       setCanvasColor(e);
     }
   }
 
-  function handlePointerUp() {
+  function handlePointerUp(){
     setCanvasThumbDrag(false);
   }
 
-  function handleChromaChange(e: Event) {
+  function handleChromaChange(e: Event){
     setChroma(
       parseFloat((e.target as HTMLInputElement).value),
       parseFloat(sliderSaturationRef.value)
     );
   }
 
-  function handleSaturationChange(e: Event) {
+  function handleSaturationChange(e: Event){
     setSaturation(parseFloat((e.target as HTMLInputElement).value));
   }
 
-  function handleContrastChange(e: Event) {
+  function handleContrastChange(e: Event){
     setContrast(parseFloat((e.target as HTMLInputElement).value));
   }
 
@@ -286,10 +254,8 @@ export function ThemeEditorBasic() {
       canvasThumbRef.style.top = `${(1 - themeReactive.a0.l[0]()) * 100}%`;
     });
 
-    document.addEventListener('pointermove', handlePointerMove, {
-      passive: true,
-    });
-    document.addEventListener('pointerup', handlePointerUp, { passive: true });
+    document.addEventListener('pointermove', handlePointerMove, {passive: true});
+    document.addEventListener('pointerup', handlePointerUp, {passive: true});
   });
 
   onCleanup(() => {
@@ -325,91 +291,91 @@ export function ThemeEditorBasic() {
           onPointerDown={handleCanvasPointerDown}
           ref={canvasContainerRef}
           style="
-          border: 1px solid var(--b4);
-          position: relative;
-          height: 250px;
-          width: 100%;
-        "
+            border: 1px solid var(--b4);
+            position: relative;
+            height: 250px;
+            width: 100%;
+          "
         >
           <canvas
             ref={canvasRef}
             style="
-            touch-action: none;
-            user-select: none;
-            display: block;
-            height: 100%;
-            width: 100%;
-          "
+              touch-action: none;
+              user-select: none;
+              display: block;
+              height: 100%;
+              width: 100%;
+            "
           />
           <div
             ref={canvasThumbRef}
             style="
-            transform: translate(-50%, -50%);
-            background-color: var(--a0);
-            border: 1px solid var(--b4);
-            box-sizing: border-box;
-            position: absolute;
-            height: 18px;
-            width: 18px;
-          "
+              transform: translate(-50%, -50%);
+              background-color: var(--a0);
+              border: 1px solid var(--b4);
+              box-sizing: border-box;
+              position: absolute;
+              height: 18px;
+              width: 18px;
+            "
           />
         </div>
 
         <div
           style="
-        grid-template-columns: 11ch 1fr;
-        height: min-content;
-        display: grid;
-        width: 100%;
-        gap: 20px 10px;
-      "
+            grid-template-columns: 11ch 1fr;
+            height: min-content;
+            display: grid;
+            width: 100%;
+            gap: 20px 10px;
+          "
         >
           <div style="position: relative;">
             <div
               style="
-          transform: translateY(-50%);
-          position: absolute;
-          top: 50%;
-          left: 0;
-        "
+                transform: translateY(-50%);
+                position: absolute;
+                top: 50%;
+                left: 0;
+              "
             >
               chroma:
             </div>
           </div>
           <div
             style="
-        box-sizing: border-box;
-        position: relative;
-        height: 10px;
-        width: 100%;
-      "
+              box-sizing: border-box;
+              position: relative;
+              height: 10px;
+              width: 100%;
+            "
           >
             <div
               style="
-          background: linear-gradient(to right, oklch(from var(--a0) l 0.0 h), oklch(from var(--a0) l 0.37 h));
-          transform: translate(-50%, -50%);
-          border: 1px solid var(--b4);
-          box-sizing: border-box;
-          position: absolute;
-          height: 10px;
-          width: 100%;
-          left: 50%;
-          top: 50%;
-        "
+                background: linear-gradient(to right, oklch(from var(--a0) l 0.0 h), oklch(from var(--a0) l 0.37 h));
+                transform: translate(-50%, -50%);
+                border: 1px solid var(--b4);
+                box-sizing: border-box;
+                position: absolute;
+                height: 10px;
+                width: 100%;
+                left: 50%;
+                top: 50%;
+              "
             />
 
             <div
               style={{
-                left: `${themeReactive.a0.c[0]() * (100 / 0.37)}%`,
-                transform: 'translate(-50%, -50%)',
+                'left': `${themeReactive.a0.c[0]() * (100 / 0.37)}%`,
+                'transform': 'translate(-50%, -50%)',
                 'background-color': 'var(--a0)',
-                border: '1px solid var(--b4)',
+                'border': '1px solid var(--b4)',
                 'box-sizing': 'border-box',
                 'border-radius': '0px',
-                position: 'absolute',
-                height: '18px',
-                width: '18px',
-                top: '50%',
+                'position': 'absolute',
+                'height': '18px',
+                'width': '18px',
+                'top': '50%',
               }}
             />
 
@@ -420,20 +386,20 @@ export function ThemeEditorBasic() {
               }}
               class="theme-editor-basdic-slider"
               style="
-            -webkit-appearance: none;
-            width: calc(100% + 18px);
-            box-sizing: border-box;
-            border-radius: 0px;
-            position: absolute;
-            background: #0000;
-            appearance: none;
-            cursor: pointer;
-            outline: none;
-            height: 100%;
-            left: -9px;
-            margin: 0;
-            top: 0;
-          "
+                -webkit-appearance: none;
+                width: calc(100% + 18px);
+                box-sizing: border-box;
+                border-radius: 0px;
+                position: absolute;
+                background: #0000;
+                appearance: none;
+                cursor: pointer;
+                outline: none;
+                height: 100%;
+                left: -9px;
+                margin: 0;
+                top: 0;
+              "
               step="0.001"
               type="range"
               max="0.37"
@@ -444,38 +410,38 @@ export function ThemeEditorBasic() {
           <div style="position: relative;">
             <div
               style="
-          transform: translateY(-50%);
-          position: absolute;
-          top: 50%;
-          left: 0;
-        "
+                transform: translateY(-50%);
+                position: absolute;
+                top: 50%;
+                left: 0;
+              "
             >
               saturation:
             </div>
           </div>
           <div
             style="
-        box-sizing: border-box;
-        position: relative;
-        height: 10px;
-        width: 100%;
-      "
+              box-sizing: border-box;
+              position: relative;
+              height: 10px;
+              width: 100%;
+            "
           >
             <div
               style="
-          grid-template-columns: 50fr 40.5fr 32fr 24.5fr 18fr 12.5fr 8fr 5fr 2fr 0.5fr;
-          transform: translate(-50%, -50%);
-          background-color: var(--b4);
-          border: 1px solid var(--b4);
-          box-sizing: border-box;
-          position: absolute;
-          display: grid;
-          height: 10px;
-          width: 100%;
-          left: 50%;
-          top: 50%;
-          gap: 1px;
-        "
+                grid-template-columns: 50fr 40.5fr 32fr 24.5fr 18fr 12.5fr 8fr 5fr 2fr 0.5fr;
+                transform: translate(-50%, -50%);
+                background-color: var(--b4);
+                border: 1px solid var(--b4);
+                box-sizing: border-box;
+                position: absolute;
+                display: grid;
+                height: 10px;
+                width: 100%;
+                left: 50%;
+                top: 50%;
+                gap: 1px;
+              "
             >
               <div style="background-color: var(--b0); height: 100%; width: 100%;" />
               <div style="background-color: var(--b0); height: 100%; width: 100%;" />
@@ -491,16 +457,16 @@ export function ThemeEditorBasic() {
 
             <div
               style={{
-                left: `${(themeReactive.b0.c[0]() / (themeReactive.a0.c[0]() * 0.8) / 0.37) * 100}%`,
-                transform: 'translate(-50%, -50%)',
+                'left': `${(themeReactive.b0.c[0]() / (themeReactive.a0.c[0]() * 0.8) / 0.37) * 100}%`,
+                'transform': 'translate(-50%, -50%)',
                 'background-color': 'var(--b0)',
-                border: '1px solid var(--b4)',
+                'border': '1px solid var(--b4)',
                 'box-sizing': 'border-box',
                 'border-radius': '0px',
-                position: 'absolute',
-                height: '18px',
-                width: '18px',
-                top: '50%',
+                'position': 'absolute',
+                'height': '18px',
+                'width': '18px',
+                'top': '50%',
               }}
             />
 
@@ -510,20 +476,20 @@ export function ThemeEditorBasic() {
               }}
               class="theme-editor-basdic-slider"
               style="
-            -webkit-appearance: none;
-            width: calc(100% + 18px);
-            box-sizing: border-box;
-            border-radius: 0px;
-            position: absolute;
-            background: #0000;
-            appearance: none;
-            cursor: pointer;
-            outline: none;
-            height: 100%;
-            left: -9px;
-            margin: 0;
-            top: 0;
-          "
+                -webkit-appearance: none;
+                width: calc(100% + 18px);
+                box-sizing: border-box;
+                border-radius: 0px;
+                position: absolute;
+                background: #0000;
+                appearance: none;
+                cursor: pointer;
+                outline: none;
+                height: 100%;
+                left: -9px;
+                margin: 0;
+                top: 0;
+              "
               ref={sliderSaturationRef}
               step="0.001"
               type="range"
@@ -536,38 +502,38 @@ export function ThemeEditorBasic() {
           <div style="position: relative;">
             <div
               style="
-          transform: translateY(-50%);
-          position: absolute;
-          top: 50%;
-          left: 0;
-        "
+                transform: translateY(-50%);
+                position: absolute;
+                top: 50%;
+                left: 0;
+              "
             >
               contrast:
             </div>
           </div>
           <div
             style="
-        box-sizing: border-box;
-        position: relative;
-        height: 10px;
-        width: 100%;
-      "
+              box-sizing: border-box;
+              position: relative;
+              height: 10px;
+              width: 100%;
+            "
           >
             <div
               style="
-          grid-template-columns:  0.5fr 2fr 5fr 8fr 12.5fr 18fr 50fr 50fr 18fr 12.5fr 8fr 5fr 2fr 0.5fr;
-          transform: translate(-50%, -50%);
-          background-color: var(--b4);
-          border: 1px solid var(--b4);
-          box-sizing: border-box;
-          position: absolute;
-          display: grid;
-          height: 10px;
-          width: 100%;
-          left: 50%;
-          top: 50%;
-          gap: 1px;
-        "
+                grid-template-columns:  0.5fr 2fr 5fr 8fr 12.5fr 18fr 50fr 50fr 18fr 12.5fr 8fr 5fr 2fr 0.5fr;
+                transform: translate(-50%, -50%);
+                background-color: var(--b4);
+                border: 1px solid var(--b4);
+                box-sizing: border-box;
+                position: absolute;
+                display: grid;
+                height: 10px;
+                width: 100%;
+                left: 50%;
+                top: 50%;
+                gap: 1px;
+              "
             >
               <div style="background-color: var(--b0); height: 100%; width: 100%;" />
               <div style="background-color: var(--b0); height: 100%; width: 100%;" />
@@ -587,16 +553,16 @@ export function ThemeEditorBasic() {
 
             <div
               style={{
-                left: `${getContrastFromY(themeReactive.b0.l[0]()) * 100}%`,
-                transform: 'translate(-50%, -50%)',
+                'left': `${getContrastFromY(themeReactive.b0.l[0]()) * 100}%`,
+                'transform': 'translate(-50%, -50%)',
                 'background-color': 'var(--b0)',
-                border: '1px solid var(--b4)',
+                'border': '1px solid var(--b4)',
                 'box-sizing': 'border-box',
                 'border-radius': '0px',
-                position: 'absolute',
-                height: '18px',
-                width: '18px',
-                top: '50%',
+                'position': 'absolute',
+                'height': '18px',
+                'width': '18px',
+                'top': '50%',
               }}
             />
 
@@ -606,20 +572,20 @@ export function ThemeEditorBasic() {
               }}
               class="theme-editor-basdic-slider"
               style="
-            -webkit-appearance: none;
-            width: calc(100% + 18px);
-            box-sizing: border-box;
-            border-radius: 0px;
-            position: absolute;
-            background: #0000;
-            appearance: none;
-            cursor: pointer;
-            outline: none;
-            height: 100%;
-            left: -9px;
-            margin: 0;
-            top: 0;
-          "
+                -webkit-appearance: none;
+                width: calc(100% + 18px);
+                box-sizing: border-box;
+                border-radius: 0px;
+                position: absolute;
+                background: #0000;
+                appearance: none;
+                cursor: pointer;
+                outline: none;
+                height: 100%;
+                left: -9px;
+                margin: 0;
+                top: 0;
+               "
               ref={sliderContrastRef}
               type="range"
               step="0.001"

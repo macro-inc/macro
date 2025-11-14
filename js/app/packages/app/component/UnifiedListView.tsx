@@ -19,10 +19,7 @@ import {
   blockAcceptsFileExtension,
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
-import {
-  ENABLE_PREVIEW,
-  ENABLE_SOUP_FROM_FILTER,
-} from '@core/constant/featureFlags';
+import { ENABLE_SOUP_FROM_FILTER } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -219,7 +216,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   );
 
   const splitContext = useSplitPanelOrThrow();
-  const { isPanelActive, unifiedListContext, panelRef } = splitContext;
+  const { isPanelActive, unifiedListContext, panelRef, previewState } =
+    splitContext;
+  const preview = () => previewState?.[0]?.() ?? false;
   const {
     viewsDataStore: viewsData,
     setViewDataStore,
@@ -399,13 +398,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       'showUnreadIndicator',
       showUnreadIndicator
     );
-  };
-
-  const preview = createMemo(
-    () => view()?.display.preview ?? defaultDisplayOptions.preview
-  );
-  const setPreview = (preview: DisplayOptions['preview']) => {
-    setViewDataStore(selectedView(), 'display', 'preview', preview);
   };
 
   const rawSearchText = createMemo<string>(() => view()?.searchText ?? '');
@@ -1010,7 +1002,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         <SplitToolbarRight order={5}>
           <div class="flex flex-row items-center gap-1 p-1 h-full select-none">
             <Show when={isViewConfigChanged()}>
-              <Show when={view().display.preview}>
+              <Show when={preview()}>
                 <DropdownMenu
                   size="SM"
                   theme="secondary"
@@ -1038,7 +1030,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   </div>
                 </DropdownMenu>
               </Show>
-              <Show when={!view().display.preview}>
+              <Show when={!preview()}>
                 <Button
                   size="SM"
                   classList={{
@@ -1210,13 +1202,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       checked={showUnreadIndicator()}
                       onChange={setShowUnreadIndicator}
                     />
-                    <ToggleSwitch
-                      size="SM"
-                      label="Preview"
-                      disabled={!ENABLE_PREVIEW}
-                      checked={preview()}
-                      onChange={setPreview}
-                    />
                   </section>
                 </div>
               </div>
@@ -1383,81 +1368,105 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             entity={contextAndModalState.selectedEntity}
           />
           <ContextMenu.Portal>
-            <ContextMenuContent mobileFullScreen>
-              <Show when={isTouchDevice && isMobileWidth()}>
-                <Entity
-                  entity={contextAndModalState.selectedEntity!}
-                  timestamp={
-                    sortType() === 'viewed_at'
-                      ? contextAndModalState.selectedEntity!.viewedAt
-                      : sortType() === 'created_at'
-                        ? contextAndModalState.selectedEntity!.createdAt
-                        : undefined
-                  }
-                />
-                <MenuSeparator />
-              </Show>
-              <EntityActionsMenuItems
-                onSelectAction={(type) => {
-                  const entity = contextAndModalState.selectedEntity;
-                  if (!entity) return;
-
-                  switch (type) {
-                    case 'mark_as_done': {
-                      markEntityAsDone(entity);
-                      break;
+            <Show when={contextAndModalState.selectedEntity}>
+              {(selectedEntity) => (
+                <ContextMenuContent mobileFullScreen>
+                  <Show when={isTouchDevice && isMobileWidth()}>
+                    <Entity
+                      entity={selectedEntity()}
+                      timestamp={
+                        sortType() === 'viewed_at'
+                          ? selectedEntity().viewedAt
+                          : sortType() === 'created_at'
+                            ? selectedEntity().createdAt
+                            : undefined
+                      }
+                    />
+                    <MenuSeparator />
+                  </Show>
+                  <Show when={markEntityAsDone}>
+                    {(fnAccessor) => {
+                      const entityDisabled = (
+                        entity: WithNotification<EntityData>
+                      ) => {
+                        return entity.type === 'email'
+                          ? entity.done
+                          : entity.notifications?.().every(({ done }) => done);
+                      };
+                      return (
+                        <MenuItem
+                          text="Mark as Done"
+                          onClick={() => fnAccessor()(selectedEntity())}
+                          disabled={entityDisabled(selectedEntity())}
+                        />
+                      );
+                    }}
+                  </Show>
+                  <MenuItem
+                    text="Delete"
+                    onClick={() => deleteDssItem(selectedEntity())}
+                    disabled={
+                      selectedEntity().type !== 'document' &&
+                      selectedEntity().type !== 'project' &&
+                      selectedEntity().type !== 'chat'
                     }
-                    case 'rename': {
-                      openEntityModal('rename');
-                      break;
+                  />
+                  <MenuItem
+                    text="Rename"
+                    onClick={() => openEntityModal('rename')}
+                    disabled={
+                      selectedEntity().type !== 'document' &&
+                      selectedEntity().type !== 'chat'
                     }
-                    case 'delete': {
-                      deleteDssItem(entity);
-                      break;
-                    }
-                    case 'move_to_project': {
+                  />
+                  <MenuItem
+                    text="Move to Project"
+                    onClick={() => {
                       openEntityModal('moveToProject');
-                      break;
+                    }}
+                    disabled={
+                      selectedEntity().type !== 'document' &&
+                      selectedEntity().type !== 'project' &&
+                      selectedEntity().type !== 'chat'
                     }
-                    case 'copy': {
-                      copyDssItem({ entity });
-                      break;
+                  />
+                  <MenuItem
+                    text="Copy"
+                    onClick={() => {
+                      copyDssItem({ entity: selectedEntity() });
+                    }}
+                    disabled={
+                      selectedEntity().type !== 'document' &&
+                      selectedEntity().type !== 'chat'
                     }
-                    case 'move_to_split': {
+                  />
+                  <MenuItem
+                    text="Open in new split"
+                    onClick={() => {
                       const splitManager = globalSplitManager();
                       if (!splitManager) {
                         console.error('No split manager available');
                         return;
                       }
-
-                      if (
-                        contextAndModalState.selectedEntity?.type === 'document'
-                      ) {
-                        const { fileType, id } =
-                          contextAndModalState.selectedEntity!;
+                      const entity = selectedEntity();
+                      if (entity.type === 'document') {
+                        const { fileType, id } = entity;
                         splitManager.createNewSplit({
                           type: fileTypeToBlockName(fileType),
                           id,
                         });
                       } else {
-                        const { id, type } =
-                          contextAndModalState.selectedEntity!;
+                        const { id, type } = entity;
                         splitManager.createNewSplit({
                           type,
                           id,
                         });
                       }
-
-                      break;
-                    }
-
-                    default:
-                      break;
-                  }
-                }}
-                disabled={disabledActions()}
-              />
-            </ContextMenuContent>
+                    }}
+                  />
+                </ContextMenuContent>
+              )}
+            </Show>
           </ContextMenu.Portal>
         </ContextMenu.Trigger>
         <Show when={view()?.selectedEntities.length}>

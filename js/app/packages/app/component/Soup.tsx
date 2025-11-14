@@ -12,6 +12,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { ENABLE_FOLDER_UPLOAD } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
+import type { BlockOrchestrator } from '@core/orchestrator';
 import {
   CONDITIONAL_VIEWS,
   DEFAULT_VIEWS,
@@ -23,6 +24,7 @@ import {
 import { handleFileFolderDrop } from '@core/util/upload';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Tabs } from '@kobalte/core/tabs';
+import type { EntityData } from '@macro-entity';
 import {
   queryKeys,
   useQueryClient as useEntityQueryClient,
@@ -52,6 +54,7 @@ import { HelpDrawer } from './HelpDrawer';
 import { SplitHeaderLeft } from './split-layout/components/SplitHeader';
 import { SplitTabs } from './split-layout/components/SplitTabs';
 import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
+import type { SplitPanelContextType } from './split-layout/context';
 import { SplitPanelContext } from './split-layout/context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { UnifiedListView } from './UnifiedListView';
@@ -124,6 +127,87 @@ const ViewWithSearch: Component<{
   );
 };
 
+const PreviewPanelContent: Component<{
+  selectedEntity: EntityData;
+  orchestrator: BlockOrchestrator;
+  splitPanelContext: SplitPanelContextType;
+}> = (props) => {
+  const blockInstance = () =>
+    props.orchestrator.createBlockInstance(
+      props.selectedEntity.type === 'document'
+        ? fileTypeToBlockName(props.selectedEntity.fileType)
+        : props.selectedEntity.type,
+      props.selectedEntity.id
+    );
+  const [interactedWithMouseDown, setInteractedWithMouseDown] =
+    createSignal(false);
+
+  createRenderEffect((prevId: string) => {
+    const id = props.selectedEntity.id;
+    if (id !== prevId) {
+      setInteractedWithMouseDown(false);
+    }
+    return id;
+  }, props.selectedEntity.id);
+
+  return (
+    <div
+      class="size-full"
+      onFocusIn={(event) => {
+        if (interactedWithMouseDown()) return;
+        const relatedTarget = event.relatedTarget as HTMLElement;
+        const currentTarget = event.currentTarget as HTMLElement;
+
+        if (!currentTarget.contains(relatedTarget)) {
+          relatedTarget.focus();
+        }
+      }}
+      onPointerDown={() => {
+        setInteractedWithMouseDown(true);
+      }}
+    >
+      <SplitPanelContext.Provider
+        value={{
+          ...props.splitPanelContext,
+          layoutRefs: {
+            ...props.splitPanelContext.layoutRefs,
+            headerLeft: undefined,
+            headerRight: undefined,
+          },
+          halfSplitState: () => ({
+            side: 'right',
+            percentage: 30,
+          }),
+        }}
+      >
+        <Dynamic component={blockInstance().element} />
+      </SplitPanelContext.Provider>
+    </div>
+  );
+};
+
+const PreviewPanel: Component<{
+  selectedEntity: EntityData | undefined;
+  orchestrator: BlockOrchestrator;
+  splitPanelContext: SplitPanelContextType;
+}> = (props) => {
+  return (
+    <div class="flex flex-row size-full w-[70%] shrink-0">
+      <Show
+        when={props.selectedEntity?.type !== 'project' && props.selectedEntity}
+      >
+        {(selectedEntity) => (
+          <PreviewPanelContent
+            selectedEntity={selectedEntity()}
+            orchestrator={props.orchestrator}
+            splitPanelContext={props.splitPanelContext}
+          />
+        )}
+      </Show>
+    </div>
+  );
+};
+
 export function Soup() {
   const authenticated = useIsAuthenticated();
   if (!authenticated()) return <Navigate href="/" />;
@@ -141,7 +225,20 @@ export function Soup() {
     },
   } = splitPanelContext;
   const view = createMemo(() => viewsData[selectedView()]);
-  const preview = () => view().display.preview;
+  // Use preview state from SplitPanelContext (created in SplitLayout for unified-list)
+  const previewState = () => splitPanelContext.previewState;
+  const preview = () => previewState()?.[0]?.() ?? false;
+  const setPreview = (value: boolean | ((prev: boolean) => boolean)) => {
+    const state = previewState();
+    if (state) {
+      const [, setState] = state;
+      if (typeof value === 'function') {
+        setState((prev) => value(prev));
+      } else {
+        setState(value);
+      }
+    }
+  };
   const selectedEntity = () => view().selectedEntity;
 
   const orchestrator = useGlobalBlockOrchestrator();
@@ -162,6 +259,18 @@ export function Soup() {
       }
       return true;
     },
+  });
+
+  registerHotkey({
+    hotkey: ['p'],
+    scopeId: splitHotkeyScope,
+    description: 'Toggle Preview',
+    hotkeyToken: TOKENS.unifiedList.togglePreview,
+    keyDownHandler: () => {
+      setPreview((prev) => !prev);
+      return true;
+    },
+    hide: true,
   });
 
   const [isDragging, setIsDragging] = createSignal(false);
@@ -213,17 +322,17 @@ export function Soup() {
 
   const TabContextMenu = (props: { value: ViewId; label: string }) => {
     const [isModalOpen, setIsModalOpen] = createSignal(false);
+    const isDefaultView = () =>
+      VIEWCONFIG_DEFAULTS_NAMES.includes(props.value as View);
     return (
-      <Show when={!VIEWCONFIG_DEFAULTS_NAMES.includes(props.value as any)}>
+      <Show when={!isDefaultView()}>
         <ContextMenu>
           <ContextMenu.Trigger class="absolute inset-0" />
           <ContextMenu.Portal>
             <ContextMenuContent mobileFullScreen>
               <MenuItem
                 text="Rename"
-                disabled={VIEWCONFIG_DEFAULTS_NAMES.includes(
-                  props.value as any
-                )}
+                disabled={isDefaultView()}
                 onClick={() => {
                   setTimeout(() => {
                     setIsModalOpen(true);
@@ -233,9 +342,7 @@ export function Soup() {
               />
               <MenuItem
                 text="Delete"
-                disabled={VIEWCONFIG_DEFAULTS_NAMES.includes(
-                  props.value as any
-                )}
+                disabled={isDefaultView()}
                 onClick={() => {
                   saveViewMutation.mutate({
                     id: props.value,
@@ -292,7 +399,7 @@ export function Soup() {
         >
           <Tabs
             ref={tabsRef}
-            class="@container/soup flex flex-col gap-1 size-full p-2 overflow-x-clip"
+            class="@container/soup flex flex-col gap-1 size-full overflow-x-clip"
             classList={{
               'border-r border-edge-muted': preview(),
               'pt-2 pb-0': showHelpDrawer().has(selectedView()),
@@ -336,71 +443,11 @@ export function Soup() {
           </Tabs>
         </SplitPanelContext.Provider>
         <Show when={preview()}>
-          <div class="flex flex-row size-full w-[70%] shrink-0">
-            {/* must access property, id, on selectedEntity in order to make it reactive   */}
-            <Show when={!!selectedEntity()?.id && selectedEntity()}>
-              {(selectedEntity) => {
-                const entity = selectedEntity();
-                if (entity.type === 'project') return null;
-                const blockInstance = () =>
-                  orchestrator.createBlockInstance(
-                    entity.type === 'document'
-                      ? fileTypeToBlockName(entity.fileType)
-                      : entity.type,
-                    entity.id
-                  );
-                const [interactedWithMouseDown, setInteractedWithMouseDown] =
-                  createSignal(false);
-
-                // Reset interaction state whenever the previewed entity changes
-                createRenderEffect(
-                  (prevId: string | undefined) => {
-                    const id = entity.id as string | undefined;
-                    if (id !== prevId) {
-                      setInteractedWithMouseDown(false);
-                    }
-                    return id;
-                  },
-                  entity.id as string | undefined
-                );
-
-                return (
-                  <div
-                    class="size-full"
-                    onFocusIn={(event) => {
-                      if (interactedWithMouseDown()) return;
-                      const relatedTarget = event.relatedTarget as HTMLElement;
-                      const currentTarget = event.currentTarget as HTMLElement;
-
-                      if (!currentTarget.contains(relatedTarget)) {
-                        relatedTarget.focus();
-                      }
-                    }}
-                    onPointerDown={() => {
-                      setInteractedWithMouseDown(true);
-                    }}
-                  >
-                    <SplitPanelContext.Provider
-                      value={{
-                        ...splitPanelContext,
-                        layoutRefs: {
-                          ...splitPanelContext.layoutRefs,
-                          headerLeft: undefined,
-                          headerRight: undefined,
-                        },
-                        halfSplitState: () => ({
-                          side: 'right',
-                          percentage: 30,
-                        }),
-                      }}
-                    >
-                      <Dynamic component={blockInstance().element} />
-                    </SplitPanelContext.Provider>
-                  </div>
-                );
-              }}
-            </Show>
-          </div>
+          <PreviewPanel
+            selectedEntity={selectedEntity()}
+            orchestrator={orchestrator}
+            splitPanelContext={splitPanelContext}
+          />
         </Show>
       </div>
       <Show when={showHelpDrawer().has(selectedView())}>
@@ -455,15 +502,18 @@ export const useUpsertSavedViewMutation = () => {
             id: ViewConfigDefaultsName | string;
           }
     ) => {
+      const isDefaultView = VIEWCONFIG_DEFAULTS_NAMES.includes(
+        viewData.id as View
+      );
       if ('config' in viewData) {
         // if data id is in defaults, exclude default, set up args to create new view
-        if (VIEWCONFIG_DEFAULTS_NAMES.includes(viewData.id as any)) {
+        if (isDefaultView) {
           // don't exclude default view on editing default view config
           // await storageServiceClient.views.excludeDefaultView({
           //   defaultViewId: viewData.id!,
           // });
           viewData.id = undefined;
-          viewData.name = 'My ' + viewData.name;
+          viewData.name = `My ${viewData.name}`;
         }
         // create new view
         if (!viewData.id) {
@@ -481,7 +531,7 @@ export const useUpsertSavedViewMutation = () => {
         }
       } else {
         // delete or exclude view
-        if (VIEWCONFIG_DEFAULTS_NAMES.includes(viewData.id as any)) {
+        if (isDefaultView) {
           // for now don't exclude default view
           // return await storageServiceClient.views.excludeDefaultView({
           //   defaultViewId: viewData.id,
