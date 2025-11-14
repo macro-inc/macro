@@ -13,7 +13,7 @@ import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 false && fileSelector;
 false && folderSelector;
 
-export function EmptyState(props: { view?: ViewId }) {
+export function EmptyState(props: { viewId?: ViewId }) {
   const emailActive = useEmailLinksStatus();
   const splitPanelContext = useSplitPanelOrThrow();
   const {
@@ -21,7 +21,7 @@ export function EmptyState(props: { view?: ViewId }) {
   } = splitPanelContext;
   return (
     <Switch>
-      <Match when={props.view === 'emails' && !emailActive()}>
+      <Match when={props.viewId === 'emails' && !emailActive()}>
         {(_) => {
           onMount(() =>
             setShowHelpDrawer((prev) => new Set([...prev, 'emails']))
@@ -31,12 +31,13 @@ export function EmptyState(props: { view?: ViewId }) {
       </Match>
       <Match
         when={
-          (props.view === 'emails' || props.view === 'inbox') && emailActive()
+          (props.viewId === 'emails' || props.viewId === 'inbox') &&
+          emailActive()
         }
       >
         <EmptyStateInner emptyMessage={'Inbox zero.'} />
       </Match>
-      <Match when={props.view === 'inbox' && !emailActive()}>
+      <Match when={props.viewId === 'inbox' && !emailActive()}>
         {(_) => {
           onMount(() =>
             setShowHelpDrawer((prev) => new Set([...prev, 'inbox']))
@@ -48,7 +49,7 @@ export function EmptyState(props: { view?: ViewId }) {
           );
         }}
       </Match>
-      <Match when={props.view === 'comms'}>
+      <Match when={props.viewId === 'comms'}>
         {(_) => {
           onMount(() =>
             setShowHelpDrawer((prev) => new Set([...prev, 'comms']))
@@ -56,7 +57,7 @@ export function EmptyState(props: { view?: ViewId }) {
           return <EmptyStateInner emptyMessage={'No messages to show.'} />;
         }}
       </Match>
-      <Match when={props.view === 'docs'}>
+      <Match when={props.viewId === 'docs'}>
         {(_) => {
           onMount(() =>
             setShowHelpDrawer((prev) => new Set([...prev, 'docs']))
@@ -64,13 +65,13 @@ export function EmptyState(props: { view?: ViewId }) {
           return <EmptyStateInner showDropZone />;
         }}
       </Match>
-      <Match when={props.view === 'ai'}>
+      <Match when={props.viewId === 'ai'}>
         {(_) => {
           onMount(() => setShowHelpDrawer((prev) => new Set([...prev, 'ai'])));
           return <EmptyStateInner emptyMessage={'No AI chats to show.'} />;
         }}
       </Match>
-      <Match when={props.view === 'folders'}>
+      <Match when={props.viewId === 'folders'}>
         {(_) => {
           onMount(() =>
             setShowHelpDrawer((prev) => new Set([...prev, 'folders']))
