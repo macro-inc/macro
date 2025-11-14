@@ -157,18 +157,6 @@
       ],
       "stack_path": "infra/stacks/unfurl-service/**"
     },
-    "sha-cleanup": {
-      "source_paths": [
-        "rust/cloud-storage/sha_cleanup_worker/**"
-      ],
-      "stack_path": "infra/stacks/sha-cleanup/**"
-    },
-    "sha-ref-count-resetter": {
-      "source_paths": [
-        "rust/cloud-storage/sha_ref_count_resetter/**"
-      ],
-      "stack_path": "infra/stacks/sha-ref-count-resetter/**"
-    },
     "opensearch": {
       "stack_path": "infra/stacks/opensearch/**"
     },
