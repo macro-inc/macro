@@ -543,6 +543,7 @@ async fn build_file_system(extract_dir: &Path) -> Result<Vec<FolderItem>, Error>
 
             Ok(FolderItem {
                 name: file_name.to_string(),
+                full_name: full_name.to_string(),
                 file_type,
                 relative_path: relative_path_without_filename,
                 sha,
