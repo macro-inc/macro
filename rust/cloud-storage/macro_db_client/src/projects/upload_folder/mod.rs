@@ -301,6 +301,7 @@ mod tests {
         // Create files for the root folder
         let root_file1 = FolderItem {
             name: "rootFile1".to_string(),
+            full_name: "rootFile1.pdf".to_string(),
             file_type: Some(FileType::Pdf),
             sha: "sha123".to_string(),
             relative_path: "/Root Test Folder".to_string(),
@@ -308,6 +309,7 @@ mod tests {
 
         let root_file2 = FolderItem {
             name: "rootFile2".to_string(),
+            full_name: "rootFile2.docx".to_string(),
             file_type: Some(FileType::Docx),
             sha: "sha456".to_string(),
             relative_path: "/Root Test Folder".to_string(),
@@ -316,6 +318,7 @@ mod tests {
         // Create a subfolder with its own files
         let subfolder1_file1 = FolderItem {
             name: "subfolder1File1".to_string(),
+            full_name: "subfolder1File1.txt".to_string(),
             file_type: Some(FileType::Txt),
             sha: "sha789".to_string(),
             relative_path: "/Root Test Folder/subfolder1".to_string(),
@@ -323,6 +326,7 @@ mod tests {
 
         let subfolder1_file2 = FolderItem {
             name: "subfolder1File2".to_string(),
+            full_name: "subfolder1File2.pdf".to_string(),
             file_type: Some(FileType::Pdf),
             sha: "sha101".to_string(),
             relative_path: "/Root Test Folder/subfolder1".to_string(),
@@ -331,6 +335,7 @@ mod tests {
         // Create a sub-subfolder with its own files
         let subsubfolder_file = FolderItem {
             name: "deepNestedFile".to_string(),
+            full_name: "deepNestedFile.pdf".to_string(),
             file_type: Some(FileType::Pdf),
             sha: "sha202".to_string(),
             relative_path: "/Root Test Folder/subfolder1/nested".to_string(),
@@ -345,6 +350,7 @@ mod tests {
         // Create another subfolder with its own content
         let subfolder2_file = FolderItem {
             name: "subfolder2File".to_string(),
+            full_name: "subfolder2File.txt".to_string(),
             file_type: Some(FileType::Txt),
             sha: "sha303".to_string(),
             relative_path: "/Root Test Folder/subfolder2".to_string(),
@@ -689,6 +695,7 @@ mod tests {
         let mut current_folder = HashMap::new();
         let deepest_file = FolderItem {
             name: "deepestFile".to_string(),
+            full_name: "deepestFile.pdf".to_string(),
             file_type: Some(FileType::Pdf),
             sha: "sha_deepest".to_string(),
             relative_path: "/Deep Nested Structure/level1/level2/level3/level4/level5".to_string(),
@@ -719,6 +726,7 @@ mod tests {
 
             let level_file = FolderItem {
                 name: format!("file_level{}", level),
+                full_name: format!("file_level{}.txt", level),
                 file_type: Some(FileType::Txt),
                 sha: format!("sha_level{}", level),
                 relative_path: current_path.clone(),
@@ -761,6 +769,7 @@ mod tests {
         // Add a file at the root level
         let root_file = FolderItem {
             name: "root_file".to_string(),
+            full_name: "root_file.txt".to_string(),
             file_type: Some(FileType::Txt),
             sha: "sha_root".to_string(),
             relative_path: "/Deep Nested Structure".to_string(),
@@ -878,6 +887,7 @@ mod tests {
         // Create a root file
         let root_file = FolderItem {
             name: "root_document".to_string(),
+            full_name: "root_document.pdf".to_string(),
             file_type: Some(FileType::Pdf),
             sha: "sha_root_doc".to_string(),
             relative_path: "/Test FileSystem Structure".to_string(),
@@ -886,6 +896,7 @@ mod tests {
         // Create a subfolder with a file
         let subfolder_file = FolderItem {
             name: "subfolder_document".to_string(),
+            full_name: "subfolder_document.txt".to_string(),
             file_type: Some(FileType::Txt),
             sha: "sha_subfolder_doc".to_string(),
             relative_path: "/Test FileSystem Structure/subfolder".to_string(),
