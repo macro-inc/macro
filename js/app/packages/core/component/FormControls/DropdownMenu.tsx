@@ -85,6 +85,7 @@ const DropdownMenu: ParentComponent<
     start();
     observe(_popoverPortalEl);
   });
+
   return (
     <Popover
       modal
@@ -100,7 +101,9 @@ const DropdownMenu: ParentComponent<
       <Popover.Trigger
         size={props.size}
         active={open()}
-        classList={{ '!block': true }}
+        classList={{
+          '!block': true,
+        }}
         as={Button}
         theme="primary"
         ref={triggerEl}
