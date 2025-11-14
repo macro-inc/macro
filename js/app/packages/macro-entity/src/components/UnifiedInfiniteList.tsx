@@ -526,7 +526,9 @@ export function createUnifiedInfiniteList<T extends EntityData>({
                 // Find the actual scroll container (VList creates its own scroll container)
                 const listEl = listRef();
                 if (!listEl) return undefined;
-                const scrollContainer = listEl.querySelector('[data-unified-entity-list]') as HTMLElement;
+                const scrollContainer = listEl.querySelector(
+                  '[data-unified-entity-list]'
+                ) as HTMLElement;
                 return scrollContainer || undefined;
               }}
             />

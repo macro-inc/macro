@@ -1,9 +1,4 @@
-import {
-  createEffect,
-  createSignal,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 
 interface CustomScrollbarProps {
   scrollContainer: () => HTMLElement | undefined;
@@ -59,18 +54,18 @@ export function CustomScrollbar(props: CustomScrollbarProps) {
       if (!isDragging()) {
         updateScrollMetrics();
       }
-      
+
       // Calculate scroll velocity
       const now = Date.now();
       const timeDelta = now - lastScrollTime;
       const scrollDelta = Math.abs(container.scrollTop - lastScrollTop);
       const velocity = timeDelta > 0 ? scrollDelta / timeDelta : 0;
-      
+
       lastScrollTop = container.scrollTop;
       lastScrollTime = now;
-      
+
       setScrollVelocity(velocity);
-      
+
       // Gradually reduce velocity - slower fade out
       if (velocityTimeoutId) clearTimeout(velocityTimeoutId);
       velocityTimeoutId = setTimeout(() => {
@@ -223,4 +218,3 @@ export function CustomScrollbar(props: CustomScrollbarProps) {
     </Show>
   );
 }
-
