@@ -690,6 +690,7 @@ mod tests {
         let extract_dir = PathBuf::from("/tmp/extract");
         let item = FolderItem {
             name: "document".to_string(),
+            full_name: "document.pdf".to_string(),
             file_type: Some(FileType::Pdf),
             relative_path: "folder/subfolder".to_string(),
             sha: "abcd1234".to_string(),
@@ -707,6 +708,7 @@ mod tests {
         let extract_dir = PathBuf::from("/tmp/extract");
         let item = FolderItem {
             name: "document".to_string(),
+            full_name: "document.tar.gz".to_string(),
             file_type: Some(FileType::TarGz),
             relative_path: "folder/subfolder".to_string(),
             sha: "abcd1234".to_string(),
@@ -724,6 +726,7 @@ mod tests {
         let extract_dir = PathBuf::from("/tmp/extract");
         let item = FolderItem {
             name: "config".to_string(),
+            full_name: "config".to_string(),
             file_type: None,
             relative_path: "settings".to_string(),
             sha: "efgh5678".to_string(),
@@ -738,6 +741,7 @@ mod tests {
         let extract_dir = PathBuf::from("/tmp/extract");
         let item = FolderItem {
             name: "test.1.5.5".to_string(),
+            full_name: "test.1.5.5.tar.gz".to_string(),
             file_type: Some(FileType::TarGz),
             relative_path: "settings".to_string(),
             sha: "efgh5678".to_string(),
@@ -755,6 +759,7 @@ mod tests {
         let extract_dir = PathBuf::from("/tmp/extract");
         let item = FolderItem {
             name: "root_file".to_string(),
+            full_name: "root_file.txt".to_string(),
             file_type: Some(FileType::Txt),
             relative_path: "".to_string(),
             sha: "ijkl9012".to_string(),
