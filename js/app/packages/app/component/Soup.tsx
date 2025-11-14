@@ -54,7 +54,7 @@ import { HelpDrawer } from './HelpDrawer';
 import { SplitHeaderLeft } from './split-layout/components/SplitHeader';
 import { SplitTabs } from './split-layout/components/SplitTabs';
 import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
-import type { SplitPanelContext as SplitPanelContextType } from './split-layout/context';
+import type { SplitPanelContextType } from './split-layout/context';
 import { SplitPanelContext } from './split-layout/context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { UnifiedListView } from './UnifiedListView';
