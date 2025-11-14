@@ -24,7 +24,8 @@ const EntityNavigationIndicator = () => {
       when={
         entities()?.length &&
         selectedEntity() &&
-        handle.content().type !== 'component'
+        handle.content().type !== 'component' &&
+        handle.content().type !== 'project'
       }
     >
       <div class="flex gap-1 items-center font-mono text-xs text-ink/50 pl-2 pr-4">

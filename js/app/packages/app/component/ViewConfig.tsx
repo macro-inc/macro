@@ -68,7 +68,6 @@ export type DisplayOptions = {
   layout: 'compact' | 'expanded' | 'visual';
   unrollNotifications: boolean;
   showUnreadIndicator: boolean;
-  showProjects: boolean;
   preview: boolean;
   limit?: number;
 };
@@ -116,7 +115,6 @@ export const VIEWCONFIG_BASE: ViewConfigBase = {
     layout: 'compact',
     unrollNotifications: false,
     showUnreadIndicator: false,
-    showProjects: false,
     preview: false,
     limit: 100,
   },
@@ -140,7 +138,6 @@ export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
     layout: 'compact',
     unrollNotifications: false,
     showUnreadIndicator: true,
-    showProjects: true,
     preview: false,
     limit: 100,
   },
@@ -246,9 +243,6 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     view: 'folders',
     filters: {
       typeFilter: ['project'],
-    },
-    display: {
-      showProjects: true,
     },
   },
 } satisfies Record<View, Omit<DeepPartial<ViewConfigEnhanced>, 'id'>>;

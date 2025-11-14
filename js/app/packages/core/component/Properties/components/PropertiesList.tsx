@@ -49,7 +49,7 @@ export const PropertiesList: Component<PropertiesListProps> = (props) => {
         </div>
       }
     >
-      <div class="grid grid-cols-[minmax(auto,50%)_1fr] gap-x-4 gap-y-3 pt-2">
+      <div class="grid grid-cols-[minmax(120px,50%)_minmax(150px,1fr)] gap-x-4 gap-y-3 pt-2 min-w-fit">
         <Show when={metadataProperties().length > 0}>
           <For each={metadataProperties()}>
             {(property) => (
