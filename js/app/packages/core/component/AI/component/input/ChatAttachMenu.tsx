@@ -1,9 +1,5 @@
 import { withAnalytics } from '@coparse/analytics';
 import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '@core/component/AI/constant';
-import type { Item } from '@service-storage/generated/schemas/item';
-
-const { track, TrackingEvents } = withAnalytics();
-
 import {
   useChatAttachableHistory,
   useGetChatAttachmentInfo,
@@ -26,6 +22,7 @@ import {
 import DeviceMobileIcon from '@icon/regular/device-mobile-speaker.svg';
 import LaptopIcon from '@icon/regular/laptop.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
+import type { Item } from '@service-storage/generated/schemas/item';
 import fuzzy from 'fuzzy';
 import {
   createEffect,
@@ -35,6 +32,8 @@ import {
   Show,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
+
+const { track, TrackingEvents } = withAnalytics();
 
 // NOTE: solid directives
 false && fileSelector;
