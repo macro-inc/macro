@@ -23,14 +23,16 @@ import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
 import IconQuestion from '@icon/regular/question.svg';
 import SplitIcon from '@icon/regular/square-split-horizontal.svg';
+import IconPower from '@phosphor-icons/core/regular/power.svg';
 import IconAtom from '@macro-icons/macro-atom.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
-import { createMemo, createSignal, Show } from 'solid-js';
+import { createMemo, createSignal, Show, onMount, onCleanup } from 'solid-js';
 import { setKonsoleOpen } from '../command/state';
 import { useGlobalNotificationSource } from '../GlobalAppState';
 import { BasicTierLimit } from './BasicTierLimit';
 import { CreateMenu } from './CreateMenu';
 import Hints from './Hints';
+import { PresentModeGlitch } from './PresentModeGlitch';
 import { QuickAccess } from './QuickAccess';
 
 export function Dock() {
@@ -67,10 +69,110 @@ export function Dock() {
   };
 
   const [debugOpen, setDebugOpen] = createSignal(false);
+  const [isPresentMode, setIsPresentMode] = createSignal(false);
+  const [showGlitchEffect, setShowGlitchEffect] = createSignal(false);
+
+  // Fullscreen API helpers
+  const enterPresentMode = async () => {
+    try {
+      const element = document.documentElement;
+      if (element.requestFullscreen) {
+        await element.requestFullscreen();
+      } else if ((element as any).webkitRequestFullscreen) {
+        // Safari
+        await (element as any).webkitRequestFullscreen();
+      } else if ((element as any).mozRequestFullScreen) {
+        // Firefox
+        await (element as any).mozRequestFullScreen();
+      } else if ((element as any).msRequestFullscreen) {
+        // IE/Edge
+        await (element as any).msRequestFullscreen();
+      }
+    } catch (error) {
+      console.error('Error entering present mode:', error);
+    }
+  };
+
+  const exitPresentMode = async () => {
+    try {
+      if (document.exitFullscreen) {
+        await document.exitFullscreen();
+      } else if ((document as any).webkitExitFullscreen) {
+        // Safari
+        await (document as any).webkitExitFullscreen();
+      } else if ((document as any).mozCancelFullScreen) {
+        // Firefox
+        await (document as any).mozCancelFullScreen();
+      } else if ((document as any).msExitFullscreen) {
+        // IE/Edge
+        await (document as any).msExitFullscreen();
+      }
+    } catch (error) {
+      console.error('Error exiting present mode:', error);
+    }
+  };
+
+  const togglePresentMode = () => {
+    if (isPresentMode()) {
+      exitPresentMode();
+      setShowGlitchEffect(false);
+    } else {
+      // Show glitch effect before entering fullscreen
+      setShowGlitchEffect(true);
+      // Enter fullscreen after a brief delay to let glitch start
+      setTimeout(() => {
+        enterPresentMode();
+      }, 200);
+    }
+  };
+
+  // Check if we're in fullscreen
+  const checkFullscreen = () => {
+    const isFullscreen =
+      document.fullscreenElement ||
+      (document as any).webkitFullscreenElement ||
+      (document as any).mozFullScreenElement ||
+      (document as any).msFullscreenElement;
+    setIsPresentMode(!!isFullscreen);
+  };
+
+  // Listen for fullscreen changes
+  onMount(() => {
+    const events = [
+      'fullscreenchange',
+      'webkitfullscreenchange',
+      'mozfullscreenchange',
+      'MSFullscreenChange',
+    ];
+    
+    events.forEach((event) => {
+      document.addEventListener(event, checkFullscreen);
+    });
+
+    // Also listen for ESC key to exit
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isPresentMode()) {
+        exitPresentMode();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+
+    onCleanup(() => {
+      events.forEach((event) => {
+        document.removeEventListener(event, checkFullscreen);
+      });
+      document.removeEventListener('keydown', handleKeyDown);
+    });
+  });
 
   return (
-    <Show when={!isMobileWidth()}>
-      <div class="z-1 relative flex shrink-0 bg-panel">
+    <>
+      <PresentModeGlitch
+        show={showGlitchEffect()}
+        onComplete={() => setShowGlitchEffect(false)}
+      />
+      <Show when={!isMobileWidth()}>
+        <div class="z-1 relative flex shrink-0 bg-panel">
         <div
           onMouseDown={() => setKonsoleOpen(true)}
           class="group *:border-b-0 *:h-full relative border-t border-edge-muted flex justify-between items-center gap-2 pl-3 py-2"
@@ -185,6 +287,16 @@ export function Dock() {
           />
 
           <IconButton
+            icon={IconPower}
+            theme={isPresentMode() ? 'accent' : 'clear'}
+            tooltip={{
+              label: isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode',
+            }}
+            class="h-full aspect-square"
+            onClick={togglePresentMode}
+          />
+
+          <IconButton
             icon={IconGear}
             theme={settingsOpen() ? 'accent' : 'clear'}
             tooltip={{
@@ -199,6 +311,7 @@ export function Dock() {
           />
         </div>
       </div>
-    </Show>
+      </Show>
+    </>
   );
 }
