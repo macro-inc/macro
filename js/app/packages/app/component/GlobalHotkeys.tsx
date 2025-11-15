@@ -28,7 +28,7 @@ import {
   setKonsoleMode,
   toggleKonsoleVisibility,
 } from './command/state';
-import { CREATABLE_BLOCKS, toggleCreateMenu } from './dock/CreateMenu';
+import { toggleCreateMenu } from './dock/CreateMenu';
 import { fireMacroJump } from './MacroJump';
 import {
   quickCreateMenuOpenSignal,
@@ -51,7 +51,7 @@ export default function GlobalShortcuts() {
     return;
   };
 
-  const createScope = registerHotkey({
+  registerHotkey({
     hotkeyToken: TOKENS.global.createCommand,
     hotkey: 'c',
     scopeId: 'global',
@@ -61,28 +61,6 @@ export default function GlobalShortcuts() {
       return true;
     },
     displayPriority: 10,
-    activateCommandScope: true,
-  });
-
-  CREATABLE_BLOCKS.forEach((item) => {
-    registerHotkey({
-      hotkeyToken: item.hotkeyToken,
-      hotkey: item.hotkey,
-      scopeId: createScope.commandScopeId,
-      description: item.description,
-      keyDownHandler: item.keyDownHandler,
-      runWithInputFocused: true,
-      displayPriority: 10,
-    });
-    registerHotkey({
-      hotkeyToken: item.altHotkeyToken,
-      hotkey: `opt+${item.hotkey}` as ValidHotkey,
-      scopeId: createScope.commandScopeId,
-      description: `${item.description} in new split`,
-      keyDownHandler: item.keyDownHandler,
-      runWithInputFocused: true,
-      displayPriority: 1,
-    });
   });
 
   const quickCreateScope = registerHotkey({
