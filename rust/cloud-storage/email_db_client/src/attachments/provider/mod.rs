@@ -310,7 +310,7 @@ pub async fn get_attachments_by_thread_ids(
 }
 
 // return if record exists for email attachment
-pub async fn fetch_document_email_record(
+pub async fn document_email_record_exists(
     db: &Pool<Postgres>,
     email_attachment_id: Uuid,
 ) -> anyhow::Result<bool> {

@@ -15,8 +15,6 @@ use sqlx::{Pool, Postgres, Row};
 /// we also upload attachments for any threads where at least one participant is someone the user has
 /// sent a message to in the past. but those attachments are fetched once backfill is complete, in
 /// a different call.
-/// Query for all attachment metadata in a thread if the thread contains important messages
-/// (messages where is_sent is true, OR they have an IMPORTANT label, OR the from_address domain matches the link's email domain)
 pub async fn fetch_thread_attachments_for_backfill(
     db: &Pool<Postgres>,
     thread_id: Uuid,

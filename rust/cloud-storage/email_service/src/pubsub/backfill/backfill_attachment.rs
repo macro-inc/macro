@@ -4,7 +4,6 @@ use models_email::service::backfill::BackfillAttachmentPayload;
 use models_email::service::link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use uuid::Uuid;
-// --- Main Orchestrator Method ---
 
 /// this step is invoked by the UpdateMetadata step. it uploads the specified attachment as a
 /// Macro document for the user. first checks the attachment doesn't already exist by querying
@@ -24,14 +23,12 @@ pub async fn backfill_attachment(
     upload_attachment(ctx, access_token, link, &p.metadata).await
 }
 
-// --- Helper Methods ---
-
 /// Checks the database to see if a document has already been created for this attachment.
 async fn attachment_document_exists(
     ctx: &PubSubContext,
     attachment_db_id: Uuid,
 ) -> Result<bool, ProcessingError> {
-    email_db_client::attachments::provider::fetch_document_email_record(&ctx.db, attachment_db_id)
+    email_db_client::attachments::provider::document_email_record_exists(&ctx.db, attachment_db_id)
         .await
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {
