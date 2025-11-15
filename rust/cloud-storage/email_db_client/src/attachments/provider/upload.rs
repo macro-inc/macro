@@ -12,6 +12,7 @@ use sqlx::{Pool, Postgres, Row};
 /// 2. the message has the IMPORTANT label
 /// 3. the message came from someone with the same domain as the user
 /// 4. the domain the email was sent from is part of the whitelisted domains
+///
 /// we also upload attachments for any threads where at least one participant is someone the user has
 /// sent a message to in the past. but those attachments are fetched once backfill is complete, in
 /// a different call.
@@ -198,6 +199,7 @@ pub async fn fetch_job_attachments_for_backfill(
 /// 3. the message came from someone with the same domain as the user
 /// 4. the domain the email was sent from is part of the whitelisted domains
 /// 5. the user has previously sent a message to any participant in the thread
+///
 /// For simplicity's sake, conditions 1 2 3 and 4 are evaluated in the first query, and condition 5
 /// is evaluated in a separate query. These queries are very similar to fetch_thread_attachments_for_backfill
 /// and fetch_job_attachments_for_backfill respectively, except they also verify the attachment

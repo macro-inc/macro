@@ -175,7 +175,7 @@ async fn handle_thread_completed(
                         .context("Failed to fetch thread attachment backfill metadata".to_string()),
                 })
             })?;
-        if attachments.len() > 0 {
+        if !attachments.is_empty() {
             tracing::info!(
                 "Found {} attachments to backfill for thread {}",
                 attachments.len(),

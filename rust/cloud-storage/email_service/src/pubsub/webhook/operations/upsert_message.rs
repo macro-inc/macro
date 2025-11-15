@@ -143,7 +143,7 @@ pub async fn upsert_message(
                 })
             })?;
 
-        if attachments.len() > 0 {
+        if !attachments.is_empty() {
             tracing::info!(
                 "Uploading attachments ({:?}) to Macro for new email",
                 attachments
