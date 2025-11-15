@@ -1,5 +1,6 @@
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { useBlockId } from '@core/block';
+import { BrightJoins } from '@core/component/BrightJoins';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
@@ -14,7 +15,6 @@ import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
 import { useDisplayName } from '@core/user';
 import { isErr, isOk } from '@core/util/maybeResult';
-import PaperPlaneRight from '@icon/fill/paper-plane-right-fill.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
@@ -26,6 +26,7 @@ import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { DocumentMentionInfo } from '@lexical-core';
 import { logger } from '@observability';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
   AttachmentMacro,
@@ -544,10 +545,11 @@ export function BaseInput(props: {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class={`relative flex-1 flex flex-col border border-edge px-3 py-2 bg-input`}
+      class="relative flex flex-col flex-1 bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px]"
     >
+      <BrightJoins dots={[false, false, true, true]} />
       {/* Top Bar */}
-      <div class="flex items-start gap-2">
+      <div class="flex items-start gap-2 p-2">
         <DropdownMenu>
           <DropdownMenu.Trigger>{ReplyIcon()}</DropdownMenu.Trigger>
           <DropdownMenu.Portal>
@@ -582,7 +584,7 @@ export function BaseInput(props: {
           when={showExpandedRecipients()}
           fallback={
             <div
-              class="flex items-center text-sm font-mono truncate overflow-hidden"
+              class="flex items-center text-sm font-mono truncate overflow-hidden mt-1"
               onclick={() => setShowExpandedRecipients(true)}
             >
               <Show
@@ -727,7 +729,7 @@ export function BaseInput(props: {
           />
         </Show>
         <div
-          class="min-h-20 max-h-80 overflow-y-scroll w-full flex flex-col cursor-text"
+          class="min-h-20 max-h-80 overflow-y-scroll w-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 px-3 pt-2 sm:pb-4"
           ref={bodyDiv}
           onclick={() => {
             editor()?.focus();
@@ -761,7 +763,7 @@ export function BaseInput(props: {
             editable={() => !isPendingSend()}
             initialValue={props.preloadedBody}
             initialHtml={props.preloadedHtml}
-            placeholder=""
+            placeholder="Reply — @mention to share or cc people"
             onChange={handleChange}
             onDocumentMention={(item) => {
               makeAttachmentPublic(item.id);
@@ -791,63 +793,63 @@ export function BaseInput(props: {
             />
           </div>
         </Show>
-        <div class="flex flex-row items-center space-x-2">
-          <div class="relative" ref={attachButtonRef}>
+        <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2 allow-css-brackets">
+          <div class="flex flex-row items-center gap-2">
+            <div class="relative" ref={attachButtonRef}>
+              <IconButton
+                theme="base"
+                icon={Plus}
+                tooltip={{ label: 'Attach' }}
+                onClick={() => setAttachMenuOpen(true)}
+              />
+              <AttachMenu
+                open={attachMenuOpen()}
+                close={() => setAttachMenuOpen(false)}
+                anchorRef={attachButtonRef}
+                containerRef={bodyDiv}
+                onAttach={onAttach}
+                onAttachDocuments={onAttachDocuments}
+                setIsPending={setIsPendingUpload}
+              />
+            </div>
             <IconButton
-              theme="clear"
-              icon={Plus}
-              tooltip={{ label: 'Attach' }}
-              onClick={() => setAttachMenuOpen(true)}
-            />
-            <AttachMenu
-              open={attachMenuOpen()}
-              close={() => setAttachMenuOpen(false)}
-              anchorRef={attachButtonRef}
-              containerRef={bodyDiv}
-              onAttach={onAttach}
-              onAttachDocuments={onAttachDocuments}
-              setIsPending={setIsPendingUpload}
-            />
-          </div>
-          <IconButton
-            theme="clear"
-            icon={TextAa}
-            onclick={() => {
-              setShowFormatRibbon(!showFormatRibbon());
-            }}
-          />
-          <Show when={savedDraftId()}>
-            <IconButton
-              theme="clear"
-              icon={Trash}
-              onclick={handleDeleteDraft}
-              tooltip={{ label: 'Delete draft' }}
-            />
-          </Show>
-          <div class="ml-auto flex flex-row">
-            <button
-              disabled={isPendingUpload() || isPendingSend()}
-              onClick={() => {
-                sendEmail();
+              theme="base"
+              icon={TextAa}
+              onclick={() => {
+                setShowFormatRibbon(!showFormatRibbon());
               }}
-              class="text-ink-muted bg-transparent rounded-full hover:scale-110! transition ease-in-out delay-150 flex flex-col justify-center items-center"
-            >
-              <div class="bg-transparent rounded-full size-8 flex flex-row justify-center items-center">
-                <Show
-                  when={!isPendingUpload() && !isPendingSend()}
-                  fallback={
-                    <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
-                  }
-                >
-                  <PaperPlaneRight
-                    width={20}
-                    height={20}
-                    class="!text-accent-ink !fill-accent"
-                  />
-                </Show>
-              </div>
-            </button>
+            />
+            <Show when={savedDraftId()}>
+              <IconButton
+                theme="base"
+                icon={Trash}
+                onclick={handleDeleteDraft}
+                tooltip={{ label: 'Delete draft' }}
+              />
+            </Show>
           </div>
+          <button
+            disabled={isPendingUpload() || isPendingSend()}
+            onClick={() => {
+              sendEmail();
+            }}
+            class="text-ink-muted bg-transparent rounded-full hover:scale-110! transition ease-in-out delay-150 flex flex-col justify-center items-center"
+          >
+            <div class="bg-transparent rounded-full size-8 flex flex-row justify-center items-center">
+              <Show
+                when={!isPendingUpload() && !isPendingSend()}
+                fallback={
+                  <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
+                }
+              >
+                <ArrowFatLineUp
+                  width={20}
+                  height={20}
+                  class="!text-accent-ink !fill-accent"
+                />
+              </Show>
+            </div>
+          </button>
         </div>
       </div>
     </div>
