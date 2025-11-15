@@ -13,7 +13,8 @@ import {
 } from 'solid-js';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 
-const titleCase = (str: string) => {
+// NOTE: unused since everything should already be correctly cased
+const _titleCase = (str: string) => {
   return str
     .split('')
     .map((c, i) => (i === 0 ? c.toUpperCase() : c.toLowerCase()))
@@ -141,7 +142,7 @@ export function SplitTabs(props: {
 
             createEffect(() => {
               if (isActive()) {
-                panel.handle.setDisplayName(titleCase(label));
+                panel.handle.setDisplayName(label);
               }
             });
 
@@ -162,7 +163,7 @@ export function SplitTabs(props: {
                   <span class="text-xs font-mono opacity-70 mr-0.5">
                     {(i() + 1).toString()}
                   </span>
-                  <span class="truncate">{titleCase(label)}</span>
+                  <span class="truncate">{label}</span>
                 </span>
                 {/* <Show when={isActive()}>
                   <BrightJoins dots={[true, true, true, true]} />
