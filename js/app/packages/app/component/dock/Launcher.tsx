@@ -2,11 +2,9 @@ import type { BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { Hotkey } from '@core/component/Hotkey';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
-import {
-  registerHotkey,
-  useHotkeyDOMScope,
-  type ValidHotkey,
-} from '@core/hotkey/hotkeys';
+import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import type { HotkeyToken } from '@core/hotkey/tokens';
+import type { CommandDisplayPriority, ValidHotkey } from '@core/hotkey/types';
 import {
   createCanvasFileFromJsonString,
   createChat,
@@ -399,8 +397,18 @@ const LauncherInner = (props: LauncherInnerProps) => {
   };
 
   launcherMenuItems.forEach((item, index) => {
-    registerHotkey({
-      hotkeyToken: item.hotkeyToken,
+    const displayPriority: CommandDisplayPriority | undefined =
+      item.displayPriority === 0 ? undefined : (item.displayPriority as CommandDisplayPriority);
+    
+    const hotkeyConfig: {
+      hotkeyToken?: HotkeyToken;
+      hotkey: ValidHotkey[];
+      scopeId: string;
+      description: string;
+      keyDownHandler: () => boolean;
+      displayPriority: CommandDisplayPriority | undefined;
+    } = {
+      hotkeyToken: item.hotkeyToken as HotkeyToken,
       hotkey: [item.hotkey],
       scopeId: launcherScope,
       description: `Create ${item.label.charAt(0).toUpperCase() + item.label.slice(1).toLowerCase()}`,
@@ -409,12 +417,13 @@ const LauncherInner = (props: LauncherInnerProps) => {
         item.onClick();
         return true;
       },
-      displayPriority: item.displayPriority,
-    });
+      displayPriority,
+    };
+    
+    registerHotkey(hotkeyConfig);
 
     // Register option+letter hotkeys to open in new split
     registerHotkey({
-      hotkeyToken: `${item.hotkeyToken}.newSplit`,
       hotkey: `opt+${item.hotkey}` as ValidHotkey,
       scopeId: launcherScope,
       description: `Create ${item.label.charAt(0).toUpperCase() + item.label.slice(1).toLowerCase()} in new split`,
@@ -423,30 +432,25 @@ const LauncherInner = (props: LauncherInnerProps) => {
         item.onClick({ altKey: true } as MouseEvent);
         return true;
       },
-      displayPriority: item.displayPriority,
+      displayPriority,
     });
   });
 
   registerHotkey({
-    hotkeyToken: 'global.create.left',
     hotkey: 'arrowleft',
     scopeId: launcherScope,
     description: 'Navigate Left',
     keyDownHandler: () => moveFocus(-1),
-    displayPriority: 0,
   });
 
   registerHotkey({
-    hotkeyToken: 'global.create.right',
     hotkey: 'arrowright' as ValidHotkey,
     scopeId: launcherScope,
     description: 'Navigate Right',
     keyDownHandler: () => moveFocus(1),
-    displayPriority: 0,
   });
 
   registerHotkey({
-    hotkeyToken: 'global.create.escape',
     hotkey: 'escape',
     scopeId: launcherScope,
     description: 'Exit',
@@ -454,11 +458,9 @@ const LauncherInner = (props: LauncherInnerProps) => {
       props.onClose();
       return true;
     },
-    displayPriority: 0,
   });
 
   registerHotkey({
-    hotkeyToken: 'global.create.enter',
     hotkey: 'enter',
     scopeId: launcherScope,
     description: 'Open in current split',
@@ -471,7 +473,6 @@ const LauncherInner = (props: LauncherInnerProps) => {
   });
 
   registerHotkey({
-    hotkeyToken: 'global.create.opt-enter',
     hotkey: 'opt+enter' as ValidHotkey,
     scopeId: launcherScope,
     description: 'Open in new split',
