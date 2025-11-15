@@ -1,7 +1,6 @@
 import { matches } from '@core/util/match';
 import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
 import { useEmail } from '@service-gql/client';
-import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -403,9 +402,7 @@ export function EntityWithEverything(
         onKeyUp={onKeyUpClick((e) => props.onClick?.(props.entity, e as any))}
         role="button"
         tabIndex={0}
-        ref={mergeRefs(props.ref, (el) => {
-          _tabbableEl = el;
-        })}
+        ref={props.ref}
       >
         {/* Left Column Indicator(s) */}
         <Show when={props.showLeftColumnIndicator}>
