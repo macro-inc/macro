@@ -3,7 +3,7 @@ use crate::outbound::pg_soup_repo::expanded::{
     by_ids::expanded_soup_by_ids,
     dynamic::expanded_dynamic_cursor_soup,
 };
-use item_filters::{EntityFilters, ast::EntityFilterAst};
+use item_filters::ast::EntityFilterAst;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
@@ -690,5 +690,807 @@ async fn empty_ast_returns_same_as_static_query(db: PgPool) {
     )
     .await
     .unwrap();
-    assert_eq!(ast_res, static_res);
+
+    // Compare the IDs since SoupItem doesn't implement PartialEq
+    let ast_ids: Vec<String> = ast_res
+        .iter()
+        .map(|item| match item {
+            SoupItem::Chat(c) => c.id.clone(),
+            SoupItem::Document(d) => d.id.clone(),
+            SoupItem::Project(p) => p.id.clone(),
+        })
+        .collect();
+
+    let static_ids: Vec<String> = static_res
+        .iter()
+        .map(|item| match item {
+            SoupItem::Chat(c) => c.id.clone(),
+            SoupItem::Document(d) => d.id.clone(),
+            SoupItem::Project(p) => p.id.clone(),
+        })
+        .collect();
+
+    assert_eq!(ast_ids, static_ids);
+}
+
+// ============================================================================
+// EntityFilter Tests with UUID-based fixture
+// ============================================================================
+
+// Test filtering by document file type
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_filter_by_document_file_type(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Filter for only PDF documents
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            file_types: vec!["pdf".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        user_id,
+        20,
+        Query::Sort(SimpleSortMethod::CreatedAt, filters),
+    )
+    .await?;
+
+    // Should get PDF documents (filtered), and all chats and all projects
+    let mut pdf_count = 0;
+    let mut chat_count = 0;
+    let mut project_count = 0;
+
+    for item in &items {
+        match item {
+            SoupItem::Document(doc) => {
+                assert_eq!(
+                    doc.file_type.as_deref(),
+                    Some("pdf"),
+                    "All documents should be PDFs"
+                );
+                pdf_count += 1;
+            }
+            SoupItem::Chat(_) => {
+                chat_count += 1;
+            }
+            SoupItem::Project(_) => {
+                project_count += 1;
+            }
+        }
+    }
+
+    // Should get 4 accessible PDF documents (doc-in-C is MD, doc-isolated not accessible)
+    assert_eq!(pdf_count, 4, "Should get 4 PDF documents");
+    // Should get all 4 accessible chats
+    assert_eq!(chat_count, 4, "Should get all chats");
+    // Should get all 2 accessible projects
+    assert_eq!(project_count, 4, "Should get all projects");
+
+    Ok(())
+}
+
+// Test filtering by specific document IDs
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_filter_by_document_ids(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Filter for specific document IDs
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            document_ids: vec![
+                "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa".to_string(),
+                "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee".to_string(),
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        user_id,
+        20,
+        Query::Sort(SimpleSortMethod::CreatedAt, filters),
+    )
+    .await?;
+
+    // Should get 2 documents (filtered), all chats, and all projects
+    let mut document_ids: HashSet<String> = HashSet::new();
+    let mut chat_count = 0;
+    let mut project_count = 0;
+
+    for item in &items {
+        match item {
+            SoupItem::Document(d) => {
+                document_ids.insert(d.id.clone());
+            }
+            SoupItem::Chat(_) => {
+                chat_count += 1;
+            }
+            SoupItem::Project(_) => {
+                project_count += 1;
+            }
+        }
+    }
+
+    assert_eq!(document_ids.len(), 2, "Should get exactly 2 documents");
+    assert_eq!(chat_count, 4, "Should get all chats");
+    assert_eq!(project_count, 4, "Should get all projects");
+
+    let returned_ids = document_ids;
+
+    let expected_ids: HashSet<String> = [
+        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "eeeeeeee-eeee-eeee-eeee-eeeeeeeeeeee",
+    ]
+    .iter()
+    .map(|&s| s.to_string())
+    .collect();
+
+    assert_eq!(
+        returned_ids, expected_ids,
+        "Should get the correct documents"
+    );
+
+    Ok(())
+}
+
+// Test filtering by project ID (documents)
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_filter_documents_by_project_id(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Filter documents in project-A only
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            project_ids: vec!["11111111-1111-1111-1111-111111111111".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        user_id,
+        20,
+        Query::Sort(SimpleSortMethod::CreatedAt, filters),
+    )
+    .await?;
+
+    // Should get 1 document in project-A, all chats, and all projects
+    let mut doc_count = 0;
+    let mut chat_count = 0;
+    let mut project_count = 0;
+    let mut found_doc_id = None;
+
+    for item in &items {
+        match item {
+            SoupItem::Document(doc) => {
+                assert_eq!(
+                    doc.project_id.as_deref(),
+                    Some("11111111-1111-1111-1111-111111111111")
+                );
+                found_doc_id = Some(doc.id.clone());
+                doc_count += 1;
+            }
+            SoupItem::Chat(_) => {
+                chat_count += 1;
+            }
+            SoupItem::Project(_) => {
+                project_count += 1;
+            }
+        }
+    }
+
+    assert_eq!(doc_count, 1, "Should get 1 document in project-A");
+    assert_eq!(
+        found_doc_id.as_deref(),
+        Some("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")
+    );
+    assert_eq!(chat_count, 4, "Should get all chats");
+    assert_eq!(project_count, 4, "Should get all projects");
+
+    Ok(())
+}
+
+// Test filtering chats by project ID
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_filter_chats_by_project_id(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{ChatFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Filter chats in project-B
+    let entity_filters = EntityFilters {
+        chat_filters: ChatFilters {
+            project_ids: vec!["22222222-2222-2222-2222-222222222222".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        user_id,
+        20,
+        Query::Sort(SimpleSortMethod::CreatedAt, filters),
+    )
+    .await?;
+
+    // Should get 1 chat in project-B, all documents, and all projects
+    let mut doc_count = 0;
+    let mut chat_count = 0;
+    let mut project_count = 0;
+    let mut found_chat_id = None;
+
+    for item in &items {
+        match item {
+            SoupItem::Document(_) => {
+                doc_count += 1;
+            }
+            SoupItem::Chat(chat) => {
+                assert_eq!(
+                    chat.project_id.as_deref(),
+                    Some("22222222-2222-2222-2222-222222222222")
+                );
+                found_chat_id = Some(chat.id.clone());
+                chat_count += 1;
+            }
+            SoupItem::Project(_) => {
+                project_count += 1;
+            }
+        }
+    }
+
+    assert_eq!(chat_count, 1, "Should get 1 chat in project-B");
+    assert_eq!(
+        found_chat_id.as_deref(),
+        Some("b2b2b2b2-b2b2-b2b2-b2b2-b2b2b2b2b2b2")
+    );
+    assert_eq!(doc_count, 5, "Should get all documents");
+    assert_eq!(project_count, 4, "Should get all projects");
+
+    Ok(())
+}
+
+// Test filtering by specific chat IDs
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_filter_by_chat_ids(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{ChatFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Filter for specific chat IDs
+    let entity_filters = EntityFilters {
+        chat_filters: ChatFilters {
+            chat_ids: vec![
+                "a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1".to_string(),
+                "d4d4d4d4-d4d4-d4d4-d4d4-d4d4d4d4d4d4".to_string(),
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        user_id,
+        20,
+        Query::Sort(SimpleSortMethod::CreatedAt, filters),
+    )
+    .await?;
+
+    // Should get 2 chats (filtered), all documents, and all projects
+    let mut chat_ids: HashSet<String> = HashSet::new();
+    let mut doc_count = 0;
+    let mut project_count = 0;
+
+    for item in &items {
+        match item {
+            SoupItem::Chat(c) => {
+                chat_ids.insert(c.id.clone());
+            }
+            SoupItem::Document(_) => {
+                doc_count += 1;
+            }
+            SoupItem::Project(_) => {
+                project_count += 1;
+            }
+        }
+    }
+
+    assert_eq!(chat_ids.len(), 2, "Should get exactly 2 chats");
+    assert_eq!(doc_count, 5, "Should get all documents");
+    assert_eq!(project_count, 4, "Should get all projects");
+
+    let returned_ids = chat_ids;
+
+    let expected_ids: HashSet<String> = [
+        "a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1",
+        "d4d4d4d4-d4d4-d4d4-d4d4-d4d4d4d4d4d4",
+    ]
+    .iter()
+    .map(|&s| s.to_string())
+    .collect();
+
+    assert_eq!(returned_ids, expected_ids, "Should get the correct chats");
+
+    Ok(())
+}
+
+// Test filtering projects by specific project IDs
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_filter_by_project_ids(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{EntityFilters, ProjectFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Filter for specific project IDs
+    let entity_filters = EntityFilters {
+        project_filters: ProjectFilters {
+            project_ids: vec![
+                "11111111-1111-1111-1111-111111111111".to_string(),
+                "44444444-4444-4444-4444-444444444444".to_string(),
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        user_id,
+        20,
+        Query::Sort(SimpleSortMethod::CreatedAt, filters),
+    )
+    .await?;
+
+    // Should get 2 projects (filtered), all documents, and all chats
+    let mut project_ids: HashSet<String> = HashSet::new();
+    let mut doc_count = 0;
+    let mut chat_count = 0;
+
+    for item in &items {
+        match item {
+            SoupItem::Project(p) => {
+                project_ids.insert(p.id.clone());
+            }
+            SoupItem::Document(_) => {
+                doc_count += 1;
+            }
+            SoupItem::Chat(_) => {
+                chat_count += 1;
+            }
+        }
+    }
+
+    assert_eq!(project_ids.len(), 2, "Should get exactly 2 projects");
+    assert_eq!(doc_count, 5, "Should get all documents");
+    assert_eq!(chat_count, 4, "Should get all chats");
+
+    let returned_ids = project_ids;
+
+    let expected_ids: HashSet<String> = [
+        "11111111-1111-1111-1111-111111111111",
+        "44444444-4444-4444-4444-444444444444",
+    ]
+    .iter()
+    .map(|&s| s.to_string())
+    .collect();
+
+    assert_eq!(
+        returned_ids, expected_ids,
+        "Should get the correct projects"
+    );
+
+    Ok(())
+}
+
+// Test combined filters across multiple entity types
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_combined_entity_filters(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{ChatFilters, DocumentFilters, EntityFilters, ProjectFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Filter for:
+    // - Documents in project-A OR project-B
+    // - Chat with ID chat-standalone
+    // - Project with ID project-D
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            project_ids: vec![
+                "11111111-1111-1111-1111-111111111111".to_string(),
+                "22222222-2222-2222-2222-222222222222".to_string(),
+            ],
+            ..Default::default()
+        },
+        chat_filters: ChatFilters {
+            chat_ids: vec!["d4d4d4d4-d4d4-d4d4-d4d4-d4d4d4d4d4d4".to_string()],
+            ..Default::default()
+        },
+        project_filters: ProjectFilters {
+            project_ids: vec!["44444444-4444-4444-4444-444444444444".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        user_id,
+        20,
+        Query::Sort(SimpleSortMethod::CreatedAt, filters),
+    )
+    .await?;
+
+    // Should get: doc-in-A, doc-in-B, chat-standalone, project-D = 4 items
+    assert_eq!(items.len(), 4, "Should get 4 items total");
+
+    let mut doc_count = 0;
+    let mut chat_count = 0;
+    let mut project_count = 0;
+
+    for item in &items {
+        match item {
+            SoupItem::Document(doc) => {
+                doc_count += 1;
+                assert!(
+                    doc.id == "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"
+                        || doc.id == "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+                    "Document should be in project-A or project-B"
+                );
+            }
+            SoupItem::Chat(chat) => {
+                chat_count += 1;
+                assert_eq!(
+                    chat.id, "d4d4d4d4-d4d4-d4d4-d4d4-d4d4d4d4d4d4",
+                    "Should only get standalone chat"
+                );
+            }
+            SoupItem::Project(project) => {
+                project_count += 1;
+                assert_eq!(
+                    project.id, "44444444-4444-4444-4444-444444444444",
+                    "Should only get project-D"
+                );
+            }
+        }
+    }
+
+    assert_eq!(doc_count, 2, "Should get 2 documents");
+    assert_eq!(chat_count, 1, "Should get 1 chat");
+    assert_eq!(project_count, 1, "Should get 1 project");
+
+    Ok(())
+}
+
+// Test filtering by multiple criteria on documents (AND logic)
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_multiple_filter_criteria_documents(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Filter for documents: specific IDs AND in specific projects AND specific file type
+    // This uses AND logic across different filter criteria
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            document_ids: vec![
+                "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa".to_string(),
+                "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb".to_string(),
+            ],
+            project_ids: vec![
+                "11111111-1111-1111-1111-111111111111".to_string(),
+                "22222222-2222-2222-2222-222222222222".to_string(),
+            ],
+            file_types: vec!["pdf".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        user_id,
+        20,
+        Query::Sort(SimpleSortMethod::CreatedAt, filters),
+    )
+    .await?;
+
+    // Should get 2 documents matching all criteria, all chats, and all projects
+    let mut document_ids: HashSet<String> = HashSet::new();
+    let mut chat_count = 0;
+    let mut project_count = 0;
+
+    for item in &items {
+        match item {
+            SoupItem::Document(d) => {
+                document_ids.insert(d.id.clone());
+            }
+            SoupItem::Chat(_) => {
+                chat_count += 1;
+            }
+            SoupItem::Project(_) => {
+                project_count += 1;
+            }
+        }
+    }
+
+    assert_eq!(
+        document_ids.len(),
+        2,
+        "Should get 2 documents matching all criteria"
+    );
+    assert_eq!(chat_count, 4, "Should get all chats");
+    assert_eq!(project_count, 4, "Should get all projects");
+
+    let returned_ids = document_ids;
+
+    let expected_ids: HashSet<String> = [
+        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    ]
+    .iter()
+    .map(|&s| s.to_string())
+    .collect();
+
+    assert_eq!(returned_ids, expected_ids);
+
+    Ok(())
+}
+
+// Test that inaccessible items are filtered out
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_filters_respect_access_control(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Try to request doc-isolated (which user doesn't have access to)
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            document_ids: vec!["ffffffff-ffff-ffff-ffff-ffffffffffff".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        user_id,
+        20,
+        Query::Sort(SimpleSortMethod::CreatedAt, filters),
+    )
+    .await?;
+
+    // Should get 0 documents (inaccessible), but all chats and all projects
+    let mut doc_count = 0;
+    let mut chat_count = 0;
+    let mut project_count = 0;
+
+    for item in &items {
+        match item {
+            SoupItem::Document(_) => {
+                doc_count += 1;
+            }
+            SoupItem::Chat(_) => {
+                chat_count += 1;
+            }
+            SoupItem::Project(_) => {
+                project_count += 1;
+            }
+        }
+    }
+
+    assert_eq!(
+        doc_count, 0,
+        "Should not return inaccessible documents even when filtered"
+    );
+    assert_eq!(chat_count, 4, "Should get all chats");
+    assert_eq!(project_count, 4, "Should get all projects");
+
+    Ok(())
+}
+
+// Test filtering by owner
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_filter_by_owner(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Filter documents by owner
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            owners: vec!["macro|user-1@test.com".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        user_id,
+        20,
+        Query::Sort(SimpleSortMethod::CreatedAt, filters),
+    )
+    .await?;
+
+    // Should get 5 documents owned by user-1, all chats, and all projects
+    let mut doc_count = 0;
+    let mut chat_count = 0;
+    let mut project_count = 0;
+
+    for item in &items {
+        match item {
+            SoupItem::Document(doc) => {
+                assert_eq!(
+                    doc.owner_id, "macro|user-1@test.com",
+                    "All documents should be owned by user-1"
+                );
+                doc_count += 1;
+            }
+            SoupItem::Chat(_) => {
+                chat_count += 1;
+            }
+            SoupItem::Project(_) => {
+                project_count += 1;
+            }
+        }
+    }
+
+    assert_eq!(doc_count, 5, "Should get 5 documents owned by user-1");
+    assert_eq!(chat_count, 4, "Should get all chats");
+    assert_eq!(project_count, 4, "Should get all projects");
+
+    Ok(())
+}
+
+// Test filtering for non-existent items returns empty
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_filter_non_existent_items(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{ChatFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Filter for non-existent chat IDs
+    let entity_filters = EntityFilters {
+        chat_filters: ChatFilters {
+            chat_ids: vec!["00000000-0000-0000-0000-000000000000".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let items = expanded_dynamic_cursor_soup(
+        &db,
+        user_id,
+        20,
+        Query::Sort(SimpleSortMethod::CreatedAt, filters),
+    )
+    .await?;
+
+    // Should get 0 chats (non-existent), but all documents and all projects
+    let mut doc_count = 0;
+    let mut chat_count = 0;
+    let mut project_count = 0;
+
+    for item in &items {
+        match item {
+            SoupItem::Document(_) => {
+                doc_count += 1;
+            }
+            SoupItem::Chat(_) => {
+                chat_count += 1;
+            }
+            SoupItem::Project(_) => {
+                project_count += 1;
+            }
+        }
+    }
+
+    assert_eq!(chat_count, 0, "Should return 0 chats for non-existent IDs");
+    assert_eq!(doc_count, 5, "Should get all documents");
+    assert_eq!(project_count, 4, "Should get all projects");
+
+    Ok(())
 }
