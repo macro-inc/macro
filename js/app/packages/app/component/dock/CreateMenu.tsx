@@ -1,6 +1,6 @@
 import { BasicHotkey } from '@core/component/Hotkey';
-import MacroCreateIcon from '@macro-icons/macro-create-b.svg';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
+import MacroCreateIcon from '@macro-icons/macro-create-b.svg';
 import { Launcher } from './Launcher';
 
 export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal();

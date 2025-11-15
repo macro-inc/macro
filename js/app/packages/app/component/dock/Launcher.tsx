@@ -1,35 +1,27 @@
 import type { BlockName } from '@core/block';
-
+import { getIconConfig } from '@core/component/EntityIcon';
 import { Hotkey } from '@core/component/Hotkey';
-
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
-
 import {
   registerHotkey,
   useHotkeyDOMScope,
   type ValidHotkey,
 } from '@core/hotkey/hotkeys';
-
 import {
   createCanvasFileFromJsonString,
   createChat,
   createCodeFileFromText,
   createMarkdownFile,
 } from '@core/util/create';
-
 import { isErr } from '@core/util/maybeResult';
-
 import { Dialog } from '@kobalte/core/dialog';
-
-import PixelArrowRight from '@macro-icons/pixel/arrow-right.svg';
-import PixelMd from '@macro-icons/pixel/notes.svg';
-import PixelEmail from '@macro-icons/pixel/email.svg';
-import PixelChannel from '@macro-icons/pixel/channel.svg';
 import PixelChat from '@macro-icons/pixel/ai.svg';
+import PixelArrowRight from '@macro-icons/pixel/arrow-right.svg';
 import PixelCanvas from '@macro-icons/pixel/canvas.svg';
+import PixelChannel from '@macro-icons/pixel/channel.svg';
 import PixelCode from '@macro-icons/pixel/code.svg';
-
-import { getIconConfig } from '@core/component/EntityIcon';
+import PixelEmail from '@macro-icons/pixel/email.svg';
+import PixelMd from '@macro-icons/pixel/notes.svg';
 
 import {
   type Component,
@@ -50,7 +42,7 @@ type LauncherMenuItemProps = {
   hotkeyLetter?: string;
   hotkeyToken: string;
   hotkey: ValidHotkey;
-  onClick: () => void | Promise<void>;
+  onClick: (e?: MouseEvent) => void | Promise<void>;
   Icon: Component;
   displayPriority: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
   onMouseEnter?: () => void;
@@ -78,7 +70,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
     <button
       class={`create-menu-${props.label.toLowerCase()} size-32 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge transition-transform ease-click duration-200`}
       classList={{
-        '-translate-y-2 text-ink bracket-offset-4': props.focused,
+        '-translate-y-2 text-ink bracket-offset-1': props.focused,
         'text-ink-extra-muted': !props.focused,
       }}
       onClick={props.onClick}
@@ -119,8 +111,8 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
         }}
       ></div>
 
-      <div class="absolute top-2 left-2 font-berkeley text-xs z-1 bg-panel">
-        <Hotkey shortcut={props.hotkeyLetter} theme="muted" />
+      <div class="absolute top-1.5 left-2 font-mono z-1 bg-panel text-accent font-bold">
+        <Hotkey shortcut={props.hotkeyLetter} />
       </div>
 
       <div
@@ -132,7 +124,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       />
 
       <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-1">
-        <div class="text-lg font-medium">{props.label}</div>
+        <div class="text-sm font-bold uppercase font-stretch-condensed">{props.label}</div>
         <div class="size-3">
           <PixelArrowRight />
         </div>
@@ -313,7 +305,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
       hotkeyLetter: 'n',
       hotkeyToken: 'global.create.note',
       hotkey: 'n',
-      onClick: () => handleNewNote(),
+      onClick: (e) => handleNewNote(e?.altKey ? 'new' : 'current'),
       Icon: () => <PixelMd class="w-full h-full" />,
       displayPriority: 5,
     },
@@ -323,7 +315,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
       hotkeyLetter: 'e',
       hotkeyToken: 'global.create.email',
       hotkey: 'e',
-      onClick: () => handleNewEmail(),
+      onClick: (e) => handleNewEmail(e?.altKey ? 'new' : 'current'),
       Icon: () => <PixelEmail class="w-full h-full" />,
       displayPriority: 4,
     },
@@ -333,7 +325,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
       hotkeyLetter: 'm',
       hotkeyToken: 'global.create.message',
       hotkey: 'm',
-      onClick: () => handleNewMessage(),
+      onClick: (e) => handleNewMessage(e?.altKey ? 'new' : 'current'),
       Icon: () => <PixelChannel class="w-full h-full" />,
       displayPriority: 3,
     },
@@ -343,7 +335,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
       hotkeyLetter: 'a',
       hotkeyToken: 'global.create.chat',
       hotkey: 'a',
-      onClick: () => handleNewChat(),
+      onClick: (e) => handleNewChat(e?.altKey ? 'new' : 'current'),
       Icon: () => <PixelChat class="w-full h-full" />,
       displayPriority: 2,
     },
@@ -353,7 +345,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
       hotkeyLetter: 'd',
       hotkeyToken: 'global.create.canvas',
       hotkey: 'd',
-      onClick: () => handleNewCanvas(),
+      onClick: (e) => handleNewCanvas(e?.altKey ? 'new' : 'current'),
       Icon: () => <PixelCanvas class="w-full h-full" />,
       displayPriority: 1,
     },
@@ -363,7 +355,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
       hotkeyLetter: 'c',
       hotkeyToken: 'global.create.code',
       hotkey: 'c',
-      onClick: () => handleNewCode(),
+      onClick: (e) => handleNewCode(e?.altKey ? 'new' : 'current'),
       Icon: () => <PixelCode class="w-full h-full" />,
       displayPriority: 0,
     },
@@ -413,6 +405,20 @@ const LauncherInner = (props: LauncherInnerProps) => {
       keyDownHandler: () => {
         setFocusedIndex(index);
         item.onClick();
+        return true;
+      },
+      displayPriority: item.displayPriority,
+    });
+
+    // Register option+letter hotkeys to open in new split
+    registerHotkey({
+      hotkeyToken: `${item.hotkeyToken}.newSplit`,
+      hotkey: `opt+${item.hotkey}` as ValidHotkey,
+      scopeId: launcherScope,
+      description: `Create ${item.label.charAt(0).toUpperCase() + item.label.slice(1).toLowerCase()} in new split`,
+      keyDownHandler: () => {
+        setFocusedIndex(index);
+        item.onClick({ altKey: true } as MouseEvent);
         return true;
       },
       displayPriority: item.displayPriority,
@@ -490,22 +496,29 @@ const LauncherInner = (props: LauncherInnerProps) => {
   });
 
   return (
-    <div
-      class="relative grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 p-6 isolate bg-menu pattern-edge pattern-dot-3 border border-edge/50 suppress-css-brackets"
-      ref={ref}
-    >
-      <div class="absolute pointer-events-none size-full inset-0 pulse-corners"></div>
+    <div>
+      <div
+        class="relative grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 p-6 isolate bg-menu pattern-edge pattern-dot-3 border border-edge/50 suppress-css-brackets"
+        ref={ref}
+      >
+        <div class="absolute pointer-events-none size-full inset-0 pulse-corners"></div>
 
-      <For each={launcherMenuItems}>
-        {(item, index) => (
-          <LauncherMenuItem
-            {...item}
-            onMouseEnter={() => setFocusedIndex(index())}
-            onFocus={() => setFocusedIndex(index())}
-            focused={focusedIndex() === index()}
-          />
-        )}
-      </For>
+        <For each={launcherMenuItems}>
+          {(item, index) => (
+            <LauncherMenuItem
+              {...item}
+              onMouseEnter={() => setFocusedIndex(index())}
+              onFocus={() => setFocusedIndex(index())}
+              focused={focusedIndex() === index()}
+            />
+          )}
+        </For>
+
+
+      </div>
+      <div class="col-span-full font-mono text-sm text-ink-muted text-center pt-4">
+        Hold option to open in a new split view
+      </div>
     </div>
   );
 };
@@ -551,4 +564,3 @@ export const Launcher = (props: LauncherProps) => {
     </Dialog>
   );
 };
-
