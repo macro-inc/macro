@@ -1,6 +1,6 @@
 import { GlitchText } from '@core/component/GlitchText';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
-import { createSignal, createEffect, onCleanup, Show } from 'solid-js';
+import { createEffect, createSignal, For, onCleanup, Show } from 'solid-js';
 
 interface PresentModeGlitchProps {
   show: boolean;
@@ -23,13 +23,13 @@ export function PresentModeGlitch(props: PresentModeGlitchProps) {
     } else {
       setIsVisible(false);
       setShowContent(false);
-      timeoutIds.forEach(id => clearTimeout(id));
+      timeoutIds.forEach((id) => clearTimeout(id));
       timeoutIds = [];
     }
   });
 
   onCleanup(() => {
-    timeoutIds.forEach(id => clearTimeout(id));
+    timeoutIds.forEach((id) => clearTimeout(id));
   });
 
   const handleAnimationComplete = () => {
@@ -142,21 +142,23 @@ export function PresentModeGlitch(props: PresentModeGlitchProps) {
 
             {/* Animated glitch lines */}
             <div class="absolute inset-0 pointer-events-none overflow-hidden">
-              {Array.from({ length: 30 }).map((_, i) => {
-                const delay = i * 50;
-                const offset = (i % 3) * 33;
-                return (
-                  <div
-                    class="absolute w-full h-px bg-accent glitch-line"
-                    style={{
-                      top: `${offset}%`,
-                      left: '0%',
-                      opacity: '0.1',
-                      'animation-delay': `${delay}ms`,
-                    }}
-                  />
-                );
-              })}
+              <For each={Array.from({ length: 30 }, (_, i) => i)}>
+                {(i) => {
+                  const delay = i * 50;
+                  const offset = (i % 3) * 33;
+                  return (
+                    <div
+                      class="absolute w-full h-px bg-accent glitch-line"
+                      style={{
+                        top: `${offset}%`,
+                        left: '0%',
+                        opacity: '0.1',
+                        'animation-delay': `${delay}ms`,
+                      }}
+                    />
+                  );
+                }}
+              </For>
             </div>
 
             {/* Corner brackets */}
@@ -197,4 +199,3 @@ export function PresentModeGlitch(props: PresentModeGlitchProps) {
     </Show>
   );
 }
-
