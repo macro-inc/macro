@@ -10,7 +10,7 @@ use models_email::gmail::operations::GmailApiOperation;
 use std::cmp::min;
 
 // the max size allowed by the gmail api
-const BACKFILL_THREAD_BATCH_SIZE: u32 = 5;
+const BACKFILL_THREAD_BATCH_SIZE: u32 = 500;
 
 /// This step is invoked by Init.
 /// Each ListThreads operation gets a batch of 500 thread_ids from the gmail api

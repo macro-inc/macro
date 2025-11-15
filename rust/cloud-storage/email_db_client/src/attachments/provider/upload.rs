@@ -272,7 +272,7 @@ pub async fn fetch_insertable_attachments_for_new_email(
         })
         .collect();
 
-    // if any conditions are met, return - we don't care if condition 4 is met as we are already inserting
+    // if one or more condition has already been met, return - don't need to check condition 5
     if !attachments.is_empty() {
         return Ok(attachments);
     }
