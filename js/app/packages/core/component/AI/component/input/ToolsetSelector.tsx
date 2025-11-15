@@ -96,7 +96,7 @@ export function ToolsetSelector(props: {
               list={SOURCES.map((s) => s.label)}
             />
           </DropdownMenu>
-          <span class="bg-accent text-panel font-mono text-xs font-medium px-1 flex items-center">
+          <span class="bg-edge-muted text-ink font-mono text-xs font-medium px-1 flex items-center">
             {SOURCE_TO_DISPLAY[source()]}
           </span>
         </div>

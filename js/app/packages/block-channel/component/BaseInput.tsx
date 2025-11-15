@@ -24,7 +24,7 @@ import FormatIcon from '@icon/regular/text-aa.svg';
 import XIcon from '@icon/regular/x.svg';
 import { logger } from '@observability';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
+import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { createCallback } from '@solid-primitives/rootless';
 import { leading, throttle } from '@solid-primitives/scheduled';
@@ -50,6 +50,7 @@ import { AttachMenu } from './AttachMenu';
 import { Attachment } from './Attachment';
 import { FormatRibbon } from './FormatRibbon';
 import { useChannelMarkdownArea } from './MarkdownArea';
+import { BrightJoins } from '@core/component/BrightJoins';
 
 false && fileDrop;
 
@@ -376,7 +377,7 @@ export function BaseInput(props: BaseInputProps) {
 
   return (
     <div
-      class="relative flex flex-col flex-1 items-center justify-between bg-input border-1 border-edge focus-within:bracket-offset-2"
+      class="relative flex flex-col flex-1 items-center justify-between bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px]"
       ref={containerRef}
       use:fileDrop={{
         onDrop: (files) => {
@@ -392,6 +393,7 @@ export function BaseInput(props: BaseInputProps) {
         },
       }}
     >
+      <BrightJoins dots={[false, false, true, true]} />
       <Show when={isDraggedOver() || isDraggingOverChannel()}>
         <FileDropOverlay valid={isValidChannelDrag()}>
           <Show when={!isValidChannelDrag()}>
@@ -514,7 +516,7 @@ export function BaseInput(props: BaseInputProps) {
                 <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
               }
             >
-              <PaperPlaneRight
+              <ArrowFatLineUp
                 width={20}
                 height={20}
                 class="!text-accent-ink !fill-accent"

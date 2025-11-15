@@ -37,7 +37,7 @@ export function EditMessageInput(props: {
   });
 
   return (
-    <div class="relative -left-3 text-sm w-full bg-input overflow-hidden border border-edge focus-within:border-accent flex flex-col gap-1 items-center mt-4 ">
+    <div class="relative -left-3 text-sm w-full bg-input overflow-hidden border border-edge-muted focus-within:border-accent flex flex-col gap-1 items-center mt-4 ">
       <div class="w-full px-3">
         <MarkdownArea
           initialValue={originalContent}

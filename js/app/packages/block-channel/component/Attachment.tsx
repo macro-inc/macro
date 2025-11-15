@@ -45,7 +45,7 @@ export function Attachment(props: AttachmentProps) {
     >
       <Show when={hover() && props.remove}>
         <XIcon
-          class="w-6 h-6 text-ink absolute -top-2 -right-2 rounded-full bg-menu  p-1 border border-edge z-[10]"
+          class="w-6 h-6 text-ink absolute -top-2 -right-2 rounded-full bg-menu  p-1 border border-edge-muted z-[10]"
           onClick={() => props.remove?.(props.attachment)}
         />
       </Show>
@@ -56,7 +56,7 @@ export function Attachment(props: AttachmentProps) {
             props.attachment.blockName === STATIC_VIDEO
           }
         >
-          <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge rounded-md bg-menu">
+          <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge-muted rounded-md bg-menu">
             <Spinner class="w-4 h-4 animate-spin" />
           </div>
         </Match>
@@ -66,7 +66,7 @@ export function Attachment(props: AttachmentProps) {
             props.attachment.blockName === STATIC_IMAGE
           }
         >
-          <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge rounded-md bg-menu">
+          <div class="flex flex-col items-center justify-center gap-2 w-[60px] h-[60px] border border-edge-muted rounded-md bg-menu">
             <Spinner class="w-4 h-4 animate-spin" />
           </div>
         </Match>

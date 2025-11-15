@@ -73,7 +73,7 @@ export function ReactionQuickSelector(props: ReactionQuickSelectorProps) {
     <Dynamic
       component={props.insideMenu ? ContextMenu.Item : 'div'}
       ref={containerRef}
-      class={`w-fit flex items-center gap-1.5 px-4 py-2 bg-menu rounded-full shadow-lg border border-edge ${props.showFocusRing ? 'focus-visible:focus-border' : ''}`}
+      class={`w-fit flex items-center gap-1.5 px-4 py-2 bg-menu rounded-full shadow-lg border border-edge-muted ${props.showFocusRing ? 'focus-visible:focus-border' : ''}`}
       onKeyDown={handleKeyDown}
       tabIndex={-1}
       {...(props.insideMenu && {
@@ -152,14 +152,14 @@ export function EmojiSearchSelector(props: EmojiSearchSelectorProps) {
   return (
     <Dynamic
       component={props.insideMenu ? ContextMenu.Item : 'div'}
-      class={`${props.fullWidth ? 'w-full' : 'w-[258px]'} h-[315px] pl-2 pt-2 rounded-md flex flex-col bg-menu shadow-lg border border-edge`}
+      class={`${props.fullWidth ? 'w-full' : 'w-[258px]'} h-[315px] pl-2 pt-2 rounded-md flex flex-col bg-menu shadow-lg border border-edge-muted`}
       role="dialog"
       aria-label="Emoji search"
       ref={containerRef}
       {...(props.insideMenu && { closeOnSelect: false })}
     >
       <div class="flex pr-2 w-full">
-        <div class="flex flex-row items-center text-ink gap-1 border border-edge rounded-md px-2 py-1 text-xs w-full">
+        <div class="flex flex-row items-center text-ink gap-1 border border-edge-muted rounded-md px-2 py-1 text-xs w-full">
           <SearchIcon class="w-3 h-3" />
           <input
             ref={searchInputRef}
