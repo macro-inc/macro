@@ -398,8 +398,10 @@ const LauncherInner = (props: LauncherInnerProps) => {
 
   launcherMenuItems.forEach((item, index) => {
     const displayPriority: CommandDisplayPriority | undefined =
-      item.displayPriority === 0 ? undefined : (item.displayPriority as CommandDisplayPriority);
-    
+      item.displayPriority === 0
+        ? undefined
+        : (item.displayPriority as CommandDisplayPriority);
+
     const hotkeyConfig: {
       hotkeyToken?: HotkeyToken;
       hotkey: ValidHotkey[];
@@ -419,7 +421,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
       },
       displayPriority,
     };
-    
+
     registerHotkey(hotkeyConfig);
 
     // Register option+letter hotkeys to open in new split
