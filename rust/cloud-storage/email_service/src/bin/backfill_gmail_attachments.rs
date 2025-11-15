@@ -147,7 +147,6 @@ mod config {
         /// Creates a new `Config` instance by reading from environment variables.
         /// Returns an error if any required variable is not set.
         pub fn from_env() -> Result<Self> {
-            // --- NEW: Load concurrency level from env with a default ---
             let upload_concurrency =
                 std::env::var("UPLOAD_CONCURRENCY").context("UPLOAD_CONCURRENCY not set")?;
             let upload_concurrency = upload_concurrency
@@ -175,12 +174,12 @@ mod config {
 
 mod database {
     use super::models::AttachmentMetadata;
-    use anyhow::{Context};
+    use anyhow::Context;
     use email_db_client::attachments::provider::upload_filters::{
         ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_WHITELISTED_DOMAINS,
     };
+    use sqlx::PgPool;
     use sqlx::postgres::PgPoolOptions;
-    use sqlx::{PgPool};
     use uuid::Uuid;
 
     /// Attachments for a thread should be uploaded if any message in the
@@ -382,7 +381,7 @@ ORDER BY
                 || "Failed to fetch attachments for condition 5 (previously contacted)",
             )?;
 
-        println!("Conditions 5 returned {} rows", rows5.len());
+        println!("Condition 5 returned {} rows", rows5.len());
 
         attachments.extend(rows5);
 
