@@ -92,7 +92,8 @@ function EmptyMessageList() {
 export function MessageList(props: MessageListProps) {
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
-  const [listContainerRef, setListContainerRef] = createSignal<HTMLDivElement>();
+  const [listContainerRef, setListContainerRef] =
+    createSignal<HTMLDivElement>();
   const [scrollHintLabel, setScrollHintLabel] = createSignal<string>();
   const [isScrollHintVisible, setIsScrollHintVisible] = createSignal(false);
   const [newIndicatorShown, setNewIndicatorShown] = createSignal<number>();
