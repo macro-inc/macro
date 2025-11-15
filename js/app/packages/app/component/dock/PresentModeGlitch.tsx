@@ -40,7 +40,7 @@ export function PresentModeGlitch(props: PresentModeGlitchProps) {
         props.onComplete();
       }, 200);
       timeoutIds.push(id2);
-    }, 400);
+    }, 800);
     timeoutIds.push(id1);
   };
 
