@@ -344,8 +344,9 @@ export function EntityWithEverything(
       use:droppable
       class={`relative group py-[5px] px-2 ${ITEM_WRAPPER_CLASS()}`}
       classList={{
-        'bg-hover ring-1 ring-edge-muted/50': props.highlighted,
+        'bg-hover': props.highlighted,
         bracket: props.selected,
+        'bg-hover ring-1 ring-inset ring-edge-muted': props.selected,
       }}
       onMouseOver={(e) => {
         if (!didCursorMove(e)) {
