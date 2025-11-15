@@ -1,4 +1,4 @@
-use crate::attachments::provider::backfill_filters::{
+use crate::attachments::provider::upload_filters::{
     ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_WHITELISTED_DOMAINS,
 };
 use models_email::service::attachment::AttachmentUploadMetadata;

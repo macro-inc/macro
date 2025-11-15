@@ -173,15 +173,17 @@ mod config {
 
 mod database {
     use super::models::AttachmentMetadata;
-    use anyhow::Context;
-    use sqlx::PgPool;
+    use anyhow::{Context, Result};
+    use email_db_client::attachments::provider::upload_filters::{
+        ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_WHITELISTED_DOMAINS,
+    };
     use sqlx::postgres::PgPoolOptions;
-    use std::cmp::Reverse;
-    use std::collections::HashMap;
+    use sqlx::{FromRow, PgPool};
     use uuid::Uuid;
 
-    // SQL queries are defined as constants for clarity and reuse.
-    const BASE_ATTACHMENT_QUERY_PREFIX: &str = r#"
+    // Combined query for conditions 1, 2, 3, and 4 - similar to fetch_insertable_attachments_for_new_email
+    // but modified to work for all threads for a given link_id instead of a specific message
+    const COMBINED_CONDITIONS_QUERY_PREFIX: &str = r#"
         SELECT DISTINCT
             a.id AS attachment_db_id,
             m.provider_id as email_provider_id,
@@ -192,23 +194,38 @@ mod database {
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
         JOIN email_threads t ON m.thread_id = t.id
-    "#;
-
-    const ATTACHMENT_FILTERS: &str = r#"
         WHERE t.link_id = $1
-        AND a.mime_type NOT IN ('image/png', 'image/jpg', 'image/jpeg', 'image/gif', 'application/ics', 'application/zip', 'application/x-zip-compressed', 'application/x-sharing-metadata-xml')
         AND a.filename IS NOT NULL
     "#;
 
-    // Condition 1: User sent a message in the thread.
-    const SENT_IN_THREAD_CONDITION: &str = r#"
-        AND EXISTS (
-            SELECT 1 FROM email_messages user_msg
-            WHERE user_msg.thread_id = t.id AND user_msg.is_sent = true
+    const COMBINED_CONDITIONS_QUERY_SUFFIX: &str = r#"
+            AND EXISTS ( -- only fetch if at least one message in the thread meets any of the criteria
+                SELECT 1
+                FROM email_messages m2
+                LEFT JOIN email_message_labels ml ON m2.id = ml.message_id
+                LEFT JOIN email_labels l ON ml.label_id = l.id
+                LEFT JOIN email_contacts c ON m2.from_contact_id = c.id
+                JOIN email_links link ON t.link_id = link.id
+                WHERE m2.thread_id = t.id -- check against the thread
+                    AND (
+                        m2.is_sent = true -- condition 1
+                        OR l.name = 'IMPORTANT' -- condition 2
+                        OR (
+                            -- condition 3: same domain
+                            c.email_address IS NOT NULL
+                            AND RIGHT(c.email_address, LENGTH(RIGHT(link.email_address,
+                                LENGTH(link.email_address) - POSITION('@' IN link.email_address)))) =
+                            RIGHT(link.email_address, LENGTH(link.email_address) - POSITION('@' IN link.email_address))
         )
     "#;
 
-    // Condition 2: Thread involves a recipient the user has previously sent mail to.
+    const COMBINED_CONDITIONS_QUERY_END: &str = r#"
+        )
+        )
+        ORDER BY m.internal_date_ts DESC
+    "#;
+
+    // Condition 5: Thread involves a recipient the user has previously sent mail to.
     const PREVIOUSLY_CONTACTED_CONDITION: &str = r#"
 WITH
 -- Step 1: Get the user's own email address from the link_id. This is our exclusion criteria.
@@ -293,31 +310,14 @@ WHERE
             previously_contacted_emails pce ON tp.email_address = pce.email_address
     )
     -- Apply standard filters at the very end
-    AND a.mime_type NOT IN ('image/png', 'image/jpg', 'image/jpeg', 'image/gif', 'application/ics', 'application/zip', 'application/x-zip-compressed', 'application/x-sharing-metadata-xml')
     AND a.filename IS NOT NULL
+    AND a.mime_type NOT LIKE 'image/%'
+    AND a.mime_type NOT LIKE '%zip%'
+    AND a.mime_type NOT LIKE 'video/%'
+    AND a.mime_type NOT LIKE 'audio/%'
+    AND a.mime_type NOT IN ('application/ics', 'application/x-sharing-metadata-xml')
 ORDER BY
     m.internal_date_ts DESC;
-    "#;
-
-    // Condition 3: Thread contains a message labeled "IMPORTANT".
-    const IMPORTANT_LABEL_CONDITION: &str = r#"
-        AND EXISTS (
-            SELECT 1 FROM email_messages thread_msg
-            JOIN email_message_labels ml ON thread_msg.id = ml.message_id
-            JOIN email_labels l ON ml.label_id = l.id
-            WHERE thread_msg.thread_id = t.id AND l.name = 'IMPORTANT'
-        )
-    "#;
-
-    // Condition 4: Thread contains a message from the user's own company domain.
-    const SAME_DOMAIN_CONDITION: &str = r#"
-        AND EXISTS (
-            SELECT 1 FROM email_messages thread_msg
-            JOIN email_contacts c ON thread_msg.from_contact_id = c.id
-            JOIN email_links el ON t.link_id = el.id
-            WHERE thread_msg.thread_id = t.id
-            AND SPLIT_PART(c.email_address, '@', 2) = SPLIT_PART(el.email_address, '@', 2)
-        )
     "#;
 
     /// Creates and returns a new PostgreSQL connection pool.
@@ -331,61 +331,58 @@ ORDER BY
     }
 
     /// Fetches attachments from the database that match one of several conditions.
-    /// The queries are run concurrently, and the results are de-duplicated.
+    /// Uses a combined query for conditions 1-4, and a separate query for condition 5.
     pub async fn fetch_unique_attachments(
         db: &PgPool,
         link_id: Uuid,
     ) -> anyhow::Result<Vec<AttachmentMetadata>> {
-        let q1 = format!(
-            "{} {} {}",
-            BASE_ATTACHMENT_QUERY_PREFIX, ATTACHMENT_FILTERS, SENT_IN_THREAD_CONDITION
-        );
-        let q2 = PREVIOUSLY_CONTACTED_CONDITION;
-        let q3 = format!(
-            "{} {} {}",
-            BASE_ATTACHMENT_QUERY_PREFIX, ATTACHMENT_FILTERS, IMPORTANT_LABEL_CONDITION
-        );
-        let q4 = format!(
-            "{} {} {}",
-            BASE_ATTACHMENT_QUERY_PREFIX, ATTACHMENT_FILTERS, SAME_DOMAIN_CONDITION
-        );
+        let mut attachments = Vec::new();
 
-        // Run all queries concurrently for better performance.
-        let (res1, res2, res3, res4) = tokio::try_join!(
-            sqlx::query_as(&q1).bind(link_id).fetch_all(db),
-            sqlx::query_as(q2).bind(link_id).fetch_all(db),
-            sqlx::query_as(&q3).bind(link_id).fetch_all(db),
-            sqlx::query_as(&q4).bind(link_id).fetch_all(db),
-        )?;
-
-        println!(
-            "Attachments found by condition: [sent_in_thread: {}, previously_contacted: {}, important_label: {}, same_domain: {}]",
-            res1.len(),
-            res2.len(),
-            res3.len(),
-            res4.len()
+        // Combined query for conditions 1-4: User sent, IMPORTANT label, same domain, whitelisted domains
+        // Build the query by concatenating the parts with the filter constants
+        let combined_query = format!(
+            "{}{}{}{}{}",
+            COMBINED_CONDITIONS_QUERY_PREFIX,
+            ATTACHMENT_MIME_TYPE_FILTERS,
+            COMBINED_CONDITIONS_QUERY_SUFFIX,
+            ATTACHMENT_WHITELISTED_DOMAINS,
+            COMBINED_CONDITIONS_QUERY_END
         );
 
-        // Combine and de-duplicate the results.
-        let all_attachments = [res1, res2, res3, res4].concat();
-        let unique_attachments: HashMap<(String, String), AttachmentMetadata> = all_attachments
-            .into_iter()
-            .map(|attachment: AttachmentMetadata| {
-                let key = (
-                    attachment.email_provider_id.clone(),
-                    attachment.provider_attachment_id.clone(),
-                );
-                (key, attachment)
-            })
-            .collect();
+        let rows_combined = sqlx::query_as::<_, AttachmentMetadata>(&combined_query)
+            .bind(link_id)
+            .fetch_all(db)
+            .await
+            .with_context(|| "Failed to fetch attachments for conditions 1-4 (combined query)")?;
 
-        let mut unique_attachments: Vec<AttachmentMetadata> =
-            unique_attachments.into_values().collect();
+        println!("Conditions 1-4 returned {} rows", rows_combined.len());
+        attachments.extend(rows_combined);
 
-        // populate newest attachments first
-        unique_attachments.sort_by_key(|a| Reverse(a.internal_date_ts));
+        // Query for condition 5: Previously contacted participants
+        let rows5 = sqlx::query_as::<_, AttachmentMetadata>(PREVIOUSLY_CONTACTED_CONDITION)
+            .bind(link_id)
+            .fetch_all(db)
+            .await
+            .with_context(
+                || "Failed to fetch attachments for condition 5 (previously contacted)",
+            )?;
 
-        Ok(unique_attachments)
+        println!("Conditions 5 returned {} rows", rows5.len());
+
+        attachments.extend(rows5);
+
+        // Deduplicate by attachment_db_id
+        let mut unique_attachments = std::collections::HashMap::new();
+        for attachment in attachments {
+            unique_attachments.insert(attachment.attachment_db_id, attachment);
+        }
+
+        let mut result: Vec<AttachmentMetadata> = unique_attachments.into_values().collect();
+        result.sort_by(|a, b| b.internal_date_ts.cmp(&a.internal_date_ts));
+
+        println!("Total unique rows: {}", result.len());
+
+        Ok(result)
     }
 }
 

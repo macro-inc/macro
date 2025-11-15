@@ -132,7 +132,7 @@ pub async fn upsert_message(
     // internal only, for now
     if link.macro_id.ends_with("@macro.com") {
         // upload attachments to Macro
-        let attachments = email_db_client::attachments::provider::backfill::fetch_insertable_attachments_for_new_email(
+        let attachments = email_db_client::attachments::provider::upload::fetch_insertable_attachments_for_new_email(
             &ctx.db,
             &payload.provider_message_id
         ).await

@@ -108,7 +108,7 @@ async fn handle_job_completed(
 
     if link.macro_id.ends_with("@macro.com") {
         let attachments =
-            email_db_client::attachments::provider::backfill::fetch_job_attachments_for_backfill(
+            email_db_client::attachments::provider::upload::fetch_job_attachments_for_backfill(
                 &ctx.db, link.id,
             )
             .await
@@ -163,18 +163,18 @@ async fn handle_thread_completed(
 
     if link.macro_id.ends_with("@macro.com") {
         let attachments =
-            email_db_client::attachments::provider::backfill::fetch_thread_attachments_for_backfill(
+            email_db_client::attachments::provider::upload::fetch_thread_attachments_for_backfill(
                 &ctx.db,
                 p.thread_db_id,
             )
-                .await
-                .map_err(|e| {
-                    ProcessingError::NonRetryable(DetailedError {
-                        reason: FailureReason::DatabaseQueryFailed,
-                        source: e
-                            .context("Failed to fetch thread attachment backfill metadata".to_string()),
-                    })
-                })?;
+            .await
+            .map_err(|e| {
+                ProcessingError::NonRetryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e
+                        .context("Failed to fetch thread attachment backfill metadata".to_string()),
+                })
+            })?;
         if attachments.len() > 0 {
             tracing::info!(
                 "Found {} attachments to backfill for thread {}",
