@@ -9,7 +9,9 @@
 //! - `DSS_URL`: The URL for the Document Storage Service.
 //! - `GMAIL_ACCESS_TOKEN`: An OAuth token to access the user's Gmail account.
 //! - `INTERNAL_AUTH_KEY`: An access token for authenticating with internal Macro services.
-//! - `MACRO_ID_SOURCE`: The Macro ID of the user account to process.
+//! - `MACRO_ID_SOURCE`: The Macro ID of the user account to fetch relevant attachments from.
+//! - `MACRO_ID_DESTINATION`: The destination Macro ID for document storage.
+//! - `UPLOAD_CONCURRENCY`: Number of concurrent uploads to process (optional, defaults to 10).
 
 use crate::processing::AttachmentProcessor;
 use anyhow::Context;
@@ -25,7 +27,7 @@ async fn main() -> anyhow::Result<()> {
 
     // 2. Establish a connection pool to the database.
     println!("Connecting to the database...");
-    let db_pool = database::create_db_pool(&config.database_url)
+    let db_pool = database::create_db_pool(&config.database_url, config.upload_concurrency as u32)
         .await
         .context("Failed to create database pool")?;
 
@@ -43,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
             .ok_or_else(|| anyhow::anyhow!("No link found for macro account source"))?
             .id;
 
-    // 5. Fetch all relevant attachment metadata from the database, running queries concurrently.
+    // 5. Fetch all relevant attachment metadata from the database.
     println!("Fetching unique attachment metadata from database...");
     let attachments = database::fetch_unique_attachments(&db_pool, link_id)
         .await
@@ -173,16 +175,26 @@ mod config {
 
 mod database {
     use super::models::AttachmentMetadata;
-    use anyhow::{Context, Result};
+    use anyhow::{Context};
     use email_db_client::attachments::provider::upload_filters::{
         ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_WHITELISTED_DOMAINS,
     };
     use sqlx::postgres::PgPoolOptions;
-    use sqlx::{FromRow, PgPool};
+    use sqlx::{PgPool};
     use uuid::Uuid;
 
-    // Combined query for conditions 1, 2, 3, and 4 - similar to fetch_insertable_attachments_for_new_email
-    // but modified to work for all threads for a given link_id instead of a specific message
+    /// Attachments for a thread should be uploaded if any message in the
+    /// thread meets any of the following criteria:
+    /// 1. the user sent the message
+    /// 2. the message has the IMPORTANT label
+    /// 3. the message came from someone with the same domain as the user
+    /// 4. the domain the email was sent from is part of the whitelisted domains
+    /// 5. the user has previously sent a message to any participant in the thread
+    ///
+    ///
+    ///
+    /// Combined query for conditions 1, 2, 3, and 4 - similar to fetch_insertable_attachments_for_new_email
+    /// but modified to work for all threads for a given link_id instead of a specific message
     const COMBINED_CONDITIONS_QUERY_PREFIX: &str = r#"
         SELECT DISTINCT
             a.id AS attachment_db_id,
@@ -225,7 +237,7 @@ mod database {
         ORDER BY m.internal_date_ts DESC
     "#;
 
-    // Condition 5: Thread involves a recipient the user has previously sent mail to.
+    /// Condition 5 Query: Thread involves a recipient the user has previously sent mail to.
     const PREVIOUSLY_CONTACTED_CONDITION: &str = r#"
 WITH
 -- Step 1: Get the user's own email address from the link_id. This is our exclusion criteria.
@@ -321,9 +333,12 @@ ORDER BY
     "#;
 
     /// Creates and returns a new PostgreSQL connection pool.
-    pub async fn create_db_pool(database_url: &str) -> anyhow::Result<PgPool> {
+    pub async fn create_db_pool(
+        database_url: &str,
+        min_connections: u32,
+    ) -> anyhow::Result<PgPool> {
         PgPoolOptions::new()
-            .min_connections(10)
+            .min_connections(min_connections)
             .max_connections(60)
             .connect(database_url)
             .await
