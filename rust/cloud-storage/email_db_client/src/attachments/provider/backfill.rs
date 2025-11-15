@@ -1,6 +1,9 @@
+use crate::attachments::provider::backfill_filters::{
+    ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_WHITELISTED_DOMAINS,
+};
 use models_email::service::attachment::AttachmentUploadMetadata;
 use sqlx::types::Uuid;
-use sqlx::{Pool, Postgres};
+use sqlx::{Pool, Postgres, Row};
 
 /// fetch attachments for a thread to upload to Macro during the backfill process.
 /// all attachments for a thread should be uploaded if any message in the thread meets any of the
@@ -8,6 +11,7 @@ use sqlx::{Pool, Postgres};
 /// 1. the user sent the message
 /// 2. the message has the IMPORTANT label
 /// 3. the message came from someone with the same domain as the user
+/// 4. the domain the email was sent from is part of the whitelisted domains
 /// we also upload attachments for any threads where at least one participant is someone the user has
 /// sent a message to in the past. but those attachments are fetched once backfill is complete, in
 /// a different call.
@@ -17,24 +21,20 @@ pub async fn fetch_thread_attachments_for_backfill(
     db: &Pool<Postgres>,
     thread_id: Uuid,
 ) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
-    let attachments = sqlx::query_as!(
-        AttachmentUploadMetadata,
+    let query = format!(
         r#"
         SELECT
             a.id AS attachment_db_id,
-            m.provider_id as "email_provider_id!",
-            a.provider_attachment_id as "provider_attachment_id!",
-            a.filename as "filename!",
-            a.mime_type as "mime_type!",
-            m.internal_date_ts as "internal_date_ts!"
+            m.provider_id as email_provider_id,
+            a.provider_attachment_id as provider_attachment_id,
+            a.filename as filename,
+            a.mime_type as mime_type,
+            m.internal_date_ts as internal_date_ts
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
         WHERE m.thread_id = $1
-            AND a.mime_type NOT LIKE 'image/%'
-            AND a.mime_type NOT LIKE '%zip%'
-            AND a.mime_type NOT LIKE 'video/%'
-            AND a.mime_type NOT LIKE 'audio/%'
-            AND a.mime_type NOT IN ('application/ics', 'application/x-sharing-metadata-xml')
+            -- attachment mime type filters injected below
+            {}
             AND EXISTS ( -- only fetch if at least one message in the thread meets any of the criteria
                 SELECT 1
                 FROM email_messages m2
@@ -54,18 +54,35 @@ pub async fn fetch_thread_attachments_for_backfill(
                                 LENGTH(link.email_address) - POSITION('@' IN link.email_address)))) =
                             RIGHT(link.email_address, LENGTH(link.email_address) - POSITION('@' IN link.email_address))
                         )
+                        -- whitelisted domain check injected below
+                        {}
                     )
             )
         ORDER BY a.id
         "#,
-        thread_id
-    )
+        ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_WHITELISTED_DOMAINS
+    );
+
+    let rows = sqlx::query(&query)
+        .bind(thread_id)
         .fetch_all(db)
         .await
         .map_err(|err| {
             tracing::error!(error=?err, thread_id=?thread_id, "Failed to fetch thread attachments for important messages");
             anyhow::anyhow!("Failed to fetch thread attachments for important messages: {}", err)
         })?;
+
+    let attachments = rows
+        .into_iter()
+        .map(|row| AttachmentUploadMetadata {
+            attachment_db_id: row.get("attachment_db_id"),
+            email_provider_id: row.get("email_provider_id"),
+            provider_attachment_id: row.get("provider_attachment_id"),
+            filename: row.get("filename"),
+            mime_type: row.get("mime_type"),
+            internal_date_ts: row.get("internal_date_ts"),
+        })
+        .collect();
 
     Ok(attachments)
 }
@@ -85,8 +102,7 @@ pub async fn fetch_job_attachments_for_backfill(
     db: &Pool<Postgres>,
     link_id: Uuid,
 ) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
-    let attachments = sqlx::query_as!(
-        AttachmentUploadMetadata,
+    let query = format!(
         r#"
         -- Step 1: Get the user's own email address from the link_id. This is our exclusion criteria.
         WITH
@@ -130,12 +146,12 @@ pub async fn fetch_job_attachments_for_backfill(
         -- Final Step: Select attachments from threads where AT LEAST ONE of the OTHER participants
         --             is in the list of OTHER previously_contacted_emails.
         SELECT
-            a.id AS "attachment_db_id!",
-            m.provider_id as "email_provider_id!",
-            a.provider_attachment_id as "provider_attachment_id!",
-            a.filename as "filename!",
-            a.mime_type as "mime_type!",
-            m.internal_date_ts as "internal_date_ts!"
+            a.id AS attachment_db_id,
+            m.provider_id as email_provider_id,
+            a.provider_attachment_id as provider_attachment_id,
+            a.filename as filename,
+            a.mime_type as mime_type,
+            m.internal_date_ts as internal_date_ts
         FROM public.email_attachments a
         JOIN public.email_messages m ON a.message_id = m.id
         JOIN public.email_contacts from_contact ON m.from_contact_id = from_contact.id
@@ -144,23 +160,34 @@ pub async fn fetch_job_attachments_for_backfill(
                 FROM thread_participants tp
                 INNER JOIN previously_contacted_emails pce ON tp.email_address = pce.email_address
             )
-            -- Apply standard filters at the very end
-            AND a.mime_type NOT LIKE 'image/%'
-            AND a.mime_type NOT LIKE '%zip%'
-            AND a.mime_type NOT LIKE 'video/%'
-            AND a.mime_type NOT LIKE 'audio/%'
-            AND a.mime_type NOT IN ('application/ics', 'application/x-sharing-metadata-xml')
+            -- attachment mime type filters injected below
+            {}
             AND a.filename IS NOT NULL
         ORDER BY m.internal_date_ts DESC
         "#,
-        link_id
-    )
+        ATTACHMENT_MIME_TYPE_FILTERS
+    );
+
+    let rows = sqlx::query(&query)
+        .bind(link_id)
         .fetch_all(db)
         .await
         .map_err(|err| {
             tracing::error!(error=?err, link_id=?link_id, "Failed to fetch attachment backfill metadata for previously contacted participants");
             anyhow::anyhow!("Failed to fetch attachment backfill metadata for previously contacted participants: {}", err)
         })?;
+
+    let attachments = rows
+        .into_iter()
+        .map(|row| AttachmentUploadMetadata {
+            attachment_db_id: row.get("attachment_db_id"),
+            email_provider_id: row.get("email_provider_id"),
+            provider_attachment_id: row.get("provider_attachment_id"),
+            filename: row.get("filename"),
+            mime_type: row.get("mime_type"),
+            internal_date_ts: row.get("internal_date_ts"),
+        })
+        .collect();
 
     Ok(attachments)
 }
@@ -171,8 +198,9 @@ pub async fn fetch_job_attachments_for_backfill(
 /// 1. the user sent the message
 /// 2. the message has the IMPORTANT label
 /// 3. the message came from someone with the same domain as the user
-/// 4. the user has previously sent a message to any participant in the thread
-/// For simplicity's sake, conditions 1 2 and 3 are evaluated in the first query, and condition 4
+/// 4. the domain the email was sent from is part of the whitelisted domains
+/// 5. the user has previously sent a message to any participant in the thread
+/// For simplicity's sake, conditions 1 2 3 and 4 are evaluated in the first query, and condition 5
 /// is evaluated in a separate query. These queries are very similar to fetch_thread_attachments_for_backfill
 /// and fetch_job_attachments_for_backfill respectively, except they also verify the attachment
 /// doesn't already exist in document_email table.
@@ -181,25 +209,21 @@ pub async fn fetch_insertable_attachments_for_new_email(
     message_provider_id: &str,
 ) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
     // query for conditions 1 2 and 3
-    let attachments = sqlx::query_as!(
-        AttachmentUploadMetadata,
+    let query1 = format!(
         r#"
         SELECT
             a.id AS attachment_db_id,
-            m.provider_id as "email_provider_id!",
-            a.provider_attachment_id as "provider_attachment_id!",
-            a.filename as "filename!",
-            a.mime_type as "mime_type!",
-            m.internal_date_ts as "internal_date_ts!"
+            m.provider_id as email_provider_id,
+            a.provider_attachment_id as provider_attachment_id,
+            a.filename as filename,
+            a.mime_type as mime_type,
+            m.internal_date_ts as internal_date_ts
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
         LEFT JOIN document_email de ON de.email_attachment_id = a.id
         WHERE m.provider_id = $1
-            AND a.mime_type NOT LIKE 'image/%'
-            AND a.mime_type NOT LIKE '%zip%'
-            AND a.mime_type NOT LIKE 'video/%'
-            AND a.mime_type NOT LIKE 'audio/%'
-            AND a.mime_type NOT IN ('application/ics', 'application/x-sharing-metadata-xml')
+            -- attachment mime type filters injected below
+            {}
             AND de.email_attachment_id IS NULL
             AND EXISTS ( -- only fetch if at least one message in the thread meets any of the criteria
                 SELECT 1
@@ -220,12 +244,17 @@ pub async fn fetch_insertable_attachments_for_new_email(
                                 LENGTH(link.email_address) - POSITION('@' IN link.email_address)))) =
                             RIGHT(link.email_address, LENGTH(link.email_address) - POSITION('@' IN link.email_address))
                         )
+                        -- whitelisted domain check injected below
+                        {}
                     )
             )
         ORDER BY a.id
         "#,
-        message_provider_id
-    )
+        ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_WHITELISTED_DOMAINS
+    );
+
+    let rows = sqlx::query(&query1)
+        .bind(message_provider_id)
         .fetch_all(db)
         .await
         .map_err(|err| {
@@ -233,14 +262,25 @@ pub async fn fetch_insertable_attachments_for_new_email(
             anyhow::anyhow!("Failed to fetch message attachments for important messages: {}", err)
         })?;
 
+    let attachments: Vec<AttachmentUploadMetadata> = rows
+        .into_iter()
+        .map(|row| AttachmentUploadMetadata {
+            attachment_db_id: row.get("attachment_db_id"),
+            email_provider_id: row.get("email_provider_id"),
+            provider_attachment_id: row.get("provider_attachment_id"),
+            filename: row.get("filename"),
+            mime_type: row.get("mime_type"),
+            internal_date_ts: row.get("internal_date_ts"),
+        })
+        .collect();
+
     // if any conditions are met, return - we don't care if condition 4 is met as we are already inserting
     if !attachments.is_empty() {
         return Ok(attachments);
     }
 
     // query for condition 4
-    let attachments = sqlx::query_as!(
-        AttachmentUploadMetadata,
+    let query2 = format!(
         r#"
         -- Step 1: Get the user's own email address and thread_id from the message
         WITH
@@ -286,12 +326,12 @@ pub async fn fetch_insertable_attachments_for_new_email(
         -- Final Step: Select attachments from the specific message if AT LEAST ONE of the OTHER participants
         --             in the thread is in the list of OTHER previously_contacted_emails.
         SELECT
-            a.id AS "attachment_db_id!",
-            m.provider_id as "email_provider_id!",
-            a.provider_attachment_id as "provider_attachment_id!",
-            a.filename as "filename!",
-            a.mime_type as "mime_type!",
-            m.internal_date_ts as "internal_date_ts!"
+            a.id AS attachment_db_id,
+            m.provider_id as email_provider_id,
+            a.provider_attachment_id as provider_attachment_id,
+            a.filename as filename,
+            a.mime_type as mime_type,
+            m.internal_date_ts as internal_date_ts
         FROM public.email_attachments a
         JOIN public.email_messages m ON a.message_id = m.id
         LEFT JOIN public.document_email de ON de.email_attachment_id = a.id
@@ -302,23 +342,34 @@ pub async fn fetch_insertable_attachments_for_new_email(
                 FROM thread_participants tp
                 INNER JOIN previously_contacted_emails pce ON tp.email_address = pce.email_address
             )
-            -- Apply standard filters at the very end
-            AND a.mime_type NOT LIKE 'image/%'
-            AND a.mime_type NOT LIKE '%zip%'
-            AND a.mime_type NOT LIKE 'video/%'
-            AND a.mime_type NOT LIKE 'audio/%'
-            AND a.mime_type NOT IN ('application/ics', 'application/x-sharing-metadata-xml')
+            -- attachment mime type filters injected below
+            {}
             AND a.filename IS NOT NULL
         ORDER BY a.id
         "#,
-        message_provider_id
-    )
+        ATTACHMENT_MIME_TYPE_FILTERS
+    );
+
+    let rows = sqlx::query(&query2)
+        .bind(message_provider_id)
         .fetch_all(db)
         .await
         .map_err(|err| {
             tracing::error!(error=?err, message_id=?message_provider_id, "Failed to fetch message attachment backfill metadata for previously contacted participants");
             anyhow::anyhow!("Failed to fetch message attachment backfill metadata for previously contacted participants: {}", err)
         })?;
+
+    let attachments = rows
+        .into_iter()
+        .map(|row| AttachmentUploadMetadata {
+            attachment_db_id: row.get("attachment_db_id"),
+            email_provider_id: row.get("email_provider_id"),
+            provider_attachment_id: row.get("provider_attachment_id"),
+            filename: row.get("filename"),
+            mime_type: row.get("mime_type"),
+            internal_date_ts: row.get("internal_date_ts"),
+        })
+        .collect();
 
     Ok(attachments)
 }
@@ -408,6 +459,27 @@ mod tests {
         let res = fetch_thread_attachments_for_backfill(&pool, thread_id).await?;
 
         assert!(res.is_empty());
+
+        Ok(())
+    }
+
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(
+            path = "../../../fixtures",
+            scripts("fetch_thread_attachments_for_backfill")
+        )
+    )]
+    // should return attachments for thread with whitelisted domain message
+    async fn thread_attachments_for_backfill_condition_4(pool: Pool<Postgres>) -> Result<()> {
+        const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS; // Dummy reference for IDE
+
+        let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000105")?;
+        let res = fetch_thread_attachments_for_backfill(&pool, thread_id).await?;
+
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].filename, "docusign_doc.pdf");
+        assert_eq!(res[0].mime_type, "application/pdf");
 
         Ok(())
     }
@@ -525,7 +597,32 @@ mod tests {
             scripts("fetch_insertable_attachments_for_new_email")
         )
     )]
-    async fn insertable_attachments_condition_4_previously_contacted(
+    async fn insertable_attachments_condition_4_whitelisted_domain(
+        pool: Pool<Postgres>,
+    ) -> Result<()> {
+        const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+        // Test condition 4: message from whitelisted domain
+        let message_provider_id = "target-msg-801";
+        let res = fetch_insertable_attachments_for_new_email(&pool, message_provider_id).await?;
+
+        // Should return 1 attachment (whitelisted_domain_doc.pdf)
+        assert_eq!(res.len(), 1);
+        assert_eq!(res[0].filename, "whitelisted_domain_doc.pdf");
+        assert_eq!(res[0].mime_type, "application/pdf");
+        assert_eq!(res[0].email_provider_id, "target-msg-801");
+
+        Ok(())
+    }
+
+    #[sqlx::test(
+        migrator = "MACRO_DB_MIGRATIONS",
+        fixtures(
+            path = "../../../fixtures",
+            scripts("fetch_insertable_attachments_for_new_email")
+        )
+    )]
+    async fn insertable_attachments_condition_5_previously_contacted(
         pool: Pool<Postgres>,
     ) -> Result<()> {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;

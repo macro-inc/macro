@@ -1,6 +1,7 @@
+
 -- SQL fixture for fetch_thread_attachments_for_backfill tests
 -- This file seeds:
--- - 4 threads (3 matching the conditions, 1 control with no matches)
+-- - 5 threads (4 matching the conditions, 1 control with no matches)
 -- - Messages, contacts, labels, attachments
 
 -- NOTE:
@@ -54,6 +55,15 @@ VALUES ('00000000-0000-0000-0000-000000000104',
         NOW(),
         NOW());
 
+-- Thread 5: used for condition 4 (whitelisted domain)
+INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000105',
+        '00000000-0000-0000-0000-00000000001a',
+        false,
+        false,
+        NOW(),
+        NOW());
+
 ------------------------------------------------------------
 -- Labels
 ------------------------------------------------------------
@@ -86,6 +96,14 @@ INSERT INTO email_contacts (id, link_id, email_address, created_at, updated_at)
 VALUES ('00000000-0000-0000-0000-0000000c0002',
         '00000000-0000-0000-0000-00000000001a',
         'sender_other@other.com',
+        NOW(),
+        NOW());
+
+-- Contact with whitelisted domain (docusign.com)
+INSERT INTO email_contacts (id, link_id, email_address, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000c0003',
+        '00000000-0000-0000-0000-00000000001a',
+        'noreply@docusign.com',
         NOW(),
         NOW());
 
@@ -301,6 +319,52 @@ VALUES ('00000000-0000-0000-0000-0000004a0401',
         '00000000-0000-0000-0000-00000000e401',
         'provider-att-401',
         'unmatched_doc.pdf',
+        'application/pdf',
+        NOW());
+
+------------------------------------------------------------
+-- Thread 5: Condition 4 - whitelisted domain
+------------------------------------------------------------
+
+-- Message: is_sent = false, from whitelisted domain contact (docusign.com), no labels
+INSERT INTO email_messages (id,
+                            thread_id,
+                            link_id,
+                            provider_id,
+                            is_sent,
+                            from_contact_id,
+                            internal_date_ts,
+                            has_attachments,
+                            is_read,
+                            is_starred,
+                            is_draft,
+                            created_at,
+                            updated_at)
+VALUES ('00000000-0000-0000-0000-00000000e501',
+        '00000000-0000-0000-0000-000000000105',
+        '00000000-0000-0000-0000-00000000001a',
+        'provider-msg-501',
+        FALSE,
+        '00000000-0000-0000-0000-0000000c0003',
+        NOW(),
+        true,
+        false,
+        false,
+        false,
+        NOW(),
+        NOW());
+
+-- Valid attachment (should be returned due to whitelisted domain)
+INSERT INTO email_attachments (id,
+                               message_id,
+                               provider_attachment_id,
+                               filename,
+                               mime_type,
+                               created_at)
+VALUES ('00000000-0000-0000-0000-0000005a0501',
+        '00000000-0000-0000-0000-00000000e501',
+        'provider-att-501',
+        'docusign_doc.pdf',
         'application/pdf',
         NOW());
 

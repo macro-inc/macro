@@ -1,9 +1,11 @@
+
 -- SQL fixture for fetch_insertable_attachments_for_new_email tests
--- This file seeds scenarios to test all four conditions for new email attachment insertion:
+-- This file seeds scenarios to test all conditions for new email attachment insertion:
 -- 1. User sent the message (is_sent = true)
 -- 2. Message has IMPORTANT label
 -- 3. Message from same domain as user
--- 4. User has previously contacted a thread participant
+-- 4. Message from whitelisted domain
+-- 5. User has previously contacted a thread participant
 -- Also tests document_email exclusion logic
 
 -- NOTE:
@@ -65,6 +67,13 @@ VALUES ('00000000-0000-0000-0000-0000000c0004',
         'never_contacted@other.com',
         NOW(), NOW());
 
+-- Whitelisted domain contact (docusign.com)
+INSERT INTO email_contacts (id, link_id, email_address, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000c0005',
+        '00000000-0000-0000-0000-00000000001a',
+        'noreply@docusign.com',
+        NOW(), NOW());
+
 ------------------------------------------------------------
 -- Threads
 ------------------------------------------------------------
@@ -87,7 +96,7 @@ VALUES ('00000000-0000-0000-0000-000000000103',
         '00000000-0000-0000-0000-00000000001a',
         false, false, NOW(), NOW());
 
--- Thread 4: For condition 4 testing (previously contacted)
+-- Thread 4: For condition 5 testing (previously contacted)
 INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
 VALUES ('00000000-0000-0000-0000-000000000104',
         '00000000-0000-0000-0000-00000000001a',
@@ -108,6 +117,12 @@ VALUES ('00000000-0000-0000-0000-000000000106',
 -- Thread 7: For document_email exclusion testing
 INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
 VALUES ('00000000-0000-0000-0000-000000000107',
+        '00000000-0000-0000-0000-00000000001a',
+        false, false, NOW(), NOW());
+
+-- Thread 8: For condition 4 testing (whitelisted domain)
+INSERT INTO email_threads (id, link_id, inbox_visible, is_read, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-000000000108',
         '00000000-0000-0000-0000-00000000001a',
         false, false, NOW(), NOW());
 
@@ -229,7 +244,7 @@ VALUES ('00000000-0000-0000-0000-0000003a0301',
         NOW());
 
 ------------------------------------------------------------
--- Thread 4: Condition 4 - Previously contacted participant
+-- Thread 4: Condition 5 - Previously contacted participant
 ------------------------------------------------------------
 
 -- Target message with attachment
@@ -303,6 +318,31 @@ VALUES ('00000000-0000-0000-0000-0000007a0701',
         'application/pdf',
         NOW());
 
+------------------------------------------------------------
+-- Thread 8: Condition 4 - Whitelisted domain
+------------------------------------------------------------
+
+-- Target message with attachment (from whitelisted domain)
+INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
+                            has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
+VALUES ('00000000-0000-0000-0000-0000000e0801',
+        '00000000-0000-0000-0000-000000000108',
+        '00000000-0000-0000-0000-00000000001a',
+        'target-msg-801',
+        FALSE,
+        '00000000-0000-0000-0000-0000000c0005', -- from noreply@docusign.com
+        '2025-01-02 16:00:00 +00:00',
+        true, false, false, false, NOW(), NOW());
+
+-- Valid attachment (should be returned due to whitelisted domain)
+INSERT INTO email_attachments (id, message_id, provider_attachment_id, filename, mime_type, created_at)
+VALUES ('00000000-0000-0000-0000-0000008a0801',
+        '00000000-0000-0000-0000-0000000e0801',
+        'provider-att-801',
+        'whitelisted_domain_doc.pdf',
+        'application/pdf',
+        NOW());
+
 -- Macro user for the User table foreign key
 INSERT INTO "macro_user" (id, username, email, stripe_customer_id)
 VALUES ('00000000-0000-0000-0000-00000000001a',
@@ -336,29 +376,6 @@ VALUES ('00000000-0000-0000-0000-00000000d701',
 -- Additional messages in threads to test EXISTS logic
 ------------------------------------------------------------
 
--- Additional message in Thread 2 (without IMPORTANT label, but thread has one)
-INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
-                            has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
-VALUES ('00000000-0000-0000-0000-0000000e0202',
-        '00000000-0000-0000-0000-000000000102',
-        '00000000-0000-0000-0000-00000000001a',
-        'other-msg-202',
-        FALSE,
-        '00000000-0000-0000-0000-0000000c0002',
-        '2025-01-02 11:30:00 +00:00',
-        false, false, false, false, NOW(), NOW());
-
--- Additional message in Thread 3 (different domain sender, but thread has same domain)
-INSERT INTO email_messages (id, thread_id, link_id, provider_id, is_sent, from_contact_id, internal_date_ts,
-                            has_attachments, is_read, is_starred, is_draft, created_at, updated_at)
-VALUES ('00000000-0000-0000-0000-0000000e0302',
-        '00000000-0000-0000-0000-000000000103',
-        '00000000-0000-0000-0000-00000000001a',
-        'other-msg-302',
-        FALSE,
-        '00000000-0000-0000-0000-0000000c0002', -- different domain
-        '2025-01-02 12:30:00 +00:00',
-        false, false, false, false, NOW(), NOW());
 
 ------------------------------------------------------------
 -- End of fixture
