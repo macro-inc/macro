@@ -66,14 +66,14 @@ export function MessageFlag(props: MessageFlagProps) {
   return (
     <div class="flex flex-row items-stretch justify-start ml-[var(--left-of-connector)]">
       <div class="flex flex-col items-center justify-center">
-        <div class="border-l border-edge min-h-1/2 ]" />
+        <div class="border-l border-edge-muted min-h-1/2 ]" />
         <div
-          class={`border-l ${props.highlight ? 'border-accent' : 'border-edge'} min-h-1/2 `}
+          class={`border-l ${props.highlight ? 'border-accent' : 'border-edge-muted'} min-h-1/2 `}
         />
       </div>
       <div class="flex flex-col items-center justify-center">
         <div
-          class={`w-8 border-b ${props.highlight ? 'border-accent' : 'border-edge'}`}
+          class={`w-8 border-b ${props.highlight ? 'border-accent' : 'border-edge-muted'}`}
         />
       </div>
       <div
@@ -650,7 +650,7 @@ export function MessageContainer(props: MessageProps) {
               </MessageComponent>
               <Show when={isLastInCollapsedThread()}>
                 <div
-                  class="border-l border-edge pb-1"
+                  class="border-l border-edge-muted pb-1"
                   style={{
                     'margin-left': `var(--left-of-connector)`,
                   }}

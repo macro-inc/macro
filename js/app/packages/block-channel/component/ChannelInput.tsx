@@ -69,7 +69,7 @@ export function ChannelInput(props: ChannelInputProps) {
 
   return (
     <BaseInput
-      placeholder={`Send a message to ${props.channelName}`}
+      placeholder={`Message ${props.channelName} — @mention to share`}
       onStartTyping={() => postTypingUpdate_('start')}
       onStopTyping={() => postTypingUpdate_('stop')}
       onSend={sendMessage_}
