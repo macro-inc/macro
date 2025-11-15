@@ -124,7 +124,9 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       />
 
       <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-1">
-        <div class="text-sm font-bold uppercase font-stretch-condensed">{props.label}</div>
+        <div class="text-sm font-bold uppercase font-stretch-condensed">
+          {props.label}
+        </div>
         <div class="size-3">
           <PixelArrowRight />
         </div>
@@ -513,8 +515,6 @@ const LauncherInner = (props: LauncherInnerProps) => {
             />
           )}
         </For>
-
-
       </div>
       <div class="col-span-full font-mono text-sm text-ink-muted text-center pt-4">
         Hold option to open in a new split view

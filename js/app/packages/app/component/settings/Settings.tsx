@@ -5,8 +5,8 @@ import {
   EXPERIMENTAL_DARK_MODE,
 } from '@core/constant/featureFlags';
 import {
-  setSettingsOpen,
   type SettingsTab,
+  setSettingsOpen,
   useSettingsState,
 } from '@core/constant/SettingsState';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -15,14 +15,6 @@ import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useOrganizationName } from '@core/user';
 import Dialog from '@corvu/dialog';
 import { Tabs } from '@kobalte/core/tabs';
-import BellRinging from '@icon/regular/bell-ringing.svg';
-import CreditCard from '@icon/regular/credit-card.svg';
-import DeviceMobile from '@icon/regular/device-mobile.svg';
-import CyberMan from '@icon/regular/head-circuit.svg';
-import Palette from '@icon/regular/palette.svg';
-import UserCircle from '@icon/regular/user-circle.svg';
-import UsersThree from '@icon/regular/users-three.svg';
-import XIcon from '@icon/regular/x.svg';
 import { MacroPermissions, usePermissions } from '@service-gql/client';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import {
@@ -31,7 +23,6 @@ import {
   createSignal,
   For,
   onCleanup,
-  onMount,
   Show,
 } from 'solid-js';
 import MacroJump from '../MacroJump';
@@ -130,10 +121,7 @@ export function Settings() {
       tabs.push({ value: 'Subscription', label: 'Subscription' });
     }
 
-    if (
-      orgName() &&
-      permissions()?.includes(MacroPermissions.WriteItPanel)
-    ) {
+    if (orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)) {
       tabs.push({ value: 'Organization', label: 'Organization' });
     }
 
@@ -188,7 +176,16 @@ export function Settings() {
           <Tabs
             value={activeTabId()}
             onChange={(value: string | undefined) => {
-              if (value && (value === 'Account' || value === 'Subscription' || value === 'Organization' || value === 'Appearance' || value === 'Notification' || value === 'Mobile' || value === 'AI Memory')) {
+              if (
+                value &&
+                (value === 'Account' ||
+                  value === 'Subscription' ||
+                  value === 'Organization' ||
+                  value === 'Appearance' ||
+                  value === 'Notification' ||
+                  value === 'Mobile' ||
+                  value === 'AI Memory')
+              ) {
                 setActiveTabId(value as SettingsTab);
                 track(TrackingEvents.SETTINGS.CHANGETAB, { tab: value });
               }
