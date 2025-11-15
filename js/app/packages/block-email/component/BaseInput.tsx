@@ -15,8 +15,6 @@ import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
 import { useDisplayName } from '@core/user';
 import { isErr, isOk } from '@core/util/maybeResult';
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
@@ -27,6 +25,8 @@ import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { DocumentMentionInfo } from '@lexical-core';
 import { logger } from '@observability';
+import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
   AttachmentMacro,

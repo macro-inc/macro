@@ -5,6 +5,7 @@ import {
 import type { sendMessage } from '@block-channel/signal/channel';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { isInBlock } from '@core/block';
+import { BrightJoins } from '@core/component/BrightJoins';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
 import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
@@ -50,7 +51,6 @@ import { AttachMenu } from './AttachMenu';
 import { Attachment } from './Attachment';
 import { FormatRibbon } from './FormatRibbon';
 import { useChannelMarkdownArea } from './MarkdownArea';
-import { BrightJoins } from '@core/component/BrightJoins';
 
 false && fileDrop;
 
