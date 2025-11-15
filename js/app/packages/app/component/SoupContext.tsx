@@ -57,7 +57,7 @@ export type UnifiedListContext = {
   setShowHelpDrawer: Setter<Set<string>>;
 };
 
-const DEFAULT_VIEW_ID = 'all';
+const DEFAULT_VIEW_ID: View = 'all';
 
 const DEFAULT_VIEW_IDS_SET = new Set(VIEWCONFIG_DEFAULTS_IDS);
 
