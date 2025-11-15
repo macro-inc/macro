@@ -40,6 +40,7 @@ export function Dock() {
   const { settingsOpen } = useSettingsState();
   const toggleRightPanel = useToggleRightPanel();
   const isRightPanelCollapsed = () => !isRightPanelOpen();
+  const activeSplitId = createMemo(() => globalSplitManager()?.activeSplitId());
 
   const notificationSource = useGlobalNotificationSource();
 
@@ -88,6 +89,7 @@ export function Dock() {
         // IE/Edge
         await (element as any).msRequestFullscreen();
       }
+      focusActiveSplit();
     } catch (error) {
       console.error('Error entering present mode:', error);
     }
@@ -107,9 +109,19 @@ export function Dock() {
         // IE/Edge
         await (document as any).msExitFullscreen();
       }
+      focusActiveSplit();
     } catch (error) {
       console.error('Error exiting present mode:', error);
     }
+  };
+
+  const focusActiveSplit = () => {
+    const id = activeSplitId();
+    if (!id) return null;
+    const splitEl = document.querySelector(
+      `[data-split-id="${id}"]`
+    ) as HTMLElement;
+    splitEl?.focus();
   };
 
   const togglePresentMode = () => {
