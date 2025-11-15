@@ -31,3 +31,6 @@ export const VIEWS = VIEW_DEFINITIONS.filter((v) => !v.disabled).map(
 
 /** equal to View type for default view, otherwise a uuid type */
 export type ViewId = View | string;
+
+/** equal to upper case View type for default view, otherwise a custom string label */
+export type ViewLabel = string;

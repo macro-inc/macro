@@ -86,6 +86,7 @@ const Block: Component = () => {
     setViewDataStore(projectId, {
       ...PROJECT_VIEWCONFIG_BASE,
       id: projectId,
+      view: name() ?? 'folder',
       filters: {
         ...PROJECT_VIEWCONFIG_BASE.filters,
         projectFilter: projectId,
