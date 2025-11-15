@@ -11,7 +11,6 @@ import { useSplitNavigationHandler } from 'core/util/useSplitNavigationHandler';
 import { notificationWithMetadata } from 'notifications/notificationMetadata';
 import type { ParentProps, Ref } from 'solid-js';
 import {
-  createEffect,
   createMemo,
   createSignal,
   For,
@@ -763,23 +762,6 @@ const createFormattedDate = (timestamp: number) =>
       year: '2-digit',
     });
   });
-
-let init = true;
-let globalResizeObserver: ResizeObserver | null = null;
-const containerCallbacks = new WeakMap<HTMLElement, () => void>();
-
-const initGlobalResizeObserver = () => {
-  if (globalResizeObserver) return;
-
-  globalResizeObserver = new ResizeObserver((entries) => {
-    for (const entry of entries) {
-      const callback = containerCallbacks.get(entry.target as HTMLElement);
-      if (callback) {
-        callback();
-      }
-    }
-  });
-};
 
 const ITEM_WRAPPER_CLASS = () => {
   let input = ITEM_WRAPPER;
