@@ -37,6 +37,7 @@ import type { SplitHandle } from './split-layout/layoutManager';
 import {
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS,
+  VIEWCONFIG_DEFAULTS_IDS,
   type ViewConfigBase,
   type ViewConfigEnhanced,
   type ViewData,
@@ -57,6 +58,8 @@ export type UnifiedListContext = {
 };
 
 const DEFAULT_VIEW_ID = 'all';
+
+const DEFAULT_VIEW_IDS_SET = new Set(VIEWCONFIG_DEFAULTS_IDS);
 
 export function createSoupContext(): UnifiedListContext {
   const [selectedView, setSelectedView] = createSignal<ViewId>(DEFAULT_VIEW_ID);
@@ -662,12 +665,11 @@ const useAllViews = ({
 
         // Filter viewsData to exclude items that are not in savedViewConfigs, except for default views
         const savedViewIds = new Set(savedViewConfigs.map((view) => view.id));
-        const defaultViewIds = new Set(Object.keys(VIEWCONFIG_DEFAULTS));
         const filteredViewsData = Object.fromEntries(
           Object.entries(viewsData).filter(
             ([viewId, viewData]) =>
               savedViewIds.has(viewId) ||
-              defaultViewIds.has(viewId) ||
+              DEFAULT_VIEW_IDS_SET.has(viewId as View) ||
               viewData.viewType !== undefined
           )
         );
