@@ -545,6 +545,8 @@
         overscroll-behavior: none;
     }
 
+    /* Custom cursor is set via JavaScript in index.tsx to match theme accent color */
+
     body {
         @apply overflow-clip overscroll-none relative m-0 p-0 font-sans optical-auto;
 
