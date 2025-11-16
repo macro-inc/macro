@@ -31,8 +31,6 @@ export function Appearance() {
           gap: '8px',
         }}
       >
-        
-
         <ThemeTools />
 
         <div
