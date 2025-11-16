@@ -1,3 +1,4 @@
+import { playSound } from '@app/util/sound';
 import type { ViewId } from '@core/types/view';
 import { Tabs } from '@kobalte/core';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -91,6 +92,16 @@ export function SplitTabs(props: {
   createEffect(() => {
     panelWidth();
     updateClipIndicators();
+  });
+
+  // Play sound when tab changes
+  let previousActive: ViewId | undefined;
+  createEffect(() => {
+    const currentActive = props.active();
+    if (previousActive !== undefined && previousActive !== currentActive) {
+      playSound('open');
+    }
+    previousActive = currentActive;
   });
 
   return (

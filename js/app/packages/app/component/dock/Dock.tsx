@@ -4,6 +4,7 @@ import { IconButton } from '@core/component/IconButton';
 const { track, TrackingEvents } = withAnalytics();
 
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { playSound } from '@app/util/sound';
 import { useHasPaidAccess } from '@core/auth';
 import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
 import { BasicHotkey } from '@core/component/Hotkey';
@@ -76,6 +77,7 @@ export function Dock() {
   // Fullscreen API helpers
   const enterPresentMode = async () => {
     try {
+      playSound('Stab_Destruct');
       const element = document.documentElement;
       if (element.requestFullscreen) {
         await element.requestFullscreen();
