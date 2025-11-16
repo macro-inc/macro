@@ -32,6 +32,7 @@ import {
   type Store,
 } from 'solid-js/store';
 import type { VirtualizerHandle } from 'virtua/solid';
+import { playSound } from '../util/sound';
 import { useGlobalNotificationSource } from './GlobalAppState';
 import type { SplitHandle } from './split-layout/layoutManager';
 import {
@@ -453,6 +454,7 @@ export function createNavigationEntityListShortcut({
     description: 'Down',
     hotkeyToken: TOKENS.entity.step.end,
     keyDownHandler: () => {
+      playSound('down');
       navigateThroughList({ axis: 'end', mode: 'step' });
       return true;
     },
@@ -464,6 +466,7 @@ export function createNavigationEntityListShortcut({
     hotkeyToken: TOKENS.entity.step.start,
     description: 'Up',
     keyDownHandler: () => {
+      playSound('up');
       navigateThroughList({ axis: 'start', mode: 'step' });
       return true;
     },
