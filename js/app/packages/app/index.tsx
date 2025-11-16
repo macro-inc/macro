@@ -17,30 +17,33 @@ let cursorStyleEl: HTMLStyleElement | null = null;
 
 function updateCursorColor() {
   if (!document.body || !document.head) return;
-  
-  const accentColor = getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim();
+
+  const accentColor = getComputedStyle(document.documentElement)
+    .getPropertyValue('--color-accent')
+    .trim();
   if (!accentColor) return;
-  
+
   // Convert CSS color (oklch/rgb/etc) to hex using canvas
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = 1;
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
-  
+
   ctx.fillStyle = accentColor;
   ctx.fillRect(0, 0, 1, 1);
   const [r, g, b] = ctx.getImageData(0, 0, 1, 1).data;
-  const hexColor = '#' + [r, g, b].map(x => x.toString(16).padStart(2, '0')).join('');
-  
+  const hexColor =
+    '#' + [r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('');
+
   // Create SVG cursor with accent color
   const svgCursor = `url('data:image/svg+xml;utf8,<svg width="14" height="12" viewBox="0 0 14 12" fill="none" xmlns="http://www.w3.org/2000/svg"><g transform="rotate(-45 7 6)"><path d="M13.0244 11.2764L6.51465 7.74316L0 11.2793L6.5127 0L13.0244 11.2764Z" fill="${hexColor.replace('#', '%23')}"/></g></svg>') 7 0, auto`;
-  
+
   if (!cursorStyleEl) {
     cursorStyleEl = document.createElement('style');
     cursorStyleEl.id = 'custom-cursor-style';
     document.head.appendChild(cursorStyleEl);
   }
-  
+
   cursorStyleEl.textContent = `* { cursor: ${svgCursor} !important; }`;
 }
 
@@ -63,7 +66,9 @@ if (document.readyState === 'loading') {
 let lastAccentColor = '';
 setInterval(() => {
   if (!document.body) return;
-  const currentAccentColor = getComputedStyle(document.documentElement).getPropertyValue('--color-accent').trim();
+  const currentAccentColor = getComputedStyle(document.documentElement)
+    .getPropertyValue('--color-accent')
+    .trim();
   if (currentAccentColor && currentAccentColor !== lastAccentColor) {
     lastAccentColor = currentAccentColor;
     updateCursorColor();
