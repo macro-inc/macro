@@ -9,14 +9,22 @@ import { ErrorBoundary, render } from 'solid-js/web';
 import { FatalError } from './component/FatalError';
 import { ReactiveFavicon } from './component/ReactiveFavicon';
 import { Root } from './component/Root';
+import { getCustomCursorEnabled } from './util/cursor';
 
 initializeLexical();
 
-// Custom cursor that matches theme accent color
 let cursorStyleEl: HTMLStyleElement | null = null;
 
-function updateCursorColor() {
+function updateCursor() {
   if (!document.body || !document.head) return;
+
+  const enabled = getCustomCursorEnabled();
+  if (!enabled) {
+    if (cursorStyleEl) {
+      cursorStyleEl.textContent = '';
+    }
+    return;
+  }
 
   const accentColor = getComputedStyle(document.documentElement)
     .getPropertyValue('--color-accent')
@@ -35,8 +43,9 @@ function updateCursorColor() {
   const hexColor =
     '#' + [r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('');
 
-  // Create SVG cursor with accent color
-  const svgCursor = `url('data:image/svg+xml;utf8,<svg width="14" height="12" viewBox="0 0 14 12" fill="none" xmlns="http://www.w3.org/2000/svg"><g transform="rotate(-45 7 6)"><path d="M13.0244 11.2764L6.51465 7.74316L0 11.2793L6.5127 0L13.0244 11.2764Z" fill="${hexColor.replace('#', '%23')}"/></g></svg>') 7 0, auto`;
+  // Create SVG cursor with accent color (scaled 10% larger)
+  const encodedColor = hexColor.replace('#', '%23');
+  const svgCursor = `url('data:image/svg+xml;utf8,<svg width="15" height="13" viewBox="0 0 14 12" fill="none" xmlns="http://www.w3.org/2000/svg"><g transform="translate(7 6) rotate(-45) scale(1.1) translate(-7 -6)"><path d="M13.0244 11.2764L6.51465 7.74316L0 11.2793L6.5127 0L13.0244 11.2764Z" fill="${encodedColor}"/></g></svg>') 7.7 0, auto`;
 
   if (!cursorStyleEl) {
     cursorStyleEl = document.createElement('style');
@@ -53,7 +62,7 @@ function initCursor() {
     requestAnimationFrame(initCursor);
     return;
   }
-  setTimeout(updateCursorColor, 0);
+  setTimeout(updateCursor, 0);
 }
 
 if (document.readyState === 'loading') {
@@ -62,18 +71,31 @@ if (document.readyState === 'loading') {
   initCursor();
 }
 
-// Watch for theme changes
+// Watch for theme changes and preference changes
 let lastAccentColor = '';
+let lastCursorEnabled = getCustomCursorEnabled();
 setInterval(() => {
   if (!document.body) return;
   const currentAccentColor = getComputedStyle(document.documentElement)
     .getPropertyValue('--color-accent')
     .trim();
-  if (currentAccentColor && currentAccentColor !== lastAccentColor) {
+  const currentCursorEnabled = getCustomCursorEnabled();
+
+  if (
+    (currentAccentColor && currentAccentColor !== lastAccentColor) ||
+    currentCursorEnabled !== lastCursorEnabled
+  ) {
     lastAccentColor = currentAccentColor;
-    updateCursorColor();
+    lastCursorEnabled = currentCursorEnabled;
+    updateCursor();
   }
 }, 100);
+
+// Listen for immediate preference changes
+window.addEventListener('cursor-preference-changed', () => {
+  lastCursorEnabled = getCustomCursorEnabled();
+  updateCursor();
+});
 
 const renderApp = () => {
   const root = document.getElementById('root');
