@@ -44,10 +44,10 @@ function updateCursor() {
     '#' + [r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('');
 
   // Use the default cursor SVG with accent color for white fill
-  const svgContent = `<svg width="11.379" height="18.066" viewBox="0 0 11.379 18.066" xmlns="http://www.w3.org/2000/svg"><path id="outline" d="M 6.137,18.066 8,17.063 9.615,16.224 7.047,11.408 h 4.332 L 0,0 v 16.015 l 3.316,-3.221 z" fill="${hexColor}" fill-rule="evenodd"/><path d="m6.42 16.593 1.765-0.941-2.775-5.202h3.604l-8.025-8.043v11.188l2.53-2.442z" fill-rule="evenodd"/></svg>`;
+  const svgContent = `<svg height="32" viewBox="0 0 32 32" width="32" xmlns="http://www.w3.org/2000/svg"><g fill="none" fill-rule="evenodd" transform="translate(10 7)"><path id="outline" d="m6.148 18.473 1.863-1.003 1.615-.839-2.568-4.816h4.332l-11.379-11.408v16.015l3.316-3.221z" fill="${hexColor}"/><path d="m6.431 17 1.765-.941-2.775-5.202h3.604l-8.025-8.043v11.188l2.53-2.442z" fill="#000"/></g></svg>`;
   const encodedSvg = encodeURIComponent(svgContent);
-  // Hot spot is at the tip of the cursor pointer, approximately (6, 0) at the top
-  const svgCursor = `url('data:image/svg+xml;utf8,${encodedSvg}') 0 2, auto`;
+  // Hot spot is at the tip of the cursor pointer, accounting for the translate(10 7) transform
+  const svgCursor = `url('data:image/svg+xml;utf8,${encodedSvg}') 11 9, auto`;
 
   if (!cursorStyleEl) {
     cursorStyleEl = document.createElement('style');
