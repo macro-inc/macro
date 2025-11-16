@@ -30,7 +30,10 @@ pub async fn incr_completed_threads(
         })?;
 
     if all_threads_processed {
-        tracing::info!("All threads for job {} have been processed", job_id);
+        tracing::info!(
+            job_id = job_id.to_string(),
+            "All threads for job have been processed"
+        );
         handle_job_completed(ctx, link, job_id).await?;
     }
 
@@ -121,7 +124,7 @@ async fn handle_job_completed(
             })?;
 
         tracing::info!(
-            "Found {} attachments to backfill for job {}",
+            "Found {} condition 5 attachments to backfill for job {}",
             attachments.len(),
             job_id
         );

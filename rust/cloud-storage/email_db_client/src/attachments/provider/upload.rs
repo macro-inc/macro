@@ -16,6 +16,7 @@ use sqlx::{Pool, Postgres, Row};
 /// we also upload attachments for any threads where at least one participant is someone the user has
 /// sent a message to in the past. but those attachments are fetched once backfill is complete, in
 /// a different call.
+#[tracing::instrument(skip(db), err)]
 pub async fn fetch_thread_attachments_for_backfill(
     db: &Pool<Postgres>,
     thread_id: Uuid,
@@ -62,14 +63,7 @@ pub async fn fetch_thread_attachments_for_backfill(
         ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_WHITELISTED_DOMAINS
     );
 
-    let rows = sqlx::query(&query)
-        .bind(thread_id)
-        .fetch_all(db)
-        .await
-        .map_err(|err| {
-            tracing::error!(error=?err, thread_id=?thread_id, "Failed to fetch thread attachments for important messages");
-            anyhow::anyhow!("Failed to fetch thread attachments for important messages: {}", err)
-        })?;
+    let rows = sqlx::query(&query).bind(thread_id).fetch_all(db).await?;
 
     let attachments = rows
         .into_iter()
@@ -97,6 +91,7 @@ pub async fn fetch_thread_attachments_for_backfill(
 /// There will be overlap between the attachments returned by this query and the ones returned by
 /// fetch_attachment_threads_for_backfill, but the BackfillAttachment job has logic to ensure
 /// duplicate attachments are not inserted by checking the DocumentEmail table.
+#[tracing::instrument(skip(db), err)]
 pub async fn fetch_job_attachments_for_backfill(
     db: &Pool<Postgres>,
     link_id: Uuid,
@@ -167,14 +162,7 @@ pub async fn fetch_job_attachments_for_backfill(
         ATTACHMENT_MIME_TYPE_FILTERS
     );
 
-    let rows = sqlx::query(&query)
-        .bind(link_id)
-        .fetch_all(db)
-        .await
-        .map_err(|err| {
-            tracing::error!(error=?err, link_id=?link_id, "Failed to fetch attachment backfill metadata for previously contacted participants");
-            anyhow::anyhow!("Failed to fetch attachment backfill metadata for previously contacted participants: {}", err)
-        })?;
+    let rows = sqlx::query(&query).bind(link_id).fetch_all(db).await?;
 
     let attachments = rows
         .into_iter()
@@ -204,6 +192,7 @@ pub async fn fetch_job_attachments_for_backfill(
 /// is evaluated in a separate query. These queries are very similar to fetch_thread_attachments_for_backfill
 /// and fetch_job_attachments_for_backfill respectively, except they also verify the attachment
 /// doesn't already exist in document_email table.
+#[tracing::instrument(skip(db), err)]
 pub async fn fetch_insertable_attachments_for_new_email(
     db: &Pool<Postgres>,
     message_provider_id: &str,
@@ -256,11 +245,7 @@ pub async fn fetch_insertable_attachments_for_new_email(
     let rows = sqlx::query(&query1)
         .bind(message_provider_id)
         .fetch_all(db)
-        .await
-        .map_err(|err| {
-            tracing::error!(error=?err, message_id=?message_provider_id, "Failed to fetch message attachments for important messages");
-            anyhow::anyhow!("Failed to fetch message attachments for important messages: {}", err)
-        })?;
+        .await?;
 
     let attachments: Vec<AttachmentUploadMetadata> = rows
         .into_iter()
@@ -353,11 +338,7 @@ pub async fn fetch_insertable_attachments_for_new_email(
     let rows = sqlx::query(&query2)
         .bind(message_provider_id)
         .fetch_all(db)
-        .await
-        .map_err(|err| {
-            tracing::error!(error=?err, message_id=?message_provider_id, "Failed to fetch message attachment backfill metadata for previously contacted participants");
-            anyhow::anyhow!("Failed to fetch message attachment backfill metadata for previously contacted participants: {}", err)
-        })?;
+        .await?;
 
     let attachments = rows
         .into_iter()

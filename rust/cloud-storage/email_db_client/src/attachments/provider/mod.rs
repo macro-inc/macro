@@ -309,7 +309,8 @@ pub async fn get_attachments_by_thread_ids(
     Ok(result)
 }
 
-// return if record exists for email attachment
+/// return if record exists for email attachment
+#[tracing::instrument(skip(db), err)]
 pub async fn document_email_record_exists(
     db: &Pool<Postgres>,
     email_attachment_id: Uuid,
@@ -323,11 +324,7 @@ pub async fn document_email_record_exists(
         email_attachment_id,
     )
     .fetch_optional(db)
-    .await
-    .map_err(|err| {
-        tracing::error!(error=?err, "unable to fetch document email record");
-        anyhow::anyhow!("unable to fetch document email record: {}", err)
-    })?;
+    .await?;
 
     Ok(exists.is_some())
 }

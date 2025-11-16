@@ -161,6 +161,10 @@ async fn handle_cancel_backfill_job(
                 .await;
             Ok(())
         }
-        _ => Ok(()),
+        BackfillOperation::Init
+        | BackfillOperation::ListThreads(_)
+        | BackfillOperation::BackfillThread(_)
+        | BackfillOperation::UpdateThreadMetadata(_)
+        | BackfillOperation::BackfillAttachment(_) => Ok(()),
     }
 }
