@@ -20,7 +20,7 @@ import {
 } from '../../block-theme/signals/themeSignals';
 
 import { applyTheme } from '../../block-theme/utils/themeUtils';
-
+import { playSound } from '../util/sound';
 import {
   konsoleOpen,
   resetKonsoleMode,
@@ -39,8 +39,13 @@ export default function GlobalShortcuts() {
   const toggleRightPanel = useToggleRightPanel();
 
   const handleCommandMenu = () => {
+    const wasOpen = konsoleOpen();
     resetKonsoleMode();
     toggleKonsoleVisibility();
+    // Play sound when opening (not closing)
+    if (!wasOpen) {
+      playSound('Kick - Struct - Tight Minimal 4');
+    }
     return;
   };
 
