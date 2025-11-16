@@ -3,6 +3,7 @@ import {
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
+import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { Button } from '@core/component/FormControls/Button';
@@ -267,6 +268,7 @@ export function Soup() {
     description: 'Toggle Preview',
     hotkeyToken: TOKENS.unifiedList.togglePreview,
     keyDownHandler: () => {
+      playSound('open');
       setPreview((prev) => !prev);
       return true;
     },
