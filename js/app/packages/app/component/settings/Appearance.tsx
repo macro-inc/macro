@@ -31,25 +31,6 @@ export function Appearance() {
           gap: '8px',
         }}
       >
-        <div
-          style={{
-            'font-family': 'var(--font-mono)',
-            border: '1px solid var(--b4)',
-            'box-sizing': 'border-box',
-            padding: '12px 20px',
-            display: 'flex',
-            'align-items': 'center',
-            'justify-content': 'space-between',
-            'font-size': '14px',
-          }}
-        >
-          <span>Themed cursor</span>
-          <ToggleSwitch
-            checked={cursorEnabled()}
-            onChange={(enabled) => setCursorEnabled(enabled)}
-          />
-        </div>
-
         <ThemeTools />
 
         <div
@@ -72,6 +53,24 @@ export function Appearance() {
         >
           <ThemeEditorAdvanced />
           <ThemeList />
+        </div>
+        <div
+          style={{
+            'font-family': 'var(--font-mono)',
+            border: '1px solid var(--b4)',
+            'box-sizing': 'border-box',
+            padding: '12px 20px',
+            display: 'flex',
+            'align-items': 'center',
+            'justify-content': 'space-between',
+            'font-size': '14px',
+          }}
+        >
+          <span>Themed cursor</span>
+          <ToggleSwitch
+            checked={cursorEnabled()}
+            onChange={(enabled) => setCursorEnabled(enabled)}
+          />
         </div>
       </div>
     </TabContent>
