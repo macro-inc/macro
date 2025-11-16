@@ -1,13 +1,13 @@
 // import { ComputeTokens } from '../../../block-theme/ComputeTokens';
 
+import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { TabContent } from '@core/component/TabContent';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { createEffect, createSignal } from 'solid-js';
 import { ThemeEditorAdvanced } from '../../../block-theme/components/ThemeEditorAdvanced';
 import { ThemeEditorBasic } from '../../../block-theme/components/ThemeEditorBasic';
 import ThemeList from '../../../block-theme/components/ThemeList';
 import ThemeTools from '../../../block-theme/components/ThemeTools';
-import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
-import { createSignal, createEffect } from 'solid-js';
 import {
   getCustomCursorEnabled,
   setCustomCursorEnabled,
