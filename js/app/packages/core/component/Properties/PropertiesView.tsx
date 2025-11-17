@@ -1,6 +1,6 @@
 import { useBlockId } from '@core/block';
 import LoadingSpinner from '@icon/regular/spinner.svg';
-import { createMemo, Show } from 'solid-js';
+import { type Accessor, createMemo, Show } from 'solid-js';
 import { AddPropertyButton } from './components/AddPropertyButton';
 import { PropertiesContent } from './components/PropertiesContent';
 import { PropertiesModals } from './components/PropertiesModals';
@@ -9,7 +9,7 @@ import {
   usePropertiesContext,
 } from './context/PropertiesContext';
 import { useProperties } from './hooks';
-import type { PropertiesPanelProps } from './types';
+import type { PropertiesPanelProps, Property } from './types';
 
 const CONTAINER_CLASSES =
   'h-full overflow-hidden relative font-mono flex flex-col';
@@ -82,12 +82,12 @@ export function PropertiesView(props: PropertiesPanelProps) {
   );
 }
 
-function AddPropertyButtonWrapper(props: { properties: () => any[] }) {
-  const { canEdit, openModal } = usePropertiesContext();
+function AddPropertyButtonWrapper(props: { properties: Accessor<Property[]> }) {
+  const { canEdit, openPropertySelector } = usePropertiesContext();
   const hasProperties = createMemo(() => props.properties().length > 0);
 
   const handleAddProperty = () => {
-    openModal('add-property');
+    openPropertySelector();
   };
 
   return (

@@ -1,5 +1,6 @@
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import {
+  type Accessor,
   createContext,
   createEffect,
   createSignal,
@@ -8,16 +9,23 @@ import {
 } from 'solid-js';
 import type { Property } from '../types';
 
-export type ModalType =
-  | 'add-property'
-  | 'edit-property'
-  | 'date-picker'
-  | 'create-property';
+// Specific modal state types with proper typing
+export interface PropertySelectorModalState {
+  isOpen: boolean;
+}
 
-export interface ModalState {
-  type: ModalType | null;
-  data: unknown;
-  anchor?: HTMLElement | null;
+export interface PropertyEditorModalState {
+  property: Property;
+  anchor?: HTMLElement;
+}
+
+export interface DatePickerModalState {
+  property: Property & { valueType: 'DATE' };
+  anchor?: HTMLElement;
+}
+
+export interface CreatePropertyModalState {
+  isOpen: boolean;
 }
 
 export interface PropertiesContextValue {
@@ -31,13 +39,31 @@ export interface PropertiesContextValue {
   onPropertyPinned?: (propertyId: string) => void;
   onPropertyUnpinned?: (propertyId: string) => void;
   pinnedPropertyIds?: () => string[];
-  // Modal state
-  modalState: () => ModalState;
-  openModal: (type: ModalType, data?: unknown, anchor?: HTMLElement) => void;
-  closeModal: () => void;
-  isModalOpen: (type: ModalType) => boolean;
-  getModalData: () => unknown;
-  getModalAnchor: () => HTMLElement | null | undefined;
+
+  // Specific modal state accessors
+  propertySelectorModal: Accessor<PropertySelectorModalState | null>;
+  propertyEditorModal: Accessor<PropertyEditorModalState | null>;
+  datePickerModal: Accessor<DatePickerModalState | null>;
+  createPropertyModal: Accessor<CreatePropertyModalState | null>;
+
+  // Specific modal actions
+  openPropertySelector: () => void;
+  closePropertySelector: () => void;
+
+  openPropertyEditor: (property: Property, anchor?: HTMLElement) => void;
+  closePropertyEditor: () => void;
+
+  openDatePicker: (
+    property: Property & { valueType: 'DATE' },
+    anchor?: HTMLElement
+  ) => void;
+  closeDatePicker: () => void;
+
+  openCreateProperty: () => void;
+  closeCreateProperty: () => void;
+
+  // Convenience function to close all modals
+  closeAllModals: () => void;
 }
 
 export interface PropertiesProviderProps extends ParentProps {
@@ -56,44 +82,79 @@ export interface PropertiesProviderProps extends ParentProps {
 const PropertiesContext = createContext<PropertiesContextValue>();
 
 export function PropertiesProvider(props: PropertiesProviderProps) {
-  const [modalState, setModalState] = createSignal<ModalState>({
-    type: null,
-    data: null,
-    anchor: null,
-  });
+  // Specific modal states
+  const [propertySelectorModal, setPropertySelectorModal] =
+    createSignal<PropertySelectorModalState | null>(null);
+  const [propertyEditorModal, setPropertyEditorModal] =
+    createSignal<PropertyEditorModalState | null>(null);
+  const [datePickerModal, setDatePickerModal] =
+    createSignal<DatePickerModalState | null>(null);
+  const [createPropertyModal, setCreatePropertyModal] =
+    createSignal<CreatePropertyModalState | null>(null);
 
-  const openModal = (type: ModalType, data?: unknown, anchor?: HTMLElement) => {
-    setModalState({ type, data, anchor });
+  // Property Selector actions
+  const openPropertySelector = () => {
+    setPropertySelectorModal({ isOpen: true });
   };
 
-  const closeModal = () => {
-    setModalState({ type: null, data: null, anchor: null });
+  const closePropertySelector = () => {
+    setPropertySelectorModal(null);
   };
 
-  const isModalOpen = (type: ModalType) => {
-    return modalState().type === type;
+  // Property Editor actions
+  const openPropertyEditor = (property: Property, anchor?: HTMLElement) => {
+    setPropertyEditorModal({ property, anchor });
   };
 
-  const getModalData = () => {
-    return modalState().data;
+  const closePropertyEditor = () => {
+    setPropertyEditorModal(null);
   };
 
-  const getModalAnchor = () => {
-    return modalState().anchor;
+  // Date Picker actions
+  const openDatePicker = (
+    property: Property & { valueType: 'DATE' },
+    anchor?: HTMLElement
+  ) => {
+    setDatePickerModal({ property, anchor });
+  };
+
+  const closeDatePicker = () => {
+    setDatePickerModal(null);
+  };
+
+  // Create Property actions
+  const openCreateProperty = () => {
+    setCreatePropertyModal({ isOpen: true });
+  };
+
+  const closeCreateProperty = () => {
+    setCreatePropertyModal(null);
+  };
+
+  // Convenience function to close all modals
+  const closeAllModals = () => {
+    setPropertySelectorModal(null);
+    setPropertyEditorModal(null);
+    setDatePickerModal(null);
+    setCreatePropertyModal(null);
   };
 
   // Handle ESC key to close modals
   // Use capture phase listener to intercept before hotkey system (like drawer close)
   createEffect(() => {
-    const isModalOpen = modalState().type !== null;
+    const isAnyModalOpen =
+      propertySelectorModal() !== null ||
+      propertyEditorModal() !== null ||
+      datePickerModal() !== null ||
+      createPropertyModal() !== null;
 
-    if (isModalOpen) {
+    if (isAnyModalOpen) {
       const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape' && modalState().type !== null) {
+        if (e.key === 'Escape') {
           e.preventDefault();
           e.stopPropagation();
           e.stopImmediatePropagation();
-          closeModal();
+          closeAllModals();
         }
       };
 
@@ -120,13 +181,21 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
     onPropertyPinned: props.onPropertyPinned,
     onPropertyUnpinned: props.onPropertyUnpinned,
     pinnedPropertyIds: props.pinnedPropertyIds,
-    // Modal state
-    modalState,
-    openModal,
-    closeModal,
-    isModalOpen,
-    getModalData,
-    getModalAnchor,
+    // Specific modal state
+    propertySelectorModal,
+    propertyEditorModal,
+    datePickerModal,
+    createPropertyModal,
+    // Specific modal actions
+    openPropertySelector,
+    closePropertySelector,
+    openPropertyEditor,
+    closePropertyEditor,
+    openDatePicker,
+    closeDatePicker,
+    openCreateProperty,
+    closeCreateProperty,
+    closeAllModals,
   };
 
   return (
