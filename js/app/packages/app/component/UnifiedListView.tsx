@@ -62,6 +62,7 @@ import {
   type WithNotification,
   type WithSearch,
 } from '@macro-entity';
+import { setMacroModalState } from '@macros-prompts/macros';
 import {
   markNotificationsForEntityAsDone,
   useNotificationsForEntity,
@@ -117,6 +118,7 @@ import {
   setKonsoleMode,
   toggleKonsoleVisibility,
 } from './command/state';
+import { EntityActionsMenuItems } from './EntityActionsMenuItems';
 import { EntityModal } from './EntityModal/EntityModal';
 import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
 import { useUpsertSavedViewMutation } from './Soup';
@@ -1387,7 +1389,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     />
                     <MenuSeparator />
                   </Show>
-                  <Show when={markEntityAsDone}>
+                  <EntityActionsMenuItems
+                    entity={selectedEntity()}
+                    onSelectAction={() => {}}
+                  />
+                  {/*<Show when={markEntityAsDone}>
                     {(fnAccessor) => {
                       const entityDisabled = (
                         entity: WithNotification<EntityData>
@@ -1445,28 +1451,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   />
                   <MenuItem
                     text="Open in new split"
-                    onClick={() => {
-                      const splitManager = globalSplitManager();
-                      if (!splitManager) {
-                        console.error('No split manager available');
-                        return;
-                      }
-                      const entity = selectedEntity();
-                      if (entity.type === 'document') {
-                        const { fileType, id } = entity;
-                        splitManager.createNewSplit({
-                          type: fileTypeToBlockName(fileType),
-                          id,
-                        });
-                      } else {
-                        const { id, type } = entity;
-                        splitManager.createNewSplit({
-                          type,
-                          id,
-                        });
-                      }
-                    }}
-                  />
+                  />*/}
                 </ContextMenuContent>
               )}
             </Show>

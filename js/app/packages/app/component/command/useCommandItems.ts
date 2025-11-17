@@ -32,7 +32,8 @@ export function useCommandItems() {
   const channelsContext = useChannelsContext();
   const channels = () => channelsContext.channels();
   const contactItems = useEmailContacts();
-  const entityActionItems = useEntityActionItems();
+  // const entityActionItems = useEntityActionItems();
+  const entityActionItems = () => [];
   const activeCommands = getActiveCommandsFromScope(activeScope(), {
     sortByScopeLevel: false,
     hideShadowedCommands: false,

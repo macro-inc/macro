@@ -1,20 +1,13 @@
-import { getSplitPanelRef } from '@app/component/split-layout/layoutUtils';
-import { isInBlock } from '@core/block';
-import clickOutside from '@core/directive/clickOutside';
-import { blockElementSignal } from '@core/signal/blockElement';
+import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { Dialog } from '@kobalte/core/dialog';
 import type { EntityData } from '@macro-entity';
-import type { ComponentProps } from 'solid-js';
 import {
   type Accessor,
   createSignal,
-  type JSX,
   type ParentComponent,
-  type ParentProps,
   type Setter,
   Show,
 } from 'solid-js';
-import { Portal } from 'solid-js/web';
 import { BulkDeleteView } from './BulkDeleteView';
 import { BulkRenameEntitiesView } from './BulkRenameEntitiesView';
 
@@ -48,60 +41,57 @@ export const BulkEditEntityModalActionFooter = (props: {
   );
 };
 
-false && clickOutside;
-
 const BulkEditEntityModalContent = (props: {
   isOpen: Accessor<boolean>;
   setIsOpen: Setter<boolean>;
   view: 'rename' | 'moveToProject' | 'delete' | null;
   entities: EntityData[];
+  onFinish?: () => void;
 }) => {
   const handleFinish = () => {
     props.setIsOpen(false);
+    props.onFinish?.();
   };
-
   const handleCancel = () => {
     props.setIsOpen(false);
   };
-  let entityModalContentRef!: HTMLDivElement;
 
   return (
-    <SplitModal
-      mode="split"
-      open={props.isOpen}
-      setOpen={props.setIsOpen}
-      scrim={true}
-    >
-      <div
-        ref={entityModalContentRef}
-        class="pointer-events-auto max-w-xl mt-16 bg-menu border border-edge w-lg h-fit p-2"
-      >
-        <div class="w-full my-1">
-          <Show when={props.view === 'rename'}>
-            <BulkRenameEntitiesView
-              entities={props.entities}
-              onFinish={handleFinish}
-              onCancel={handleCancel}
-            />
-          </Show>
-          <Show when={props.view === 'moveToProject'}>
-            {/* <MoveToProjectView */}
-            {/*   entity={props.entity!} */}
-            {/*   onFinish={handleFinish} */}
-            {/*   onCancel={handleCancel} */}
-            {/* /> */}
-            <div />
-          </Show>
-          <Show when={props.view === 'delete'}>
-            <BulkDeleteView
-              entities={props.entities}
-              onFinish={handleFinish}
-              onCancel={handleCancel}
-            />
-          </Show>
+    <Dialog open={props.isOpen()} onOpenChange={props.setIsOpen} modal={true}>
+      <Dialog.Portal>
+        <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay" />
+        <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center">
+          <Dialog.Content class="flex items-center justify-center">
+            <div class="pointer-events-auto max-w-xl bg-menu border border-edge w-lg h-fit p-2">
+              <div class="w-full my-1">
+                <Show when={props.view === 'rename'}>
+                  <BulkRenameEntitiesView
+                    entities={props.entities}
+                    onFinish={handleFinish}
+                    onCancel={handleCancel}
+                  />
+                </Show>
+                <Show when={props.view === 'moveToProject'}>
+                  {/* <MoveToProjectView */}
+                  {/*   entity={props.entity!} */}
+                  {/*   onFinish={handleFinish} */}
+                  {/*   onCancel={handleCancel} */}
+                  {/* /> */}
+                  <div />
+                </Show>
+                <Show when={props.view === 'delete'}>
+                  <BulkDeleteView
+                    entities={props.entities}
+                    onFinish={handleFinish}
+                    onCancel={handleCancel}
+                  />
+                </Show>
+              </div>
+            </div>
+          </Dialog.Content>
         </div>
-      </div>
-    </SplitModal>
+      </Dialog.Portal>
+    </Dialog>
   );
 };
 
@@ -127,120 +117,46 @@ export const BulkEditEntityModal: ParentComponent<BulkEditEntityModalProps> = (
   );
 };
 
-export const createGlobalBulkEditEntityModal = () => {
-  const [modalProps, setModalProps] = createSignal<
-    BulkEditEntityModalProps | undefined
-  >();
+// Global modal state
+const [globalModalProps, setGlobalModalProps] = createSignal<{
+  view: 'rename' | 'moveToProject' | 'delete';
+  entities: EntityData[];
+  onFinish?: () => void;
+} | null>(null);
+const [modalOpen, setModalOpen] = createControlledOpenSignal();
 
-  const openModal = (
-    props: Omit<BulkEditEntityModalProps, 'isOpen' | 'setIsOpen'>
-  ) => {
-    setModalProps({
-      ...props,
-      isOpen: () => true,
-      setIsOpen: (open) => {
-        setModalProps((p) => (open ? p : undefined));
-      },
-    });
-  };
-
-  return {
-    BulkEditEntityModal,
-    modalProps,
-    openModal,
-  };
+// Global modal open function
+export const openBulkEditModal = (props: {
+  view: 'rename' | 'moveToProject' | 'delete';
+  entities: EntityData[];
+  onFinish?: () => void;
+}) => {
+  setModalOpen(true);
+  setGlobalModalProps(props);
 };
 
-function SplitModal(
-  props: ParentProps<{
-    trigger?: JSX.Element;
-    open: Accessor<boolean>;
-    setOpen: Setter<boolean>;
-    mode?: 'split' | 'global';
-    scrim?: boolean;
-    onCloseAutoFocus?: (e: Event) => void;
-    onOpenAutoFocus?: (e: Event) => void;
-  }>
-) {
-  return (
-    <Dialog open={props.open()} onOpenChange={props.setOpen} modal={true}>
-      <Show when={props.trigger}>
-        <Dialog.Trigger>{props.trigger}</Dialog.Trigger>
-      </Show>
-      <ScopedPortal scope={props.mode ?? 'global'}>
-        <Dialog.Overlay
-          as="div"
-          class="absolute z-modal"
-          classList={{
-            'left-[1px] right-[1px] bottom-[1px] top-[1px]':
-              props.mode === 'split',
-            'inset-0': props.mode !== 'split',
-            'bg-modal-overlay': props.scrim !== false,
-          }}
-          use:clickOutside={() => props.setOpen(false)}
-          on:click={() => props.setOpen(false)}
-        />
-        <div
-          class="absolute z-modal flex justify-around pointer-events-none"
-          classList={{
-            'left-[1px] right-[1px] bottom-[1px] top-0': props.mode === 'split',
-            'inset-0': props.mode !== 'split',
-          }}
-        >
-          <Dialog.Content
-            class="pointer-events-none!"
-            onCloseAutoFocus={props.onCloseAutoFocus}
-            onOpenAutoFocus={props.onOpenAutoFocus}
-          >
-            {props.children}
-          </Dialog.Content>
-        </div>
-      </ScopedPortal>
-    </Dialog>
-  );
-}
+export const GlobalBulkEditEntityModal = () => {
+  const modalProps = () => globalModalProps();
 
-type PortalScope = 'local' | 'block' | 'global' | 'split';
-
-/**
- * Portal with some extra scoping logic. If passed a specific mount prop or no props at all – it is
- * just a regular solid Portal.
- * @param props.scope - The scope of the portal. If 'local' it will mount to the closest element with the
- *    '.portal-scope' class. If 'block' it will mount to the containing block element. If 'global' it will
- *    mount to the document body.
- * @returns
- */
-function ScopedPortal(
-  props: ComponentProps<typeof Portal> & {
-    scope?: PortalScope;
-    show?: boolean;
-  }
-) {
-  let searchRef!: HTMLDivElement;
-
-  const mountRef = () => {
-    if (props.mount) return props.mount;
-    if (props.scope === 'block') {
-      if (isInBlock()) {
-        const blockElement = blockElementSignal.get();
-        if (blockElement) return blockElement;
-      }
+  const handleFinish = () => {
+    const props = globalModalProps();
+    setGlobalModalProps(null);
+    if (props?.onFinish) {
+      props.onFinish();
     }
-    if (props.scope === 'split') {
-      const panelElement = getSplitPanelRef();
-      if (panelElement) return panelElement;
-    }
-    if (props.scope === 'local') {
-      const scopedElement = searchRef.closest('.portal-scope');
-      if (scopedElement) return scopedElement;
-    }
-    return document.body;
   };
 
   return (
-    <Show when={props.show !== false}>
-      <div class="hidden" ref={searchRef} />
-      <Portal mount={mountRef()}>{props.children}</Portal>
+    <Show when={modalProps()}>
+      {(props) => (
+        <BulkEditEntityModalContent
+          isOpen={modalOpen}
+          setIsOpen={setModalOpen}
+          view={props().view}
+          entities={props().entities}
+          onFinish={handleFinish}
+        />
+      )}
     </Show>
   );
-}
+};

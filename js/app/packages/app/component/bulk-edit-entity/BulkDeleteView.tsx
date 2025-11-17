@@ -1,4 +1,3 @@
-import { DeleteConfimationDialog } from '@core/component/DeleteConfimationDialog';
 import type { EntityData } from '@macro-entity';
 import { createSignal, onMount, Show } from 'solid-js';
 import { createBulkDeleteDssItemsMutation } from '../../../macro-entity/src/queries/dss';
@@ -21,15 +20,6 @@ export const BulkDeleteView = (props: {
     setShowConfirmation(true);
   });
 
-  const deleteConfirmationText = () => {
-    const itemName =
-      props.entities.length === 1 ? props.entities[0].name : undefined;
-
-    return !itemName
-      ? `Are you sure you want to delete <b>${props.entities.length} items?</b>`
-      : `Are you sure you want to delete <b>${itemName} and all of its contents</b>?`;
-  };
-
   const handleDelete = async () => {
     try {
       await bulkDelete.mutateAsync(props.entities);
@@ -43,7 +33,6 @@ export const BulkDeleteView = (props: {
       props.onFinish();
     } catch (error) {
       console.error('Failed to delete entities:', error);
-      // Keep the confirmation dialog open on error
     }
   };
 
@@ -67,18 +56,9 @@ export const BulkDeleteView = (props: {
 
       <BulkEditEntityModalActionFooter
         onCancel={handleCancel}
-        onConfirm={() => setShowConfirmation(true)}
+        onConfirm={handleDelete}
         confirmText="Delete"
       />
-
-      <Show when={showConfirmation()}>
-        <DeleteConfimationDialog
-          open={showConfirmation()}
-          setOpen={setShowConfirmation}
-          onDelete={handleDelete}
-          deleteConfirmationText={deleteConfirmationText}
-        />
-      </Show>
     </div>
   );
 };

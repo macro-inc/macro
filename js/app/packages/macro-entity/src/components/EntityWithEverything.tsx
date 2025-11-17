@@ -136,10 +136,10 @@ export function EntityWithEverything(
   const hasNotifications = () =>
     !!props.entity.notifications && props.entity.notifications().length > 0;
 
-  const threadGap = 10;
+  const threadGap = 6;
   const ThreadBorder = () => (
     <div
-      class="absolute left-[9.5px] border-[0.5px] border-edge -top-1/2"
+      class="absolute left-[calc(0.5rem+1px)] w-[1px] border-l border-edge-muted -top-0.75"
       style={{ height: `${threadGap}px` }}
     />
   );
@@ -408,9 +408,6 @@ export function EntityWithEverything(
         role="button"
         tabIndex={0}
         ref={props.ref}
-        ref={mergeRefs(props.ref, (el) => {
-          _tabbableEl = el;
-        })}
       >
         <button
           type="button"
@@ -783,7 +780,6 @@ const createFormattedDate = (timestamp: number) =>
       year: '2-digit',
     });
   });
-
 
 let lastMouseX: number | null = null;
 let lastMouseY: number | null = null;

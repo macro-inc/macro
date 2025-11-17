@@ -416,6 +416,7 @@ function SplitPanel(props: SplitPanelProps) {
   });
 
   const unifiedListContext = createSoupContext();
+
   createNavigationEntityListShortcut({
     splitName,
     splitHandle: props.handle,

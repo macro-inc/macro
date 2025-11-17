@@ -1,15 +1,7 @@
-import { DeleteConfimationDialog } from '@core/component/DeleteConfimationDialog';
 import { Hotkey } from '@core/component/Hotkey';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import type { EntityData } from '@macro-entity';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
-import { Show } from 'solid-js';
-import { createGlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
-
-const { openModal, modalProps, BulkEditEntityModal } =
-  createGlobalBulkEditEntityModal();
-
-export const openBulkEditEntityModal = openModal;
 
 interface EntitySelectionToolbarModalProps {
   selectedEntities: EntityData[];
@@ -37,9 +29,6 @@ export const EntitySelectionToolbarModal = (
               {props.selectedEntities.length} selected
             </span>
           </div>
-          <Show when={modalProps()}>
-            {(props) => <BulkEditEntityModal {...props()} />}
-          </Show>
           <button
             onClick={props.onAction}
             class="p-1 px-2 flex gap-1 border-edge-muted border items-center h-full w-full hover:bg-hover hover-transition-bg"

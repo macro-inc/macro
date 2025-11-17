@@ -1,3 +1,4 @@
+import { disableOverlayClickSignal } from '@block-pdf/signal/click';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
@@ -14,8 +15,8 @@ import type { EntityData } from '@macro-entity';
 import { useTutorialCompleted } from '@service-gql/client';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
+import { action } from '@solidjs/router';
 import { useQuery } from '@tanstack/solid-query';
-import { set } from 'colorjs.io/fn';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
@@ -34,6 +35,9 @@ import {
   type Store,
 } from 'solid-js/store';
 import type { VirtualizerHandle } from 'virtua/solid';
+import { useUserId } from '../../macro-entity/src/queries/auth';
+import { playSound } from '../util/sound';
+import { openBulkEditModal } from './bulk-edit-entity/BulkEditEntityModal';
 import {
   resetCommandCategoryIndex,
   searchCategories,
@@ -46,9 +50,12 @@ import {
   setKonsoleMode,
   toggleKonsoleVisibility,
 } from './command/state';
-import { playSound } from '../util/sound';
 import { useGlobalNotificationSource } from './GlobalAppState';
 import type { SplitHandle } from './split-layout/layoutManager';
+import {
+  createEntityActionRegistry,
+  type EntityActionRegistry,
+} from './UnifiedEntityActions';
 import {
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS,
@@ -70,6 +77,7 @@ export type UnifiedListContext = {
   emailViewSignal: Signal<'inbox' | 'sent' | 'drafts' | 'all'>;
   showHelpDrawer: Accessor<Set<string>>;
   setShowHelpDrawer: Setter<Set<string>>;
+  actionRegistry: EntityActionRegistry;
 };
 
 const DEFAULT_VIEW_ID: View = 'all';
@@ -117,6 +125,7 @@ export function createSoupContext(): UnifiedListContext {
     emailViewSignal,
     showHelpDrawer,
     setShowHelpDrawer,
+    actionRegistry: createEntityActionRegistry(),
   };
 }
 
@@ -153,9 +162,6 @@ function createViewData(
       showUnreadIndicator:
         viewProps?.display?.showUnreadIndicator ??
         VIEWCONFIG_BASE.display.showUnreadIndicator,
-      showProjects:
-        viewProps?.display?.showProjects ??
-        VIEWCONFIG_BASE.display.showProjects,
       unrollNotifications:
         viewProps?.display?.unrollNotifications ??
         VIEWCONFIG_BASE.display.unrollNotifications,
@@ -206,22 +212,60 @@ export function createNavigationEntityListShortcut({
     setSelectedView,
     // selectedEntitySignal: [selectedEntity, setSelectedEntity],
     entitiesSignal: [entities],
+    actionRegistry,
   } = unifiedListContext;
   const viewData = createMemo(() => viewsData[selectedView()]);
   const viewIds = createMemo<ViewId[]>(() => Object.keys(viewsData));
 
   const selectedEntity = () => viewData().selectedEntity;
+  const userId = useUserId();
 
   const notificationSource = useGlobalNotificationSource();
 
-  const defaultHotkeyE = () =>
-    VIEWCONFIG_DEFAULTS[selectedView() as View]?.hotkeyOptions?.e;
+  // const markEntityAsDone = (entity: EntityData) =>
+  //   defaultHotkeyE()?.(entity, {
+  //     notificationSource,
+  //     soupContext: unifiedListContext,
+  //   });
+  //
+  actionRegistry.register('mark_as_done', async (entities) => {
+    const handler =
+      VIEWCONFIG_DEFAULTS[selectedView() as View]?.hotkeyOptions?.e;
+    if (handler) {
+      for (const entity of entities) {
+        handler(entity, {
+          soupContext: unifiedListContext,
+          notificationSource,
+        });
+      }
+    }
+    return { success: true };
+  });
 
-  const markEntityAsDone = (entity: EntityData) =>
-    defaultHotkeyE()?.(entity, {
-      notificationSource,
-      soupContext: unifiedListContext,
-    });
+  actionRegistry.register(
+    'delete',
+    async (entities) => {
+      try {
+        openBulkEditModal({
+          view: 'delete',
+          entities: entities,
+          onFinish: () => {
+            setViewDataStore(selectedView(), 'selectedEntities', []);
+          },
+        });
+      } catch (err) {
+        console.error('Failed to open bulk delete modal', err);
+      }
+      return { success: true };
+    },
+    {
+      disabled: (entity) => {
+        if (entity.type === 'channel' || entity.type === 'email') return true;
+        if (entity.ownerId !== userId()) return true;
+        return false;
+      },
+    }
+  );
 
   const openEntity = (entity: EntityData) => {
     const { type, id } = entity;
@@ -267,26 +311,70 @@ export function createNavigationEntityListShortcut({
     };
   });
 
-  const getEntitiesForAction = createLazyMemo(() => {
+  const getEntitiesForAction = createLazyMemo<{
+    entities: Array<{ entity: EntityData; index: number }>;
+    beforeEntity: EntityData | null;
+    afterEntity: EntityData | null;
+  }>(() => {
     const entityList = entities();
-    if (!entityList) return [];
+    if (!entityList) return { entities: [], beforeEntity: '', afterId: '' };
+
     const idToIndexMap = new Map(entityList.map(({ id }, i) => [id, i]));
+    let selectedEntityIndices: Array<{ entity: EntityData; index: number }> =
+      [];
+
     if (viewData().selectedEntities.length > 0) {
-      return filterMap(viewData().selectedEntities, (entity) => {
-        const index = idToIndexMap.get(entity.id);
-        if (index === undefined) {
-          return undefined;
+      selectedEntityIndices = filterMap(
+        viewData().selectedEntities,
+        (entity) => {
+          const index = idToIndexMap.get(entity.id);
+          if (index === undefined) {
+            return undefined;
+          }
+          return {
+            index,
+            entity,
+          };
         }
-        return {
-          index,
-          entity,
-        };
-      });
+      );
     } else {
       const entity = getHighlightedEntity();
-      if (entity) return [entity];
+      if (entity) selectedEntityIndices = [entity];
     }
-    return [];
+
+    if (selectedEntityIndices.length === 0) {
+      return { entities: [], beforeEntity: '', afterId: '' };
+    }
+
+    selectedEntityIndices.sort((a, b) => a.index - b.index);
+
+    const firstIndex = selectedEntityIndices[0].index;
+    const lastIndex =
+      selectedEntityIndices[selectedEntityIndices.length - 1].index;
+
+    let before = null;
+    if (firstIndex === 0) {
+      // If first item is at index 0, use the item after the selection as beforeId
+      const afterSelectionIndex = lastIndex + 1;
+      if (afterSelectionIndex < entityList.length) {
+        before = entityList[afterSelectionIndex];
+      }
+    } else {
+      before = entityList[firstIndex - 1];
+    }
+
+    // Calculate afterId
+    let after = null;
+    const afterSelectionIndex = lastIndex + 1;
+    if (afterSelectionIndex < entityList.length) {
+      after = entityList[afterSelectionIndex];
+    }
+
+    return {
+      entities: selectedEntityIndices,
+      beforeEntity: before,
+      afterEntity: after,
+    };
   });
 
   const isEntityLastItem = createLazyMemo(() => {
@@ -611,7 +699,7 @@ export function createNavigationEntityListShortcut({
       searchCategories.hideCategory('Selection');
       resetCommandCategoryIndex();
       resetKonsoleMode();
-      return false;
+      false;
     },
   });
 
@@ -780,18 +868,22 @@ export function createNavigationEntityListShortcut({
     scopeId: entityHotkeyScope,
     description: 'Mark done',
     keyDownHandler: () => {
-      const entities = getEntitiesForAction();
-      if (entities.length === 0) {
+      const entitiesForAction = getEntitiesForAction();
+      if (entitiesForAction.entities.length === 0) {
         return false;
       }
+
       if (isEntityLastItem()) {
         navigateThroughList({ axis: 'start', mode: 'step' });
       } else {
         navigateThroughList({ axis: 'end', mode: 'step' });
       }
-      for (const { entity } of entities) {
-        markEntityAsDone(entity);
-      }
+
+      actionRegistry.execute(
+        'mark_as_done',
+        entitiesForAction.entities.map(({ entity }) => entity)
+      );
+
       setViewDataStore(selectedView(), 'selectedEntities', []);
       return true;
     },
@@ -812,11 +904,44 @@ export function createNavigationEntityListShortcut({
   registerHotkey({
     hotkey: ['escape'],
     scopeId: splitHotkeyScope,
-    description: 'Clear Multi Selection',
+    description: 'Clear multi selection',
+    condition: () => viewData().selectedEntities.length > 0,
     keyDownHandler: () => {
       const length = viewData().selectedEntities.length;
       setViewDataStore(selectedView(), 'selectedEntities', []);
       return length > 1;
+    },
+  });
+  registerHotkey({
+    hotkey: ['delete', 'backspace'],
+    scopeId: splitHotkeyScope,
+    description: () =>
+      viewData().selectedEntities.length > 1 ? 'Delete items' : 'Delete item',
+    keyDownHandler: () => {
+      const entitiesForAction = getEntitiesForAction();
+      if (entitiesForAction.entities.length === 0) {
+        return false;
+      }
+      actionRegistry
+        .execute(
+          'delete',
+          entitiesForAction.entities.map(({ entity }) => entity)
+        )
+        .then(({ success }) => {
+          if (success && entitiesForAction.afterEntity) {
+            setViewDataStore(
+              selectedView(),
+              'highlightedId',
+              entitiesForAction.afterEntity.id
+            );
+            setViewDataStore(
+              selectedView(),
+              'selectedEntity',
+              entitiesForAction.afterEntity
+            );
+          }
+        });
+      return true;
     },
   });
 
