@@ -25,10 +25,63 @@ pub struct FrecencyPgStorage {
     pool: PgPool,
 }
 
+/// the types of errors that can occur on [FrecencyPgStorage]
+#[derive(Debug, Error)]
+pub enum FrecencyStorageErr {
+    /// there was a sqlx error
+    #[error(transparent)]
+    Db(#[from] sqlx::Error),
+    /// the database contained invalid user id data
+    #[error(transparent)]
+    UserIdErr(#[from] ParseErr),
+    /// encounted an unknown entity type
+    #[error(transparent)]
+    UnknownEntity(#[from] model_entity::ParseError),
+    /// failed to deserialize a type from json
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
+}
+
 impl FrecencyPgStorage {
     /// create a new instance of Self
     pub fn new(pool: PgPool) -> Self {
         FrecencyPgStorage { pool }
+    }
+
+    async fn static_get_top_entities(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        from_score: Option<f64>,
+        limit: u32,
+    ) -> Result<Vec<AggregateFrecency>, FrecencyStorageErr> {
+        let rows = sqlx::query!(
+            r#"
+                SELECT *
+                FROM frecency_aggregates
+                WHERE user_id = $1
+                ORDER BY frecency_score DESC
+                LIMIT $2
+                "#,
+            user_id.as_ref(),
+            limit as i64
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let aggregate_row = AggregateRow {
+                    entity_id: row.entity_id,
+                    entity_type: row.entity_type.parse()?,
+                    user_id: row.user_id,
+                    event_count: row.event_count as usize,
+                    frecency_score: row.frecency_score,
+                    first_event: row.first_event,
+                    recent_events: serde_json::from_value(row.recent_events)?,
+                };
+                Ok(aggregate_row.into_aggregate_frecency()?)
+            })
+            .collect()
     }
 }
 
@@ -175,42 +228,25 @@ impl AggregateRow {
 }
 
 impl AggregateFrecencyStorage for FrecencyPgStorage {
-    type Err = anyhow::Error;
+    type Err = FrecencyStorageErr;
 
     async fn get_top_entities(
         &self,
         req: FrecencyPageRequest<'_>,
-    ) -> Result<Vec<crate::domain::models::AggregateFrecency>, Self::Err> {
-        let rows = sqlx::query!(
-            r#"
-                SELECT *
-                FROM frecency_aggregates
-                WHERE user_id = $1
-                ORDER BY frecency_score DESC
-                LIMIT $2
-                "#,
-            req.user_id.as_ref(),
-            req.limit as i64
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        let out: Result<Vec<_>, _> = rows
-            .into_iter()
-            .map(|row| {
-                let aggregate_row = AggregateRow {
-                    entity_id: row.entity_id,
-                    entity_type: row.entity_type.parse().unwrap(),
-                    user_id: row.user_id,
-                    event_count: row.event_count as usize,
-                    frecency_score: row.frecency_score,
-                    first_event: row.first_event,
-                    recent_events: serde_json::from_value(row.recent_events).unwrap(),
-                };
-                aggregate_row.into_aggregate_frecency()
-            })
-            .collect();
-        Ok(out?)
+    ) -> Result<Vec<AggregateFrecency>, Self::Err> {
+        let FrecencyPageRequest {
+            user_id,
+            from_score,
+            limit,
+            filters,
+        } = req;
+        match filters {
+            None => {
+                self.static_get_top_entities(user_id, from_score, limit)
+                    .await
+            }
+            Some(_ast) => todo!(),
+        }
     }
 
     async fn set_aggregate(
