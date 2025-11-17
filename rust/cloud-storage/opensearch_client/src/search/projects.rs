@@ -14,7 +14,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
 #[derive(Clone, Default)]
-struct ProjectSearchConfig;
+pub(crate) struct ProjectSearchConfig;
 
 impl SearchQueryConfig for ProjectSearchConfig {
     const INDEX: &'static str = PROJECT_INDEX;

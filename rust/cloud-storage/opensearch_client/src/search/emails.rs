@@ -17,7 +17,7 @@ use opensearch_query_builder::{
 use crate::search::model::DefaultSearchResponse;
 use serde_json::Value;
 
-struct EmailSearchConfig;
+pub(crate) struct EmailSearchConfig;
 
 impl SearchQueryConfig for EmailSearchConfig {
     const INDEX: &'static str = EMAIL_INDEX;
@@ -143,7 +143,7 @@ impl EmailQueryBuilder {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-struct EmailIndex {
+pub(crate) struct EmailIndex {
     /// The id of the email thread
     pub entity_id: String,
     /// The id of the email message

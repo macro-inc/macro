@@ -37,7 +37,7 @@ pub struct ChatSearchResponse {
     pub highlight: Highlight,
 }
 
-struct ChatSearchConfig;
+pub(crate) struct ChatSearchConfig;
 
 impl SearchQueryConfig for ChatSearchConfig {
     const INDEX: &'static str = CHAT_INDEX;

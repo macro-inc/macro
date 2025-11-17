@@ -46,7 +46,7 @@ pub struct ChannelMessageSearchResponse {
 }
 
 #[derive(Default)]
-struct ChannelMessageSearchConfig;
+pub(crate) struct ChannelMessageSearchConfig;
 
 impl SearchQueryConfig for ChannelMessageSearchConfig {
     const INDEX: &'static str = CHANNEL_INDEX;

@@ -15,7 +15,7 @@ use opensearch_query_builder::{
 use serde_json::Value;
 
 #[derive(Clone)]
-struct DocumentSearchConfig;
+pub(crate) struct DocumentSearchConfig;
 
 impl SearchQueryConfig for DocumentSearchConfig {
     const INDEX: &'static str = DOCUMENTS_INDEX;
@@ -68,7 +68,7 @@ impl DocumentQueryBuilder {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct DocumentIndex {
+pub(crate) struct DocumentIndex {
     pub entity_id: String,
     pub document_name: String,
     pub node_id: String,
