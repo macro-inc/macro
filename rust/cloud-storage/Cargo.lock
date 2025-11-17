@@ -3151,12 +3151,10 @@ name = "frecency"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "aws-config",
  "chrono",
  "cool_asserts",
  "futures",
  "item_filters",
- "lambda_runtime",
  "macro_db_migrator",
  "macro_env",
  "macro_env_var",

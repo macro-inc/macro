@@ -58,11 +58,12 @@ impl FrecencyPgStorage {
             r#"
                 SELECT *
                 FROM frecency_aggregates
-                WHERE user_id = $1
+                WHERE user_id = $1 AND ($2::float8 IS NULL OR frecency_score < $2)
                 ORDER BY frecency_score DESC
-                LIMIT $2
+                LIMIT $3
                 "#,
             user_id.as_ref(),
+            from_score,
             limit as i64
         )
         .fetch_all(&self.pool)

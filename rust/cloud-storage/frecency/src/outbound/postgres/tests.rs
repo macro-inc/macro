@@ -297,6 +297,128 @@ async fn test_get_aggregate_for_empty_entities_list(pool: PgPool) {
 // Tests for FrecencyPgProcessor
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn test_get_top_entities_with_from_score(pool: PgPool) {
+    let storage = FrecencyPgStorage::new(pool.clone());
+    let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();
+
+    // Create multiple aggregates with different scores
+    let entities = vec![
+        ("doc1", EntityType::Document, 100.0),
+        ("doc2", EntityType::Document, 80.0),
+        ("chat1", EntityType::Chat, 60.0),
+        ("project1", EntityType::Project, 40.0),
+        ("doc3", EntityType::Document, 20.0),
+    ];
+
+    for (id, entity_type, score) in entities {
+        let aggregate = AggregateFrecency {
+            id: AggregateId {
+                entity: entity_type.with_entity_string(id.to_string()),
+                user_id: test_user_id.clone(),
+            },
+            data: FrecencyData {
+                event_count: 1,
+                frecency_score: score,
+                first_event: Utc::now(),
+                recent_events: VecDeque::new(),
+            },
+        };
+        storage.set_aggregate(aggregate).await.unwrap();
+    }
+
+    // Test 1: Get all top entities without from_score
+    let all_entities = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 10,
+            filters: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(all_entities.len(), 5);
+    assert_eq!(all_entities[0].id.entity.entity_id, "doc1");
+    assert_eq!(all_entities[0].data.frecency_score, 100.0);
+
+    // Test 2: Get entities with score < 80.0 (should get 60, 40, 20)
+    let filtered_entities = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: Some(80.0),
+            limit: 10,
+            filters: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(filtered_entities.len(), 3);
+    assert_eq!(filtered_entities[0].id.entity.entity_id, "chat1");
+    assert_eq!(filtered_entities[0].data.frecency_score, 60.0);
+    assert_eq!(filtered_entities[1].id.entity.entity_id, "project1");
+    assert_eq!(filtered_entities[1].data.frecency_score, 40.0);
+    assert_eq!(filtered_entities[2].id.entity.entity_id, "doc3");
+    assert_eq!(filtered_entities[2].data.frecency_score, 20.0);
+
+    // Test 3: Pagination - get top 2, then next 2
+    let page1 = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 2,
+            filters: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(page1.len(), 2);
+    assert_eq!(page1[0].data.frecency_score, 100.0);
+    assert_eq!(page1[1].data.frecency_score, 80.0);
+
+    // Use the last score from page1 to get the next page
+    let last_score = page1.last().unwrap().data.frecency_score;
+    let page2 = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: Some(last_score),
+            limit: 2,
+            filters: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(page2.len(), 2);
+    assert_eq!(page2[0].data.frecency_score, 60.0);
+    assert_eq!(page2[1].data.frecency_score, 40.0);
+
+    // Test 4: from_score lower than all scores (should return empty)
+    let no_entities = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: Some(10.0),
+            limit: 10,
+            filters: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(no_entities.len(), 0);
+
+    // Test 5: from_score higher than all scores (should return all)
+    let all_with_high_score = storage
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: Some(150.0),
+            limit: 10,
+            filters: None,
+        })
+        .await
+        .unwrap();
+
+    assert_eq!(all_with_high_score.len(), 5);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn test_processor_get_unprocessed_events(pool: PgPool) {
     let processor = FrecencyPgProcessor::new(pool.clone());
     let test_user_id = MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap();

@@ -13,7 +13,6 @@ anyhow = { workspace = true }
 chrono = { workspace = true, features = ["serde"] }
 futures = { workspace = true }
 item_filters = { path = "../item_filters" }
-lambda_runtime = { workspace = true, optional = true, features = ["tracing"] }
 macro_env = { path = "../macro_env" }
 macro_env_var = { path = "../macro_env_var", optional = true }
 macro_user_id = { path = "../macro_user_id" }
@@ -31,7 +30,6 @@ tower = { workspace = true, optional = true }
 tracing = { workspace = true }
 
 [dev-dependencies]
-aws-config = { workspace = true }
 cool_asserts = "2"
 macro_db_migrator = { path = "../macro_db_migrator" }
 rand = { workspace = true }
