@@ -47,7 +47,7 @@ async fn test_set_event(pool: PgPool) {
     assert_eq!(row.event_type, "open");
     assert_eq!(row.entity_id, "doc123");
     assert_eq!(row.connection_id, "conn456");
-    assert_eq!(row.was_processed, false);
+    assert!(!row.was_processed);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -81,15 +81,11 @@ async fn test_set_and_get_aggregate(pool: PgPool) {
 
     // Retrieve the aggregate
     let retrieved = storage
-        .get_aggregate_for_user_entity_pair(
-            test_user_id.copied(),
-            EntityType::Document.with_entity_str("doc456"),
-        )
+        .get_top_entities(test_user_id.copied(), 1)
         .await
         .unwrap();
 
-    assert!(retrieved.is_some());
-    let retrieved = retrieved.unwrap();
+    let retrieved = retrieved.into_iter().next().unwrap();
     assert_eq!(retrieved.id.user_id.as_ref(), test_user_id.as_ref());
     assert_eq!(retrieved.id.entity.entity_id, "doc456");
     assert_eq!(retrieved.id.entity.entity_type, EntityType::Document);
@@ -143,12 +139,11 @@ async fn test_update_aggregate(pool: PgPool) {
 
     // Verify the update
     let retrieved = storage
-        .get_aggregate_for_user_entity_pair(
-            test_user_id,
-            EntityType::Chat.with_entity_str("chat789"),
-        )
+        .get_top_entities(test_user_id, 1)
         .await
         .unwrap()
+        .into_iter()
+        .next()
         .unwrap();
 
     assert_eq!(retrieved.data.event_count, 10);
@@ -248,24 +243,6 @@ async fn test_get_aggregate_for_user_entities(pool: PgPool) {
     assert_eq!(results[0].data.frecency_score, 85.0);
     assert_eq!(results[1].id.entity.entity_id, "doc1");
     assert_eq!(results[1].data.frecency_score, 80.0);
-}
-
-#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn test_get_aggregate_for_nonexistent_entity(pool: PgPool) {
-    let storage = FrecencyPgStorage::new(pool.clone());
-    let test_user_id =
-        MacroUserIdStr::parse_from_str("macro|test-user-nonexistent@example.com").unwrap();
-
-    // Try to get a non-existent aggregate
-    let result = storage
-        .get_aggregate_for_user_entity_pair(
-            test_user_id.copied(),
-            EntityType::Document.with_entity_str("nonexistent"),
-        )
-        .await
-        .unwrap();
-
-    assert!(result.is_none());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

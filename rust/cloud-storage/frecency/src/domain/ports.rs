@@ -67,13 +67,6 @@ pub trait AggregateFrecencyStorage: Send + Sync + 'static {
         frecency: AggregateFrecency,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// retrieve the specific aggregate record for this entity + user pair
-    fn get_aggregate_for_user_entity_pair(
-        &self,
-        user_id: MacroUserIdStr<'_>,
-        entity: Entity<'_>,
-    ) -> impl Future<Output = Result<Option<AggregateFrecency>, Self::Err>> + Send;
-
     /// retrieve the specific aggregate record for the input entities + user pair
     fn get_aggregate_for_user_entities<T>(
         &self,

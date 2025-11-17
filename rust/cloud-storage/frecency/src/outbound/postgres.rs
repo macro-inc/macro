@@ -255,50 +255,6 @@ impl AggregateFrecencyStorage for FrecencyPgStorage {
         Ok(())
     }
 
-    async fn get_aggregate_for_user_entity_pair(
-        &self,
-        user_id: MacroUserIdStr<'_>,
-        entity: Entity<'_>,
-    ) -> Result<Option<crate::domain::models::AggregateFrecency>, Self::Err> {
-        let entity_type = entity.entity_type.to_string();
-        let entity_id = entity.entity_id.into_owned();
-
-        let row = sqlx::query!(
-            r#"
-                SELECT 
-                    entity_id,
-                    entity_type,
-                    user_id,
-                    event_count,
-                    frecency_score,
-                    first_event,
-                    recent_events
-                FROM frecency_aggregates
-                WHERE user_id = $1 AND entity_type = $2 AND entity_id = $3
-                "#,
-            user_id.as_ref(),
-            entity_type,
-            entity_id
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(row
-            .map(|row| {
-                let aggregate_row = AggregateRow {
-                    entity_id: row.entity_id,
-                    entity_type: row.entity_type.parse().unwrap(),
-                    user_id: row.user_id.to_string(),
-                    event_count: row.event_count as usize,
-                    frecency_score: row.frecency_score,
-                    first_event: row.first_event,
-                    recent_events: serde_json::from_value(row.recent_events).unwrap(),
-                };
-                aggregate_row.into_aggregate_frecency()
-            })
-            .transpose()?)
-    }
-
     async fn get_aggregate_for_user_entities<T>(
         &self,
         user_id: MacroUserIdStr<'static>,
