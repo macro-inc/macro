@@ -2,7 +2,6 @@
 
 require('dotenv').config();
 
-import type { Client } from '@opensearch-project/opensearch';
 import { client } from '../client';
 import {
   CHANNEL_INDEX,
@@ -12,20 +11,10 @@ import {
   IS_DRY_RUN,
   PROJECT_INDEX,
 } from '../constants';
-import { checkIndexExists } from '../utils/check_index_exists';
-import { copyFieldData, verifyFieldCopy } from '../utils/copy_field';
+import type { IndexMigration } from '../utils/migrate_field';
+import { migrateIndex } from '../utils/migrate_field';
 
 const ENTITY_ID_FIELD = 'entity_id';
-
-type FieldToMigrate = {
-  oldField: string;
-  newField: string;
-};
-
-type IndexMigration = {
-  indexName: string;
-  fields: FieldToMigrate[];
-};
 
 const MIGRATIONS: IndexMigration[] = [
   {
@@ -49,52 +38,6 @@ const MIGRATIONS: IndexMigration[] = [
     fields: [{ oldField: 'project_id', newField: ENTITY_ID_FIELD }],
   },
 ];
-
-async function migrateIndex(
-  opensearchClient: Client,
-  migration: IndexMigration,
-  dryRun: boolean
-): Promise<void> {
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(
-    `Migrating index: ${migration.indexName} ${dryRun ? '(DRY-RUN)' : ''}`
-  );
-  console.log(`${'='.repeat(60)}`);
-
-  const indexExists = await checkIndexExists(
-    opensearchClient,
-    migration.indexName
-  );
-
-  if (!indexExists) {
-    console.log(
-      `⚠️  Index "${migration.indexName}" does not exist. Skipping...`
-    );
-    return;
-  }
-
-  for (const field of migration.fields) {
-    console.log(`\nProcessing field: ${field.oldField}`);
-
-    await copyFieldData(
-      opensearchClient,
-      migration.indexName,
-      field.oldField,
-      field.newField,
-      dryRun
-    );
-
-    await verifyFieldCopy(
-      opensearchClient,
-      migration.indexName,
-      field.oldField,
-      field.newField,
-      dryRun
-    );
-  }
-
-  console.log(`\n✓ Completed migration for index: ${migration.indexName}`);
-}
 
 async function run(dryRun: boolean = true) {
   const opensearchClient = client();

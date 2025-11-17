@@ -1,6 +1,5 @@
 require('dotenv').config();
 
-import type { Client } from '@opensearch-project/opensearch';
 import { client } from '../client';
 import {
   CHANNEL_INDEX,
@@ -9,96 +8,39 @@ import {
   EMAIL_INDEX,
   PROJECT_INDEX,
 } from '../constants';
-import { checkIndexExists } from '../utils/check_index_exists';
-import { copyFieldData, verifyFieldCopy } from '../utils/copy_field';
-
-interface DateField {
-  oldField: string;
-  newField: string;
-}
-
-interface IndexMigration {
-  indexName: string;
-  dateFields: DateField[];
-}
+import { type IndexMigration, migrateIndex } from '../utils/migrate_field';
 
 const MIGRATIONS: IndexMigration[] = [
   {
     indexName: CHANNEL_INDEX,
-    dateFields: [
+    fields: [
       { oldField: 'created_at', newField: 'created_at_seconds' },
       { oldField: 'updated_at', newField: 'updated_at_seconds' },
     ],
   },
   {
     indexName: CHAT_INDEX,
-    dateFields: [{ oldField: 'updated_at', newField: 'updated_at_seconds' }],
+    fields: [{ oldField: 'updated_at', newField: 'updated_at_seconds' }],
   },
   {
     indexName: DOCUMENT_INDEX,
-    dateFields: [{ oldField: 'updated_at', newField: 'updated_at_seconds' }],
+    fields: [{ oldField: 'updated_at', newField: 'updated_at_seconds' }],
   },
   {
     indexName: EMAIL_INDEX,
-    dateFields: [
+    fields: [
       { oldField: 'updated_at', newField: 'updated_at_seconds' },
       { oldField: 'sent_at', newField: 'sent_at_seconds' },
     ],
   },
   {
     indexName: PROJECT_INDEX,
-    dateFields: [
+    fields: [
       { oldField: 'created_at', newField: 'created_at_seconds' },
       { oldField: 'updated_at', newField: 'updated_at_seconds' },
     ],
   },
 ];
-
-async function migrateIndex(
-  opensearchClient: Client,
-  migration: IndexMigration,
-  dryRun: boolean
-): Promise<void> {
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(
-    `Migrating index: ${migration.indexName} ${dryRun ? '(DRY-RUN)' : ''}`
-  );
-  console.log(`${'='.repeat(60)}`);
-
-  const indexExists = await checkIndexExists(
-    opensearchClient,
-    migration.indexName
-  );
-
-  if (!indexExists) {
-    console.log(
-      `⚠️  Index "${migration.indexName}" does not exist. Skipping...`
-    );
-    return;
-  }
-
-  for (const dateField of migration.dateFields) {
-    console.log(`\nProcessing field: ${dateField.oldField}`);
-
-    await copyFieldData(
-      opensearchClient,
-      migration.indexName,
-      dateField.oldField,
-      dateField.newField,
-      dryRun
-    );
-
-    await verifyFieldCopy(
-      opensearchClient,
-      migration.indexName,
-      dateField.oldField,
-      dateField.newField,
-      dryRun
-    );
-  }
-
-  console.log(`\n✓ Completed migration for index: ${migration.indexName}`);
-}
 
 async function copyData(dryRun: boolean = true) {
   const opensearchClient = client();
