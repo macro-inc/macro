@@ -1,4 +1,5 @@
 use super::Client;
+use crate::types::AiError;
 
 #[derive(Clone, Debug)]
 pub struct AnthropicClient {
@@ -23,7 +24,7 @@ impl Client for AnthropicClient {
         &self,
         request: async_openai::types::CreateChatCompletionRequest,
         extensions: Option<super::RequestExtensions>,
-    ) -> anyhow::Result<async_openai::types::ChatCompletionResponseStream> {
+    ) -> Result<async_openai::types::ChatCompletionResponseStream, AiError> {
         if extensions.is_some() {
             tracing::warn!("extensions are not yet supported");
         }
