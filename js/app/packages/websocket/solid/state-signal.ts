@@ -1,7 +1,7 @@
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
-import type { Websocket } from '../websocket';
-import { WebsocketConnectionState } from '../websocket-connection-state';
-import { WebsocketEvent } from '../websocket-event';
+import type { Websocket } from '../core/websocket';
+import { WebsocketConnectionState } from '../core/websocket-connection-state';
+import { WebsocketEvent } from '../core/websocket-event';
 
 export function createWebsocketStateSignal(
   ws: Websocket<any, any>

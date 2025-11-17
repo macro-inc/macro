@@ -1,21 +1,23 @@
-import { WebSocketServer, WebSocket } from 'ws';
+import {
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from 'vitest';
+import type { WebSocket, WebSocketServer } from 'ws';
+import type { WebsocketBuffer } from '../';
 import {
   ArrayQueue,
-  Backoff,
+  type Backoff,
   ConstantBackoff,
   Websocket,
   WebsocketBuilder,
+  WebsocketEvent,
+  type WebsocketEventListenerParams,
 } from '../';
-import { WebsocketEvent, type WebsocketEventListenerParams } from '../';
-import type { WebsocketBuffer } from '../';
-import {
-  describe,
-  test,
-  expect,
-  beforeAll,
-  beforeEach,
-  afterEach,
-} from 'vitest';
+import { JsonSerializer } from '../core/serializers/json-serializer';
 import {
   closeServer,
   getListenersWithOptions,
@@ -25,7 +27,6 @@ import {
   stopServer,
   waitForClientToConnectToServer,
 } from './websocket-test-utils';
-import { JsonSerializer } from '../serializers/json-serializer';
 
 describe('Testsuite for Websocket', () => {
   const port: number = process.env.PORT ? parseInt(process.env.PORT) : 41337;

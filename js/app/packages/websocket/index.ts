@@ -1,13 +1,15 @@
-export type { Backoff } from './backoff/backoff';
-export { ConstantBackoff } from './backoff/constant-backoff';
-export { ExponentialBackoff } from './backoff/exponential-backoff';
-export { LinearBackoff } from './backoff/linear-backoff';
-export { ArrayQueue } from './queue/array-queue';
-export type { Queue } from './queue/queue';
-export { RingQueue } from './queue/ring-queue';
-export { Websocket } from './websocket';
-export type { WebsocketBuffer } from './websocket-buffer';
-export { WebsocketBuilder } from './websocket-builder';
+export type { Backoff } from './core/backoff/backoff';
+export { ConstantBackoff } from './core/backoff/constant-backoff';
+export { ExponentialBackoff } from './core/backoff/exponential-backoff';
+export { LinearBackoff } from './core/backoff/linear-backoff';
+export { ArrayQueue } from './core/queue/array-queue';
+export type { Queue } from './core/queue/queue';
+export { RingQueue } from './core/queue/ring-queue';
+export { BebopSerializer } from './core/serializers/bebop-serializer';
+export { JsonSerializer } from './core/serializers/json-serializer';
+export { Websocket } from './core/websocket';
+export type { WebsocketBuffer } from './core/websocket-buffer';
+export { WebsocketBuilder } from './core/websocket-builder';
 export {
   type ReconnectEventDetail,
   type RetryEventDetail,
@@ -18,12 +20,13 @@ export {
   type WebsocketEventListeners,
   type WebsocketEventListenerWithOptions,
   type WebsocketEventMap,
-} from './websocket-event';
-export type { WebsocketOptions } from './websocket-options';
-export type { WebsocketConnectionRetryOptions } from './websocket-retry-options';
+} from './core/websocket-event';
+export type { WebsocketOptions } from './core/websocket-options';
+export type { WebsocketConnectionRetryOptions } from './core/websocket-retry-options';
 export {
-  createWebsocketEventEffect,
-  createSocketEffect,
-  createWebsocketEventEffects,
   createReconnectEffect,
+  createSocketEffect,
+  createWebsocketEventEffect,
+  createWebsocketEventEffects,
 } from './solid/socket-effect';
+export { createWebsocketStateSignal } from './solid/state-signal';

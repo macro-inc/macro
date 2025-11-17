@@ -5,6 +5,10 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { createCallback } from '@solid-primitives/rootless';
+import { ConstantBackoff, WebsocketBuilder } from '@websocket';
+import { JsonSerializer } from '@websocket/serializers/json-serializer';
+import { createSocketEffect } from '@websocket/solid/socket-effect';
+import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
 // import {
 //   authPlugin,
 //   createDurableSocket,
@@ -18,10 +22,6 @@ import { createRoot, createSignal } from 'solid-js';
 import type { StreamError } from './generated/schemas';
 import type { FromWebSocketMessage } from './generated/schemas/fromWebSocketMessage';
 import type { ToWebSocketMessage } from './generated/schemas/toWebSocketMessage';
-import { JsonSerializer } from '@websocket/serializers/json-serializer';
-import { ConstantBackoff, WebsocketBuilder } from '@websocket';
-import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
-import { createSocketEffect } from '@websocket/solid/socket-effect';
 
 export type { StreamError, FromWebSocketMessage, ToWebSocketMessage };
 

@@ -121,7 +121,10 @@ export type WebsocketEventListener<
   K extends WebsocketEvent,
   Send = WebsocketData,
   Receive = WebsocketData,
-> = (instance: Websocket<Send, Receive>, ev: WebsocketEventMap<Receive>[K]) => unknown;
+> = (
+  instance: Websocket<Send, Receive>,
+  ev: WebsocketEventMap<Receive>[K]
+) => unknown;
 
 export type WebsocketEventListenerParams<
   K extends WebsocketEvent,

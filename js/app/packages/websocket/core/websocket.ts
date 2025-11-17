@@ -1,29 +1,33 @@
-import { Backoff } from './backoff/backoff';
-import { WebsocketBuffer } from './websocket-buffer';
+import { match, P } from 'ts-pattern';
+import type { Backoff } from './backoff/backoff';
+import { browserWebSocketFactory } from './platform/minimal-websocket';
+import type { WebsocketBuffer } from './websocket-buffer';
 import { WebsocketConnectionState } from './websocket-connection-state';
 import {
-  HeartbeatEventDetail,
-  HeartbeatMissedEventDetail,
-  ReconnectEventDetail,
-  RetryEventDetail,
+  type HeartbeatEventDetail,
+  type HeartbeatMissedEventDetail,
+  type ReconnectEventDetail,
+  type RetryEventDetail,
   WebsocketEvent,
-  WebsocketEventListener,
-  WebsocketEventListenerOptions,
-  WebsocketEventListeners,
-  WebsocketEventListenerWithOptions,
-  WebsocketEventMap,
-  WebsocketEventUnion,
+  type WebsocketEventListener,
+  type WebsocketEventListenerOptions,
+  type WebsocketEventListeners,
+  type WebsocketEventListenerWithOptions,
+  type WebsocketEventMap,
+  type WebsocketEventUnion,
 } from './websocket-event';
 import { isRequiredHeartbeatOptions } from './websocket-heartbeat-options';
-import { WebsocketOptions } from './websocket-options';
-import { match, P } from 'ts-pattern';
+import type { WebsocketOptions } from './websocket-options';
 import {
   deserializeIfNeeded,
   serializeIfNeeded,
-  WebsocketData,
+  type WebsocketData,
 } from './websocket-serializer';
-import { isString, resolveUrl, UrlResolver } from './websocket-url-resolver';
-import { browserWebSocketFactory } from './platform/minimal-websocket';
+import {
+  isString,
+  resolveUrl,
+  type UrlResolver,
+} from './websocket-url-resolver';
 
 /**
  * A websocket wrapper that can be configured to reconnect automatically and buffer messages when the websocket is not connected.
@@ -320,7 +324,6 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
     const factory = this._options.factory ?? browserWebSocketFactory;
     const newSocket = factory(this.url, this.protocols); // create new browser-native websocket and add all event listeners
     this._underlyingWebsocket = newSocket;
-    this._underlyingWebsocket.binaryType = 'arraybuffer';
     this._underlyingWebsocket.addEventListener(
       WebsocketEvent.open,
       this.handleOpenEvent
@@ -337,6 +340,10 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
       WebsocketEvent.message,
       this.handleMessageEvent
     );
+
+    if (this._options.binaryType !== undefined) {
+      this._underlyingWebsocket.binaryType = this._options.binaryType;
+    }
 
     return this._underlyingWebsocket;
   }
@@ -463,7 +470,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
       type,
       // Internal event handles have not yet deserialized the data
       // thus here it is WebsocketData and not Receive
-    } as WebsocketEventUnion<WebsocketData>
+    } as WebsocketEventUnion<WebsocketData>;
 
     match(eventWithType)
       .with({ type: WebsocketEvent.close }, () => {

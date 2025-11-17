@@ -1,5 +1,5 @@
+import type { WebSocketFactory } from '../platform/minimal-websocket';
 import type { Backoff } from './backoff/backoff';
-import type { WebSocketFactory } from './platform/minimal-websocket';
 import { Websocket } from './websocket';
 import type { WebsocketBuffer } from './websocket-buffer';
 import {
@@ -13,7 +13,7 @@ import type {
   WebsocketData,
   WebsocketSerializer,
 } from './websocket-serializer';
-import { UrlResolver } from './websocket-url-resolver';
+import type { UrlResolver } from './websocket-url-resolver';
 
 /**
  * Builder for websockets.
@@ -182,7 +182,9 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
   public withSerializer<NewSend, NewReceive>(
     serializer: WebsocketSerializer<NewSend, NewReceive>
   ): WebsocketBuilder<NewSend, NewReceive> {
-    const newBuilder = new WebsocketBuilder<NewSend, NewReceive>(this._urlResolver);
+    const newBuilder = new WebsocketBuilder<NewSend, NewReceive>(
+      this._urlResolver
+    );
     newBuilder._protocols = this._protocols;
     newBuilder._options = {
       retry: this._options?.retry,
@@ -197,8 +199,6 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
     }
 
     return newBuilder;
-
-
   }
 
   /**
@@ -210,7 +210,15 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
     return this._options?.buffer;
   }
 
-  public withBinaryType(binaryType: BinaryType): WebsocketBuilder<Send, Receive> {
+  /**
+   * Sets the binaryType of the websocket.
+   *
+   * @param binaryType to set.
+   * @returns the builder itself.
+   */
+  public withBinaryType(
+    binaryType: BinaryType
+  ): WebsocketBuilder<Send, Receive> {
     this._options = {
       ...this._options,
       binaryType,
@@ -371,15 +379,11 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
    * @return a new websocket, with the set options
    */
   public build(): Websocket<Send, Receive> {
-    const ws =  new Websocket<Send, Receive>(
+    const ws = new Websocket<Send, Receive>(
       this._urlResolver,
       this._protocols,
       this._options as WebsocketOptions<Send, Receive>
     ); // instantiate the websocket with the set options
-
-    if (this._binaryType !== undefined) {
-      ws.binaryType = this._binaryType;
-    }
 
     return ws;
   }

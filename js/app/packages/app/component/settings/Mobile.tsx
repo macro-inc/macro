@@ -232,7 +232,10 @@ export function useMobileEffect() {
 
   App.addListener('resume', () => {
     const wsState = state();
-    if (wsState === WebsocketConnectionState.Closed || wsState === WebsocketConnectionState.Closing)
+    if (
+      wsState === WebsocketConnectionState.Closed ||
+      wsState === WebsocketConnectionState.Closing
+    )
       ws.reconnect();
   });
 

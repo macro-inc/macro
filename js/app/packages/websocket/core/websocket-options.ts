@@ -1,4 +1,4 @@
-import { WebSocketFactory } from './platform/minimal-websocket';
+import type { WebSocketFactory } from '../platform/minimal-websocket';
 import type { WebsocketBuffer } from './websocket-buffer';
 import type { WebsocketEventListeners } from './websocket-event';
 import type { WebsocketHeartbeatOptions } from './websocket-heartbeat-options';
@@ -44,8 +44,8 @@ export interface WebsocketOptions<
   readonly serializer?: WebsocketSerializer<Send, Receive>;
 
   /**
-  * The factory to use to create the websocket.
-  * Can be browser-native or a custom implementation.
-  */
+   * The factory to use to create the websocket.
+   * Can be browser-native or a custom implementation.
+   */
   readonly factory?: WebSocketFactory;
 }

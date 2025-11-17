@@ -1,18 +1,18 @@
 import {
-  ConstantBackoff,
-  Websocket,
-  WebsocketBuilder,
-  WebsocketEvent,
-  WebsocketEventListenerParams,
-} from '../';
-import {
-  describe,
-  test,
+  afterEach,
   beforeAll,
   beforeEach,
-  afterEach,
+  describe,
   expect,
+  test,
 } from 'vitest';
+import {
+  ConstantBackoff,
+  type Websocket,
+  WebsocketBuilder,
+  WebsocketEvent,
+  type WebsocketEventListenerParams,
+} from '../';
 import {
   startServerWithHeartbeat,
   stopClient,
@@ -49,7 +49,8 @@ describe('Testsuite for Websocket with Heartbeat', () => {
     await startServerWithHeartbeat(0, serverTimeout).then((s) => {
       server = s;
       const address = server.address();
-      const port = typeof address === 'object' && address !== null ? address.port : 41338;
+      const port =
+        typeof address === 'object' && address !== null ? address.port : 41338;
       url = `ws://localhost:${port}`;
     });
   }, testTimeout);

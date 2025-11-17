@@ -1,6 +1,8 @@
 export type UrlResolver = string | (() => string | Promise<string>);
 
-export function isThunk(url: UrlResolver): url is (() => string) | (() => Promise<string>) {
+export function isThunk(
+  url: UrlResolver
+): url is (() => string) | (() => Promise<string>) {
   return typeof url === 'function';
 }
 

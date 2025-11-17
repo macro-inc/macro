@@ -1,4 +1,4 @@
-import { Backoff } from './backoff/backoff';
+import type { Backoff } from './backoff/backoff';
 
 /**
  * Options for the websockets retry-strategy.

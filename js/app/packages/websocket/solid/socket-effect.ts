@@ -1,7 +1,7 @@
 import type { ObjectLike } from '@core/util/maybeResult';
-import type { Websocket } from '@websocket/websocket';
-import { WebsocketEvent } from '@websocket/websocket-event';
 import { getOwner, onCleanup } from 'solid-js';
+import type { Websocket } from '../core/websocket';
+import { WebsocketEvent } from '../core/websocket-event';
 
 export function createWebsocketEventEffect<
   EventType extends string,
@@ -33,11 +33,14 @@ export function createWebsocketEventEffect<
   }
 }
 
-export function createSocketEffect<Receive>(
-  ws: Websocket<any, Receive>,
+export function createSocketEffect<Send, Receive>(
+  ws: Websocket<Send, Receive>,
   callback: (data: Receive) => void
 ) {
-  const messageHandler = (instance: Websocket, e: MessageEvent<Receive>) => {
+  const messageHandler = (
+    _: Websocket<Send, Receive>,
+    e: MessageEvent<Receive>
+  ) => {
     const data = e.data;
     callback(data);
   };

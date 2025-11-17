@@ -1,5 +1,5 @@
+import { describe, expect, test } from 'vitest';
 import { RingQueue } from '../../';
-import { describe, test, expect } from 'vitest';
 
 describe('Testsuite for RingQueue', () => {
   test('Initialization should throw on negative capacity', () => {

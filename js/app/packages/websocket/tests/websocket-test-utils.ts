@@ -1,11 +1,6 @@
-import { WebSocketServer, WebSocket } from 'ws';
-import {
-  Websocket,
-} from '../';
-import {
-  WebsocketEvent,
-  WebsocketEventListenerWithOptions,
-} from '../';
+import { WebSocket, WebSocketServer } from 'ws';
+import type { Websocket } from '../';
+import { WebsocketEvent, type WebsocketEventListenerWithOptions } from '../';
 
 /**
  * Creates a promise that will be rejected after the given amount of milliseconds. The error will be a TimeoutError.
@@ -45,7 +40,10 @@ export const stopClient = (
  * @param port the port to start the server on
  * @param timeout the amount of milliseconds to wait before rejecting
  */
-export const startServer = (port: number, timeout: number): Promise<WebSocketServer> =>
+export const startServer = (
+  port: number,
+  timeout: number
+): Promise<WebSocketServer> =>
   new Promise((resolve, reject) => {
     rejectAfter(timeout, 'failed to start server').catch((err) => reject(err));
     const wss = new WebSocketServer({ port });
@@ -138,7 +136,7 @@ export const closeServer = (wss: WebSocketServer | undefined) => {
   if (wss === undefined) return;
   wss.clients.forEach((client) => client.terminate());
   wss.close();
-}
+};
 
 export type WebsocketServerWithHeartbeat = WebSocketServer & {
   setRespondToPings: (value: boolean) => void;
@@ -149,13 +147,16 @@ export type WebsocketServerWithHeartbeat = WebSocketServer & {
  * @param port the port to start the server on
  * @param timeout the amount of milliseconds to wait before rejecting
  */
-export const startServerWithHeartbeat = (port: number, timeout: number): Promise<WebsocketServerWithHeartbeat> =>
+export const startServerWithHeartbeat = (
+  port: number,
+  timeout: number
+): Promise<WebsocketServerWithHeartbeat> =>
   new Promise((resolve, reject) => {
     rejectAfter(timeout, 'failed to start server').catch((err) => reject(err));
     const wss = new WebSocketServer({ port });
-    
+
     let respondToPings = true;
-    
+
     wss.on('connection', (ws) => {
       ws.on('message', (message) => {
         if (message.toString() === 'ping' && respondToPings) {
@@ -163,11 +164,11 @@ export const startServerWithHeartbeat = (port: number, timeout: number): Promise
         }
       });
     });
-    
+
     (wss as any).setRespondToPings = (value: boolean) => {
       respondToPings = value;
     };
-    
+
     wss.on('listening', () => resolve(wss as any));
     wss.on('error', (err) => reject(err));
   });

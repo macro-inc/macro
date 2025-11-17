@@ -15,6 +15,16 @@ import { isErr as isChaseError } from '@core/util/maybeResult';
 import { storageServiceClient } from '@service-storage/client';
 import { createEventBus } from '@solid-primitives/event-bus';
 import { raceTimeout, until } from '@solid-primitives/promise';
+import { ConstantBackoff, WebsocketBuilder } from '@websocket';
+import { BebopSerializer } from '@websocket/serializers/bebop-serializer';
+import {
+  createReconnectEffect,
+  createSocketEffect,
+} from '@websocket/solid/socket-effect';
+import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
+import { untilMessage } from '@websocket/solid/until-message';
+import { WebsocketConnectionState } from '@websocket/websocket-connection-state';
+import type { UrlResolver } from '@websocket/websocket-url-resolver';
 import { encodeFrontiers, type Frontiers } from 'loro-crdt';
 import { err, ok, type Result, ResultAsync } from 'neverthrow';
 import { createStore } from 'solid-js/store';
@@ -24,12 +34,6 @@ import {
   type RemoteSnapshot,
   type RemoteUpdateSince,
 } from './generated/schema';
-import { WebsocketConnectionState } from '@websocket/websocket-connection-state';
-import { BebopSerializer } from '@websocket/serializers/bebop-serializer';
-import { ConstantBackoff, WebsocketBuilder } from '@websocket';
-import { untilMessage } from '@websocket/solid/until-message';
-import { createReconnectEffect, createSocketEffect } from '@websocket/solid/socket-effect';
-import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
 
 const SYNC_SERVICE_WS_URL = `${SYNC_SERVICE_HOSTS['ws']}/document`;
 
@@ -52,7 +56,7 @@ function createSyncServiceSocket(documentId: string, token: string) {
   /**
    * Refetches the token if it is expired
    */
-  const getUrl = async () => {
+  const getUrl: UrlResolver = async () => {
     const response =
       await storageServiceClient.permissionsTokens.createPermissionToken({
         document_id: documentId,
@@ -71,6 +75,7 @@ function createSyncServiceSocket(documentId: string, token: string) {
   return new WebsocketBuilder(getUrl)
     .withSerializer(new BebopSerializer(FromPeer, FromRemote))
     .withBackoff(new ConstantBackoff(500))
+    .withMaxRetries(20)
     .withHeartbeat({
       interval: 1_000,
       timeout: 1_000,

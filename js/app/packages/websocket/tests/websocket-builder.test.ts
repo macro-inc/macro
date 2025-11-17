@@ -1,7 +1,10 @@
+import { describe, expect, test, vi } from 'vitest';
+import type {
+  WebsocketBuffer,
+  WebsocketEvent,
+  WebsocketEventListenerWithOptions,
+} from '../';
 import { ArrayQueue, ConstantBackoff, Websocket, WebsocketBuilder } from '../';
-import { WebsocketBuffer } from '../';
-import { WebsocketEvent, WebsocketEventListenerWithOptions } from '../';
-import { vi, describe, test, expect } from 'vitest';
 
 describe('Testsuite for WebSocketBuilder', () => {
   const url = 'ws://localhost:8080';

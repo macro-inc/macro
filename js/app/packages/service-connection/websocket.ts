@@ -6,13 +6,13 @@ import { fetchToken } from '@core/util/fetchWithToken';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { createCallback } from '@solid-primitives/rootless';
 import {
-    createSocketEffect,
+  createSocketEffect,
+  JsonSerializer,
   LinearBackoff,
   WebsocketBuilder,
-} from '@websocket/index';
-import type { ToWebsocketMessage } from './generated/schemas/toWebsocketMessage';
-import { JsonSerializer } from '@websocket/serializers/json-serializer';
+} from '@websocket';
 import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
+import type { ToWebsocketMessage } from './generated/schemas/toWebsocketMessage';
 
 const wsHost: string = SERVER_HOSTS['connection-gateway'];
 
@@ -33,7 +33,6 @@ async function resolveWsUrl() {
   await fetchToken();
   return wsHost;
 }
-
 
 export const ws = new WebsocketBuilder(resolveWsUrl)
   .withSerializer(

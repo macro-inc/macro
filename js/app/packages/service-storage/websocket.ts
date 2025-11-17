@@ -1,7 +1,7 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import {
   ConstantBackoff,
-  Websocket,
+  type Websocket,
   WebsocketBuilder,
   WebsocketEvent,
 } from '@websocket';
@@ -19,21 +19,6 @@ const HEARTBEAT_INTERVAL = 300000;
  * The time in milliseconds to wait for a heartbeat response from the server after the heartbeat is sent.
  */
 const HEARTBEAT_TIMEOUT = 5000;
-
-// export const ws = createDurableSocket(
-//   SERVER_HOSTS['websocket-service'],
-//   {
-//     retries: 5,
-//     delay: 1500,
-//   },
-//   [
-//     heartbeatPlugin({
-//       message: JSON.stringify({ action: 'wsping' }),
-//       wait: HEARTBEAT_TIMEOUT,
-//       interval: HEARTBEAT_INTERVAL,
-//     }),
-//   ]
-// );
 
 export const ws = new WebsocketBuilder(SERVER_HOSTS['websocket-service'])
   .withBackoff(new ConstantBackoff(1500))
@@ -74,7 +59,10 @@ export function createWebSocketJob<T, R, D, U>({
     const requestId = uuidv7();
 
     // TODO: use zod types
-    const messageHandler = async (_instance: Websocket, event: MessageEvent) => {
+    const messageHandler = async (
+      _instance: Websocket,
+      event: MessageEvent
+    ) => {
       if (event.data === 'pong') return;
       const eventMessage = JSON.parse(event.data);
 

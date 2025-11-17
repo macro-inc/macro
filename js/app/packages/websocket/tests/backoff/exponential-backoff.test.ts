@@ -1,5 +1,5 @@
+import { describe, expect, test } from 'vitest';
 import { ExponentialBackoff } from '../../';
-import { describe, test, expect } from 'vitest';
 
 describe('Testsuite for ExponentialBackoff', () => {
   test('Initialization should throw on negative base', () => {

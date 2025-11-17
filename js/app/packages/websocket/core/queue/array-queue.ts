@@ -1,4 +1,4 @@
-import { Queue } from './queue';
+import type { Queue } from './queue';
 
 /**
  * An array queue is a queue that has an unbounded capacity. Reading from an array queue

@@ -1,4 +1,4 @@
-import { Backoff } from './backoff';
+import type { Backoff } from './backoff';
 
 /**
  * LinearBackoff returns a backoff-time that is incremented by a fixed amount
