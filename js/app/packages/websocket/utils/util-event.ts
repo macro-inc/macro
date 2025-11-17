@@ -1,4 +1,8 @@
-import { type Websocket, WebsocketEvent, type WebsocketEventMap } from '@websocket';
+import {
+  type Websocket,
+  WebsocketEvent,
+  type WebsocketEventMap,
+} from '@websocket';
 
 export async function untilEvent<Send, Receive, K extends WebsocketEvent>(
   ws: Websocket<Send, Receive>,

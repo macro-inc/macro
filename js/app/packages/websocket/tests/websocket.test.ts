@@ -1,3 +1,4 @@
+import { untilEvent } from '@websocket/utils/util-event';
 import {
   afterEach,
   beforeAll,
@@ -27,7 +28,6 @@ import {
   stopServer,
   waitForClientToConnectToServer,
 } from './websocket-test-utils';
-import { untilEvent } from '@websocket/utils/util-event';
 
 describe('Testsuite for Websocket', () => {
   const port: number = process.env.PORT ? parseInt(process.env.PORT) : 41337;

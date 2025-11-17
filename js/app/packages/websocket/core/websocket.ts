@@ -8,6 +8,7 @@ import {
   type HeartbeatMissedEventDetail,
   type ReconnectEventDetail,
   type RetryEventDetail,
+  type UrlResolvedEventDetail,
   WebsocketEvent,
   type WebsocketEventListener,
   type WebsocketEventListenerOptions,
@@ -15,7 +16,6 @@ import {
   type WebsocketEventListenerWithOptions,
   type WebsocketEventMap,
   type WebsocketEventUnion,
-  UrlResolvedEventDetail,
 } from './websocket-event';
 import { isRequiredHeartbeatOptions } from './websocket-heartbeat-options';
 import type { WebsocketOptions } from './websocket-options';
@@ -246,7 +246,6 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
     }
 
     this._binaryType = value;
-
   }
 
   /**
@@ -264,7 +263,8 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
     let data = serializeIfNeeded(rawData, this._options.serializer);
 
     if (
-      this._underlyingWebsocket && this._underlyingWebsocket.readyState === this._underlyingWebsocket.OPEN
+      this._underlyingWebsocket &&
+      this._underlyingWebsocket.readyState === this._underlyingWebsocket.OPEN
     ) {
       this._underlyingWebsocket.send(data); // websocket is connected, send data
     } else if (this.buffer !== undefined) {
