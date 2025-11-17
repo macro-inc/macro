@@ -98,7 +98,7 @@ function openAuthPopup(idpName: string, returnUrl: string): Window | null {
  *
  * @returns The broadcast channel.
  */
-function getOrCreateAuthChannel(): BroadcastChannel {
+export function getOrCreateAuthChannel(): BroadcastChannel {
   let channel = broadcastChannels().get(AUTH_CHANNEL);
   if (!channel) {
     channel = new BroadcastChannel(AUTH_CHANNEL);

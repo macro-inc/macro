@@ -1,14 +1,14 @@
+import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
+import { withAnalytics } from '@coparse/analytics';
 import { useNavigate } from '@solidjs/router';
 import { createEffect, createSignal, on } from 'solid-js';
-import { type CheckoutState, useCheckout } from './subscription';
+import { match } from 'ts-pattern';
 import {
   type EmailAuthenticationState,
   useEmailInitializeAndPoll,
   useSignUpAndConnectEmail,
 } from './email-link';
-import { withAnalytics } from '@coparse/analytics';
-import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
-import { match } from 'ts-pattern';
+import { type CheckoutState, useCheckout } from './subscription';
 
 type OnboardingState =
   | { step: 'needs_auth'; authenticating: boolean }

@@ -201,7 +201,10 @@
       ],
       "@app/*": [
         "./packages/app/*"
-      ]
+      ],
+      "@testing-utils": [
+        "./packages/testing-utils"
+      ],
     },
     "rootDir": ".",
     "outDir": "./dist"
