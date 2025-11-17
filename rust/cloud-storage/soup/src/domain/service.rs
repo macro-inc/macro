@@ -179,18 +179,23 @@ where
 
     async fn handle_frecency_cursor(
         &self,
-        #[expect(unused_variables)] from_value: Option<(f64, Option<EntityFilterAst>)>,
+        from_value: Option<(f64, Option<EntityFilterAst>)>,
         soup_type: SoupType,
         user: MacroUserIdStr<'static>,
         limit: u16,
     ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+        let (from_score, filters) = match from_value {
+            None => (None, None),
+            Some((s, f)) => (Some(s), f),
+        };
+
         let res = self
             .frecency
             .get_frecency_page(FrecencyPageRequest {
                 user_id: user.copied(),
-                from_score: None,
+                from_score,
                 limit: limit as u32,
-                filters: None,
+                filters,
             })
             .await?;
 
