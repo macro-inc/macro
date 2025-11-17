@@ -51,21 +51,17 @@ function InlinePropertyValue(props: {
   property: any;
   displayValue: string | null;
 }) {
-  const { openModal } = usePropertiesContext();
+  const { openDatePicker, openPropertyEditor } = usePropertiesContext();
 
   const handleClick = (e: MouseEvent) => {
     if (props.property.valueType === 'DATE') {
-      openModal('date-picker', props.property, e.currentTarget as HTMLElement);
+      openDatePicker(props.property, e.currentTarget as HTMLElement);
     } else if (
       props.property.valueType === 'SELECT_STRING' ||
       props.property.valueType === 'SELECT_NUMBER' ||
       props.property.valueType === 'ENTITY'
     ) {
-      openModal(
-        'edit-property',
-        props.property,
-        e.currentTarget as HTMLElement
-      );
+      openPropertyEditor(props.property, e.currentTarget as HTMLElement);
     }
   };
 
@@ -99,7 +95,7 @@ function InlineEntityValue(props: {
   canEdit: boolean;
   onRefresh: () => void;
 }) {
-  const { openModal } = usePropertiesContext();
+  const { openPropertyEditor } = usePropertiesContext();
   const entities = () =>
     (props.property.value as EntityReference[] | undefined) ?? [];
 
@@ -110,7 +106,7 @@ function InlineEntityValue(props: {
       return;
     }
     // Always allow clicking to open modal, even for metadata properties
-    openModal('edit-property', props.property, e.currentTarget as HTMLElement);
+    openPropertyEditor(props.property, e.currentTarget as HTMLElement);
   };
 
   // For inline display, we want entity values to be clickable

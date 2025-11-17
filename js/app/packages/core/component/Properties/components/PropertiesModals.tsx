@@ -16,50 +16,66 @@ export const PropertiesModals: Component = () => {
     onPropertyAdded,
     properties,
     onRefresh,
-    closeModal,
-    isModalOpen,
-    getModalData,
-    getModalAnchor,
+    propertySelectorModal,
+    propertyEditorModal,
+    datePickerModal,
+    createPropertyModal,
+    closePropertySelector,
+    closePropertyEditor,
+    closeDatePicker,
+    closeCreateProperty,
   } = usePropertiesContext();
 
   const existingPropertyIds = createMemo(() => {
     return properties().map((prop) => prop.propertyDefinitionId);
   });
 
-  const handlePropertyAdded = () => {
-    onPropertyAdded();
-    closeModal();
-  };
-
   const handlePropertySaved = () => {
     onRefresh();
-    closeModal();
+    closePropertyEditor();
+  };
+
+  const handleDateSaved = async (newDate: Date, property: Property) => {
+    const success = await savePropertyValue(
+      blockId,
+      property,
+      { valueType: 'DATE', value: newDate.toISOString() },
+      entityType
+    );
+    if (success) {
+      onRefresh();
+    }
+    closeDatePicker();
+  };
+
+  const handlePropertyCreated = () => {
+    onPropertyAdded();
+    closeCreateProperty();
   };
 
   return (
     <>
-      <Show when={isModalOpen('add-property')}>
+      <Show when={propertySelectorModal()}>
         <PropertySelector
           isOpen={true}
-          onClose={closeModal}
+          onClose={closePropertySelector}
           existingPropertyIds={existingPropertyIds()}
         />
       </Show>
 
-      <Show when={isModalOpen('edit-property') && getModalData()}>
-        {(property) => {
-          const anchor = getModalAnchor();
-          const position = anchor
+      <Show when={propertyEditorModal()}>
+        {(state) => {
+          const position = state().anchor
             ? {
-                top: anchor.getBoundingClientRect().top,
-                left: anchor.getBoundingClientRect().left,
+                top: state().anchor!.getBoundingClientRect().top,
+                left: state().anchor!.getBoundingClientRect().left,
               }
             : undefined;
 
           return (
             <PropertyEditor
-              property={property() as Property}
-              onClose={closeModal}
+              property={state().property}
+              onClose={closePropertyEditor}
               onSaved={handlePropertySaved}
               position={position}
               entityType={entityType}
@@ -68,45 +84,32 @@ export const PropertiesModals: Component = () => {
         }}
       </Show>
 
-      <Show
-        when={isModalOpen('date-picker') && getModalAnchor() && getModalData()}
-      >
-        {(modalData) => {
-          const property = modalData() as Property;
-          const dateValue =
-            property.valueType === 'DATE' && property.value
-              ? new Date(property.value)
-              : new Date();
+      <Show when={datePickerModal()}>
+        {(state) => {
+          const property = state().property;
+          const dateValue = property.value
+            ? new Date(property.value)
+            : new Date();
+          const anchor = state().anchor;
 
-          return (
+          return anchor ? (
             <Portal>
               <DatePicker
                 value={dateValue}
-                onChange={async (newDate) => {
-                  const success = await savePropertyValue(
-                    blockId,
-                    property,
-                    { valueType: 'DATE', value: newDate.toISOString() },
-                    entityType
-                  );
-                  if (success) {
-                    onRefresh();
-                  }
-                  closeModal();
-                }}
-                onClose={closeModal}
-                anchorRef={getModalAnchor()!}
+                onChange={(newDate) => handleDateSaved(newDate, property)}
+                onClose={closeDatePicker}
+                anchorRef={anchor}
               />
             </Portal>
-          );
+          ) : null;
         }}
       </Show>
 
-      <Show when={isModalOpen('create-property')}>
+      <Show when={createPropertyModal()}>
         <CreatePropertyModal
           isOpen={true}
-          onClose={closeModal}
-          onPropertyCreated={handlePropertyAdded}
+          onClose={closeCreateProperty}
+          onPropertyCreated={handlePropertyCreated}
         />
       </Show>
     </>
