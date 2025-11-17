@@ -20,7 +20,6 @@ use serde_json::Value;
 struct EmailSearchConfig;
 
 impl SearchQueryConfig for EmailSearchConfig {
-    const ID_KEY: &'static str = "message_id";
     const INDEX: &'static str = EMAIL_INDEX;
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "subject";
@@ -29,15 +28,12 @@ impl SearchQueryConfig for EmailSearchConfig {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
-            SortType::Field(FieldSort::new("thread_id", SortOrder::Asc)),
         ]
     }
 }
 
 struct EmailQueryBuilder {
     inner: SearchQueryBuilder<EmailSearchConfig>,
-    /// thread ids to query over
-    thread_ids: Vec<String>,
     /// link ids to query over
     link_ids: Vec<String>,
     /// The sender of the email message
@@ -54,7 +50,6 @@ impl EmailQueryBuilder {
     pub fn new(terms: Vec<String>) -> Self {
         Self {
             inner: SearchQueryBuilder::new(terms),
-            thread_ids: Vec::new(),
             link_ids: Vec::new(),
             sender: Vec::new(),
             cc: Vec::new(),
@@ -74,11 +69,6 @@ impl EmailQueryBuilder {
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
         fn disable_recency(disable_recency: bool) -> Self;
-    }
-
-    pub fn thread_ids(mut self, thread_ids: Vec<String>) -> Self {
-        self.thread_ids = thread_ids;
-        self
     }
 
     pub fn link_ids(mut self, link_ids: Vec<String>) -> Self {
@@ -111,11 +101,6 @@ impl EmailQueryBuilder {
         let mut bool_query = self.inner.build_bool_query()?;
 
         // CUSTOM ATTRIBUTES SECTION
-
-        // If thread_ids are provided, add them to the query
-        if !self.thread_ids.is_empty() {
-            bool_query.must(QueryType::terms("thread_id", self.thread_ids));
-        }
 
         // If link_ids are provided, add them to the query
         if !self.link_ids.is_empty() {
@@ -160,7 +145,7 @@ impl EmailQueryBuilder {
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 struct EmailIndex {
     /// The id of the email thread
-    pub thread_id: String,
+    pub entity_id: String,
     /// The id of the email message
     pub message_id: String,
     /// The sender of the email message
@@ -207,7 +192,6 @@ pub struct EmailSearchResponse {
 pub struct EmailSearchArgs {
     pub terms: Vec<String>,
     pub user_id: String,
-    pub message_ids: Vec<String>,
     pub thread_ids: Vec<String>,
     pub link_ids: Vec<String>,
     pub sender: Vec<String>,
@@ -230,8 +214,7 @@ impl EmailSearchArgs {
             .page_size(self.page_size)
             .page(self.page)
             .user_id(&self.user_id)
-            .ids(self.message_ids)
-            .thread_ids(self.thread_ids) // Now using the thread_ids parameter
+            .ids(self.thread_ids)
             .link_ids(self.link_ids)
             .sender(self.sender)
             .cc(self.cc)
@@ -274,7 +257,7 @@ pub(crate) async fn search_emails(
         .hits
         .into_iter()
         .map(|hit| EmailSearchResponse {
-            thread_id: hit._source.thread_id,
+            thread_id: hit._source.entity_id,
             message_id: hit._source.message_id,
             subject: hit._source.subject,
             sender: hit._source.sender,

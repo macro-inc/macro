@@ -24,3 +24,5 @@ export const SHARD_SETTINGS =
         number_of_replicas: 0,
         refresh_interval: '30s', // Default is 1s
       };
+
+export const IS_DRY_RUN = process.env.DRY_RUN !== 'false';

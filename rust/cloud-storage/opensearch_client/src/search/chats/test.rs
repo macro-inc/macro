@@ -19,7 +19,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
         "from": 20,
         "size": 20,
         "collapse": {
-            "field": "chat_id"
+            "field": "entity_id"
         },
         "sort": ChatSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
         "highlight": ChatSearchConfig::default_highlight().to_json(),
@@ -58,7 +58,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
                 "should": [
                     {
                         "terms": {
-                            "chat_id": ["chat1", "chat2"]
+                            "entity_id": ["chat1", "chat2"]
                         }
                     },
                     {

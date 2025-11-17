@@ -5,7 +5,6 @@ use opensearch_query_builder::ToOpenSearchJson;
 struct TestSearchConfig;
 
 impl SearchQueryConfig for TestSearchConfig {
-    const ID_KEY: &'static str = "test_id";
     const INDEX: &'static str = "test_index";
     const USER_ID_KEY: &'static str = "test_user_id";
     const TITLE_KEY: &'static str = "test_title";
@@ -31,7 +30,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
         "from": 20,
         "size": 20,
         "collapse": {
-            "field": "test_id"
+            "field": "entity_id"
         },
         "sort": TestSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
         "highlight": TestSearchConfig::default_highlight().to_json(),
@@ -60,19 +59,19 @@ fn test_build_search_request() -> anyhow::Result<()> {
         "aggs": {
             "total_uniques": {
                 "cardinality": {
-                    "field": "test_id"
+                    "field": "entity_id"
                 }
             }
         },
         "collapse": {
-            "field": "test_id"
+            "field": "entity_id"
         },
         "sort": [
             {
                 "_score": "desc"
             },
             {
-                "test_id": "asc"
+                "entity_id": "asc"
             }
         ],
         "highlight": {
@@ -134,14 +133,14 @@ fn test_build_search_request() -> anyhow::Result<()> {
         "from": 20,
         "size": 20,
         "collapse": {
-            "field": "test_id"
+            "field": "entity_id"
         },
         "sort": [
             {
                 "_score": "desc"
             },
             {
-                "test_id": "asc"
+                "entity_id": "asc"
             }
         ],
         "highlight": {
@@ -200,7 +199,7 @@ fn test_build_bool_query() -> anyhow::Result<()> {
             "should": [
                 {
                     "terms": {
-                        "test_id": ["id1", "id2"]
+                        "entity_id": ["id1", "id2"]
                     }
                 },
                 {
@@ -240,7 +239,7 @@ fn test_build_bool_query() -> anyhow::Result<()> {
             "should": [
                 {
                     "terms": {
-                        "test_id": ["id1", "id2"]
+                        "entity_id": ["id1", "id2"]
                     }
                 },
             ],
@@ -309,7 +308,7 @@ fn test_build_bool_query() -> anyhow::Result<()> {
             "should": [
                 {
                     "terms": {
-                        "test_id": ["id1", "id2"]
+                        "entity_id": ["id1", "id2"]
                     }
                 },
             ],

@@ -1,5 +1,5 @@
 {
-	"name": "search-processing-service-helpers",
+	"name": "opensearch-helpers",
 	"version": "0.0.0",
 	"description": "",
 	"scripts": {

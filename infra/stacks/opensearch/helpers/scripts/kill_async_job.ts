@@ -3,7 +3,7 @@
 
 require('dotenv').config();
 
-import { client } from './client';
+import { client } from '../client';
 
 async function cancelTask(taskId: string) {
   const opensearchClient = client();
