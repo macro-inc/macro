@@ -19,13 +19,23 @@ if (typeof window !== 'undefined') {
 }
 
 /**
+ * Normalize BASE_URL to always end with a trailing slash
+ */
+function getBasePath(): string {
+  const base = import.meta.env.BASE_URL;
+  return base.endsWith('/') ? base : `${base}/`;
+}
+
+/**
  * Get the sound file path, trying .wav first, then .mp3
  * @param name - The name of the sound file (without extension)
  */
 function _getSoundPath(name: string): string {
   // Try .wav first, then fallback to .mp3
   // This allows both formats to work seamlessly
-  return `/sounds/${name}.wav`;
+  // Use BASE_URL to respect Vite's base path configuration
+  const base = getBasePath();
+  return `${base}sounds/${name}.wav`;
 }
 
 /**
@@ -46,8 +56,10 @@ export function playSound(name: string, volume?: number): void {
 
   if (!audio) {
     // Try .wav first, fallback to .mp3 if needed
-    const wavPath = `/sounds/${name}.wav`;
-    const mp3Path = `/sounds/${name}.mp3`;
+    // Use BASE_URL to respect Vite's base path configuration
+    const base = getBasePath();
+    const wavPath = `${base}sounds/${name}.wav`;
+    const mp3Path = `${base}sounds/${name}.mp3`;
 
     // Create audio element - try .wav first
     audio = new Audio(wavPath);
@@ -97,11 +109,13 @@ export function preloadSound(name: string): void {
     return;
   }
 
-  const audio = new Audio(`/sounds/${name}.wav`);
+  // Use BASE_URL to respect Vite's base path configuration
+  const base = getBasePath();
+  const audio = new Audio(`${base}sounds/${name}.wav`);
   audio.preload = 'auto';
   audio.addEventListener('error', () => {
     // Fallback to mp3
-    const fallbackAudio = new Audio(`/sounds/${name}.mp3`);
+    const fallbackAudio = new Audio(`${base}sounds/${name}.mp3`);
     fallbackAudio.preload = 'auto';
     soundCache.set(name, fallbackAudio);
   });
