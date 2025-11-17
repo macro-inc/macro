@@ -636,9 +636,6 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
   private handleHeartbeatTimeout() {
     this.missedHeartbeats++;
     if (!isRequiredHeartbeatOptions(this._options?.heartbeat)) {
-      console.warn(
-        'Heartbeat options are not set. Heartbeats will not handle timeout.'
-      );
       return;
     }
 
@@ -678,9 +675,6 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
   private sendHeartbeat() {
     if (!this._underlyingWebsocket || this.closedByUser) return;
     if (!isRequiredHeartbeatOptions(this._options?.heartbeat)) {
-      console.warn(
-        'Heartbeat options are not set. Heartbeats will not be sent.'
-      );
       return;
     }
 
@@ -741,9 +735,6 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
     this.stopHeartbeat();
     this.missedHeartbeats = 0;
     if (!isRequiredHeartbeatOptions(this._options?.heartbeat)) {
-      console.warn(
-        'Heartbeat options are not set. Heartbeats will not be started.'
-      );
       return;
     }
 
