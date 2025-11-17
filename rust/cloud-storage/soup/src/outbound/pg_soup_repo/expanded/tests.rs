@@ -1,7 +1,7 @@
 use crate::outbound::pg_soup_repo::expanded::{
     by_cursor::{expanded_generic_cursor_soup, no_frecency_expanded_generic_soup},
     by_ids::expanded_soup_by_ids,
-    dynamic::expanded_dynamic_cursor_soup,
+    dynamic::{ExpandedDynamicCursorArgs, expanded_dynamic_cursor_soup},
 };
 use item_filters::ast::EntityFilterAst;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -676,10 +676,12 @@ async fn empty_ast_returns_same_as_static_query(db: PgPool) {
     let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     let ast_res = expanded_dynamic_cursor_soup(
         &db,
-        user_id.clone(),
-        20,
-        Query::Sort(SimpleSortMethod::CreatedAt, EntityFilterAst::mock_empty()),
-        false,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.clone(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, EntityFilterAst::mock_empty()),
+            exclude_frecency: false,
+        },
     )
     .await
     .unwrap();
@@ -744,10 +746,12 @@ async fn test_filter_by_document_file_type(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id.copied(),
-        20,
-        Query::Sort(SimpleSortMethod::CreatedAt, filters),
-        false,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
     )
     .await?;
 
@@ -814,10 +818,12 @@ async fn test_filter_by_document_ids(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id.copied(),
-        20,
-        Query::Sort(SimpleSortMethod::CreatedAt, filters),
-        false,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
     )
     .await?;
 
@@ -888,10 +894,12 @@ async fn test_filter_documents_by_project_id(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id.copied(),
-        20,
-        Query::Sort(SimpleSortMethod::CreatedAt, filters),
-        false,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
     )
     .await?;
 
@@ -957,10 +965,12 @@ async fn test_filter_chats_by_project_id(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id.copied(),
-        20,
-        Query::Sort(SimpleSortMethod::CreatedAt, filters),
-        false,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
     )
     .await?;
 
@@ -1029,10 +1039,12 @@ async fn test_filter_by_chat_ids(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id.copied(),
-        20,
-        Query::Sort(SimpleSortMethod::CreatedAt, filters),
-        false,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
     )
     .await?;
 
@@ -1103,10 +1115,12 @@ async fn test_filter_by_project_ids(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id.copied(),
-        20,
-        Query::Sort(SimpleSortMethod::CreatedAt, filters),
-        false,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
     )
     .await?;
 
@@ -1191,10 +1205,12 @@ async fn test_combined_entity_filters(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id.copied(),
-        20,
-        Query::Sort(SimpleSortMethod::CreatedAt, filters),
-        false,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
     )
     .await?;
 
@@ -1274,10 +1290,12 @@ async fn test_multiple_filter_criteria_documents(db: PgPool) -> anyhow::Result<(
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id.copied(),
-        20,
-        Query::Sort(SimpleSortMethod::CreatedAt, filters),
-        false,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
     )
     .await?;
 
@@ -1349,10 +1367,12 @@ async fn test_filters_respect_access_control(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id.copied(),
-        20,
-        Query::Sort(SimpleSortMethod::CreatedAt, filters),
-        false,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
     )
     .await?;
 
@@ -1411,10 +1431,12 @@ async fn test_filter_by_owner(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id.copied(),
-        20,
-        Query::Sort(SimpleSortMethod::CreatedAt, filters),
-        false,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
     )
     .await?;
 
@@ -1474,10 +1496,12 @@ async fn test_filter_non_existent_items(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id.copied(),
-        20,
-        Query::Sort(SimpleSortMethod::CreatedAt, filters),
-        false,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            exclude_frecency: false,
+        },
     )
     .await?;
 
@@ -1534,10 +1558,12 @@ async fn test_cursor_pagination_with_document_filter(db: PgPool) -> anyhow::Resu
     // First page - get 3 items
     let result = expanded_dynamic_cursor_soup(
         &db,
-        user_id.copied(),
-        3,
-        Query::Sort(SimpleSortMethod::CreatedAt, filters.clone()),
-        false,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 3,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters.clone()),
+            exclude_frecency: false,
+        },
     )
     .await?
     .into_iter()
@@ -1566,15 +1592,17 @@ async fn test_cursor_pagination_with_document_filter(db: PgPool) -> anyhow::Resu
 
     let second_page_items = expanded_dynamic_cursor_soup(
         &db,
-        user_id.copied(),
-        3,
-        Query::Cursor(models_pagination::Cursor {
-            id: cursor_decoded.id,
-            limit: cursor_decoded.limit,
-            val: cursor_decoded.val,
-            filter: filters_for_cursor,
-        }),
-        false,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 3,
+            cursor: Query::Cursor(models_pagination::Cursor {
+                id: cursor_decoded.id,
+                limit: cursor_decoded.limit,
+                val: cursor_decoded.val,
+                filter: filters_for_cursor,
+            }),
+            exclude_frecency: false,
+        },
     )
     .await?;
 
@@ -1658,10 +1686,12 @@ async fn test_cursor_pagination_with_combined_filters(db: PgPool) -> anyhow::Res
     // First page - get 2 items
     let result = expanded_dynamic_cursor_soup(
         &db,
-        user_id.copied(),
-        2,
-        Query::Sort(SimpleSortMethod::CreatedAt, filters.clone()),
-        false,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 2,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters.clone()),
+            exclude_frecency: false,
+        },
     )
     .await?
     .into_iter()
@@ -1677,15 +1707,17 @@ async fn test_cursor_pagination_with_combined_filters(db: PgPool) -> anyhow::Res
 
         let second_page_items = expanded_dynamic_cursor_soup(
             &db,
-            user_id.copied(),
-            2,
-            Query::Cursor(models_pagination::Cursor {
-                id: cursor_decoded.id,
-                limit: cursor_decoded.limit,
-                val: cursor_decoded.val,
-                filter: filters_for_cursor,
-            }),
-            false,
+            ExpandedDynamicCursorArgs {
+                user_id: user_id.copied(),
+                limit: 2,
+                cursor: Query::Cursor(models_pagination::Cursor {
+                    id: cursor_decoded.id,
+                    limit: cursor_decoded.limit,
+                    val: cursor_decoded.val,
+                    filter: filters_for_cursor,
+                }),
+                exclude_frecency: false,
+            },
         )
         .await?;
 
@@ -1749,11 +1781,19 @@ async fn test_cursor_pagination_filter_consistency(db: PgPool) -> anyhow::Result
     let page_size: u16 = 2;
 
     loop {
-        let result = expanded_dynamic_cursor_soup(&db, user_id.copied(), page_size, current_query, false)
-            .await?
-            .into_iter()
-            .paginate_on(page_size as usize, SimpleSortMethod::CreatedAt)
-            .into_page();
+        let result = expanded_dynamic_cursor_soup(
+            &db,
+            ExpandedDynamicCursorArgs {
+                user_id: user_id.copied(),
+                limit: page_size,
+                cursor: current_query,
+                exclude_frecency: false,
+            },
+        )
+        .await?
+        .into_iter()
+        .paginate_on(page_size as usize, SimpleSortMethod::CreatedAt)
+        .into_page();
 
         all_items.extend(result.items);
 
@@ -1847,10 +1887,12 @@ async fn test_cursor_pagination_with_single_item_filter(db: PgPool) -> anyhow::R
     // Get first page with limit 5
     let result = expanded_dynamic_cursor_soup(
         &db,
-        user_id.copied(),
-        5,
-        Query::Sort(SimpleSortMethod::CreatedAt, filters.clone()),
-        false,
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 5,
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters.clone()),
+            exclude_frecency: false,
+        },
     )
     .await?
     .into_iter()
@@ -1871,15 +1913,17 @@ async fn test_cursor_pagination_with_single_item_filter(db: PgPool) -> anyhow::R
 
         let second_page_items = expanded_dynamic_cursor_soup(
             &db,
-            user_id.copied(),
-            5,
-            Query::Cursor(models_pagination::Cursor {
-                id: cursor_decoded.id,
-                limit: cursor_decoded.limit,
-                val: cursor_decoded.val,
-                filter: filters_for_cursor,
-            }),
-            false,
+            ExpandedDynamicCursorArgs {
+                user_id: user_id.copied(),
+                limit: 5,
+                cursor: Query::Cursor(models_pagination::Cursor {
+                    id: cursor_decoded.id,
+                    limit: cursor_decoded.limit,
+                    val: cursor_decoded.val,
+                    filter: filters_for_cursor,
+                }),
+                exclude_frecency: false,
+            },
         )
         .await?;
 
@@ -1951,10 +1995,12 @@ async fn test_dynamic_query_with_ast_and_frecency_exclusion(
     // Call with exclude_frecency=true
     let items = expanded_dynamic_cursor_soup(
         &pool,
-        user_id.copied(),
-        20,
-        Query::Sort(SimpleSortMethod::UpdatedAt, filters.clone()),
-        true, // exclude frecency items
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filters.clone()),
+            exclude_frecency: true,
+        },
     )
     .await?;
 
@@ -2002,10 +2048,12 @@ async fn test_dynamic_query_with_ast_and_frecency_exclusion(
     // Now test with exclude_frecency=false to verify both filters work independently
     let items_with_frecency = expanded_dynamic_cursor_soup(
         &pool,
-        user_id.copied(),
-        20,
-        Query::Sort(SimpleSortMethod::UpdatedAt, filters),
-        false, // include frecency items
+        ExpandedDynamicCursorArgs {
+            user_id: user_id.copied(),
+            limit: 20,
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filters),
+            exclude_frecency: false,
+        },
     )
     .await?;
 

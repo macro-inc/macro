@@ -427,14 +427,30 @@ impl SoupRow {
     }
 }
 
-#[tracing::instrument(skip(db, limit))]
-pub async fn expanded_dynamic_cursor_soup(
+#[derive(Debug)]
+pub(crate) struct ExpandedDynamicCursorArgs<'a> {
+    /// the user for which we are performing the query
+    pub user_id: MacroUserIdStr<'a>,
+    /// the limit of items we can return
+    pub limit: u16,
+    /// the Query that we are attempting to perform
+    pub cursor: Query<String, SimpleSortMethod, EntityFilterAst>,
+    /// whether or not the query should explicitly remove items that DO have
+    /// frecency records
+    pub exclude_frecency: bool,
+}
+
+#[tracing::instrument(skip(db), err)]
+pub(crate) async fn expanded_dynamic_cursor_soup(
     db: &PgPool,
-    user_id: MacroUserIdStr<'_>,
-    limit: u16,
-    cursor: Query<String, SimpleSortMethod, EntityFilterAst>,
-    exclude_frecency: bool,
+    args: ExpandedDynamicCursorArgs<'_>,
 ) -> Result<Vec<SoupItem>, sqlx::Error> {
+    let ExpandedDynamicCursorArgs {
+        user_id,
+        limit,
+        cursor,
+        exclude_frecency,
+    } = args;
     let query_limit = limit as i64;
     let sort_method_str = cursor.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = cursor.vals();

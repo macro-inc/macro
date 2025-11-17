@@ -1,6 +1,9 @@
-use crate::domain::{
-    models::{AdvancedSortParams, SimpleSortQuery, SimpleSortRequest},
-    ports::SoupRepo,
+use crate::{
+    domain::{
+        models::{AdvancedSortParams, SimpleSortQuery, SimpleSortRequest},
+        ports::SoupRepo,
+    },
+    outbound::pg_soup_repo::expanded::dynamic::ExpandedDynamicCursorArgs,
 };
 use either::Either;
 use models_soup::item::SoupItem;
@@ -32,20 +35,24 @@ impl SoupRepo for PgSoupRepo {
                 Either::Left(Either::Left(
                     expanded::dynamic::expanded_dynamic_cursor_soup(
                         &self.inner,
-                        req.user_id,
-                        req.limit,
-                        query.map_filter(|(_, ast)| ast),
-                        true, // exclude frecency items
+                        ExpandedDynamicCursorArgs {
+                            user_id: req.user_id,
+                            limit: req.limit,
+                            cursor: query.map_filter(|(_, ast)| ast),
+                            exclude_frecency: true,
+                        },
                     ),
                 ))
             }
             SimpleSortQuery::ItemsFilter(ast) => Either::Left(Either::Right(
                 expanded::dynamic::expanded_dynamic_cursor_soup(
                     &self.inner,
-                    req.user_id,
-                    req.limit,
-                    ast,
-                    false, // include frecency items
+                    ExpandedDynamicCursorArgs {
+                        user_id: req.user_id,
+                        limit: req.limit,
+                        cursor: ast,
+                        exclude_frecency: false,
+                    },
                 ),
             )),
             SimpleSortQuery::FilterFrecency(f) => Either::Right(Either::Left(
