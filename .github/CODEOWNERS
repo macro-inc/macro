@@ -6,13 +6,15 @@
 /rust/cloud-storage/ses_client/ @whutchinson98
 /rust/cloud-storage/sns_client/ @whutchinson98
 /rust/cloud-storage/secretsmanager_client/ @whutchinson98
-/rust/cloud-storage/opensearch_client/ @whutchinson98
+/rust/cloud-storage/opensearch_client/ @whutchinson98 @gbirman
 /rust/cloud-storage/search_processing_service/ @whutchinson98
 /rust/cloud-storage/search_service/ @whutchinson98 @gbirman
 /rust/cloud-storage/models_search/ @whutchinson98 @gbirman
 /rust/cloud-storage/models_notification/ @whutchinson98
 /rust/cloud-storage/macro_db_client/ @whutchinson98 @evanhutnik @seanaye @gbirman
 /infra/ @whutchinson98
+
+/infra/stacks/opensearch/helpers @whutchinson98 @gbirman
 
 /rust/cloud-storage/email_db_client @evanhutnik
 /rust/cloud-storage/email_service @evanhutnik
