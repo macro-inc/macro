@@ -29,7 +29,7 @@ impl SearchQueryConfig for ProjectSearchConfig {
             .field(
                 Self::TITLE_KEY,
                 HighlightField::new()
-                    .highlight_type("unified")
+                    .highlight_type("plain")
                     .number_of_fragments(1)
                     .pre_tags(vec![MacroEm::Open.to_string()])
                     .post_tags(vec![MacroEm::Close.to_string()]),
