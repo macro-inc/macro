@@ -547,7 +547,7 @@ export function createSplitLayout(
     return handle;
   }
 
-  function removeSplit(id: SplitId) {
+  function removeSplit(id: SplitId, createNewOnEmpty: boolean = true) {
     const idx = state.splits.findIndex((s) => s.id === id);
     if (idx < 0) return;
 
@@ -564,7 +564,7 @@ export function createSplitLayout(
 
     dispatchEvent(SplitEvent.Remove, { splitId: id, splitIndex: idx });
 
-    if (nextSplits.length === 0) {
+    if (nextSplits.length === 0 && createNewOnEmpty) {
       createNewSplit(DEFAULT_SPLIT_CONTENT);
     }
   }
@@ -610,7 +610,7 @@ export function createSplitLayout(
     ];
 
     for (const splitToRemove of splitsToRemove) {
-      removeSplit(splitToRemove.id);
+      removeSplit(splitToRemove.id, false);
     }
 
     for (const split of newSplits) {
