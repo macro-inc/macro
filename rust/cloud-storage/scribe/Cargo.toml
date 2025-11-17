@@ -56,3 +56,5 @@ models_comms = { path = "../models_comms", optional = true }
 models_email = { path = "../models_email", optional = true }
 models_sfs = { path = "../models_sfs", optional = true }
 static_file_service_client = { path = "../static_file_service_client", optional = true }
+image = "0.25.9"
+webp = "0.3.1"
