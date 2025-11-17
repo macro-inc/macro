@@ -177,13 +177,9 @@ export function detectLanguageFromExtension(
     return extensionToLanguage[normalizedExt];
   }
 
-  // Check if this extension is in FileTypeMap with app === 'code'
-  const fileTypeEntry = Object.values(FileTypeMap).find(
-    (ft) => ft.extension === normalizedExt && ft.app === 'code'
-  );
-
-  if (fileTypeEntry) {
-    // Return plaintext as fallback for code files without explicit language mapping
+  // Return plaintext as fallback for code files without explicit language mapping
+  const matchesCodeFileType = codeFileExtensions.includes(normalizedExt as any);
+  if (matchesCodeFileType) {
     return 'plaintext';
   }
 
