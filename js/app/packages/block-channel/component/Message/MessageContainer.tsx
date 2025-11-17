@@ -120,6 +120,7 @@ type MessageProps = {
   container?: HTMLDivElement;
   listContext: MessageListContext;
   targetMessageId: string | undefined;
+  setLastMessageRef?: Setter<HTMLDivElement | undefined>;
 };
 
 export function MessageContainer(props: MessageProps) {
@@ -128,7 +129,13 @@ export function MessageContainer(props: MessageProps) {
   const [contextMenuOpen, setContextMenuOpen] = createSignal(false);
   const [reactionSearchOpen, setReactionSearchOpen] = createSignal(false);
   const [topBarEmojiMenuOpen, setTopBarEmojiMenuOpen] = createSignal(false);
-  const [messageBodyRef, setMessageBodyRef] = createSignal<HTMLDivElement>();
+  const [messageBodyRef, setMessageBodyRefInner] = createSignal<HTMLDivElement>();
+  const setMessageBodyRef = (...params: Parameters<typeof setMessageBodyRefInner>) => {
+    setMessageBodyRefInner(...params);
+    if (props.setLastMessageRef && isLastMessage()) {
+      props.setLastMessageRef(messageBodyRef());
+    }
+  };
   const editMessage_ = createCallback(editMessage);
 
   const userId = useUserId();
@@ -574,6 +581,7 @@ export function MessageContainer(props: MessageProps) {
           >
             <ContextMenu.Trigger>
               <MessageComponent
+                ref={isLastMessage() ? props.setLastMessageRef : undefined}
                 id={message.id}
                 focused={props.isFocused}
                 senderId={message.sender_id}
