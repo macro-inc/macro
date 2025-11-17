@@ -1,6 +1,6 @@
 import { match, P } from 'ts-pattern';
+import { browserWebSocketFactory } from '../platform/minimal-websocket';
 import type { Backoff } from './backoff/backoff';
-import { browserWebSocketFactory } from './platform/minimal-websocket';
 import type { WebsocketBuffer } from './websocket-buffer';
 import { WebsocketConnectionState } from './websocket-connection-state';
 import {
@@ -92,6 +92,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
         heartbeatReceived: [...(options?.listeners?.heartbeatReceived ?? [])],
         heartbeatMissed: [...(options?.listeners?.heartbeatMissed ?? [])],
       },
+      binaryType: options?.binaryType,
       serializer: options?.serializer,
       factory: options?.factory,
     };
@@ -341,6 +342,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
       this.handleMessageEvent
     );
 
+    console.log("binary type", this._options.binaryType);
     if (this._options.binaryType !== undefined) {
       this._underlyingWebsocket.binaryType = this._options.binaryType;
     }

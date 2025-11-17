@@ -10,6 +10,7 @@ export { JsonSerializer } from './core/serializers/json-serializer';
 export { Websocket } from './core/websocket';
 export type { WebsocketBuffer } from './core/websocket-buffer';
 export { WebsocketBuilder } from './core/websocket-builder';
+export { WebsocketConnectionState } from './core/websocket-connection-state';
 export {
   type ReconnectEventDetail,
   type RetryEventDetail,
@@ -30,3 +31,5 @@ export {
   createWebsocketEventEffects,
 } from './solid/socket-effect';
 export { createWebsocketStateSignal } from './solid/state-signal';
+export { untilMessage } from './utils/until-message';
+export type { UrlResolver } from './core/websocket-url-resolver';

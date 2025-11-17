@@ -11,7 +11,7 @@ import {
   ws as storageWs,
 } from '@service-storage/websocket';
 // import { WebSocketState } from '@websocket/index';
-import { WebsocketConnectionState } from '@websocket/websocket-connection-state';
+import { WebsocketConnectionState } from '@websocket';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
 const WebSocketStateLabels = {
@@ -105,13 +105,12 @@ export function WebsocketDebugger() {
             <div class="flex items-center justify-between">
               <div class="text-sm font-medium text-ink">Cognition Service</div>
               <span
-                class={`text-xs font-medium px-3 py-1.5 rounded-lg ${
-                  cognitionState() === WebSocketState.Open
+                class={`text-xs font-medium px-3 py-1.5 rounded-lg ${cognitionState() === WebSocketState.Open
                     ? 'bg-success-bg text-success-ink border border-success/30'
                     : cognitionState() === WebSocketState.Connecting
                       ? 'bg-alert/10 text-alert-ink border border-alert/30'
                       : 'bg-failure-bg text-failure-ink border border-failure/30'
-                }`}
+                  }`}
               >
                 {WebSocketStateLabels[cognitionState()]}
               </span>
@@ -123,23 +122,21 @@ export function WebsocketDebugger() {
                   cognitionState() === WebSocketState.Closed ||
                   cognitionState() === WebSocketState.Closing
                 }
-                class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${
-                  cognitionState() === WebSocketState.Closed ||
-                  cognitionState() === WebSocketState.Closing
+                class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${cognitionState() === WebSocketState.Closed ||
+                    cognitionState() === WebSocketState.Closing
                     ? 'bg-edge/20 text-ink-disabled border-edge/30 cursor-not-allowed'
                     : 'bg-failure-bg hover:bg-failure text-failure-ink border-failure/30'
-                }`}
+                  }`}
               >
                 Disconnect
               </button>
               <button
                 onClick={() => cognitionWs.reconnect()}
                 disabled={cognitionState() === WebSocketState.Open}
-                class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${
-                  cognitionState() === WebSocketState.Open
+                class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${cognitionState() === WebSocketState.Open
                     ? 'bg-edge/20 text-ink-disabled border-edge/30 cursor-not-allowed'
                     : 'bg-accent/10 hover:bg-accent/20 text-accent-ink border-accent/30'
-                }`}
+                  }`}
               >
                 Reconnect
               </button>
@@ -151,13 +148,12 @@ export function WebsocketDebugger() {
             <div class="flex items-center justify-between">
               <div class="text-sm font-medium text-ink">Connection Service</div>
               <span
-                class={`text-xs font-medium px-3 py-1.5 rounded-lg ${
-                  connectionState() === WebSocketState.Open
+                class={`text-xs font-medium px-3 py-1.5 rounded-lg ${connectionState() === WebSocketState.Open
                     ? 'bg-success-bg text-success-ink border border-success/30'
                     : connectionState() === WebSocketState.Connecting
                       ? 'bg-alert/10 text-alert-ink border border-alert/30'
                       : 'bg-failure-bg text-failure-ink border border-failure/30'
-                }`}
+                  }`}
               >
                 {WebSocketStateLabels[connectionState()]}
               </span>
@@ -169,23 +165,21 @@ export function WebsocketDebugger() {
                   connectionState() === WebSocketState.Closed ||
                   connectionState() === WebSocketState.Closing
                 }
-                class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${
-                  connectionState() === WebSocketState.Closed ||
-                  connectionState() === WebSocketState.Closing
+                class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${connectionState() === WebSocketState.Closed ||
+                    connectionState() === WebSocketState.Closing
                     ? 'bg-edge/20 text-ink-disabled border-edge/30 cursor-not-allowed'
                     : 'bg-failure-bg hover:bg-failure text-failure-ink border-failure/30'
-                }`}
+                  }`}
               >
                 Disconnect
               </button>
               <button
                 onClick={() => connectionWs.reconnect()}
                 disabled={connectionState() === WebSocketState.Open}
-                class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${
-                  connectionState() === WebSocketState.Open
+                class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${connectionState() === WebSocketState.Open
                     ? 'bg-edge/20 text-ink-disabled border-edge/30 cursor-not-allowed'
                     : 'bg-accent/10 hover:bg-accent/20 text-accent-ink border-accent/30'
-                }`}
+                  }`}
               >
                 Reconnect
               </button>
@@ -197,13 +191,12 @@ export function WebsocketDebugger() {
             <div class="flex items-center justify-between">
               <div class="text-sm font-medium text-ink">Storage Service</div>
               <span
-                class={`text-xs font-medium px-3 py-1.5 rounded-lg ${
-                  storageState() === WebSocketState.Open
+                class={`text-xs font-medium px-3 py-1.5 rounded-lg ${storageState() === WebSocketState.Open
                     ? 'bg-success-bg text-success-ink border border-success/30'
                     : storageState() === WebSocketState.Connecting
                       ? 'bg-alert/10 text-alert-ink border border-alert/30'
                       : 'bg-failure-bg text-failure-ink border border-failure/30'
-                }`}
+                  }`}
               >
                 {WebSocketStateLabels[storageState()]}
               </span>
@@ -215,23 +208,21 @@ export function WebsocketDebugger() {
                   storageState() === WebSocketState.Closed ||
                   storageState() === WebSocketState.Closing
                 }
-                class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${
-                  storageState() === WebSocketState.Closed ||
-                  storageState() === WebSocketState.Closing
+                class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${storageState() === WebSocketState.Closed ||
+                    storageState() === WebSocketState.Closing
                     ? 'bg-edge/20 text-ink-disabled border-edge/30 cursor-not-allowed'
                     : 'bg-failure-bg hover:bg-failure text-failure-ink border-failure/30'
-                }`}
+                  }`}
               >
                 Disconnect
               </button>
               <button
                 onClick={() => storageWs.reconnect()}
                 disabled={storageState() === WebSocketState.Open}
-                class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${
-                  storageState() === WebSocketState.Open
+                class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${storageState() === WebSocketState.Open
                     ? 'bg-edge/20 text-ink-disabled border-edge/30 cursor-not-allowed'
                     : 'bg-accent/10 hover:bg-accent/20 text-accent-ink border-accent/30'
-                }`}
+                  }`}
               >
                 Reconnect
               </button>

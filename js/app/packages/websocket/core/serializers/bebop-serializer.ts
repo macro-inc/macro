@@ -21,7 +21,6 @@ export class BebopSerializer<Send, Receive>
     return this.encoder.encode(data);
   }
   deserialize(data: ArrayBuffer): Receive {
-    console.log('data', data);
     return this.decoder.decode(new Uint8Array(data));
   }
 

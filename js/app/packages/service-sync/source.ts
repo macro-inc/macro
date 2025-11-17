@@ -15,16 +15,19 @@ import { isErr as isChaseError } from '@core/util/maybeResult';
 import { storageServiceClient } from '@service-storage/client';
 import { createEventBus } from '@solid-primitives/event-bus';
 import { raceTimeout, until } from '@solid-primitives/promise';
-import { ConstantBackoff, WebsocketBuilder } from '@websocket';
-import { BebopSerializer } from '@websocket/serializers/bebop-serializer';
+import {
+  BebopSerializer,
+  ConstantBackoff,
+  type UrlResolver,
+  untilMessage,
+  WebsocketBuilder,
+  WebsocketConnectionState,
+} from '@websocket';
 import {
   createReconnectEffect,
   createSocketEffect,
 } from '@websocket/solid/socket-effect';
 import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
-import { untilMessage } from '@websocket/solid/until-message';
-import { WebsocketConnectionState } from '@websocket/websocket-connection-state';
-import type { UrlResolver } from '@websocket/websocket-url-resolver';
 import { encodeFrontiers, type Frontiers } from 'loro-crdt';
 import { err, ok, type Result, ResultAsync } from 'neverthrow';
 import { createStore } from 'solid-js/store';

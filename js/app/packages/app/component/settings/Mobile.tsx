@@ -29,7 +29,7 @@ import { notificationServiceClient } from '@service-notification/client';
 import type { PushNotificationData } from '@service-notification/generated/schemas/pushNotificationData';
 import { type AsyncStorage, makePersisted } from '@solid-primitives/storage';
 import { useNavigate } from '@solidjs/router';
-import { WebsocketConnectionState } from '@websocket/websocket-connection-state';
+import { WebsocketConnectionState } from '@websocket';
 import { toast } from 'core/component/Toast/Toast';
 import {
   createEffect,

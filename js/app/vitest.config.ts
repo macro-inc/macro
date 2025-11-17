@@ -6,7 +6,6 @@ export default defineConfig({
   plugins: [tsconfigPaths(), solidPlugin()],
   test: {
     exclude: [...configDefaults.exclude],
-    // Use projects to allow different configurations per package
     projects: [
       {
         // WebSocket tests with Node.js environment
