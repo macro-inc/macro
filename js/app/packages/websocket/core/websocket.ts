@@ -390,7 +390,16 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
       WebsocketEvent.Message,
       this.handleMessageEvent
     );
-    this._underlyingWebsocket.close();
+
+    // Only close if the connection is OPEN or CLOSING
+    // The ws library throws an error when closing a CONNECTING WebSocket
+    const readyState = this._underlyingWebsocket.readyState;
+    if (
+      readyState !== WebSocket.CONNECTING &&
+      readyState !== WebSocket.CLOSED
+    ) {
+      this._underlyingWebsocket.close();
+    }
   }
 
   /**
