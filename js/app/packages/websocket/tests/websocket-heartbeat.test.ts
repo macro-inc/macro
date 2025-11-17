@@ -44,8 +44,12 @@ describe('Testsuite for Websocket with Heartbeat', () => {
 
   /** Before each test, start a websocket server on a random port. */
   beforeEach(async () => {
-    await stopClient(client, clientTimeout).then(() => (client = undefined));
-    await stopServer(server, serverTimeout).then(() => (server = undefined));
+    await stopClient(client, clientTimeout).then(() => {
+      client = undefined;
+    });
+    await stopServer(server, serverTimeout).then(() => {
+      server = undefined;
+    });
     await startServerWithHeartbeat(0, serverTimeout).then((s) => {
       server = s;
       const address = server.address();
@@ -57,8 +61,12 @@ describe('Testsuite for Websocket with Heartbeat', () => {
 
   /** After each test, stop the websocket server. */
   afterEach(async () => {
-    await stopClient(client, clientTimeout).then(() => (client = undefined));
-    await stopServer(server, serverTimeout).then(() => (server = undefined));
+    await stopClient(client, clientTimeout).then(() => {
+      client = undefined;
+    });
+    await stopServer(server, serverTimeout).then(() => {
+      server = undefined;
+    });
   }, testTimeout);
 
   test('Websocket should send pings on interval', async () => {

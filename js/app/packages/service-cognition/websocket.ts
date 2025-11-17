@@ -1,22 +1,12 @@
-import { useIsAuthenticated } from '@core/auth';
 import { createBlockEffect, inBlock } from '@core/block';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { createCallback } from '@solid-primitives/rootless';
-import { ConstantBackoff, WebsocketBuilder } from '@websocket';
-import { JsonSerializer } from '@websocket/serializers/json-serializer';
+import { ConstantBackoff, JsonSerializer, WebsocketBuilder } from '@websocket';
 import { createSocketEffect } from '@websocket/solid/socket-effect';
 import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
-// import {
-//   authPlugin,
-//   createDurableSocket,
-//   createSocketEffect,
-//   createWSState,
-//   heartbeatPlugin,
-//   jsonPlugin,
-// } from '@websocket/index';
 import type { Accessor } from 'solid-js';
 import { createRoot, createSignal } from 'solid-js';
 import type { StreamError } from './generated/schemas';

@@ -6,7 +6,7 @@ import {
   expect,
   test,
 } from 'vitest';
-import type { WebSocket, WebSocketServer } from 'ws';
+import type { WebSocketServer } from 'ws';
 import type { WebsocketBuffer } from '../';
 import {
   ArrayQueue,
@@ -53,13 +53,19 @@ describe('Testsuite for Websocket', () => {
 
   /** Before each test, start a websocket server on the given port. */
   beforeEach(async () => {
-    await startServer(port, serverTimeout).then((s) => (server = s));
+    await startServer(port, serverTimeout).then((s) => {
+      server = s;
+    });
   }, testTimeout);
 
   /** After each test, stop the websocket server. */
   afterEach(async () => {
-    await stopClient(client, clientTimeout).then(() => (client = undefined));
-    await stopServer(server, serverTimeout).then(() => (server = undefined));
+    await stopClient(client, clientTimeout).then(() => {
+      client = undefined;
+    });
+    await stopServer(server, serverTimeout).then(() => {
+      server = undefined;
+    });
   }, testTimeout);
 
   describe('Getter/setter tests', () => {
@@ -519,9 +525,9 @@ describe('Testsuite for Websocket', () => {
 
     describe('Error', () => {
       test("Websocket should fire 'error' when the server rejects the connection and the underlying websocket should be in readyState 'CLOSED", async () => {
-        await stopServer(server, serverTimeout).then(
-          () => (server = undefined)
-        );
+        await stopServer(server, serverTimeout).then(() => {
+          server = undefined;
+        });
         await new Promise<WebsocketEventListenerParams<WebsocketEvent.error>>(
           (resolve) => {
             client = new WebsocketBuilder(url)

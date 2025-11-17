@@ -1,4 +1,3 @@
-import { useIsAuthenticated } from '@core/auth';
 import { createBlockEffect, inBlock } from '@core/block';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
@@ -15,8 +14,6 @@ import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
 import type { ToWebsocketMessage } from './generated/schemas/toWebsocketMessage';
 
 const wsHost: string = SERVER_HOSTS['connection-gateway'];
-
-const isAuthenticated = useIsAuthenticated();
 
 export type FromWebsocketMessage = {
   type: string;
