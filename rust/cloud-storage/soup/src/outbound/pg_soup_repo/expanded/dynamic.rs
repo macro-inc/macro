@@ -173,6 +173,22 @@ static SUFFIX: &str = r#"
     LIMIT $3
 "#;
 
+static SUFFIX_NO_FRECENCY: &str = r#"
+    SELECT Combined.* FROM Combined
+    LEFT JOIN frecency_aggregates fa
+        ON fa.entity_id = Combined."id"
+        AND fa.entity_type = Combined."item_type"
+        AND fa.user_id = $1
+    WHERE fa.id IS NULL
+        AND (
+            ($4::timestamptz IS NULL)
+            OR
+            (Combined."sort_ts", Combined."id") < ($4, $5)
+        )
+    ORDER BY Combined."sort_ts" DESC, Combined."updated_at" DESC
+    LIMIT $3
+"#;
+
 fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
     let Some(expr) = ast else {
         return String::new();
@@ -240,7 +256,7 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
     }
 }
 
-fn build_query(filter_ast: &EntityFilterAst) -> QueryBuilder<'_, Postgres> {
+fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBuilder<'_, Postgres> {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
     builder.push("Combined AS (");
 
@@ -265,7 +281,12 @@ fn build_query(filter_ast: &EntityFilterAst) -> QueryBuilder<'_, Postgres> {
     ));
 
     builder.push(") ");
-    builder.push(SUFFIX);
+
+    if exclude_frecency {
+        builder.push(SUFFIX_NO_FRECENCY);
+    } else {
+        builder.push(SUFFIX);
+    }
 
     builder
 }
@@ -412,12 +433,13 @@ pub async fn expanded_dynamic_cursor_soup(
     user_id: MacroUserIdStr<'_>,
     limit: u16,
     cursor: Query<String, SimpleSortMethod, EntityFilterAst>,
+    exclude_frecency: bool,
 ) -> Result<Vec<SoupItem>, sqlx::Error> {
     let query_limit = limit as i64;
     let sort_method_str = cursor.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = cursor.vals();
 
-    build_query(cursor.filter())
+    build_query(cursor.filter(), exclude_frecency)
         .build()
         .bind(user_id.as_ref())
         .bind(sort_method_str)

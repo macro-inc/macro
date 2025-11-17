@@ -27,8 +27,17 @@ impl SoupRepo for PgSoupRepo {
         req: SimpleSortRequest<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send {
         match req.cursor {
-            SimpleSortQuery::ItemsAndFrecencyFilter(_) => {
-                Either::Left(Either::Left(not_implemented(req)))
+            SimpleSortQuery::ItemsAndFrecencyFilter(query) => {
+                // Extract the EntityFilterAst from the tuple (Frecency, EntityFilterAst)
+                Either::Left(Either::Left(
+                    expanded::dynamic::expanded_dynamic_cursor_soup(
+                        &self.inner,
+                        req.user_id,
+                        req.limit,
+                        query.map_filter(|(_, ast)| ast),
+                        true, // exclude frecency items
+                    ),
+                ))
             }
             SimpleSortQuery::ItemsFilter(ast) => Either::Left(Either::Right(
                 expanded::dynamic::expanded_dynamic_cursor_soup(
@@ -36,6 +45,7 @@ impl SoupRepo for PgSoupRepo {
                     req.user_id,
                     req.limit,
                     ast,
+                    false, // include frecency items
                 ),
             )),
             SimpleSortQuery::FilterFrecency(f) => Either::Right(Either::Left(

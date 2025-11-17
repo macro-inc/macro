@@ -679,6 +679,7 @@ async fn empty_ast_returns_same_as_static_query(db: PgPool) {
         user_id.clone(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, EntityFilterAst::mock_empty()),
+        false,
     )
     .await
     .unwrap();
@@ -746,6 +747,7 @@ async fn test_filter_by_document_file_type(db: PgPool) -> anyhow::Result<()> {
         user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
+        false,
     )
     .await?;
 
@@ -815,6 +817,7 @@ async fn test_filter_by_document_ids(db: PgPool) -> anyhow::Result<()> {
         user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
+        false,
     )
     .await?;
 
@@ -888,6 +891,7 @@ async fn test_filter_documents_by_project_id(db: PgPool) -> anyhow::Result<()> {
         user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
+        false,
     )
     .await?;
 
@@ -956,6 +960,7 @@ async fn test_filter_chats_by_project_id(db: PgPool) -> anyhow::Result<()> {
         user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
+        false,
     )
     .await?;
 
@@ -1027,6 +1032,7 @@ async fn test_filter_by_chat_ids(db: PgPool) -> anyhow::Result<()> {
         user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
+        false,
     )
     .await?;
 
@@ -1100,6 +1106,7 @@ async fn test_filter_by_project_ids(db: PgPool) -> anyhow::Result<()> {
         user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
+        false,
     )
     .await?;
 
@@ -1187,6 +1194,7 @@ async fn test_combined_entity_filters(db: PgPool) -> anyhow::Result<()> {
         user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
+        false,
     )
     .await?;
 
@@ -1269,6 +1277,7 @@ async fn test_multiple_filter_criteria_documents(db: PgPool) -> anyhow::Result<(
         user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
+        false,
     )
     .await?;
 
@@ -1343,6 +1352,7 @@ async fn test_filters_respect_access_control(db: PgPool) -> anyhow::Result<()> {
         user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
+        false,
     )
     .await?;
 
@@ -1404,6 +1414,7 @@ async fn test_filter_by_owner(db: PgPool) -> anyhow::Result<()> {
         user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
+        false,
     )
     .await?;
 
@@ -1466,6 +1477,7 @@ async fn test_filter_non_existent_items(db: PgPool) -> anyhow::Result<()> {
         user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
+        false,
     )
     .await?;
 
@@ -1525,6 +1537,7 @@ async fn test_cursor_pagination_with_document_filter(db: PgPool) -> anyhow::Resu
         user_id.copied(),
         3,
         Query::Sort(SimpleSortMethod::CreatedAt, filters.clone()),
+        false,
     )
     .await?
     .into_iter()
@@ -1561,6 +1574,7 @@ async fn test_cursor_pagination_with_document_filter(db: PgPool) -> anyhow::Resu
             val: cursor_decoded.val,
             filter: filters_for_cursor,
         }),
+        false,
     )
     .await?;
 
@@ -1647,6 +1661,7 @@ async fn test_cursor_pagination_with_combined_filters(db: PgPool) -> anyhow::Res
         user_id.copied(),
         2,
         Query::Sort(SimpleSortMethod::CreatedAt, filters.clone()),
+        false,
     )
     .await?
     .into_iter()
@@ -1670,6 +1685,7 @@ async fn test_cursor_pagination_with_combined_filters(db: PgPool) -> anyhow::Res
                 val: cursor_decoded.val,
                 filter: filters_for_cursor,
             }),
+            false,
         )
         .await?;
 
@@ -1733,7 +1749,7 @@ async fn test_cursor_pagination_filter_consistency(db: PgPool) -> anyhow::Result
     let page_size: u16 = 2;
 
     loop {
-        let result = expanded_dynamic_cursor_soup(&db, user_id.copied(), page_size, current_query)
+        let result = expanded_dynamic_cursor_soup(&db, user_id.copied(), page_size, current_query, false)
             .await?
             .into_iter()
             .paginate_on(page_size as usize, SimpleSortMethod::CreatedAt)
@@ -1834,6 +1850,7 @@ async fn test_cursor_pagination_with_single_item_filter(db: PgPool) -> anyhow::R
         user_id.copied(),
         5,
         Query::Sort(SimpleSortMethod::CreatedAt, filters.clone()),
+        false,
     )
     .await?
     .into_iter()
@@ -1862,6 +1879,7 @@ async fn test_cursor_pagination_with_single_item_filter(db: PgPool) -> anyhow::R
                 val: cursor_decoded.val,
                 filter: filters_for_cursor,
             }),
+            false,
         )
         .await?;
 
