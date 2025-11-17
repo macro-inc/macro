@@ -116,6 +116,8 @@ const codeFileExtensions = Object.values(FileTypeMap)
   .filter((fileType) => fileType.app === 'code')
   .map((fileType) => fileType.extension);
 
+export type CodeFileExtension = (typeof codeFileExtensions)[number];
+
 // Combine with our explicitly mapped extensions
 const allSupportedExtensions = [
   ...new Set([...Object.keys(extensionToLanguage), ...codeFileExtensions]),
