@@ -18,7 +18,6 @@ use serde_json::Value;
 struct DocumentSearchConfig;
 
 impl SearchQueryConfig for DocumentSearchConfig {
-    const ID_KEY: &'static str = "document_id";
     const INDEX: &'static str = DOCUMENTS_INDEX;
     const USER_ID_KEY: &'static str = "owner_id";
     const TITLE_KEY: &'static str = "document_name";
@@ -70,7 +69,7 @@ impl DocumentQueryBuilder {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct DocumentIndex {
-    pub document_id: String,
+    pub entity_id: String,
     pub document_name: String,
     pub node_id: String,
     pub raw_content: Option<String>,
@@ -154,7 +153,7 @@ pub(crate) async fn search_documents(
         .hits
         .into_iter()
         .map(|hit| DocumentSearchResponse {
-            document_id: hit._source.document_id,
+            document_id: hit._source.entity_id,
             node_id: hit._source.node_id,
             document_name: hit._source.document_name,
             owner_id: hit._source.owner_id,
