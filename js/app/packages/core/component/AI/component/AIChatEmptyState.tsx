@@ -1,11 +1,11 @@
 import { BrightJoins } from '@core/component/BrightJoins';
-import { useOpenInstructionsMd } from '../util/instructions';
 import { useSettingsState } from '@core/constant/SettingsState';
+import { useOpenInstructionsMd } from '../util/instructions';
 
 export function AiChatEmptyState() {
   const { setActiveTabId, openSettings } = useSettingsState();
   const openInstructions = useOpenInstructionsMd();
-  console.log("aichat empty state ")
+  console.log('aichat empty state ');
   return (
     <div class="relative p-2 border border-edge-muted bg-dialog text-sm flex flex-col gap-2 text-ink">
       <BrightJoins dots={[true, true, true, true]} />
@@ -25,19 +25,26 @@ export function AiChatEmptyState() {
       </div>
       <div>
         Change the
-        <span class="font-medium text-accent underline mx-1"
+        <span
+          class="font-medium text-accent underline mx-1"
           onClick={openInstructions}
-        >Instructions</span>
+        >
+          Instructions
+        </span>
         to feed AI some basic context on what you do, who you work with, etc
       </div>
       <div>
         Check your AI
-        <span class="font-medium text-accent underline mx-1"
+        <span
+          class="font-medium text-accent underline mx-1"
           onClick={() => {
-            setActiveTabId("AI Memory");
+            setActiveTabId('AI Memory');
             openSettings();
           }}
-        > Memories</span>
+        >
+          {' '}
+          Memories
+        </span>
         that are auto-generated for accuracy and relevance
       </div>
     </div>
