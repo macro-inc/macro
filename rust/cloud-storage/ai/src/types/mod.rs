@@ -1,4 +1,5 @@
 mod client;
+mod error;
 mod message;
 mod model;
 mod providers;
@@ -7,6 +8,7 @@ mod request_builder;
 mod response;
 
 pub use client::*;
+pub use error::*;
 pub use message::*;
 pub use model::*;
 pub(crate) use providers::*;
