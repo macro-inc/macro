@@ -63,7 +63,7 @@ const CustomCursorDemo = () => {
           }
         `}
       </style>
-      <h1 class="text-2xl font-bold mb-6">CSS Cursor Types Demo</h1>
+      <h1 class="text-2xl font-bold mb-6">Custom Cursor Types Demo</h1>
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <For each={cursorTypes}>
           {({ name, cursor }) => (
