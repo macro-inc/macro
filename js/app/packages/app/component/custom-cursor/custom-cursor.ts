@@ -1,5 +1,7 @@
-
 import { getCustomCursorEnabled } from '@app/util/cursor';
+import { isMobile } from "@solid-primitives/platform";
+import { createEffect, createRoot } from 'solid-js';
+import { themeReactive } from '../../../block-theme/signals/themeReactive';
 import busySvgRaw from './cursor-svg/busy.svg?raw';
 import cellSvgRaw from './cursor-svg/cell.svg?raw';
 import contextualmenuSvgRaw from './cursor-svg/contextualmenu.svg?raw';
@@ -10,7 +12,6 @@ import handgrabbingSvgRaw from './cursor-svg/handgrabbing.svg?raw';
 import handopenSvgRaw from './cursor-svg/handopen.svg?raw';
 import handpointingSvgRaw from './cursor-svg/handpointing.svg?raw';
 import helpSvgRaw from './cursor-svg/help.svg?raw';
-
 // Import cursor SVGs as raw text so we can replace white fills with accent color
 import aliasSvgRaw from './cursor-svg/makealias.svg?raw';
 import moveSvgRaw from './cursor-svg/move.svg?raw';
@@ -43,16 +44,17 @@ let defaultCursor: string = '';
 let hexColor: string = '';
 let cursorCache: Record<string, string> = {};
 let currentCursorType: string | null = null;
+const shadowRoots = new Set<ShadowRoot>()
+let overridedCursorTargetEl: HTMLElement | null = null
+const overrideCursorAttr = 'data-override-cursor'
+// const overrideCursorSelector = `[${overrideCursorAttr}]`
+const overrideCursorSelector = `*`
 
 // Get or create style elements in all matching shadow roots
-function getShadowRootStyleEl(selector: string): HTMLStyleElement[] {
-  const containers = document.querySelectorAll(selector);
+function getShadowRootStyleEls(): HTMLStyleElement[] {
   const styleElements: HTMLStyleElement[] = [];
 
-  for (const container of containers) {
-    const shadowRoot = container.shadowRoot;
-    if (!shadowRoot) continue;
-
+  for (const shadowRoot of shadowRoots) {
     let styleEl = shadowRoot.querySelector('style');
     if (!styleEl) {
       styleEl = document.createElement('style');
@@ -62,53 +64,6 @@ function getShadowRootStyleEl(selector: string): HTMLStyleElement[] {
   }
 
   return styleElements;
-}
-
-// Check if element is inside an email container shadow root
-function isInsideEmailShadowRoot(element: Element): boolean {
-  let current: Element | null = element;
-  while (current) {
-    const root = current.getRootNode();
-    if (root instanceof ShadowRoot) {
-      const host = root.host;
-      if (host.hasAttribute('data-email-container')) {
-        return true;
-      }
-    }
-    current = current.parentElement;
-  }
-  return false;
-}
-
-// Infer cursor type based on element tag
-function inferCursorFromElement(element: Element): string | null {
-  const tagName = element.tagName.toLowerCase();
-
-  // Links and buttons should be pointer
-  if (tagName === 'a' || tagName === 'button') {
-    return 'pointer';
-  }
-
-  // Input fields and textareas should be text cursor
-  if (tagName === 'input' || tagName === 'textarea') {
-    const inputType = (element as HTMLInputElement).type;
-    if (inputType === 'text' || inputType === 'email' || inputType === 'password' || inputType === 'search' || inputType === 'url' || inputType === 'tel' || !inputType) {
-      return 'text';
-    }
-    return null;
-  }
-
-  // Contenteditable elements should be text cursor
-  if ((element as HTMLElement).contentEditable === 'true') {
-    return 'text';
-  }
-
-  // Images might be move or default
-  if (tagName === 'img') {
-    return null; // Let CSS handle it
-  }
-
-  return null;
 }
 
 // Extract fallback cursor from custom cursor string (e.g., 'url(...) 11 9, auto' -> 'auto')
@@ -126,53 +81,63 @@ function extractFallbackCursor(cursor: string): string {
   return cursor;
 }
 
+// Recursively find element at point, traversing into shadow roots
+function deepElementFromPoint(x: number, y: number, root: Document | ShadowRoot = document): Element | null {
+  const el = root.elementFromPoint(x, y);
+  if (!el) return null;
+
+  if (el.shadowRoot) {
+    const deeper = deepElementFromPoint(x, y, el.shadowRoot);
+    return deeper || el;
+  }
+
+  return el;
+}
+
+// Get all text nodes from an element
+function getTextNodes(el: Element): Text[] {
+  const nodes: Text[] = [];
+  const tw = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, {
+    acceptNode(node: Node) {
+      return (node.nodeValue?.trim().length ?? 0) > 0
+        ? NodeFilter.FILTER_ACCEPT
+        : NodeFilter.FILTER_REJECT;
+    },
+  });
+
+  let n: Node | null;
+  // biome-ignore lint/suspicious/noAssignInExpressions: <explanation_for_suppression>
+  while ((n = tw.nextNode())) {
+    nodes.push(n as Text);
+  }
+  return nodes;
+}
+
+// Check if a point is within a text node's bounding rects
+function isPointInTextLine(textNode: Text, x: number, y: number): boolean {
+  const range = document.createRange();
+  range.setStart(textNode, 0);
+  range.setEnd(textNode, textNode.length);
+
+  const rects = range.getClientRects();
+  for (const r of rects) {
+    if (y >= r.top && y <= r.bottom && x >= r.left && x <= r.right) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Detect if mouse is over text glyph (I-beam cursor)
 function isOverTextGlyph(clientX: number, clientY: number): boolean {
-  const range =
-    (document as any).caretRangeFromPoint?.(clientX, clientY) ||
-    (document.caretPositionFromPoint &&
-      (() => {
-        const pos = document.caretPositionFromPoint(clientX, clientY);
-        if (!pos) return null;
-        const r = document.createRange();
-        r.setStart(pos.offsetNode, pos.offset);
-        r.setEnd(pos.offsetNode, pos.offset);
-        return r;
-      })());
+  const node = deepElementFromPoint(clientX, clientY);
+  if (!node) return false;
 
-  if (!range) return false;
+  const textNodes = getTextNodes(node);
+  if (!textNodes.length) return false;
 
-  const node = range.startContainer;
-  if (node.nodeType !== Node.TEXT_NODE) {
-    // Not even in a text node → definitely not "text hovered"
-    return false;
-  }
-
-  const textNode = node;
-
-  // Build a range that spans the entire text node
-  const fullRange = document.createRange();
-  fullRange.setStart(textNode, 0);
-  fullRange.setEnd(textNode, textNode.length);
-
-  const rects = Array.from(fullRange.getClientRects());
-  if (!rects.length) return false;
-
-  // Find all rects whose vertical band covers the mouse Y
-  const lineRects = rects.filter(
-    (r) => clientY >= r.top && clientY <= r.bottom
-  );
-  if (!lineRects.length) {
-    // Above/below the line box → not text
-    return false;
-  }
-
-  // Merge those rects horizontally into one line span
-  const left = Math.min(...lineRects.map((r) => r.left));
-  const right = Math.max(...lineRects.map((r) => r.right));
-
-  const isOverTextLine = clientX >= left && clientX <= right;
-  return isOverTextLine;
+  const isOverText = textNodes.some((tn) => isPointInTextLine(tn, clientX, clientY));
+  return isOverText;
 }
 
 // Convert CSS color (oklch/rgb/etc) to hex using canvas
@@ -268,6 +233,9 @@ const cursorSvgMap: Record<string, { svg: string; fallback: string; position: st
   'zoom-out': { svg: zoomoutSvgRaw, fallback: 'zoom-out', position: '11 9' },
 };
 
+// Map of cursor states to custom cursor URLs (dynamically generated)
+const cursorMap: Record<string, string> = {};
+
 // Get cursor CSS for a given cursor type
 function getCursor(cursorType: string): string {
   const cursorDef = cursorSvgMap[cursorType];
@@ -298,15 +266,39 @@ function getCursor(cursorType: string): string {
   return cursorCss;
 }
 
-// Map of cursor states to custom cursor URLs (dynamically generated)
-const cursorMap: Record<string, string> = {};
 
-function updateDefaultCursor() {
-  if (!document.body || !document.head) return;
+function updateCursorStyle() {
+  if (!currentCursorType) return
+  const cursor = getCursor(currentCursorType)
 
-  const accentColor = getComputedStyle(document.documentElement)
-    .getPropertyValue('--color-accent')
-    .trim();
+
+  const cursorStyle = cursor ? `${overrideCursorSelector} { cursor: ${cursor} !important; }` : '';
+
+  if (cursor) {
+    cursorStyleEl!.textContent = cursorStyle;
+    const shadowStyleEls = getShadowRootStyleEls();
+    for (const shadowStyleEl of shadowStyleEls) {
+      shadowStyleEl.textContent = cursorStyle;
+    }
+  } else {
+    cursorStyleEl!.textContent = '';
+    const shadowStyleEls = getShadowRootStyleEls();
+    for (const shadowStyleEl of shadowStyleEls) {
+      shadowStyleEl.textContent = '';
+    }
+  }
+}
+
+function updateCursor() {
+  updateCustomCursor()
+  updateCursorStyle()
+}
+
+function updateCustomCursor() {
+  const { l, c, h } = themeReactive.a0;
+  const col = `oklch(${l[0]()} ${c[0]()} ${h[0]()}deg)`;
+
+  const accentColor = col;
   if (!accentColor) {
     defaultCursor = '';
     hexColor = '';
@@ -332,33 +324,21 @@ function updateDefaultCursor() {
   cursorMap.default = defaultCursor;
 }
 
-function updateCursor() {
-  if (!document.body || !document.head) return;
 
-  const enabled = getCustomCursorEnabled();
-  if (!enabled) {
-    if (cursorStyleEl) {
-      cursorStyleEl.textContent = '';
-    }
-    const shadowStyleEls = getShadowRootStyleEl('[data-email-container]');
-    for (const shadowStyleEl of shadowStyleEls) {
-      shadowStyleEl.textContent = '';
-    }
-    document.body.style.cursor = '';
 
-    return;
+const clearCursorOverrideStyle = () => {
+  cursorStyleEl!.textContent = '';
+  const shadowStyleEls = getShadowRootStyleEls();
+  for (const shadowStyleEl of shadowStyleEls) {
+    shadowStyleEl.textContent = '';
   }
-
-  updateDefaultCursor();
 }
+
 
 // Initialize cursor
 function initCursor() {
-  if (!document.body || !document.head) {
-    requestAnimationFrame(initCursor);
-    return;
-  }
-  setTimeout(updateCursor, 0);
+  if (isMobile) return
+  updateCustomCursor()
 
   // Initialize cursor style element
   if (!cursorStyleEl) {
@@ -367,48 +347,47 @@ function initCursor() {
     document.head.appendChild(cursorStyleEl);
   }
 
+
   // Add mousemove listener to handle cursor states and text glyph detection
   const onMouseMove = (e: MouseEvent) => {
     if (!getCustomCursorEnabled()) {
-      if (cursorStyleEl) {
-        cursorStyleEl.textContent = '';
-      }
-      const shadowStyleEls = getShadowRootStyleEl('[data-email-container]');
-      for (const shadowStyleEl of shadowStyleEls) {
-        shadowStyleEl.textContent = '';
-      }
-      currentCursorType = null;
+      clearCursorOverrideStyle()
       return;
     }
 
-
     const target = e.target as Element;
+
     if (target.shadowRoot) {
-      // console.log(target.shadowRoot.querySelector('div'))
-      target.shadowRoot.querySelector('div')?.addEventListener('mousemove', onMouseMove)
+      shadowRoots.add(target.shadowRoot);
+      [...target.shadowRoot.children].forEach(child => {
+        child.addEventListener('mousemove', onMouseMove)
+      })
       return
     }
-    // console.log({ target }, 'currentTarget', e.currentTarget)
-    const isInEmailShadow = isInsideEmailShadowRoot(target);
+
+
+    clearCursorOverrideStyle()
+
     const targetComputedStyle = getComputedStyle(target)
     const computedCursor = targetComputedStyle.cursor;
     const computedUserSelect = targetComputedStyle.userSelect;
+    // TODO: maybe use attribute selector instead of wild card selector to improve perf
+    // target.setAttribute(overrideCursorAttr, '')
+    // if (target !== overridedCursorTargetEl) {
+    //   overridedCursorTargetEl?.removeAttribute(overrideCursorAttr)
+    // }
+    // overridedCursorTargetEl = target as HTMLElement
 
     // Extract fallback cursor if computed cursor is a custom cursor string
     const baseCursor = extractFallbackCursor(computedCursor);
 
-    // If inside email shadow root, try to infer cursor from element tag
     let inferredCursorType: string | null = null;
-    if (isInEmailShadow) {
-      // inferredCursorType = inferCursorFromElement(target);
-    }
 
     // Use inferred cursor type if available, otherwise use extracted fallback cursor
     let cs = inferredCursorType || baseCursor;
 
     // Only use text glyph detection when cursor is 'auto'
     if (cs === 'auto' && isOverTextGlyph(e.clientX, e.clientY)) {
-
       if (computedUserSelect === 'none') {
         cs = 'default';
       } else {
@@ -418,47 +397,17 @@ function initCursor() {
         cs = 'default'
       }
     }
+    currentCursorType = cs
 
-    // Only update if cursor type changed
-    if (cs === currentCursorType) return;
+    // TODO: Only update if cursor type changed
+    // if (cs === currentCursorType) {
+    //   return;
+    // }
 
-    // Get the cursor using getCursor() which handles white fill replacement
-    const cursor = getCursor(cs);
-
-    if (!cursorStyleEl) return;
-
-    const cursorStyle = cursor ? `* { cursor: ${cursor} !important; }` : '';
-
-    if (cursor) {
-      cursorStyleEl.textContent = cursorStyle;
-      const shadowStyleEls = getShadowRootStyleEl('[data-email-container]');
-      for (const shadowStyleEl of shadowStyleEls) {
-        shadowStyleEl.textContent = cursorStyle;
-      }
-      currentCursorType = cs;
-    } else {
-      cursorStyleEl.textContent = '';
-      const shadowStyleEls = getShadowRootStyleEl('[data-email-container]');
-      for (const shadowStyleEl of shadowStyleEls) {
-        shadowStyleEl.textContent = '';
-      }
-      currentCursorType = null;
-    }
-
+    updateCursorStyle()
   }
-  document.addEventListener('mousemove', onMouseMove);
 
-  // Clean up on mouseout
-  document.addEventListener('mouseout', () => {
-    if (cursorStyleEl) {
-      cursorStyleEl.textContent = '';
-    }
-    const shadowStyleEls = getShadowRootStyleEl('[data-email-container]');
-    for (const shadowStyleEl of shadowStyleEls) {
-      shadowStyleEl.textContent = '';
-    }
-    currentCursorType = null;
-  });
+  document.addEventListener('mousemove', onMouseMove);
 }
 
 if (document.readyState === 'loading') {
@@ -470,27 +419,29 @@ if (document.readyState === 'loading') {
 // Watch for theme changes and preference changes
 let lastAccentColor = '';
 let lastCursorEnabled = getCustomCursorEnabled();
-setInterval(() => {
-  if (!document.body) return;
-  const currentAccentColor = getComputedStyle(document.documentElement)
-    .getPropertyValue('--color-accent')
-    .trim();
-  const currentCursorEnabled = getCustomCursorEnabled();
 
-  if (
-    (currentAccentColor && currentAccentColor !== lastAccentColor) ||
-    currentCursorEnabled !== lastCursorEnabled
-  ) {
-    lastAccentColor = currentAccentColor;
-    lastCursorEnabled = currentCursorEnabled;
-    updateCursor();
-    updateDefaultCursor();
-  }
-}, 100);
+createRoot(() => {
+  createEffect(() => {
+    const { l, c, h } = themeReactive.a0;
+    const col = `oklch(${l[0]()} ${c[0]()} ${h[0]()}deg)`;
+
+    const currentAccentColor = col;
+    const currentCursorEnabled = getCustomCursorEnabled();
+
+    if (
+      (currentAccentColor && currentAccentColor !== lastAccentColor) ||
+      currentCursorEnabled !== lastCursorEnabled
+    ) {
+      lastAccentColor = currentAccentColor;
+      lastCursorEnabled = currentCursorEnabled;
+
+      updateCursor()
+    }
+  })
+})
 
 // Listen for immediate preference changes
 window.addEventListener('cursor-preference-changed', () => {
   lastCursorEnabled = getCustomCursorEnabled();
-  updateCursor();
-  updateDefaultCursor();
+  updateCustomCursor();
 });
