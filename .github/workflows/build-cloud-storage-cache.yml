@@ -39,8 +39,8 @@ jobs:
           docker buildx build \
             --platform linux/amd64 \
             --file Dockerfile.cache \
-            --cache-from type=registry,ref=569036502058.dkr.ecr.us-east-1.amazonaws.com/cloud-storage-cache:latest \
-            --cache-to type=registry,ref=569036502058.dkr.ecr.us-east-1.amazonaws.com/cloud-storage-cache:latest,mode=max \
+            --cache-from type=registry,ref=569036502058.dkr.ecr.us-east-1.amazonaws.com/cloud-storage-cache:buildcache \
+            --cache-to type=registry,ref=569036502058.dkr.ecr.us-east-1.amazonaws.com/cloud-storage-cache:buildcache,mode=max \
             --tag 569036502058.dkr.ecr.us-east-1.amazonaws.com/cloud-storage-cache:latest \
             --push \
             .
