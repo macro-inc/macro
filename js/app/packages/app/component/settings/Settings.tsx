@@ -6,14 +6,11 @@ import {
 } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
-  setSettingsOpen,
   useSettingsState,
 } from '@core/constant/SettingsState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useOrganizationName } from '@core/user';
-import Dialog from '@corvu/dialog';
 import { Tabs } from '@kobalte/core/tabs';
 import { MacroPermissions, usePermissions } from '@service-gql/client';
 import { registerHotkey } from 'core/hotkey/hotkeys';
@@ -25,7 +22,7 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import MacroJump from '../MacroJump';
+import { useSplitPanelOrThrow } from '../split-layout/layoutUtils';
 import { Account } from './Account';
 import { AiMemory } from './AiMemory/AiMemory';
 import { Appearance } from './Appearance';
@@ -33,8 +30,6 @@ import { Mobile } from './Mobile';
 import { Notification } from './Notification';
 import Organization from './Organization/Organization';
 import { Subscription } from './Subscription';
-
-export const [viewportOffset, setViewportOffset] = createSignal(0);
 
 const SCROLL_THRESHOLD = 10;
 
@@ -49,6 +44,7 @@ export function Settings() {
   } = useSettingsState();
   const permissions = usePermissions();
   const orgName = useOrganizationName();
+  const splitPanel = useSplitPanelOrThrow();
 
   let scrollRef!: HTMLDivElement;
   let scrollCleanup: (() => void) | undefined;
@@ -152,28 +148,22 @@ export function Settings() {
     runWithInputFocused: true,
   });
 
-  let settingsContentEl!: HTMLDivElement;
+  // Register escape key handler for closing settings
+  registerHotkey({
+    hotkeyToken: TOKENS.split.close,
+    hotkey: 'escape',
+    scopeId: splitPanel.scopeId,
+    description: () => 'Close Settings',
+    keyDownHandler: () => {
+      closeSettings();
+      return true;
+    },
+    runWithInputFocused: true,
+  });
 
   return (
-    <Dialog
-      open={settingsOpen()}
-      onOpenChange={setSettingsOpen}
-      onEscapeKeyDown={closeSettings}
-      trapFocus={true}
-    >
-      <Dialog.Portal>
-        <Dialog.Overlay class="dialog-overlay fixed inset-0 z-modal-overlay w-full bg-modal-overlay" />
-        <Dialog.Content
-          class="dialog-content bg-dialog text-ink fixed sm:left-1/2 sm:top-1/2 z-modal sm:-translate-x-1/2 sm:-translate-y-1/2 w-dvw sm:w-[90vw] flex flex-col sm:shadow-2xl border-2 border-accent"
-          style={{
-            height: isMobileWidth() ? `calc(100dvh)` : '90dvh',
-            top: isMobileWidth()
-              ? `calc(${viewportOffset()}px + env(safe-area-inset-top))`
-              : '50%',
-          }}
-          ref={settingsContentEl}
-        >
-          <Tabs
+    <div class="flex flex-col h-full bg-dialog text-ink">
+      <Tabs
             value={activeTabId()}
             onChange={(value: string | undefined) => {
               if (
@@ -303,9 +293,6 @@ export function Settings() {
               </Show>
             </div>
           </Tabs>
-        </Dialog.Content>
-        <MacroJump tabbableParent={() => settingsContentEl} />
-      </Dialog.Portal>
-    </Dialog>
+    </div>
   );
 }

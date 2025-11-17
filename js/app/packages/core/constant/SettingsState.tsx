@@ -1,4 +1,6 @@
-import { createEffect, createSignal } from 'solid-js';
+import { createEffect, createMemo, createSignal } from 'solid-js';
+import { useSplitLayout } from '@app/component/split-layout/layout';
+import { globalSplitManager } from '@app/signal/splitLayout';
 
 export type SettingsTab =
   | 'Account'
@@ -9,19 +11,40 @@ export type SettingsTab =
   | 'Mobile'
   | 'AI Memory';
 
-export const [settingsOpen, setSettingsOpen] = createSignal(false);
 export const [activeTabId, setActiveTabId] =
   createSignal<SettingsTab>('Appearance');
 
 export const useSettingsState = () => {
+  const { replaceOrInsertSplit } = useSplitLayout();
+
+  const settingsOpen = createMemo(() => {
+    const splitManager = globalSplitManager();
+    if (!splitManager) return false;
+    const settingsSplit = splitManager.getSplitByContent('component', 'settings');
+    return settingsSplit !== undefined;
+  });
+
   const openSettings = (activeTabId?: SettingsTab) => {
-    setSettingsOpen(true);
     if (activeTabId) setActiveTabId(activeTabId);
+    replaceOrInsertSplit({
+      type: 'component',
+      id: 'settings',
+    });
   };
-  const closeSettings = () => setSettingsOpen(false);
+
+  const closeSettings = () => {
+    const splitManager = globalSplitManager();
+    if (!splitManager) return;
+    const settingsSplit = splitManager.getSplitByContent('component', 'settings');
+    settingsSplit?.close();
+  };
+
   const toggleSettings = () => {
-    const newState = !settingsOpen();
-    setSettingsOpen(newState);
+    if (settingsOpen()) {
+      closeSettings();
+    } else {
+      openSettings();
+    }
   };
 
   createEffect(() => {

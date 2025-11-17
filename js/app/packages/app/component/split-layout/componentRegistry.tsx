@@ -4,6 +4,7 @@ import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
 import { type JSXElement, lazy } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/Compose';
 import { Soup } from '../Soup';
+import { Settings } from '../settings/Settings';
 
 export type ComponentFactory = (params?: Record<string, any>) => JSXElement;
 
@@ -26,6 +27,7 @@ registerComponent('unified-list', () => <Soup />);
 registerComponent('loading', () => <LoadingBlock />);
 registerComponent('channel-compose', () => <ChannelCompose />);
 registerComponent('email-compose', () => <EmailCompose />);
+registerComponent('settings', () => <Settings />);
 
 if (LOCAL_ONLY) {
   registerComponent(

@@ -12,7 +12,7 @@ import { updateUserAuth, useIsAuthenticated } from '@core/auth';
 import { useLogout } from '@core/auth/logout';
 import { TabContent, TabContentRow } from '@core/component/TabContent';
 import { TextButton } from '@core/component/TextButton';
-import { setSettingsOpen } from '@core/constant/SettingsState';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { setKeyboardVisible } from '@core/mobile/virtualKeyboardDetection';
 import { unsetTokenPromise } from '@core/util/fetchWithToken';
@@ -156,6 +156,7 @@ export function useMobileNavigate() {
 
   const navigate = useNavigate();
   const isAuthenticated = useIsAuthenticated();
+  const { closeSettings } = useSettingsState();
 
   App.addListener('appUrlOpen', async (event) => {
     if (event.url.startsWith('file://') && isAuthenticated()) {
@@ -187,7 +188,7 @@ export function useMobileNavigate() {
             },
           });
         }
-        setSettingsOpen(false);
+        closeSettings();
       }
 
       return;
@@ -219,7 +220,7 @@ export function useMobileNavigate() {
     'pushNotificationActionPerformed',
     ({ notification }) => {
       const notificationData = notification.data as PushNotificationData;
-      setSettingsOpen(false);
+      closeSettings();
       navigate(notificationData.openRoute);
     }
   );
