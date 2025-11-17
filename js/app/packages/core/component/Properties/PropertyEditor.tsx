@@ -35,7 +35,6 @@ const CONTENT_CLASSES = 'flex-1 max-h-64 pt-2 px-4 pb-4';
 
 export function PropertyEditor(props: PropertyEditorProps) {
   const blockId = useBlockId();
-  const [saveError, setSaveError] = createSignal<string | null>(null);
 
   const [selectedEntityRefs, setSelectedEntityRefs] = createSignal<
     EntityReference[]
@@ -54,8 +53,6 @@ export function PropertyEditor(props: PropertyEditorProps) {
   } = usePropertyEditor(props.property);
 
   const saveChanges = async () => {
-    setSaveError(null);
-
     const selectedArray = Array.from(editorState().selectedOptions);
 
     let apiValues: PropertyApiValues;
@@ -93,6 +90,7 @@ export function PropertyEditor(props: PropertyEditorProps) {
         return;
     }
 
+    // savePropertyValue already handles error logging and user feedback
     const result = await savePropertyValue(
       blockId,
       props.entityType,
@@ -102,9 +100,6 @@ export function PropertyEditor(props: PropertyEditorProps) {
 
     if (result.ok) {
       props.onSaved();
-      // Note: hasChanges is managed internally by the hook now
-    } else {
-      setSaveError('Failed to save changes');
     }
 
     props.onClose();
@@ -258,12 +253,6 @@ export function PropertyEditor(props: PropertyEditorProps) {
                   onRetry={fetchOptions}
                   onAddOption={addOption}
                 />
-              </Show>
-
-              <Show when={saveError()}>
-                <div class="mt-3 text-failure-ink text-sm text-center">
-                  {saveError()}
-                </div>
               </Show>
             </div>
           </div>
