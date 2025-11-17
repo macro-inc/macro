@@ -55,46 +55,53 @@ export function PropertiesView(props: PropertiesPanelProps) {
       onPropertyUnpinned={props.onPropertyUnpinned}
       pinnedPropertyIds={props.pinnedPropertyIds}
     >
-      <div class={CONTAINER_CLASSES}>
-        <Show when={isLoading()}>
-          <div class={LOADING_CONTAINER_CLASSES}>
-            <div class={SPINNER_CLASSES}>
-              <LoadingSpinner />
-            </div>
-          </div>
-        </Show>
-
-        <Show when={error()}>
-          <div class="text-failure-ink text-center py-4">{error()}</div>
-        </Show>
-
-        <PropertiesContent
-          properties={properties}
-          isLoading={isLoading}
-          error={error}
-        />
-
-        <AddPropertyButtonWrapper properties={properties} />
-
-        <PropertiesModals />
-      </div>
+      <PropertiesViewContent
+        properties={properties}
+        isLoading={isLoading}
+        error={error}
+        canEdit={props.canEdit}
+      />
     </PropertiesProvider>
   );
 }
 
-function AddPropertyButtonWrapper(props: { properties: Accessor<Property[]> }) {
-  const { canEdit, openPropertySelector } = usePropertiesContext();
+// Separated to allow context access while keeping PropertiesView clean
+function PropertiesViewContent(props: {
+  properties: Accessor<Property[]>;
+  isLoading: Accessor<boolean>;
+  error: Accessor<string | null>;
+  canEdit: boolean;
+}) {
+  const { openPropertySelector } = usePropertiesContext();
   const hasProperties = createMemo(() => props.properties().length > 0);
 
-  const handleAddProperty = () => {
-    openPropertySelector();
-  };
-
   return (
-    <Show when={canEdit && hasProperties()}>
-      <div class="flex-shrink-0 p-4">
-        <AddPropertyButton onClick={handleAddProperty} />
-      </div>
-    </Show>
+    <div class={CONTAINER_CLASSES}>
+      <Show when={props.isLoading()}>
+        <div class={LOADING_CONTAINER_CLASSES}>
+          <div class={SPINNER_CLASSES}>
+            <LoadingSpinner />
+          </div>
+        </div>
+      </Show>
+
+      <Show when={props.error()}>
+        <div class="text-failure-ink text-center py-4">{props.error()}</div>
+      </Show>
+
+      <PropertiesContent
+        properties={props.properties}
+        isLoading={props.isLoading}
+        error={props.error}
+      />
+
+      <Show when={props.canEdit && hasProperties()}>
+        <div class="flex-shrink-0 p-4">
+          <AddPropertyButton onClick={openPropertySelector} />
+        </div>
+      </Show>
+
+      <PropertiesModals />
+    </div>
   );
 }

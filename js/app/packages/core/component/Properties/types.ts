@@ -53,8 +53,7 @@ export type Property = {
   specificEntityType?: EntityType | null;
   createdAt: string;
   updatedAt: string;
-} & (
-  // Single-value types
+} & ( // Single-value types
   | { valueType: 'STRING'; value?: string }
   | { valueType: 'NUMBER'; value?: number }
   | { valueType: 'BOOLEAN'; value?: boolean }
