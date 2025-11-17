@@ -10,6 +10,7 @@ import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { fileDrop } from '@core/directive/fileDrop';
+import { fileSelector } from '@core/directive/fileSelector';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
@@ -19,7 +20,7 @@ import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
 import DotsThree from '@icon/regular/dots-three.svg';
-import Plus from '@icon/regular/plus.svg';
+import ArrowLineUp from '@icon/regular/arrow-line-up.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
@@ -35,8 +36,6 @@ import type {
   MessageWithBodyReplyless,
 } from '@service-email/generated/schemas';
 import { useEmail, useUserId } from '@service-gql/client';
-import type { FileType } from '@service-storage/generated/schemas/fileType';
-import type { Item } from '@service-storage/generated/schemas/item';
 import {
   defaultSelectionData,
   lazyRegister,
@@ -79,11 +78,12 @@ import {
 } from '../util/prepareEmailBody';
 import { convertEmailRecipientToContactInfo } from '../util/recipientConversion';
 import { getReplyTypeFromDraft } from '../util/replyType';
-import { AttachMenu } from './AttachMenu';
+import { blockAcceptedFileExtensions } from '@core/constant/allBlocks';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
 
 false && fileDrop;
+false && fileSelector;
 
 const getRecipientDisplayName = (item: EmailRecipient): string => {
   switch (item.kind) {
@@ -145,7 +145,6 @@ export function BaseInput(props: {
     createSignal<HTMLDivElement>();
   const [editor, setEditor] = createSignal<LexicalEditor>();
   const [showSubject, _] = createSignal(props.newMessage ?? false);
-  const [attachMenuOpen, setAttachMenuOpen] = createSignal(false);
   const [showExpandedRecipients, setShowExpandedRecipients] =
     createSignal<boolean>(false);
   const [isDragging, setIsDragging] = createSignal<boolean>();
@@ -206,7 +205,6 @@ export function BaseInput(props: {
   const [userName] = useDisplayName(userId());
 
   let bodyDiv!: HTMLDivElement;
-  let attachButtonRef!: HTMLDivElement;
   let draftSaveTimer: number | undefined;
   const DRAFT_DEBOUNCE_MS = 1000;
 
@@ -302,19 +300,6 @@ export function BaseInput(props: {
     untrack(scheduleDraftSave);
   };
 
-  function onAttach(items: Item[]) {
-    const documentMentionItems = items.map((item) => ({
-      documentId: item.id,
-      documentName: item.name,
-      blockName:
-        item.type === 'document' ? (item.fileType as FileType) : item.type,
-    }));
-    appendItemsAsMacroMentions(editor(), documentMentionItems);
-    items.forEach((item) => {
-      makeAttachmentPublic(item.id);
-    });
-    scheduleDraftSave();
-  }
 
   function onAttachDocuments(items: DocumentMentionInfo[]) {
     appendItemsAsMacroMentions(editor(), items);
@@ -795,21 +780,21 @@ export function BaseInput(props: {
         </Show>
         <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2 allow-css-brackets">
           <div class="flex flex-row items-center gap-2">
-            <div class="relative" ref={attachButtonRef}>
+            <div
+              use:fileSelector={{
+                acceptedFileExtensions: blockAcceptedFileExtensions,
+                multiple: true,
+                onSelect: async (files) => {
+                  await handleFileUpload(files, setIsPendingUpload, (items) => {
+                    onAttachDocuments(items);
+                  });
+                },
+              }}
+            >
               <IconButton
                 theme="base"
-                icon={Plus}
-                tooltip={{ label: 'Attach' }}
-                onClick={() => setAttachMenuOpen(true)}
-              />
-              <AttachMenu
-                open={attachMenuOpen()}
-                close={() => setAttachMenuOpen(false)}
-                anchorRef={attachButtonRef}
-                containerRef={bodyDiv}
-                onAttach={onAttach}
-                onAttachDocuments={onAttachDocuments}
-                setIsPending={setIsPendingUpload}
+                icon={ArrowLineUp}
+                tooltip={{ label: 'Upload files' }}
               />
             </div>
             <IconButton

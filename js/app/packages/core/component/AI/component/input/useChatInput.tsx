@@ -19,15 +19,15 @@ import { BrightJoins } from '@core/component/BrightJoins';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { IconButton } from '@core/component/IconButton';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import PlusIcon from '@icon/regular/plus.svg';
-import XIcon from '@icon/regular/x.svg';
+import ArrowLineUp from '@icon/regular/arrow-line-up.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, Component, Setter } from 'solid-js';
 import { createEffect, createSignal, Match, Show, Switch } from 'solid-js';
 import { ActiveTabAttachment } from './ActiveTabAttachment';
 import { AttachmentList } from './Attachment';
-import { ChatAttachMenu } from './ChatAttachMenu';
+import { fileSelector } from '@core/directive/fileSelector';
+import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '@core/component/AI/constant';
 import { SendMessageButton, StopButton } from './SendMessageButton';
 import { type Source, ToolsetSelector } from './ToolsetSelector';
 import {
@@ -36,6 +36,9 @@ import {
 } from './useChatMarkdownArea';
 
 const { track, TrackingEvents } = withAnalytics();
+
+// Register fileSelector directive
+false && fileSelector;
 
 export type ChatInputProps = {
   onSend: (args: CreateAndSend | Send) => void;
@@ -134,9 +137,6 @@ function ChatInput(props: ChatInputInternalProps) {
   const toolsetSignal = createSignal<ToolSet>({ type: 'all' });
 
   const [source, setSource] = createSignal<Source>('everything');
-  const [showAttachMenu, setShowAttachMenu] = createSignal(false);
-  const [attachMenuAnchorRef, setAttachMenuAnchorRef] =
-    createSignal<HTMLDivElement>();
 
   createEffect(() => {
     const uploaded = props.uploadQueue.popComplete();
@@ -236,26 +236,22 @@ function ChatInput(props: ChatInputInternalProps) {
             />
           </div>
           <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2 allow-css-brackets">
-            <Show when={showAttachMenu()}>
-              <ChatAttachMenu
-                anchorRef={attachMenuAnchorRef()!}
-                close={() => setShowAttachMenu(false)}
-                containerRef={containerRef}
-                open={showAttachMenu()}
-                onAttach={(attachment) => {
-                  track(TrackingEvents.CHAT.ATTACHMENT.ADD);
-                  props.attachments.addAttachment(attachment);
-                }}
-                uploadQueue={props.uploadQueue}
-              />
-            </Show>
             <div class="flex flex-row items-center gap-2">
-              <IconButton
-                icon={showAttachMenu() ? XIcon : PlusIcon}
-                theme="base"
-                ref={setAttachMenuAnchorRef}
-                onClick={() => setShowAttachMenu((prev) => !prev)}
-              />
+              <div
+                use:fileSelector={{
+                  acceptedFileExtensions: SUPPORTED_ATTACHMENT_EXTENSIONS,
+                  multiple: true,
+                  onSelect: (files) => {
+                    props.uploadQueue.upload(files);
+                  },
+                }}
+              >
+                <IconButton
+                  icon={ArrowLineUp}
+                  theme="base"
+                  tooltip={{ label: 'Upload files' }}
+                />
+              </div>
               <Show when={props.showActiveTabs}>
                 <ActiveTabAttachment
                   onAddAttachment={(attachment) => {

@@ -10,6 +10,7 @@ import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
 import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { fileDrop } from '@core/directive/fileDrop';
+import { fileSelector } from '@core/directive/fileSelector';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
@@ -20,9 +21,8 @@ import {
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
 import type { IUser } from '@core/user';
-import PlusIcon from '@icon/regular/plus.svg';
+import ArrowLineUp from '@icon/regular/arrow-line-up.svg';
 import FormatIcon from '@icon/regular/text-aa.svg';
-import XIcon from '@icon/regular/x.svg';
 import { logger } from '@observability';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
@@ -47,12 +47,13 @@ import type { SetStoreFunction } from 'solid-js/store';
 import { tabbable } from 'tabbable';
 import { staticFileClient } from '../../service-static-files/client';
 import { ActionButton } from './ActionButton';
-import { AttachMenu } from './AttachMenu';
+import { blockAcceptedFileExtensions } from '@core/constant/allBlocks';
 import { Attachment } from './Attachment';
 import { FormatRibbon } from './FormatRibbon';
 import { useChannelMarkdownArea } from './MarkdownArea';
 
 false && fileDrop;
+false && fileSelector;
 
 type InputAttachmentsStore = {
   store: Record<string, InputAttachment[]>;
@@ -124,9 +125,6 @@ export function BaseInput(props: BaseInputProps) {
   let localTypingTimeout: ReturnType<typeof setTimeout> | undefined;
   let viewportObserver: IntersectionObserver | undefined;
 
-  const [showAttachMenu, setShowAttachMenu] = createSignal(false);
-  const [attachMenuAnchorRef, setAttachMenuAnchorRef] =
-    createSignal<HTMLDivElement>();
 
   function resetInactivityTimeout() {
     if (inactivityTimeout) {
@@ -261,18 +259,6 @@ export function BaseInput(props: BaseInputProps) {
     }
   });
 
-  function onAttach(attachment: InputAttachment) {
-    // prevent duplicate attachments
-    const list = attachments();
-    if (list.find((a) => a.id === attachment.id)) return;
-    if (list.length >= 10) {
-      toast.failure('You can only attach up to 10 files at a time');
-      return;
-    }
-    props.inputAttachments.setStore(key, (prev = []) => [...prev, attachment]);
-    focusMarkdownArea();
-    props.onChange(markdownState());
-  }
 
   function removeAttachment(attachment: InputAttachment) {
     if (attachment.blockName === STATIC_IMAGE) {
@@ -473,23 +459,22 @@ export function BaseInput(props: BaseInputProps) {
         </div>
       </Show>
       <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2 allow-css-brackets">
-        <Show when={showAttachMenu()}>
-          <AttachMenu
-            anchorRef={attachMenuAnchorRef()!}
-            close={() => setShowAttachMenu(false)}
-            containerRef={containerRef!}
-            open={showAttachMenu()}
-            onAttach={onAttach}
-            inputAttachmentsStore={props.inputAttachments}
-          />
-        </Show>
         <div class="flex flex-row items-center gap-2">
-          <IconButton
-            icon={showAttachMenu() ? XIcon : PlusIcon}
-            theme="base"
-            ref={setAttachMenuAnchorRef}
-            onClick={() => setShowAttachMenu((prev) => !prev)}
-          />
+          <div
+            use:fileSelector={{
+              acceptedFileExtensions: blockAcceptedFileExtensions,
+              multiple: true,
+              onSelect: (files) => {
+                handleFileUpload(files, props.inputAttachments);
+              },
+            }}
+          >
+            <IconButton
+              icon={ArrowLineUp}
+              theme="base"
+              tooltip={{ label: 'Upload files' }}
+            />
+          </div>
 
           <ActionButton
             tooltip="Format"
