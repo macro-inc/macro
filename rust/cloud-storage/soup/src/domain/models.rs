@@ -34,6 +34,7 @@ pub(crate) enum SimpleSortQuery {
     /// we filter out items based on the input [EntityFilterAst]
     ItemsFilter(Query<String, SimpleSortMethod, EntityFilterAst>),
     /// we filter out items based on the input [EntityFilterAst] IN ADDITION to ANY items that DO have a [Frecency] score
+    #[allow(dead_code, reason = "this is used in a later PR")]
     ItemsAndFrecencyFilter(Query<String, SimpleSortMethod, (Frecency, EntityFilterAst)>),
 }
 
@@ -71,6 +72,7 @@ impl SimpleSortQuery {
 }
 
 impl SimpleSortQuery {
+    #[cfg(test)]
     pub(crate) fn sort_method(&self) -> &SimpleSortMethod {
         match self {
             SimpleSortQuery::NoFilter(query) => query.sort_method(),

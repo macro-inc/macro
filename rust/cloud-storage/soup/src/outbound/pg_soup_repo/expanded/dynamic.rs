@@ -209,7 +209,7 @@ fn build_chat_clause(ast: Option<&Expr<ChatLiteral>>) -> QueryBuilder<'static, P
             format!(r#"c."projectId" = '{p}'"#)
         }
         // todo? I'm not sure what a chat role filter looks like
-        filter_ast::ExprFrame::Literal(ChatLiteral::Role(r)) => String::new(),
+        filter_ast::ExprFrame::Literal(ChatLiteral::Role(_r)) => String::new(),
         filter_ast::ExprFrame::Literal(ChatLiteral::ChatId(i)) => format!("c.id = '{i}'"),
         filter_ast::ExprFrame::Literal(ChatLiteral::Owner(o)) => format!("c.owner = '{o}'"),
     });

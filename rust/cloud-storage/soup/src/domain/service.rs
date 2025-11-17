@@ -139,15 +139,30 @@ where
                         soup_type,
                         SimpleSortRequest {
                             limit,
-                            cursor: SimpleSortQuery::FilterFrecency(Query::Cursor(Cursor {
-                                id,
-                                limit: cursor_limit,
-                                val: CursorVal {
-                                    sort_type: SimpleSortMethod::UpdatedAt,
-                                    last_val: updated,
-                                },
-                                filter: Frecency,
-                            })),
+                            cursor: match filter {
+                                // the input has no ast filter, just filter out items with frecency score and sort by update at
+                                None => SimpleSortQuery::FilterFrecency(Query::Cursor(Cursor {
+                                    id,
+                                    limit: cursor_limit,
+                                    val: CursorVal {
+                                        sort_type: SimpleSortMethod::UpdatedAt,
+                                        last_val: updated,
+                                    },
+                                    filter: Frecency,
+                                })),
+                                // the input has an ast filter, we need to filter out items that have a frecency score and also items that don't match the filter
+                                Some(ast) => {
+                                    SimpleSortQuery::ItemsAndFrecencyFilter(Query::Cursor(Cursor {
+                                        id,
+                                        limit: cursor_limit,
+                                        val: CursorVal {
+                                            sort_type: SimpleSortMethod::UpdatedAt,
+                                            last_val: updated,
+                                        },
+                                        filter: (Frecency, ast),
+                                    }))
+                                }
+                            },
                             user_id: user,
                         },
                     )

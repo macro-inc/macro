@@ -11,7 +11,7 @@ use crate::{
 /// the literal ast type for the chat entity
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ChatLiteral {
-    /// the chat is in some project with [Uuid]
+    /// the chat is in some nested project structure where [Uuid] is a parent node
     ProjectId(Uuid),
     /// the chat has role [ChatRole]
     Role(ChatRole),
