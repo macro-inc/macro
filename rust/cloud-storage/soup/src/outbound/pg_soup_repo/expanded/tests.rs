@@ -151,7 +151,7 @@ async fn test_get_user_items_expanded_cursor(pool: Pool<Postgres>) -> anyhow::Re
     )
     .await?
     .into_iter()
-    .paginate_filter_on(1, SimpleSortMethod::ViewedAt, ())
+    .paginate_on(1, SimpleSortMethod::ViewedAt)
     .into_page();
     let items = result.items;
 
@@ -598,7 +598,8 @@ async fn test_no_frecency_expanded_cursor_pagination(pool: Pool<Postgres>) -> an
     )
     .await?
     .into_iter()
-    .paginate_filter_on(2, SimpleSortMethod::UpdatedAt, Frecency)
+    .paginate_on(2, SimpleSortMethod::UpdatedAt)
+    .filter_on(Frecency)
     .into_page();
 
     assert_eq!(result.items.len(), 2, "Should get 2 items in first page");

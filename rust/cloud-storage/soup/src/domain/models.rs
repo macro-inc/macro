@@ -3,7 +3,7 @@ use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_pagination::{
-    CursorVal, Frecency, FrecencyValue, Identify, Query, SimpleSortMethod, SortOn,
+    Cursor, CursorVal, Frecency, FrecencyValue, Identify, Query, SimpleSortMethod, SortOn,
 };
 use models_soup::item::SoupItem;
 use thiserror::Error;
@@ -20,19 +20,67 @@ pub struct SimpleSortRequest<'a> {
     /// the limit of the number of items to return
     pub(crate) limit: u16,
     /// the [Query] the client passes (if any)
-    pub(crate) cursor: Query<String, SimpleSortMethod, Option<SimpleSortFilter>>,
+    pub(crate) cursor: SimpleSortQuery,
     /// the id of the user
     pub(crate) user_id: MacroUserIdStr<'a>,
 }
 
-/// the types of values we can potentially filter out of a [SimpleSortRequest]
 #[derive(Debug)]
-pub enum SimpleSortFilter {
-    /// remove frecency values from output
-    Frecency(Frecency),
-    /// remove the ast values from output
-    Ast(EntityFilterAst),
-    FrecencyAst(Frecency, EntityFilterAst),
+pub(crate) enum SimpleSortQuery {
+    /// we dont have anything to filter out
+    NoFilter(Query<String, SimpleSortMethod, ()>),
+    /// we filter out items that DO have a [Frecency] record
+    FilterFrecency(Query<String, SimpleSortMethod, Frecency>),
+    /// we filter out items based on the input [EntityFilterAst]
+    ItemsFilter(Query<String, SimpleSortMethod, EntityFilterAst>),
+    /// we filter out items based on the input [EntityFilterAst] IN ADDITION to ANY items that DO have a [Frecency] score
+    #[allow(dead_code, reason = "this is used in a later PR")]
+    ItemsAndFrecencyFilter(Query<String, SimpleSortMethod, (Frecency, EntityFilterAst)>),
+}
+
+impl SimpleSortQuery {
+    pub(crate) fn from_entity_cursor(
+        cursor: Query<String, SimpleSortMethod, Option<EntityFilterAst>>,
+    ) -> Self {
+        match cursor {
+            Query::Sort(s, Some(f)) => SimpleSortQuery::ItemsFilter(Query::Sort(s, f)),
+            Query::Sort(s, None) => SimpleSortQuery::NoFilter(Query::Sort(s, ())),
+            Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter: Some(filter),
+            }) => SimpleSortQuery::ItemsFilter(Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter,
+            })),
+            Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter: None,
+            }) => SimpleSortQuery::NoFilter(Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter: (),
+            })),
+        }
+    }
+}
+
+impl SimpleSortQuery {
+    #[cfg(test)]
+    pub(crate) fn sort_method(&self) -> &SimpleSortMethod {
+        match self {
+            SimpleSortQuery::NoFilter(query) => query.sort_method(),
+            SimpleSortQuery::FilterFrecency(query) => query.sort_method(),
+            SimpleSortQuery::ItemsFilter(query) => query.sort_method(),
+            SimpleSortQuery::ItemsAndFrecencyFilter(query) => query.sort_method(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -81,10 +129,9 @@ impl Identify for FrecencySoupItem {
 }
 
 impl SortOn<Frecency> for FrecencySoupItem {
-    fn sort_on<F>(
+    fn sort_on(
         sort_type: Frecency,
-        filter: F,
-    ) -> impl FnOnce(&Self) -> models_pagination::CursorVal<Frecency, F> {
+    ) -> impl FnOnce(&Self) -> models_pagination::CursorVal<Frecency> {
         move |val| CursorVal {
             sort_type,
             // if this record does not have a frecency score we fallback to created_at as the sort
@@ -92,17 +139,13 @@ impl SortOn<Frecency> for FrecencySoupItem {
                 Some(f) => FrecencyValue::FrecencyScore(f.data.frecency_score),
                 None => FrecencyValue::UpdatedAt(val.item.updated_at()),
             },
-            filter,
         }
     }
 }
 
 impl SortOn<SimpleSortMethod> for FrecencySoupItem {
-    fn sort_on<F>(
-        sort: SimpleSortMethod,
-        filter: F,
-    ) -> impl FnOnce(&Self) -> CursorVal<SimpleSortMethod, F> {
-        let cb = SoupItem::sort_on(sort, filter);
+    fn sort_on(sort: SimpleSortMethod) -> impl FnOnce(&Self) -> CursorVal<SimpleSortMethod> {
+        let cb = SoupItem::sort_on(sort);
         move |v| cb(&v.item)
     }
 }
