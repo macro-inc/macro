@@ -1,5 +1,6 @@
 import { DEV_MODE_ENV, ENABLE_DOCK_NOTITIFCATIONS } from '@core/constant/featureFlags';
 import { setSettingsOpen, useSettingsState } from '@core/constant/SettingsState';
+import IconTerminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
 import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
@@ -16,6 +17,7 @@ import { BasicHotkey } from '@core/component/Hotkey';
 import { withAnalytics } from '@coparse/analytics';
 import IconAtom from '@macro-icons/macro-atom.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
+import IconLogo from '@macro-icons/macro-logo.svg';
 import { BasicTierLimit } from './BasicTierLimit';
 import { setKonsoleOpen } from '../command/state';
 import { runCommand } from '@core/hotkey/hotkeys';
@@ -47,20 +49,19 @@ export function Dock() {
 
   // This method of opening the correct help drawer is disgusting,
   // but it works and doesn't require changing anything else.
-  const activeSoupDrawerCommand = () => {
+  function activeSoupDrawerCommand(){
     const currentActiveScope = activeScope();
-    if (!currentActiveScope) return undefined;
+    if(!currentActiveScope){return undefined};
     let activeScopeNode = hotkeyScopeTree.get(currentActiveScope);
-    if (!activeScopeNode) return undefined;
-    if (activeScopeNode?.type !== 'dom') return;
+    if(!activeScopeNode){return undefined};
+    if(activeScopeNode?.type !== 'dom'){return};
     const dom = activeScopeNode.element;
     const closestSplitScope = dom.closest('[data-hotkey-scope^="split"]');
-    if (!closestSplitScope || !(closestSplitScope instanceof HTMLElement))
-      return;
+    if(!closestSplitScope || !(closestSplitScope instanceof HTMLElement)){return};
     const scopeId = closestSplitScope.dataset.hotkeyScope;
-    if (!scopeId) return undefined;
+    if(!scopeId){return undefined};
     const splitNode = hotkeyScopeTree.get(scopeId);
-    if (!splitNode) return undefined;
+    if(!splitNode){return undefined};
     return splitNode.hotkeyCommands.get('shift+/');
   };
 
@@ -68,14 +69,14 @@ export function Dock() {
   const [isPresentMode, setIsPresentMode] = createSignal(false);
   const [showGlitchEffect, setShowGlitchEffect] = createSignal(false);
 
-  const enterPresentMode = async () => {
+  async function enterPresentMode(){
     try{
       playSound('Stab_Destruct');
       const element = document.documentElement;
       if(element.requestFullscreen){await element.requestFullscreen()}
       else if((element as any).webkitRequestFullscreen){await (element as any).webkitRequestFullscreen()}// Safari
-      else if((element as any).mozRequestFullScreen)   {await (element as any).mozRequestFullScreen()}// Firefox
-      else if((element as any).msRequestFullscreen)    {await (element as any).msRequestFullscreen()}// IE/Edge
+      else if((element as any).mozRequestFullScreen){await (element as any).mozRequestFullScreen()}// Firefox
+      else if((element as any).msRequestFullscreen){await (element as any).msRequestFullscreen()}// IE/Edge
       focusActiveSplit();
     }
     catch(error){
@@ -83,12 +84,12 @@ export function Dock() {
     }
   };
 
-  const exitPresentMode = async () => {
+  async function exitPresentMode(){
     try{
       if(document.exitFullscreen){await document.exitFullscreen()}
       else if((document as any).webkitExitFullscreen){await (document as any).webkitExitFullscreen()}// Safari
-      else if((document as any).mozCancelFullScreen) {await (document as any).mozCancelFullScreen()}// Firefox
-      else if((document as any).msExitFullscreen)    {await (document as any).msExitFullscreen()}// IE/Edge
+      else if((document as any).mozCancelFullScreen){await (document as any).mozCancelFullScreen()}// Firefox
+      else if((document as any).msExitFullscreen){await (document as any).msExitFullscreen()}// IE/Edge
       focusActiveSplit();
     }
     catch(error){
@@ -96,14 +97,14 @@ export function Dock() {
     }
   };
 
-  const focusActiveSplit = () => {
+  async function focusActiveSplit(){
     const id = activeSplitId();
     if (!id) return null;
     const splitEl = document.querySelector(`[data-split-id="${id}"]`) as HTMLElement;
     splitEl?.focus();
   };
 
-  const togglePresentMode = () => {
+  function togglePresentMode(){
     if(isPresentMode()){
       exitPresentMode();
       setShowGlitchEffect(false);
@@ -115,7 +116,7 @@ export function Dock() {
   };
 
   // Check if we're in fullscreen
-  const checkFullscreen = () => {
+  function checkFullscreen(){
     const isFullscreen =
       document.fullscreenElement ||
       (document as any).webkitFullscreenElement ||
@@ -152,47 +153,23 @@ export function Dock() {
             'box-sizing': 'border-box',
             'align-content': 'center',
             'position': 'relative',
-            'padding': '0 4px',
+            'padding': '0 7px',
             'display': 'grid',
             'height': '40px',
             'z-index': '1',
             'gap': '8px',
           }}>
-            <div
-              onMouseDown={() => setKonsoleOpen(true)}
-              style={{
-                'border-top': '1px solid var(--edge-muted)',
-                'justify-content': 'space-between',
-                'align-items': 'center',
-                'position': 'relative',
-                'display': 'flex',
-                'gap': '0.5rem',
+
+            <IconButton
+              tooltip={{
+                // hotkeyToken: TOKENS.global.createNewSplit,
+                label: 'Open Command Menu'
               }}
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                style={{
-                  'color': 'var(--ink-muted)',
-                  'transition': 'all 300ms',
-                  'margin-bottom': '1px',
-                  'height': '1.5rem',
-                  'width': '1.5rem',
-                }}
-                viewBox="0 0 185.062 122.8"
-              >
-                <path
-                  d="M48.143,0l-17.298,6.784v44.891l10.281,9.711v9.738l-10.281-9.72v-9.729l-13.547-12.792L0,45.664v51.515c0,.98.2,1.95.587,2.85.388.9.955,1.712,1.667,2.386l21.558,20.385,17.313-6.781v-44.891l54.654,51.673,17.313-6.781v-44.891l54.672,51.673,17.298-6.781v-51.515c0-.98-.2-1.95-.587-2.85-.388-.9-.955-1.712-1.667-2.385L120.127,0l-17.316,6.784v44.891l10.281,9.717-.1,9.638-10.181-9.623v-9.732L48.143,0Z"
-                  fill="currentColor"
-                />
-              </svg>
-              <div style={{
-                'display': 'flex',
-                'height': '100%',
-                'width': '100%'
-              }}>
-                <BasicHotkey shortcut="cmd+k" />
-              </div>
-            </div>
+              onClick={() => {setKonsoleOpen(true)}}
+              icon={IconTerminal}
+              theme="clear"
+              size="sm"
+            />
 
             <CreateMenu />
 
@@ -229,6 +206,7 @@ export function Dock() {
               'border-top': '1px solid var(--edge-muted)',
               'align-items': 'stretch',
               'display': 'flex',
+              'gap': '4px'
             }}>
               <IconButton
                 style={{
@@ -243,11 +221,12 @@ export function Dock() {
                 }}
                 onClick={() => {
                   const showHelp = activeSoupDrawerCommand();
-                  if (!showHelp) return;
+                  if(!showHelp){return};
                   runCommand(showHelp);
                 }}
                 icon={IconQuestion}
                 theme="clear"
+                size="sm"
               />
               <IconButton
                 onClick={() => {
@@ -265,8 +244,8 @@ export function Dock() {
                   'height': '100%',
                 }}
                 icon={IconAtom}
+                size="sm"
               />
-
               <IconButton
                 tooltip={{
                   hotkeyToken: TOKENS.global.createNewSplit,
@@ -287,8 +266,8 @@ export function Dock() {
                 }}
                 icon={SplitIcon}
                 theme="clear"
+                size="sm"
               />
-
               <IconButton
                 tooltip={{label: isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'}}
                 theme={isPresentMode() ? 'accent' : 'clear'}
@@ -298,8 +277,8 @@ export function Dock() {
                   'height': '100%',
                 }}
                 icon={IconPower}
+                size="sm"
               />
-
               <IconButton
                 tooltip={{
                   label: settingsOpen() ? 'Close Settings' : 'Open Settings',
@@ -313,8 +292,10 @@ export function Dock() {
                 }}
                 data-settings-button
                 icon={IconGear}
+                size="sm"
               />
             </div>
+
           </div>
         </Show>
       </div>
@@ -387,7 +368,6 @@ export function Dock() {
           </ol>
         </div>
       </Show>
-
     </>
   );
 }

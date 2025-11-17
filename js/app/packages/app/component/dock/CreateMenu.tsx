@@ -1,4 +1,3 @@
-import { BasicHotkey } from '@core/component/Hotkey';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import MacroCreateIcon from '@macro-icons/macro-create-b.svg';
 import { Launcher } from './Launcher';
@@ -25,10 +24,6 @@ export function CreateMenu() {
             class={`h-2.5 ${createMenuOpen() ? 'fill-dialog/70' : 'fill-accent/70 transition-all duration-300'}`}
           />
         </span>
-        <BasicHotkey
-          shortcut="C"
-          theme={createMenuOpen() ? 'muted' : 'muted'}
-        />
       </button>
       <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
     </>
