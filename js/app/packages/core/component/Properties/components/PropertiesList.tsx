@@ -8,7 +8,7 @@ interface PropertiesListProps {
 }
 
 export const PropertiesList: Component<PropertiesListProps> = (props) => {
-  const { openModal } = usePropertiesContext();
+  const { openPropertyEditor, openDatePicker } = usePropertiesContext();
 
   const metadataProperties = createMemo(() =>
     props.properties.filter(
@@ -29,13 +29,13 @@ export const PropertiesList: Component<PropertiesListProps> = (props) => {
 
   const handleValueClick = (property: Property, anchor?: HTMLElement) => {
     if (property.valueType === 'DATE') {
-      openModal('date-picker', property, anchor);
+      openDatePicker(property, anchor);
     } else if (
       property.valueType === 'SELECT_STRING' ||
       property.valueType === 'SELECT_NUMBER' ||
       property.valueType === 'ENTITY'
     ) {
-      openModal('edit-property', property, anchor);
+      openPropertyEditor(property, anchor);
     }
     // LINK, STRING, NUMBER, BOOLEAN handle their own inline editing
   };
