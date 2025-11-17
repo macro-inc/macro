@@ -16,7 +16,7 @@ use serde_json::Value;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChannelMessageIndex {
-    pub channel_id: String,
+    pub entity_id: String,
     pub channel_name: Option<String>,
     pub channel_type: String,
     pub org_id: Option<i64>,
@@ -49,7 +49,6 @@ pub struct ChannelMessageSearchResponse {
 struct ChannelMessageSearchConfig;
 
 impl SearchQueryConfig for ChannelMessageSearchConfig {
-    const ID_KEY: &'static str = "channel_id";
     const INDEX: &'static str = CHANNEL_INDEX;
     const USER_ID_KEY: &'static str = "sender_id";
     const TITLE_KEY: &'static str = "channel_name";
@@ -68,7 +67,6 @@ struct ChannelMessageQueryBuilder {
     inner: SearchQueryBuilder<ChannelMessageSearchConfig>,
     thread_ids: Vec<String>,
     mentions: Vec<String>,
-    channel_ids: Vec<String>,
     sender_ids: Vec<String>,
 }
 
@@ -95,14 +93,9 @@ impl ChannelMessageQueryBuilder {
         self
     }
 
-    pub fn ids(mut self, ids: Vec<String>) -> Self {
-        self.channel_ids = ids.clone();
-        self.inner = self.inner.ids(ids);
-        self
-    }
-
     // Copy function signature from SearchQueryBuilder
     delegate_methods! {
+        fn ids(ids: Vec<String>) -> Self;
         fn match_type(match_type: &str) -> Self;
         fn page(page: u32) -> Self;
         fn page_size(page_size: u32) -> Self;
@@ -127,10 +120,6 @@ impl ChannelMessageQueryBuilder {
         // Add mentions to must clause if provided
         if !self.mentions.is_empty() {
             bool_query.must(QueryType::terms("mentions", self.mentions));
-        }
-
-        if !self.channel_ids.is_empty() {
-            bool_query.must(QueryType::terms("channel_id", self.channel_ids));
         }
 
         // Add sender_ids to must clause if provided
@@ -214,7 +203,7 @@ pub(crate) async fn search_channel_messages(
         .hits
         .into_iter()
         .map(|hit| ChannelMessageSearchResponse {
-            channel_id: hit._source.channel_id,
+            channel_id: hit._source.entity_id,
             channel_name: hit._source.channel_name,
             channel_type: hit._source.channel_type,
             org_id: hit._source.org_id,

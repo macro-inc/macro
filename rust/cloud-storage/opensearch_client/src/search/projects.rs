@@ -17,7 +17,6 @@ use serde_json::Value;
 struct ProjectSearchConfig;
 
 impl SearchQueryConfig for ProjectSearchConfig {
-    const ID_KEY: &'static str = "project_id";
     const INDEX: &'static str = PROJECT_INDEX;
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "project_name";
@@ -77,7 +76,7 @@ impl ProjectQueryBuilder {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProjectIndex {
-    pub project_id: String,
+    pub entity_id: String,
     pub user_id: String,
     pub parent_project_id: Option<String>,
     pub project_name: String,
@@ -162,7 +161,7 @@ pub(crate) async fn search_projects(
         .hits
         .into_iter()
         .map(|hit| ProjectSearchResponse {
-            project_id: hit._source.project_id,
+            project_id: hit._source.entity_id,
             user_id: hit._source.user_id,
             project_name: hit._source.project_name,
             created_at: hit._source.created_at_seconds,

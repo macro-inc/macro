@@ -18,7 +18,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
         "from": 20,
         "size": 20,
         "collapse": {
-            "field": "document_id"
+            "field": "entity_id"
         },
         "sort": DocumentSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
         "highlight": DocumentSearchConfig::default_highlight().to_json(),
@@ -34,7 +34,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
                 "should": [
                     {
                         "terms": {
-                            "document_id": ["doc1", "doc2"]
+                            "entity_id": ["doc1", "doc2"]
                         }
                     },
                     {

@@ -3,6 +3,7 @@ use crate::{CHANNEL_INDEX, Result, date_format::EpochSeconds, error::OpensearchC
 /// The arguments for upserting a channel message into the opensearch index
 #[derive(Debug, serde::Serialize)]
 pub struct UpsertChannelMessageArgs {
+    #[serde(rename = "entity_id")]
     pub channel_id: String,
     pub channel_name: Option<String>,
     pub channel_type: String,

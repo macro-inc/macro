@@ -17,7 +17,7 @@ use serde_json::Value;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChatIndex {
-    pub chat_id: String,
+    pub entity_id: String,
     pub chat_message_id: String,
     pub user_id: String,
     pub role: String,
@@ -40,7 +40,6 @@ pub struct ChatSearchResponse {
 struct ChatSearchConfig;
 
 impl SearchQueryConfig for ChatSearchConfig {
-    const ID_KEY: &'static str = "chat_id";
     const INDEX: &'static str = CHAT_INDEX;
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "title";
@@ -170,7 +169,7 @@ pub(crate) async fn search_chats(
         .hits
         .into_iter()
         .map(|hit| ChatSearchResponse {
-            chat_id: hit._source.chat_id,
+            chat_id: hit._source.entity_id,
             chat_message_id: hit._source.chat_message_id,
             user_id: hit._source.user_id,
             role: hit._source.role,

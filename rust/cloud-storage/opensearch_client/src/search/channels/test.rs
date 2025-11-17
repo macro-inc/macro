@@ -21,7 +21,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
         "from": 20,
         "size": 20,
         "collapse": {
-            "field": "channel_id"
+            "field": "entity_id"
         },
         "sort": ChannelMessageSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
         "highlight": ChannelMessageSearchConfig::default_highlight().to_json(),
@@ -45,11 +45,6 @@ fn test_build_search_request() -> anyhow::Result<()> {
                     },
                     {
                         "terms": {
-                            "channel_id": ["id1", "id2"]
-                        }
-                    },
-                    {
-                        "terms": {
                             "sender_id": ["sender1", "sender2"]
                         },
                     },
@@ -57,7 +52,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
                 "should": [
                     {
                         "terms": {
-                            "channel_id": ["id1", "id2"]
+                            "entity_id": ["id1", "id2"]
                         }
                     },
                     {
