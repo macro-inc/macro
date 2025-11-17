@@ -3,6 +3,7 @@ use crate::{PROJECT_INDEX, Result, date_format::EpochSeconds, error::OpensearchC
 /// The arguments for upserting a project into the opensearch index
 #[derive(Debug, serde::Serialize)]
 pub struct UpsertProjectArgs {
+    #[serde(rename = "entity_id")]
     pub project_id: String,
     pub user_id: String,
     pub project_name: String,

@@ -12,4 +12,4 @@ OPENSEARCH_USERNAME=
 OPENSEARCH_PASSWORD=
 ```
 
-2. Run `bun ${OPERATION}` to perform the desired operation.
+2. Run `bun scripts/${OPERATION}` to perform the desired operation.
