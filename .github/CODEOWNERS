@@ -1,18 +1,18 @@
-/rust/cloud-storage/authentication_service/ @whutchinson98
-/rust/cloud-storage/notification_service/ @whutchinson98
-/rust/cloud-storage/notification_db_client/ @whutchinson98
-/rust/cloud-storage/macro_notify/ @whutchinson98
+/rust/cloud-storage/authentication_service/ @whutchinson98 @evanhutnik @seanaye
+/rust/cloud-storage/notification_service/ @whutchinson98 @evanhutnik
+/rust/cloud-storage/notification_db_client/ @whutchinson98 @evanhutnik
+/rust/cloud-storage/macro_notify/ @whutchinson98 @evanhutnik
 /rust/cloud-storage/sqs_client/ @whutchinson98
 /rust/cloud-storage/ses_client/ @whutchinson98
 /rust/cloud-storage/sns_client/ @whutchinson98
 /rust/cloud-storage/secretsmanager_client/ @whutchinson98
-/rust/cloud-storage/opensearch_client/ @whutchinson98 @gbirman
+/rust/cloud-storage/opensearch_client/ @whutchinson98
 /rust/cloud-storage/search_processing_service/ @whutchinson98
 /rust/cloud-storage/search_service/ @whutchinson98 @gbirman
 /rust/cloud-storage/models_search/ @whutchinson98 @gbirman
 /rust/cloud-storage/models_notification/ @whutchinson98
-/rust/cloud-storage/macro_db_client/ @whutchinson98
-/infra/ @whutchinson98 @gbirman
+/rust/cloud-storage/macro_db_client/ @whutchinson98 @evanhutnik @seanaye @gbirman
+/infra/ @whutchinson98
 
 /rust/cloud-storage/email_db_client @evanhutnik
 /rust/cloud-storage/email_service @evanhutnik
