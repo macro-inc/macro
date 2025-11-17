@@ -10,6 +10,7 @@
     "dev": "cd packages/app && bun run --bun dev",
     "local-dcs": "cd packages/app && VITE_LOCAL_SERVERS='cognition-service,cognition-websocket-service' bun run --bun dev",
     "local-dss": "cd packages/app && VITE_LOCAL_SERVERS='document-storage-service' bun run --bun dev",
+    "local-search": "cd packages/app && VITE_LOCAL_SERVERS='search-service' bun run --bun dev",
     "check": "tsc --noEmit --skipLibCheck --project packages/app/tsconfig.json",
     "build": "cd packages/app && MODE=development NODE_ENV=production bun run --bun build",
     "build:dev": "bun run build",
