@@ -49,25 +49,25 @@ pub enum SearchError {
 
 impl IntoResponse for SearchError {
     fn into_response(self) -> Response {
-        let status_code = match self {
-            SearchError::NoUserId => StatusCode::UNAUTHORIZED,
+        let (status_code, message) = match &self {
+            SearchError::NoUserId => (StatusCode::UNAUTHORIZED, self.to_string()),
             SearchError::InvalidPageSize
             | SearchError::InvalidQuerySize
-            | SearchError::NoQueryOrTermsProvided => StatusCode::BAD_REQUEST,
+            | SearchError::NoQueryOrTermsProvided => (StatusCode::BAD_REQUEST, self.to_string()),
             SearchError::Search(e) => {
-                tracing::error!(error=?e, "Search error details: {:?}", e);
-                StatusCode::INTERNAL_SERVER_ERROR
+                tracing::error!("Search error details: {:?}", e);
+                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }
             SearchError::InternalError(e) => {
-                tracing::error!(error=?e, "Internal error details: {:?}", e);
-                StatusCode::INTERNAL_SERVER_ERROR
+                tracing::error!("Internal error details: {:?}", e);
+                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
             }
         };
 
         (
             status_code,
             Json(ErrorResponse {
-                message: self.to_string().as_str(),
+                message: message.as_str(),
             }),
         )
             .into_response()
