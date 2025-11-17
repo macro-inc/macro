@@ -92,6 +92,18 @@ impl EntityFilterAst {
             }),
         }))
     }
+
+    /// mock function to create the an empty ast
+    #[cfg(feature = "mock")]
+    pub fn mock_empty() -> Self {
+        Self {
+            inner: Arc::new(EntityFilterInner {
+                document_filter: None,
+                project_filter: None,
+                chat_filter: None,
+            }),
+        }
+    }
 }
 
 impl IsEmpty for EntityFilterAst {

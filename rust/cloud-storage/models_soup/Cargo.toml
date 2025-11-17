@@ -4,6 +4,9 @@ name = "models_soup"
 publish = false
 version = "0.1.0"
 
+[features]
+mock = []
+
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true }

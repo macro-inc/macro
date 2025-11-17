@@ -179,7 +179,7 @@ r#"
         ORDER BY "sort_ts!" DESC, "updated_at!" DESC
         LIMIT $3
 "#,
-        user_id.as_ref(),          // $1
+        user_id.as_ref(), // $1
         sort_method_str,  // $2
         query_limit,      // $3
         cursor_timestamp, // $4
