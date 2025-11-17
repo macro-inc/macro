@@ -105,7 +105,7 @@ const DropdownMenu: ParentComponent<
           '!block': true,
         }}
         as={Button}
-        theme="primary"
+        theme={props.theme}
         ref={triggerEl}
       >
         {props.triggerLabel}
