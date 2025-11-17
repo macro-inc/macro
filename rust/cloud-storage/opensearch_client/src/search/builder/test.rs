@@ -79,13 +79,13 @@ fn test_build_search_request() -> anyhow::Result<()> {
             "require_field_match": false,
             "fields": {
                 "content": {
-                    "type": "unified",
+                    "type": "plain",
                     "number_of_fragments": 1,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
                 },
                 "test_title": {
-                    "type": "unified",
+                    "type": "plain",
                     "number_of_fragments": 1,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
@@ -148,13 +148,13 @@ fn test_build_search_request() -> anyhow::Result<()> {
             "require_field_match": false,
             "fields": {
                 "content": {
-                    "type": "unified",
+                    "type": "plain",
                     "number_of_fragments": 1,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
                 },
                 "test_title": {
-                    "type": "unified",
+                    "type": "plain",
                     "number_of_fragments": 1,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
