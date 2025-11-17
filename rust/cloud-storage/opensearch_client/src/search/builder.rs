@@ -70,7 +70,7 @@ pub trait SearchQueryConfig {
         Highlight::new().require_field_match(true).field(
             "content",
             HighlightField::new()
-                .highlight_type("unified")
+                .highlight_type("plain")
                 .pre_tags(vec![MacroEm::Open.to_string()])
                 .post_tags(vec![MacroEm::Close.to_string()])
                 .number_of_fragments(500),
