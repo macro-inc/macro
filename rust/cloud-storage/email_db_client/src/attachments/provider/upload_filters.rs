@@ -5,6 +5,7 @@ pub const ATTACHMENT_MIME_TYPE_FILTERS: &str = r#"
     AND a.mime_type NOT LIKE 'video/%'
     AND a.mime_type NOT LIKE 'audio/%'
     AND a.mime_type NOT IN ('application/ics', 'application/x-sharing-metadata-xml')
+    AND NOT (a.mime_type = 'application/octet-stream' AND UPPER(SUBSTRING(a.filename FROM '\.([^.]+)$')) NOT IN ('PDF', 'DOC', 'DOCX'))
 "#;
 
 /// always insert attachments sent from these domains.
