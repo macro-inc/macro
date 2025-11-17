@@ -129,7 +129,7 @@ export function createMessageStream(send: Send): MessageStream {
   const [isErr, setIsErr] = createSignal<boolean>(false);
   const [err, setErr] = createSignal<StreamError>();
 
-  let cleanup = () => { };
+  let cleanup = () => {};
 
   const handleMessage = (data: FromWebSocketMessage) => {
     if (isDone()) return;
