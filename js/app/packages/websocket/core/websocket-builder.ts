@@ -234,10 +234,10 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
    * @param options the listener options
    */
   public onOpen(
-    listener: WebsocketEventListener<WebsocketEvent.open, Send, Receive>,
+    listener: WebsocketEventListener<WebsocketEvent.Open, Send, Receive>,
     options?: WebsocketEventListenerOptions
   ): WebsocketBuilder<Send, Receive> {
-    this.addListener(WebsocketEvent.open, listener, options);
+    this.addListener(WebsocketEvent.Open, listener, options);
     return this;
   }
 
@@ -249,10 +249,10 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
    * @param options the listener options
    */
   public onClose(
-    listener: WebsocketEventListener<WebsocketEvent.close, Send, Receive>,
+    listener: WebsocketEventListener<WebsocketEvent.Close, Send, Receive>,
     options?: WebsocketEventListenerOptions
   ): WebsocketBuilder<Send, Receive> {
-    this.addListener(WebsocketEvent.close, listener, options);
+    this.addListener(WebsocketEvent.Close, listener, options);
     return this;
   }
 
@@ -264,10 +264,10 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
    * @param options the listener options
    */
   public onError(
-    listener: WebsocketEventListener<WebsocketEvent.error, Send, Receive>,
+    listener: WebsocketEventListener<WebsocketEvent.Error, Send, Receive>,
     options?: WebsocketEventListenerOptions
   ): WebsocketBuilder<Send, Receive> {
-    this.addListener(WebsocketEvent.error, listener, options);
+    this.addListener(WebsocketEvent.Error, listener, options);
     return this;
   }
 
@@ -279,10 +279,10 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
    * @param options the listener options
    */
   public onMessage(
-    listener: WebsocketEventListener<WebsocketEvent.message, Send, Receive>,
+    listener: WebsocketEventListener<WebsocketEvent.Message, Send, Receive>,
     options?: WebsocketEventListenerOptions
   ): WebsocketBuilder<Send, Receive> {
-    this.addListener(WebsocketEvent.message, listener, options);
+    this.addListener(WebsocketEvent.Message, listener, options);
     return this;
   }
 
@@ -309,10 +309,10 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
    * @param options the listener options
    */
   public onReconnect(
-    listener: WebsocketEventListener<WebsocketEvent.reconnect, Send, Receive>,
+    listener: WebsocketEventListener<WebsocketEvent.Reconnect, Send, Receive>,
     options?: WebsocketEventListenerOptions
   ): WebsocketBuilder<Send, Receive> {
-    this.addListener(WebsocketEvent.reconnect, listener, options);
+    this.addListener(WebsocketEvent.Reconnect, listener, options);
     return this;
   }
 
@@ -325,13 +325,13 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
    */
   public onHeartbeatSent(
     listener: WebsocketEventListener<
-      WebsocketEvent.heartbeatSent,
+      WebsocketEvent.HeartbeatSent,
       Send,
       Receive
     >,
     options?: WebsocketEventListenerOptions
   ): WebsocketBuilder<Send, Receive> {
-    this.addListener(WebsocketEvent.heartbeatSent, listener, options);
+    this.addListener(WebsocketEvent.HeartbeatSent, listener, options);
     return this;
   }
 
@@ -344,13 +344,13 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
    */
   public onHeartbeatReceived(
     listener: WebsocketEventListener<
-      WebsocketEvent.heartbeatSent,
+      WebsocketEvent.HeartbeatSent,
       Send,
       Receive
     >,
     options?: WebsocketEventListenerOptions
   ): WebsocketBuilder<Send, Receive> {
-    this.addListener(WebsocketEvent.heartbeatReceived, listener, options);
+    this.addListener(WebsocketEvent.HeartbeatReceived, listener, options);
     return this;
   }
 
@@ -363,13 +363,13 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
    */
   public onHeartbeatMissed(
     listener: WebsocketEventListener<
-      WebsocketEvent.heartbeatMissed,
+      WebsocketEvent.HeartbeatMissed,
       Send,
       Receive
     >,
     options?: WebsocketEventListenerOptions
   ): WebsocketBuilder<Send, Receive> {
-    this.addListener(WebsocketEvent.heartbeatMissed, listener, options);
+    this.addListener(WebsocketEvent.HeartbeatMissed, listener, options);
     return this;
   }
 

@@ -15,23 +15,23 @@ export function createWebsocketStateSignal(
   const [state, setState] = createSignal(ws.connectionState);
 
   const EVENT_HANDLERS: Record<
-    | WebsocketEvent.open
-    | WebsocketEvent.close
-    | WebsocketEvent.error
-    | WebsocketEvent.reconnect
+    | WebsocketEvent.Open
+    | WebsocketEvent.Close
+    | WebsocketEvent.Error
+    | WebsocketEvent.Reconnect
     | WebsocketEvent.retry,
     () => void
   > = {
-    [WebsocketEvent.open]: () => {
+    [WebsocketEvent.Open]: () => {
       setState(WebsocketConnectionState.Open);
     },
-    [WebsocketEvent.close]: () => {
+    [WebsocketEvent.Close]: () => {
       setState(WebsocketConnectionState.Closed);
     },
-    [WebsocketEvent.error]: () => {
+    [WebsocketEvent.Error]: () => {
       setState(WebsocketConnectionState.Closing);
     },
-    [WebsocketEvent.reconnect]: () => {
+    [WebsocketEvent.Reconnect]: () => {
       setState(WebsocketConnectionState.Reconnecting);
     },
     [WebsocketEvent.retry]: () => {
@@ -39,18 +39,18 @@ export function createWebsocketStateSignal(
     },
   };
 
-  ws.addEventListener(WebsocketEvent.open, EVENT_HANDLERS[WebsocketEvent.open]);
+  ws.addEventListener(WebsocketEvent.Open, EVENT_HANDLERS[WebsocketEvent.Open]);
   ws.addEventListener(
-    WebsocketEvent.close,
-    EVENT_HANDLERS[WebsocketEvent.close]
+    WebsocketEvent.Close,
+    EVENT_HANDLERS[WebsocketEvent.Close]
   );
   ws.addEventListener(
-    WebsocketEvent.error,
-    EVENT_HANDLERS[WebsocketEvent.error]
+    WebsocketEvent.Error,
+    EVENT_HANDLERS[WebsocketEvent.Error]
   );
   ws.addEventListener(
-    WebsocketEvent.reconnect,
-    EVENT_HANDLERS[WebsocketEvent.reconnect]
+    WebsocketEvent.Reconnect,
+    EVENT_HANDLERS[WebsocketEvent.Reconnect]
   );
   ws.addEventListener(
     WebsocketEvent.retry,
@@ -59,20 +59,20 @@ export function createWebsocketStateSignal(
 
   onCleanup(() => {
     ws.removeEventListener(
-      WebsocketEvent.open,
-      EVENT_HANDLERS[WebsocketEvent.open]
+      WebsocketEvent.Open,
+      EVENT_HANDLERS[WebsocketEvent.Open]
     );
     ws.removeEventListener(
-      WebsocketEvent.close,
-      EVENT_HANDLERS[WebsocketEvent.close]
+      WebsocketEvent.Close,
+      EVENT_HANDLERS[WebsocketEvent.Close]
     );
     ws.removeEventListener(
-      WebsocketEvent.error,
-      EVENT_HANDLERS[WebsocketEvent.error]
+      WebsocketEvent.Error,
+      EVENT_HANDLERS[WebsocketEvent.Error]
     );
     ws.removeEventListener(
-      WebsocketEvent.reconnect,
-      EVENT_HANDLERS[WebsocketEvent.reconnect]
+      WebsocketEvent.Reconnect,
+      EVENT_HANDLERS[WebsocketEvent.Reconnect]
     );
     ws.removeEventListener(
       WebsocketEvent.retry,

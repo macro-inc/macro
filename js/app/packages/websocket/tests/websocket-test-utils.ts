@@ -29,7 +29,7 @@ export const stopClient = (
     if (client.underlyingWebsocket?.readyState === WebSocket.CLOSED)
       return resolve();
     rejectAfter(timeout, 'failed to stop client').catch((err) => reject(err));
-    client.addEventListener(WebsocketEvent.close, () => resolve(), {
+    client.addEventListener(WebsocketEvent.Close, () => resolve(), {
       once: true,
     });
     client.close();

@@ -17,13 +17,13 @@ export function untilMessage<Send, Receive>(
 ): Promise<Receive> {
   return new Promise((resolve, reject) => {
     const cleanup = () => {
-      ws.removeEventListener(WebsocketEvent.message, handler);
-      ws.removeEventListener(WebsocketEvent.close, closeHandler);
+      ws.removeEventListener(WebsocketEvent.Message, handler);
+      ws.removeEventListener(WebsocketEvent.Close, closeHandler);
     };
 
     const handler = (
       _ws: Websocket<Send, Receive>,
-      e: WebsocketEventMap<Receive>[WebsocketEvent.message]
+      e: WebsocketEventMap<Receive>[WebsocketEvent.Message]
     ) => {
       const data = e.data;
       if (predicate(data)) {
@@ -37,7 +37,7 @@ export function untilMessage<Send, Receive>(
       reject(new Error('WebSocket closed before message received'));
     };
 
-    ws.addEventListener(WebsocketEvent.message, handler);
-    ws.addEventListener(WebsocketEvent.close, closeHandler);
+    ws.addEventListener(WebsocketEvent.Message, handler);
+    ws.addEventListener(WebsocketEvent.Close, closeHandler);
   });
 }

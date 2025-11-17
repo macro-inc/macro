@@ -15,6 +15,7 @@ import {
   type WebsocketEventListenerWithOptions,
   type WebsocketEventMap,
   type WebsocketEventUnion,
+  UrlResolvedEventDetail,
 } from './websocket-event';
 import { isRequiredHeartbeatOptions } from './websocket-heartbeat-options';
 import type { WebsocketOptions } from './websocket-options';
@@ -36,6 +37,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
   private _url: string; // the url to connect to
   private readonly _urlResolver: UrlResolver; // the url resolver to use
   private readonly _protocols?: string | string[]; // the protocols to use
+  private _binaryType?: BinaryType = 'blob'; // the binaryType to use
 
   private _closedByUser: boolean = false; // whether the websocket was closed by the user
   private _lastConnection?: Date; // timestamp of the last connection
@@ -91,11 +93,16 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
         heartbeatSent: [...(options?.listeners?.heartbeatSent ?? [])],
         heartbeatReceived: [...(options?.listeners?.heartbeatReceived ?? [])],
         heartbeatMissed: [...(options?.listeners?.heartbeatMissed ?? [])],
+        urlResolved: [...(options?.listeners?.urlResolved ?? [])],
       },
       binaryType: options?.binaryType,
       serializer: options?.serializer,
       factory: options?.factory,
     };
+
+    if (options?.binaryType !== undefined) {
+      this.binaryType = options.binaryType;
+    }
 
     this._urlResolver = resolver;
 
@@ -225,7 +232,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
    * @return the binaryType of the underlying websocket.
    */
   get binaryType(): BinaryType {
-    return this._underlyingWebsocket.binaryType;
+    return this._binaryType ?? this._underlyingWebsocket.binaryType;
   }
 
   /**
@@ -234,7 +241,12 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
    * @param value to set, 'blob' or 'arraybuffer'.
    */
   set binaryType(value: BinaryType) {
-    this._underlyingWebsocket.binaryType = value;
+    if (this._underlyingWebsocket) {
+      this._underlyingWebsocket.binaryType = value;
+    }
+
+    this._binaryType = value;
+
   }
 
   /**
@@ -252,7 +264,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
     let data = serializeIfNeeded(rawData, this._options.serializer);
 
     if (
-      this._underlyingWebsocket.readyState === this._underlyingWebsocket.OPEN
+      this._underlyingWebsocket && this._underlyingWebsocket.readyState === this._underlyingWebsocket.OPEN
     ) {
       this._underlyingWebsocket.send(data); // websocket is connected, send data
     } else if (this.buffer !== undefined) {
@@ -322,28 +334,37 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
   private async tryConnect(): Promise<WebSocket> {
     const url = await resolveUrl(this._urlResolver);
     this._url = url;
+    const event = new CustomEvent<UrlResolvedEventDetail>(
+      WebsocketEvent.UrlResolved,
+      {
+        detail: {
+          url: this._url,
+        },
+      }
+    );
+    this.dispatchEvent(WebsocketEvent.UrlResolved, event);
     const factory = this._options.factory ?? browserWebSocketFactory;
     const newSocket = factory(this.url, this.protocols); // create new browser-native websocket and add all event listeners
     this._underlyingWebsocket = newSocket;
     this._underlyingWebsocket.addEventListener(
-      WebsocketEvent.open,
+      WebsocketEvent.Open,
       this.handleOpenEvent
     );
     this._underlyingWebsocket.addEventListener(
-      WebsocketEvent.close,
+      WebsocketEvent.Close,
       this.handleCloseEvent
     );
     this._underlyingWebsocket.addEventListener(
-      WebsocketEvent.error,
+      WebsocketEvent.Error,
       this.handleErrorEvent
     );
     this._underlyingWebsocket.addEventListener(
-      WebsocketEvent.message,
+      WebsocketEvent.Message,
       this.handleMessageEvent
     );
 
-    if (this._options.binaryType !== undefined) {
-      this._underlyingWebsocket.binaryType = this._options.binaryType;
+    if (this.binaryType !== undefined) {
+      this._underlyingWebsocket.binaryType = this.binaryType;
     }
 
     return this._underlyingWebsocket;
@@ -354,19 +375,19 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
    */
   private clearWebsocket() {
     this._underlyingWebsocket.removeEventListener(
-      WebsocketEvent.open,
+      WebsocketEvent.Open,
       this.handleOpenEvent
     );
     this._underlyingWebsocket.removeEventListener(
-      WebsocketEvent.close,
+      WebsocketEvent.Close,
       this.handleCloseEvent
     );
     this._underlyingWebsocket.removeEventListener(
-      WebsocketEvent.error,
+      WebsocketEvent.Error,
       this.handleErrorEvent
     );
     this._underlyingWebsocket.removeEventListener(
-      WebsocketEvent.message,
+      WebsocketEvent.Message,
       this.handleMessageEvent
     );
     this._underlyingWebsocket.close();
@@ -377,21 +398,21 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
    * @param event to handle.
    */
   private handleOpenEvent = (event: Event) =>
-    this.handleEvent(WebsocketEvent.open, event);
+    this.handleEvent(WebsocketEvent.Open, event);
 
   /**
    * Handles the 'error' event of the browser-native websocket.
    * @param event to handle.
    */
   private handleErrorEvent = (event: Event) =>
-    this.handleEvent(WebsocketEvent.error, event);
+    this.handleEvent(WebsocketEvent.Error, event);
 
   /**
    * Handles the 'close' event of the browser-native websocket.
    * @param event to handle.
    */
   private handleCloseEvent = (event: CloseEvent) =>
-    this.handleEvent(WebsocketEvent.close, event);
+    this.handleEvent(WebsocketEvent.Close, event);
 
   private handleHeartbeatReceived = (event: MessageEvent) => {
     if (this.heartbeatTimeout) {
@@ -400,7 +421,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
     }
 
     const receivedHeartbeatEvent = new CustomEvent<HeartbeatEventDetail>(
-      WebsocketEvent.heartbeatReceived,
+      WebsocketEvent.HeartbeatReceived,
       {
         detail: {
           message: event.data,
@@ -410,7 +431,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
     );
 
     this.dispatchEvent(
-      WebsocketEvent.heartbeatReceived,
+      WebsocketEvent.HeartbeatReceived,
       receivedHeartbeatEvent
     );
   };
@@ -424,7 +445,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
       this.handleHeartbeatReceived(event);
       return;
     }
-    this.handleEvent(WebsocketEvent.message, event);
+    this.handleEvent(WebsocketEvent.Message, event);
   };
 
   /**
@@ -474,13 +495,13 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
     } as WebsocketEventUnion<WebsocketData>;
 
     match(eventWithType)
-      .with({ type: WebsocketEvent.close }, () => {
+      .with({ type: WebsocketEvent.Close }, () => {
         this.stopHeartbeat();
         this.connectionState = WebsocketConnectionState.Closed;
         this.dispatchEvent(type, event);
         this.scheduleConnectionRetryIfNeeded();
       })
-      .with({ type: WebsocketEvent.open }, () => {
+      .with({ type: WebsocketEvent.Open }, () => {
         if (this.backoff !== undefined && this._lastConnection !== undefined) {
           const detail: ReconnectEventDetail = {
             retries: this.backoff.retries,
@@ -488,10 +509,10 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
             url: this._url,
           };
           const reconnectEvent = new CustomEvent<ReconnectEventDetail>(
-            WebsocketEvent.reconnect,
+            WebsocketEvent.Reconnect,
             { detail }
           );
-          this.dispatchEvent(WebsocketEvent.reconnect, reconnectEvent);
+          this.dispatchEvent(WebsocketEvent.Reconnect, reconnectEvent);
           this.backoff.reset();
         }
 
@@ -510,11 +531,11 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
         this.clearWebsocket();
         this.tryConnect();
       })
-      .with({ type: WebsocketEvent.error }, () => {
+      .with({ type: WebsocketEvent.Error }, () => {
         this.connectionState = WebsocketConnectionState.Closing;
         this.dispatchEvent(type, event);
       })
-      .with({ type: WebsocketEvent.message }, ({ event }) => {
+      .with({ type: WebsocketEvent.Message }, ({ event }) => {
         const data = deserializeIfNeeded(event.data, this._options.serializer);
         const newEvent = new MessageEvent('message', {
           data,
@@ -522,15 +543,15 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
           lastEventId: event.lastEventId,
           source: event.source,
         });
-        this.dispatchEvent(WebsocketEvent.message, newEvent);
+        this.dispatchEvent(WebsocketEvent.Message, newEvent);
       })
       .with(
         {
           type: P.union(
-            WebsocketEvent.reconnect,
-            WebsocketEvent.heartbeatSent,
-            WebsocketEvent.heartbeatReceived,
-            WebsocketEvent.heartbeatMissed
+            WebsocketEvent.Reconnect,
+            WebsocketEvent.HeartbeatSent,
+            WebsocketEvent.HeartbeatReceived,
+            WebsocketEvent.HeartbeatMissed
           ),
         },
         () => {
@@ -625,7 +646,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
       this.missedHeartbeats > this._options.heartbeat.maxMissedHeartbeats;
 
     const event = new CustomEvent<HeartbeatMissedEventDetail>(
-      WebsocketEvent.heartbeatMissed,
+      WebsocketEvent.HeartbeatMissed,
       {
         detail: {
           missedHeartbeats: this.missedHeartbeats,
@@ -635,7 +656,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
       }
     );
 
-    this.dispatchEvent(WebsocketEvent.heartbeatMissed, event);
+    this.dispatchEvent(WebsocketEvent.HeartbeatMissed, event);
 
     if (shouldReconnect) {
       // Close the underlying websocket and trigger a reconnect
@@ -665,7 +686,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
 
     if (this.isClosing()) {
       this.handleEvent(
-        WebsocketEvent.close,
+        WebsocketEvent.Close,
         new CloseEvent('closed websocket by heartbeat, already closing')
       );
       return;
@@ -674,7 +695,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
     this._underlyingWebsocket.send(this._options.heartbeat.pingMessage);
 
     const event = new CustomEvent<HeartbeatEventDetail>(
-      WebsocketEvent.heartbeatReceived,
+      WebsocketEvent.HeartbeatReceived,
       {
         detail: {
           message: this._options.heartbeat.pingMessage,
@@ -683,7 +704,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
       }
     );
 
-    this.dispatchEvent(WebsocketEvent.heartbeatSent, event);
+    this.dispatchEvent(WebsocketEvent.HeartbeatSent, event);
 
     this.heartbeatTimeout = setTimeout(
       () => this.handleHeartbeatTimeout(),

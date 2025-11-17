@@ -71,7 +71,7 @@ describe('Testsuite for Websocket with Heartbeat', () => {
 
   test('Websocket should send pings on interval', async () => {
     let [heartbeatsSent, heartbeatsReceived] = [0, 0];
-    await new Promise<WebsocketEventListenerParams<WebsocketEvent.open>>(
+    await new Promise<WebsocketEventListenerParams<WebsocketEvent.Open>>(
       (resolve) => {
         client = new WebsocketBuilder(url)
           .withBackoff(new ConstantBackoff(100)) // retry after 1 second
@@ -94,7 +94,7 @@ describe('Testsuite for Websocket with Heartbeat', () => {
       }
     ).then(([instance, ev]) => {
       expect(instance).toBe(client);
-      expect(ev.type).toBe(WebsocketEvent.open);
+      expect(ev.type).toBe(WebsocketEvent.Open);
     });
 
     await new Promise((resolve) => setTimeout(resolve, 200));
@@ -106,7 +106,7 @@ describe('Testsuite for Websocket with Heartbeat', () => {
   test('Websocket should dispatch heartbeatMissed and reconnect when pong not received within timeout', async () => {
     let [heartbeatsSent, heartbeatsReceived, heartbeatMissed] = [0, 0, 0];
     server?.setRespondToPings(false);
-    await new Promise<WebsocketEventListenerParams<WebsocketEvent.reconnect>>(
+    await new Promise<WebsocketEventListenerParams<WebsocketEvent.Reconnect>>(
       (resolve) => {
         client = new WebsocketBuilder(url)
           .withBackoff(new ConstantBackoff(1000))

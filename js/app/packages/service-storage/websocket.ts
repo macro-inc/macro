@@ -99,7 +99,7 @@ export function createWebSocketJob<T, R, D, U>({
       setJobId(eventMessage.jobId);
     };
 
-    storageWS.addEventListener(WebsocketEvent.message, messageHandler);
+    storageWS.addEventListener(WebsocketEvent.Message, messageHandler);
     storageWS.send(
       JSON.stringify({
         requestId,
@@ -112,7 +112,7 @@ export function createWebSocketJob<T, R, D, U>({
       const completedJobId = jobId();
       const jobFailed = failed();
       if (completedJobId) {
-        storageWS.removeEventListener(WebsocketEvent.message, messageHandler);
+        storageWS.removeEventListener(WebsocketEvent.Message, messageHandler);
 
         const currentResult = result();
         if (!currentResult) {
@@ -126,13 +126,13 @@ export function createWebSocketJob<T, R, D, U>({
       }
 
       if (jobFailed) {
-        storageWS.removeEventListener(WebsocketEvent.message, messageHandler);
+        storageWS.removeEventListener(WebsocketEvent.Message, messageHandler);
         reject();
       }
     });
 
     onCleanup(() => {
-      storageWS.removeEventListener(WebsocketEvent.message, messageHandler);
+      storageWS.removeEventListener(WebsocketEvent.Message, messageHandler);
     });
   });
 }

@@ -5,32 +5,35 @@ import type { WebsocketData } from './websocket-serializer';
  * Events that can be fired by the websocket.
  */
 export enum WebsocketEvent {
+  /** Fired when the url for the websocket has been resolved on creation or reconnection*/
+  UrlResolved = 'urlResolved',
+
   /** Fired when the connection is opened. */
-  open = 'open',
+  Open = 'open',
 
   /** Fired when the connection is closed. */
-  close = 'close',
+  Close = 'close',
 
   /** Fired when the connection has been closed because of an error, such as when some data couldn't be sent. */
-  error = 'error',
+  Error = 'error',
 
   /** Fired when a message is received. */
-  message = 'message',
+  Message = 'message',
 
   /** Fired when the websocket tries to reconnect after a connection loss. */
   retry = 'retry',
 
   /** Fired when the websocket successfully reconnects after a connection loss. */
-  reconnect = 'reconnect',
+  Reconnect = 'reconnect',
 
   /** Fired when a heartbeat is successfully sent. */
-  heartbeatSent = 'heartbeatSent',
+  HeartbeatSent = 'heartbeatSent',
 
   /** Fired when a heartbeat is received. */
-  heartbeatReceived = 'heartbeatReceived',
+  HeartbeatReceived = 'heartbeatReceived',
 
   /** Fired when a heartbeat is missed. */
-  heartbeatMissed = 'heartbeatMissed',
+  HeartbeatMissed = 'heartbeatMissed',
 }
 
 /***
@@ -76,41 +79,46 @@ export type HeartbeatMissedEventDetail = {
   readonly willReconnect: boolean;
 };
 
+export type UrlResolvedEventDetail = {
+  readonly url: string;
+};
+
 /**
  * Maps websocket events to their corresponding event.
  */
 export type WebsocketEventMap<Receive = WebsocketData> = {
-  [WebsocketEvent.open]: Event;
-  [WebsocketEvent.close]: CloseEvent;
-  [WebsocketEvent.error]: Event;
-  [WebsocketEvent.message]: MessageEvent<Receive>;
+  [WebsocketEvent.UrlResolved]: CustomEvent<UrlResolvedEventDetail>;
+  [WebsocketEvent.Open]: Event;
+  [WebsocketEvent.Close]: CloseEvent;
+  [WebsocketEvent.Error]: Event;
+  [WebsocketEvent.Message]: MessageEvent<Receive>;
   [WebsocketEvent.retry]: CustomEvent<RetryEventDetail>;
-  [WebsocketEvent.reconnect]: CustomEvent<ReconnectEventDetail>;
-  [WebsocketEvent.heartbeatSent]: CustomEvent<HeartbeatEventDetail>;
-  [WebsocketEvent.heartbeatReceived]: CustomEvent<HeartbeatEventDetail>;
-  [WebsocketEvent.heartbeatMissed]: CustomEvent<HeartbeatMissedEventDetail>;
+  [WebsocketEvent.Reconnect]: CustomEvent<ReconnectEventDetail>;
+  [WebsocketEvent.HeartbeatSent]: CustomEvent<HeartbeatEventDetail>;
+  [WebsocketEvent.HeartbeatReceived]: CustomEvent<HeartbeatEventDetail>;
+  [WebsocketEvent.HeartbeatMissed]: CustomEvent<HeartbeatMissedEventDetail>;
 };
 
 /**
  * Discriminated union of all websocket events
  */
 export type WebsocketEventUnion<Receive = WebsocketData> =
-  | { type: WebsocketEvent.open; event: Event }
-  | { type: WebsocketEvent.close; event: CloseEvent }
-  | { type: WebsocketEvent.error; event: Event }
-  | { type: WebsocketEvent.message; event: MessageEvent<Receive> }
+  | { type: WebsocketEvent.Open; event: Event }
+  | { type: WebsocketEvent.Close; event: CloseEvent }
+  | { type: WebsocketEvent.Error; event: Event }
+  | { type: WebsocketEvent.Message; event: MessageEvent<Receive> }
   | { type: WebsocketEvent.retry; event: CustomEvent<RetryEventDetail> }
-  | { type: WebsocketEvent.reconnect; event: CustomEvent<ReconnectEventDetail> }
+  | { type: WebsocketEvent.Reconnect; event: CustomEvent<ReconnectEventDetail> }
   | {
-      type: WebsocketEvent.heartbeatSent;
+      type: WebsocketEvent.HeartbeatSent;
       event: CustomEvent<HeartbeatEventDetail>;
     }
   | {
-      type: WebsocketEvent.heartbeatReceived;
+      type: WebsocketEvent.HeartbeatReceived;
       event: CustomEvent<HeartbeatEventDetail>;
     }
   | {
-      type: WebsocketEvent.heartbeatMissed;
+      type: WebsocketEvent.HeartbeatMissed;
       event: CustomEvent<HeartbeatMissedEventDetail>;
     };
 

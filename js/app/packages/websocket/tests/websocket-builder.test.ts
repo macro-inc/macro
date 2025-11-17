@@ -158,7 +158,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const builder = new WebsocketBuilder(url).onOpen(listener);
     expect(builder['_options']!['listeners']!.open).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.open>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Open>[]
     >([
       {
         listener,
@@ -168,7 +168,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']['listeners'].open).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.open>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Open>[]
     >([
       {
         listener,
@@ -185,7 +185,7 @@ describe('Testsuite for WebSocketBuilder', () => {
       .onOpen(listener1)
       .onOpen(listener2);
     expect(builder['_options']!['listeners']!.open).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.open>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Open>[]
     >([
       {
         listener: listener1,
@@ -196,7 +196,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.open).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.open>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Open>[]
     >([
       {
         listener: listener1,
@@ -212,12 +212,12 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const builder = new WebsocketBuilder(url).onOpen(listener, options);
     expect(builder['_options']!['listeners']!.open).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.open>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Open>[]
     >([{ listener, options }]);
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.open).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.open>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Open>[]
     >([{ listener, options }]);
   });
 
@@ -230,7 +230,7 @@ describe('Testsuite for WebSocketBuilder', () => {
       .onOpen(listener1)
       .onOpen(listener2, options);
     expect(builder['_options']!['listeners']!.open).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.open>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Open>[]
     >([
       {
         listener: listener1,
@@ -241,7 +241,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.open).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.open>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Open>[]
     >([
       {
         listener: listener1,
@@ -256,7 +256,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const builder = new WebsocketBuilder(url).onClose(listener);
     expect(builder['_options']!['listeners']!.close).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.close>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Close>[]
     >([
       {
         listener,
@@ -266,7 +266,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.close).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.close>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Close>[]
     >([
       {
         listener,
@@ -283,7 +283,7 @@ describe('Testsuite for WebSocketBuilder', () => {
       .onClose(listener1)
       .onClose(listener2);
     expect(builder['_options']!['listeners']!.close).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.close>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Close>[]
     >([
       {
         listener: listener1,
@@ -294,7 +294,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.close).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.close>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Close>[]
     >([
       {
         listener: listener1,
@@ -310,7 +310,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const builder = new WebsocketBuilder(url).onClose(listener, options);
     expect(builder['_options']!['listeners']!.close).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.close>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Close>[]
     >([
       {
         listener,
@@ -320,7 +320,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.close).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.close>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Close>[]
     >([{ listener, options }]);
   });
 
@@ -333,7 +333,7 @@ describe('Testsuite for WebSocketBuilder', () => {
       .onClose(listener1)
       .onClose(listener2, options);
     expect(builder['_options']!['listeners']!.close).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.close>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Close>[]
     >([
       {
         listener: listener1,
@@ -344,7 +344,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.close).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.close>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Close>[]
     >([
       {
         listener: listener1,
@@ -359,7 +359,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const builder = new WebsocketBuilder(url).onError(listener);
     expect(builder['_options']!['listeners']!.error).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.error>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Error>[]
     >([
       {
         listener,
@@ -369,7 +369,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.error).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.error>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Error>[]
     >([
       {
         listener,
@@ -386,7 +386,7 @@ describe('Testsuite for WebSocketBuilder', () => {
       .onError(listener1)
       .onError(listener2);
     expect(builder['_options']!['listeners']!.error).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.error>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Error>[]
     >([
       {
         listener: listener1,
@@ -397,7 +397,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.error).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.error>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Error>[]
     >([
       {
         listener: listener1,
@@ -413,7 +413,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const builder = new WebsocketBuilder(url).onError(listener, options);
     expect(builder['_options']!['listeners']!.error).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.error>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Error>[]
     >([
       {
         listener,
@@ -423,7 +423,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.error).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.error>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Error>[]
     >([{ listener, options }]);
   });
 
@@ -436,7 +436,7 @@ describe('Testsuite for WebSocketBuilder', () => {
       .onError(listener1)
       .onError(listener2, options);
     expect(builder['_options']!['listeners']!.error).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.error>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Error>[]
     >([
       {
         listener: listener1,
@@ -447,7 +447,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.error).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.error>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Error>[]
     >([
       {
         listener: listener1,
@@ -462,7 +462,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const builder = new WebsocketBuilder(url).onMessage(listener);
     expect(builder['_options']!['listeners']!.message).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.message>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Message>[]
     >([
       {
         listener,
@@ -472,7 +472,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.message).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.message>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Message>[]
     >([
       {
         listener,
@@ -489,7 +489,7 @@ describe('Testsuite for WebSocketBuilder', () => {
       .onMessage(listener1)
       .onMessage(listener2);
     expect(builder['_options']!['listeners']!.message).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.message>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Message>[]
     >([
       {
         listener: listener1,
@@ -500,7 +500,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.message).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.message>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Message>[]
     >([
       {
         listener: listener1,
@@ -516,7 +516,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const builder = new WebsocketBuilder(url).onMessage(listener, options);
     expect(builder['_options']!['listeners']!.message).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.message>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Message>[]
     >([
       {
         listener,
@@ -526,7 +526,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.message).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.message>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Message>[]
     >([
       {
         listener,
@@ -544,7 +544,7 @@ describe('Testsuite for WebSocketBuilder', () => {
       .onMessage(listener1)
       .onMessage(listener2, options);
     expect(builder['_options']!['listeners']!.message).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.message>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Message>[]
     >([
       {
         listener: listener1,
@@ -555,7 +555,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.message).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.message>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Message>[]
     >([
       {
         listener: listener1,
@@ -673,7 +673,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const builder = new WebsocketBuilder(url).onReconnect(listener);
     expect(builder['_options']!['listeners']!.reconnect).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.reconnect>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Reconnect>[]
     >([
       {
         listener,
@@ -683,7 +683,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.reconnect).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.reconnect>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Reconnect>[]
     >([
       {
         listener,
@@ -700,7 +700,7 @@ describe('Testsuite for WebSocketBuilder', () => {
       .onReconnect(listener1)
       .onReconnect(listener2);
     expect(builder['_options']!['listeners']!.reconnect).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.reconnect>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Reconnect>[]
     >([
       {
         listener: listener1,
@@ -711,7 +711,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.reconnect).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.reconnect>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Reconnect>[]
     >([
       {
         listener: listener1,
@@ -727,7 +727,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const builder = new WebsocketBuilder(url).onReconnect(listener, options);
     expect(builder['_options']!['listeners']!.reconnect).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.reconnect>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Reconnect>[]
     >([
       {
         listener,
@@ -737,7 +737,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.reconnect).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.reconnect>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Reconnect>[]
     >([
       {
         listener,
@@ -755,7 +755,7 @@ describe('Testsuite for WebSocketBuilder', () => {
       .onReconnect(listener1)
       .onReconnect(listener2, options);
     expect(builder['_options']!['listeners']!.reconnect).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.reconnect>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Reconnect>[]
     >([
       {
         listener: listener1,
@@ -766,7 +766,7 @@ describe('Testsuite for WebSocketBuilder', () => {
 
     const ws = builder.build();
     expect(ws['_options']!['listeners']!.reconnect).toStrictEqual<
-      WebsocketEventListenerWithOptions<WebsocketEvent.reconnect>[]
+      WebsocketEventListenerWithOptions<WebsocketEvent.Reconnect>[]
     >([
       {
         listener: listener1,

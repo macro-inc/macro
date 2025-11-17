@@ -34,11 +34,11 @@ export function createWebsocketEventEffect<
     }
   };
 
-  ws.addEventListener(WebsocketEvent.message, messageHandler);
+  ws.addEventListener(WebsocketEvent.Message, messageHandler);
 
   if (getOwner()) {
     onCleanup(() => {
-      ws.removeEventListener(WebsocketEvent.message, messageHandler);
+      ws.removeEventListener(WebsocketEvent.Message, messageHandler);
     });
   }
 }
@@ -61,10 +61,10 @@ export function createSocketEffect<Send, Receive>(
     callback(data);
   };
 
-  ws.addEventListener(WebsocketEvent.message, messageHandler);
+  ws.addEventListener(WebsocketEvent.Message, messageHandler);
 
   const dispose = () => {
-    ws.removeEventListener(WebsocketEvent.message, messageHandler);
+    ws.removeEventListener(WebsocketEvent.Message, messageHandler);
   };
 
   if (getOwner()) {
@@ -90,11 +90,11 @@ export function createReconnectEffect(
     callback();
   };
 
-  ws.addEventListener(WebsocketEvent.reconnect, reconnectingHandler);
+  ws.addEventListener(WebsocketEvent.Reconnect, reconnectingHandler);
 
   if (getOwner()) {
     onCleanup(() => {
-      ws.removeEventListener(WebsocketEvent.reconnect, reconnectingHandler);
+      ws.removeEventListener(WebsocketEvent.Reconnect, reconnectingHandler);
     });
   }
 }
