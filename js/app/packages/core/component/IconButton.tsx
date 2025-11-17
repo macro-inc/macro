@@ -1,4 +1,3 @@
-import { useTokenToHotkeyString } from '@core/hotkey/hotkeys';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { onKeyDownClick, onKeyUpClick } from '@core/util/click';
@@ -16,6 +15,7 @@ import { Dynamic } from 'solid-js/web';
 import { BasicHotkey } from './Hotkey';
 import { type Theme, themeColors, themeStyles } from './Themes';
 import { LabelAndHotKey, NullTooltip, Tooltip } from './Tooltip';
+import { useTokenToHotkeyString } from '@core/hotkey/hotkeys';
 
 type IconButton = ComponentProps<'button'> & {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
@@ -121,20 +121,7 @@ export function IconButton(props: IconButtonProps) {
     return <>{props.children}</>;
   };
 
-  const primaryHotkey = createMemo(() => {
-    const tips = tooltips();
-    if (!tips) return undefined;
-    if (tips[0]?.hotkeyToken) {
-      const hotkey = useTokenToHotkeyString(tips[0].hotkeyToken);
-      if (hotkey()) {
-        return hotkey();
-      }
-    }
-    if (tips[0]?.shortcut) {
-      return <BasicHotkey shortcut={tips[0].shortcut} />;
-    }
-    return undefined;
-  });
+  const primaryHotkeyToken = () => tooltips()?.[0]?.hotkeyToken;
 
   const sizeClasses = createMemo(() => {
     switch (local.size ?? 'base') {
@@ -175,6 +162,7 @@ export function IconButton(props: IconButtonProps) {
         onTouchEnd={local.onTouchEnd}
         data-index={local.index}
         tabIndex={local.tabIndex}
+        data-hotkey-token={primaryHotkeyToken()}
       >
         <div
           class="flex justify-start items-center"
@@ -197,14 +185,14 @@ export function IconButton(props: IconButtonProps) {
             <CaretDown class="flex w-3 h-3" />
           </div>
         </Show>
-        <Show when={props.showShortcut && primaryHotkey()}>
-          {(key) => {
+        <Show when={props.showShortcut && primaryHotkeyToken()}>
+          {(token) => {
             return (
               <div
                 class="absolute bottom-[-0.5px] right-[-0.5px] text-[7.5px] uppercase pointer-events-none font-semibold"
                 classList={{ invisible: isMobileWidth() }}
               >
-                {key()}
+                <BasicHotkey token={token()} />
               </div>
             );
           }}

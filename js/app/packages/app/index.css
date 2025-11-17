@@ -565,6 +565,10 @@
         color: var(--color-ink);
     }
 
+    body.visor-active {
+        background-color: var(--color-accent);
+    }
+
     @font-face {
         font-family: "oooh-baby";
         src: url("./asset/fonts/OoohBaby-Regular.woff2") format("truetype");

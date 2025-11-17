@@ -7,7 +7,7 @@ const initialTree = new Map<string, ScopeNode>([
   [
     'global',
     {
-      id: 'global',
+      scopeId: 'global',
       type: 'dom',
       element: document.body,
       childScopeIds: [],

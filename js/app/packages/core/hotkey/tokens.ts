@@ -183,3 +183,32 @@ export const TOKENS = {
 
 type ExtractValues<T> = T extends object ? ExtractValues<T[keyof T]> : T;
 export type HotkeyToken = ExtractValues<typeof TOKENS>;
+
+/**
+ * Builds a Map from token string values to their token references
+ * e.g. 'channel.moveUp' -> TOKENS.channel.moveUp
+ */
+export function buildTokenMap(tokens: typeof TOKENS): Map<string, HotkeyToken> {
+  const map = new Map<string, HotkeyToken>();
+
+  function traverse(obj: any, path: string[] = []) {
+    for (const key in obj) {
+      const value = obj[key];
+      const currentPath = [...path, key];
+
+      if (typeof value === 'string') {
+        // Leaf node - add to map
+        map.set(value, value as HotkeyToken);
+      } else if (typeof value === 'object' && value !== null) {
+        // Nested object - recurse
+        traverse(value, currentPath);
+      }
+    }
+  }
+
+  traverse(tokens);
+  return map;
+}
+
+export const tokenMap = buildTokenMap(TOKENS);
+

@@ -179,6 +179,7 @@ export function registerHotkey(
 
   const command: HotkeyCommand = {
     hotkeyToken,
+    scopeId,
     hotkeys,
     condition,
     description,
@@ -317,7 +318,7 @@ export function useHotkeyDOMScope(
   const repairScopeBranch = (scopeNode: ScopeNode, scopeDOM: Element) => {
     let currentScope = scopeNode;
     let currentDOM: Element | null | undefined = scopeDOM;
-    while (currentScope.id !== 'global' && currentDOM) {
+    while (currentScope.scopeId !== 'global' && currentDOM) {
       // If the scope is detached, we can stop.
       if (currentScope.detached) {
         break;
@@ -325,7 +326,7 @@ export function useHotkeyDOMScope(
       const parentScopeId = findClosestParentScopeId(currentDOM);
       const parentScope = hotkeyScopeTree.get(parentScopeId);
       if (!parentScope) break;
-      parentScope.childScopeIds.push(currentScope.id);
+      parentScope.childScopeIds.push(currentScope.scopeId);
       if (currentScope.type === 'dom') {
         currentScope.parentScopeId = parentScopeId;
       }
@@ -527,12 +528,12 @@ export function useHotKeyRoot() {
           command.keyUpHandler &&
           e.type === 'keydown' &&
           !hotkeysAwaitingKeyUp.some(
-            (h) => h.hotkey === pressedKeysString && h.scopeId === scopeNode?.id
+            (h) => h.hotkey === pressedKeysString && h.scopeId === scopeNode?.scopeId
           )
         ) {
           hotkeysAwaitingKeyUp.push({
             hotkey: pressedKeysString as ValidHotkey,
-            scopeId: scopeNode.id,
+            scopeId: scopeNode.scopeId,
             command: () => command.keyUpHandler?.(e),
           });
         }
@@ -540,7 +541,7 @@ export function useHotKeyRoot() {
           const newScope = hotkeyScopeTree.get(command.activateCommandScopeId);
           if (newScope) {
             setPressedKeys(new Set<string>());
-            setActiveScope(newScope.id);
+            setActiveScope(newScope.scopeId);
             if (!transitionOrCommandFound) {
               setExecutedTokens((prev) =>
                 prev.includes(command.hotkeyToken ?? '')
@@ -604,7 +605,7 @@ export function runCommand({
   if (activateCommandScopeId) {
     const newScope = hotkeyScopeTree.get(activateCommandScopeId);
     if (newScope) {
-      setActiveScope(newScope.id);
+      setActiveScope(newScope.scopeId);
     }
   }
 }
@@ -618,7 +619,7 @@ export function runCommandByToken(token: HotkeyToken) {
     if (command.activateCommandScopeId) {
       const newScope = hotkeyScopeTree.get(command.activateCommandScopeId);
       if (newScope) {
-        setActiveScope(newScope.id);
+        setActiveScope(newScope.scopeId);
       }
     }
   }
@@ -639,7 +640,7 @@ export function useHotkeyCommandByToken(token: HotkeyToken) {
 }
 
 // Helper function to get the first hotkey for display purposes
-export function useTokenToHotkeyString(token: HotkeyToken) {
+export function useTokenToHotkeyString(token?: HotkeyToken) {
   return createMemo(() => {
     if (!token) return undefined;
     const map = hotkeyTokenMap();
