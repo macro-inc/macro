@@ -5,9 +5,12 @@ use uuid::Uuid;
 
 use crate::{ProjectFilters, ast::ExpandErr};
 
-#[derive(Debug, Serialize, Deserialize)]
+/// the literal ast types for a project
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ProjectLiteral {
+    /// the id of the project
     ProjectId(Uuid),
+    /// the owner of the project
     Owner(MacroUserIdStr<'static>),
 }
 

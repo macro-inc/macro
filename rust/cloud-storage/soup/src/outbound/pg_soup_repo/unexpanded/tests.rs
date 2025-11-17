@@ -220,7 +220,7 @@ async fn test_get_user_items_unexpanded_cursor(pool: Pool<Postgres>) -> anyhow::
     )
     .await?
     .into_iter()
-    .paginate_filter_on(1, SimpleSortMethod::ViewedAt, ())
+    .paginate_on(1, SimpleSortMethod::ViewedAt)
     .into_page();
 
     assert_eq!(result.items.len(), 1, "Should get 1 item");

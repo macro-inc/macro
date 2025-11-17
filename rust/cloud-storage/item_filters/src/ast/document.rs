@@ -7,7 +7,7 @@ use std::str::FromStr;
 use uuid::Uuid;
 
 /// the literal type that can appear in the item filer ast
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum DocumentLiteral {
     /// this node value filters by [FileType]
     FileType(FileType),

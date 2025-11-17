@@ -184,16 +184,14 @@ impl ThreadPreviewCursor {
 }
 
 impl SortOn<SimpleSortMethod> for ThreadPreviewCursor {
-    fn sort_on<F>(
+    fn sort_on(
         sort: SimpleSortMethod,
-        filter: F,
-    ) -> impl FnOnce(&Self) -> models_pagination::CursorVal<SimpleSortMethod, F> {
+    ) -> impl FnOnce(&Self) -> models_pagination::CursorVal<SimpleSortMethod> {
         move |v| {
             let last_val = v.timestamp_for_sort_method(sort);
             models_pagination::CursorVal {
                 sort_type: sort,
                 last_val,
-                filter,
             }
         }
     }
