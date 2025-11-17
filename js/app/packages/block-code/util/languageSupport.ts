@@ -167,10 +167,6 @@ export const langIdSet = new Set([
 // Export supported languages as langId for compatibility
 export const langId = supportedLanguages;
 
-// File extensions for type compatibility
-export const filesExtensions = supportedExtensions;
-export const fileExtensionSet = supportedExtensionSet;
-
 export function detectLanguageFromExtension(
   fileExtension: string
 ): string | null {

@@ -1,4 +1,3 @@
-import type { filesExtensions } from '@block-code/util/languageSupport';
 import { MARKDOWN_LORO_SCHEMA } from '@block-md/definition';
 import { rawStateToLoroSnapshot } from '@core/collab/utils';
 import { createMarkdownStateFromContent } from '@core/component/LexicalMarkdown/collaboration/utils';
@@ -85,7 +84,7 @@ export async function createCodeFileFromText({
 }: {
   code: string;
   title?: string;
-  extension: (typeof filesExtensions)[number];
+  extension: string;
 }) {
   const encoder = new TextEncoder();
   const buffer = encoder.encode(code);
