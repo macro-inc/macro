@@ -75,6 +75,7 @@ export type MessageListProps = {
   setFocusedMessageId: Setter<string | undefined>;
   orderedMessages: Accessor<Message[]>;
   setOrderedMessages: Setter<Message[]>;
+  setLastMessageRef?: Setter<HTMLDivElement | undefined>;
 };
 
 function EmptyMessageList() {
@@ -661,6 +662,7 @@ export function MessageList(props: MessageListProps) {
                       container={containerRef()}
                       listContext={messageListContext[row.id]}
                       targetMessageId={activeTargetMessage()?.messageId}
+                      setLastMessageRef={props.setLastMessageRef}
                     />
                   </Show>
                 );
