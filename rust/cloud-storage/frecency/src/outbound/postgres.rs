@@ -7,6 +7,7 @@ use crate::domain::{
     ports::{AggregateFrecencyStorage, EventRecordStorage, UnprocessedEventsRepo},
 };
 use chrono::{DateTime, Utc};
+use item_filters::ast::EntityFilterAst;
 use macro_user_id::{
     cowlike::CowLike,
     user_id::{MacroUserIdStr, ParseErr},
@@ -83,6 +84,16 @@ impl FrecencyPgStorage {
                 Ok(aggregate_row.into_aggregate_frecency()?)
             })
             .collect()
+    }
+
+    async fn dynamic_get_top_entities(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        from_score: Option<f64>,
+        limit: u32,
+        filter: EntityFilterAst,
+    ) -> Result<Vec<AggregateFrecency>, FrecencyStorageErr> {
+        todo!()
     }
 }
 
@@ -246,7 +257,10 @@ impl AggregateFrecencyStorage for FrecencyPgStorage {
                 self.static_get_top_entities(user_id, from_score, limit)
                     .await
             }
-            Some(_ast) => todo!(),
+            Some(filter) => {
+                self.dynamic_get_top_entities(user_id, from_score, limit, filter)
+                    .await
+            }
         }
     }
 
