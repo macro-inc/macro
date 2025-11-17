@@ -1,14 +1,14 @@
 require('dotenv').config();
 
 import type { Client } from '@opensearch-project/opensearch';
-import { client } from './client';
+import { client } from '../client';
 import {
   CHANNEL_INDEX,
   CHAT_INDEX,
   DOCUMENT_INDEX,
   EMAIL_INDEX,
   PROJECT_INDEX,
-} from './constants';
+} from '../constants';
 
 interface FieldToRemove {
   fieldName: string;

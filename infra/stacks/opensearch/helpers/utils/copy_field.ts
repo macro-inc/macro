@@ -1,58 +1,15 @@
-require('dotenv').config();
-
 import type { Client } from '@opensearch-project/opensearch';
-import { client } from './client';
-import {
-  CHANNEL_INDEX,
-  CHAT_INDEX,
-  DOCUMENT_INDEX,
-  EMAIL_INDEX,
-  PROJECT_INDEX,
-} from './constants';
 
-interface DateField {
-  oldField: string;
-  newField: string;
-}
-
-interface IndexMigration {
-  indexName: string;
-  dateFields: DateField[];
-}
-
-const MIGRATIONS: IndexMigration[] = [
-  {
-    indexName: CHANNEL_INDEX,
-    dateFields: [
-      { oldField: 'created_at', newField: 'created_at_seconds' },
-      { oldField: 'updated_at', newField: 'updated_at_seconds' },
-    ],
-  },
-  {
-    indexName: CHAT_INDEX,
-    dateFields: [{ oldField: 'updated_at', newField: 'updated_at_seconds' }],
-  },
-  {
-    indexName: DOCUMENT_INDEX,
-    dateFields: [{ oldField: 'updated_at', newField: 'updated_at_seconds' }],
-  },
-  {
-    indexName: EMAIL_INDEX,
-    dateFields: [
-      { oldField: 'updated_at', newField: 'updated_at_seconds' },
-      { oldField: 'sent_at', newField: 'sent_at_seconds' },
-    ],
-  },
-  {
-    indexName: PROJECT_INDEX,
-    dateFields: [
-      { oldField: 'created_at', newField: 'created_at_seconds' },
-      { oldField: 'updated_at', newField: 'updated_at_seconds' },
-    ],
-  },
-];
-
-async function copyFieldData(
+/**
+ * This function copies data from one field to another in an index.
+ * @param opensearchClient An instance of the OpenSearch client.
+ * @param indexName The name of the index to copy the data from.
+ * @param oldField The name of the field to copy data from.
+ * @param newField The name of the field to copy data to.
+ * @param dryRun A boolean indicating whether to perform a dry run.
+ * @returns A Promise that resolves when the data has been copied.
+ */
+export async function copyFieldData(
   opensearchClient: Client,
   indexName: string,
   oldField: string,
@@ -108,8 +65,8 @@ async function copyFieldData(
 
   if ('task' in body) {
     const taskId = body.task!;
-    console.log(`  ⏳ Started async task: ${taskId}`);
-    console.log(`  ⏳ Polling for completion...`);
+    console.log(`Started async task: ${taskId}`);
+    console.log(`Polling for completion...`);
 
     // Poll for task completion
     let completed = false;
@@ -129,7 +86,7 @@ async function copyFieldData(
         if (status) {
           const updated = status.updated ?? 0;
           const total = status.total ?? 0;
-          console.log(`  ⏳ Progress: ${updated}/${total} documents processed`);
+          console.log(`Progress: ${updated}/${total} documents processed`);
         }
       }
     }
@@ -198,7 +155,16 @@ async function copyFieldData(
   return 0;
 }
 
-async function verifyMigration(
+/**
+ * This function verifies that data has been copied from one field to another in an index.
+ * @param opensearchClient An instance of the OpenSearch client.
+ * @param indexName The name of the index to verify the data in.
+ * @param oldField The name of the field to copy data from.
+ * @param newField The name of the field to copy data to.
+ * @param dryRun A boolean indicating whether to perform a dry run.
+ * @returns A Promise that resolves when the data has been verified.
+ */
+export async function verifyFieldCopy(
   opensearchClient: Client,
   indexName: string,
   oldField: string,
@@ -211,7 +177,7 @@ async function verifyMigration(
 
   if (dryRun) {
     console.log(
-      `  [DRY-RUN] Would fetch sample documents and compare date formats`
+      `[DRY-RUN] Would fetch sample documents and compare date formats`
     );
     return;
   }
@@ -219,7 +185,7 @@ async function verifyMigration(
   const response = await opensearchClient.search({
     index: indexName,
     body: {
-      size: 3,
+      size: 150,
       query: {
         bool: {
           must: [
@@ -231,11 +197,9 @@ async function verifyMigration(
       fields: [
         {
           field: oldField,
-          format: 'strict_date_optional_time',
         },
         {
           field: newField,
-          format: 'strict_date_optional_time',
         },
       ],
       _source: true,
@@ -246,142 +210,26 @@ async function verifyMigration(
 
   if (hits.length === 0) {
     console.log(
-      `  ⚠️  No documents found with both "${oldField}" and "${newField}"`
+      `⚠️ No documents found with both "${oldField}" and "${newField}"`
     );
     return;
   }
 
-  console.log(`  📊 Sample verification (showing ${hits.length} documents):`);
+  console.log(`📊 Sample verification (showing ${hits.length} documents):`);
 
   for (let i = 0; i < hits.length; i++) {
     const hit = hits[i];
     const oldDateRaw = hit._source?.[oldField];
     const newDateRaw = hit._source?.[newField];
-    const oldDateFormatted =
-      hit.fields && hit.fields[oldField] ? hit.fields[oldField][0] : 'N/A';
-    const newDateFormatted =
-      hit.fields && hit.fields[newField] ? hit.fields[newField][0] : 'N/A';
 
     console.log(`\n    Document ${i + 1} (ID: ${hit._id}):`);
-    console.log(`      ${oldField} (raw): ${oldDateRaw}`);
-    console.log(`      ${oldField} (interpreted): ${oldDateFormatted}`);
-    console.log(`      ${newField} (raw): ${newDateRaw}`);
-    console.log(`      ${newField} (interpreted): ${newDateFormatted}`);
+    console.log(`${oldField} (raw): ${oldDateRaw}`);
+    console.log(`${newField} (raw): ${newDateRaw}`);
 
     if (oldDateRaw === newDateRaw) {
-      console.log(`      ✓ Values match (${oldDateRaw})`);
+      console.log(`✓ Values match (${oldDateRaw})`);
     } else {
-      console.log(
-        `      ⚠️  Values don't match! ${oldDateRaw} vs ${newDateRaw}`
-      );
+      console.log(`⚠️ Values don't match! ${oldDateRaw} vs ${newDateRaw}`);
     }
   }
 }
-
-async function checkIndexExists(
-  opensearchClient: Client,
-  indexName: string
-): Promise<boolean> {
-  const response = await opensearchClient.indices.exists({
-    index: indexName,
-  });
-  return response.body;
-}
-
-async function migrateIndex(
-  opensearchClient: Client,
-  migration: IndexMigration,
-  dryRun: boolean
-): Promise<void> {
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(
-    `Migrating index: ${migration.indexName} ${dryRun ? '(DRY-RUN)' : ''}`
-  );
-  console.log(`${'='.repeat(60)}`);
-
-  const indexExists = await checkIndexExists(
-    opensearchClient,
-    migration.indexName
-  );
-
-  if (!indexExists) {
-    console.log(
-      `⚠️  Index "${migration.indexName}" does not exist. Skipping...`
-    );
-    return;
-  }
-
-  for (const dateField of migration.dateFields) {
-    console.log(`\nProcessing field: ${dateField.oldField}`);
-
-    await copyFieldData(
-      opensearchClient,
-      migration.indexName,
-      dateField.oldField,
-      dateField.newField,
-      dryRun
-    );
-
-    await verifyMigration(
-      opensearchClient,
-      migration.indexName,
-      dateField.oldField,
-      dateField.newField,
-      dryRun
-    );
-  }
-
-  console.log(`\n✓ Completed migration for index: ${migration.indexName}`);
-}
-
-async function copyData(dryRun: boolean = true) {
-  const opensearchClient = client();
-
-  console.log('\n' + '='.repeat(60));
-  console.log(
-    `Copy Timestamp Data ${dryRun ? '(DRY-RUN MODE)' : '(LIVE MODE)'}`
-  );
-  console.log('='.repeat(60));
-  console.log(
-    '\nThis script copies timestamp data from old fields to *_seconds fields.'
-  );
-  console.log('It only updates documents where the new field does not exist.');
-  console.log("\n💡 Safe to run multiple times - it's idempotent!");
-
-  if (dryRun) {
-    console.log('\n⚠️  DRY-RUN MODE: No changes will be made to the database');
-  } else {
-    console.log('\n🚨 LIVE MODE: Data will be copied');
-  }
-
-  try {
-    for (const migration of MIGRATIONS) {
-      await migrateIndex(opensearchClient, migration, dryRun);
-    }
-
-    console.log('\n' + '='.repeat(60));
-    console.log('Data copy completed successfully!');
-    console.log('='.repeat(60));
-
-    if (dryRun) {
-      console.log(
-        '\nTo run for real, set DRY_RUN=false environment variable\n'
-      );
-    } else {
-      console.log(
-        '\n✓ All timestamp data has been copied to *_seconds fields.'
-      );
-      console.log(
-        '💡 Run this script again after deploying new code to catch any documents'
-      );
-      console.log('   added during the migration.\n');
-    }
-  } catch (error) {
-    console.error('\n❌ Data copy failed:', error);
-    throw error;
-  }
-}
-
-const isDryRun = process.env.DRY_RUN !== 'false';
-
-copyData(isDryRun);

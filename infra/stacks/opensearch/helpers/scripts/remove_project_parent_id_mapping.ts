@@ -1,8 +1,8 @@
 require('dotenv').config();
 
 import type { Client } from '@opensearch-project/opensearch';
-import { client } from './client';
-import { PROJECT_INDEX } from './constants';
+import { client } from '../client';
+import { PROJECT_INDEX } from '../constants';
 
 const INDEX_NAME = PROJECT_INDEX;
 const CLEANUP_FIELD = 'parent_project_id';
