@@ -130,7 +130,7 @@ export function AttachMenu(props: AttachMenuProps) {
           }}
         >
           <OldMenu>
-            <div class="flex flex-row items-center w-full p-2 gap-2 text-sm border-b border-edge text-ink mb-1">
+            <div class="flex flex-row items-center w-full p-2 gap-2 text-sm border-b border-edge-muted text-ink mb-1">
               <SearchIcon class="w-3 h-3" />
               <input
                 value={input()}

@@ -1,6 +1,6 @@
+import { matches } from '@core/util/match';
 import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
 import { useEmail } from '@service-gql/client';
-import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -11,7 +11,6 @@ import { useSplitNavigationHandler } from 'core/util/useSplitNavigationHandler';
 import { notificationWithMetadata } from 'notifications/notificationMetadata';
 import type { ParentProps, Ref } from 'solid-js';
 import {
-  createEffect,
   createMemo,
   createSignal,
   For,
@@ -22,17 +21,15 @@ import {
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { createProfilePictureQuery } from '../queries/auth';
-import { createProjectQuery } from '../queries/project';
-import type { EntityData, EntityOf } from '../types/entity';
+import {
+  createProjectQuery,
+  isProjectContainedEntity,
+  type ProjectContainedEntity,
+} from '../queries/project';
+import type { EntityData } from '../types/entity';
 import type { Notification, WithNotification } from '../types/notification';
 import type { WithSearch } from '../types/search';
 import type { EntityClickHandler } from './Entity';
-
-function isEmailEntity(
-  entity: WithNotification<EntityData>
-): entity is WithNotification<EntityOf<'email'>> {
-  return entity.type === 'email';
-}
 
 function UnreadIndicator(props: { active?: boolean }) {
   return (
@@ -103,7 +100,6 @@ export function EntityWithEverything(
     createSignal(false);
 
   const { keydownDataDuringTask } = trackKeydownDuringTask();
-  let _tabbableEl!: HTMLDivElement;
   const userEmail = useEmail();
 
   // onMount(() => {
@@ -176,7 +172,7 @@ export function EntityWithEverything(
       const isLikelyEmail = (value?: string) =>
         typeof value === 'string' && value.includes('@');
       const combinedParticipantFirstNames = createMemo(() => {
-        if (!isEmailEntity(props.entity)) return [];
+        if (props.entity.type !== 'email') return [];
         const me = userEmail();
         const participantNames = props.entity.participantNames ?? [];
         return (
@@ -411,6 +407,7 @@ export function EntityWithEverything(
         onKeyUp={onKeyUpClick((e) => props.onClick?.(props.entity, e as any))}
         role="button"
         tabIndex={0}
+        ref={props.ref}
         ref={mergeRefs(props.ref, (el) => {
           _tabbableEl = el;
         })}
@@ -467,7 +464,9 @@ export function EntityWithEverything(
         >
           <div class="flex flex-row items-center justify-end gap-4 min-w-0">
             <Show when={!showActionList()}>
-              <EntityProject entity={props.entity} />
+              <Show when={matches(props.entity, isProjectContainedEntity)}>
+                {(entity) => <EntityProject entity={entity()} />}
+              </Show>
               <Show when={props.timestamp ?? props.entity.updatedAt}>
                 {(date) => {
                   const formattedDate = createFormattedDate(date());
@@ -691,20 +690,8 @@ function NotificationUserIcon(props: { id: string; name?: string }) {
   );
 }
 
-function EntityProject(props: { entity: EntityData }) {
-  if (
-    !(
-      (props.entity.type === 'chat' || props.entity.type === 'document') &&
-      props.entity.projectId
-    )
-  ) {
-    return null;
-  }
-
+function EntityProject(props: { entity: ProjectContainedEntity }) {
   const projectQuery = createProjectQuery(props.entity);
-  const Loading = () => (
-    <div class="h-3 w-10 bg-ink-placeholder animate-pulse" />
-  );
   return (
     <div class="flex gap-1 items-center text-xs text-ink-extra-muted min-w-0">
       <svg
@@ -720,7 +707,9 @@ function EntityProject(props: { entity: EntityData }) {
           fill="currentColor"
         />
       </svg>
-      <Suspense fallback={<Loading />}>
+      <Suspense
+        fallback={<div class="h-3 w-10 bg-ink-placeholder animate-pulse" />}
+      >
         <Show when={projectQuery.data?.name}>
           {(name) => <div class="truncate">{name()}</div>}
         </Show>
@@ -795,276 +784,6 @@ const createFormattedDate = (timestamp: number) =>
     });
   });
 
-let init = true;
-let globalResizeObserver: ResizeObserver | null = null;
-const containerCallbacks = new WeakMap<HTMLElement, () => void>();
-
-const initGlobalResizeObserver = () => {
-  if (globalResizeObserver) return;
-
-  globalResizeObserver = new ResizeObserver((entries) => {
-    for (const entry of entries) {
-      const callback = containerCallbacks.get(entry.target as HTMLElement);
-      if (callback) {
-        callback();
-      }
-    }
-  });
-};
-
-// truncates rightmost child first
-function _truncateChildren(
-  containerRef: () => HTMLDivElement | undefined | null
-) {
-  const MIN_WIDTH = 80; // Minimum width for collapsed children
-
-  createEffect(() => {
-    const container = containerRef();
-    if (!container) return;
-
-    initGlobalResizeObserver();
-
-    const setSizes = () => {
-      const children = Array.from(container.children) as HTMLElement[];
-      if (children.length === 0) return;
-
-      const containerWidth = container.getBoundingClientRect().width;
-      if (containerWidth === 0) return;
-
-      // Store original styles to restore later
-      const originalStyles = children.map((child) => ({
-        width: child.style.width,
-      }));
-
-      // microtask callback hell to batch sequential dom read/write ...
-      queueMicrotask(() => {
-        // Write
-        // Temporarily reset all width constraints to measure true natural width
-        children.forEach((child) => {
-          child.style.width = 'auto';
-        });
-
-        queueMicrotask(() => {
-          // Read
-          // Measure natural widths using scrollWidth
-          // also forces reflow
-          const naturalWidths = children.map((child) => {
-            // const width = child.scrollWidth;
-            const width = child.scrollWidth;
-            // if(entity) {
-            // console.log(
-            //   'Child scrollWidth:',
-            //   width,
-            //   'Child text:',
-            //   child.textContent?.trim()
-            // );
-            // }
-            return width;
-          });
-
-          queueMicrotask(() => {
-            // Write
-            // Restore original styles immediately
-            children.forEach((child, index) => {
-              const original = originalStyles[index];
-              child.style.width = original.width;
-            });
-
-            queueMicrotask(() => {
-              // Read
-              container.offsetHeight;
-
-              // Account for gaps between children (gap-2 = 8px)
-              const GAP_SIZE = 8;
-              const totalNaturalWidth =
-                naturalWidths.reduce((sum, w) => sum + w, 0) +
-                (children.length - 1) * GAP_SIZE;
-
-              // console.log(
-              //   'Container width:',
-              //   containerWidth,
-              //   'Total natural width:',
-              //   totalNaturalWidth,
-              //   'Natural widths:',
-              //   naturalWidths
-              // );
-
-              // If container is wide enough, use natural widths
-              if (containerWidth >= totalNaturalWidth) {
-                // console.log('Using natural widths - container is wide enough');
-                queueMicrotask(() => {
-                  children.forEach((child) => {
-                    child.style.width = 'auto';
-                    child.style.flexShrink = '';
-                  });
-                });
-                return;
-              }
-
-              // console.log(
-              //   'Container too narrow, applying progressive collapse from right to left'
-              // );
-
-              // Progressive collapse: start from rightmost child and work backwards
-              const computedWidths = [...naturalWidths];
-
-              // Calculate total width needed (including gaps)
-              let totalWidth =
-                computedWidths.reduce((sum, w) => sum + w, 0) +
-                (computedWidths.length - 1) * GAP_SIZE;
-
-              // If total width exceeds container, start collapsing from right
-              if (totalWidth > containerWidth) {
-                // console.log(`Total width ${totalWidth} exceeds container ${containerWidth}, starting collapse from right`);
-
-                // Start from rightmost child and work backwards
-                for (let i = computedWidths.length - 1; i >= 0; i--) {
-                  // console.log(`Child ${i}: natural=${computedWidths[i]}, current total=${totalWidth}`);
-
-                  // Use the smaller of natural width or MIN_WIDTH
-                  const effectiveMinWidth = Math.min(
-                    computedWidths[i],
-                    MIN_WIDTH
-                  );
-
-                  if (computedWidths[i] > effectiveMinWidth) {
-                    // Calculate how much we need to reduce this child
-                    const excess = totalWidth - containerWidth;
-
-                    if (excess > 0) {
-                      // Reduce this child, but not below its effective minimum
-                      const reduction = Math.min(
-                        excess,
-                        computedWidths[i] - effectiveMinWidth
-                      );
-                      computedWidths[i] = Math.max(
-                        effectiveMinWidth,
-                        computedWidths[i] - reduction
-                      );
-                      totalWidth =
-                        computedWidths.reduce((sum, w) => sum + w, 0) +
-                        (computedWidths.length - 1) * GAP_SIZE;
-                      // console.log(`Reduced child ${i} by ${reduction}px to ${computedWidths[i]}px, new total: ${totalWidth}`);
-                    }
-                  }
-
-                  // Check if we're now within bounds
-                  if (totalWidth <= containerWidth) {
-                    // console.log(
-                    //   `Total width ${totalWidth} now fits in container ${containerWidth}`
-                    // );
-                    break;
-                  }
-                }
-              }
-
-              // Second pass: if still not enough space, proportionally reduce all children equally
-              let finalTotalWidth =
-                computedWidths.reduce((sum, w) => sum + w, 0) +
-                (computedWidths.length - 1) * GAP_SIZE;
-
-              if (finalTotalWidth > containerWidth) {
-                // console.log(
-                //   'Still too wide after collapse, applying proportional scaling'
-                // );
-                const availableWidth =
-                  containerWidth - (computedWidths.length - 1) * GAP_SIZE;
-                const scaleFactor = Math.max(
-                  0,
-                  availableWidth / computedWidths.reduce((sum, w) => sum + w, 0)
-                );
-
-                computedWidths.forEach((_, i) => {
-                  computedWidths[i] = Math.max(
-                    0,
-                    computedWidths[i] * scaleFactor
-                  );
-                });
-
-                // Recalculate final width
-                finalTotalWidth =
-                  computedWidths.reduce((sum, w) => sum + w, 0) +
-                  (computedWidths.length - 1) * GAP_SIZE;
-              }
-
-              // Safety check: ensure we never exceed container width
-              if (finalTotalWidth > containerWidth) {
-                const _excess = finalTotalWidth - containerWidth;
-                const availableForChildren =
-                  containerWidth - (computedWidths.length - 1) * GAP_SIZE;
-
-                // Distribute available width proportionally among children
-                const totalChildWidth = computedWidths.reduce(
-                  (sum, w) => sum + w,
-                  0
-                );
-                const finalScaleFactor = availableForChildren / totalChildWidth;
-
-                computedWidths.forEach((_, i) => {
-                  computedWidths[i] = Math.max(
-                    0,
-                    computedWidths[i] * finalScaleFactor
-                  );
-                });
-              }
-
-              // console.log('Final computed widths:', computedWidths);
-
-              // Apply computed widths to children
-              queueMicrotask(() => {
-                children.forEach((child, index) => {
-                  const computedWidth = computedWidths[index];
-                  const naturalWidth = naturalWidths[index];
-
-                  // Only set width if it's different from the natural width
-                  if (Math.abs(computedWidth - naturalWidth) > 0.1) {
-                    child.style.width = `${computedWidth}px`;
-                    // the resizing logic is off by 10 pixels or so
-                    // for now apply shrink in addition, to workaround that issue
-                    child.style.flexShrink = '1';
-                  } else {
-                    // Reset to natural width
-                    child.style.width = 'auto';
-                    child.style.flexShrink = '';
-                  }
-                });
-              });
-            });
-          });
-        });
-      });
-    };
-
-    // Register this container with the global observer
-    containerCallbacks.set(container, setSizes);
-    globalResizeObserver!.observe(container);
-
-    // Check if fonts are ready and recalculate if needed
-    const checkFontsAndRecalculate = async () => {
-      if ('fonts' in document) {
-        try {
-          await document.fonts.ready;
-          setTimeout(() => {
-            setSizes();
-          }, 800);
-        } catch (_error) {
-          setTimeout(setSizes, 100);
-        }
-      }
-    };
-
-    if (init) {
-      // Check fonts and recalculate when ready
-      checkFontsAndRecalculate();
-      init = false;
-    }
-
-    onCleanup(() => {
-      // Unobserve this container and remove its callback
-      globalResizeObserver!.unobserve(container);
-    });
-  });
-}
 
 let lastMouseX: number | null = null;
 let lastMouseY: number | null = null;

@@ -52,7 +52,7 @@ export function ToolsetSelector(props: {
   const [toolset, setToolset] = props.toolset;
   const [source, setSource] = props.sources;
 
-  const StyledTriggerLabel = (props: ParentProps) => {
+  const _StyledTriggerLabel = (props: ParentProps) => {
     return (
       <Tooltip
         tooltip={'Tell the agent which sources to consider in its search'}
@@ -96,7 +96,7 @@ export function ToolsetSelector(props: {
               list={SOURCES.map((s) => s.label)}
             />
           </DropdownMenu>
-          <span class="bg-accent text-panel font-mono text-xs font-medium px-1 flex items-center">
+          <span class="bg-edge-muted text-ink font-mono text-xs font-medium px-1 flex items-center">
             {SOURCE_TO_DISPLAY[source()]}
           </span>
         </div>

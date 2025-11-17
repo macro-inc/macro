@@ -1,6 +1,7 @@
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { IconButton } from '@core/component/IconButton';
-import { runCommandByToken } from '@core/hotkey/hotkeys';
+import { runCommand } from '@core/hotkey/hotkeys';
+import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import CaretDown from '@icon/regular/caret-down.svg';
 import CaretUp from '@icon/regular/caret-up.svg';
@@ -19,6 +20,24 @@ const EntityNavigationIndicator = () => {
   const selectedEntity = () => selectedViewData().selectedEntity;
   const selectedEntityIndex = () =>
     entities()?.findIndex((item) => item.id === selectedEntity()?.id) ?? -1;
+
+  const getNavigationCommand = (key: 'j' | 'k') => {
+    const currentActiveScope = activeScope();
+    if (!currentActiveScope) return undefined;
+    let activeScopeNode = hotkeyScopeTree.get(currentActiveScope);
+    if (!activeScopeNode) return undefined;
+    if (activeScopeNode?.type !== 'dom') return;
+    const dom = activeScopeNode.element;
+    const closestSplitScope = dom.closest('[data-hotkey-scope^="split"]');
+    if (!closestSplitScope || !(closestSplitScope instanceof HTMLElement))
+      return;
+    const scopeId = closestSplitScope.dataset.hotkeyScope;
+    if (!scopeId) return undefined;
+    const splitNode = hotkeyScopeTree.get(scopeId);
+    if (!splitNode) return undefined;
+    return splitNode.hotkeyCommands.get(key);
+  };
+
   return (
     <Show
       when={
@@ -44,7 +63,11 @@ const EntityNavigationIndicator = () => {
             }}
             disabled={selectedEntityIndex() >= entities()!.length - 1}
             theme="current"
-            onClick={() => runCommandByToken(TOKENS.entity.step.end)}
+            onDeepClick={() => {
+              const command = getNavigationCommand('j');
+              if (!command) return;
+              runCommand(command);
+            }}
           />
           <IconButton
             size="sm"
@@ -55,7 +78,11 @@ const EntityNavigationIndicator = () => {
             }}
             disabled={selectedEntityIndex() === 0}
             theme="current"
-            onClick={() => runCommandByToken(TOKENS.entity.step.start)}
+            onDeepClick={() => {
+              const command = getNavigationCommand('k');
+              if (!command) return;
+              runCommand(command);
+            }}
           />
         </div>
       </div>

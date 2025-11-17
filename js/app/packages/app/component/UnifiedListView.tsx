@@ -136,7 +136,7 @@ import {
   KNOWN_FILE_TYPES,
   type SortOptions,
   VIEWCONFIG_BASE,
-  VIEWCONFIG_DEFAULTS_NAMES,
+  VIEWCONFIG_DEFAULTS_IDS,
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
@@ -922,7 +922,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       config,
     });
     // only for default views
-    if (VIEWCONFIG_DEFAULTS_NAMES.includes(view_.id as any)) {
+    if (VIEWCONFIG_DEFAULTS_IDS.includes(view_.id as any)) {
       // Reset initialConfigSignal to current config after save
       const currentConfig = stringifiedCurrentViewConfigBase();
       if (currentConfig !== null && currentConfig !== undefined) {
@@ -1235,7 +1235,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           <UnifiedListComponent
             entityListRef={setLocalEntityListRef}
             virtualizerHandle={setVirtualizerHandle}
-            emptyState={<EmptyState view={view()?.view} />}
+            emptyState={<EmptyState viewId={view()?.id} />}
             hasRefinementsFromBase={isViewConfigChanged}
           >
             {(innerProps) => {
@@ -1565,6 +1565,7 @@ function SearchBar(props: {
     entityListRefSignal: [entityListRef],
   } = splitContext.unifiedListContext;
   const viewData = createMemo(() => viewsDataStore[selectedView()]);
+  const viewName = createMemo(() => viewData().view);
 
   let inputRef: HTMLInputElement | undefined;
 
@@ -1680,7 +1681,7 @@ function SearchBar(props: {
         <input
           ref={inputRef}
           id={`search-input-${splitContext.handle.id}-${selectedView()}`}
-          placeholder="Search"
+          placeholder={`Search in ${viewName()}`}
           value={searchText()}
           onInput={(e) => {
             debouncedSetSearch(e.target.value);

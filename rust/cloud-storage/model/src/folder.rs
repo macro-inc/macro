@@ -51,6 +51,8 @@ pub struct UploadFolderResponseData {
 pub struct FolderItem {
     /// The name of the file, without the extension
     pub name: String,
+    /// The full OS name of the file for deduplication
+    pub full_name: String,
     /// The file type of the file
     #[serde(skip_serializing_if = "Option::is_none")]
     pub file_type: Option<FileType>,
@@ -108,7 +110,7 @@ impl FileSystemNode {
                 .collect();
 
             // Add the file name as the last component
-            path_components.push(&item.name);
+            path_components.push(&item.full_name);
 
             let mut current_node = &mut root;
 

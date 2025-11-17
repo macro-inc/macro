@@ -1,5 +1,5 @@
 use crate::domain::{
-    models::{AdvancedSortParams, SimpleSortRequest, SoupFilter},
+    models::{AdvancedSortParams, SimpleSortFilter, SimpleSortRequest},
     ports::SoupRepo,
 };
 use either::Either;
@@ -26,21 +26,22 @@ impl SoupRepo for PgSoupRepo {
         &self,
         req: SimpleSortRequest<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send {
-        match req.filters {
-            Some(SoupFilter::Ast(_ast)) => todo!(),
-            Some(SoupFilter::Frecency) => {
+        match req.cursor.filter() {
+            Some(SimpleSortFilter::Ast(_ast) | SimpleSortFilter::FrecencyAst(_, _ast)) => todo!(),
+            Some(SimpleSortFilter::Frecency(f)) => {
+                let f = *f;
                 Either::Left(expanded::by_cursor::no_frecency_expanded_generic_soup(
                     &self.inner,
                     req.user_id,
                     req.limit,
-                    req.cursor,
+                    req.cursor.map_filter(|_| f),
                 ))
             }
             None => Either::Right(expanded::by_cursor::expanded_generic_cursor_soup(
                 &self.inner,
                 req.user_id,
                 req.limit,
-                req.cursor,
+                req.cursor.map_filter(|_| ()),
             )),
         }
     }
@@ -49,21 +50,22 @@ impl SoupRepo for PgSoupRepo {
         &self,
         req: SimpleSortRequest<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send {
-        match req.filters {
-            Some(SoupFilter::Ast(_ast)) => todo!(),
-            Some(SoupFilter::Frecency) => {
+        match req.cursor.filter() {
+            Some(SimpleSortFilter::Ast(_ast) | SimpleSortFilter::FrecencyAst(_, _ast)) => todo!(),
+            Some(SimpleSortFilter::Frecency(f)) => {
+                let f = *f;
                 Either::Left(expanded::by_cursor::no_frecency_expanded_generic_soup(
                     &self.inner,
                     req.user_id,
                     req.limit,
-                    req.cursor,
+                    req.cursor.map_filter(|_| f),
                 ))
             }
             None => Either::Right(unexpanded::by_cursor::unexpanded_generic_cursor_soup(
                 &self.inner,
                 req.user_id,
                 req.limit,
-                req.cursor,
+                req.cursor.map_filter(|_| ()),
             )),
         }
     }

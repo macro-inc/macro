@@ -3,6 +3,7 @@ import {
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
+import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { Button } from '@core/component/FormControls/Button';
@@ -20,6 +21,7 @@ import {
   VIEWS,
   type View,
   type ViewId,
+  type ViewLabel,
 } from '@core/types/view';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -60,9 +62,8 @@ import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { UnifiedListView } from './UnifiedListView';
 import {
   VIEWCONFIG_BASE,
-  VIEWCONFIG_DEFAULTS_NAMES,
+  VIEWCONFIG_DEFAULTS_IDS,
   type ViewConfigBase,
-  type ViewConfigDefaultsName,
 } from './ViewConfig';
 
 false && fileFolderDrop;
@@ -267,6 +268,7 @@ export function Soup() {
     description: 'Toggle Preview',
     hotkeyToken: TOKENS.unifiedList.togglePreview,
     keyDownHandler: () => {
+      playSound('open');
       setPreview((prev) => !prev);
       return true;
     },
@@ -323,7 +325,7 @@ export function Soup() {
   const TabContextMenu = (props: { value: ViewId; label: string }) => {
     const [isModalOpen, setIsModalOpen] = createSignal(false);
     const isDefaultView = () =>
-      VIEWCONFIG_DEFAULTS_NAMES.includes(props.value as View);
+      VIEWCONFIG_DEFAULTS_IDS.includes(props.value as View);
     return (
       <Show when={!isDefaultView()}>
         <ContextMenu>
@@ -451,7 +453,7 @@ export function Soup() {
         </Show>
       </div>
       <Show when={showHelpDrawer().has(selectedView())}>
-        <HelpDrawer view={view().view} />
+        <HelpDrawer viewId={view().id} />
       </Show>
     </div>
   );
@@ -495,14 +497,14 @@ export const useUpsertSavedViewMutation = () => {
       viewData:
         | {
             config: ViewConfigBase;
-            id?: ViewConfigDefaultsName | string;
-            name: string;
+            id?: ViewId;
+            name: ViewLabel;
           }
         | {
-            id: ViewConfigDefaultsName | string;
+            id: ViewId;
           }
     ) => {
-      const isDefaultView = VIEWCONFIG_DEFAULTS_NAMES.includes(
+      const isDefaultView = VIEWCONFIG_DEFAULTS_IDS.includes(
         viewData.id as View
       );
       if ('config' in viewData) {

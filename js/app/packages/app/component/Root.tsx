@@ -52,6 +52,7 @@ import {
 } from '../../block-theme/utils/themeUtils';
 import { useNotificationState } from '../../notification-provider/src/NotificationProvider';
 import { TauriRouteListener } from '../../tauri/src/TauriProvider';
+import { useSoundHover } from '../util/soundHover';
 import { updateCookie } from '../util/updateCookie';
 import { Login } from './auth/Login';
 import { LOGIN_COOKIE_AGE, setCookie } from './auth/Shared';
@@ -274,6 +275,7 @@ const clearBodyInlineStyleColor = () => {
 export function Root() {
   const isAuthenticated = useIsAuthenticated();
   useHotKeyRoot();
+  useSoundHover();
 
   useMobileEffect();
 
