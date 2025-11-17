@@ -15,7 +15,7 @@ export function AiChatEmptyState() {
         <span class="p-1 bg-accent text-panel mr-2 text-center">Agent</span>
         <span>
           <span>
-            Quick answers to quick quesions with access to any files @ mentioned
+            Let AI think and search through your files, emails, and channels
           </span>
         </span>
         <span class="p-1 bg-accent text-panel mr-2 text-center">Ask</span>
