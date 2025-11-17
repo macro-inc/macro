@@ -1,8 +1,7 @@
 import DropdownMenu from '@core/component/FormControls/DropdownMenu';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
-import { Tooltip } from '@core/component/Tooltip';
 import type { ToolSet } from '@service-cognition/generated/schemas';
-import { type ParentProps, Show, type Signal } from 'solid-js';
+import { Show, type Signal } from 'solid-js';
 
 type ToolSetName = ToolSet['type'];
 
@@ -52,15 +51,6 @@ export function ToolsetSelector(props: {
   const [toolset, setToolset] = props.toolset;
   const [source, setSource] = props.sources;
 
-  const _StyledTriggerLabel = (props: ParentProps) => {
-    return (
-      <Tooltip
-        tooltip={'Tell the agent which sources to consider in its search'}
-      >
-        {props.children}
-      </Tooltip>
-    );
-  };
   return (
     <div class="flex items-center gap-x-1">
       <SegmentedControl
