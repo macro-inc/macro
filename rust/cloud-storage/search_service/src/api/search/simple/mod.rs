@@ -40,10 +40,10 @@ pub enum SearchError {
     #[error("query or terms must be provided")]
     NoQueryOrTermsProvided,
     /// Opensearch error occurred
-    #[error("unable to search")]
+    #[error("unable to search: {0}")]
     Search(#[from] OpensearchClientError),
     /// Internal error occurred
-    #[error("internal error")]
+    #[error("internal error: {0}")]
     InternalError(#[from] anyhow::Error),
 }
 
