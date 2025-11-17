@@ -34,14 +34,10 @@ export type ValueType =
   | 'LINK';
 
 /**
- * UI layer property representation with type-safe discriminated union
+ * UI layer property with discriminated union for type-safe values
  *
- * TypeScript automatically narrows the value type based on valueType:
- * ```typescript
- * if (property.valueType === 'STRING') {
- *   property.value // TypeScript knows this is string[]
- * }
- * ```
+ * Note: Single-value types use `value?: T`, multi-value types use `value?: T[]`
+ * This reflects the semantic difference between logically single vs multiple values.
  *
  * @see EntityPropertyWithDefinition - Backend structured type
  * @see PropertyValue - Backend discriminated union for values
@@ -55,15 +51,15 @@ export type Property = {
   options?: PropertyOption[];
   owner: PropertyOwner;
   specificEntityType?: EntityType | null;
-  // Timestamps
   createdAt: string;
   updatedAt: string;
 } & (
+  // Single-value types
   | { valueType: 'STRING'; value?: string }
   | { valueType: 'NUMBER'; value?: number }
   | { valueType: 'BOOLEAN'; value?: boolean }
   | { valueType: 'DATE'; value?: Date }
-  // Select values are stored as option IDs (UUIDs as strings), not the actual option values
+  // Multi-value types (select values are option IDs, not display values)
   | { valueType: 'SELECT_STRING'; value?: string[] }
   | { valueType: 'SELECT_NUMBER'; value?: string[] }
   | { valueType: 'ENTITY'; value?: EntityReference[] }
