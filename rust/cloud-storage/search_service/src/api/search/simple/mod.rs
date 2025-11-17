@@ -40,34 +40,28 @@ pub enum SearchError {
     #[error("query or terms must be provided")]
     NoQueryOrTermsProvided,
     /// Opensearch error occurred
-    #[error("unable to search: {0}")]
+    #[error("unable to search")]
     Search(#[from] OpensearchClientError),
     /// Internal error occurred
-    #[error("internal error: {0}")]
+    #[error("internal error")]
     InternalError(#[from] anyhow::Error),
 }
 
 impl IntoResponse for SearchError {
     fn into_response(self) -> Response {
-        let (status_code, message) = match &self {
-            SearchError::NoUserId => (StatusCode::UNAUTHORIZED, self.to_string()),
+        let status_code = match self {
+            SearchError::NoUserId => StatusCode::UNAUTHORIZED,
             SearchError::InvalidPageSize
             | SearchError::InvalidQuerySize
-            | SearchError::NoQueryOrTermsProvided => (StatusCode::BAD_REQUEST, self.to_string()),
-            SearchError::Search(e) => {
-                tracing::error!("Search error details: {:?}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
-            }
-            SearchError::InternalError(e) => {
-                tracing::error!("Internal error details: {:?}", e);
-                (StatusCode::INTERNAL_SERVER_ERROR, self.to_string())
-            }
+            | SearchError::NoQueryOrTermsProvided => StatusCode::BAD_REQUEST,
+            SearchError::Search(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            SearchError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
 
         (
             status_code,
             Json(ErrorResponse {
-                message: message.as_str(),
+                message: self.to_string().as_str(),
             }),
         )
             .into_response()
