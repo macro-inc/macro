@@ -16,7 +16,10 @@ import type { ToWebsocketMessage } from './generated/schemas/toWebsocketMessage'
 
 const wsHost: string = SERVER_HOSTS['connection-gateway'];
 
-export type ConnectionGatewayWebsocket = Websocket<ToWebsocketMessage, FromWebsocketMessage>;
+export type ConnectionGatewayWebsocket = Websocket<
+  ToWebsocketMessage,
+  FromWebsocketMessage
+>;
 
 export type FromWebsocketMessage = {
   type: string;

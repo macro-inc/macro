@@ -4,7 +4,12 @@ import { SERVER_HOSTS } from '@core/constant/servers';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { createCallback } from '@solid-primitives/rootless';
-import { ConstantBackoff, JsonSerializer, type Websocket, WebsocketBuilder } from '@websocket';
+import {
+  ConstantBackoff,
+  JsonSerializer,
+  type Websocket,
+  WebsocketBuilder,
+} from '@websocket';
 import { createSocketEffect } from '@websocket/solid/socket-effect';
 import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
 import type { Accessor } from 'solid-js';
@@ -13,7 +18,10 @@ import type { StreamError } from './generated/schemas';
 import type { FromWebSocketMessage } from './generated/schemas/fromWebSocketMessage';
 import type { ToWebSocketMessage } from './generated/schemas/toWebSocketMessage';
 
-export type CognitionWebsocket = Websocket<ToWebSocketMessage, FromWebSocketMessage>;
+export type CognitionWebsocket = Websocket<
+  ToWebSocketMessage,
+  FromWebSocketMessage
+>;
 
 export type { StreamError, FromWebSocketMessage, ToWebSocketMessage };
 
@@ -121,7 +129,7 @@ export function createMessageStream(send: Send): MessageStream {
   const [isErr, setIsErr] = createSignal<boolean>(false);
   const [err, setErr] = createSignal<StreamError>();
 
-  let cleanup = () => {};
+  let cleanup = () => { };
 
   const handleMessage = (data: FromWebSocketMessage) => {
     if (isDone()) return;
