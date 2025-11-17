@@ -74,12 +74,8 @@ async function copyFieldData(
       body: {
         query: {
           bool: {
-            must: [
-              { exists: { field: oldField } }
-            ],
-            must_not: [
-              { exists: { field: newField } }
-            ]
+            must: [{ exists: { field: oldField } }],
+            must_not: [{ exists: { field: newField } }],
           },
         },
       },
@@ -94,19 +90,15 @@ async function copyFieldData(
   const response = await opensearchClient.updateByQuery({
     index: indexName,
     wait_for_completion: false,
-    scroll_size: 5000,        // Larger batches for better performance
-    slices: 'auto',           // Enable parallel processing
-    refresh: false,           // Don't refresh after each batch
+    scroll_size: 5000, // Larger batches for better performance
+    slices: 'auto', // Enable parallel processing
+    refresh: false, // Don't refresh after each batch
     body: {
       script,
       query: {
         bool: {
-          must: [
-            { exists: { field: oldField } }
-          ],
-          must_not: [
-            { exists: { field: newField } }
-          ]
+          must: [{ exists: { field: oldField } }],
+          must_not: [{ exists: { field: newField } }],
         },
       },
     },
@@ -124,7 +116,7 @@ async function copyFieldData(
     let taskResponse: any;
 
     while (!completed) {
-      await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+      await new Promise((resolve) => setTimeout(resolve, 2000)); // Wait 2 seconds
 
       taskResponse = await opensearchClient.tasks.get({
         task_id: taskId,
@@ -158,7 +150,9 @@ async function copyFieldData(
       if (otherFailures > 0) {
         console.error(
           `  ⚠️  Encountered ${otherFailures} non-version-conflict failures:`,
-          taskResult.failures.filter((f: any) => f.cause?.type !== 'version_conflict_engine_exception'),
+          taskResult.failures.filter(
+            (f: any) => f.cause?.type !== 'version_conflict_engine_exception'
+          )
         );
         throw new Error(`Update by query failed for some documents`);
       }
@@ -186,7 +180,9 @@ async function copyFieldData(
       if (otherFailures > 0) {
         console.error(
           `  ⚠️  Encountered ${otherFailures} non-version-conflict failures:`,
-          body.failures.filter((f: any) => f.cause?.type !== 'version_conflict_engine_exception'),
+          body.failures.filter(
+            (f: any) => f.cause?.type !== 'version_conflict_engine_exception'
+          )
         );
         throw new Error(`Update by query failed for some documents`);
       }
@@ -228,8 +224,8 @@ async function verifyMigration(
         bool: {
           must: [
             { exists: { field: oldField } },
-            { exists: { field: newField } }
-          ]
+            { exists: { field: newField } },
+          ],
         },
       },
       fields: [
@@ -249,7 +245,9 @@ async function verifyMigration(
   const hits = response.body.hits.hits;
 
   if (hits.length === 0) {
-    console.log(`  ⚠️  No documents found with both "${oldField}" and "${newField}"`);
+    console.log(
+      `  ⚠️  No documents found with both "${oldField}" and "${newField}"`
+    );
     return;
   }
 
@@ -348,7 +346,7 @@ async function copyData(dryRun: boolean = true) {
     '\nThis script copies timestamp data from old fields to *_seconds fields.'
   );
   console.log('It only updates documents where the new field does not exist.');
-  console.log('\n💡 Safe to run multiple times - it\'s idempotent!');
+  console.log("\n💡 Safe to run multiple times - it's idempotent!");
 
   if (dryRun) {
     console.log('\n⚠️  DRY-RUN MODE: No changes will be made to the database');
@@ -370,7 +368,9 @@ async function copyData(dryRun: boolean = true) {
         '\nTo run for real, set DRY_RUN=false environment variable\n'
       );
     } else {
-      console.log('\n✓ All timestamp data has been copied to *_seconds fields.');
+      console.log(
+        '\n✓ All timestamp data has been copied to *_seconds fields.'
+      );
       console.log(
         '💡 Run this script again after deploying new code to catch any documents'
       );

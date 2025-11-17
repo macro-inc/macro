@@ -2,9 +2,7 @@ require('dotenv').config();
 
 import type { Client } from '@opensearch-project/opensearch';
 import { client } from './client';
-import {
-  PROJECT_INDEX,
-} from './constants';
+import { PROJECT_INDEX } from './constants';
 
 const INDEX_NAME = PROJECT_INDEX;
 const CLEANUP_FIELD = 'parent_project_id';
@@ -84,7 +82,7 @@ async function removeFieldFromDocuments(
     if (body.failures && body.failures.length > 0) {
       console.error(
         `  ⚠️  Encountered ${body.failures.length} failures:`,
-        body.failures,
+        body.failures
       );
       throw new Error(`Update by query failed for some documents`);
     }
@@ -97,7 +95,7 @@ async function removeFieldFromDocuments(
 
   throw new Error(
     `Update by query returned a task ID instead of completing synchronously. ` +
-    `Task ID: ${body.task}. This script does not support async operations.`,
+      `Task ID: ${body.task}. This script does not support async operations.`
   );
 }
 
@@ -145,15 +143,10 @@ async function cleanupIndex(
   dryRun: boolean
 ): Promise<void> {
   console.log(`\n${'='.repeat(60)}`);
-  console.log(
-    `Cleaning up index: ${indexName} ${dryRun ? '(DRY-RUN)' : ''}`
-  );
+  console.log(`Cleaning up index: ${indexName} ${dryRun ? '(DRY-RUN)' : ''}`);
   console.log(`${'='.repeat(60)}`);
 
-  const indexExists = await checkIndexExists(
-    opensearchClient,
-    indexName
-  );
+  const indexExists = await checkIndexExists(opensearchClient, indexName);
 
   if (!indexExists) {
     console.log(`⚠️  Index "${indexName}" does not exist. Skipping...`);
@@ -182,13 +175,7 @@ async function cleanupIndex(
     dryRun
   );
 
-  await verifyFieldRemoval(
-    opensearchClient,
-    indexName,
-    fieldName,
-    dryRun
-  );
-
+  await verifyFieldRemoval(opensearchClient, indexName, fieldName, dryRun);
 
   console.log(`\n✓ Completed cleanup for index: ${indexName}`);
 }
@@ -204,7 +191,9 @@ async function runCleanup(dryRun: boolean = true) {
   console.log(
     '\nThis script will remove project_parent_id field from project index.'
   );
-  console.log('\n⚠️  WARNING: This will permanently delete data from documents!');
+  console.log(
+    '\n⚠️  WARNING: This will permanently delete data from documents!'
+  );
 
   if (dryRun) {
     console.log('\n⚠️  DRY-RUN MODE: No changes will be made to the database');
