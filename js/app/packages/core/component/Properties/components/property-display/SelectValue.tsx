@@ -8,6 +8,7 @@ import { savePropertyValue } from '../../api/propertyValues';
 import { PROPERTY_STYLES } from '../../styles/propertyStyles';
 import type { Property } from '../../types';
 import { formatPropertyValue } from '../../utils';
+import { AddPropertyValueButton, EmptyValue } from './PropertyValuePrimitives';
 
 type SelectValueProps = {
   property: Property;
@@ -104,18 +105,13 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
         fallback={
           <Show when={displayValues.length === 0}>
             <div class="text-ink-muted text-xs px-2 py-1 border border-edge bg-transparent inline-block shrink-0">
-              {<>—</>}
+              <EmptyValue />
             </div>
           </Show>
         }
       >
         <Show when={props.property.isMultiSelect || displayValues.length === 0}>
-          <button
-            onClick={handleClick}
-            class="text-ink-muted hover:text-ink text-xs hover:bg-hover px-2 py-1 cursor-pointer border border-edge bg-transparent inline-block shrink-0"
-          >
-            +
-          </button>
+          <AddPropertyValueButton onClick={handleClick} />
         </Show>
       </Show>
     </div>

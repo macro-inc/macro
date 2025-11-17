@@ -2,6 +2,7 @@ import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import type { Property } from '../../types';
 import { formatDate } from '../../utils';
+import { EmptyValue } from './PropertyValuePrimitives';
 
 type DateValueProps = {
   property: Property;
@@ -35,7 +36,7 @@ export const DateValue: Component<DateValueProps> = (props) => {
           : 'hover:bg-hover cursor-pointer bg-transparent text-ink'
       } inline-block max-w-full break-words`}
     >
-      <Show when={displayValue} fallback={<>—</>}>
+      <Show when={displayValue} fallback={<EmptyValue />}>
         <span class="block truncate max-w-full">{displayValue}</span>
       </Show>
     </button>

@@ -11,6 +11,7 @@ import { createStore } from 'solid-js/store';
 import { savePropertyValue } from '../../api/propertyValues';
 import type { Property } from '../../types';
 import { extractDomain, isValidUrl, normalizeUrl } from '../../utils';
+import { AddPropertyValueButton, EmptyValue } from './PropertyValuePrimitives';
 
 type LinkValueProps = {
   property: Property;
@@ -136,7 +137,7 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
   };
 
   const AddLinkInput = () => (
-    <div>
+    <>
       <input
         ref={(el) => {
           setTimeout(() => el.focus(), 0);
@@ -154,12 +155,12 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
         }}
         placeholder="Enter URL..."
         disabled={isSaving()}
-        class="text-left text-xs px-2 py-1 border border-edge bg-transparent focus:outline-none focus:border-accent text-ink"
+        class="text-left text-xs px-2 py-1 border border-edge bg-transparent focus:outline-none focus:border-accent text-ink inline-block shrink-0"
       />
       <Show when={error()}>
-        <div class="text-failure-ink text-xs mt-1">{error()}</div>
+        <div class="text-failure-ink text-xs mt-1 w-full">{error()}</div>
       </Show>
-    </div>
+    </>
   );
 
   return (
@@ -179,9 +180,11 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
       <Show
         when={!isReadOnly()}
         fallback={
-          <div class="text-ink-muted text-xs px-2 py-1 border border-edge bg-transparent inline-block shrink-0">
-            {<>—</>}
-          </div>
+          <Show when={linkValues.length === 0}>
+            <div class="text-ink-muted text-xs px-2 py-1 border border-edge bg-transparent inline-block shrink-0">
+              <EmptyValue />
+            </div>
+          </Show>
         }
       >
         <Show
@@ -190,18 +193,11 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
             <Show
               when={props.property.isMultiSelect || linkValues.length === 0}
             >
-              <button
-                onClick={startAdding}
-                class="text-ink-muted hover:text-ink text-xs hover:bg-hover px-2 py-1 cursor-pointer border border-edge bg-transparent inline-block shrink-0"
-              >
-                +
-              </button>
+              <AddPropertyValueButton onClick={startAdding} />
             </Show>
           }
         >
-          <div class="inline-block">
-            <AddLinkInput />
-          </div>
+          <AddLinkInput />
         </Show>
       </Show>
     </div>
