@@ -54,8 +54,14 @@ impl IntoResponse for SearchError {
             SearchError::InvalidPageSize
             | SearchError::InvalidQuerySize
             | SearchError::NoQueryOrTermsProvided => StatusCode::BAD_REQUEST,
-            SearchError::Search(_) => StatusCode::INTERNAL_SERVER_ERROR,
-            SearchError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            SearchError::Search(e) => {
+                tracing::error!(error=?e, "Search error details: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
+            SearchError::InternalError(e) => {
+                tracing::error!(error=?e, "Internal error details: {:?}", e);
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
         };
 
         (
