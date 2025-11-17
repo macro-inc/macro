@@ -81,7 +81,12 @@ async fn test_set_and_get_aggregate(pool: PgPool) {
 
     // Retrieve the aggregate
     let retrieved = storage
-        .get_top_entities(test_user_id.copied(), 1)
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 1,
+            filters: None,
+        })
         .await
         .unwrap();
 
@@ -139,7 +144,12 @@ async fn test_update_aggregate(pool: PgPool) {
 
     // Verify the update
     let retrieved = storage
-        .get_top_entities(test_user_id, 1)
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 1,
+            filters: None,
+        })
         .await
         .unwrap()
         .into_iter()
@@ -183,7 +193,12 @@ async fn test_get_top_entities(pool: PgPool) {
 
     // Get top 3 entities
     let top_entities = storage
-        .get_top_entities(test_user_id.clone(), 3)
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 3,
+            filters: None,
+        })
         .await
         .unwrap();
 
@@ -253,7 +268,12 @@ async fn test_get_top_entities_empty(pool: PgPool) {
 
     // Get top entities for user with no data
     let top_entities = storage
-        .get_top_entities(test_user_id.copied(), 10)
+        .get_top_entities(FrecencyPageRequest {
+            user_id: test_user_id.copied(),
+            from_score: None,
+            limit: 10,
+            filters: None,
+        })
         .await
         .unwrap();
 

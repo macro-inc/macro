@@ -2,7 +2,7 @@
 use crate::domain::{
     models::{
         AggregateFrecency, AggregateId, EventRecord, EventRecordWithId, FrecencyData,
-        TimestampWeight,
+        FrecencyPageRequest, TimestampWeight,
     },
     ports::{AggregateFrecencyStorage, EventRecordStorage, UnprocessedEventsRepo},
 };
@@ -179,8 +179,7 @@ impl AggregateFrecencyStorage for FrecencyPgStorage {
 
     async fn get_top_entities(
         &self,
-        user_id: MacroUserIdStr<'_>,
-        limit: u32,
+        req: FrecencyPageRequest<'_>,
     ) -> Result<Vec<crate::domain::models::AggregateFrecency>, Self::Err> {
         let rows = sqlx::query!(
             r#"
@@ -190,8 +189,8 @@ impl AggregateFrecencyStorage for FrecencyPgStorage {
                 ORDER BY frecency_score DESC
                 LIMIT $2
                 "#,
-            user_id.as_ref(),
-            limit as i64
+            req.user_id.as_ref(),
+            req.limit as i64
         )
         .fetch_all(&self.pool)
         .await?;

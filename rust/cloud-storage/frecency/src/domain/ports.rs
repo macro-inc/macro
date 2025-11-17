@@ -57,8 +57,7 @@ pub trait AggregateFrecencyStorage: Send + Sync + 'static {
     /// retrieve the top frecency score records for this user
     fn get_top_entities(
         &self,
-        user_id: MacroUserIdStr<'_>,
-        limit: u32,
+        req: FrecencyPageRequest<'_>,
     ) -> impl Future<Output = Result<Vec<AggregateFrecency>, Self::Err>> + Send;
 
     /// write an [AggregateFrecency] back to storage
