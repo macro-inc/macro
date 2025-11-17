@@ -238,7 +238,7 @@ mod database {
     "#;
 
     /// Condition 5 Query: Thread involves a recipient the user has previously sent mail to.
-    const PREVIOUSLY_CONTACTED_CONDITION: &str = r#"
+    const PREVIOUSLY_CONTACTED_CONDITION_PREFIX: &str = r#"
 WITH
 -- Step 1: Get the user's own email address from the link_id. This is our exclusion criteria.
 user_email AS (
@@ -323,11 +323,9 @@ WHERE
     )
     -- Apply standard filters at the very end
     AND a.filename IS NOT NULL
-    AND a.mime_type NOT LIKE 'image/%'
-    AND a.mime_type NOT LIKE '%zip%'
-    AND a.mime_type NOT LIKE 'video/%'
-    AND a.mime_type NOT LIKE 'audio/%'
-    AND a.mime_type NOT IN ('application/ics', 'application/x-sharing-metadata-xml')
+    "#;
+
+    const PREVIOUSLY_CONTACTED_CONDITION_SUFFIX: &str = r#"
 ORDER BY
     m.internal_date_ts DESC;
     "#;
@@ -374,7 +372,14 @@ ORDER BY
         attachments.extend(rows_combined);
 
         // Query for condition 5: Previously contacted participants
-        let rows5 = sqlx::query_as::<_, AttachmentMetadata>(PREVIOUSLY_CONTACTED_CONDITION)
+        let previously_contacted_query = format!(
+            "{}{}{}",
+            PREVIOUSLY_CONTACTED_CONDITION_PREFIX,
+            ATTACHMENT_MIME_TYPE_FILTERS,
+            PREVIOUSLY_CONTACTED_CONDITION_SUFFIX
+        );
+
+        let rows5 = sqlx::query_as::<_, AttachmentMetadata>(&previously_contacted_query)
             .bind(link_id)
             .fetch_all(db)
             .await
