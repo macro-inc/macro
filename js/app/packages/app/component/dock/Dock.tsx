@@ -13,10 +13,7 @@ import {
   ENABLE_DOCK_NOTITIFCATIONS,
   ENABLE_RIGHTHAND_SIDEBAR,
 } from '@core/constant/featureFlags';
-import {
-  setSettingsOpen,
-  useSettingsState,
-} from '@core/constant/SettingsState';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { runCommand } from '@core/hotkey/hotkeys';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -38,7 +35,7 @@ import { QuickAccess } from './QuickAccess';
 
 export function Dock() {
   const hasPaid = useHasPaidAccess();
-  const { settingsOpen } = useSettingsState();
+  const { settingsOpen, openSettings } = useSettingsState();
   const toggleRightPanel = useToggleRightPanel();
   const isRightPanelCollapsed = () => !isRightPanelOpen();
   const activeSplitId = createMemo(() => globalSplitManager()?.activeSplitId());
@@ -322,7 +319,7 @@ export function Dock() {
               class="h-full aspect-square"
               data-settings-button
               onDeepClick={() => {
-                setSettingsOpen(true);
+                openSettings();
               }}
             />
           </div>
