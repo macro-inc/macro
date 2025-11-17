@@ -1,9 +1,9 @@
 [package]
-name = "filter_ast"
-version = "0.1.0"
 edition = "2024"
+name = "filter_ast"
 publish = false
+version = "0.1.0"
 
 [dependencies]
-recursion = "0.5.4"
+recursion = { workspace = true }
 serde = { workspace = true }

@@ -8,18 +8,27 @@ use crate::{
     ast::{ExpandErr, ParseFromStr, UnknownValue},
 };
 
-#[derive(Debug, Serialize, Deserialize)]
+/// the literal ast type for the chat entity
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ChatLiteral {
+    /// the chat is in some nested project structure where [Uuid] is a parent node
     ProjectId(Uuid),
+    /// the chat has role [ChatRole]
     Role(ChatRole),
+    /// the chat has the id [Uuid]
     ChatId(Uuid),
+    /// the chat is owned by [MacroUserIdStr]
     Owner(MacroUserIdStr<'static>),
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+/// the possible roles for a chat
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum ChatRole {
+    /// the role is user
     User,
+    /// the role is system
     System,
+    /// the role is assistant
     Assistant,
 }
 

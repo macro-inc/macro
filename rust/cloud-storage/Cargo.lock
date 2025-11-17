@@ -7785,6 +7785,7 @@ dependencies = [
  "models_soup",
  "non_empty",
  "ordered-float",
+ "recursion",
  "serde",
  "serde_json",
  "sqlx",
