@@ -57,7 +57,7 @@ pub async fn handler(
             &user_context.user_id,
             &[&event_item_id],
             limit,
-            cursor.into_query(CreatedAt)
+            cursor.into_query(CreatedAt, ())
         )
         .await
         .map_err(|e| {

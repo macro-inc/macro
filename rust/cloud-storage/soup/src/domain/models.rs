@@ -14,32 +14,25 @@ pub enum SoupType {
     UnExpanded,
 }
 
-/// possible things we can exclude from the results
-#[derive(Debug)]
-pub(crate) enum SoupFilter {
-    /// excludes any item that has a frecency record from the results
-    Frecency,
-    Ast(AstFilter),
-}
-
-#[derive(Debug)]
-#[expect(dead_code)]
-pub(crate) enum AstFilter {
-    Normal(EntityFilterAst),
-    Frecency(EntityFilterAst),
-}
-
 /// the parameters required for a [SimpleSortMethod]
 #[derive(Debug)]
 pub struct SimpleSortRequest<'a> {
     /// the limit of the number of items to return
-    pub limit: u16,
-    /// the [ParsedCursor] the client passes (if any)
-    pub cursor: Query<String, SimpleSortMethod, EntityFilterAst>,
+    pub(crate) limit: u16,
+    /// the [Query] the client passes (if any)
+    pub(crate) cursor: Query<String, SimpleSortMethod, Option<SimpleSortFilter>>,
     /// the id of the user
-    pub user_id: MacroUserIdStr<'a>,
-    /// a list of things that should be excluded from the query
-    pub(crate) filters: Option<SoupFilter>,
+    pub(crate) user_id: MacroUserIdStr<'a>,
+}
+
+/// the types of values we can potentially filter out of a [SimpleSortRequest]
+#[derive(Debug)]
+pub enum SimpleSortFilter {
+    /// remove frecency values from output
+    Frecency(Frecency),
+    /// remove the ast values from output
+    Ast(EntityFilterAst),
+    FrecencyAst(Frecency, EntityFilterAst),
 }
 
 #[derive(Debug)]
@@ -49,8 +42,17 @@ pub struct AdvancedSortParams<'a> {
 }
 
 pub enum SoupQuery {
-    Simple(Query<String, SimpleSortMethod, EntityFilterAst>),
-    Frecency(Query<String, Frecency, EntityFilterAst>),
+    Simple(Query<String, SimpleSortMethod, Option<EntityFilterAst>>),
+    Frecency(Query<String, Frecency, Option<EntityFilterAst>>),
+}
+
+impl SoupQuery {
+    pub(crate) fn filter(&self) -> Option<&EntityFilterAst> {
+        match self {
+            SoupQuery::Simple(query) => query.filter().as_ref(),
+            SoupQuery::Frecency(query) => query.filter().as_ref(),
+        }
+    }
 }
 
 pub struct SoupRequest {
@@ -58,7 +60,6 @@ pub struct SoupRequest {
     pub limit: u16,
     pub cursor: SoupQuery,
     pub user: MacroUserIdStr<'static>,
-    pub filters: EntityFilterAst,
 }
 
 /// a [SoupItem] with an associated frecency score
