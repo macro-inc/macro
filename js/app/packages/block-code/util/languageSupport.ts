@@ -1,4 +1,5 @@
 import type { Extension } from '@codemirror/state';
+import { FileTypeMap } from '@service-storage/fileTypeMap';
 
 type LanguageLoader = () => Promise<Extension>;
 
@@ -77,6 +78,7 @@ const extensionToLanguage: Record<string, string> = {
   xhtml: 'html',
   shtml: 'html',
   css: 'css',
+  'css.map': 'json',
   scss: 'css',
   sass: 'css',
   less: 'css',
@@ -105,17 +107,26 @@ const extensionToLanguage: Record<string, string> = {
   cppm: 'cpp',
   ccm: 'cpp',
   cxxm: 'cpp',
-  'c++m': 'cpp',
   txt: 'plaintext',
   csv: 'plaintext',
 };
+
+// Build supported extensions from FileTypeMap where app === 'code'
+const codeFileExtensions = Object.values(FileTypeMap)
+  .filter((fileType) => fileType.app === 'code')
+  .map((fileType) => fileType.extension);
+
+// Combine with our explicitly mapped extensions
+const allSupportedExtensions = [
+  ...new Set([...Object.keys(extensionToLanguage), ...codeFileExtensions]),
+];
 
 // Supported languages (source of truth for block-code)
 export const supportedLanguages = Object.keys(languageLoaders);
 export const supportedLanguageSet = new Set(supportedLanguages);
 
-// Supported file extensions
-export const supportedExtensions = Object.keys(extensionToLanguage);
+// Supported file extensions (derived from FileTypeMap)
+export const supportedExtensions = allSupportedExtensions;
 export const supportedExtensionSet = new Set(supportedExtensions);
 
 // Language aliases to file extensions (for create.ts compatibility)
@@ -164,7 +175,23 @@ export function detectLanguageFromExtension(
   fileExtension: string
 ): string | null {
   const normalizedExt = fileExtension.toLowerCase().replace(/^\./, '');
-  return extensionToLanguage[normalizedExt] || null;
+
+  // Check if we have an explicit language mapping
+  if (extensionToLanguage[normalizedExt]) {
+    return extensionToLanguage[normalizedExt];
+  }
+
+  // Check if this extension is in FileTypeMap with app === 'code'
+  const fileTypeEntry = Object.values(FileTypeMap).find(
+    (ft) => ft.extension === normalizedExt && ft.app === 'code'
+  );
+
+  if (fileTypeEntry) {
+    // Return plaintext as fallback for code files without explicit language mapping
+    return 'plaintext';
+  }
+
+  return null;
 }
 
 export async function loadLanguageExtension(
