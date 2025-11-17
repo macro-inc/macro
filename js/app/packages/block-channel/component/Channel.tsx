@@ -253,9 +253,6 @@ export function Channel(props: { data: Required<ChannelData> }) {
   const [channelInputRef, setChannelInputRef] = createSignal<
     HTMLDivElement | undefined
   >();
-  const [channelWrapperRef, setChannelWrapperRef] = createSignal<
-    HTMLDivElement | undefined
-  >();
   const [lastMessageRef, setLastMessageRef] = createSignal<
     HTMLDivElement | undefined
   >();
@@ -299,7 +296,6 @@ export function Channel(props: { data: Required<ChannelData> }) {
     <div
       class={`relative flex flex-col w-full h-full bg-panel bracket-never`}
       tabIndex={-1}
-      ref={setChannelWrapperRef}
     >
       <ChannelDebouncedNotificationReadMarker
         notificationSource={notificationSource}

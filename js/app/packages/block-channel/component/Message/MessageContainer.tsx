@@ -129,13 +129,19 @@ export function MessageContainer(props: MessageProps) {
   const [contextMenuOpen, setContextMenuOpen] = createSignal(false);
   const [reactionSearchOpen, setReactionSearchOpen] = createSignal(false);
   const [topBarEmojiMenuOpen, setTopBarEmojiMenuOpen] = createSignal(false);
-  const [messageBodyRef, setMessageBodyRefInner] = createSignal<HTMLDivElement>();
-  const setMessageBodyRef = (...params: Parameters<typeof setMessageBodyRefInner>) => {
-    setMessageBodyRefInner(...params);
+  const [messageBodyRef, setMessageBodyRefInner] =
+    createSignal<HTMLDivElement>();
+  const setMessageBodyRef = ((
+    value?:
+      | HTMLDivElement
+      | ((prev?: HTMLDivElement) => HTMLDivElement | undefined)
+  ): undefined => {
+    setMessageBodyRefInner(value);
     if (props.setLastMessageRef && isLastMessage()) {
-      props.setLastMessageRef(messageBodyRef());
+      props.setLastMessageRef(value);
     }
-  };
+    return undefined;
+  }) satisfies typeof setMessageBodyRefInner;
   const editMessage_ = createCallback(editMessage);
 
   const userId = useUserId();
