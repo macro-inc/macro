@@ -205,6 +205,7 @@ async fn main() -> anyhow::Result<()> {
         let macro_notify_client_webhook = macro_notify_client.clone();
         let sfs_client_webhook = sfs_client.clone();
         let connection_gateway_client_webhook = connection_gateway_client.clone();
+        let dss_client_webhook = dss_client.clone();
         tokio::spawn(async move {
             pubsub::webhook::worker::run_worker(
                 db_webhook,
@@ -216,6 +217,7 @@ async fn main() -> anyhow::Result<()> {
                 macro_notify_client_webhook,
                 sfs_client_webhook,
                 connection_gateway_client_webhook,
+                dss_client_webhook,
                 config.notifications_enabled,
             )
             .await;
@@ -235,6 +237,7 @@ async fn main() -> anyhow::Result<()> {
         let macro_notify_client_backfill = macro_notify_client.clone();
         let sfs_client_backfill = sfs_client.clone();
         let connection_gateway_client_backfill = connection_gateway_client.clone();
+        let dss_client_backfill = dss_client.clone();
         tokio::spawn(async move {
             pubsub::backfill::worker::run_worker(
                 db_backfill,
@@ -246,6 +249,7 @@ async fn main() -> anyhow::Result<()> {
                 macro_notify_client_backfill,
                 sfs_client_backfill,
                 connection_gateway_client_backfill,
+                dss_client_backfill,
                 config.notifications_enabled,
             )
             .await;
