@@ -342,7 +342,6 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
       this.handleMessageEvent
     );
 
-    console.log("binary type", this._options.binaryType);
     if (this._options.binaryType !== undefined) {
       this._underlyingWebsocket.binaryType = this._options.binaryType;
     }
@@ -644,16 +643,30 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
     }
   }
 
+  private isClosing(): boolean {
+    return (
+      this._underlyingWebsocket.readyState === this._underlyingWebsocket.CLOSING
+    );
+  }
+
   /**
    * Sends a heartbeat message to the websocket.
    * Schedules a timeout for `this._options.heartbeat.timeout` milliseconds.
    * If we don't receive a pong we will increment the missedHeartbeats counter and check if we should reconnect.
    */
   private sendHeartbeat() {
-    if (!this._underlyingWebsocket) return;
+    if (!this._underlyingWebsocket || this.closedByUser) return;
     if (!isRequiredHeartbeatOptions(this._options?.heartbeat)) {
       console.warn(
         'Heartbeat options are not set. Heartbeats will not be sent.'
+      );
+      return;
+    }
+
+    if (this.isClosing()) {
+      this.dispatchEvent(
+        WebsocketEvent.close,
+        new CloseEvent('closed websocket by heartbeat, already closing')
       );
       return;
     }

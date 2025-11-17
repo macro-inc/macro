@@ -194,7 +194,6 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
       buffer: this._options?.buffer,
     } as WebsocketOptions<NewSend, NewReceive>;
 
-    console.log("binary type", serializer.binaryType);
     if (serializer.binaryType !== undefined) {
       return newBuilder.withBinaryType(serializer.binaryType);
     }
