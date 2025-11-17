@@ -26,31 +26,3 @@ impl fmt::Display for EntityType {
         }
     }
 }
-
-// ===== Conversions to/from models_properties =====
-
-impl From<models_properties::EntityType> for EntityType {
-    fn from(external: models_properties::EntityType) -> Self {
-        match external {
-            models_properties::EntityType::Channel => EntityType::Channel,
-            models_properties::EntityType::Chat => EntityType::Chat,
-            models_properties::EntityType::Document => EntityType::Document,
-            models_properties::EntityType::Project => EntityType::Project,
-            models_properties::EntityType::Thread => EntityType::Thread,
-            models_properties::EntityType::User => EntityType::User,
-        }
-    }
-}
-
-impl From<EntityType> for models_properties::EntityType {
-    fn from(domain: EntityType) -> Self {
-        match domain {
-            EntityType::Channel => models_properties::EntityType::Channel,
-            EntityType::Chat => models_properties::EntityType::Chat,
-            EntityType::Document => models_properties::EntityType::Document,
-            EntityType::Project => models_properties::EntityType::Project,
-            EntityType::Thread => models_properties::EntityType::Thread,
-            EntityType::User => models_properties::EntityType::User,
-        }
-    }
-}
