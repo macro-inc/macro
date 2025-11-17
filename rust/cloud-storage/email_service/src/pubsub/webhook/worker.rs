@@ -3,6 +3,7 @@ use crate::pubsub::webhook::process;
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use document_storage_service_client::DocumentStorageServiceClient;
 use futures::StreamExt;
 use macro_notify::MacroNotifyClient;
 use static_file_service_client::StaticFileServiceClient;
@@ -19,6 +20,7 @@ pub async fn run_worker(
     macro_notify_client: MacroNotifyClient,
     sfs_client: StaticFileServiceClient,
     connection_gateway_client: ConnectionGatewayClient,
+    dss_client: DocumentStorageServiceClient,
     notifications_enabled: bool,
 ) {
     let ctx = PubSubContext {
@@ -31,6 +33,7 @@ pub async fn run_worker(
         macro_notify_client,
         sfs_client,
         connection_gateway_client,
+        dss_client,
         notifications_enabled,
     };
 

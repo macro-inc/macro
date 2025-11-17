@@ -91,7 +91,6 @@ pub(in crate::api::search) async fn search_emails(
         .search_emails(EmailSearchArgs {
             terms,
             user_id: user_id.to_string(),
-            message_ids: vec![],
             thread_ids: vec![],
             link_ids: vec![],
             sender: filters.senders,

@@ -1,4 +1,3 @@
-use crate::domain::models::SimpleSortFilter;
 use crate::domain::ports::MockSoupRepo;
 use chrono::Days;
 use cool_asserts::assert_matches;
@@ -48,7 +47,7 @@ async fn it_should_not_query_frecency() {
                     SimpleSortRequest {
                         limit: 20,
                         user_id,
-                        cursor: models_pagination::Query::Sort(SimpleSortMethod::ViewedUpdated, None),
+                        cursor: SimpleSortQuery::NoFilter(Query::Sort(SimpleSortMethod::ViewedUpdated, ())),
                     } => {
                         assert_eq!(user_id.as_ref(), "macro|test@example.com");
                         true
@@ -266,7 +265,7 @@ async fn frecency_should_fallback() {
                 params,
                 SimpleSortRequest {
                     limit: 75,
-                    cursor: Query::Sort(SimpleSortMethod::UpdatedAt, Some(SimpleSortFilter::Frecency(Frecency))),
+                    cursor: SimpleSortQuery::FilterFrecency(Query::Sort(SimpleSortMethod::UpdatedAt, Frecency)),
                     ..
                 } => {
                     true
@@ -313,7 +312,7 @@ async fn frecency_should_fallback() {
     let typed_cursor = res.next_cursor.unwrap().decode_json().unwrap();
     assert_matches!(
         typed_cursor,
-        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated), filter: None }} => {
+        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated) }, filter: None } => {
         assert_eq!(id, "doc-100");
         assert_eq!(updated, <DateTime<Utc>>::default() + Days::new(100));
 
@@ -379,7 +378,7 @@ async fn frecency_should_paginate() {
     let typed_cursor = res.next_cursor.unwrap().decode_json().unwrap();
     assert_matches!(
         typed_cursor,
-        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score), filter: None }} => {
+        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score) }, filter: None} => {
         assert_eq!(id, "doc-1");
         // last item should be the lowest score because we sort desc
         assert_eq!(score as u32, 1u32);
@@ -428,8 +427,8 @@ async fn frecency_should_resume_cursor() {
                 val: CursorVal {
                     sort_type: Frecency,
                     last_val: FrecencyValue::FrecencyScore(5.0),
-                    filter: Default::default(),
                 },
+                filter: Default::default(),
             })),
             user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
         })
@@ -450,7 +449,7 @@ async fn frecency_should_resume_cursor() {
     let typed_cursor = res.next_cursor.unwrap().decode_json().unwrap();
     assert_matches!(
         typed_cursor,
-        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score), filter: None }} => {
+        Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score) }, filter: None} => {
         assert_eq!(id, "doc-next-100");
         // last item should be the lowest score because we sort desc
         assert_eq!(score as u32, 4u32);
@@ -468,15 +467,15 @@ async fn frecency_fallback_cursor_should_resume() {
                 params,
                 SimpleSortRequest {
                     limit: 100,
-                    cursor: Query::Cursor(Cursor {
+                    cursor: SimpleSortQuery::FilterFrecency(Query::Cursor(Cursor {
                         id,
                         limit: 100,
+                        filter: Frecency,
                         val: CursorVal {
                             sort_type: SimpleSortMethod::UpdatedAt,
                             last_val,
-                            filter: Some(SimpleSortFilter::Frecency(Frecency))
                         }
-                    }),
+                    })),
                     ..
                 } => {
                 let expected_time = <DateTime<Utc>>::default() + Days::new(5);
@@ -510,8 +509,8 @@ async fn frecency_fallback_cursor_should_resume() {
                 val: CursorVal {
                     sort_type: Frecency,
                     last_val: FrecencyValue::UpdatedAt(DateTime::default() + Days::new(5)),
-                    filter: None,
                 },
+                filter: None,
             })),
             user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
         })
@@ -521,7 +520,7 @@ async fn frecency_fallback_cursor_should_resume() {
 
     assert!(res.items.iter().all(|v| v.frecency_score.is_none()));
     let cursor = res.next_cursor.unwrap().decode_json().unwrap();
-    assert_matches!(cursor, Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated), filter: None } } => {
+    assert_matches!(cursor, Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated) }, filter: None } => {
         assert_eq!(id, "doc-next-100");
         let expected_date = <DateTime<Utc>>::default() + Days::new(100);
         assert_eq!(updated, expected_date);
@@ -540,7 +539,7 @@ async fn cursor_should_return_simple_sort() {
                     SimpleSortRequest {
                         limit: 20,
                         user_id,
-                        cursor: models_pagination::Query::Sort(SimpleSortMethod::ViewedUpdated, None),
+                        cursor: SimpleSortQuery::NoFilter(Query::Sort(SimpleSortMethod::ViewedUpdated, ())),
                     } => {
                         assert_eq!(user_id.as_ref(), "macro|test@example.com");
                         true
@@ -571,7 +570,7 @@ async fn cursor_should_return_simple_sort() {
 
     let simple_cursor = res.unwrap_left();
     let cursor_decoded = simple_cursor.next_cursor.unwrap().decode_json().unwrap();
-    assert_matches!(cursor_decoded, Cursor { id, limit: 20, val: CursorVal { sort_type: SimpleSortMethod::ViewedUpdated, last_val, filter } } => {
+    assert_matches!(cursor_decoded, Cursor { id, limit: 20, val: CursorVal { sort_type: SimpleSortMethod::ViewedUpdated, last_val }, filter } => {
         assert_eq!(id, "my-document-19");
         let date: DateTime<Utc> = Default::default();
         assert_eq!(last_val, date);
@@ -623,7 +622,7 @@ async fn cursor_should_return_frecency() {
 
     let simple_cursor = res.unwrap_right();
     let cursor_decoded = simple_cursor.next_cursor.unwrap().decode_json().unwrap();
-    assert_matches!(cursor_decoded, Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(1.0), filter } } => {
+    assert_matches!(cursor_decoded, Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(1.0) }, filter } => {
         // frecency sort is descending so the last item is id 1
         assert_eq!(id, "doc-1");
         assert!(filter.is_none());
