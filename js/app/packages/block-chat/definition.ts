@@ -7,11 +7,14 @@ import type { DocumentMetadata } from '@service-storage/generated/schemas/docume
 import { cognitionApiServiceClient } from 'service-cognition/client';
 import BlockChat from './component/Block';
 
+export const DEFAULT_CHAT_NAME = 'New Chat';
+
 export type AttachmentWithoutId = Omit<ChatAttachmentWithName, 'id'>;
+
 export const definition = defineBlock({
   name: 'chat',
   description: '',
-  defaultFilename: 'New Chat',
+  defaultFilename: DEFAULT_CHAT_NAME,
   component: BlockChat,
   async load(source, intent) {
     if (source.type === 'dss') {
