@@ -41,7 +41,14 @@ import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { toast } from 'core/component/Toast/Toast';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMethodRegistration } from 'core/orchestrator';
-import { createRenderEffect, createSignal, onMount } from 'solid-js';
+import {
+  createEffect,
+  createRenderEffect,
+  createSignal,
+  on,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { ChannelInput } from './ChannelInput';
@@ -174,13 +181,11 @@ export function Channel(props: { data: Required<ChannelData> }) {
 
   const focusPrevious = () => {
     const tabbableEls = tabbable(blockRef()!);
-    const activeEl = document.activeElement;
-    if (activeEl === channelWrapperRef() || activeEl === document.body)
-      return false;
+    const fromEl = document.activeElement;
 
-    const activeElIndex = tabbableEls.indexOf(activeEl as FocusableElement);
-    if (activeElIndex !== -1) {
-      const prevIndex = activeElIndex - 1;
+    const fromElIndex = tabbableEls.indexOf(fromEl as FocusableElement);
+    if (fromElIndex !== -1) {
+      const prevIndex = fromElIndex - 1;
       if (prevIndex < 0) return false;
       const prevEl = tabbableEls[prevIndex];
       if (!prevEl) return false;
@@ -214,7 +219,7 @@ export function Channel(props: { data: Required<ChannelData> }) {
   });
 
   registerHotkey({
-    hotkey: ['arrowup', 'k', 'shift+tab'],
+    hotkey: ['arrowup', 'shift+tab'],
     scopeId: scopeId(),
     description: 'Focus previous',
     keyDownHandler: () => {
@@ -225,7 +230,7 @@ export function Channel(props: { data: Required<ChannelData> }) {
   });
 
   registerHotkey({
-    hotkey: ['arrowdown', 'j', 'tab'],
+    hotkey: ['arrowdown', 'tab'],
     scopeId: scopeId(),
     description: 'Focus next',
     keyDownHandler: () => {
@@ -248,7 +253,7 @@ export function Channel(props: { data: Required<ChannelData> }) {
   const [channelInputRef, setChannelInputRef] = createSignal<
     HTMLDivElement | undefined
   >();
-  const [channelWrapperRef, setChannelWrapperRef] = createSignal<
+  const [lastMessageRef, setLastMessageRef] = createSignal<
     HTMLDivElement | undefined
   >();
   const [autoFocusOnMount, setAutoFocusOnMount] = createSignal(true);
@@ -261,18 +266,36 @@ export function Channel(props: { data: Required<ChannelData> }) {
     }
   });
 
-  onMount(() => {
-    if (autoFocusOnMount()) return;
-    if (!navigatedFromJK()) return;
+  let initialFocusSet = false;
+  createEffect(
+    on(lastMessageRef, () => {
+      if (autoFocusOnMount()) return;
+      if (!navigatedFromJK()) return;
+      if (initialFocusSet) return;
 
-    channelWrapperRef()?.focus();
-  });
+      const lastMessage = lastMessageRef();
+      if (!lastMessage) return;
+      // Using Resize Observer here so that we only focus when the lastMessageRef
+      // is actually connected to DOM
+      const resizeObserver = new ResizeObserver(() => {
+        const lastMessageId = lastMessage?.getAttribute('data-message-body-id');
+        if (!lastMessageId) return;
+        setTimeout(() => lastMessage.focus(), 0);
+        setFocusedMessageId(lastMessageId);
+        initialFocusSet = true;
+      });
+      resizeObserver.observe(lastMessage);
+
+      onCleanup(() => {
+        resizeObserver.disconnect();
+      });
+    })
+  );
 
   return (
     <div
       class={`relative flex flex-col w-full h-full bg-panel bracket-never`}
       tabIndex={-1}
-      ref={setChannelWrapperRef}
     >
       <ChannelDebouncedNotificationReadMarker
         notificationSource={notificationSource}
@@ -313,6 +336,7 @@ export function Channel(props: { data: Required<ChannelData> }) {
             latestActivity={latestActivity()}
             orderedMessages={orderedMessages}
             setOrderedMessages={setOrderedMessages}
+            setLastMessageRef={setLastMessageRef}
           />
           <div class="shrink-0 w-full px-4 pb-2">
             {/* seamus: note this element is below the scroll so we translate it back to account for the scroll above */}
