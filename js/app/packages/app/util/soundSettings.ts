@@ -30,3 +30,4 @@ export function setSoundEffectsVolume(volume: number) {
   // Dispatch event to notify sound code of preference change
   window.dispatchEvent(new CustomEvent('sound-preference-changed'));
 }
+
