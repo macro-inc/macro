@@ -67,5 +67,5 @@ pub async fn backfill_message(
     })?;
 
     // Handle all success-related operations
-    increment_counters::incr_completed_messages(ctx, link.id, data.job_id, p).await
+    increment_counters::incr_completed_messages(ctx, link, data.job_id, p).await
 }
