@@ -20,7 +20,7 @@ import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
 import DotsThree from '@icon/regular/dots-three.svg';
-import ArrowLineUp from '@icon/regular/arrow-line-up.svg';
+import UploadSimple from '@icon/regular/upload-simple.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
@@ -793,7 +793,7 @@ export function BaseInput(props: {
             >
               <IconButton
                 theme="base"
-                icon={ArrowLineUp}
+                icon={UploadSimple}
                 tooltip={{ label: 'Upload files' }}
               />
             </div>

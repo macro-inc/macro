@@ -21,7 +21,7 @@ import {
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
 import type { IUser } from '@core/user';
-import ArrowLineUp from '@icon/regular/arrow-line-up.svg';
+import UploadSimple from '@icon/regular/upload-simple.svg';
 import FormatIcon from '@icon/regular/text-aa.svg';
 import { logger } from '@observability';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
@@ -470,7 +470,7 @@ export function BaseInput(props: BaseInputProps) {
             }}
           >
             <IconButton
-              icon={ArrowLineUp}
+              icon={UploadSimple}
               theme="base"
               tooltip={{ label: 'Upload files' }}
             />

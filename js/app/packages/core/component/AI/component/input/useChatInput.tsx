@@ -19,7 +19,7 @@ import { BrightJoins } from '@core/component/BrightJoins';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { IconButton } from '@core/component/IconButton';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import ArrowLineUp from '@icon/regular/arrow-line-up.svg';
+import UploadSimple from '@icon/regular/upload-simple.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import type { LexicalEditor } from 'lexical';
 import type { Accessor, Component, Setter } from 'solid-js';
@@ -247,7 +247,7 @@ function ChatInput(props: ChatInputInternalProps) {
                 }}
               >
                 <IconButton
-                  icon={ArrowLineUp}
+                  icon={UploadSimple}
                   theme="base"
                   tooltip={{ label: 'Upload files' }}
                 />
