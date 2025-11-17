@@ -4,6 +4,9 @@ name = "item_filters"
 publish = false
 version = "0.1.0"
 
+[features]
+mock = []
+
 [dependencies]
 chrono = { workspace = true }
 filter_ast = { path = "../filter_ast" }

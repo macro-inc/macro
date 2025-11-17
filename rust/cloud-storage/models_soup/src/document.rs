@@ -2,6 +2,7 @@ use chrono::Utc;
 use utoipa::ToSchema;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, ToSchema, Clone)]
+#[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[serde(rename_all = "camelCase")]
 pub struct SoupDocument {
     /// The document id
