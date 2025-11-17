@@ -3,6 +3,8 @@ import { useTokenToHotkeyString } from '@core/hotkey/hotkeys';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import { createMemo, For, type JSX, Show, splitProps } from 'solid-js';
 import type { Theme } from './Themes';
+import { prettyPrintHotkeyString } from '@core/hotkey/utils';
+import { ValidHotkey } from '@core/hotkey/types';
 
 const modifierMap = {
   cmd: IS_MAC ? '⌘' : 'Ctrl',
@@ -102,7 +104,7 @@ function breakApartHotkeyString(hotkey: string) {
 
 interface HotkeyProps extends JSX.HTMLAttributes<HTMLDivElement> {
   token?: HotkeyToken;
-  shortcut?: string;
+  shortcut?: ValidHotkey;
   showPlus?: boolean; // Whether to show the plus sign in compound hotkeys
   lowercase?: boolean; // Whether to display the key in lowercase
 }
@@ -130,7 +132,7 @@ export const Hotkey = (props: HotkeyProps) => {
     const tokenShortcut_ = tokenShortcut();
     // fallback for when we specify a shortcut directly instead of a hotkey token
     if (local.shortcut && !tokenShortcut_) {
-      return breakApartHotkeyString(local.shortcut);
+      return breakApartHotkeyString(prettyPrintHotkeyString(local.shortcut) ?? '');
     }
     if (!tokenShortcut_) {
       return { key: '', modifiers: [] };

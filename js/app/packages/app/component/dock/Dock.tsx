@@ -74,6 +74,7 @@ export function Dock() {
         <div
           onMouseDown={() => setKonsoleOpen(true)}
           class="group *:border-b-0 *:h-full relative border-t border-edge-muted flex justify-between items-center gap-2 pl-3 py-2"
+          data-hotkey-token={TOKENS.global.commandMenu}
         >
           <svg
             xmlns="http://www.w3.org/2000/svg"

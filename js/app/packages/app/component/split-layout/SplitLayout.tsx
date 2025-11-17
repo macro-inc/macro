@@ -289,14 +289,13 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   registerHotkey({
     hotkeyToken: TOKENS.global.createNewSplit,
-    hotkey: 'cmd+\\',
+    hotkey: '\\',
     scopeId: 'global',
     description: 'Create new split',
     keyDownHandler: () => {
       splitManager.createNewSplit();
       return true;
     },
-    runWithInputFocused: true,
   });
 
   createEffect(() => {
@@ -354,13 +353,12 @@ function SplitPanel(props: SplitPanelProps) {
 
   registerHotkey({
     scopeId: splitHotkeyScope,
-    hotkey: 'cmd+escape',
+    hotkey: 'w',
     description: `Close ${splitName()}`,
     keyDownHandler: () => {
       props.handle.close();
       return true;
     },
-    runWithInputFocused: true,
     hotkeyToken: TOKENS.split.close,
   });
 
@@ -391,7 +389,7 @@ function SplitPanel(props: SplitPanelProps) {
 
   registerHotkey({
     scopeId: splitHotkeyScope,
-    hotkey: 'opt+[',
+    hotkey: '[',
     hotkeyToken: TOKENS.split.back,
     condition: () => props.handle.canGoBack(),
     description: `Go back in split`,
@@ -399,12 +397,12 @@ function SplitPanel(props: SplitPanelProps) {
       props.handle.goBack();
       return true;
     },
-    runWithInputFocused: false,
+
   });
 
   registerHotkey({
     scopeId: splitHotkeyScope,
-    hotkey: 'opt+]',
+    hotkey: ']',
     hotkeyToken: TOKENS.split.forward,
     condition: () => props.handle.canGoForward(),
     description: `Go back in split`,
@@ -412,7 +410,7 @@ function SplitPanel(props: SplitPanelProps) {
       props.handle.goForward();
       return true;
     },
-    runWithInputFocused: false,
+
   });
 
   const unifiedListContext = createSoupContext();

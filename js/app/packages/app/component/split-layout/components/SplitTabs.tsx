@@ -1,3 +1,4 @@
+import { TOKENS } from '@core/hotkey/tokens';
 import type { ViewId } from '@core/types/view';
 import { Tabs } from '@kobalte/core';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -24,7 +25,7 @@ const SCROLL_THRESHOLD = 10;
 
 export function SplitTabs(props: {
   // values: readonly View[];
-  list: { value: ViewId; label: string }[];
+  list: { value: ViewId; label: string; index: number }[];
   active: Accessor<ViewId>;
   setButtonsRef?: Setter<HTMLDivElement | null>;
   newButton?: JSXElement;
@@ -123,7 +124,7 @@ export function SplitTabs(props: {
         />
 
         <For each={props.list}>
-          {({ value, label }, i) => {
+          {({ value, label, index }, i) => {
             const isActive = createMemo(() => value === props.active());
 
             let ref: HTMLDivElement | undefined;
@@ -157,6 +158,11 @@ export function SplitTabs(props: {
                   'border-y border-edge-muted text-ink-disabled hover:text-accent/70 hover-transition-text':
                     !isActive(),
                 }}
+                data-hotkey-token={
+                  TOKENS.soup.tabs[
+                    index.toString() as keyof typeof TOKENS.soup.tabs
+                  ]
+                }
               >
                 <span class="flex items-center gap-1 w-full">
                   <span class="text-xs font-mono opacity-70 mr-0.5">

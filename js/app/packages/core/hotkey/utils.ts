@@ -195,6 +195,9 @@ export function prettyPrintHotkeyString(validHotkey?: ValidHotkey) {
       ];
     }
   }
+  if (validHotkey.includes('escape')) {
+    return validHotkey.replace('escape', 'esc');
+  }
   return validHotkey;
 }
 

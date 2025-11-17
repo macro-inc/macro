@@ -192,7 +192,7 @@ export default function GlobalShortcuts() {
 
   registerHotkey({
     hotkeyToken: TOKENS.global.toggleRightPanel,
-    hotkey: 'cmd+/',
+    hotkey: 'r',
     scopeId: 'global',
     description: () => {
       return isRightPanelOpen() ? 'Close AI panel' : 'Open AI panel';
@@ -204,7 +204,6 @@ export default function GlobalShortcuts() {
     condition: () => {
       return !bigChatOpen();
     },
-    runWithInputFocused: true,
   });
 
   registerHotkey({
@@ -359,7 +358,6 @@ export default function GlobalShortcuts() {
     hotkey: ['escape'],
     description: 'Toggle visor',
     keyDownHandler: () => {
-      document.body.classList.toggle('visor-active');
       fireVisor();
       return false;
     },

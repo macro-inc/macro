@@ -409,9 +409,10 @@ export function Soup() {
           >
             <SplitHeaderLeft>
               <SplitTabs
-                list={Object.values(viewsData).map((view) => ({
+                list={Object.values(viewsData).map((view, index) => ({
                   value: view.id,
                   label: view.view,
+                  index: index
                 }))}
                 active={selectedView}
                 contextMenu={({ value, label }) => (

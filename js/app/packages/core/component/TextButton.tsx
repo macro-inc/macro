@@ -149,6 +149,7 @@ export function TextButton(props: TextButtonProps) {
           }}
           tabIndex={props.tabIndex}
           ref={props.buttonRef}
+          data-hotkey-token={props.tooltip?.hotkeyToken}
         >
           {props.icon && (
             <div class="flex justify-start items-center h-full">
