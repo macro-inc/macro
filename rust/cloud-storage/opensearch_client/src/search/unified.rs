@@ -7,7 +7,7 @@ use crate::{
         chats::{ChatIndex, ChatSearchConfig, ChatSearchResponse},
         documents::{DocumentIndex, DocumentSearchConfig, DocumentSearchResponse},
         emails::{EmailIndex, EmailSearchConfig, EmailSearchResponse},
-        model::{DefaultSearchResponse, Hit},
+        model::{DefaultSearchResponse, Hit, parse_highlight_hit},
         projects::{ProjectIndex, ProjectSearchConfig, ProjectSearchResponse},
         query::{Keys, QueryKey, generate_name_content_unified_query, generate_terms_must_query},
         utils::should_wildcard_field_query_builder,
@@ -91,11 +91,122 @@ pub enum UnifiedSearchResponse {
 impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
     fn from(index: Hit<UnifiedSearchIndex>) -> Self {
         match index._source {
-            UnifiedSearchIndex::ChannelMessage(a) => todo!(),
-            UnifiedSearchIndex::Document(a) => todo!(),
-            UnifiedSearchIndex::Email(a) => todo!(),
-            UnifiedSearchIndex::Project(a) => todo!(),
-            UnifiedSearchIndex::Chat(a) => todo!(),
+            UnifiedSearchIndex::ChannelMessage(a) => {
+                UnifiedSearchResponse::ChannelMessage(ChannelMessageSearchResponse {
+                    channel_id: a.entity_id,
+                    channel_name: a.channel_name,
+                    channel_type: a.channel_type,
+                    org_id: a.org_id,
+                    message_id: a.message_id,
+                    thread_id: a.thread_id,
+                    sender_id: a.sender_id,
+                    mentions: a.mentions,
+                    created_at: a.created_at_seconds,
+                    updated_at: a.updated_at_seconds,
+                    highlight: index
+                        .highlight
+                        .map(|h| {
+                            parse_highlight_hit(
+                                h,
+                                Keys {
+                                    title_key: ChannelMessageSearchConfig::TITLE_KEY,
+                                    content_key: ChannelMessageSearchConfig::CONTENT_KEY,
+                                },
+                            )
+                        })
+                        .unwrap_or_default(),
+                })
+            }
+            UnifiedSearchIndex::Document(a) => {
+                UnifiedSearchResponse::Document(DocumentSearchResponse {
+                    document_id: a.entity_id,
+                    document_name: a.document_name,
+                    node_id: a.node_id,
+                    raw_content: a.raw_content,
+                    owner_id: a.owner_id,
+                    file_type: a.file_type,
+                    updated_at: a.updated_at_seconds,
+                    highlight: index
+                        .highlight
+                        .map(|h| {
+                            parse_highlight_hit(
+                                h,
+                                Keys {
+                                    title_key: DocumentSearchConfig::TITLE_KEY,
+                                    content_key: DocumentSearchConfig::CONTENT_KEY,
+                                },
+                            )
+                        })
+                        .unwrap_or_default(),
+                })
+            }
+            UnifiedSearchIndex::Email(a) => UnifiedSearchResponse::Email(EmailSearchResponse {
+                thread_id: a.entity_id,
+                message_id: a.message_id,
+                subject: a.subject,
+                sender: a.sender,
+                recipients: a.recipients,
+                cc: a.cc,
+                bcc: a.bcc,
+                labels: a.labels,
+                link_id: a.link_id,
+                user_id: a.user_id,
+                updated_at: a.updated_at_seconds,
+                sent_at: a.sent_at_seconds,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: EmailSearchConfig::TITLE_KEY,
+                                content_key: EmailSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+            }),
+            UnifiedSearchIndex::Project(a) => {
+                UnifiedSearchResponse::Project(ProjectSearchResponse {
+                    project_id: a.entity_id,
+                    user_id: a.user_id,
+                    project_name: a.project_name,
+                    created_at: a.created_at_seconds,
+                    updated_at: a.updated_at_seconds,
+                    highlight: index
+                        .highlight
+                        .map(|h| {
+                            parse_highlight_hit(
+                                h,
+                                Keys {
+                                    title_key: ProjectSearchConfig::TITLE_KEY,
+                                    content_key: ProjectSearchConfig::CONTENT_KEY,
+                                },
+                            )
+                        })
+                        .unwrap_or_default(),
+                })
+            }
+            UnifiedSearchIndex::Chat(a) => UnifiedSearchResponse::Chat(ChatSearchResponse {
+                chat_id: a.entity_id,
+                chat_message_id: a.chat_message_id,
+                user_id: a.user_id,
+                role: a.role,
+                title: a.title,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: ChatSearchConfig::TITLE_KEY,
+                                content_key: ChatSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                updated_at: a.updated_at_seconds,
+            }),
         }
     }
 }
