@@ -389,7 +389,7 @@ export function EntityWithEverything(
       <div
         data-entity
         data-entity-id={props.entity.id}
-        class="w-full min-w-0 grid flex-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto]"
+        class="w-full min-w-0 grid flex-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto] pr-2"
         {...navHandlers()}
         // Action List is also rendered based on focus, but when focused via Shift+Tab, parent is focused due to Action List dom not present. Here we check if current browser task has captured Shift+Tab focus on Action List
         onFocusIn={(e) => {
