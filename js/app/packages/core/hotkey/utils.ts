@@ -42,7 +42,7 @@ export function registerScope(args: RegisterScopeArgs) {
   const { parentScopeId, type, scopeId, description } = args;
 
   const baseScope = {
-    id: scopeId,
+    scopeId: scopeId,
     description: description ?? undefined,
     parentScopeId: parentScopeId,
     childScopeIds: [],
@@ -83,7 +83,7 @@ export function removeScope(scopeId: string) {
   if (scope.type === 'dom') {
     let currentScope = scopeTree.get(activeScope() ?? '');
     while (currentScope) {
-      if (currentScope.id === scopeId) {
+      if (currentScope.scopeId === scopeId) {
         let parentScope = hotkeyScopeTree.get(currentScope.parentScopeId ?? '');
         let foundDOMScopeParent = false;
         while (parentScope) {
@@ -92,7 +92,7 @@ export function removeScope(scopeId: string) {
             parentScope.element instanceof HTMLElement
           ) {
             parentScope.element.focus();
-            setActiveScope(parentScope.id);
+            setActiveScope(parentScope.scopeId);
             foundDOMScopeParent = true;
             break;
           }
@@ -143,7 +143,7 @@ export function activateClosestDOMScope() {
       currentScope.element instanceof HTMLElement
     ) {
       currentScope.element.focus();
-      activeScopeId = currentScope.id;
+      activeScopeId = currentScope.scopeId;
       break;
     }
 
@@ -152,6 +152,16 @@ export function activateClosestDOMScope() {
   }
 
   setActiveScope(activeScopeId);
+}
+
+export function isScopeInActiveBranch(scopeId: string): boolean {
+  let currentScope = hotkeyScopeTree.get(activeScope() ?? '');
+  while (currentScope) {
+    if (currentScope.scopeId === scopeId) return true;
+    if (!currentScope.parentScopeId) break;
+    currentScope = hotkeyScopeTree.get(currentScope.parentScopeId);
+  }
+  return false;
 }
 
 export function normalizeEventKeyPress(e: KeyboardEvent): string {

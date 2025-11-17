@@ -4,6 +4,8 @@ import type { HotkeyToken } from './tokens';
 export interface HotkeyCommand {
   // Used to identify the hotkey in UI elements. Needs to be unique to a particular scope.
   hotkeyToken?: HotkeyToken;
+  // What scope does this hotkey belong to
+  scopeId: string;
   // The hotkey strings, e.g. ['cmd+j', 'ctrl+j']
   hotkeys?: ValidHotkey[];
   // Condition to check if the hotkey command should run. This is checked on keydown/keyup. If this is fed a reactive value, any hotkey UI that displays hotkeys based on this condition will be reactively updated.
@@ -107,7 +109,7 @@ export type RegisterHotkeyReturn = {
 };
 
 export type ScopeNodeBase = {
-  id: string;
+  scopeId: string;
   description?: string;
   parentScopeId?: string;
   childScopeIds: string[];

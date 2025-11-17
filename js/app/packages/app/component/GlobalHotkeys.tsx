@@ -35,6 +35,7 @@ import {
   selectedQuickCreateTypeSignal,
 } from './QuickCreateMenu';
 import { focusAdjacentSplit } from './split-layout/layoutUtils';
+import { fireVisor } from './Visor';
 
 export default function GlobalShortcuts() {
   const [bigChatOpen, setBigChatOpen] = useBigChat();
@@ -349,6 +350,18 @@ export default function GlobalShortcuts() {
     keyDownHandler: () => {
       setMonochromeIcons(!monochromeIcons());
       return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    hotkey: ['escape'],
+    description: 'Toggle visor',
+    keyDownHandler: () => {
+      document.body.classList.toggle('visor-active');
+      fireVisor();
+      return false;
     },
     runWithInputFocused: true,
   });

@@ -58,6 +58,7 @@ import { LOGIN_COOKIE_AGE, setCookie } from './auth/Shared';
 import { GlobalAppStateProvider } from './GlobalAppState';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
+import Visor from './Visor';
 import Onboarding from './Onboarding';
 import { useMobileEffect, useMobileNavigate } from './settings/Mobile';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
@@ -333,6 +334,7 @@ export function Root() {
             <ChannelsContextProvider>
               <Title>{tabTitle()}</Title>
               <MacroJump />
+              <Visor />
               <Suspense fallback={''}>
                 <IsomorphicRouter
                   transformUrl={transformShortIdInUrlPathname}
