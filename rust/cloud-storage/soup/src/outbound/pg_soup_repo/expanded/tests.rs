@@ -24,7 +24,7 @@ async fn test_viewed_at_orders_nulls_last(pool: Pool<Postgres>) -> anyhow::Resul
     let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
     let items = expanded_generic_cursor_soup(
         &pool,
-        user_id,
+        user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::ViewedAt, ()),
     )
@@ -170,7 +170,7 @@ async fn test_get_user_items_expanded_cursor(pool: Pool<Postgres>) -> anyhow::Re
 
     let items = expanded_generic_cursor_soup(
         &pool,
-        user_id,
+        user_id.copied(),
         1,
         Query::new(
             result.next_cursor.map(|s| s.decode_json().unwrap()),
@@ -281,7 +281,7 @@ async fn test_expanded_generic_sorting_methods(pool: Pool<Postgres>) -> anyhow::
     {
         let items = expanded_generic_cursor_soup(
             &pool,
-            user_id,
+            user_id.copied(),
             10,
             Query::Sort(SimpleSortMethod::CreatedAt, ()),
         )
@@ -415,7 +415,7 @@ async fn test_no_frecency_expanded_filters_out_frecency_items(
     // Test with UpdatedAt sort - should return only items without frecency
     let items = no_frecency_expanded_generic_soup(
         &pool,
-        user_id,
+        user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::UpdatedAt, Frecency),
     )
@@ -553,7 +553,7 @@ async fn test_no_frecency_expanded_sorting_methods(pool: Pool<Postgres>) -> anyh
     {
         let items = no_frecency_expanded_generic_soup(
             &pool,
-            user_id,
+            user_id.copied(),
             20,
             Query::Sort(SimpleSortMethod::ViewedAt, Frecency),
         )
@@ -629,7 +629,7 @@ async fn test_no_frecency_expanded_cursor_pagination(pool: Pool<Postgres>) -> an
     // Get second page using cursor
     let items = no_frecency_expanded_generic_soup(
         &pool,
-        user_id,
+        user_id.copied(),
         2,
         Query::new(
             result.next_cursor.map(|s| s.decode_json().unwrap()),
@@ -684,7 +684,7 @@ async fn empty_ast_returns_same_as_static_query(db: PgPool) {
     .unwrap();
     let static_res = expanded_generic_cursor_soup(
         &db,
-        user_id,
+        user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, ()),
     )
@@ -743,7 +743,7 @@ async fn test_filter_by_document_file_type(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id,
+        user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
     )
@@ -812,7 +812,7 @@ async fn test_filter_by_document_ids(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id,
+        user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
     )
@@ -885,7 +885,7 @@ async fn test_filter_documents_by_project_id(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id,
+        user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
     )
@@ -953,7 +953,7 @@ async fn test_filter_chats_by_project_id(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id,
+        user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
     )
@@ -1024,7 +1024,7 @@ async fn test_filter_by_chat_ids(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id,
+        user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
     )
@@ -1097,7 +1097,7 @@ async fn test_filter_by_project_ids(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id,
+        user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
     )
@@ -1184,7 +1184,7 @@ async fn test_combined_entity_filters(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id,
+        user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
     )
@@ -1266,7 +1266,7 @@ async fn test_multiple_filter_criteria_documents(db: PgPool) -> anyhow::Result<(
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id,
+        user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
     )
@@ -1340,7 +1340,7 @@ async fn test_filters_respect_access_control(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id,
+        user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
     )
@@ -1401,7 +1401,7 @@ async fn test_filter_by_owner(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id,
+        user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
     )
@@ -1463,7 +1463,7 @@ async fn test_filter_non_existent_items(db: PgPool) -> anyhow::Result<()> {
 
     let items = expanded_dynamic_cursor_soup(
         &db,
-        user_id,
+        user_id.copied(),
         20,
         Query::Sort(SimpleSortMethod::CreatedAt, filters),
     )
@@ -1491,6 +1491,399 @@ async fn test_filter_non_existent_items(db: PgPool) -> anyhow::Result<()> {
     assert_eq!(chat_count, 0, "Should return 0 chats for non-existent IDs");
     assert_eq!(doc_count, 5, "Should get all documents");
     assert_eq!(project_count, 4, "Should get all projects");
+
+    Ok(())
+}
+
+// Test cursor-based pagination with document filters
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_cursor_pagination_with_document_filter(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Filter for only PDF documents
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            file_types: vec!["pdf".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters.clone())?.unwrap();
+
+    // First page - get 3 items
+    let result = expanded_dynamic_cursor_soup(
+        &db,
+        user_id.copied(),
+        3,
+        Query::Sort(SimpleSortMethod::CreatedAt, filters.clone()),
+    )
+    .await?
+    .into_iter()
+    .paginate_on(3, SimpleSortMethod::CreatedAt)
+    .into_page();
+
+    let first_page_items = result.items;
+    assert_eq!(first_page_items.len(), 3, "First page should have 3 items");
+
+    // Verify any documents on first page are PDFs
+    for item in &first_page_items {
+        if let SoupItem::Document(doc) = item {
+            assert_eq!(
+                doc.file_type.as_deref(),
+                Some("pdf"),
+                "All documents should be PDFs"
+            );
+        }
+    }
+
+    // Get second page using cursor
+    let next_cursor = result.next_cursor.expect("Should have a next cursor");
+    let cursor_decoded = next_cursor.decode_json()?;
+
+    let filters_for_cursor = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+    let second_page_items = expanded_dynamic_cursor_soup(
+        &db,
+        user_id.copied(),
+        3,
+        Query::Cursor(models_pagination::Cursor {
+            id: cursor_decoded.id,
+            limit: cursor_decoded.limit,
+            val: cursor_decoded.val,
+            filter: filters_for_cursor,
+        }),
+    )
+    .await?;
+
+    assert!(second_page_items.len() > 0, "Second page should have items");
+
+    // Verify filter still applies on second page
+    for item in &second_page_items {
+        match item {
+            SoupItem::Document(doc) => {
+                assert_eq!(
+                    doc.file_type.as_deref(),
+                    Some("pdf"),
+                    "All documents should be PDFs on second page"
+                );
+            }
+            SoupItem::Chat(_) => {
+                // Chats are fine
+            }
+            SoupItem::Project(_) => {
+                // Projects are fine
+            }
+        }
+    }
+
+    // Verify no duplicate items between pages
+    let first_page_ids: HashSet<String> = first_page_items
+        .iter()
+        .map(|item| match item {
+            SoupItem::Document(d) => d.id.clone(),
+            SoupItem::Chat(c) => c.id.clone(),
+            SoupItem::Project(p) => p.id.clone(),
+        })
+        .collect();
+
+    for item in &second_page_items {
+        let id = match item {
+            SoupItem::Document(d) => &d.id,
+            SoupItem::Chat(c) => &c.id,
+            SoupItem::Project(p) => &p.id,
+        };
+        assert!(
+            !first_page_ids.contains(id),
+            "No item should appear on both pages"
+        );
+    }
+
+    Ok(())
+}
+
+// Test cursor-based pagination with multiple entity filters
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_cursor_pagination_with_combined_filters(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{ChatFilters, DocumentFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Filter for documents in specific projects AND specific chats
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            project_ids: vec![
+                "11111111-1111-1111-1111-111111111111".to_string(),
+                "22222222-2222-2222-2222-222222222222".to_string(),
+            ],
+            ..Default::default()
+        },
+        chat_filters: ChatFilters {
+            chat_ids: vec!["a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters.clone())?.unwrap();
+
+    // First page - get 2 items
+    let result = expanded_dynamic_cursor_soup(
+        &db,
+        user_id.copied(),
+        2,
+        Query::Sort(SimpleSortMethod::CreatedAt, filters.clone()),
+    )
+    .await?
+    .into_iter()
+    .paginate_on(2, SimpleSortMethod::CreatedAt)
+    .into_page();
+
+    assert_eq!(result.items.len(), 2, "First page should have 2 items");
+
+    // Get second page
+    if let Some(next_cursor) = result.next_cursor {
+        let cursor_decoded = next_cursor.decode_json()?;
+        let filters_for_cursor = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+        let second_page_items = expanded_dynamic_cursor_soup(
+            &db,
+            user_id.copied(),
+            2,
+            Query::Cursor(models_pagination::Cursor {
+                id: cursor_decoded.id,
+                limit: cursor_decoded.limit,
+                val: cursor_decoded.val,
+                filter: filters_for_cursor,
+            }),
+        )
+        .await?;
+
+        // Verify filters still apply on second page
+        for item in &second_page_items {
+            match item {
+                SoupItem::Document(doc) => {
+                    let project_id = doc.project_id.as_deref().unwrap();
+                    assert!(
+                        project_id == "11111111-1111-1111-1111-111111111111"
+                            || project_id == "22222222-2222-2222-2222-222222222222",
+                        "Documents should be in filtered projects"
+                    );
+                }
+                SoupItem::Chat(chat) => {
+                    assert_eq!(
+                        chat.id, "a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1",
+                        "Only the filtered chat should appear"
+                    );
+                }
+                SoupItem::Project(_) => {
+                    // All projects should be included
+                }
+            }
+        }
+    }
+
+    Ok(())
+}
+
+// Test cursor pagination maintains filter consistency across pages
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_cursor_pagination_filter_consistency(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{DocumentFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Filter for documents by specific IDs
+    let entity_filters = EntityFilters {
+        document_filters: DocumentFilters {
+            document_ids: vec![
+                "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa".to_string(),
+                "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb".to_string(),
+            ],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters.clone())?.unwrap();
+
+    // Collect all items across multiple pages with small page size
+    let mut all_items = Vec::new();
+    let mut current_query = Query::Sort(SimpleSortMethod::CreatedAt, filters.clone());
+    let page_size: u16 = 2;
+
+    loop {
+        let result = expanded_dynamic_cursor_soup(&db, user_id.copied(), page_size, current_query)
+            .await?
+            .into_iter()
+            .paginate_on(page_size as usize, SimpleSortMethod::CreatedAt)
+            .into_page();
+
+        all_items.extend(result.items);
+
+        match result.next_cursor {
+            Some(cursor) => {
+                let cursor_decoded = cursor.decode_json()?;
+                let filters_for_cursor =
+                    EntityFilterAst::new_from_filters(entity_filters.clone())?.unwrap();
+                current_query = Query::Cursor(models_pagination::Cursor {
+                    id: cursor_decoded.id,
+                    limit: cursor_decoded.limit,
+                    val: cursor_decoded.val,
+                    filter: filters_for_cursor,
+                });
+            }
+            None => break,
+        }
+    }
+
+    // Count filtered documents across all pages
+    let mut filtered_doc_count = 0;
+    let expected_doc_ids: HashSet<String> = [
+        "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+        "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",
+    ]
+    .iter()
+    .map(|&s| s.to_string())
+    .collect();
+
+    for item in &all_items {
+        if let SoupItem::Document(doc) = item {
+            assert!(
+                expected_doc_ids.contains(&doc.id),
+                "Document {} should be in the filtered set",
+                doc.id
+            );
+            filtered_doc_count += 1;
+        }
+    }
+
+    // Should get exactly the 2 filtered documents
+    assert_eq!(
+        filtered_doc_count, 2,
+        "Should get exactly 2 filtered documents across all pages"
+    );
+
+    // Verify no duplicate items
+    let all_ids: Vec<String> = all_items
+        .iter()
+        .map(|item| match item {
+            SoupItem::Document(d) => d.id.clone(),
+            SoupItem::Chat(c) => c.id.clone(),
+            SoupItem::Project(p) => p.id.clone(),
+        })
+        .collect();
+
+    let unique_ids: HashSet<_> = all_ids.iter().collect();
+    assert_eq!(
+        all_ids.len(),
+        unique_ids.len(),
+        "Should have no duplicate items across pages"
+    );
+
+    Ok(())
+}
+
+// Test cursor pagination with empty filter results on subsequent pages
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("entity_filter_tests")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn test_cursor_pagination_with_single_item_filter(db: PgPool) -> anyhow::Result<()> {
+    use item_filters::{ChatFilters, EntityFilters};
+
+    let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
+
+    // Filter for a single chat ID
+    let entity_filters = EntityFilters {
+        chat_filters: ChatFilters {
+            chat_ids: vec!["a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1".to_string()],
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let filters = EntityFilterAst::new_from_filters(entity_filters.clone())?.unwrap();
+
+    // Get first page with limit 5
+    let result = expanded_dynamic_cursor_soup(
+        &db,
+        user_id.copied(),
+        5,
+        Query::Sort(SimpleSortMethod::CreatedAt, filters.clone()),
+    )
+    .await?
+    .into_iter()
+    .paginate_on(5, SimpleSortMethod::CreatedAt)
+    .into_page();
+
+    // Count the filtered chat in first page
+    let chat_count_page1 = result
+        .items
+        .iter()
+        .filter(|item| matches!(item, SoupItem::Chat(c) if c.id == "a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1"))
+        .count();
+
+    // We should see the filtered chat (it might be on page 1 or later depending on sort order)
+    if let Some(next_cursor) = result.next_cursor {
+        let cursor_decoded = next_cursor.decode_json()?;
+        let filters_for_cursor = EntityFilterAst::new_from_filters(entity_filters)?.unwrap();
+
+        let second_page_items = expanded_dynamic_cursor_soup(
+            &db,
+            user_id.copied(),
+            5,
+            Query::Cursor(models_pagination::Cursor {
+                id: cursor_decoded.id,
+                limit: cursor_decoded.limit,
+                val: cursor_decoded.val,
+                filter: filters_for_cursor,
+            }),
+        )
+        .await?;
+
+        // Count the filtered chat in second page
+        let chat_count_page2 = second_page_items
+            .iter()
+            .filter(|item| matches!(item, SoupItem::Chat(c) if c.id == "a1a1a1a1-a1a1-a1a1-a1a1-a1a1a1a1a1a1"))
+            .count();
+
+        // Across both pages, we should see exactly 1 instance of the filtered chat
+        assert_eq!(
+            chat_count_page1 + chat_count_page2,
+            1,
+            "Should see the filtered chat exactly once across pages"
+        );
+    } else {
+        // If no second page, the chat should be on the first page
+        assert_eq!(
+            chat_count_page1, 1,
+            "Should see the filtered chat on first page"
+        );
+    }
 
     Ok(())
 }
