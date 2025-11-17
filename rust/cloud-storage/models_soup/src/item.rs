@@ -18,6 +18,7 @@ pub enum SoupItemType {
 }
 
 #[derive(Deserialize, Clone, ToSchema, Debug)]
+#[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[serde(untagged)]
 #[schema(discriminator(property_name = "type", mapping(
      ("document" = "#/components/schemas/SoupDocument"),
