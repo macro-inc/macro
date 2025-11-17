@@ -35,10 +35,10 @@ pub trait SoupRepo: Send + Sync + 'static {
 /// 1. The item type is [FrecencySoupItem]
 /// 1. The id type is [String] (this should be changed to uuid)
 /// 1. The sort method is [Either] [SimpleSortMethod] or [Frecency]
-/// 1. The filter type is [EntityFilterAst]
+/// 1. The filter type is an [Option] [EntityFilterAst]
 pub type SoupOutput = Either<
-    PaginatedCursor<FrecencySoupItem, String, SimpleSortMethod, EntityFilterAst>,
-    PaginatedCursor<FrecencySoupItem, String, Frecency, EntityFilterAst>,
+    PaginatedCursor<FrecencySoupItem, String, SimpleSortMethod, Option<EntityFilterAst>>,
+    PaginatedCursor<FrecencySoupItem, String, Frecency, Option<EntityFilterAst>>,
 >;
 
 pub trait SoupService: Send + Sync + 'static {
