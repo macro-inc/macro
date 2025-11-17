@@ -1,5 +1,5 @@
 use crate::domain::{
-    models::{AdvancedSortParams, SimpleSortFilter, SimpleSortRequest},
+    models::{AdvancedSortParams, SimpleSortQuery, SimpleSortRequest},
     ports::SoupRepo,
 };
 use either::Either;
@@ -26,22 +26,33 @@ impl SoupRepo for PgSoupRepo {
         &self,
         req: SimpleSortRequest<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send {
-        match req.cursor.filter() {
-            Some(SimpleSortFilter::Ast(_ast) | SimpleSortFilter::FrecencyAst(_, _ast)) => todo!(),
-            Some(SimpleSortFilter::Frecency(f)) => {
-                let f = *f;
-                Either::Left(expanded::by_cursor::no_frecency_expanded_generic_soup(
+        match req.cursor {
+            SimpleSortQuery::ItemsAndFrecencyFilter(_) => {
+                Either::Left(Either::Left(Box::pin(async move { todo!() })))
+            }
+            SimpleSortQuery::ItemsFilter(ast) => Either::Left(Either::Right(
+                expanded::dynamic::expanded_dynamic_cursor_soup(
                     &self.inner,
                     req.user_id,
                     req.limit,
-                    req.cursor.map_filter(|_| f),
-                ))
-            }
-            None => Either::Right(expanded::by_cursor::expanded_generic_cursor_soup(
-                &self.inner,
-                req.user_id,
-                req.limit,
-                req.cursor.map_filter(|_| ()),
+                    ast,
+                ),
+            )),
+            SimpleSortQuery::FilterFrecency(f) => Either::Right(Either::Left(
+                expanded::by_cursor::no_frecency_expanded_generic_soup(
+                    &self.inner,
+                    req.user_id,
+                    req.limit,
+                    f,
+                ),
+            )),
+            SimpleSortQuery::NoFilter(f) => Either::Right(Either::Right(
+                expanded::by_cursor::expanded_generic_cursor_soup(
+                    &self.inner,
+                    req.user_id,
+                    req.limit,
+                    f,
+                ),
             )),
         }
     }
@@ -50,23 +61,24 @@ impl SoupRepo for PgSoupRepo {
         &self,
         req: SimpleSortRequest<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send {
-        match req.cursor.filter() {
-            Some(SimpleSortFilter::Ast(_ast) | SimpleSortFilter::FrecencyAst(_, _ast)) => todo!(),
-            Some(SimpleSortFilter::Frecency(f)) => {
-                let f = *f;
+        match req.cursor {
+            SimpleSortQuery::ItemsFilter(_) | SimpleSortQuery::ItemsAndFrecencyFilter(_) => todo!(),
+            SimpleSortQuery::FilterFrecency(f) => {
                 Either::Left(expanded::by_cursor::no_frecency_expanded_generic_soup(
                     &self.inner,
                     req.user_id,
                     req.limit,
-                    req.cursor.map_filter(|_| f),
+                    f,
                 ))
             }
-            None => Either::Right(unexpanded::by_cursor::unexpanded_generic_cursor_soup(
-                &self.inner,
-                req.user_id,
-                req.limit,
-                req.cursor.map_filter(|_| ()),
-            )),
+            SimpleSortQuery::NoFilter(f) => {
+                Either::Right(unexpanded::by_cursor::unexpanded_generic_cursor_soup(
+                    &self.inner,
+                    req.user_id,
+                    req.limit,
+                    f,
+                ))
+            }
         }
     }
 

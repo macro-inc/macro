@@ -100,11 +100,8 @@ impl Identify for ThreadPreviewFrecency {
 }
 
 impl SortOn<SimpleSortMethod> for ThreadPreviewFrecency {
-    fn sort_on<F>(
-        sort: SimpleSortMethod,
-        filter: F,
-    ) -> impl FnOnce(&Self) -> CursorVal<SimpleSortMethod, F> {
-        let cb = ThreadPreviewCursor::sort_on(sort, filter);
+    fn sort_on(sort: SimpleSortMethod) -> impl FnOnce(&Self) -> CursorVal<SimpleSortMethod> {
+        let cb = ThreadPreviewCursor::sort_on(sort);
         move |v| cb(&v.preview)
     }
 }

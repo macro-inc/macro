@@ -254,32 +254,24 @@ impl Identify for RawNotification {
 }
 
 impl SortOn<CreatedAt> for RawNotification {
-    fn sort_on<F>(
-        sort: CreatedAt,
-        filter: F,
-    ) -> impl FnOnce(&Self) -> models_pagination::CursorVal<CreatedAt, F> {
+    fn sort_on(sort: CreatedAt) -> impl FnOnce(&Self) -> models_pagination::CursorVal<CreatedAt> {
         move |v| {
             let last_val = v.created_at.unwrap_or(DateTime::UNIX_EPOCH);
             CursorVal {
                 sort_type: sort,
                 last_val,
-                filter,
             }
         }
     }
 }
 
 impl SortOn<CreatedAt> for RawUserNotification {
-    fn sort_on<F>(
-        sort: CreatedAt,
-        filter: F,
-    ) -> impl FnOnce(&Self) -> models_pagination::CursorVal<CreatedAt, F> {
+    fn sort_on(sort: CreatedAt) -> impl FnOnce(&Self) -> models_pagination::CursorVal<CreatedAt> {
         move |v| {
             let last_val = v.created_at.unwrap_or(DateTime::UNIX_EPOCH);
             CursorVal {
                 sort_type: sort,
                 last_val,
-                filter,
             }
         }
     }

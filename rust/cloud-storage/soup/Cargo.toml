@@ -17,6 +17,7 @@ axum = [
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
+chrono = { workspace = true }
 either = { workspace = true }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
@@ -28,6 +29,7 @@ model_user = { path = "../model_user", optional = true, features = ["axum"] }
 models_pagination = { path = "../models_pagination" }
 models_soup = { path = "../models_soup" }
 non_empty = { path = "../non_empty" }
+recursion = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
 thiserror = { workspace = true }
@@ -36,7 +38,6 @@ utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
-chrono = { workspace = true }
 cool_asserts = "2"
 frecency = { path = "../frecency", features = ["mock"] }
 futures = { workspace = true }
