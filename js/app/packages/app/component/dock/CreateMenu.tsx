@@ -15,7 +15,7 @@ export function CreateMenu() {
     <>
       <button
         onClick={() => setCreateMenuOpen(true)}
-        class="relative flex justify-between items-center gap-2 data-expanded:bg-accent px-3 py-2 border border-edge-muted data-expanded:border-accent **:border-none! font-medium text-ink-muted data-expanded:text-default-bg hover:text-accent text-base bracket-never"
+        class="relative flex justify-between items-center gap-2 data-expanded:bg-accent data-expanded:border-accent **:border-none! font-medium text-ink-muted data-expanded:text-default-bg hover:text-accent text-base bracket-never"
         classList={{
           'bg-accent text-default-bg': createMenuOpen(),
         }}

@@ -2,7 +2,6 @@ import { mountGlobalFocusListener } from '@app/signal/focus';
 import { useIsAuthenticated } from '@core/auth';
 import { Resize } from '@core/component/Resize';
 import { useABTest } from '@core/constant/ABTest';
-import { ENABLE_RIGHTHAND_SIDEBAR } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
@@ -139,9 +138,7 @@ export function Layout(props: RouteSectionProps) {
             <Resize.Panel id={LAYOUT_CONTEXT_ID} minSize={250}>
               {props.children}
             </Resize.Panel>
-            <Show when={ENABLE_RIGHTHAND_SIDEBAR}>
-              <RightbarWrapper />
-            </Show>
+            <RightbarWrapper />
           </ItemDndProvider>
         </Resize.Zone>
       </div>
