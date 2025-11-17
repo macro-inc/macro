@@ -1,3 +1,4 @@
+import { supportedExtensionSet } from '@block-code/util/languageSupport';
 import type { BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { USE_PIXEL_BLOCK_ICONS } from '@core/constant/featureFlags';
@@ -41,7 +42,7 @@ import PixelUser from '@macro-icons/pixel/user.svg';
 import PixelUsers from '@macro-icons/pixel/users.svg';
 import PixelVideo from '@macro-icons/pixel/video.svg';
 import PixelWord from '@macro-icons/pixel/write.svg';
-import { FileTypeMap } from '@service-storage/fileTypeMap';
+import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Component, JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -196,14 +197,8 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   },
 };
 
-// Build a set of all valid file extensions from FileTypeMap
-// This includes extensions with dots like 'js.map', 'css.map', etc.
-const validFileExtensions = new Set(
-  Object.values(FileTypeMap).map((fileType) => fileType.extension)
-);
-
 function isFileType(entity: string): boolean {
-  return validFileExtensions.has(entity);
+  return supportedExtensionSet.has(entity);
 }
 
 function validateEntity(entity: string): EntityWithValidIcon {
