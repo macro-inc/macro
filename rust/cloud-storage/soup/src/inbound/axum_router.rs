@@ -17,7 +17,8 @@ use macro_user_id::user_id::MacroUserIdStr;
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::{
-    CursorExtractor, Either, Frecency, PaginatedOpaqueCursor, SimpleSortMethod, SortMethod,
+    CursorExtractor, Either, EitherWrapper, Frecency, PaginatedOpaqueCursor, SimpleSortMethod,
+    SortMethod, TypeEraseCursor,
 };
 use models_soup::item::SoupItem;
 use serde::{Deserialize, Serialize};
@@ -98,6 +99,8 @@ where
         PostSoupRequest { filters, params }: PostSoupRequest,
         cursor: SoupCursor,
     ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr> {
+        let filters = EntityFilterAst::new_from_filters(filters)?;
+
         let create_fallback = move || {
             let params_sort = params
                 .sort_method
@@ -105,15 +108,15 @@ where
                 .unwrap_or(SortMethod::Simple(SimpleSortMethod::ViewedAt));
             match params_sort {
                 SortMethod::Simple(simple_sort_method) => {
-                    SoupQuery::Simple(models_pagination::Query::Sort(simple_sort_method))
+                    SoupQuery::Simple(models_pagination::Query::Sort(simple_sort_method, filters))
                 }
                 SortMethod::Advanced(frecency) => {
-                    SoupQuery::Frecency(models_pagination::Query::Sort(frecency))
+                    SoupQuery::Frecency(models_pagination::Query::Sort(frecency, filters))
                 }
             }
         };
 
-        let cursor = match cursor {
+        let cursor = match cursor.0 {
             Either::Left(l) => l
                 .into_option()
                 .map(models_pagination::Query::Cursor)
@@ -136,11 +139,12 @@ where
                 limit: params.limit.unwrap_or(20),
                 cursor,
                 user: macro_user_id,
-                filters: Arc::new(EntityFilterAst::new_from_filters(filters)?),
             })
             .await?;
 
-        Ok(Json(res.map(SoupApiItem::from_frecency_soup_item)))
+        Ok(Json(
+            res.type_erase().map(SoupApiItem::from_frecency_soup_item),
+        ))
     }
 }
 
@@ -240,9 +244,9 @@ pub struct PostSoupRequest {
     params: Params,
 }
 
-type SoupCursor = Either<
-    CursorExtractor<String, SimpleSortMethod, EntityFilterAst>,
-    CursorExtractor<String, Frecency, EntityFilterAst>,
+type SoupCursor = EitherWrapper<
+    CursorExtractor<String, SimpleSortMethod, Option<EntityFilterAst>>,
+    CursorExtractor<String, Frecency, Option<EntityFilterAst>>,
 >;
 
 /// Gets the items the user has access to

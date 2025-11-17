@@ -27,6 +27,8 @@ export const ToggleSwitch: Component<
     animateFlickerOnDeactivate?: boolean;
     size?: 'SM' | 'Base';
     disabled?: boolean;
+    trueLabel?: string;
+    falseLabel?: string;
   } & SwitchRootOptions
 > = (props) => {
   const [checked, setChecked] = createSignal(props.checked);
@@ -64,8 +66,9 @@ export const ToggleSwitch: Component<
 
   return (
     <KSwitch
-      class="flex justify-between items-center text-xs font-medium gap-1"
+      class="flex justify-between items-center font-medium gap-1"
       classList={{
+        [`${sizeClass[props.size || 'Base']}`]: true,
         [`${props.switchRootClass}`]: !!props.switchRootClass,
         'flex-row-reverse': props.labelPlacement === 'right',
         'opacity-50 cursor-not-allowed': props.disabled,
@@ -135,28 +138,44 @@ export const ToggleSwitch: Component<
                 </div>
               </div>
               <div
-                class="absolute inset-0 border border-ink uppercase"
+                class="absolute inset-0 uppercase"
                 classList={{
                   [`${sizeClass[props.size || 'Base']}`]: true,
+                  'border border-ink/30':
+                    props.switchRootClass?.includes('subtle'),
+                  'border border-ink':
+                    !props.switchRootClass?.includes('subtle'),
                 }}
                 aria-hidden
               >
                 <div class="absolute inset-0">
                   <div
-                    class="font-bold absolute inset-0 flex justify-center items-center mr-[100cqh] bg-ink text-panel transition-[clip-path] duration-100"
+                    class="absolute inset-0 flex justify-center items-center mr-[100cqh] transition-[clip-path] duration-100"
+                    classList={{
+                      'font-bold bg-ink text-panel':
+                        !props.switchRootClass?.includes('subtle'),
+                      'font-medium bg-ink/20 text-ink/80':
+                        props.switchRootClass?.includes('subtle'),
+                    }}
                     style={{
                       'clip-path': `polygon(0% 0%, ${!checked() ? 0 : 100}% 0%, ${!checked() ? 0 : 100}% 100%, 0% 100%)`,
                     }}
                   >
-                    True
+                    {props.trueLabel ?? 'True'}
                   </div>
                   <div
-                    class="font-bold absolute inset-0 flex justify-center items-center ml-[100cqh] text-ink transition-[clip-path] duration-100"
+                    class="absolute inset-0 flex justify-center items-center ml-[100cqh] transition-[clip-path] duration-100"
+                    classList={{
+                      'font-bold text-ink':
+                        !props.switchRootClass?.includes('subtle'),
+                      'font-medium text-ink/60':
+                        props.switchRootClass?.includes('subtle'),
+                    }}
                     style={{
                       'clip-path': `polygon(${!checked() ? 0 : 100}% 0%, 100% 0%, 100% 100%, ${!checked() ? 0 : 100}% 100%)`,
                     }}
                   >
-                    False
+                    {props.falseLabel ?? 'False'}
                   </div>
                 </div>
               </div>

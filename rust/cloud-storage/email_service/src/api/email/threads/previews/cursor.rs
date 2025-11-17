@@ -24,6 +24,7 @@ use models_email::service::link::Link;
 use models_email::service::thread::ThreadPreviewCursor;
 use models_pagination::{
     CursorExtractor, CursorVal, Identify, PaginateOn, Paginated, SimpleSortMethod, SortOn,
+    TypeEraseCursor,
 };
 use schemars::JsonSchema;
 use serde::Serialize;
@@ -153,7 +154,7 @@ pub async fn previews_handler(
         view: preview_view,
         link_id: link.id,
         limit: params.limit,
-        query: cursor.into_query(params.sort_method),
+        query: cursor.into_query(params.sort_method, ()),
     };
     let sort_method = *query.query.sort_method();
 

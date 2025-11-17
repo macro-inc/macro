@@ -67,6 +67,10 @@ pub struct ChatSearchRequest {
     pub terms: Option<Vec<String>>,
     /// The match type to use when searching
     pub match_type: MatchType,
+    /// If search_on is set to NameContent, you can disable the recency filter
+    /// by setting to true.
+    #[serde(default)]
+    pub disable_recency: bool,
     /// Search filters for chat
     #[serde(flatten)]
     pub filters: Option<ChatFilters>,

@@ -1,4 +1,9 @@
-import { VIEWS, type View, type ViewId } from '@core/types/view';
+import {
+  VIEWS,
+  type View,
+  type ViewId,
+  type ViewLabel,
+} from '@core/types/view';
 import type { WithCustomUserInput } from '@core/user';
 import type { DeepPartial } from '@core/util/withRequired';
 import {
@@ -19,7 +24,7 @@ export type ViewType = 'project';
 
 export type ViewData = {
   id: ViewId;
-  view: View;
+  view: ViewLabel;
   viewType?: ViewType;
   highlightedId: string | undefined;
   selectedEntity: EntityData | undefined;
@@ -67,8 +72,6 @@ export type DisplayOptions = {
   layout: 'compact' | 'expanded' | 'visual';
   unrollNotifications: boolean;
   showUnreadIndicator: boolean;
-  showProjects: boolean;
-  preview: boolean;
   limit?: number;
 };
 
@@ -83,14 +86,15 @@ export type HotkeyOptions = {
 };
 
 export type ViewConfigBase = {
+  viewType?: ViewType;
   filters: FilterOptions;
   sort: SortOptions;
   display: DisplayOptions;
 };
 
 export type ViewConfigEnhanced = {
-  id: View | string;
-  view: View;
+  id: ViewId;
+  view: ViewLabel;
   searchText?: string;
   hideToolbar?: true;
   onLoadingChange?: (isLoading: boolean) => void;
@@ -114,13 +118,12 @@ export const VIEWCONFIG_BASE: ViewConfigBase = {
     layout: 'compact',
     unrollNotifications: false,
     showUnreadIndicator: false,
-    showProjects: false,
-    preview: false,
     limit: 100,
   },
 };
 
 export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
+  viewType: 'project',
   sort: {
     sortBy: 'viewed_at',
     sortOrder: 'descending',
@@ -137,29 +140,13 @@ export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
     layout: 'compact',
     unrollNotifications: false,
     showUnreadIndicator: true,
-    showProjects: true,
-    preview: false,
     limit: 100,
   },
 };
 
 const ALL_VIEWCONFIG_DEFAULTS = {
-  all: {
-    view: 'all',
-    sort: {
-      sortBy: 'viewed_at',
-    },
-    hotkeyOptions: {
-      e: (entity: EntityData) => {
-        if (entity.type === 'email') {
-          archiveEmail(entity.id, { isDone: entity.done });
-        }
-        return true;
-      },
-    },
-  },
   inbox: {
-    view: 'inbox',
+    view: 'Inbox',
     filters: {
       notificationFilter: 'notDone',
       emailFilter: 'sent',
@@ -184,7 +171,7 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     },
   },
   emails: {
-    view: 'emails',
+    view: 'Emails',
     filters: {
       typeFilter: ['email'],
     },
@@ -219,7 +206,7 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     },
   },
   comms: {
-    view: 'comms',
+    view: 'Comms',
     filters: {
       typeFilter: ['channel'],
     },
@@ -228,25 +215,35 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     },
   },
   docs: {
-    view: 'docs',
+    view: 'Docs',
     filters: {
-      typeFilter: ['document', 'project'],
-      documentTypeFilter: ['md', 'code', 'image', 'canvas', 'pdf', 'unknown'],
+      typeFilter: ['document'],
     },
   },
   ai: {
-    view: 'ai',
+    view: 'Ai',
     filters: {
-      typeFilter: ['chat', 'project'],
+      typeFilter: ['chat'],
     },
   },
   folders: {
-    view: 'folders',
+    view: 'Folders',
     filters: {
       typeFilter: ['project'],
     },
-    display: {
-      showProjects: true,
+  },
+  all: {
+    view: 'All',
+    sort: {
+      sortBy: 'viewed_at',
+    },
+    hotkeyOptions: {
+      e: (entity: EntityData) => {
+        if (entity.type === 'email') {
+          archiveEmail(entity.id, { isDone: entity.done });
+        }
+        return true;
+      },
     },
   },
 } satisfies Record<View, Omit<DeepPartial<ViewConfigEnhanced>, 'id'>>;
@@ -257,18 +254,9 @@ export const VIEWCONFIG_DEFAULTS = Object.fromEntries(
   )
 ) as Record<View, Omit<ViewConfigEnhanced, 'id'>>;
 
-export type ViewConfigDefaultsName = keyof typeof VIEWCONFIG_DEFAULTS;
-export const VIEWCONFIG_DEFAULTS_NAMES = Object.keys(
+export const VIEWCONFIG_DEFAULTS_IDS = Object.keys(
   VIEWCONFIG_DEFAULTS
-) as ViewConfigDefaultsName[];
-
-export type NewViewData =
-  | {
-      config: ViewConfigEnhanced;
-      id: ViewConfigDefaultsName;
-      name: ViewConfigDefaultsName;
-    }
-  | { config: ViewConfigEnhanced; id: string; name: string };
+) as View[];
 
 export const VIEWCONFIG_FILTER_SHOW_OPTIONS: readonly FilterOptions['notificationFilter'][] =
   ['all', 'unread', 'notDone'] as const;

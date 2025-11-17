@@ -36,15 +36,9 @@ use soup::inbound::axum_router::{SoupApiItem, SoupApiSort, SoupPage};
 
 use crate::{
     api::{
-        activity,
-        affiliate::{
-            self, get_affiliate_referred_by::GetUsersAffiliateResponse,
-            get_affiliate_users::GetAffiliateUsersResponse,
-        },
-        annotations,
+        activity, annotations,
         documents::{
             self,
-            create_document::CreateDocumentResponse,
             export_document::ExportDocumentResponse,
             permissions_token::{
                 create_permission_token::DocumentPermissionsTokenResponse,
@@ -66,7 +60,6 @@ use crate::{
         request::{
             documents::{
                 copy::{CopyDocumentQueryParams, CopyDocumentRequest},
-                create::CreateDocumentRequest,
                 edit::EditDocumentRequestV2,
                 preview::GetBatchPreviewRequest,
                 save::{PreSaveDocumentRequest, SaveDocumentRequest},
@@ -78,11 +71,7 @@ use crate::{
         response::{
             activity::{GetActivitiesResponse, UserActivitiesResponse},
             documents::{
-                DocumentResponseMetadata,
-                create::{
-                    CreateBulkDocumentResponse, CreateBulkDocumentResponseData,
-                    CreateDocumentResponseData,
-                },
+                create::{CreateBulkDocumentResponse, CreateBulkDocumentResponseData},
                 get::{
                     GetDocumentKeyResponse, GetDocumentKeyResponseData,
                     GetDocumentPermissionsResponseDataV2, GetDocumentProcessingResult,
@@ -116,6 +105,10 @@ use models_soup::item::SoupItem;
 use models_soup::item::SoupItemType;
 use models_soup::project::SoupProject;
 
+use model::document::response::{
+    CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
+    DocumentResponseMetadata,
+};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -212,11 +205,6 @@ use utoipa::OpenApi;
 
         // threads
         threads::edit_thread::edit_thread_handler,
-
-        // /affiliate
-        affiliate::affiliate_user::handler,
-        affiliate::get_affiliate_users::handler,
-        affiliate::get_affiliate_referred_by::handler,
 
         // /recents
         recents::recently_deleted::handler,
@@ -333,10 +321,6 @@ use utoipa::OpenApi;
 
             // Mentions
             UpsertUserMentionsRequest,
-
-            // Affiliate
-            GetAffiliateUsersResponse,
-            GetUsersAffiliateResponse,
 
             // Annotations
             AnnotationIncrementalUpdate,

@@ -18,7 +18,7 @@
         "name": "access_level: AccessLevel",
         "type_info": {
           "Custom": {
-            "name": "AccessLevel",
+            "name": "\"AccessLevel\"",
             "kind": {
               "Enum": [
                 "view",

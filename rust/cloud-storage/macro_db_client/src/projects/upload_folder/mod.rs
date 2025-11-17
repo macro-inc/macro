@@ -119,6 +119,8 @@ async fn traverse_with_ids(
                         project_name: Some(project_name),
                         share_permission,
                         skip_history: true,
+                        email_attachment_id: None,
+                        created_at: None,
                     },
                 )
                 .await?;
@@ -299,6 +301,7 @@ mod tests {
         // Create files for the root folder
         let root_file1 = FolderItem {
             name: "rootFile1".to_string(),
+            full_name: "rootFile1.pdf".to_string(),
             file_type: Some(FileType::Pdf),
             sha: "sha123".to_string(),
             relative_path: "/Root Test Folder".to_string(),
@@ -306,6 +309,7 @@ mod tests {
 
         let root_file2 = FolderItem {
             name: "rootFile2".to_string(),
+            full_name: "rootFile2.docx".to_string(),
             file_type: Some(FileType::Docx),
             sha: "sha456".to_string(),
             relative_path: "/Root Test Folder".to_string(),
@@ -314,6 +318,7 @@ mod tests {
         // Create a subfolder with its own files
         let subfolder1_file1 = FolderItem {
             name: "subfolder1File1".to_string(),
+            full_name: "subfolder1File1.txt".to_string(),
             file_type: Some(FileType::Txt),
             sha: "sha789".to_string(),
             relative_path: "/Root Test Folder/subfolder1".to_string(),
@@ -321,6 +326,7 @@ mod tests {
 
         let subfolder1_file2 = FolderItem {
             name: "subfolder1File2".to_string(),
+            full_name: "subfolder1File2.pdf".to_string(),
             file_type: Some(FileType::Pdf),
             sha: "sha101".to_string(),
             relative_path: "/Root Test Folder/subfolder1".to_string(),
@@ -329,6 +335,7 @@ mod tests {
         // Create a sub-subfolder with its own files
         let subsubfolder_file = FolderItem {
             name: "deepNestedFile".to_string(),
+            full_name: "deepNestedFile.pdf".to_string(),
             file_type: Some(FileType::Pdf),
             sha: "sha202".to_string(),
             relative_path: "/Root Test Folder/subfolder1/nested".to_string(),
@@ -343,6 +350,7 @@ mod tests {
         // Create another subfolder with its own content
         let subfolder2_file = FolderItem {
             name: "subfolder2File".to_string(),
+            full_name: "subfolder2File.txt".to_string(),
             file_type: Some(FileType::Txt),
             sha: "sha303".to_string(),
             relative_path: "/Root Test Folder/subfolder2".to_string(),
@@ -687,6 +695,7 @@ mod tests {
         let mut current_folder = HashMap::new();
         let deepest_file = FolderItem {
             name: "deepestFile".to_string(),
+            full_name: "deepestFile.pdf".to_string(),
             file_type: Some(FileType::Pdf),
             sha: "sha_deepest".to_string(),
             relative_path: "/Deep Nested Structure/level1/level2/level3/level4/level5".to_string(),
@@ -717,6 +726,7 @@ mod tests {
 
             let level_file = FolderItem {
                 name: format!("file_level{}", level),
+                full_name: format!("file_level{}.txt", level),
                 file_type: Some(FileType::Txt),
                 sha: format!("sha_level{}", level),
                 relative_path: current_path.clone(),
@@ -759,6 +769,7 @@ mod tests {
         // Add a file at the root level
         let root_file = FolderItem {
             name: "root_file".to_string(),
+            full_name: "root_file.txt".to_string(),
             file_type: Some(FileType::Txt),
             sha: "sha_root".to_string(),
             relative_path: "/Deep Nested Structure".to_string(),
@@ -876,6 +887,7 @@ mod tests {
         // Create a root file
         let root_file = FolderItem {
             name: "root_document".to_string(),
+            full_name: "root_document.pdf".to_string(),
             file_type: Some(FileType::Pdf),
             sha: "sha_root_doc".to_string(),
             relative_path: "/Test FileSystem Structure".to_string(),
@@ -884,6 +896,7 @@ mod tests {
         // Create a subfolder with a file
         let subfolder_file = FolderItem {
             name: "subfolder_document".to_string(),
+            full_name: "subfolder_document.txt".to_string(),
             file_type: Some(FileType::Txt),
             sha: "sha_subfolder_doc".to_string(),
             relative_path: "/Test FileSystem Structure/subfolder".to_string(),
@@ -1159,6 +1172,166 @@ mod tests {
                 "Project {} does not have correct upload_request_id set",
                 project_id
             );
+        }
+
+        // Clean up
+        let mut cleanup_tx = pool.begin().await?;
+        for project_id in &project_ids {
+            let _ = sqlx::query!(r#"DELETE FROM "Project" WHERE id = $1"#, project_id)
+                .execute(&mut *cleanup_tx)
+                .await?;
+        }
+        cleanup_tx.commit().await?;
+
+        Ok(())
+    }
+
+    #[sqlx::test]
+    async fn test_files_and_folders_with_same_name(pool: Pool<Postgres>) -> anyhow::Result<()> {
+        // This tests the scenario where you have both a file and folder with identical names
+        // Example: "Report.pdf" (file) and "Report" (folder)
+
+        let root_folder_name = "Conflicting Names Test";
+        let upload_request_id = "conflict_test_123";
+        let user_id = "macro|user@user.com";
+        let share_permission = create_test_permission(&pool).await?;
+
+        // Create a file called "Report.pdf"
+        let report_file = FolderItem {
+            name: "Report".to_string(),
+            full_name: "Report.pdf".to_string(),
+            file_type: Some(FileType::Pdf),
+            sha: "sha_report_file".to_string(),
+            relative_path: "/Conflicting Names Test".to_string(),
+        };
+
+        // Create a folder called "Report" with a file inside
+        let report_folder_file = FolderItem {
+            name: "contents".to_string(),
+            full_name: "contents.txt".to_string(),
+            file_type: Some(FileType::Txt),
+            sha: "sha_report_folder_contents".to_string(),
+            relative_path: "/Conflicting Names Test/Report".to_string(),
+        };
+
+        // Build the folder structure
+        let mut report_folder_content = HashMap::new();
+        report_folder_content.insert(
+            "contents.txt".to_string(),
+            FileSystemNode::File(report_folder_file),
+        );
+
+        let mut root_content = HashMap::new();
+        root_content.insert("Report.pdf".to_string(), FileSystemNode::File(report_file));
+        root_content.insert(
+            "Report".to_string(),
+            FileSystemNode::Folder(report_folder_content),
+        );
+
+        let folder_tree = FileSystemNode::Folder(root_content);
+
+        // Start transaction
+        let mut transaction = pool.begin().await?;
+
+        // Upload the folder structure
+        let UploadFolderWithIdsResponse {
+            file_system,
+            project_ids,
+            documents,
+            ..
+        } = upload_folder_with_ids(
+            &mut transaction,
+            user_id,
+            &share_permission,
+            &folder_tree,
+            root_folder_name,
+            upload_request_id,
+            None,
+        )
+        .await?;
+
+        // Commit the transaction
+        transaction.commit().await?;
+
+        // Verify the structure was created correctly
+        assert_eq!(
+            project_ids.len(),
+            2,
+            "Expected 2 projects: root folder + Report subfolder"
+        );
+        assert_eq!(
+            documents.len(),
+            2,
+            "Expected 2 documents: Report.pdf file + contents.txt inside Report folder"
+        );
+
+        // Verify the file system structure
+        match &file_system {
+            FileSystemNodeWithIds::File { .. } => {
+                panic!("Expected root to be a folder");
+            }
+            FileSystemNodeWithIds::Folder { content, .. } => {
+                // Should have both "Report.pdf" (file) and "Report" (folder)
+                assert_eq!(content.len(), 2, "Root should have 2 items");
+
+                // Verify the file exists
+                let report_file_node = content
+                    .get("Report.pdf")
+                    .expect("Report.pdf file should exist");
+                match report_file_node {
+                    FileSystemNodeWithIds::File { item, document_id } => {
+                        assert_eq!(item.name, "Report");
+                        assert_eq!(item.full_name, "Report.pdf");
+                        assert_eq!(item.file_type, Some(FileType::Pdf));
+
+                        // Verify document was created
+                        let doc = documents
+                            .iter()
+                            .find(|d| &d.document_id == document_id)
+                            .expect("Report.pdf document should exist in documents list");
+                        assert_eq!(doc.document_name, "Report");
+                    }
+                    _ => panic!("Report.pdf should be a file node"),
+                }
+
+                // Verify the folder exists
+                let report_folder_node = content.get("Report").expect("Report folder should exist");
+                match report_folder_node {
+                    FileSystemNodeWithIds::Folder {
+                        content: folder_content,
+                        project_id,
+                    } => {
+                        assert_eq!(folder_content.len(), 1, "Report folder should have 1 file");
+
+                        // Verify the file inside the folder
+                        let contents_file = folder_content
+                            .get("contents.txt")
+                            .expect("contents.txt should exist in Report folder");
+                        match contents_file {
+                            FileSystemNodeWithIds::File { item, document_id } => {
+                                assert_eq!(item.name, "contents");
+                                assert_eq!(item.full_name, "contents.txt");
+                                assert_eq!(item.relative_path, "/Conflicting Names Test/Report");
+
+                                // Verify document was created
+                                let doc = documents
+                                    .iter()
+                                    .find(|d| &d.document_id == document_id)
+                                    .expect("contents.txt document should exist");
+                                assert_eq!(doc.document_name, "contents");
+                            }
+                            _ => panic!("contents.txt should be a file node"),
+                        }
+
+                        // Verify the folder has a project_id
+                        assert!(
+                            project_ids.contains(project_id),
+                            "Report folder project_id should be in the project list"
+                        );
+                    }
+                    _ => panic!("Report should be a folder node"),
+                }
+            }
         }
 
         // Clean up

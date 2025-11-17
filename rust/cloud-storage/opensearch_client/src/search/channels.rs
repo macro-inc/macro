@@ -66,7 +66,6 @@ impl SearchQueryConfig for ChannelMessageSearchConfig {
 #[derive(Default)]
 struct ChannelMessageQueryBuilder {
     inner: SearchQueryBuilder<ChannelMessageSearchConfig>,
-    org_id: Option<i64>,
     thread_ids: Vec<String>,
     mentions: Vec<String>,
     channel_ids: Vec<String>,
@@ -79,11 +78,6 @@ impl ChannelMessageQueryBuilder {
             inner: SearchQueryBuilder::new(terms),
             ..Default::default()
         }
-    }
-
-    pub fn org_id(mut self, org_id: Option<i64>) -> Self {
-        self.org_id = org_id;
-        self
     }
 
     pub fn thread_ids(mut self, thread_ids: Vec<String>) -> Self {
@@ -116,6 +110,7 @@ impl ChannelMessageQueryBuilder {
         fn search_on(search_on: SearchOn) -> Self;
         fn ids_only(ids_only: bool) -> Self;
         fn collapse(collapse: bool) -> Self;
+        fn disable_recency(disable_recency: bool) -> Self;
     }
 
     fn build_search_request(self) -> Result<SearchRequest> {
@@ -123,11 +118,6 @@ impl ChannelMessageQueryBuilder {
         let mut bool_query = self.inner.build_bool_query()?;
 
         // CUSTOM ATTRIBUTES SECTION
-
-        // Add org_id to must clause if provided
-        if let Some(org_id) = self.org_id {
-            bool_query.must(QueryType::term("org_id", org_id));
-        }
 
         // Add thread_ids to must clause if provided
         if !self.thread_ids.is_empty() {
@@ -167,13 +157,13 @@ pub struct ChannelMessageSearchArgs {
     pub page: u32,
     pub page_size: u32,
     pub match_type: String,
-    pub org_id: Option<i64>,
     pub thread_ids: Vec<String>,
     pub mentions: Vec<String>,
     pub sender_ids: Vec<String>,
     pub search_on: SearchOn,
     pub collapse: bool,
     pub ids_only: bool,
+    pub disable_recency: bool,
 }
 
 impl ChannelMessageSearchArgs {
@@ -190,7 +180,7 @@ impl ChannelMessageSearchArgs {
             .collapse(self.collapse)
             .ids_only(self.ids_only)
             .sender_ids(self.sender_ids)
-            .org_id(self.org_id)
+            .disable_recency(self.disable_recency)
             .build_search_request()?
             .to_json())
     }

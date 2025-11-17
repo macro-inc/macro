@@ -23,6 +23,19 @@ import {
 } from 'lexical';
 import type { ReplyType } from './replyType';
 
+export function clearEmailBody(editor: LexicalEditor | undefined) {
+  if (!editor) return;
+  editor.update(
+    () => {
+      const root = $getRoot();
+      const paragraph = $createParagraphNode();
+      root.clear();
+      root.append(paragraph);
+    },
+    { tag: 'external' }
+  );
+}
+
 export const APPEND_PREVIOUS_EMAIL_COMMAND = createCommand<{
   replyingTo: MessageWithBodyReplyless | undefined;
   replyType?: ReplyType;

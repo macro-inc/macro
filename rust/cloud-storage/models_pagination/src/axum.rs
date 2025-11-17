@@ -3,6 +3,7 @@ use axum::extract::{FromRequestParts, Query};
 use axum::http::{StatusCode, request::Parts};
 use axum::response::IntoResponse;
 use axum::{Json, RequestPartsExt, async_trait};
+pub use either::Either;
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
 use serde::de::DeserializeOwned;
@@ -29,8 +30,8 @@ impl<Id, S: Sortable, F> CursorExtractor<Id, S, F> {
         }
     }
     /// convert self into a [Query] by supplying a fallback
-    pub fn into_query(self, sort: S) -> crate::cursor::Query<Id, S, F> {
-        crate::cursor::Query::new(self.into_option(), sort)
+    pub fn into_query(self, sort: S, filter: F) -> crate::cursor::Query<Id, S, F> {
+        crate::cursor::Query::new(self.into_option(), sort, filter)
     }
 }
 
@@ -70,7 +71,7 @@ where
     Sort: Sortable + DeserializeOwned,
     Sort::Value: DeserializeOwned,
     Id: DeserializeOwned,
-    F: DeserializeOwned + Default,
+    F: DeserializeOwned,
 {
     type Rejection = CusorExtractErr;
 
@@ -97,20 +98,15 @@ where
 }
 
 /// utility type for handling the cases where exactly 1 of 2 extractors must pass
-pub enum Either<L, R> {
-    /// the left value
-    Left(L),
-    /// the right value
-    Right(R),
-}
+pub struct EitherWrapper<L, R>(pub Either<L, R>);
 
-impl<L, R> IntoResponse for Either<L, R>
+impl<L, R> IntoResponse for EitherWrapper<L, R>
 where
     L: IntoResponse,
     R: IntoResponse,
 {
     fn into_response(self) -> axum::response::Response {
-        match self {
+        match self.0 {
             Either::Left(l) => l.into_response(),
             Either::Right(r) => r.into_response(),
         }
@@ -118,7 +114,7 @@ where
 }
 
 #[axum::async_trait]
-impl<S, L, R> FromRequestParts<S> for Either<L, R>
+impl<S, L, R> FromRequestParts<S> for EitherWrapper<L, R>
 where
     L: FromRequestParts<S> + Send + 'static,
     L::Rejection: Send,
@@ -126,15 +122,18 @@ where
     R::Rejection: Send,
     S: Send + Sync,
 {
-    type Rejection = Either<L::Rejection, R::Rejection>;
+    type Rejection = EitherWrapper<L::Rejection, R::Rejection>;
 
     async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
         let res: Result<L, _> = parts.extract_with_state(state).await;
         if let Ok(left) = res {
-            return Ok(Either::Left(left));
+            return Ok(EitherWrapper(Either::Left(left)));
         }
         let res2: Result<R, _> = parts.extract_with_state(state).await;
 
-        res2.map(Either::Right).map_err(Either::Right)
+        res2.map(Either::Right)
+            .map(EitherWrapper)
+            .map_err(Either::Right)
+            .map_err(EitherWrapper)
     }
 }

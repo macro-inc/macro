@@ -84,7 +84,7 @@ export function ParticipantManager(props: { participantCount: number }) {
       <Dialog.Portal>
         <Dialog.Overlay class="fixed flex inset-0 z-modal bg-modal-overlay items-center justify-content" />
         <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center bg-transparent">
-          <Dialog.Content class="w-[512px] bg-dialog rounded-lg border-edge border-1 shadow-lg">
+          <Dialog.Content class="w-[512px] bg-dialog rounded-lg border-edge-muted border-1 shadow-lg">
             <div class="flex flex-row justify-between items-center p-4">
               <Dialog.Title class="font-medium text-2xl text-ink-muted">
                 {title()}
@@ -180,7 +180,7 @@ export function ParticipantList(props: {
       <Show when={props.participants.length > 10}>
         <input
           placeholder="Search participants..."
-          class="w-full rounded-md border-edge border-solid border p-2 text-sm text-ink-muted"
+          class="w-full rounded-md border-edge-muted border-solid border p-2 text-sm text-ink-muted"
           value={searchQuery()}
           onInput={(e) => setSearchQuery(e.currentTarget.value)}
         />

@@ -32,11 +32,13 @@ import {
   type Store,
 } from 'solid-js/store';
 import type { VirtualizerHandle } from 'virtua/solid';
+import { playSound } from '../util/sound';
 import { useGlobalNotificationSource } from './GlobalAppState';
 import type { SplitHandle } from './split-layout/layoutManager';
 import {
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS,
+  VIEWCONFIG_DEFAULTS_IDS,
   type ViewConfigBase,
   type ViewConfigEnhanced,
   type ViewData,
@@ -45,7 +47,7 @@ import {
 
 export type UnifiedListContext = {
   viewsDataStore: Store<ViewDataMap>;
-  setViewDataStore: SetStoreFunction<ViewDataMap>;
+  setViewDataStore: SetStoreFunction<Partial<ViewDataMap>>;
   selectedView: Accessor<ViewId>;
   setSelectedView: Setter<ViewId>;
   virtualizerHandleSignal: Signal<VirtualizerHandle | undefined>;
@@ -56,7 +58,9 @@ export type UnifiedListContext = {
   setShowHelpDrawer: Setter<Set<string>>;
 };
 
-const DEFAULT_VIEW_ID = 'all';
+const DEFAULT_VIEW_ID: View = 'all';
+
+const DEFAULT_VIEW_IDS_SET = new Set(VIEWCONFIG_DEFAULTS_IDS);
 
 export function createSoupContext(): UnifiedListContext {
   const [selectedView, setSelectedView] = createSignal<ViewId>(DEFAULT_VIEW_ID);
@@ -109,7 +113,7 @@ function createViewData(
 ): ViewData {
   return {
     id: (viewProps?.id || view) ?? '',
-    view,
+    view: viewProps?.view ?? view,
     filters: {
       notificationFilter:
         viewProps?.filters?.notificationFilter ??
@@ -135,13 +139,9 @@ function createViewData(
       showUnreadIndicator:
         viewProps?.display?.showUnreadIndicator ??
         VIEWCONFIG_BASE.display.showUnreadIndicator,
-      showProjects:
-        viewProps?.display?.showProjects ??
-        VIEWCONFIG_BASE.display.showProjects,
       unrollNotifications:
         viewProps?.display?.unrollNotifications ??
         VIEWCONFIG_BASE.display.unrollNotifications,
-      preview: viewProps?.display?.preview ?? VIEWCONFIG_BASE.display.preview,
       limit: viewProps?.display?.limit,
     },
     sort: {
@@ -308,6 +308,21 @@ export function createNavigationEntityListShortcut({
 
       const selectedEntity = entities()?.at(index);
       if (selectedEntity) {
+        if (
+          splitHandle.content().type !== 'component' &&
+          splitHandle.content().type !== 'project'
+        ) {
+          const { type, id } = selectedEntity;
+          if (type === 'document') {
+            const { fileType } = selectedEntity;
+            splitHandle.replace(
+              { type: fileTypeToBlockName(fileType), id },
+              true
+            );
+          } else {
+            splitHandle.replace({ type, id }, true);
+          }
+        }
         batch(() => {
           setViewDataStore(selectedView(), 'highlightedId', selectedEntity.id);
           setViewDataStore(selectedView(), 'selectedEntity', selectedEntity);
@@ -434,22 +449,24 @@ export function createNavigationEntityListShortcut({
   );
 
   registerHotkey({
-    hotkey: ['arrowdown', 'j'],
+    hotkey: ['j', 'arrowdown'],
     scopeId: splitHotkeyScope,
     description: 'Down',
     hotkeyToken: TOKENS.entity.step.end,
     keyDownHandler: () => {
+      playSound('down');
       navigateThroughList({ axis: 'end', mode: 'step' });
       return true;
     },
     hide: true,
   });
   registerHotkey({
-    hotkey: ['arrowup', 'k'],
+    hotkey: ['k', 'arrowup'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.step.start,
     description: 'Up',
     keyDownHandler: () => {
+      playSound('up');
       navigateThroughList({ axis: 'start', mode: 'step' });
       return true;
     },
@@ -494,19 +511,6 @@ export function createNavigationEntityListShortcut({
 
       return true;
     },
-  });
-  registerHotkey({
-    hotkey: ['p'],
-    scopeId: splitHotkeyScope,
-    description: 'Toggle Preview',
-    hotkeyToken: TOKENS.unifiedList.togglePreview,
-    keyDownHandler: () => {
-      if (!entityListRef()) return false;
-
-      setViewDataStore(selectedView(), 'display', 'preview', (prev) => !prev);
-      return true;
-    },
-    hide: true,
   });
 
   const navigateThroughViews = ({
@@ -664,12 +668,11 @@ const useAllViews = ({
 
         // Filter viewsData to exclude items that are not in savedViewConfigs, except for default views
         const savedViewIds = new Set(savedViewConfigs.map((view) => view.id));
-        const defaultViewIds = new Set(Object.keys(VIEWCONFIG_DEFAULTS));
         const filteredViewsData = Object.fromEntries(
           Object.entries(viewsData).filter(
             ([viewId, viewData]) =>
               savedViewIds.has(viewId) ||
-              defaultViewIds.has(viewId) ||
+              DEFAULT_VIEW_IDS_SET.has(viewId as View) ||
               viewData.viewType !== undefined
           )
         );

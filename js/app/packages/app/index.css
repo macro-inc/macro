@@ -4,9 +4,9 @@
 @source '../../packages/core/component/LexicalMarkdown/theme.ts';
 @config '../../tailwind.config.ts';
 
-@property --a0l { syntax: "<number>"; inherits: false; initial-value:   0.61; }
-@property --a0c { syntax: "<number>"; inherits: false; initial-value:   0.37; }
-@property --a0h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
+@property --a0l { syntax: "<number>"; inherits: false; initial-value:   0.8854; }
+@property --a0c { syntax: "<number>"; inherits: false; initial-value:   0.2003; }
+@property --a0h { syntax: "<angle>";  inherits: false; initial-value:  145.5deg; }
 @property --a1l { syntax: "<number>"; inherits: false; initial-value:   0.61; }
 @property --a1c { syntax: "<number>"; inherits: false; initial-value:   0.37; }
 @property --a1h { syntax: "<angle>";  inherits: false; initial-value:  54deg; }
@@ -463,10 +463,7 @@
 @theme default {
     /* Font families */
     --font-sans: "Forma Macro", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-
     --font-mono: "Forma DJR Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-    --font-mono--font-feature-settings: "ss03" on, "calt", "liga", "rlig", "rvrn", "kern", "rclt";
-
     --font-serif: "Georgia", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 
     /* Colors */
@@ -548,6 +545,8 @@
         overscroll-behavior: none;
     }
 
+    /* Custom cursor is set via JavaScript in index.tsx to match theme accent color */
+
     body {
         @apply overflow-clip overscroll-none relative m-0 p-0 font-sans optical-auto;
 
@@ -585,12 +584,12 @@
     }
 
     @font-face {
-      font-family: "Forma DJR Mono";
-      src: url("./asset/fonts/FormaDJRMonoVariable.woff2") format("woff2");
-      font-weight: 1 900;
+      font-family: "Forma Macro Mono";
+      src: url("./asset/fonts/FormaMacroMonoVariable.woff2") format("woff2");
+      font-weight: 200 700;
       font-style: normal italic;
       font-display: swap;
-      ascent-override: 100%;
+      font-feature-settings: "ss11" on, "ss19" on, "calt", "liga", "rlig", "rvrn", "kern", "rclt";
     }
 
     .text-xs { @apply optical-9; }
@@ -706,14 +705,10 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
     }
 
     @container (width < 816px) {
-        margin-inline: calc(var(--spacing) * 4)
-            /* 1rem = 16px */
-        ;
+        margin-inline: calc(var(--spacing) * 4);
     }
     @container (width < 640px) {
-        margin-inline: calc(var(--spacing) * 2)
-            /* 1rem = 16px */
-        ;
+        margin-inline: calc(var(--spacing) * 2);
     }
 
 }

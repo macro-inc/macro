@@ -11,7 +11,7 @@ export type SettingsTab =
 
 export const [settingsOpen, setSettingsOpen] = createSignal(false);
 export const [activeTabId, setActiveTabId] =
-  createSignal<SettingsTab>('Account');
+  createSignal<SettingsTab>('Appearance');
 
 export const useSettingsState = () => {
   const openSettings = (activeTabId?: SettingsTab) => {
@@ -25,7 +25,7 @@ export const useSettingsState = () => {
   };
 
   createEffect(() => {
-    if (!settingsOpen()) setActiveTabId('Account');
+    if (!settingsOpen()) setActiveTabId('Appearance');
   });
 
   return {

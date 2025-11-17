@@ -51,6 +51,7 @@ pub struct EmailSearchResponseItemWithMetadata {
     pub created_at: i64,
     pub updated_at: i64,
     pub viewed_at: Option<i64>,
+    pub snippet: Option<String>,
     #[serde(flatten)]
     pub extra: EmailSearchResponseItem,
 }
@@ -92,6 +93,10 @@ pub struct EmailSearchRequest {
     pub terms: Option<Vec<String>>,
     /// The match type to use when searching
     pub match_type: MatchType,
+    /// If search_on is set to NameContent, you can disable the recency filter
+    /// by setting to true.
+    #[serde(default)]
+    pub disable_recency: bool,
     /// Search filters for email
     #[serde(flatten)]
     pub filters: Option<EmailFilters>,

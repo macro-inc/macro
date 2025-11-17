@@ -76,8 +76,15 @@ export function createEmailsInfiniteQuery(
         cursor ? { ...params(), cursor } : undefined,
       select: (data) =>
         data.pages.flatMap(({ items }) =>
-          items.map(
-            (email): EmailEntity => ({
+          items.map((email): EmailEntity => {
+            const participantEmails = email.participants.map(
+              (p) => p.email_address ?? ''
+            );
+            const participantNames = email.participants.map(
+              (p) => p.name ?? ''
+            );
+
+            return {
               ...email,
               type: 'email',
               name: email.name || 'No Subject',
@@ -87,10 +94,12 @@ export function createEmailsInfiniteQuery(
               snippet: email.snippet ?? undefined,
               isImportant: email.isImportant ?? false,
               done: !email.inboxVisible,
+              participantEmails,
+              participantNames,
               senderEmail: email.senderEmail ?? undefined,
               senderName: email.senderName ?? email.senderEmail ?? undefined,
-            })
-          )
+            };
+          })
         ),
       enabled: enabled(),
       refetchInterval: options?.refetchInterval?.(),

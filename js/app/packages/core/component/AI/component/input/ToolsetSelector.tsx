@@ -1,37 +1,49 @@
 import DropdownMenu from '@core/component/FormControls/DropdownMenu';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
+import { Tooltip } from '@core/component/Tooltip';
 import type { ToolSet } from '@service-cognition/generated/schemas';
 import { type ParentProps, Show, type Signal } from 'solid-js';
 
 type ToolSetName = ToolSet['type'];
 
-const TOOLSET_TO_DISPLAY = {
-  none: 'ASK',
-  all: 'AGENT',
-} as const satisfies Record<ToolSetName, string>;
+const TOOLSETS = [
+  {
+    value: 'none' as const,
+    label: 'ASK',
+    tooltip: 'Simple answers to simple questions',
+  },
+  {
+    value: 'all' as const,
+    label: 'AGENT',
+    tooltip: 'Dynamically search Macro for useful context',
+  },
+] as const;
 
-const TOOLSET_FROM_DISPLAY = {
-  ASK: 'none',
-  AGENT: 'all',
-} as const satisfies Record<string, ToolSetName>;
+const TOOLSET_TO_DISPLAY = Object.fromEntries(
+  TOOLSETS.map((t) => [t.value, t.label])
+) as Record<ToolSetName, string>;
+
+const TOOLSET_FROM_DISPLAY = Object.fromEntries(
+  TOOLSETS.map((t) => [t.label, { value: t.value, tooltip: t.tooltip }])
+) as Record<string, { value: ToolSetName; tooltip: string }>;
 
 export type Source = 'chat' | 'channel' | 'document' | 'email' | 'everything';
 
-const SOURCE_TO_DISPLAY = {
-  everything: 'ALL',
-  chat: 'CHATS',
-  channel: 'CHANNELS',
-  document: 'DOCUMENTS',
-  email: 'EMAILS',
-} as const satisfies Record<Source, string>;
+const SOURCES = [
+  { value: 'everything' as const, label: 'ALL' },
+  { value: 'chat' as const, label: 'CHATS' },
+  { value: 'channel' as const, label: 'CHANNELS' },
+  { value: 'document' as const, label: 'DOCUMENTS' },
+  { value: 'email' as const, label: 'EMAILS' },
+] as const;
 
-const SOURCE_FROM_DISPLAY = {
-  ALL: 'everything',
-  CHATS: 'chat',
-  CHANNELS: 'channel',
-  DOCUMENTS: 'document',
-  EMAILS: 'email',
-} as const satisfies Record<string, Source>;
+const SOURCE_TO_DISPLAY = Object.fromEntries(
+  SOURCES.map((s) => [s.value, s.label])
+) as Record<Source, string>;
+
+const SOURCE_FROM_DISPLAY = Object.fromEntries(
+  SOURCES.map((s) => [s.label, s.value])
+) as Record<string, Source>;
 
 export function ToolsetSelector(props: {
   toolset: Signal<ToolSet>;
@@ -40,26 +52,39 @@ export function ToolsetSelector(props: {
   const [toolset, setToolset] = props.toolset;
   const [source, setSource] = props.sources;
 
-  const StyledTriggerLabel = (props: ParentProps) => {
-    return <span class="text-[.85rem] font-medium flex">{props.children}</span>;
+  const _StyledTriggerLabel = (props: ParentProps) => {
+    return (
+      <Tooltip
+        tooltip={'Tell the agent which sources to consider in its search'}
+      >
+        {props.children}
+      </Tooltip>
+    );
   };
   return (
     <div class="flex items-center gap-x-1">
       <SegmentedControl
+        size="SM"
         defaultValue={TOOLSET_TO_DISPLAY[toolset().type]}
         onChange={(s) => {
           setToolset({
-            type: TOOLSET_FROM_DISPLAY[s as keyof typeof TOOLSET_FROM_DISPLAY],
+            type: TOOLSET_FROM_DISPLAY[s as keyof typeof TOOLSET_FROM_DISPLAY]
+              .value,
           });
         }}
-        list={Object.keys(TOOLSET_FROM_DISPLAY)}
+        list={TOOLSETS.map((t) => ({
+          value: t.label,
+          label: t.label,
+          tooltip: t.tooltip,
+        }))}
       />
 
       <Show when={toolset().type === 'all'}>
         <div class="flex">
           <DropdownMenu
+            size="SM"
             theme="secondary"
-            triggerLabel={<StyledTriggerLabel>Filter</StyledTriggerLabel>}
+            triggerLabel={<span>SOURCE</span>}
           >
             <SegmentedControl
               defaultValue={SOURCE_TO_DISPLAY[source()]}
@@ -68,11 +93,10 @@ export function ToolsetSelector(props: {
                   SOURCE_FROM_DISPLAY[s as keyof typeof SOURCE_FROM_DISPLAY]
                 );
               }}
-              list={Object.keys(SOURCE_FROM_DISPLAY)}
+              list={SOURCES.map((s) => s.label)}
             />
           </DropdownMenu>
-
-          <span class="bg-accent text-panel font-mono text-xs font-medium p-1">
+          <span class="bg-edge-muted text-ink font-mono text-xs font-medium px-1 flex items-center">
             {SOURCE_TO_DISPLAY[source()]}
           </span>
         </div>

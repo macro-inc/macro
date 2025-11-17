@@ -6,7 +6,7 @@ use item_filters::ast::EntityFilterAst;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
-use models_pagination::{PaginateOn, Query, SimpleSortMethod};
+use models_pagination::{Frecency, PaginateOn, Query, SimpleSortMethod};
 use models_soup::item::SoupItem;
 use sqlx::{Pool, Postgres};
 use std::collections::HashSet;
@@ -21,9 +21,13 @@ use std::collections::HashSet;
 )]
 async fn test_viewed_at_orders_nulls_last(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
-    let items =
-        expanded_generic_cursor_soup(&pool, user_id, 20, Query::Sort(SimpleSortMethod::ViewedAt))
-            .await?;
+    let items = expanded_generic_cursor_soup(
+        &pool,
+        user_id,
+        20,
+        Query::Sort(SimpleSortMethod::ViewedAt, ()),
+    )
+    .await?;
 
     assert_eq!(items.len(), 13, "Should get 13 total items");
 
@@ -143,11 +147,11 @@ async fn test_get_user_items_expanded_cursor(pool: Pool<Postgres>) -> anyhow::Re
         &pool,
         user_id.copied(),
         1,
-        Query::Sort(SimpleSortMethod::ViewedAt),
+        Query::Sort(SimpleSortMethod::ViewedAt, ()),
     )
     .await?
     .into_iter()
-    .paginate_filter_on(1, SimpleSortMethod::ViewedAt, EntityFilterAst::default())
+    .paginate_filter_on(1, SimpleSortMethod::ViewedAt, ())
     .into_page();
     let items = result.items;
 
@@ -170,6 +174,7 @@ async fn test_get_user_items_expanded_cursor(pool: Pool<Postgres>) -> anyhow::Re
         Query::new(
             result.next_cursor.map(|s| s.decode_json().unwrap()),
             SimpleSortMethod::ViewedAt,
+            (),
         ),
     )
     .await?;
@@ -219,7 +224,7 @@ async fn test_expanded_generic_sorting_methods(pool: Pool<Postgres>) -> anyhow::
             &pool,
             user_id.copied(),
             10,
-            Query::Sort(SimpleSortMethod::ViewedAt),
+            Query::Sort(SimpleSortMethod::ViewedAt, ()),
         )
         .await?;
         assert_eq!(
@@ -250,7 +255,7 @@ async fn test_expanded_generic_sorting_methods(pool: Pool<Postgres>) -> anyhow::
             &pool,
             user_id.copied(),
             10,
-            Query::Sort(SimpleSortMethod::UpdatedAt),
+            Query::Sort(SimpleSortMethod::UpdatedAt, ()),
         )
         .await?;
         assert_eq!(items.len(), 6, "UpdatedAt should return all 6 items");
@@ -277,7 +282,7 @@ async fn test_expanded_generic_sorting_methods(pool: Pool<Postgres>) -> anyhow::
             &pool,
             user_id,
             10,
-            Query::Sort(SimpleSortMethod::CreatedAt),
+            Query::Sort(SimpleSortMethod::CreatedAt, ()),
         )
         .await?;
         assert_eq!(items.len(), 6, "CreatedAt should return all 6 items");
@@ -411,7 +416,7 @@ async fn test_no_frecency_expanded_filters_out_frecency_items(
         &pool,
         user_id,
         20,
-        Query::Sort(SimpleSortMethod::UpdatedAt),
+        Query::Sort(SimpleSortMethod::UpdatedAt, Frecency),
     )
     .await?;
 
@@ -495,7 +500,7 @@ async fn test_no_frecency_expanded_sorting_methods(pool: Pool<Postgres>) -> anyh
             &pool,
             user_id.copied(),
             20,
-            Query::Sort(SimpleSortMethod::UpdatedAt),
+            Query::Sort(SimpleSortMethod::UpdatedAt, Frecency),
         )
         .await?;
         assert_eq!(items.len(), 5, "UpdatedAt should return 5 items");
@@ -522,7 +527,7 @@ async fn test_no_frecency_expanded_sorting_methods(pool: Pool<Postgres>) -> anyh
             &pool,
             user_id.copied(),
             20,
-            Query::Sort(SimpleSortMethod::CreatedAt),
+            Query::Sort(SimpleSortMethod::CreatedAt, Frecency),
         )
         .await?;
         assert_eq!(items.len(), 5, "CreatedAt should return 5 items");
@@ -549,7 +554,7 @@ async fn test_no_frecency_expanded_sorting_methods(pool: Pool<Postgres>) -> anyh
             &pool,
             user_id,
             20,
-            Query::Sort(SimpleSortMethod::ViewedAt),
+            Query::Sort(SimpleSortMethod::ViewedAt, Frecency),
         )
         .await?;
         assert_eq!(items.len(), 5, "ViewedAt should return 5 items");
@@ -589,11 +594,11 @@ async fn test_no_frecency_expanded_cursor_pagination(pool: Pool<Postgres>) -> an
         &pool,
         user_id.copied(),
         2,
-        Query::Sort(SimpleSortMethod::UpdatedAt),
+        Query::Sort(SimpleSortMethod::UpdatedAt, Frecency),
     )
     .await?
     .into_iter()
-    .paginate_filter_on(2, SimpleSortMethod::UpdatedAt, EntityFilterAst::default())
+    .paginate_filter_on(2, SimpleSortMethod::UpdatedAt, Frecency)
     .into_page();
 
     assert_eq!(result.items.len(), 2, "Should get 2 items in first page");
@@ -627,6 +632,7 @@ async fn test_no_frecency_expanded_cursor_pagination(pool: Pool<Postgres>) -> an
         Query::new(
             result.next_cursor.map(|s| s.decode_json().unwrap()),
             SimpleSortMethod::UpdatedAt,
+            Frecency,
         ),
     )
     .await?;

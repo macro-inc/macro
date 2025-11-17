@@ -1,4 +1,5 @@
 use base64::{DecodeError, Engine, engine::general_purpose};
+use either::Either;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use std::{cmp::Ordering, marker::PhantomData};
 use thiserror::Error;
@@ -57,7 +58,6 @@ pub struct CursorVal<C: Sortable, F> {
     /// the last value of the [Sortable] from the previous page
     pub last_val: C::Value,
     /// the value that we are filtering on
-    #[serde(default)]
     pub filter: F,
 }
 
@@ -210,14 +210,31 @@ where
     }
 }
 
-impl<T, I, C: Sortable, F> PaginatedCursor<T, I, C, F> {
+/// trait for erasing the strong typing of a Cursor
+/// This makes the type less specific but maintains the same inner data
+pub trait TypeEraseCursor<T> {
     /// Erase the type of self.
     /// This doesn't actually change any data it just makes the type less sepcific
-    pub fn type_erase(self) -> PaginatedOpaqueCursor<T> {
+    fn type_erase(self) -> PaginatedOpaqueCursor<T>;
+}
+
+impl<T, I, C: Sortable, F> TypeEraseCursor<T> for PaginatedCursor<T, I, C, F> {
+    fn type_erase(self) -> PaginatedOpaqueCursor<T> {
         let Self { items, next_cursor } = self;
         PaginatedOpaqueCursor {
             items,
             next_cursor: next_cursor.map(|c| c.type_erase()),
+        }
+    }
+}
+
+impl<T, I, I2, C: Sortable, C2: Sortable, F, F2> TypeEraseCursor<T>
+    for Either<PaginatedCursor<T, I, C, F>, PaginatedCursor<T, I2, C2, F2>>
+{
+    fn type_erase(self) -> PaginatedOpaqueCursor<T> {
+        match self {
+            Either::Left(l) => l.type_erase(),
+            Either::Right(r) => r.type_erase(),
         }
     }
 }
@@ -307,7 +324,7 @@ where
 #[derive(Debug)]
 pub enum Query<I, T: Sortable, F> {
     /// a Sort method T
-    Sort(T),
+    Sort(T, F),
     /// a [CursorWithVal]
     Cursor(CursorWithValAndFilter<I, T, F>),
 }
@@ -321,7 +338,7 @@ where
 {
     fn clone(&self) -> Self {
         match self {
-            Query::Sort(s) => Query::Sort(s.clone()),
+            Query::Sort(s, f) => Query::Sort(s.clone(), f.clone()),
             Query::Cursor(cursor) => Query::Cursor(cursor.clone()),
         }
     }
@@ -329,26 +346,62 @@ where
 
 impl<I, T: Sortable, F> Query<I, T, F> {
     /// create an instance of [Query] from optionally a [CursorWithVal], fallling back to T if it does not exist
-    pub fn new(maybe_cursor: Option<CursorWithValAndFilter<I, T, F>>, fallback: T) -> Self {
+    pub fn new(maybe_cursor: Option<CursorWithValAndFilter<I, T, F>>, sort: T, filter: F) -> Self {
         match maybe_cursor {
             Some(c) => Self::Cursor(c),
-            None => Self::Sort(fallback),
+            None => Self::Sort(sort, filter),
         }
     }
 
     /// returns the inner sort method [Sortable] for this query
     pub fn sort_method(&self) -> &T {
         match self {
-            Query::Sort(s) => s,
+            Query::Sort(s, _) => s,
             Query::Cursor(cursor) => &cursor.val.sort_type,
+        }
+    }
+
+    /// returns a reference to the inner filter type
+    pub fn filter(&self) -> &F {
+        match self {
+            Query::Sort(_, f) => f,
+            Query::Cursor(cursor) => &cursor.val.filter,
         }
     }
 
     /// returns the entity [Uuid] and [Sortable::Value] if they exist
     pub fn vals(&self) -> (Option<&I>, Option<&T::Value>) {
         match self {
-            Query::Sort(_) => (None, None),
+            Query::Sort(_, _) => (None, None),
             Query::Cursor(cursor) => (Some(&cursor.id), Some(&cursor.val.last_val)),
+        }
+    }
+
+    /// maps the type of filter from one type to another
+    pub fn map_filter<Cb, U>(self, cb: Cb) -> Query<I, T, U>
+    where
+        Cb: FnOnce(F) -> U,
+    {
+        match self {
+            Query::Sort(s, f) => Query::Sort(s, cb(f)),
+            Query::Cursor(Cursor {
+                id,
+                limit,
+                val:
+                    CursorVal {
+                        sort_type,
+                        last_val,
+                        filter,
+                    },
+            }) => Query::Cursor(Cursor {
+                id,
+                limit,
+                val: CursorVal {
+                    sort_type,
+                    last_val,
+                    filter: cb(filter),
+                },
+            }),
         }
     }
 }

@@ -1,7 +1,8 @@
 import { useBlockId } from '@core/block';
+import { IconButton } from '@core/component/IconButton';
 import { useUnfurl } from '@core/signal/unfurl';
+import DeleteIcon from '@icon/bold/x-bold.svg';
 import LinkIcon from '@icon/regular/link.svg';
-import XIcon from '@icon/regular/x.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { proxyResource } from '@service-unfurl/client';
 import type { Component } from 'solid-js';
@@ -30,8 +31,6 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
 
   const isReadOnly = () => props.property.isMetadata || !props.canEdit;
   const linkValues = (props.property.value || []) as string[];
-  const hasLinks = () => linkValues.length > 0;
-  const isMultiValue = () => props.property.isMultiSelect;
 
   const startAdding = () => {
     if (isReadOnly()) return;
@@ -164,75 +163,48 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
   );
 
   return (
-    <Show
-      when={isMultiValue()}
-      fallback={
-        <Show
-          when={hasLinks()}
-          fallback={
-            <Show
-              when={isAdding()}
-              fallback={
-                <button
-                  onClick={startAdding}
-                  class={`text-left text-xs px-2 py-1 border border-edge ${
-                    isReadOnly()
-                      ? 'bg-transparent text-ink-muted cursor-default'
-                      : 'hover:bg-hover cursor-pointer bg-transparent text-ink'
-                  } inline-block max-w-full`}
-                  disabled={isReadOnly()}
-                >
-                  —
-                </button>
-              }
-            >
-              <AddLinkInput />
-            </Show>
-          }
-        >
+    <div class="flex flex-wrap gap-1 justify-start items-start w-full min-w-0">
+      <For each={linkValues}>
+        {(url) => (
           <LinkDisplay
-            url={linkValues[0]}
-            onRemove={() => handleRemoveLink(linkValues[0])}
+            url={url}
+            onRemove={() => handleRemoveLink(url)}
             canEdit={!isReadOnly()}
             isRemoving={isSaving()}
             hoveredLink={hoveredLink()}
             setHoveredLink={setHoveredLink}
           />
-        </Show>
-      }
-    >
-      <div class="flex flex-wrap gap-1 justify-start items-start w-full min-w-0">
-        <For each={linkValues}>
-          {(url) => (
-            <LinkDisplay
-              url={url}
-              onRemove={() => handleRemoveLink(url)}
-              canEdit={!isReadOnly()}
-              isRemoving={isSaving()}
-              hoveredLink={hoveredLink()}
-              setHoveredLink={setHoveredLink}
-            />
-          )}
-        </For>
-        <Show when={!isReadOnly()}>
-          <Show
-            when={isAdding()}
-            fallback={
+        )}
+      </For>
+      <Show
+        when={!isReadOnly()}
+        fallback={
+          <div class="text-ink-muted text-xs px-2 py-1 border border-edge bg-transparent inline-block shrink-0">
+            {<>—</>}
+          </div>
+        }
+      >
+        <Show
+          when={isAdding()}
+          fallback={
+            <Show
+              when={props.property.isMultiSelect || linkValues.length === 0}
+            >
               <button
                 onClick={startAdding}
                 class="text-ink-muted hover:text-ink text-xs hover:bg-hover px-2 py-1 cursor-pointer border border-edge bg-transparent inline-block shrink-0"
               >
                 +
               </button>
-            }
-          >
-            <div class="inline-block">
-              <AddLinkInput />
-            </div>
-          </Show>
+            </Show>
+          }
+        >
+          <div class="inline-block">
+            <AddLinkInput />
+          </div>
         </Show>
-      </div>
-    </Show>
+      </Show>
+    </div>
   );
 };
 
@@ -258,9 +230,7 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
     window.open(props.url, '_blank');
   };
 
-  const handleRemoveClick = (e: MouseEvent) => {
-    e.preventDefault();
-    e.stopPropagation();
+  const handleRemoveClick = () => {
     props.onRemove();
   };
 
@@ -284,7 +254,7 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
 
   return (
     <div
-      class="relative inline-block max-w-[225px] shrink-0"
+      class="relative inline-flex max-w-[200px] shrink-0"
       onMouseEnter={() => props.setHoveredLink(props.url)}
       onMouseLeave={() => props.setHoveredLink(null)}
     >
@@ -317,17 +287,18 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
         </div>
 
         <span class="truncate flex-1 text-ink">{title()}</span>
-
-        <Show when={props.canEdit && isHovered() && !props.isRemoving}>
-          <button
-            class="remove-button shrink-0 p-0.5 hover:bg-failure/20 rounded"
-            onClick={handleRemoveClick}
-            title="Remove link"
-          >
-            <XIcon class="w-3 h-3 text-ink-muted hover:text-failure-ink" />
-          </button>
-        </Show>
       </button>
+      <Show when={props.canEdit && isHovered() && !props.isRemoving}>
+        <div class="absolute right-1 inset-y-0 flex items-center">
+          <IconButton
+            icon={DeleteIcon}
+            theme="clear"
+            size="xs"
+            class="!text-failure !bg-[#2a2a2a] hover:!bg-[#444444] !cursor-pointer !w-4 !h-4 !min-w-4 !min-h-4"
+            onClick={handleRemoveClick}
+          />
+        </div>
+      </Show>
     </div>
   );
 };

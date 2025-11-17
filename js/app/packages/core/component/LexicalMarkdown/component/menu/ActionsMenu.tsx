@@ -2,8 +2,8 @@ import { BozzyBracketInnerSibling } from '@core/component/BozzyBracket';
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { fuzzyFilter } from '@core/util/fuzzy';
 import { debounce } from '@solid-primitives/scheduled';
-import fuzzy from 'fuzzy';
 import type { LexicalEditor } from 'lexical';
 import {
   createEffect,
@@ -112,14 +112,9 @@ export function ActionMenu(props: {
   });
 
   const filteredItems = createMemo(() => {
-    return fuzzy
-      .filter(searchTerm(), ACTIONS, {
-        extract: (item) => {
-          return [item.name, ...item.keywords].join(' ');
-        },
-      })
-      .map((result) => result.original)
-      .slice(0, maxItems());
+    return fuzzyFilter(searchTerm(), ACTIONS, (item) =>
+      [item.name, ...item.keywords].join(' ')
+    ).slice(0, maxItems());
   });
 
   const [escapeSpaceState, setEscapeSpaceState] = createSignal<

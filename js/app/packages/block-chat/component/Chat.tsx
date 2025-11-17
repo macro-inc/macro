@@ -1,3 +1,4 @@
+import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
@@ -17,18 +18,28 @@ import {
   storeChatState,
 } from '@core/component/AI/util/storage';
 import { usePaywallState } from '@core/constant/PaywallState';
+import { registerHotkey } from '@core/hotkey/hotkeys';
 import { createMethodRegistration } from '@core/orchestrator';
+import {
+  blockElementSignal,
+  blockHotkeyScopeSignal,
+} from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
 import { invalidateUserQuota } from '@service-auth/userQuota';
 import { cognitionWebsocketServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
+import type { LexicalEditor } from 'lexical';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { pendingLocationParamsSignal } from '../signal/pendingLocationParams';
 
 export function Chat(props: { data: ChatData }) {
   const canEdit = useCanEdit();
   const disabled = () => !canEdit();
+  const scopeId = blockHotkeyScopeSignal.get;
+  const blockElement = blockElementSignal.get;
+  const { navigatedFromJK } = useNavigatedFromJK();
+  const [chatEditor, setChatEditor] = createSignal<LexicalEditor>();
 
   const [stream, setStream] = createSignal<MessageStream>();
   const cancelStream = () => {
@@ -136,6 +147,31 @@ export function Chat(props: { data: ChatData }) {
     },
   });
 
+  createEffect(() => {
+    if (scopeId()) {
+      registerHotkey({
+        hotkey: 'enter',
+        scopeId: scopeId(),
+        description: 'Focus Chat Input',
+        keyDownHandler: () => {
+          const editor = chatEditor();
+          if (editor) {
+            editor.focus(undefined, { defaultSelection: 'rootStart' });
+            return true;
+          }
+          return false;
+        },
+        hide: true,
+      });
+    }
+  });
+
+  createEffect(() => {
+    if (!blockElement()) return;
+    if (!navigatedFromJK()) return;
+    blockElement()?.focus();
+  });
+
   return (
     <DragDropWrapper
       class="size-full bg-panel overscroll-none overflow-hidden flex flex-col"
@@ -152,7 +188,12 @@ export function Chat(props: { data: ChatData }) {
       <Show when={!disabled()}>
         <div class="flex w-full justify-center pb-2 px-4">
           <div class="w-3xl">
-            <ChatInput onSend={onSend} onStop={cancelStream} />
+            <ChatInput
+              onSend={onSend}
+              onStop={cancelStream}
+              captureEditor={setChatEditor}
+              autoFocusOnMount={!navigatedFromJK()}
+            />
           </div>
         </div>
       </Show>

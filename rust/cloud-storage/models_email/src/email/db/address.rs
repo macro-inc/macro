@@ -1,7 +1,6 @@
 use crate::email::db::message::MessageRecipient;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
-use sqlx::postgres::{PgHasArrayType, PgTypeInfo};
 use sqlx::{FromRow, Type};
 use uuid::Uuid;
 
@@ -51,13 +50,4 @@ pub enum EmailRecipientType {
     To,
     Cc,
     Bcc,
-}
-
-impl PgHasArrayType for EmailRecipientType {
-    fn array_type_info() -> PgTypeInfo {
-        // PostgreSQL implicitly creates an array type for custom types,
-        // usually prefixed with an underscore.
-        // We need to tell sqlx the name of this array type.
-        PgTypeInfo::with_name("_email_recipient_type")
-    }
 }

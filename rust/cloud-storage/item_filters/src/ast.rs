@@ -1,59 +1,36 @@
 //! This module defines stricter typing for the filters found in lib.
 //! This is used to construct a strictly typed ast for the input filters, allowing consumers to have a logical represenation of the required operations
 
-use crate::{DocumentFilters, EntityFilters};
-use filter_ast::{ExpandFrame, ExpandNode, Expr};
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use crate::{
+    ChatFilters, DocumentFilters, EntityFilters, ProjectFilters,
+    ast::{
+        chat::{ChatLiteral, ChatRole},
+        project::ProjectLiteral,
+    },
+};
+use document::DocumentLiteral;
+use filter_ast::{ExpandFrame, Expr};
 use non_empty::IsEmpty;
 use serde::{Deserialize, Serialize};
+use std::{marker::PhantomData, sync::Arc};
 use thiserror::Error;
-use uuid::Uuid;
+
+mod channel;
+mod chat;
+mod document;
+mod email;
+mod project;
 
 #[cfg(test)]
 mod tests;
 
-/// the types of documents we can filter by
-#[derive(Debug, Serialize, Deserialize)]
-pub enum FileType {
-    /// the document is a pdf
-    Pdf,
-    /// the document is markdown
-    Md,
-    /// the document is plaintext
-    Txt,
-    /// the document is html
-    Html,
-}
-
 /// encountered an unknown file type
 #[derive(Debug, Error)]
-#[error("Unknown file type: {0}")]
-pub struct UnknownFileType(String);
+#[error("Found unknown value {0} when attempting to parse {t}", t = std::any::type_name::<T>())]
+pub struct UnknownValue<T>(String, PhantomData<T>);
 
-impl FileType {
-    /// parse the file type from the input
-    pub fn parse_from_str<T: AsRef<str>>(s: T) -> Result<FileType, UnknownFileType> {
-        match s.as_ref() {
-            "pdf" => Ok(FileType::Pdf),
-            "md" => Ok(FileType::Md),
-            "txt" => Ok(FileType::Txt),
-            "html" => Ok(FileType::Html),
-            _ => Err(UnknownFileType(s.as_ref().to_string())),
-        }
-    }
-}
-
-/// the literal type that can appear in the item filer ast
-#[derive(Debug, Serialize, Deserialize)]
-pub enum DocumentLiteral {
-    /// this node value filters by [FileType]
-    FileType(FileType),
-    /// this node value filters by document [Uuid]
-    Id(Uuid),
-    /// this node value filters by project [Uuid]
-    ProjectId(Uuid),
-    /// this node value filters by document owner
-    Owner(MacroUserIdStr<'static>),
+trait ParseFromStr: Sized {
+    fn parse_from_str<T: AsRef<str>>(s: T) -> Result<Self, UnknownValue<Self>>;
 }
 
 /// the types of errors that can occur when expanding [DocumentFilters] into an ast
@@ -61,7 +38,10 @@ pub enum DocumentLiteral {
 pub enum ExpandErr {
     /// unknown file type
     #[error(transparent)]
-    FileTypeErr(#[from] UnknownFileType),
+    FileTypeErr(#[from] model_file_type::ValueError<model_file_type::FileType>),
+    /// unknown chat type
+    #[error(transparent)]
+    ChatRoleErr(#[from] UnknownValue<ChatRole>),
     /// invalid uuid
     #[error("Invalid uuid string: {0}")]
     Uuid(#[from] uuid::Error),
@@ -70,71 +50,52 @@ pub enum ExpandErr {
     MacroIdErr(#[from] macro_user_id::user_id::ParseErr),
 }
 
-impl ExpandFrame<DocumentLiteral> for DocumentFilters {
-    type Err = ExpandErr;
-    fn expand_ast(
-        filter_request: DocumentFilters,
-    ) -> Result<Option<Expr<DocumentLiteral>>, ExpandErr> {
-        let DocumentFilters {
-            file_types,
-            document_ids,
-            project_ids,
-            owners,
-        } = filter_request;
-
-        let file_types_node = file_types
-            .iter()
-            .map(FileType::parse_from_str)
-            .expand(|r| r.map(DocumentLiteral::FileType), Expr::or)?;
-
-        let document_id_nodes = document_ids
-            .iter()
-            .map(|s| Uuid::parse_str(s))
-            .expand(|r| r.map(DocumentLiteral::Id), Expr::or)?;
-
-        let project_ids = project_ids
-            .iter()
-            .map(|s| Uuid::parse_str(s))
-            .expand(|r| r.map(DocumentLiteral::ProjectId), Expr::or)?;
-
-        let owners = owners
-            .iter()
-            .map(|s| MacroUserIdStr::parse_from_str(s).map(CowLike::into_owned))
-            .expand(|r| r.map(DocumentLiteral::Owner), Expr::or)?;
-
-        Ok([file_types_node, document_id_nodes, project_ids, owners]
-            .into_iter()
-            .fold(None, |acc, cur| match (acc, cur) {
-                (Some(acc), Some(cur)) => Some(Expr::and(acc, cur)),
-                (None, Some(next)) | (Some(next), None) => Some(next),
-                (None, None) => None,
-            }))
-    }
-}
-
 /// Describes a bundle of filters that should be applied across different entity types
-#[derive(Default, Debug, Serialize, Deserialize)]
-pub struct EntityFilterAst {
+#[derive(Debug, Serialize, Deserialize)]
+#[non_exhaustive]
+pub struct EntityFilterInner {
     /// the filters that should be applied to the document entity
     #[serde(default)]
     pub document_filter: Option<Expr<DocumentLiteral>>,
+    /// the filters that should be applied to the project entity
+    #[serde(default)]
+    pub project_filter: Option<Expr<ProjectLiteral>>,
+    /// the filters that should be applied to the chat entity
+    #[serde(default)]
+    pub chat_filter: Option<Expr<ChatLiteral>>,
+}
+
+/// wrapper over [EntityFilterInner] which gives us cheaper clones
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[non_exhaustive]
+pub struct EntityFilterAst {
+    /// we wrap the inner type in an arc to avoid large allocations when cloning boxed values
+    pub inner: Arc<EntityFilterInner>,
 }
 
 impl EntityFilterAst {
     /// expand the input [EntityFilters] into an ast representation
-    pub fn new_from_filters(entity_filter: EntityFilters) -> Result<Self, ExpandErr> {
+    pub fn new_from_filters(entity_filter: EntityFilters) -> Result<Option<Self>, ExpandErr> {
         if entity_filter.is_empty() {
-            return Ok(Self::default());
+            return Ok(None);
         }
-        Ok(Self {
-            document_filter: DocumentFilters::expand_ast(entity_filter.document_filters)?,
-        })
+        Ok(Some(Self {
+            inner: Arc::new(EntityFilterInner {
+                document_filter: DocumentFilters::expand_ast(entity_filter.document_filters)?,
+                project_filter: ProjectFilters::expand_ast(entity_filter.project_filters)?,
+                chat_filter: ChatFilters::expand_ast(entity_filter.chat_filters)?,
+            }),
+        }))
     }
 }
 
 impl IsEmpty for EntityFilterAst {
     fn is_empty(&self) -> bool {
-        let EntityFilterAst { document_filter } = self;
-        document_filter.is_none()
+        let EntityFilterInner {
+            document_filter,
+            project_filter,
+            chat_filter,
+        } = &*self.inner;
+        document_filter.is_none() && project_filter.is_none() && chat_filter.is_none()
     }
 }

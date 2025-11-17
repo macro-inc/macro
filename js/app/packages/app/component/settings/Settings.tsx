@@ -5,6 +5,7 @@ import {
   EXPERIMENTAL_DARK_MODE,
 } from '@core/constant/featureFlags';
 import {
+  type SettingsTab,
   setSettingsOpen,
   useSettingsState,
 } from '@core/constant/SettingsState';
@@ -13,17 +14,17 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useOrganizationName } from '@core/user';
 import Dialog from '@corvu/dialog';
-import BellRinging from '@icon/regular/bell-ringing.svg';
-import CreditCard from '@icon/regular/credit-card.svg';
-import DeviceMobile from '@icon/regular/device-mobile.svg';
-import CyberMan from '@icon/regular/head-circuit.svg';
-import Palette from '@icon/regular/palette.svg';
-import UserCircle from '@icon/regular/user-circle.svg';
-import UsersThree from '@icon/regular/users-three.svg';
-import XIcon from '@icon/regular/x.svg';
+import { Tabs } from '@kobalte/core/tabs';
 import { MacroPermissions, usePermissions } from '@service-gql/client';
 import { registerHotkey } from 'core/hotkey/hotkeys';
-import { createSignal, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import MacroJump from '../MacroJump';
 import { Account } from './Account';
 import { AiMemory } from './AiMemory/AiMemory';
@@ -34,6 +35,8 @@ import Organization from './Organization/Organization';
 import { Subscription } from './Subscription';
 
 export const [viewportOffset, setViewportOffset] = createSignal(0);
+
+const SCROLL_THRESHOLD = 10;
 
 const { track, TrackingEvents } = withAnalytics();
 export function Settings() {
@@ -46,6 +49,94 @@ export function Settings() {
   } = useSettingsState();
   const permissions = usePermissions();
   const orgName = useOrganizationName();
+
+  let scrollRef!: HTMLDivElement;
+  let scrollCleanup: (() => void) | undefined;
+  const [leftOpacity, setLeftOpacity] = createSignal(0);
+  const [rightOpacity, setRightOpacity] = createSignal(0);
+  const [indicatorStyle, setIndicatorStyle] = createSignal({
+    left: 0,
+    width: 0,
+  });
+
+  const updateClipIndicators = () => {
+    if (!scrollRef) return;
+    const { scrollLeft, scrollWidth, clientWidth } = scrollRef;
+
+    const leftAmount = Math.min(scrollLeft, SCROLL_THRESHOLD);
+    setLeftOpacity(leftAmount / SCROLL_THRESHOLD);
+
+    const maxScroll = scrollWidth - clientWidth;
+    const remainingScroll = maxScroll - scrollLeft;
+    const rightAmount = Math.min(remainingScroll, SCROLL_THRESHOLD);
+    setRightOpacity(rightAmount / SCROLL_THRESHOLD);
+  };
+
+  const updateIndicatorPosition = (element: HTMLElement) => {
+    if (!scrollRef || !element) return;
+    const listRect = scrollRef.getBoundingClientRect();
+    const tabRect = element.getBoundingClientRect();
+    setIndicatorStyle({
+      left: tabRect.left - listRect.left + scrollRef.scrollLeft,
+      width: tabRect.width,
+    });
+  };
+
+  const setupScrollListeners = (element: HTMLDivElement) => {
+    const listener = (e: WheelEvent) => {
+      e.preventDefault();
+      const { deltaX, deltaY } = e;
+      const delta = Math.abs(deltaX) > Math.abs(deltaY) ? deltaX : deltaY;
+      element.scrollLeft += delta;
+      updateClipIndicators();
+    };
+    const scrollListener = () => {
+      updateClipIndicators();
+    };
+    element.addEventListener('wheel', listener);
+    element.addEventListener('scroll', scrollListener);
+    updateClipIndicators();
+    return () => {
+      element.removeEventListener('wheel', listener);
+      element.removeEventListener('scroll', scrollListener);
+    };
+  };
+
+  onCleanup(() => {
+    if (scrollCleanup) {
+      scrollCleanup();
+    }
+  });
+
+  const settingsTabs = createMemo(() => {
+    const tabs: { value: string; label: string }[] = [];
+
+    if (EXPERIMENTAL_DARK_MODE) {
+      tabs.push({ value: 'Appearance', label: 'Appearance' });
+    }
+
+    tabs.push({ value: 'Account', label: 'Account' });
+
+    if (!orgName() && !isNativeMobilePlatform()) {
+      tabs.push({ value: 'Subscription', label: 'Subscription' });
+    }
+
+    if (orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)) {
+      tabs.push({ value: 'Organization', label: 'Organization' });
+    }
+
+    tabs.push({ value: 'Notification', label: 'Notification' });
+
+    if (isNativeMobilePlatform() && DEV_MODE_ENV) {
+      tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' });
+    }
+
+    if (ENABLE_AI_MEMORY) {
+      tabs.push({ value: 'AI Memory', label: 'AI Memory' });
+    }
+
+    return tabs;
+  });
 
   registerHotkey({
     hotkeyToken: TOKENS.global.toggleSettings,
@@ -73,258 +164,145 @@ export function Settings() {
       <Dialog.Portal>
         <Dialog.Overlay class="dialog-overlay fixed inset-0 z-modal-overlay w-full bg-modal-overlay" />
         <Dialog.Content
-          class="dialog-content bg-dialog text-ink sm:rounded-lg fixed sm:left-1/2 sm:top-1/2 z-modal sm:-translate-x-1/2 sm:-translate-y-1/2 w-dvw sm:w-[75vw] flex flex-col sm:flex-row sm:ring-1 ring-edge sm:shadow-2xl"
+          class="dialog-content bg-dialog text-ink fixed sm:left-1/2 sm:top-1/2 z-modal sm:-translate-x-1/2 sm:-translate-y-1/2 w-dvw sm:w-[90vw] flex flex-col sm:shadow-2xl border-2 border-accent"
           style={{
-            height: isMobileWidth() ? `calc(100dvh)` : '75dvh',
+            height: isMobileWidth() ? `calc(100dvh)` : '90dvh',
             top: isMobileWidth()
               ? `calc(${viewportOffset()}px + env(safe-area-inset-top))`
               : '50%',
           }}
           ref={settingsContentEl}
         >
-          <div class="sm:h-full w-full rounded-l-lg sm:flex-1 sm:min-w-[15%] sm:max-w-[20%] bg-edge/15">
-            <nav class="relative h-full flex-col sm:border-r border-b border-ink/10">
-              <div class="flex justify-between items-center">
-                <div class="px-3 py-3 text-xs text-ink-muted font-medium">
-                  Settings
-                </div>
-                <Show when={isMobileWidth()}>
-                  <XIcon
-                    width={16}
-                    height={16}
-                    class="text-ink-muted cursor-default mr-2 ml-1"
-                    onClick={closeSettings}
-                  />
-                </Show>
-              </div>
-              <div class="flex flex-col px-2 py-[3px] gap-[3px]">
-                {/* Account tab - always shown */}
-                <Show when={true}>
-                  <button
-                    onClick={() => {
-                      setActiveTabId('Account');
-                      track(TrackingEvents.SETTINGS.CHANGETAB, {
-                        tab: 'Account',
-                      });
-                    }}
-                    class={`
-                    relative font-medium align-middle select-none
-                    flex flex-row justify-start items-center
-                    h-8 hover:bg-hover hover-transition-bg px-1 rounded-md
-                    ${'Account' === activeTabId() ? 'text-ink cursor-default bg-active' : ''}
-                  `}
-                  >
-                    <div class="line-clamp-1 text-sm flex-grow">
-                      <div class="flex items-center gap-1">
-                        <UserCircle class="w-5 h-5" />
-                        <div>Account</div>
-                      </div>
-                    </div>
-                  </button>
-                </Show>
-
-                {/* Subscription tab */}
-                <Show when={!orgName() && !isNativeMobilePlatform()}>
-                  <button
-                    onClick={() => {
-                      setActiveTabId('Subscription');
-                      track(TrackingEvents.SETTINGS.CHANGETAB, {
-                        tab: 'Subscription',
-                      });
-                    }}
-                    class={`
-                    relative font-medium align-middle select-none
-                    flex flex-row justify-start items-center
-                    h-8 hover:bg-hover hover-transition-bg px-1 rounded-md
-                    ${'Subscription' === activeTabId() ? 'text-ink cursor-default bg-active' : ''}
-                  `}
-                  >
-                    <div class="line-clamp-1 text-sm flex-grow">
-                      <div class="flex items-center gap-1">
-                        <CreditCard class="w-5 h-5" />
-                        <div>Subscription</div>
-                      </div>
-                    </div>
-                  </button>
-                </Show>
-
-                {/* Organization tab */}
-                <Show
-                  when={
-                    orgName() &&
-                    permissions()?.includes(MacroPermissions.WriteItPanel)
-                  }
-                >
-                  <button
-                    onClick={() => {
-                      setActiveTabId('Organization');
-                      track(TrackingEvents.SETTINGS.CHANGETAB, {
-                        tab: 'Organization',
-                      });
-                    }}
-                    class={`
-                    relative font-medium align-middle select-none
-                    flex flex-row justify-start items-center
-                    h-8 hover:bg-hover hover-transition-bg px-1 rounded-md
-                    ${'Organization' === activeTabId() ? 'text-ink cursor-default bg-active' : ''}
-                  `}
-                  >
-                    <div class="line-clamp-1 text-sm flex-grow">
-                      <div class="flex items-center gap-1">
-                        <UsersThree class="w-5 h-5" />
-                        <div>Organization</div>
-                      </div>
-                    </div>
-                  </button>
-                </Show>
-
-                {/* Appearance tab */}
-                <Show when={EXPERIMENTAL_DARK_MODE}>
-                  <button
-                    onClick={() => {
-                      setActiveTabId('Appearance');
-                      track(TrackingEvents.SETTINGS.CHANGETAB, {
-                        tab: 'Appearance',
-                      });
-                    }}
-                    class={`
-                    relative font-medium align-middle select-none
-                    flex flex-row justify-start items-center
-                    h-8 hover:bg-hover hover-transition-bg px-1 rounded-md
-                    ${'Appearance' === activeTabId() ? 'text-ink cursor-default bg-active' : ''}
-                  `}
-                  >
-                    <div class="line-clamp-1 text-sm flex-grow">
-                      <div class="flex items-center gap-1">
-                        <Palette class="w-5 h-5" />
-                        <div>Appearance</div>
-                      </div>
-                    </div>
-                  </button>
-                </Show>
-
-                {/* Notification tab */}
-                <button
-                  onClick={() => {
-                    setActiveTabId('Notification');
-                    track(TrackingEvents.SETTINGS.CHANGETAB, {
-                      tab: 'Notification',
-                    });
-                  }}
-                  class={`
-                    relative font-medium align-middle select-none
-                    flex flex-row justify-start items-center
-                    h-8 hover:bg-hover hover-transition-bg px-1 rounded-md
-                    ${'Notification' === activeTabId() ? 'text-ink cursor-default bg-active' : ''}
-                  `}
-                >
-                  <div class="line-clamp-1 text-sm flex-grow">
-                    <div class="flex items-center gap-1">
-                      <BellRinging class="w-5 h-5" />
-                      <div>Notification</div>
-                    </div>
-                  </div>
-                </button>
-
-                {/* Mobile tab */}
-                <Show when={!!isNativeMobilePlatform() && DEV_MODE_ENV}>
-                  <button
-                    onClick={() => {
-                      setActiveTabId('Mobile');
-                      track(TrackingEvents.SETTINGS.CHANGETAB, {
-                        tab: 'Mobile',
-                      });
-                    }}
-                    class={`
-                    relative font-medium align-middle select-none
-                    flex flex-row justify-start items-center
-                    h-8 hover:bg-hover hover-transition-bg px-1 rounded-md
-                    ${'Mobile' === activeTabId() ? 'text-ink cursor-default bg-active' : ''}
-                  `}
-                  >
-                    <div class="line-clamp-1 text-sm flex-grow">
-                      <div class="flex items-center gap-1">
-                        <DeviceMobile class="w-5 h-5" />
-                        <div>Mobile Dev Tools</div>
-                      </div>
-                    </div>
-                  </button>
-                </Show>
-                <Show when={ENABLE_AI_MEMORY}>
-                  <button
-                    onClick={() => {
-                      setActiveTabId('AI Memory');
-                      track(TrackingEvents.SETTINGS.CHANGETAB, {
-                        tab: 'AI Memory',
-                      });
-                    }}
-                    class={`
-                    relative font-medium align-middle select-none
-                    flex flex-row justify-start items-center
-                    h-8 hover:bg-hover hover-transition-bg px-1 rounded-md
-                    ${'AI Memory' === activeTabId() ? 'text-ink cursor-default bg-active' : ''}
-                  `}
-                  >
-                    <div class="line-clamp-1 text-sm flex-grow">
-                      <div class="flex items-center gap-1">
-                        <CyberMan class="w-5 h-5" />
-                        <div>AI Memory</div>
-                      </div>
-                    </div>
-                  </button>
-                </Show>
-              </div>
-            </nav>
-          </div>
-          <div class="flex-1 p-6 overflow-y-scroll">
-            {/* Use switch/case approach for the content instead of using tabs array */}
-            {(() => {
-              switch (activeTabId()) {
-                case 'Account':
-                  return <Account />;
-                case 'Subscription':
-                  return (
-                    <Show when={!orgName()}>
-                      <Subscription />
-                    </Show>
-                  );
-                case 'Organization':
-                  return (
-                    <Show
-                      when={
-                        orgName() &&
-                        permissions()?.includes(MacroPermissions.WriteItPanel)
-                      }
-                    >
-                      <Organization />
-                    </Show>
-                  );
-                case 'Appearance':
-                  return (
-                    <Show when={EXPERIMENTAL_DARK_MODE}>
-                      <Appearance />
-                    </Show>
-                  );
-                case 'Notification':
-                  return <Notification />;
-
-                case 'Mobile':
-                  return (
-                    <Show when={!!isNativeMobilePlatform() && DEV_MODE_ENV}>
-                      <Mobile />
-                    </Show>
-                  );
-                case 'AI Memory':
-                  return (
-                    <Show when={ENABLE_AI_MEMORY}>
-                      <AiMemory />
-                    </Show>
-                  );
-                default:
-                  return <Account />;
+          <Tabs
+            value={activeTabId()}
+            onChange={(value: string | undefined) => {
+              if (
+                value &&
+                (value === 'Account' ||
+                  value === 'Subscription' ||
+                  value === 'Organization' ||
+                  value === 'Appearance' ||
+                  value === 'Notification' ||
+                  value === 'Mobile' ||
+                  value === 'AI Memory')
+              ) {
+                setActiveTabId(value as SettingsTab);
+                track(TrackingEvents.SETTINGS.CHANGETAB, { tab: value });
               }
-            })()}
-          </div>
+            }}
+            class="flex flex-col h-full"
+          >
+            <div class="relative isolate shrink-0">
+              {/* Left clip boundary indicator */}
+              <div
+                class="absolute pointer-events-none left-0 top-px bottom-px w-3 z-2 pattern-diagonal-4 pattern-edge mask-r-from-0% border-l border-edge-muted transition-opacity duration-150"
+                style={{ opacity: leftOpacity() }}
+              />
+              {/* Right clip boundary indicator */}
+              <div
+                class="absolute pointer-events-none right-0 top-px bottom-px w-3 z-2 pattern-diagonal-4 pattern-edge mask-l-from-0% border-r border-edge-muted transition-opacity duration-150"
+                style={{ opacity: rightOpacity() }}
+              />
+
+              <Tabs.List
+                class="flex flex-row suppress-css-brackets h-full bg-panel overflow-x-scroll overscroll-none scrollbar-hidden scroll-shadows-x relative"
+                as="div"
+                ref={(el) => {
+                  scrollRef = el;
+                  if (el) {
+                    scrollCleanup = setupScrollListeners(el);
+                  }
+                }}
+              >
+                {/* Sliding indicator line */}
+                <div
+                  class="absolute bottom-0 h-px bg-accent z-10 pointer-events-none transition-all duration-150 ease-out"
+                  style={{
+                    transform: `translateX(${indicatorStyle().left}px)`,
+                    width: `${indicatorStyle().width}px`,
+                  }}
+                />
+
+                <For each={settingsTabs()}>
+                  {({ value, label }, i) => {
+                    const isActive = createMemo(() => value === activeTabId());
+
+                    let ref: HTMLDivElement | undefined;
+                    createEffect(() => {
+                      if (isActive() && ref) {
+                        ref.scrollIntoView({
+                          inline: 'end',
+                        });
+                        updateIndicatorPosition(ref);
+                        setTimeout(updateClipIndicators, 0);
+                      }
+                    });
+
+                    return (
+                      <Tabs.Trigger
+                        value={value}
+                        ref={ref}
+                        tabIndex={-1}
+                        class="min-w-12 max-w-[40cqw] shrink-0 text-sm relative h-full flex items-center px-2"
+                        classList={{
+                          'z-1 border-y border-edge-muted text-accent text-glow-sm':
+                            isActive(),
+                          'border-y border-edge-muted text-ink-disabled hover:text-accent/70 hover-transition-text':
+                            !isActive(),
+                        }}
+                      >
+                        <span class="flex items-center gap-1 w-full">
+                          <span class="text-xs font-mono opacity-70 mr-0.5">
+                            {(i() + 1).toString()}
+                          </span>
+                          <span class="truncate">{label}</span>
+                        </span>
+                      </Tabs.Trigger>
+                    );
+                  }}
+                </For>
+              </Tabs.List>
+            </div>
+
+            <div class="flex-1 p-6 overflow-y-scroll">
+              <Tabs.Content value="Account" class="h-full">
+                <Account />
+              </Tabs.Content>
+              <Show when={!orgName() && !isNativeMobilePlatform()}>
+                <Tabs.Content value="Subscription" class="h-full">
+                  <Subscription />
+                </Tabs.Content>
+              </Show>
+              <Show
+                when={
+                  orgName() &&
+                  permissions()?.includes(MacroPermissions.WriteItPanel)
+                }
+              >
+                <Tabs.Content value="Organization" class="h-full">
+                  <Organization />
+                </Tabs.Content>
+              </Show>
+              <Show when={EXPERIMENTAL_DARK_MODE}>
+                <Tabs.Content value="Appearance" class="h-full">
+                  <Appearance />
+                </Tabs.Content>
+              </Show>
+              <Tabs.Content value="Notification" class="h-full">
+                <Notification />
+              </Tabs.Content>
+              <Show when={!!isNativeMobilePlatform() && DEV_MODE_ENV}>
+                <Tabs.Content value="Mobile" class="h-full">
+                  <Mobile />
+                </Tabs.Content>
+              </Show>
+              <Show when={ENABLE_AI_MEMORY}>
+                <Tabs.Content value="AI Memory" class="h-full">
+                  <AiMemory />
+                </Tabs.Content>
+              </Show>
+            </div>
+          </Tabs>
         </Dialog.Content>
         <MacroJump tabbableParent={() => settingsContentEl} />
       </Dialog.Portal>

@@ -23,15 +23,13 @@ import {
   blockAcceptsFileExtension,
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
-import {
-  ENABLE_PREVIEW,
-  ENABLE_SOUP_FROM_FILTER,
-} from '@core/constant/featureFlags';
+import { ENABLE_SOUP_FROM_FILTER } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
+import { fuzzyMatch } from '@core/util/fuzzy';
 import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
 import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
 import XIcon from '@icon/regular/x.svg?component-solid';
@@ -62,6 +60,7 @@ import {
   sortByViewedAt,
   unreadFilterFn,
   type WithNotification,
+  type WithSearch,
 } from '@macro-entity';
 import {
   markNotificationsForEntityAsDone,
@@ -86,7 +85,6 @@ import type {
 } from '@service-search/generated/models';
 import type { GetItemsSoupParams } from '@service-storage/generated/schemas';
 import { debounce } from '@solid-primitives/scheduled';
-import fuzzy from 'fuzzy';
 import stringify from 'json-stable-stringify';
 import {
   type Accessor,
@@ -126,7 +124,7 @@ import {
   KNOWN_FILE_TYPES,
   type SortOptions,
   VIEWCONFIG_BASE,
-  VIEWCONFIG_DEFAULTS_NAMES,
+  VIEWCONFIG_DEFAULTS_IDS,
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
@@ -209,7 +207,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   );
 
   const splitContext = useSplitPanelOrThrow();
-  const { isPanelActive, unifiedListContext, panelRef } = splitContext;
+  const { isPanelActive, unifiedListContext, panelRef, previewState } =
+    splitContext;
+  const preview = () => previewState?.[0]?.() ?? false;
   const {
     viewsDataStore: viewsData,
     setViewDataStore,
@@ -300,8 +300,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   );
   const setEntityTypeFilter: SetStoreFunction<
     ViewData['filters']['typeFilter']
-  > = (...entityTypeFilter: any[]) => {
-    setViewDataStore(selectedView(), 'filters', 'typeFilter', entityTypeFilter);
+  > = (...args: any[]) => {
+    // @ts-ignore narrowing set store function is annoying due to function overloading
+    setViewDataStore(selectedView(), 'filters', 'typeFilter', ...args);
   };
 
   const fileTypeFilter = createMemo(
@@ -311,12 +312,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   );
   const setFileTypeFilter: SetStoreFunction<
     ViewData['filters']['documentTypeFilter']
-  > = (...fileTypeFilter: any[]) => {
+  > = (...args: any[]) => {
     setViewDataStore(
       selectedView(),
       'filters',
       'documentTypeFilter',
-      fileTypeFilter
+      // @ts-ignore narrowing set store function is annoying due to function overloading
+      ...args
     );
   };
 
@@ -328,12 +330,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const fromFilter = createMemo(() => view()?.filters.fromFilter);
   const hasFromFilter = createMemo(() => fromFilter() !== undefined);
   const shouldFilterEmails = createMemo(() => {
-    if (!hasFromFilter) return false;
+    if (!hasFromFilter()) return false;
     const types = entityTypeFilter();
     return types.length === 0 || types.includes('email');
   });
   const shouldFilterOwnedEntities = createMemo(() => {
-    if (!hasFromFilter) return false;
+    if (!hasFromFilter()) return false;
     const types = entityTypeFilter();
     return types.length === 0 || types.some((t) => t !== 'email');
   });
@@ -343,8 +345,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const fromFilterUsers = createMemo(() => fromFilter() ?? []);
   const setFromFilterUsers: SetStoreFunction<
     ViewData['filters']['fromFilter']
-  > = (...fromFilterUsers: any[]) => {
-    setViewDataStore(selectedView(), 'filters', 'fromFilter', fromFilterUsers);
+  > = (...args: any[]) => {
+    // @ts-ignore narrowing set store function is annoying due to function overloading
+    setViewDataStore(selectedView(), 'filters', 'fromFilter', ...args);
   };
 
   const sortType = createMemo(
@@ -372,13 +375,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     );
   };
 
-  const showProjects = createMemo(
-    () => view()?.display?.showProjects ?? defaultDisplayOptions.showProjects
-  );
-  const setShowProjects = (showProjects: DisplayOptions['showProjects']) => {
-    setViewDataStore(selectedView(), 'display', 'showProjects', showProjects);
-  };
-
   const showUnreadIndicator = createMemo(
     () =>
       view()?.display?.showUnreadIndicator ??
@@ -393,13 +389,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       'showUnreadIndicator',
       showUnreadIndicator
     );
-  };
-
-  const preview = createMemo(
-    () => view()?.display.preview ?? defaultDisplayOptions.preview
-  );
-  const setPreview = (preview: DisplayOptions['preview']) => {
-    setViewDataStore(selectedView(), 'display', 'preview', preview);
   };
 
   const rawSearchText = createMemo<string>(() => view()?.searchText ?? '');
@@ -445,10 +434,20 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     rawSearchText()
       ? (items: WithNotification<EntityData>[]) => {
           if (!searchText() || searchText().length === 0) return items;
-          const fuzzyResults = fuzzy.filter(searchText(), items, {
-            extract: (item) => item.name,
+
+          const query = searchText();
+          const matchResults = fuzzyMatch(query, items, (item) => item.name);
+
+          return matchResults.map((result) => {
+            return {
+              ...result.item,
+              search: {
+                nameHighlight: result.nameHighlight,
+                contentHighlights: null,
+                source: 'local',
+              },
+            } as WithNotification<WithSearch<EntityData>>;
           });
-          return fuzzyResults.map((result) => result.original);
         }
       : undefined
   );
@@ -658,29 +657,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       view: selectedView() === 'emails' ? emailView() : 'inbox',
     };
   });
-  const searchUnifiedContentQueryParams = createMemo(
+  const searchUnifiedNameContentQueryParams = createMemo(
     (): PaginatedSearchArgs => ({
       params: {
         page: 0,
         page_size: 100,
       },
       request: {
-        search_on: 'content',
-        match_type: 'partial',
-        terms: searchText().length > 0 ? [searchText()] : undefined,
-        filters: unifiedSearchFilters(),
-        include: unifiedSearchIncludeArray(),
-      },
-    })
-  );
-  const searchUnifiedNameQueryParams = createMemo(
-    (): PaginatedSearchArgs => ({
-      params: {
-        page: 0,
-        page_size: 100,
-      },
-      request: {
-        search_on: 'name',
+        search_on: 'name_content',
         match_type: 'partial',
         terms: searchText().length > 0 ? [searchText()] : undefined,
         filters: unifiedSearchFilters(),
@@ -698,10 +682,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return false;
   });
 
+  const isSearchActive = createMemo(() => {
+    return validSearchTerms() || validSearchFilters();
+  });
+
   const disableSearchService = createMemo(() => {
-    // we only need to use search service when we have some sort of search text/filter
-    const validSearch = validSearchTerms() || validSearchFilters();
-    return !validSearch;
+    return !isSearchActive();
   });
 
   const emailActive = useEmailLinksStatus();
@@ -710,10 +696,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     // NOTE: at the moment emails are not supported in project blocks
     // so it doesn't make sense to do an expensive email query
     if (projectFilter()) return true;
+    if (isSearchActive()) return true;
     if (!emailActive()) return true;
     const typeFilter = entityTypeFilter();
     if (typeFilter.length > 0 && !typeFilter.includes('email')) return true;
-    return !disableSearchService();
+    return false;
   });
 
   const disableDssInfiniteQuery = createMemo(() => {
@@ -730,12 +717,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return false;
   });
 
-  const disableNameOnlySearch = createMemo(() => {
-    if (disableSearchService()) return true;
-    // if terms is empty, we only need to search once
-    return !validSearchTerms();
-  });
-
   const channelsQuery = createChannelsQuery({
     disabled: disableChannelsQuery,
   });
@@ -746,13 +727,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     refetchInterval: () => emailRefetchInterval(),
     disabled: disableEmailQuery,
   });
-  const searchContentInfiniteQuery = createUnifiedSearchInfiniteQuery(
-    searchUnifiedContentQueryParams,
+  const searchNameContentInfiniteQuery = createUnifiedSearchInfiniteQuery(
+    searchUnifiedNameContentQueryParams,
     { disabled: disableSearchService }
-  );
-  const searchNameInfiniteQuery = createUnifiedSearchInfiniteQuery(
-    searchUnifiedNameQueryParams,
-    { disabled: disableNameOnlySearch }
   );
 
   // TODO: fix email source
@@ -815,10 +792,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const { SortComponent, sortFn: entitySort } = createSort({
     sortOptions,
     sortTypeSignal: [sortType, setSortType],
+    disabled: isSearchActive,
   });
 
   const { UnifiedListComponent, entities, isLoading } =
-    createUnifiedInfiniteList<WithNotification<EntityData>>({
+    createUnifiedInfiniteList<
+      WithNotification<WithSearch<EntityData> | EntityData>
+    >({
       entityInfiniteQueries: [
         {
           query: dssInfiniteQuery,
@@ -829,11 +809,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           operations: { filter: true, search: false },
         },
         {
-          query: searchContentInfiniteQuery,
-          operations: { filter: false, search: false },
-        },
-        {
-          query: searchNameInfiniteQuery,
+          query: searchNameContentInfiniteQuery,
           operations: { filter: false, search: false },
         },
       ],
@@ -845,8 +821,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       optionalFilter,
       entitySort,
       searchFilter: nameFuzzySearchFilter,
-      showProjects,
-      projectFilter,
+      isSearchActive,
     });
 
   createEffect(() => setEntities(entities()));
@@ -920,10 +895,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
   });
 
-  const hasRefinementsFromBase = createMemo(() => {
-    return isViewConfigChanged() || validSearchTerms() || validSearchFilters();
-  });
-
   const onClickSaveViewConfigChanges = () => {
     const view_ = view();
     const config = currentViewConfigBase();
@@ -935,7 +906,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       config,
     });
     // only for default views
-    if (VIEWCONFIG_DEFAULTS_NAMES.includes(view_.id as any)) {
+    if (VIEWCONFIG_DEFAULTS_IDS.includes(view_.id as any)) {
       // Reset initialConfigSignal to current config after save
       const currentConfig = stringifiedCurrentViewConfigBase();
       if (currentConfig !== null && currentConfig !== undefined) {
@@ -983,24 +954,54 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         <SplitToolbarRight order={5}>
           <div class="flex flex-row items-center gap-1 p-1 h-full select-none">
             <Show when={isViewConfigChanged()}>
-              <Button
-                size="SM"
-                classList={{
-                  '!border-ink/25 !text-ink !bg-panel hover:!text-ink ml-1.5 font-normal': true,
-                }}
-                onClick={onClickResetViewConfigChanges}
-              >
-                CLEAR
-              </Button>
-              <Button
-                size="SM"
-                classList={{
-                  '!border-ink/25 !text-ink !bg-panel hover:!text-ink mx-1.5 font-normal': true,
-                }}
-                onClick={onClickSaveViewConfigChanges}
-              >
-                SAVE CHANGES
-              </Button>
+              <Show when={preview()}>
+                <DropdownMenu
+                  size="SM"
+                  theme="secondary"
+                  triggerLabel={<span class="font-extrabold">⋮</span>}
+                >
+                  <div class="flex flex-col gap-2 p-2">
+                    <Button
+                      size="SM"
+                      classList={{
+                        '!border-ink/25 !text-ink !bg-panel hover:!text-ink font-normal': true,
+                      }}
+                      onClick={onClickResetViewConfigChanges}
+                    >
+                      CLEAR
+                    </Button>
+                    <Button
+                      size="SM"
+                      classList={{
+                        '!border-ink/25 !text-ink !bg-panel hover:!text-ink font-normal': true,
+                      }}
+                      onClick={onClickSaveViewConfigChanges}
+                    >
+                      SAVE CHANGES
+                    </Button>
+                  </div>
+                </DropdownMenu>
+              </Show>
+              <Show when={!preview()}>
+                <Button
+                  size="SM"
+                  classList={{
+                    '!border-ink/25 !text-ink !bg-panel hover:!text-ink ml-1.5 font-normal': true,
+                  }}
+                  onClick={onClickResetViewConfigChanges}
+                >
+                  CLEAR
+                </Button>
+                <Button
+                  size="SM"
+                  classList={{
+                    '!border-ink/25 !text-ink !bg-panel hover:!text-ink mx-1.5 font-normal': true,
+                  }}
+                  onClick={onClickSaveViewConfigChanges}
+                >
+                  SAVE CHANGES
+                </Button>
+              </Show>
             </Show>
             <DropdownMenu
               size="SM"
@@ -1143,12 +1144,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   <section class="gap-1 grid p-2">
                     <ToggleSwitch
                       size="SM"
-                      label="Show Projects"
-                      checked={showProjects()}
-                      onChange={setShowProjects}
-                    />
-                    <ToggleSwitch
-                      size="SM"
                       label="Unroll Notifications"
                       checked={showUnrollNotifications()}
                       onChange={setShowUnrollNotifications}
@@ -1158,13 +1153,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       label="Indicate Unread"
                       checked={showUnreadIndicator()}
                       onChange={setShowUnreadIndicator}
-                    />
-                    <ToggleSwitch
-                      size="SM"
-                      label="Preview"
-                      disabled={!ENABLE_PREVIEW}
-                      checked={preview()}
-                      onChange={setPreview}
                     />
                   </section>
                 </div>
@@ -1195,8 +1183,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           <UnifiedListComponent
             entityListRef={setLocalEntityListRef}
             virtualizerHandle={setVirtualizerHandle}
-            emptyState={<EmptyState view={view()?.view} />}
-            hasRefinementsFromBase={hasRefinementsFromBase}
+            emptyState={<EmptyState viewId={view()?.id} />}
+            hasRefinementsFromBase={isViewConfigChanged}
           >
             {(innerProps) => {
               const displayDoneButton = () => {
@@ -1318,106 +1306,105 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             entity={contextAndModalState.selectedEntity}
           />
           <ContextMenu.Portal>
-            <ContextMenuContent mobileFullScreen>
-              <Show when={isTouchDevice && isMobileWidth()}>
-                <Entity
-                  entity={contextAndModalState.selectedEntity!}
-                  timestamp={
-                    sortType() === 'viewed_at'
-                      ? contextAndModalState.selectedEntity!.viewedAt
-                      : sortType() === 'created_at'
-                        ? contextAndModalState.selectedEntity!.createdAt
-                        : undefined
-                  }
-                />
-                <MenuSeparator />
-              </Show>
-              <Show when={markEntityAsDone}>
-                {(fnAccessor) => (
+            <Show when={contextAndModalState.selectedEntity}>
+              {(selectedEntity) => (
+                <ContextMenuContent mobileFullScreen>
+                  <Show when={isTouchDevice && isMobileWidth()}>
+                    <Entity
+                      entity={selectedEntity()}
+                      timestamp={
+                        sortType() === 'viewed_at'
+                          ? selectedEntity().viewedAt
+                          : sortType() === 'created_at'
+                            ? selectedEntity().createdAt
+                            : undefined
+                      }
+                    />
+                    <MenuSeparator />
+                  </Show>
+                  <Show when={markEntityAsDone}>
+                    {(fnAccessor) => {
+                      const entityDisabled = (
+                        entity: WithNotification<EntityData>
+                      ) => {
+                        return entity.type === 'email'
+                          ? entity.done
+                          : entity.notifications?.().every(({ done }) => done);
+                      };
+                      return (
+                        <MenuItem
+                          text="Mark as Done"
+                          onClick={() => fnAccessor()(selectedEntity())}
+                          disabled={entityDisabled(selectedEntity())}
+                        />
+                      );
+                    }}
+                  </Show>
                   <MenuItem
-                    text="Mark as Done"
-                    onClick={() =>
-                      fnAccessor()(contextAndModalState.selectedEntity!)
-                    }
+                    text="Delete"
+                    onClick={() => deleteDssItem(selectedEntity())}
                     disabled={
-                      contextAndModalState.selectedEntity?.type === 'email'
-                        ? contextAndModalState.selectedEntity.done
-                        : contextAndModalState.selectedEntity
-                            ?.notifications?.()
-                            .every(({ done }) => done)
+                      selectedEntity().type !== 'document' &&
+                      selectedEntity().type !== 'project' &&
+                      selectedEntity().type !== 'chat'
                     }
                   />
-                )}
-              </Show>
-              <MenuItem
-                text="Delete"
-                onClick={() =>
-                  deleteDssItem(contextAndModalState.selectedEntity!)
-                }
-                disabled={
-                  contextAndModalState.selectedEntity?.type !== 'document' &&
-                  contextAndModalState.selectedEntity?.type !== 'project' &&
-                  contextAndModalState.selectedEntity?.type !== 'chat'
-                }
-              />
-              <MenuItem
-                text="Rename"
-                onClick={() => openEntityModal('rename')}
-                disabled={
-                  contextAndModalState.selectedEntity?.type !== 'document' &&
-                  contextAndModalState.selectedEntity?.type !== 'chat'
-                }
-              />
-              <MenuItem
-                text="Move to Project"
-                onClick={() => {
-                  openEntityModal('moveToProject');
-                }}
-                disabled={
-                  contextAndModalState.selectedEntity?.type !== 'document' &&
-                  contextAndModalState.selectedEntity?.type !== 'project' &&
-                  contextAndModalState.selectedEntity?.type !== 'chat'
-                  // https://github.com/macro-inc/macro-api/pull/2395
-                  //  || !hasProjectPermissions()
-                }
-              />
-              <MenuItem
-                text="Copy"
-                onClick={() => {
-                  copyDssItem({ entity: contextAndModalState.selectedEntity! });
-                }}
-                disabled={
-                  contextAndModalState.selectedEntity?.type !== 'document' &&
-                  contextAndModalState.selectedEntity?.type !== 'chat'
-                }
-              />
-              <MenuItem
-                text="Open in new split"
-                onClick={() => {
-                  const splitManager = globalSplitManager();
-                  if (!splitManager) {
-                    console.error('No split manager available');
-                    return;
-                  }
-                  if (
-                    contextAndModalState.selectedEntity?.type === 'document'
-                  ) {
-                    const { fileType, id } =
-                      contextAndModalState.selectedEntity!;
-                    splitManager.createNewSplit({
-                      type: fileTypeToBlockName(fileType),
-                      id,
-                    });
-                  } else {
-                    const { id, type } = contextAndModalState.selectedEntity!;
-                    splitManager.createNewSplit({
-                      type,
-                      id,
-                    });
-                  }
-                }}
-              />
-            </ContextMenuContent>
+                  <MenuItem
+                    text="Rename"
+                    onClick={() => openEntityModal('rename')}
+                    disabled={
+                      selectedEntity().type !== 'document' &&
+                      selectedEntity().type !== 'chat'
+                    }
+                  />
+                  <MenuItem
+                    text="Move to Project"
+                    onClick={() => {
+                      openEntityModal('moveToProject');
+                    }}
+                    disabled={
+                      selectedEntity().type !== 'document' &&
+                      selectedEntity().type !== 'project' &&
+                      selectedEntity().type !== 'chat'
+                    }
+                  />
+                  <MenuItem
+                    text="Copy"
+                    onClick={() => {
+                      copyDssItem({ entity: selectedEntity() });
+                    }}
+                    disabled={
+                      selectedEntity().type !== 'document' &&
+                      selectedEntity().type !== 'chat'
+                    }
+                  />
+                  <MenuItem
+                    text="Open in new split"
+                    onClick={() => {
+                      const splitManager = globalSplitManager();
+                      if (!splitManager) {
+                        console.error('No split manager available');
+                        return;
+                      }
+                      const entity = selectedEntity();
+                      if (entity.type === 'document') {
+                        const { fileType, id } = entity;
+                        splitManager.createNewSplit({
+                          type: fileTypeToBlockName(fileType),
+                          id,
+                        });
+                      } else {
+                        const { id, type } = entity;
+                        splitManager.createNewSplit({
+                          type,
+                          id,
+                        });
+                      }
+                    }}
+                  />
+                </ContextMenuContent>
+              )}
+            </Show>
           </ContextMenu.Portal>
         </ContextMenu.Trigger>
       </ContextMenu>
@@ -1467,6 +1454,7 @@ function SearchBar(props: {
     entityListRefSignal: [entityListRef],
   } = splitContext.unifiedListContext;
   const viewData = createMemo(() => viewsDataStore[selectedView()]);
+  const viewName = createMemo(() => viewData().view);
 
   let inputRef: HTMLInputElement | undefined;
 
@@ -1582,7 +1570,7 @@ function SearchBar(props: {
         <input
           ref={inputRef}
           id={`search-input-${selectedView()}`}
-          placeholder="Search"
+          placeholder={`Search in ${viewName()}`}
           value={searchText()}
           onInput={(e) => {
             debouncedSetSearch(e.target.value);

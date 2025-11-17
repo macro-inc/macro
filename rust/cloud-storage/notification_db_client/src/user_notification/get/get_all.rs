@@ -112,13 +112,15 @@ pub async fn get_all_user_notifications_by_event_item_ids(
 mod tests {
     use super::*;
     use chrono::DateTime;
-    use models_pagination::{Base64Str, Cursor, CursorVal, CursorWithVal, Paginate, PaginateOn};
+    use models_pagination::{
+        Base64Str, Cursor, CursorVal, CursorWithVal, PaginateOn, TypeEraseCursor,
+    };
     use sqlx::{Pool, Postgres};
 
     #[sqlx::test(fixtures(path = "../../../fixtures", scripts("user_notifications")))]
     async fn test_get_user_notifications(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let paginated_result =
-            get_all_user_notifications(&pool, "macro|user@user.com", 1, Query::Sort(CreatedAt))
+            get_all_user_notifications(&pool, "macro|user@user.com", 1, Query::Sort(CreatedAt, ()))
                 .await?;
 
         assert_eq!(paginated_result.len(), 1);
@@ -156,9 +158,9 @@ mod tests {
         let paginated_result = get_all_user_notifications_by_event_item_ids(
             &pool,
             "macro|user@user.com",
-            &vec!["test"],
+            &["test"],
             1,
-            Query::Sort(CreatedAt),
+            Query::Sort(CreatedAt, ()),
         )
         .await?
         .into_iter()

@@ -15,13 +15,12 @@ import { useIsAuthenticated } from '@core/auth';
 import { hasPermissions, Permissions } from '@core/component/SharePermissions';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
-import { useGetPermissions } from '@core/signal/permissions';
+import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { toast } from 'core/component/Toast/Toast';
 import { Show } from 'solid-js';
 import { projectSignal } from '../signal/project';
 import { ProjectCreateMenu } from './ProjectCreateMenu';
-import { ViewSizeSelector } from './ViewSizeSelector';
 
 // TODO (SEAMUS) : Revisit this file when we figure out what we wanna do
 //     with folder block.
@@ -30,6 +29,7 @@ export function TopBar() {
   const project = projectSignal.get;
   const isAuth = useIsAuthenticated();
   const permissions = useGetPermissions();
+  const canEdit = useCanEdit();
 
   function handleCopyLink() {
     navigator.clipboard.writeText(
@@ -73,13 +73,14 @@ export function TopBar() {
               name={project()?.name ?? ''}
               ops={ops}
             />
-            <ProjectCreateMenu />
+            <Show when={canEdit()}>
+              <ProjectCreateMenu />
+            </Show>
           </Show>
         </div>
       </SplitToolbarLeft>
       <SplitToolbarRight>
         <div class="flex items-center p-1">
-          <ViewSizeSelector />
           <div class="flex items-center">
             <SplitPermissionsBadge />
             <Show
