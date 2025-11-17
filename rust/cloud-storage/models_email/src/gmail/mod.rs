@@ -224,3 +224,10 @@ pub struct GmailUserProfile {
     pub threads_total: i32,
     pub history_id: String,
 }
+
+/// Response structure for Gmail send-as settings
+#[derive(Debug, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EmailSignature {
+    pub signature: String,
+}
