@@ -135,7 +135,7 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
 }
 
 fn build_query(filter_ast: &EntityFilterAst) -> QueryBuilder<'_, Postgres> {
-    let mut builder = sqlx::QueryBuilder::new("Combined AS (");
+    let mut builder = sqlx::QueryBuilder::new("WITH Combined AS (");
 
     // Document clause
     builder.push(DOCUMENT_CLAUSE);

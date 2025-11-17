@@ -22,6 +22,9 @@ mod dynamic;
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+mod dynamic_tests;
+
 /// Concrete implementation of storage ports against a postgres instance
 #[derive(Debug, Clone)]
 pub struct FrecencyPgStorage {

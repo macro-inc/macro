@@ -33,5 +33,7 @@ tracing = { workspace = true }
 
 [dev-dependencies]
 cool_asserts = "2"
+item_filters = { path = "../item_filters", features = ["mock"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 rand = { workspace = true }
+uuid = { workspace = true }
