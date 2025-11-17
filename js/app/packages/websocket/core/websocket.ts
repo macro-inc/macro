@@ -475,10 +475,10 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
 
     match(eventWithType)
       .with({ type: WebsocketEvent.close }, () => {
+        this.stopHeartbeat();
         this.connectionState = WebsocketConnectionState.Closed;
         this.dispatchEvent(type, event);
         this.scheduleConnectionRetryIfNeeded();
-        this.stopHeartbeat();
       })
       .with({ type: WebsocketEvent.open }, () => {
         if (this.backoff !== undefined && this._lastConnection !== undefined) {
@@ -664,7 +664,7 @@ export class Websocket<Send = WebsocketData, Receive = WebsocketData> {
     }
 
     if (this.isClosing()) {
-      this.dispatchEvent(
+      this.handleEvent(
         WebsocketEvent.close,
         new CloseEvent('closed websocket by heartbeat, already closing')
       );

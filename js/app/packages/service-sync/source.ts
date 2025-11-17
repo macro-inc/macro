@@ -45,10 +45,10 @@ function mapToSyncStatus(status: WebsocketConnectionState): SyncSourceStatus {
     case WebsocketConnectionState.Connecting:
       return SyncSourceStatus.Connecting;
     case WebsocketConnectionState.Open:
-    case WebsocketConnectionState.Reconnecting:
       return SyncSourceStatus.Connected;
     case WebsocketConnectionState.Closed:
     case WebsocketConnectionState.Closing:
+    case WebsocketConnectionState.Reconnecting:
       return SyncSourceStatus.Disconnected;
   }
 }
@@ -84,7 +84,7 @@ function createSyncServiceSocket(documentId: string, token: string) {
       timeout: 1_000,
       pingMessage: 'ping',
       pongMessage: 'pong',
-      maxMissedHeartbeats: 3,
+      maxMissedHeartbeats: 1,
     })
     .build();
 }
