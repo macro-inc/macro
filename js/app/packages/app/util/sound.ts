@@ -19,6 +19,14 @@ if (typeof window !== 'undefined') {
 }
 
 /**
+ * Normalize BASE_URL to always end with a trailing slash
+ */
+function getBasePath(): string {
+  const base = import.meta.env.BASE_URL;
+  return base.endsWith('/') ? base : `${base}/`;
+}
+
+/**
  * Get the sound file path, trying .wav first, then .mp3
  * @param name - The name of the sound file (without extension)
  */
@@ -26,7 +34,7 @@ function _getSoundPath(name: string): string {
   // Try .wav first, then fallback to .mp3
   // This allows both formats to work seamlessly
   // Use BASE_URL to respect Vite's base path configuration
-  const base = import.meta.env.BASE_URL;
+  const base = getBasePath();
   return `${base}sounds/${name}.wav`;
 }
 
@@ -49,7 +57,7 @@ export function playSound(name: string, volume?: number): void {
   if (!audio) {
     // Try .wav first, fallback to .mp3 if needed
     // Use BASE_URL to respect Vite's base path configuration
-    const base = import.meta.env.BASE_URL;
+    const base = getBasePath();
     const wavPath = `${base}sounds/${name}.wav`;
     const mp3Path = `${base}sounds/${name}.mp3`;
 
@@ -102,7 +110,7 @@ export function preloadSound(name: string): void {
   }
 
   // Use BASE_URL to respect Vite's base path configuration
-  const base = import.meta.env.BASE_URL;
+  const base = getBasePath();
   const audio = new Audio(`${base}sounds/${name}.wav`);
   audio.preload = 'auto';
   audio.addEventListener('error', () => {
