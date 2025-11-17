@@ -5,6 +5,10 @@ name = "properties_service"
 publish = false
 version = "0.1.0"
 
+[lib]
+name = "properties_service"
+path = "src/lib.rs"
+
 [[bin]]
 name = "properties_service"
 path = "src/main.rs"
@@ -12,8 +16,11 @@ required-features = []
 
 
 [features]
+default = ["postgres"]
 local_auth = []
 tree_trace = []
+postgres = []
+mock = ["dep:mockall"]
 
 [dependencies]
 anyhow = { workspace = true }
@@ -33,6 +40,7 @@ macro_middleware = { path = "../macro_middleware", default-features = false, fea
   "cloud_storage",
 ] }
 macro_uuid = { path = "../macro_uuid" }
+mockall = { workspace = true, optional = true }
 model = { path = "../model" }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
