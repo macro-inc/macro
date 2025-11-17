@@ -1,25 +1,32 @@
-FROM rust:latest AS chef 
+# Set the cache image name
+ARG CACHE_IMAGE=569036502058.dkr.ecr.us-east-1.amazonaws.com/cloud-storage-cache:latest
+# Load the cache image
+FROM ${CACHE_IMAGE} AS cache
+
 ARG SERVICE_NAME
 ENV SQLX_OFFLINE=true
-# We only pay the installation cost once, 
-# it will be cached from the second build onwards
-RUN cargo install cargo-chef cargo-strip 
+
+FROM rust:latest AS chef
+ARG SERVICE_NAME
+ENV SQLX_OFFLINE=true
+RUN cargo install cargo-strip
 WORKDIR /app
 
-FROM chef AS planner
-COPY . .
-RUN cargo chef prepare  --recipe-path recipe.json --bin ${SERVICE_NAME}
-
 FROM chef AS builder
-COPY --from=planner /app/recipe.json recipe.json
-# Build dependencies - this is the caching Docker layer!
-RUN cargo chef cook --release --recipe-path recipe.json --bin ${SERVICE_NAME}
-# Build application
+ARG SERVICE_NAME
+
+# COPY the pre-built dependencies from cache image
+COPY --from=cache /app/target target
+COPY --from=cache /usr/local/cargo /usr/local/cargo
+
 COPY . .
+
+# Build the service
 RUN cargo build --release --bin ${SERVICE_NAME} && \
   cargo strip && \
   mv /app/target/release/${SERVICE_NAME} /app/svc
 
+# Create slim runner to run the service
 FROM debian:trixie-slim AS runner
 ARG SERVICE_NAME
 WORKDIR /app

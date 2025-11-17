@@ -1,0 +1,28 @@
+FROM rust:latest AS chef 
+ENV SQLX_OFFLINE=true
+
+# We only pay the installation cost once, 
+# it will be cached from the second build onwards
+RUN cargo install cargo-chef cargo-strip 
+
+# Needed for convert service rs-libreoffice-bindings
+RUN apt-get update && apt-get install -y \
+  llvm \
+  libclang-dev \
+  clang \
+  && apt-get clean \
+  && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /app
+
+FROM chef AS planner
+COPY . .
+
+# Prepare recipe for entire workspace
+RUN cargo chef prepare --recipe-path recipe.json
+
+FROM chef AS builder
+COPY --from=planner /app/recipe.json recipe.json
+
+# Cook all workspace dependencies
+RUN cargo chef cook --release --recipe-path recipe.json

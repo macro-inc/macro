@@ -49,6 +49,10 @@
     "stacks/bulk-upload": {
       "name": "bulk-upload-stack",
     },
+    "stacks/cloud-storage-cache": {
+      "name": "cloud-storage-cache-stack",
+      "version": "0.0.0",
+    },
     "stacks/cloud-storage-service": {
       "name": "cloud-storage-service-stack",
       "version": "0.0.0",
@@ -576,6 +580,8 @@
     "cliui": ["cliui@8.0.1", "", { "dependencies": { "string-width": "^4.2.0", "strip-ansi": "^6.0.1", "wrap-ansi": "^7.0.0" } }, "sha512-BSeNnyus75C4//NQ9gQt1/csTXyo/8Sb+afLAkzAptFuMsod9HFokGNudZpi/oQV73hnVK+sR+5PVRMd+Dr7YQ=="],
 
     "clone-response": ["clone-response@1.0.3", "", { "dependencies": { "mimic-response": "^1.0.0" } }, "sha512-ROoL94jJH2dUVML2Y/5PEDNaSHgeOdSDicUyS7izcF63G6sTc/FTjLub4b8Il9S8S0beOfYt0TaA5qvFK+w0wA=="],
+
+    "cloud-storage-cache-stack": ["cloud-storage-cache-stack@workspace:stacks/cloud-storage-cache"],
 
     "cloud-storage-service-stack": ["cloud-storage-service-stack@workspace:stacks/cloud-storage-service"],
 
