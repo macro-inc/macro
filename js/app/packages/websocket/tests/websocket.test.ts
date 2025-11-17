@@ -204,7 +204,7 @@ describe('Testsuite for Websocket', () => {
       test('Websocket should return native websocket after initialization', () => {
         const client = new Websocket(url);
         expect(client.underlyingWebsocket).not.toBeUndefined();
-        expect(client.underlyingWebsocket).toBeInstanceOf(window.WebSocket);
+        expect(client.underlyingWebsocket).toBeInstanceOf(WebSocket);
       });
 
       test('Websocket should return the underlying websocket after the client connects to the server', async () => {
@@ -218,7 +218,7 @@ describe('Testsuite for Websocket', () => {
           expect(instance).toBe(client);
           expect(ev.type).toBe(WebsocketEvent.open);
           expect(instance.underlyingWebsocket).not.toBeUndefined();
-          expect(instance.underlyingWebsocket).toBeInstanceOf(window.WebSocket);
+          expect(instance.underlyingWebsocket).toBeInstanceOf(WebSocket);
         });
       });
 
@@ -234,7 +234,7 @@ describe('Testsuite for Websocket', () => {
           expect(instance).toBe(client);
           expect(ev.type).toBe(WebsocketEvent.close);
           expect(instance.underlyingWebsocket).not.toBeUndefined();
-          expect(instance.underlyingWebsocket).toBeInstanceOf(window.WebSocket);
+          expect(instance.underlyingWebsocket).toBeInstanceOf(WebSocket);
           expect(instance.underlyingWebsocket!.readyState).toBe(
             WebSocket.CLOSED
           );
@@ -253,7 +253,7 @@ describe('Testsuite for Websocket', () => {
           expect(instance).toBe(client);
           expect(ev.type).toBe(WebsocketEvent.close);
           expect(instance.underlyingWebsocket).not.toBeUndefined();
-          expect(instance.underlyingWebsocket).toBeInstanceOf(window.WebSocket);
+          expect(instance.underlyingWebsocket).toBeInstanceOf(WebSocket);
           expect(instance.underlyingWebsocket!.readyState).toBe(
             WebSocket.CLOSED
           );

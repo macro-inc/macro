@@ -3,10 +3,9 @@ import {
   WebsocketEvent,
   type WebsocketEventMap,
 } from '@websocket';
-import type { WebsocketData } from '@websocket/websocket-serializer';
 
-export function untilMessage<Receive extends WebsocketData>(
-  ws: Websocket<any, Receive>,
+export function untilMessage<Send, Receive>(
+  ws: Websocket<Send, Receive>,
   predicate: (data: Receive) => boolean
 ): Promise<Receive> {
   return new Promise((resolve, reject) => {
@@ -16,8 +15,8 @@ export function untilMessage<Receive extends WebsocketData>(
     };
 
     const handler = (
-      _ws: Websocket<any, Receive>,
-      e: WebsocketEventMap[WebsocketEvent.message]
+      _ws: Websocket<Send, Receive>,
+      e: WebsocketEventMap<Receive>[WebsocketEvent.message]
     ) => {
       const data = e.data;
       if (predicate(data)) {

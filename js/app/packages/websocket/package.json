@@ -1,15 +1,7 @@
 {
   "name": "websocket",
   "private": true,
-  "dependencies": {
-    "vitest": "^3.2.3",
-    "zod": "^3.24.1"
-  },
-  "scripts": {
-    "test": "vitest"
-  },
   "devDependencies": {
-    "@vitest/coverage-v8": "3.2.4",
     "vite-tsconfig-paths": "^5.1.4"
   }
 }

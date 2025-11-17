@@ -33,14 +33,14 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
     this._urlResolver = resolver;
   }
 
-  // /**
-  //  * Getter for the url.
-  //  *
-  //  * @returns the url
-  //  */
-  // get url(): string {
-  //   return this._url;
-  // }
+  /**
+   * Getter for the url.
+   *
+   * @returns the url
+   */
+  get url(): UrlResolver {
+    return this._urlResolver;
+  }
 
   /**
    * Adds protocols to the websocket. Subsequent calls to this method will override the previously set protocols.

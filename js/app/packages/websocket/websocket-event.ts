@@ -79,11 +79,11 @@ export type HeartbeatMissedEventDetail = {
 /**
  * Maps websocket events to their corresponding event.
  */
-export type WebsocketEventMap = {
+export type WebsocketEventMap<Receive = WebsocketData> = {
   [WebsocketEvent.open]: Event;
   [WebsocketEvent.close]: CloseEvent;
   [WebsocketEvent.error]: Event;
-  [WebsocketEvent.message]: MessageEvent;
+  [WebsocketEvent.message]: MessageEvent<Receive>;
   [WebsocketEvent.retry]: CustomEvent<RetryEventDetail>;
   [WebsocketEvent.reconnect]: CustomEvent<ReconnectEventDetail>;
   [WebsocketEvent.heartbeatSent]: CustomEvent<HeartbeatEventDetail>;
@@ -94,11 +94,11 @@ export type WebsocketEventMap = {
 /**
  * Discriminated union of all websocket events
  */
-export type WebsocketEventUnion =
+export type WebsocketEventUnion<Receive = WebsocketData> =
   | { type: WebsocketEvent.open; event: Event }
   | { type: WebsocketEvent.close; event: CloseEvent }
   | { type: WebsocketEvent.error; event: Event }
-  | { type: WebsocketEvent.message; event: MessageEvent }
+  | { type: WebsocketEvent.message; event: MessageEvent<Receive> }
   | { type: WebsocketEvent.retry; event: CustomEvent<RetryEventDetail> }
   | { type: WebsocketEvent.reconnect; event: CustomEvent<ReconnectEventDetail> }
   | {
@@ -121,7 +121,7 @@ export type WebsocketEventListener<
   K extends WebsocketEvent,
   Send = WebsocketData,
   Receive = WebsocketData,
-> = (instance: Websocket<Send, Receive>, ev: WebsocketEventMap[K]) => unknown;
+> = (instance: Websocket<Send, Receive>, ev: WebsocketEventMap<Receive>[K]) => unknown;
 
 export type WebsocketEventListenerParams<
   K extends WebsocketEvent,
