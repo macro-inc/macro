@@ -1,10 +1,10 @@
-import { client } from './client';
+import { client } from '../client';
 import {
   CHANNEL_INDEX,
   CHAT_INDEX,
   DOCUMENT_INDEX,
   EMAIL_INDEX,
-} from './constants';
+} from '../constants';
 
 const indices = [
   /* DOCUMENT_INDEX, CHAT_INDEX, EMAIL_INDEX, CHANNEL_INDEX */

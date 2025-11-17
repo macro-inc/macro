@@ -1,5 +1,5 @@
 import type { Client } from '@opensearch-project/opensearch';
-import { client } from './client';
+import { client } from '../client';
 import {
   CHANNEL_INDEX,
   CHAT_INDEX,
@@ -7,7 +7,7 @@ import {
   EMAIL_INDEX,
   PROJECT_INDEX,
   SHARD_SETTINGS,
-} from './constants';
+} from '../constants';
 
 async function createChannelIndex(opensearchClient: Client) {
   const channelIndexExists = (
@@ -28,7 +28,7 @@ async function createChannelIndex(opensearchClient: Client) {
         mappings: {
           properties: {
             // channel id
-            channel_id: {
+            entity_id: {
               type: 'keyword',
             },
             channel_name: {
@@ -109,7 +109,7 @@ async function createDocumentIndex(opensearchClient: Client) {
         mappings: {
           properties: {
             // The id of the document
-            document_id: {
+            entity_id: {
               type: 'keyword',
             },
             // The node id of the document
@@ -181,9 +181,8 @@ async function createChatIndex(opensearchClient: Client) {
           properties: {
             /* All chat messages are put into OpenSearch under a chat index and are associated by their chat_id, chat_message_id, user_id, role, updated_at, title and content. */
             // The id of the chat
-            chat_id: {
+            entity_id: {
               type: 'keyword',
-              index: true,
             },
             // The chat message id
             chat_message_id: {
@@ -247,10 +246,9 @@ async function createEmailIndex(opensearchClient: Client) {
         },
         mappings: {
           properties: {
-            thread_id: {
+            // The thread id of the email
+            entity_id: {
               type: 'keyword',
-              index: true,
-              doc_values: true,
             },
             message_id: {
               type: 'keyword',
@@ -346,7 +344,8 @@ async function createProjectIndex(opensearchClient: Client) {
         },
         mappings: {
           properties: {
-            project_id: {
+            // The project id
+            entity_id: {
               type: 'keyword',
             },
             user_id: {

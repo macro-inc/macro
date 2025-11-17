@@ -4,6 +4,7 @@ use crate::{DOCUMENTS_INDEX, Result, date_format::EpochSeconds, error::Opensearc
 #[derive(Debug, serde::Serialize)]
 pub struct UpsertDocumentArgs {
     /// The id of the document
+    #[serde(rename = "entity_id")]
     pub document_id: String,
     /// The node id of the document
     ///
