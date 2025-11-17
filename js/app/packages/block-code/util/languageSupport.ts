@@ -78,7 +78,6 @@ const extensionToLanguage: Record<string, string> = {
   xhtml: 'html',
   shtml: 'html',
   css: 'css',
-  'css.map': 'json',
   scss: 'css',
   sass: 'css',
   less: 'css',
@@ -107,6 +106,7 @@ const extensionToLanguage: Record<string, string> = {
   cppm: 'cpp',
   ccm: 'cpp',
   cxxm: 'cpp',
+  'c++m': 'cpp',
   txt: 'plaintext',
   csv: 'plaintext',
 };
