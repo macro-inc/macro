@@ -96,6 +96,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     const shadow = hostContainer.attachShadow({ mode: 'open' });
     // Style that uses a CSS variable to control image visibility
     const styleEl = document.createElement('style');
+    hostContainer.setAttribute('data-email-container', '');
     styleEl.textContent = `img{display: var(--macro-email-img-display, initial);}`;
     shadow.appendChild(styleEl);
     const messageDiv = document.createElement('div');
