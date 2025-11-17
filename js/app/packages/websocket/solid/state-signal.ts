@@ -3,6 +3,12 @@ import type { Websocket } from '../core/websocket';
 import { WebsocketConnectionState } from '../core/websocket-connection-state';
 import { WebsocketEvent } from '../core/websocket-event';
 
+/**
+ * Creates a reactive signal that tracks the connection state of a websocket.
+ *
+ * @param ws The websocket to track the connection state of.
+ * @returns A reactive signal that tracks the connection state of the websocket.
+ */
 export function createWebsocketStateSignal(
   ws: Websocket<any, any>
 ): Accessor<WebsocketConnectionState> {

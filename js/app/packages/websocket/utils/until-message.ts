@@ -4,6 +4,13 @@ import {
   type WebsocketEventMap,
 } from '@websocket';
 
+/**
+ * Waits for a message to be received from the websocket.
+ *
+ * @param ws The websocket to wait for a message on.
+ * @param predicate A predicate function that returns true if the message should be considered a match.
+ * @returns A promise that resolves with the received message.
+ */
 export function untilMessage<Send, Receive>(
   ws: Websocket<Send, Receive>,
   predicate: (data: Receive) => boolean

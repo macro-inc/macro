@@ -29,7 +29,6 @@ export {
   createReconnectEffect,
   createSocketEffect,
   createWebsocketEventEffect,
-  createWebsocketEventEffects,
 } from './solid/socket-effect';
 export { createWebsocketStateSignal } from './solid/state-signal';
 export { untilMessage } from './utils/until-message';

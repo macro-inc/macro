@@ -3,15 +3,25 @@ import { getOwner, onCleanup } from 'solid-js';
 import type { Websocket } from '../core/websocket';
 import { WebsocketEvent } from '../core/websocket-event';
 
+/**
+ * Creates a reactive effect that listens for a specific websocket event and triggers a callback when the event is received.
+ *
+ * @param ws The websocket to listen for the event on, that has a json serializable data type.
+ * @param eventType The type of the event to listen for.
+ * @param callback The callback to trigger when the event is received.
+ */
 export function createWebsocketEventEffect<
   EventType extends string,
   Receive extends ObjectLike & { type: EventType },
 >(
-  ws: Websocket<any, any>,
+  ws: Websocket<any, Receive>,
   eventType: EventType,
   callback: (data: Receive) => void
 ) {
-  const messageHandler = (_i: Websocket, e: MessageEvent) => {
+  const messageHandler = (
+    _i: Websocket<any, Receive>,
+    e: MessageEvent<Receive>
+  ) => {
     const data = e.data;
 
     if (
@@ -33,6 +43,12 @@ export function createWebsocketEventEffect<
   }
 }
 
+/**
+ * Creates a reactive effect that listens for all websocket messages and triggers a callback when a message is received.
+ *
+ * @param ws The websocket to listen for messages on.
+ * @param callback The callback to trigger when a message is received.
+ */
 export function createSocketEffect<Send, Receive>(
   ws: Websocket<Send, Receive>,
   callback: (data: Receive) => void
@@ -60,14 +76,12 @@ export function createSocketEffect<Send, Receive>(
   return dispose;
 }
 
-export function createWebsocketEventEffects<
-  EventHandlers extends Record<string, (data: any) => void>,
->(ws: Websocket<any, any>, handlers: EventHandlers) {
-  Object.entries(handlers).forEach(([eventType, handler]) => {
-    createWebsocketEventEffect(ws, eventType, handler);
-  });
-}
-
+/**
+ * Creates a reactive effect that triggers when a websocket reconnects successfully.
+ *
+ * @param ws The websocket to listen for reconnects on.
+ * @param callback The callback to trigger when the websocket reconnects successfully.
+ */
 export function createReconnectEffect(
   ws: Websocket<any, any>,
   callback: () => void
