@@ -1,0 +1,14 @@
+{
+  "name": "testing-utils",
+  "private": true,
+  "dependencies": {
+    "vitest": "^3.2.3",
+    "zod": "^3.24.1"
+  },
+  "scripts": {
+    "test": "vitest"
+  },
+  "devDependencies": {
+    "vite-tsconfig-paths": "^5.1.4"
+  }
+}
