@@ -526,6 +526,7 @@ export function createNavigationEntityListShortcut({
       const viewId = viewIds()[i];
       const viewData = viewsData[viewId];
       registerHotkey({
+        hotkeyToken: TOKENS.soup.tabs[i.toString() as keyof typeof TOKENS.soup.tabs],
         hotkey: [(i + 1).toString() as ValidHotkey],
         scopeId: splitHotkeyScope,
         description: viewData.view,

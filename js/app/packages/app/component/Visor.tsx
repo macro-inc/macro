@@ -1,5 +1,6 @@
 import { getClippedOverlayRect } from '@app/util/getClippedOverlayRect';
 import { getScrollElementParent } from '@app/util/getScrollElementParent';
+import { Hotkey } from '@core/component/Hotkey';
 import { useHotkeyCommandByToken } from '@core/hotkey/hotkeys';
 import { tokenMap } from '@core/hotkey/tokens';
 import type { HotkeyCommand } from '@core/hotkey/types';
@@ -130,13 +131,12 @@ const Visor: Component<{
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
-    e.stopImmediatePropagation();
-    e.stopPropagation();
-    e.preventDefault();
 
     if (e.key === 'Escape') {
+      e.stopImmediatePropagation();
+      e.stopPropagation();
+      e.preventDefault();
       removeAllOverlays();
-      document.body.classList.toggle('visor-active');
       window.removeEventListener('keydown', handleKeyDown, {
         capture: true,
       });
@@ -269,7 +269,7 @@ const VisorLabelOverlay: Component<VisorLabel> = (props) => {
             'relative font-mono text-page font-bold w-fit bg-accent border-l-accent border-t-accent border-r-page border-b-page border p-[2px] text-xs z-[1]'
           }
         >
-          {props.hotkey}
+          <Hotkey shortcut={props.hotkey} />
         </div>
         <div
           class="absolute inset-0 border-page border"

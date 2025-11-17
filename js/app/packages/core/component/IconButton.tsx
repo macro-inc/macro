@@ -15,7 +15,6 @@ import { Dynamic } from 'solid-js/web';
 import { BasicHotkey } from './Hotkey';
 import { type Theme, themeColors, themeStyles } from './Themes';
 import { LabelAndHotKey, NullTooltip, Tooltip } from './Tooltip';
-import { useTokenToHotkeyString } from '@core/hotkey/hotkeys';
 
 type IconButton = ComponentProps<'button'> & {
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
