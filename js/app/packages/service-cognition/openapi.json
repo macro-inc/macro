@@ -2674,9 +2674,8 @@
           },
           {
             "type": "object",
-            "required": ["stream_id", "model", "stream_error"],
+            "required": ["stream_id", "stream_error"],
             "properties": {
-              "model": { "$ref": "#/components/schemas/Model" },
               "stream_error": {
                 "type": "string",
                 "enum": ["model_context_overflow"]
