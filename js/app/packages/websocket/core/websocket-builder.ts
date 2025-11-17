@@ -412,6 +412,7 @@ export class WebsocketBuilder<Send = WebsocketData, Receive = WebsocketData> {
         heartbeatSent: this._options?.listeners?.heartbeatSent ?? [],
         heartbeatReceived: this._options?.listeners?.heartbeatReceived ?? [],
         heartbeatMissed: this._options?.listeners?.heartbeatMissed ?? [],
+        urlResolved: this._options?.listeners?.urlResolved ?? [],
         [event]: [
           ...(this._options?.listeners?.[event] ?? []),
           { listener, options },

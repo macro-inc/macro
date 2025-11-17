@@ -11,7 +11,7 @@ import { WebsocketEvent } from '../core/websocket-event';
  * @param callback The callback to trigger when the event is received.
  */
 export function createWebsocketEventEffect<
-  EventType extends string,
+  EventType,
   Receive extends ObjectLike & { type: EventType },
 >(
   ws: Websocket<any, Receive>,
