@@ -24,6 +24,7 @@ export {
 } from './core/websocket-event';
 export type { WebsocketOptions } from './core/websocket-options';
 export type { WebsocketConnectionRetryOptions } from './core/websocket-retry-options';
+export type { UrlResolver } from './core/websocket-url-resolver';
 export {
   createReconnectEffect,
   createSocketEffect,
@@ -32,4 +33,3 @@ export {
 } from './solid/socket-effect';
 export { createWebsocketStateSignal } from './solid/state-signal';
 export { untilMessage } from './utils/until-message';
-export type { UrlResolver } from './core/websocket-url-resolver';
