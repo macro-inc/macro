@@ -54,6 +54,7 @@ async fn main() -> anyhow::Result<()> {
 
     // 6. Process and upload each attachment.
     let processor = Arc::new(processing::AttachmentProcessor::new(
+        db_pool.clone(),
         dss_client,
         gmail_client,
         config.gmail_access_token.clone(),
@@ -408,10 +409,12 @@ mod processing {
     use base64::{Engine as _, engine::general_purpose::STANDARD};
     use model::document::response::CreateDocumentRequest;
     use sha2::{Digest, Sha256};
+    use sqlx::PgPool;
     use tracing::instrument;
 
     /// A helper struct to manage clients and tokens required for processing.
     pub struct AttachmentProcessor {
+        db: PgPool,
         dss_client: document_storage_service_client::DocumentStorageServiceClient,
         gmail_client: gmail_client::GmailClient,
         gmail_access_token: String,
@@ -420,12 +423,14 @@ mod processing {
 
     impl AttachmentProcessor {
         pub fn new(
+            db: PgPool,
             dss_client: document_storage_service_client::DocumentStorageServiceClient,
             gmail_client: gmail_client::GmailClient,
             gmail_access_token: String,
             macro_id_destination: String,
         ) -> Self {
             Self {
+                db,
                 dss_client,
                 gmail_client,
                 gmail_access_token,
@@ -436,6 +441,19 @@ mod processing {
         /// Orchestrates the full upload process for a single attachment.
         #[instrument(skip(self), fields(file_name = %attachment.filename, mime_type = %attachment.mime_type))]
         pub async fn upload(&self, attachment: &AttachmentMetadata) -> anyhow::Result<()> {
+            let exists = email_db_client::attachments::provider::document_email_record_exists(
+                &self.db,
+                attachment.attachment_db_id,
+            )
+            .await?;
+            if exists {
+                println!(
+                    "Attachment {} already exists in DSS, skipping",
+                    attachment.attachment_db_id
+                );
+                return Ok(());
+            }
+
             // 1. Fetch attachment data from Gmail.
             let data = self.fetch_gmail_data(attachment).await?;
 
