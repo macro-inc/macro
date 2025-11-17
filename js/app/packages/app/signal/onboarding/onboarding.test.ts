@@ -88,6 +88,8 @@ const FAKE_USER_INFO: Awaited<ReturnType<typeof updateUserInfo>> = ok({
   authenticated: true,
   userId: 'macro|user@macro.com',
   hasTrialed: false,
+  group: 'A',
+  hasChromeExt: undefined,
 });
 
 const setupAuthMocks = () => {
