@@ -17,6 +17,8 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction, prelude::FromRow};
 use std::{borrow::Cow, collections::VecDeque, str::FromStr};
 use thiserror::Error;
 
+mod dynamic;
+
 #[cfg(test)]
 mod tests;
 
@@ -93,7 +95,7 @@ impl FrecencyPgStorage {
         limit: u32,
         filter: EntityFilterAst,
     ) -> Result<Vec<AggregateFrecency>, FrecencyStorageErr> {
-        todo!()
+        dynamic::dynamic_get_top_entities(&self.pool, user_id, from_score, limit, filter).await
     }
 }
 
