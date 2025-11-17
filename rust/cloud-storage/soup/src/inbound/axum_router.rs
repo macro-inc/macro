@@ -99,6 +99,8 @@ where
         PostSoupRequest { filters, params }: PostSoupRequest,
         cursor: SoupCursor,
     ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr> {
+        let filters = EntityFilterAst::new_from_filters(filters)?;
+
         let create_fallback = move || {
             let params_sort = params
                 .sort_method
@@ -106,10 +108,10 @@ where
                 .unwrap_or(SortMethod::Simple(SimpleSortMethod::ViewedAt));
             match params_sort {
                 SortMethod::Simple(simple_sort_method) => {
-                    SoupQuery::Simple(models_pagination::Query::Sort(simple_sort_method))
+                    SoupQuery::Simple(models_pagination::Query::Sort(simple_sort_method, filters))
                 }
                 SortMethod::Advanced(frecency) => {
-                    SoupQuery::Frecency(models_pagination::Query::Sort(frecency))
+                    SoupQuery::Frecency(models_pagination::Query::Sort(frecency, filters))
                 }
             }
         };
@@ -137,7 +139,6 @@ where
                 limit: params.limit.unwrap_or(20),
                 cursor,
                 user: macro_user_id,
-                filters: EntityFilterAst::new_from_filters(filters)?,
             })
             .await?;
 
@@ -244,8 +245,8 @@ pub struct PostSoupRequest {
 }
 
 type SoupCursor = EitherWrapper<
-    CursorExtractor<String, SimpleSortMethod, EntityFilterAst>,
-    CursorExtractor<String, Frecency, EntityFilterAst>,
+    CursorExtractor<String, SimpleSortMethod, Option<EntityFilterAst>>,
+    CursorExtractor<String, Frecency, Option<EntityFilterAst>>,
 >;
 
 /// Gets the items the user has access to
