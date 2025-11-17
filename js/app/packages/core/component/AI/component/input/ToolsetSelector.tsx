@@ -52,15 +52,6 @@ export function ToolsetSelector(props: {
   const [toolset, setToolset] = props.toolset;
   const [source, setSource] = props.sources;
 
-  const _StyledTriggerLabel = (props: ParentProps) => {
-    return (
-      <Tooltip
-        tooltip={'Tell the agent which sources to consider in its search'}
-      >
-        {props.children}
-      </Tooltip>
-    );
-  };
   return (
     <div class="flex items-center gap-x-1">
       <SegmentedControl
