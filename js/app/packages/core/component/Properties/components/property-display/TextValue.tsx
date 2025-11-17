@@ -4,6 +4,7 @@ import { Show } from 'solid-js';
 import { useInlineEditor } from '../../hooks';
 import type { Property } from '../../types';
 import { formatPropertyValue } from '../../utils';
+import { EmptyValue } from './PropertyValuePrimitives';
 
 type TextValueProps = {
   property: Property;
@@ -60,7 +61,7 @@ export const TextValue: Component<TextValueProps> = (props) => {
               : 'bg-transparent text-ink-muted cursor-default'
           } block max-w-full break-words`}
         >
-          <Show when={hasValue()} fallback={<>—</>}>
+          <Show when={hasValue()} fallback={<EmptyValue />}>
             <span class="block max-w-full">
               {formatPropertyValue(
                 props.property,

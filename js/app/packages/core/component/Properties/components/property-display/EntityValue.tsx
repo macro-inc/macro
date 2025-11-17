@@ -6,6 +6,7 @@ import { createSignal, For, Show } from 'solid-js';
 import { savePropertyValue } from '../../api/propertyValues';
 import { EntityValueDisplay } from '../../EntityValueDisplay';
 import type { Property } from '../../types';
+import { AddPropertyValueButton, EmptyValue } from './PropertyValuePrimitives';
 
 type EntityValueProps = {
   property: Property;
@@ -81,18 +82,13 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
         fallback={
           <Show when={entities.length === 0}>
             <div class="text-ink-muted text-xs px-2 py-1 border border-edge bg-transparent inline-block shrink-0">
-              {<>—</>}
+              <EmptyValue />
             </div>
           </Show>
         }
       >
         <Show when={entities.length === 0 || props.property.isMultiSelect}>
-          <button
-            onClick={handleEditClick}
-            class="text-ink-muted hover:text-ink text-xs hover:bg-hover px-2 py-1 cursor-pointer border border-edge bg-transparent inline-block shrink-0"
-          >
-            {<>+</>}
-          </button>
+          <AddPropertyValueButton onClick={handleEditClick} />
         </Show>
       </Show>
     </div>
