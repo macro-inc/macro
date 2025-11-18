@@ -67,64 +67,6 @@ export default function GlobalShortcuts() {
     displayPriority: 10,
   });
 
-  const quickCreateScope = registerHotkey({
-    hotkeyToken: TOKENS.global.quickCreateCommand,
-    hotkey: 'q',
-    scopeId: 'global',
-    description: 'Quick send',
-    keyDownHandler: () => {
-      return true;
-    },
-    activateCommandScope: true,
-    displayPriority: 4,
-  });
-
-  const [_selectedQuickCreateType, setSelectedQuickCreateType] =
-    selectedQuickCreateTypeSignal;
-  const [_quickCreateMenuOpen, setQuickCreateMenuOpen] =
-    quickCreateMenuOpenSignal;
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.quickCreate.note,
-    hotkey: 'n',
-    scopeId: quickCreateScope.commandScopeId,
-    description: 'Create note',
-    keyDownHandler: () => {
-      setSelectedQuickCreateType('note');
-      setQuickCreateMenuOpen(true);
-      return true;
-    },
-    displayPriority: 10,
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.quickCreate.email,
-    hotkey: 'e',
-    scopeId: quickCreateScope.commandScopeId,
-    description: 'Create email',
-    keyDownHandler: () => {
-      setSelectedQuickCreateType('email');
-      setQuickCreateMenuOpen(true);
-      return true;
-    },
-    displayPriority: 10,
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.quickCreate.message,
-    hotkey: 'm',
-    scopeId: quickCreateScope.commandScopeId,
-    description: 'Create message',
-    keyDownHandler: () => {
-      setSelectedQuickCreateType('message');
-      setQuickCreateMenuOpen(true);
-      return true;
-    },
-    displayPriority: 10,
-    runWithInputFocused: true,
-  });
 
   registerHotkey({
     hotkeyToken: TOKENS.global.macroJump,

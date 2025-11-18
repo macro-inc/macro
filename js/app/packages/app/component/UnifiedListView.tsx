@@ -1511,7 +1511,10 @@ function SearchBar(props: {
   }, props.isLoading());
 
   onMount(() => {
-    const { dispose } = registerHotkey({
+    const disposers: Array<() => void> = [];
+
+    // Search hotkey
+    const searchDisposer = registerHotkey({
       hotkey: ['/'],
       scopeId: splitContext.splitHotkeyScope,
       description: 'Search in current view',
@@ -1527,8 +1530,123 @@ function SearchBar(props: {
       },
       displayPriority: 5,
     });
+    disposers.push(searchDisposer.dispose);
+
+    // Navigation hotkeys: j/k for up/down, e to open
+    const jDisposer = registerHotkey({
+      hotkey: 'j',
+      scopeId: splitContext.splitHotkeyScope,
+      description: 'Navigate down',
+      hotkeyToken: TOKENS.entity.step.end,
+      keyDownHandler: () => {
+        const entities = _entities();
+        if (!entities || entities.length === 0) return false;
+        
+        const highlightedId = view()?.highlightedId;
+        const currentIndex = highlightedId
+          ? entities.findIndex((e) => e.id === highlightedId)
+          : -1;
+        
+        const nextIndex = currentIndex < entities.length - 1 ? currentIndex + 1 : currentIndex;
+        const nextEntity = entities[nextIndex];
+        
+        if (nextEntity) {
+          setViewDataStore(selectedView(), 'highlightedId', nextEntity.id);
+          setViewDataStore(selectedView(), 'selectedEntity', nextEntity);
+          setViewDataStore(selectedView(), 'hasUserInteractedEntity', true);
+          
+          // Scroll to entity using virtualizer
+          const virtualizerHandle = unifiedListContext.virtualizerHandleSignal[0]();
+          if (virtualizerHandle) {
+            virtualizerHandle.scrollToIndex(nextIndex, { align: 'nearest' });
+          }
+          
+          // Focus the entity element
+          setTimeout(() => {
+            const entityEl = localEntityListRef()?.querySelector(
+              `[data-entity-id="${nextEntity.id}"]`
+            ) as HTMLElement;
+            entityEl?.focus({ preventScroll: true });
+          }, 0);
+        }
+        return true;
+      },
+      displayPriority: 8,
+      runWithInputFocused: true,
+    });
+    disposers.push(jDisposer.dispose);
+
+    const kDisposer = registerHotkey({
+      hotkey: 'k',
+      scopeId: splitContext.splitHotkeyScope,
+      description: 'Navigate up',
+      hotkeyToken: TOKENS.entity.step.start,
+      keyDownHandler: () => {
+        const entities = _entities();
+        if (!entities || entities.length === 0) return false;
+        
+        const highlightedId = view()?.highlightedId;
+        const currentIndex = highlightedId
+          ? entities.findIndex((e) => e.id === highlightedId)
+          : -1;
+        
+        const prevIndex = currentIndex > 0 ? currentIndex - 1 : currentIndex >= 0 ? currentIndex : 0;
+        const prevEntity = entities[prevIndex];
+        
+        if (prevEntity) {
+          setViewDataStore(selectedView(), 'highlightedId', prevEntity.id);
+          setViewDataStore(selectedView(), 'selectedEntity', prevEntity);
+          setViewDataStore(selectedView(), 'hasUserInteractedEntity', true);
+          
+          // Scroll to entity using virtualizer
+          const virtualizerHandle = unifiedListContext.virtualizerHandleSignal[0]();
+          if (virtualizerHandle) {
+            virtualizerHandle.scrollToIndex(prevIndex, { align: 'nearest' });
+          }
+          
+          // Focus the entity element
+          setTimeout(() => {
+            const entityEl = localEntityListRef()?.querySelector(
+              `[data-entity-id="${prevEntity.id}"]`
+            ) as HTMLElement;
+            entityEl?.focus({ preventScroll: true });
+          }, 0);
+        }
+        return true;
+      },
+      displayPriority: 8,
+      runWithInputFocused: true,
+    });
+    disposers.push(kDisposer.dispose);
+
+    const eDisposer = registerHotkey({
+      hotkey: 'e',
+      scopeId: splitContext.splitHotkeyScope,
+      description: 'Open selected entity',
+      keyDownHandler: () => {
+        const entity = selectedEntity();
+        if (!entity) {
+          // Try highlighted entity if no selected entity
+          const highlightedId = view()?.highlightedId;
+          if (highlightedId) {
+            const highlightedEntity = _entities()?.find((e) => e.id === highlightedId);
+            if (highlightedEntity) {
+              entityClickHandler(highlightedEntity, new MouseEvent('click'));
+              return true;
+            }
+          }
+          return false;
+        }
+        entityClickHandler(entity, new MouseEvent('click'));
+        return true;
+      },
+      displayPriority: 9,
+      runWithInputFocused: true,
+    });
+    disposers.push(eDisposer.dispose);
+
     onCleanup(() => {
-      dispose();
+      disposers.forEach((dispose) => dispose());
     });
   });
 
