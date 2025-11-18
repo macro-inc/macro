@@ -21,7 +21,7 @@ import { Paywall } from './paywall/Paywall';
 import { QuickCreateMenu } from './QuickCreateMenu';
 import { RightbarWrapper } from './rightbar/Rightbar';
 import { Settings, setViewportOffset } from './settings/Settings';
-import { Launcher, setCreateMenuOpen, createMenuOpen} from './Launcher';
+import { Launcher, setCreateMenuOpen, createMenuOpen } from './Launcher';
 
 export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
