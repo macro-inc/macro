@@ -3,7 +3,7 @@ import LoadingSpinner from '@icon/regular/spinner.svg';
 import { type Accessor, createMemo, Show } from 'solid-js';
 import { AddPropertyButton } from './component/panel/AddPropertyButton';
 import { PanelContainer } from './component/panel/PanelContainer';
-import { PropertiesModals } from './components/PropertiesModals';
+import { Modals } from './component/modal/Modals';
 import {
   PropertiesProvider,
   usePropertiesContext,
@@ -101,7 +101,7 @@ function PropertiesViewContent(props: {
         </div>
       </Show>
 
-      <PropertiesModals />
+      <Modals />
     </div>
   );
 }
