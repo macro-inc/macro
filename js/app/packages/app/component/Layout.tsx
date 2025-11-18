@@ -17,7 +17,8 @@ import Banner from './banner/Banner';
 import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { KommandMenu } from './command/Konsole';
 import { Dock } from './dock/Dock';
-import GlobalShortcuts from './GlobalHotkeys';
+import GlobalShortcuts, { hotkeysModalOpen, setHotkeysModalOpen } from './GlobalHotkeys';
+import { HotkeysModal } from './HotkeysModal';
 import { ItemDndProvider } from './ItemDragAndDrop';
 import { Paywall } from './paywall/Paywall';
 import { QuickCreateMenu } from './QuickCreateMenu';
@@ -114,6 +115,10 @@ export function Layout(props: RouteSectionProps) {
         </Suspense>
         <QuickCreateMenu />
         <GlobalBulkEditEntityModal />
+        <HotkeysModal
+          open={hotkeysModalOpen()}
+          onOpenChange={setHotkeysModalOpen}
+        />
       </Show>
       <Show
         when={

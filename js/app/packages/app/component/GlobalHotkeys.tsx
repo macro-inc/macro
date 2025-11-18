@@ -8,7 +8,7 @@ import {
 } from '@core/signal/layout';
 import { AiInstructionsIcon } from '@service-storage/instructionsMd';
 import { registerHotkey } from 'core/hotkey/hotkeys';
-import { createMemo } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 import {
   monochromeIcons,
   setDarkModeTheme,
@@ -302,5 +302,20 @@ export default function GlobalShortcuts() {
     runWithInputFocused: true,
   });
 
+  registerHotkey({
+    hotkeyToken: TOKENS.global.showHotkeys,
+    hotkey: 'shift+cmd+/',
+    scopeId: 'global',
+    description: 'Show keyboard shortcuts',
+    keyDownHandler: () => {
+      setHotkeysModalOpen(true);
+      return true;
+    },
+    displayPriority: 10,
+    runWithInputFocused: true,
+  });
+
   return '';
 }
+
+export const [hotkeysModalOpen, setHotkeysModalOpen] = createSignal(false);
