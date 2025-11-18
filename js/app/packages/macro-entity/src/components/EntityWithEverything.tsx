@@ -291,11 +291,11 @@ export function EntityWithEverything(
 
           <Show when={!props.showUnrollNotifications && lastMessageContent()}>
             {(lastMessageContent) => (
-              <div class="truncate shrink grow opacity-60">
+              <div class="truncate shrink grow opacity-60 flex items-center">
                 <StaticMarkdown
                   markdown={lastMessageContent()}
                   theme={unifiedListMarkdownTheme}
-                  singleLine={false}
+                  singleLine={true}
                 />
               </div>
             )}
@@ -496,7 +496,7 @@ export function EntityWithEverything(
           <div class="relative row-2 grid gap-2 col-2 col-end-4 pb-2">
             <For each={contentHighlights()}>
               {(highlight) => (
-                <div class="text-sm text-ink-muted truncate">
+                <div class="text-sm text-ink-muted truncate flex items-center">
                   <StaticMarkdown
                     markdown={highlight}
                     theme={unifiedListMarkdownTheme}
@@ -578,7 +578,7 @@ export function EntityWithEverything(
 
                 return (
                   <div
-                    class="relative flex gap-1 items-center min-w-0 h-7"
+                    class="relative flex gap-1 items-center min-w-0 h-8"
                     classList={{
                       'hover:bg-hover/20 hover:opacity-70':
                         !!props.onClickNotification,
@@ -607,16 +607,13 @@ export function EntityWithEverything(
                           {ActionContent()}
                         </span>
                       </div>
-
                       {/*<ImportantBadge
                         active={
                           notification.viewedAt === null &&
                           notification.isImportantV0
                         }
                       />*/}
-                      <div class="text-sm shrink truncate min-w-0 max-h-5 opacity-70 overflow-clip">
-                        <MessageContent />
-                      </div>
+                      <MessageContent />
                     </div>
                     <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
                       {formattedDate()}
