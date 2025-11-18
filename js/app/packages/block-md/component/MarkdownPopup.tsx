@@ -16,6 +16,7 @@ import { LexicalWrapperContext } from '@core/component/LexicalMarkdown/context/L
 import {
   autoRegister,
   type EnhancedSelection,
+  NODE_TRANSFORM,
   registerRootEventListener,
 } from '@core/component/LexicalMarkdown/plugins';
 import {
@@ -32,7 +33,7 @@ import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
-import { laggedGate } from '@core/util/debounce';
+import { debouncedDependent } from '@core/util/debounce';
 import { createFromMarkdownText } from '@core/util/md';
 import { getScrollParentElement } from '@core/util/scrollParent';
 import type { NodeIdMappings } from '@lexical-core';
@@ -51,7 +52,7 @@ import {
   $getSelectionLocation,
   type PersistentLocation,
 } from 'core/component/LexicalMarkdown/plugins/location/locationPlugin';
-import { $getRoot } from 'lexical';
+import { $getRoot, COMMAND_PRIORITY_HIGH } from 'lexical';
 import {
   createEffect,
   createSignal,
@@ -79,6 +80,7 @@ export function MarkdownPopup(props: {
   }
 
   const [anchorRef, setAnchorRef] = createSignal<HTMLDivElement>();
+  const [menuRef, setMenuRef] = createSignal<HTMLDivElement>();
 
   const [popupVisible, setPopupVisible] = createMenuOpenSignal(
     MENU_ID,
@@ -102,8 +104,8 @@ export function MarkdownPopup(props: {
     })
   );
 
-  // The actual control value for showPopup lags by 200 ms on the "true" side.
-  const showPopup = laggedGate(popupVisible, 200);
+  // The actual control value for showPopup lags.
+  const showPopup = debouncedDependent(popupVisible, 100);
 
   const canEdit = useCanEdit();
   const canComment = useCanComment();
@@ -176,9 +178,21 @@ export function MarkdownPopup(props: {
         }
       }
     }),
-    registerRootEventListener(editor, 'focusout', () => {
+    registerRootEventListener(editor, 'focusout', ({ relatedTarget }) => {
+      console.log('RELATED TARGET', relatedTarget);
+      if (relatedTarget && relatedTarget instanceof Node) {
+        if (menuRef()?.contains(relatedTarget)) return;
+      }
       setPopupVisible(false);
-    })
+    }),
+    editor.registerCommand(
+      NODE_TRANSFORM,
+      () => {
+        setPopupVisible(false);
+        return false;
+      },
+      COMMAND_PRIORITY_HIGH
+    )
   );
 
   const MarkdownPopupToolbar = () => {
@@ -632,6 +646,7 @@ export function MarkdownPopup(props: {
               blockType: 'md',
             }}
             useBlockBoundary={true}
+            ref={setMenuRef}
           />
         </ScopedPortal>
       </Show>
