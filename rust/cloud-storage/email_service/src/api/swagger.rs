@@ -18,6 +18,7 @@ use crate::api::email::threads::previews::cursor::{
 };
 use crate::api::{email, health};
 use model::response::EmptyResponse;
+use models_email::api::settings::Settings;
 use models_email::email::service;
 use models_email::email::service::address::ContactInfoWithInteraction;
 use models_email::email::service::backfill::BackfillJob;
@@ -105,6 +106,7 @@ use utoipa::OpenApi;
             // Link types
             ListLinksResponse,
             Link,
+            Settings,
             // Contact types
             ListContactsResponse,
             ContactInfoWithInteraction,

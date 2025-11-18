@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use futures::future::join_all;
-use model::response::{EmptyResponse, ErrorResponse};
+use model::response::ErrorResponse;
 use model::user::UserContext;
 use models_email::api;
 use utoipa::ToSchema;
