@@ -1,4 +1,5 @@
 import { IS_MAC } from '@core/constant/isMac';
+import { createMemo } from 'solid-js';
 import {
   macOptionReverse,
   shiftPunctuationMap,
@@ -6,11 +7,15 @@ import {
 } from './constants';
 import {
   activeScope,
+  activeScopeBranch,
   hotkeyScopeTree,
   hotkeysAwaitingKeyUp,
+  hotkeyTokenMap,
   setActiveScope,
+  setActiveScopeBranch,
 } from './state';
-import type { ScopeNode, ValidHotkey } from './types';
+import { HotkeyToken } from './tokens';
+import type { HotkeyCommand, ScopeNode, ValidHotkey } from './types';
 
 let scopeCounter = 0;
 export function getScopeId(prefix: string = 'scope'): string {
@@ -154,14 +159,92 @@ export function activateClosestDOMScope() {
   setActiveScope(activeScopeId);
 }
 
-export function isScopeInActiveBranch(scopeId: string): boolean {
-  let currentScope = hotkeyScopeTree.get(activeScope() ?? '');
-  while (currentScope) {
-    if (currentScope.scopeId === scopeId) return true;
-    if (!currentScope.parentScopeId) break;
-    currentScope = hotkeyScopeTree.get(currentScope.parentScopeId);
+export function updateActiveScopeBranch(activeScopeId: string | undefined) {
+  const branch = new Set<string>();
+
+  if (activeScopeId) {
+    let currentScope = hotkeyScopeTree.get(activeScopeId);
+    while (currentScope) {
+      branch.add(currentScope.scopeId);
+      if (!currentScope.parentScopeId) break;
+      currentScope = hotkeyScopeTree.get(currentScope.parentScopeId);
+    }
   }
-  return false;
+  
+  console.log('ACTIVE SCOPE BRANCH', branch);
+
+  setActiveScopeBranch(branch);
+}
+
+/**
+ * Fast O(1) check if scope is in active branch using cached data
+ */
+export function isScopeInActiveBranch(scopeId: string): boolean {
+  return activeScopeBranch().has(scopeId);
+}
+
+/**
+ * Finds the first hotkey command for a given token that is in the current active scope branch
+ */
+export function getActiveCommandByToken(
+  token: HotkeyToken
+): HotkeyCommand | undefined {
+  const commands = hotkeyTokenMap().get(token);
+  if (!commands || commands.length === 0) return undefined;
+
+  const branch = activeScopeBranch();
+
+  // Return the first command that's in the active scope branch
+  return commands.find((command) => branch.has(command.scopeId));
+}
+
+/**
+ * Returns a hotkey command for a given hotkey token. NOTE: this might not be THE command you are looking for, if there are hotkeys sharing the same token instantiated across different scopes. But this can be used in situations where you don't know or don't care about the scope you are in, e.g. when displaying hotkey metadata.
+ */
+export function getHotkeyCommandByToken(token: HotkeyToken) {
+  const command = hotkeyTokenMap().get(token)?.at(0);
+  return command;
+}
+
+// Helper function to get the primary hotkey string for a given token, pretty printed.
+export function getPretyHotkeyStringByToken(token: HotkeyToken) {
+  const hotkey = hotkeyTokenMap().get(token)?.at(0)?.hotkeys?.[0];
+  if (!hotkey) return undefined;
+  return prettyPrintHotkeyString(hotkey);
+}
+
+export function runCommandByToken(token: HotkeyToken) {
+  const command = getHotkeyCommandByToken(token);
+  if (command) {
+    if (command.keyDownHandler) {
+      command.keyDownHandler();
+    }
+    if (command.activateCommandScopeId) {
+      const newScope = hotkeyScopeTree.get(command.activateCommandScopeId);
+      if (newScope) {
+        setActiveScope(newScope.scopeId);
+      }
+    }
+  }
+}
+
+// Runs the given hotkey command.
+export function runCommand({
+  keyDownHandler,
+  activateCommandScopeId,
+}: {
+  keyDownHandler?: (e?: KeyboardEvent) => boolean;
+  activateCommandScopeId?: string;
+}) {
+  if (keyDownHandler) {
+    keyDownHandler();
+  }
+  if (activateCommandScopeId) {
+    const newScope = hotkeyScopeTree.get(activateCommandScopeId);
+    if (newScope) {
+      setActiveScope(newScope.scopeId);
+    }
+  }
 }
 
 export function normalizeEventKeyPress(e: KeyboardEvent): string {
@@ -185,8 +268,7 @@ export function normalizeEventKeyPress(e: KeyboardEvent): string {
 }
 
 // When you specify a hotkey for, e.g. '?', you want it show as '?' even though the actual key pressed was 'shift+/'. This function prints the printed punctuation key rather than the key combo.
-export function prettyPrintHotkeyString(validHotkey?: ValidHotkey) {
-  if (!validHotkey) return undefined;
+export function prettyPrintHotkeyString(validHotkey: ValidHotkey) {
   if (validHotkey.includes('shift+')) {
     const shiftless = validHotkey.replace('shift+', '');
     if (shiftless in shiftPunctuationReverseMap) {

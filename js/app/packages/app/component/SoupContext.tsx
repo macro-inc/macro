@@ -521,25 +521,24 @@ export function createNavigationEntityListShortcut({
 
   const splitIsUnifiedList = createMemo(() => splitName() === 'unified-list');
 
-  createEffect(() => {
-    for (let i = 0; i < viewIds().length && i < 9; i++) {
-      const viewId = viewIds()[i];
-      const viewData = viewsData[viewId];
-      registerHotkey({
-        hotkeyToken: TOKENS.soup.tabs[i.toString() as keyof typeof TOKENS.soup.tabs],
-        hotkey: [(i + 1).toString() as ValidHotkey],
-        scopeId: splitHotkeyScope,
-        description: viewData.view,
-        condition: splitIsUnifiedList,
-        keyDownHandler: () => {
-          setSelectedView(viewData.id);
-          return true;
-        },
-        // displayPriority: 0,
-        hide: true,
-      });
-    }
-  });
+  for (let i = 0; i < viewIds().length && i < 9; i++) {
+    const viewId = viewIds()[i];
+    const viewData = viewsData[viewId];
+    registerHotkey({
+      hotkeyToken:
+        TOKENS.soup.tabs[i.toString() as keyof typeof TOKENS.soup.tabs],
+      hotkey: [(i + 1).toString() as ValidHotkey],
+      scopeId: splitHotkeyScope,
+      description: viewData.view,
+      condition: splitIsUnifiedList,
+      keyDownHandler: () => {
+        setSelectedView(viewData.id);
+        return true;
+      },
+      // displayPriority: 0,
+      hide: true,
+    });
+  }1
 
   registerHotkey({
     hotkey: 'tab',

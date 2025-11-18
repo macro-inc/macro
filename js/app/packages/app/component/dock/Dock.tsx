@@ -16,7 +16,7 @@ import {
   setSettingsOpen,
   useSettingsState,
 } from '@core/constant/SettingsState';
-import { runCommand } from '@core/hotkey/hotkeys';
+import { runCommand } from '@core/hotkey/utils';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobileWidth } from '@core/mobile/mobileWidth';

@@ -1,7 +1,7 @@
 import { Hotkey } from '@core/component/Hotkey';
-import { useHotkeyCommandByToken } from '@core/hotkey/hotkeys';
 import { executedTokens } from '@core/hotkey/state';
 import type { HotkeyToken } from '@core/hotkey/tokens';
+import { getHotkeyCommandByToken } from '@core/hotkey/utils';
 import ArrowRight from '@icon/regular/arrow-right.svg';
 import { createMemo, For, Show } from 'solid-js';
 
@@ -12,16 +12,14 @@ export interface HotkeyExampleProps {
 
 export function HotkeyExample(props: HotkeyExampleProps) {
   const commandSequence = props.hotkeyTokenSequence.map((token) => ({
-    command: useHotkeyCommandByToken(token),
+    command: getHotkeyCommandByToken(token),
     executed: createMemo(() => executedTokens().includes(token)),
   }));
 
   const lowerCaseFirstChar = (str: string) =>
     str.charAt(0).toLowerCase() + str.slice(1);
 
-  const lastCommandDescription_ = commandSequence
-    .at(-1)
-    ?.command()?.description;
+  const lastCommandDescription_ = commandSequence.at(-1)?.command?.description;
   const lastCommandDescription = createMemo(() =>
     lowerCaseFirstChar(
       typeof lastCommandDescription_ === 'function'
@@ -37,7 +35,7 @@ export function HotkeyExample(props: HotkeyExampleProps) {
           <For each={commandSequence}>
             {(item, index) => (
               <>
-                <Show when={item.command()}>
+                <Show when={item.command}>
                   {(command) => (
                     <Hotkey
                       token={command().hotkeyToken}

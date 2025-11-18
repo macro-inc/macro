@@ -1,7 +1,7 @@
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { IconButton } from '@core/component/IconButton';
-import { runCommandByToken } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { runCommandByToken } from '@core/hotkey/utils';
 import CaretDown from '@icon/regular/caret-down.svg';
 import CaretUp from '@icon/regular/caret-up.svg';
 import { Show } from 'solid-js';

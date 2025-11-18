@@ -140,18 +140,17 @@ export function registerHotkey(
   // Convert single hotkey to array for consistent handling
   const hotkeys = hotkey && !Array.isArray(hotkey) ? [hotkey] : hotkey;
 
-  // Check for duplicate hotkeyToken
+  // Check for duplicate hotkeyToken for non-identical command
   const existingCommand = hotkeyToken
-    ? hotkeyTokenMap().get(hotkeyToken)
+    ? hotkeyTokenMap().get(hotkeyToken)?.at(0)
     : undefined;
-  if (existingCommand) {
-    const existingHotkeys = new Set(existingCommand.hotkeys);
-    const newHotkeys = new Set(hotkeys);
-
-    // We don't warn if all of the existing hotkeys are in the new hotkeys, on the assumption that the developer has a good reason for specifying "the same" hotkey in multiple places.
+  if (existingCommand && hotkeys && existingCommand.hotkeys) {
+    // Yes, you should be able to register multiple hotkeys with the same token. But if you do this, they should be "the same" hotkey.
+    // Here we check if the existing hotkey strings are the same as the new hotkey strings. This probably isn't exactly what you'd want to check (it especially won't be right if the commmands do not have hotkey strings), but is close enough for now.
+    const existingHotkeys = existingCommand.hotkeys;
     if (
-      existingHotkeys.size !== newHotkeys.size ||
-      ![...existingHotkeys].every((h) => newHotkeys.has(h))
+      existingHotkeys.length !== hotkeys?.length ||
+      !existingHotkeys.every((el, i) => el === hotkeys[i])
     ) {
       logger.log(
         `Hotkey token "${hotkeyToken}" is already registered with a different command. ` +
@@ -205,10 +204,11 @@ export function registerHotkey(
     }
   });
 
-  if (hotkeyToken && !existingCommand) {
+  if (hotkeyToken) {
     setHotkeyTokenMap((prev) => {
       const newMap = new Map(prev);
-      newMap.set(hotkeyToken, command);
+      const existingCommands = newMap.get(hotkeyToken) || [];
+      newMap.set(hotkeyToken, [...existingCommands, command]);
       return newMap;
     });
   }
@@ -528,7 +528,8 @@ export function useHotKeyRoot() {
           command.keyUpHandler &&
           e.type === 'keydown' &&
           !hotkeysAwaitingKeyUp.some(
-            (h) => h.hotkey === pressedKeysString && h.scopeId === scopeNode?.scopeId
+            (h) =>
+              h.hotkey === pressedKeysString && h.scopeId === scopeNode?.scopeId
           )
         ) {
           hotkeysAwaitingKeyUp.push({
@@ -589,64 +590,6 @@ export function useHotKeyRoot() {
       });
     }
   };
-}
-
-// Runs the given hotkey command.
-export function runCommand({
-  keyDownHandler,
-  activateCommandScopeId,
-}: {
-  keyDownHandler?: (e?: KeyboardEvent) => boolean;
-  activateCommandScopeId?: string;
-}) {
-  if (keyDownHandler) {
-    keyDownHandler();
-  }
-  if (activateCommandScopeId) {
-    const newScope = hotkeyScopeTree.get(activateCommandScopeId);
-    if (newScope) {
-      setActiveScope(newScope.scopeId);
-    }
-  }
-}
-
-export function runCommandByToken(token: HotkeyToken) {
-  const command = useHotkeyCommandByToken(token)();
-  if (command) {
-    if (command.keyDownHandler) {
-      command.keyDownHandler();
-    }
-    if (command.activateCommandScopeId) {
-      const newScope = hotkeyScopeTree.get(command.activateCommandScopeId);
-      if (newScope) {
-        setActiveScope(newScope.scopeId);
-      }
-    }
-  }
-}
-
-/**
- * Returns the hotkey command for a given hotkey token.
- * @param token - The hotkey token to look up.
- * @returns The hotkey command, or undefined if the token is not found.
- */
-export function useHotkeyCommandByToken(token: HotkeyToken) {
-  return createMemo(() => {
-    if (!token) return undefined;
-    const map = hotkeyTokenMap();
-    const command = map.get(token);
-    return command;
-  });
-}
-
-// Helper function to get the first hotkey for display purposes
-export function useTokenToHotkeyString(token?: HotkeyToken) {
-  return createMemo(() => {
-    if (!token) return undefined;
-    const map = hotkeyTokenMap();
-    const command = map.get(token);
-    return prettyPrintHotkeyString(command?.hotkeys?.[0]);
-  });
 }
 
 // =========================================================================
