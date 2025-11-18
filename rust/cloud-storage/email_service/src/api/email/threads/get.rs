@@ -98,7 +98,7 @@ const MESSAGE_MAX: i64 = 100;
 
 
     responses(
-            (status = 200, body=Vec<GetThreadResponse>),
+            (status = 200, body=GetThreadResponse),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
             (status = 404, body=ErrorResponse),

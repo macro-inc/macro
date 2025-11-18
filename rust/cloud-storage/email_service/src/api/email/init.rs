@@ -7,7 +7,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use model::response::EmptyResponse;
 use model::{response::ErrorResponse, user::UserContext};
 use models_email::email::service::backfill::{
     BackfillJobStatus, BackfillOperation, BackfillPubsubMessage,
@@ -80,7 +79,7 @@ pub struct InitResponse {
     path = "/email/init",
     operation_id = "init_user",
     responses(
-            (status = 200, body=EmptyResponse),
+            (status = 200, body=InitResponse),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
             (status = 500, body=ErrorResponse),

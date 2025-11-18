@@ -30,7 +30,7 @@ pub struct GetAttachmentResponse {
         ("id" = Uuid, Path, description = "Attachment ID."),
     ),
     responses(
-            (status = 200, body=Vec<GetAttachmentResponse>),
+            (status = 200, body=GetAttachmentResponse),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
             (status = 404, body=ErrorResponse),
