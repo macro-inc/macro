@@ -1,5 +1,6 @@
 import { UserIcon } from '@core/component/UserIcon';
 import { idToEmail } from '@core/user';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import type { Component } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 
@@ -25,8 +26,10 @@ export const UserIconWithContact: Component<UserIconWithContactProps> = (
     replaceOrInsertSplit({ type: 'contact', id: email });
   };
 
+  const navHandlers = useSplitNavigationHandler(handleClick);
+
   return (
-    <div onClick={handleClick} class="cursor-pointer" title="View contact">
+    <div {...navHandlers} class="cursor-pointer" title="View contact">
       <UserIcon id={props.userId} size={props.size} isDeleted={false} />
     </div>
   );

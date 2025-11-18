@@ -1,6 +1,8 @@
+use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::serde_as;
+use sqlx::FromRow;
 use utoipa::ToSchema;
 use uuid::Uuid;
 
@@ -34,4 +36,15 @@ pub struct AttachmentMacro {
     #[schemars(with = "String")]
     pub item_id: Uuid,
     pub item_type: String,
+}
+
+/// The metadata of an attachment we need to upload it to DSS.
+#[derive(Clone, Debug, FromRow, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AttachmentUploadMetadata {
+    pub attachment_db_id: Uuid,
+    pub email_provider_id: String,
+    pub provider_attachment_id: String,
+    pub mime_type: String,
+    pub filename: String,
+    pub internal_date_ts: DateTime<Utc>,
 }

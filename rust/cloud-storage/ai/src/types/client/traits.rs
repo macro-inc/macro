@@ -1,3 +1,4 @@
+use crate::types::AiError;
 use anyhow::{Context, Result};
 use async_openai::types::{ChatCompletionResponseStream, CreateChatCompletionRequest};
 use serde::Serialize;
@@ -24,7 +25,7 @@ pub trait Client {
         &self,
         request: CreateChatCompletionRequest,
         extensions: Option<RequestExtensions>,
-    ) -> impl Future<Output = Result<ChatCompletionResponseStream>> + Send;
+    ) -> impl Future<Output = Result<ChatCompletionResponseStream, AiError>> + Send;
 
     fn extend_request(
         &self,

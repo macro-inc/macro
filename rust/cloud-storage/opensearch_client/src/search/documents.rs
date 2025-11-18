@@ -3,27 +3,28 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{DefaultSearchResponse, parse_highlight_hit},
+        model::{DefaultSearchResponse, Highlight, parse_highlight_hit},
         query::Keys,
     },
 };
 
 use crate::SearchOn;
-use opensearch_query_builder::{FieldSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson};
+use opensearch_query_builder::{
+    FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
+};
 use serde_json::Value;
 
 #[derive(Clone)]
 struct DocumentSearchConfig;
 
 impl SearchQueryConfig for DocumentSearchConfig {
-    const ID_KEY: &'static str = "document_id";
     const INDEX: &'static str = DOCUMENTS_INDEX;
     const USER_ID_KEY: &'static str = "owner_id";
     const TITLE_KEY: &'static str = "document_name";
 
     fn default_sort_types() -> Vec<SortType> {
         vec![
-            SortType::Field(FieldSort::new("updated_at_seconds", SortOrder::Desc)),
+            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
             SortType::Field(FieldSort::new("node_id", SortOrder::Asc)),
         ]
@@ -51,6 +52,7 @@ impl DocumentQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
+        fn disable_recency(disable_recency: bool) -> Self;
     }
 
     fn build_search_request(self) -> Result<SearchRequest> {
@@ -67,7 +69,7 @@ impl DocumentQueryBuilder {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub struct DocumentIndex {
-    pub document_id: String,
+    pub entity_id: String,
     pub document_name: String,
     pub node_id: String,
     pub raw_content: Option<String>,
@@ -85,7 +87,8 @@ pub struct DocumentSearchResponse {
     pub owner_id: String,
     pub file_type: String,
     pub updated_at: i64,
-    pub content: Option<Vec<String>>,
+    /// Contains the highlight matches for the document name and content
+    pub highlight: Highlight,
     pub raw_content: Option<String>,
 }
 
@@ -100,6 +103,7 @@ pub struct DocumentSearchArgs {
     pub search_on: SearchOn,
     pub collapse: bool,
     pub ids_only: bool,
+    pub disable_recency: bool,
 }
 
 impl DocumentSearchArgs {
@@ -113,16 +117,17 @@ impl DocumentSearchArgs {
             .search_on(self.search_on)
             .collapse(self.collapse)
             .ids_only(self.ids_only)
+            .disable_recency(self.disable_recency)
             .build_search_request()?
             .to_json())
     }
 }
 
+#[tracing::instrument(skip(client, args), err)]
 pub(crate) async fn search_documents(
     client: &opensearch::OpenSearch,
     args: DocumentSearchArgs,
 ) -> Result<Vec<DocumentSearchResponse>> {
-    let search_on = args.search_on;
     let query_body = args.build()?;
 
     tracing::trace!("query: {}", query_body);
@@ -148,23 +153,25 @@ pub(crate) async fn search_documents(
         .hits
         .into_iter()
         .map(|hit| DocumentSearchResponse {
-            document_id: hit._source.document_id,
+            document_id: hit._source.entity_id,
             node_id: hit._source.node_id,
             document_name: hit._source.document_name,
             owner_id: hit._source.owner_id,
             file_type: hit._source.file_type,
             updated_at: hit._source.updated_at_seconds,
             raw_content: hit._source.raw_content,
-            content: hit.highlight.map(|h| {
-                parse_highlight_hit(
-                    h,
-                    Keys {
-                        title_key: DocumentSearchConfig::TITLE_KEY,
-                        content_key: DocumentSearchConfig::CONTENT_KEY,
-                    },
-                    search_on,
-                )
-            }),
+            highlight: hit
+                .highlight
+                .map(|h| {
+                    parse_highlight_hit(
+                        h,
+                        Keys {
+                            title_key: DocumentSearchConfig::TITLE_KEY,
+                            content_key: DocumentSearchConfig::CONTENT_KEY,
+                        },
+                    )
+                })
+                .unwrap_or_default(),
         })
         .collect())
 }

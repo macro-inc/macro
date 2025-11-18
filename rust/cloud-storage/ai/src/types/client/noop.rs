@@ -1,4 +1,5 @@
 use super::traits::Client;
+use crate::types::AiError;
 use anyhow::anyhow;
 
 #[derive(Debug, Clone, Default)]
@@ -9,7 +10,7 @@ impl Client for NoOpClient {
         &self,
         _: async_openai::types::CreateChatCompletionRequest,
         _: Option<super::RequestExtensions>,
-    ) -> anyhow::Result<async_openai::types::ChatCompletionResponseStream> {
-        Err(anyhow!("noop"))
+    ) -> Result<async_openai::types::ChatCompletionResponseStream, AiError> {
+        Err(anyhow!("noop").into())
     }
 }

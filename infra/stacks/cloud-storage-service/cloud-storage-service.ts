@@ -41,7 +41,6 @@ type CreateCloudStorageServiceServiceArgs = {
   secretKeyArns: (pulumi.Output<string> | string)[];
   notificationQueueArn: pulumi.Output<string> | string;
   searchEventQueueArn: pulumi.Output<string> | string;
-  affiliateTrackingTableArn: pulumi.Output<string> | string;
   tags: { [key: string]: string };
 };
 
@@ -75,7 +74,6 @@ export class CloudStorageService extends pulumi.ComponentResource {
       secretKeyArns,
       notificationQueueArn,
       searchEventQueueArn,
-      affiliateTrackingTableArn,
       tags,
     }: CreateCloudStorageServiceServiceArgs,
     opts?: pulumi.ComponentResourceOptions
@@ -86,25 +84,6 @@ export class CloudStorageService extends pulumi.ComponentResource {
     this.cloudStorageClusterName = cloudStorageClusterName;
 
     // role
-    const affiliateTrackingTablePolicy = new aws.iam.Policy(
-      `${BASE_NAME}-affiliate-tracking-table-policy`,
-      {
-        name: `${BASE_NAME}-affiliate-tracking-table-policy-${stack}`,
-        policy: {
-          Version: '2012-10-17',
-          Statement: [
-            {
-              Action: ['dynamodb:*'],
-              Resource: [affiliateTrackingTableArn],
-              Effect: 'Allow',
-            },
-          ],
-        },
-        tags: this.tags,
-      },
-      { parent: this }
-    );
-
     const frecencyTablePolicy = createFrecencyTablePolicy(
       `${BASE_NAME}-frecency-table-policy`,
       { parent: this }
@@ -204,15 +183,6 @@ export class CloudStorageService extends pulumi.ComponentResource {
         tags: this.tags,
       },
       { parent: this }
-    );
-
-    new aws.iam.RolePolicyAttachment(
-      `${BASE_NAME}-role-affiliate-tracking-att`,
-      {
-        role: this.role,
-        policyArn: affiliateTrackingTablePolicy.arn,
-      },
-      { parent: this, dependsOn: [affiliateTrackingTablePolicy, this.role] }
     );
 
     attachFrecencyTablePolicy(

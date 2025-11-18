@@ -4,6 +4,7 @@ use crate::{EMAIL_INDEX, Result, date_format::EpochSeconds, error::OpensearchCli
 #[derive(Debug, serde::Serialize)]
 pub struct UpsertEmailArgs {
     /// The id of the email thread
+    #[serde(rename = "entity_id")]
     pub thread_id: String,
     /// The id of the email message
     pub message_id: String,

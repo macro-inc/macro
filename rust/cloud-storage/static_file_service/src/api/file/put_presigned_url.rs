@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::api::context::AppState;
 use crate::model::api::*;
 use crate::service::dynamodb::model::MetadataObject;
@@ -33,7 +35,8 @@ pub async fn put_presigned_url(
             .file_name
             .split(".")
             .last()
-            .and_then(FileType::from_str)
+            .map(FileType::from_str)
+            .and_then(Result::ok)
             .map(|file_type| file_type.mime_type().to_string())
             .ok_or_else(|| {
                 (

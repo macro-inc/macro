@@ -33,5 +33,6 @@ export * from './queries/search';
 export { createEmailSource, type EmailSource, useEmails } from './source/email';
 export * from './types/entity';
 export * from './types/notification';
+export * from './types/search';
 export * from './utils/filter';
 export { composeFilters, createFilterComposer } from './utils/filter';

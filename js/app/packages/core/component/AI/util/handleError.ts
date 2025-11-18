@@ -6,6 +6,8 @@ export function handleError(error: StreamError) {
   const { showPaywall } = usePaywallState();
   if (error.stream_error === 'payment_required') {
     showPaywall();
+  } else if (error.stream_error === 'model_context_overflow') {
+    toast.failure('Too much context. Remove attachments or start a new chat');
   } else {
     toast.failure('Failed to respond to message');
   }

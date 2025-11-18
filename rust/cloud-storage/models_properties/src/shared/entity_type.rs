@@ -32,9 +32,3 @@ impl fmt::Display for EntityType {
         }
     }
 }
-
-impl sqlx::postgres::PgHasArrayType for EntityType {
-    fn array_type_info() -> sqlx::postgres::PgTypeInfo {
-        sqlx::postgres::PgTypeInfo::with_name("_property_entity_type")
-    }
-}

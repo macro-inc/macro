@@ -1,3 +1,4 @@
+import { supportedExtensionSet } from '@block-code/util/languageSupport';
 import type { BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { USE_PIXEL_BLOCK_ICONS } from '@core/constant/featureFlags';
@@ -41,7 +42,7 @@ import PixelUser from '@macro-icons/pixel/user.svg';
 import PixelUsers from '@macro-icons/pixel/users.svg';
 import PixelVideo from '@macro-icons/pixel/video.svg';
 import PixelWord from '@macro-icons/pixel/write.svg';
-import { FileType } from '@service-storage/generated/schemas/fileType';
+import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Component, JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 
@@ -196,8 +197,8 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   },
 };
 
-function isFileType(entity: string): entity is FileType {
-  return entity in FileType;
+function isFileType(entity: string): boolean {
+  return supportedExtensionSet.has(entity);
 }
 
 function validateEntity(entity: string): EntityWithValidIcon {
@@ -281,6 +282,7 @@ export type EntityIconProps = {
    * Render the icon with a subtle background color?
    */
   useBackground?: boolean;
+  class?: string;
 };
 
 export type EntityIconSelector = EntityIconProps['targetType'];
@@ -311,6 +313,7 @@ export function EntityIcon(props: EntityIconProps) {
         [config().background]: props.useBackground && !isMonochrome(),
         [config().background]: props.useBackground && isMonochrome(),
         'p-[20%]': props.useBackground,
+        [`${props.class}`]: !!props.class,
       }}
     >
       <Dynamic component={icon()} />

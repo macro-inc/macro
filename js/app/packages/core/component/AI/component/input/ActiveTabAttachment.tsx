@@ -290,7 +290,7 @@ export function ActiveTabAttachment(props: ActiveTabAttachmentProps) {
 
   return (
     <Show when={hasUnattachedTabs()}>
-      <div class="flex items-center p-1 space-x-2 hover:bg-hover hover-transition-bg cursor-pointer text-sm border border-dashed border-ink-muted">
+      <div class="py-[1.5] px-2 hover:bg-hover hover-transition-bg text-xs border border-edge border-dashed">
         <DropdownMenu
           open={showDropdown()}
           onOpenChange={setShowDropdown}
@@ -298,13 +298,12 @@ export function ActiveTabAttachment(props: ActiveTabAttachmentProps) {
         >
           <DropdownMenu.Trigger>
             <div
-              class="flex items-center gap-1 cursor-pointer"
+              class="flex items-center gap-1 text-ink"
               onClick={() => setShowDropdown(!showDropdown())}
             >
-              <span class="text-ink">{'Tabs'}</span>
+              Tabs
             </div>
           </DropdownMenu.Trigger>
-
           <DropdownMenu.Portal>
             <AddContextDropdown
               activeTabs={validActiveTabs()}

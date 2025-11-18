@@ -1,5 +1,6 @@
 use crate::email::db::backfill as db_backfill;
 use crate::email::service::thread::ListThreadsPayload;
+use crate::service::attachment::AttachmentUploadMetadata;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;
@@ -35,8 +36,14 @@ pub enum BackfillOperation {
     // the thread to be processed, it sends an UpdateThreadMetadata message for the thread.
     BackfillMessage(BackfillMessagePayload),
     // Updates the thread metadata in the database. If it's the last thread to be processed,
-    // it sets the backfill job status to complete.
+    // it sets the backfill job status to complete. Sends BackfillAttachment messages for each
+    // attachment requiring backfill, except for the criteria of attachments in any threads
+    // with a participant the user has previously emailed. This criteria we can only know after
+    // backfill completes. Once backfill is completed it sends a BackfillAttachment message
+    // for each of those attachments.
     UpdateThreadMetadata(UpdateMetadataPayload),
+    // Uploads the message attachment as a Macro document.
+    BackfillAttachment(BackfillAttachmentPayload),
 }
 
 // the object we send on the backfill pubsub queue
@@ -165,4 +172,9 @@ pub struct BackfillJobCounters {
 pub struct UpdateMetadataPayload {
     pub thread_provider_id: String,
     pub thread_db_id: Uuid,
+}
+
+#[derive(Debug, Deserialize, Serialize, Clone, PartialEq, Eq)]
+pub struct BackfillAttachmentPayload {
+    pub metadata: AttachmentUploadMetadata,
 }

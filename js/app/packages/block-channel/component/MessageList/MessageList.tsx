@@ -31,6 +31,7 @@ import {
   Match,
   mapArray,
   on,
+  onCleanup,
   type Setter,
   Show,
   Switch,
@@ -38,10 +39,25 @@ import {
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
+import { CustomScrollbar } from '../../../macro-entity/src/components/CustomScrollbar';
 import { MessageContainer } from '../Message/MessageContainer';
 import { ReplyInputsPortaler } from '../ReplyInputsPortaler';
 
 false && observedSize;
+
+const SHORT_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  month: 'short',
+  day: 'numeric',
+});
+
+const LONG_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
+  month: 'short',
+  day: 'numeric',
+  year: 'numeric',
+});
+
+const clampIndex = (value: number, minValue: number, maxValue: number) =>
+  Math.min(Math.max(value, minValue), maxValue);
 
 export type MessageListProps = {
   channelId: string;
@@ -59,6 +75,7 @@ export type MessageListProps = {
   setFocusedMessageId: Setter<string | undefined>;
   orderedMessages: Accessor<Message[]>;
   setOrderedMessages: Setter<Message[]>;
+  setLastMessageRef?: Setter<HTMLDivElement | undefined>;
 };
 
 function EmptyMessageList() {
@@ -76,7 +93,12 @@ function EmptyMessageList() {
 export function MessageList(props: MessageListProps) {
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
+  const [listContainerRef, setListContainerRef] =
+    createSignal<HTMLDivElement>();
+  const [scrollHintLabel, setScrollHintLabel] = createSignal<string>();
+  const [isScrollHintVisible, setIsScrollHintVisible] = createSignal(false);
   const [newIndicatorShown, setNewIndicatorShown] = createSignal<number>();
+  const [hasUserScrolled, setHasUserScrolled] = createSignal(false);
   const [messageListContext, setMessageListContext] =
     createStore<MessageListContextLookup>({});
 
@@ -88,7 +110,8 @@ export function MessageList(props: MessageListProps) {
 
   const [threadViewStore, setThreadViewStore] = createStore<ThreadViewData>({});
 
-  const [isNearBottom, setIsNearBottom] = createSignal(false);
+  const [isNearBottom, setIsNearBottom] = createSignal(true);
+  const [initialScrollComplete, setInitialScrollComplete] = createSignal(false);
 
   const openedChannel = openedChannelSignal.get;
 
@@ -145,6 +168,44 @@ export function MessageList(props: MessageListProps) {
   });
 
   let scrollTimeoutId: ReturnType<typeof setTimeout> | undefined;
+  let scrollHintTimeoutId: ReturnType<typeof setTimeout> | undefined;
+
+  const formatScrollHintDate = (isoDate?: string) => {
+    if (!isoDate) return '';
+    const date = new Date(isoDate);
+    if (Number.isNaN(date.getTime())) return '';
+    const now = new Date();
+    const formatter =
+      date.getFullYear() === now.getFullYear()
+        ? SHORT_DATE_FORMATTER
+        : LONG_DATE_FORMATTER;
+    return formatter.format(date).toUpperCase();
+  };
+
+  const updateScrollHint = () => {
+    if (!hasUserScrolled()) return;
+    const handle = virtualHandle();
+    const list = props.orderedMessages();
+    if (!handle || !list || list.length === 0) return;
+
+    const endIndex = handle.findEndIndex?.();
+    if (endIndex === undefined) return;
+
+    const index = clampIndex(endIndex, 0, list.length - 1);
+    const message = list[index];
+    const label = formatScrollHintDate(message?.created_at);
+    if (!label) return;
+
+    if (scrollHintTimeoutId) {
+      clearTimeout(scrollHintTimeoutId);
+    }
+
+    setScrollHintLabel(label);
+    setIsScrollHintVisible(true);
+    scrollHintTimeoutId = setTimeout(() => {
+      setIsScrollHintVisible(false);
+    }, 300);
+  };
 
   /**
    * Scroll to the bottom of the document or the target message depending on the
@@ -167,14 +228,12 @@ export function MessageList(props: MessageListProps) {
       (isNearBottom() || forceBottom)
     ) {
       if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
-      scrollTimeoutId = setTimeout(() => {
-        virtualHandle()?.scrollToIndex(
-          (props.orderedMessages()?.length ?? 1) - 1,
-          {
-            align: 'end',
-          }
-        );
-      }, 0);
+      virtualHandle()?.scrollToIndex(
+        (props.orderedMessages()?.length ?? 1) - 1,
+        {
+          align: 'end',
+        }
+      );
       return;
     }
     if (params?.onlyBottom) return;
@@ -195,11 +254,9 @@ export function MessageList(props: MessageListProps) {
           }));
         }
         if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
-        scrollTimeoutId = setTimeout(() => {
-          virtualHandle()?.scrollToIndex(index, {
-            align: 'center',
-          });
-        }, 0);
+        virtualHandle()?.scrollToIndex(index, {
+          align: 'center',
+        });
         return;
       }
     }
@@ -326,6 +383,7 @@ export function MessageList(props: MessageListProps) {
   const checkIfNearBottom = () => {
     const handle = virtualHandle();
     if (!handle) return false;
+    if (!initialScrollComplete()) return true;
 
     const THRESHOLD = 100;
     const distanceFromBottom =
@@ -362,6 +420,7 @@ export function MessageList(props: MessageListProps) {
   const [unviewedMessages, setUnviewedMessages] = createSignal<Message[]>();
   const [dismissUnviewedMessages, setDismissUnviewedMessages] =
     createSignal(false);
+  const [dismissJumpToLatest, setDismissJumpToLatest] = createSignal(false);
   const [newMessageIndex, setNewMessageIndex] = createSignal<number>();
 
   // Record new unviewed messages
@@ -424,6 +483,26 @@ export function MessageList(props: MessageListProps) {
   const [size, setSize] = createSignal<DOMRect>();
   const [initialized, setInitialized] = createSignal(false);
 
+  // Mark the scroll container with data attribute after VList mounts
+  createEffect(() => {
+    const container = listContainerRef();
+    const handle = virtualHandle();
+    if (!container || !handle) return;
+
+    // Use requestAnimationFrame to ensure VList has rendered
+    requestAnimationFrame(() => {
+      // Find the scroll container by looking for the element with overflow-y: scroll
+      const allElements = container.querySelectorAll('*');
+      for (const el of allElements) {
+        const styles = window.getComputedStyle(el);
+        if (styles.overflowY === 'scroll' || styles.overflowY === 'auto') {
+          (el as HTMLElement).setAttribute('data-channel-message-list', '');
+          break;
+        }
+      }
+    });
+  });
+
   // scroll to bottom on size change, if the user is near the bottom
   createEffect(
     on(virtualHandle, () => {
@@ -441,7 +520,15 @@ export function MessageList(props: MessageListProps) {
 
   // Handle vlistscroll events
   const handleScroll = () => {
-    setIsNearBottom(checkIfNearBottom());
+    if (!initialScrollComplete()) return;
+    updateScrollHint();
+
+    const nearBottom = checkIfNearBottom();
+    setIsNearBottom(nearBottom);
+
+    if (!nearBottom && dismissJumpToLatest()) {
+      setDismissJumpToLatest(false);
+    }
 
     const messages = unviewedMessages();
     if (messages?.length) {
@@ -474,6 +561,22 @@ export function MessageList(props: MessageListProps) {
     }
   };
 
+  const showJumpToUnviewedMessages = createMemo(
+    () => !dismissUnviewedMessages() && !!unviewedMessages()?.length
+  );
+
+  onCleanup(() => {
+    if (scrollHintTimeoutId) {
+      clearTimeout(scrollHintTimeoutId);
+    }
+  });
+
+  const markUserScrolled = () => {
+    if (!hasUserScrolled()) {
+      setHasUserScrolled(true);
+    }
+  };
+
   return (
     <div
       class="flex-1 overflow-y-hidden suppress-css-brackets"
@@ -481,6 +584,10 @@ export function MessageList(props: MessageListProps) {
     >
       <div
         class="flex flex-col h-full relative"
+        ref={setListContainerRef}
+        onWheel={markUserScrolled}
+        onTouchMove={markUserScrolled}
+        onPointerDown={markUserScrolled}
         use:observedSize={{
           setSize: setSize,
           setInitialized: setInitialized,
@@ -497,10 +604,17 @@ export function MessageList(props: MessageListProps) {
                 'overflow-x': 'hidden',
                 'overflow-y': 'scroll',
               }}
+              class="scrollbar-hidden"
+              data-channel-message-list
               data={rows() ?? []}
               overscan={10}
               keepMounted={keepMountedIndices()}
               onScroll={handleScroll}
+              onScrollEnd={() => {
+                if (!initialScrollComplete()) {
+                  setInitialScrollComplete(true);
+                }
+              }}
             >
               {(row: { id: string; message: Message }, i) => {
                 const isParentless = !row.message.thread_id;
@@ -548,6 +662,7 @@ export function MessageList(props: MessageListProps) {
                       container={containerRef()}
                       listContext={messageListContext[row.id]}
                       targetMessageId={activeTargetMessage()?.messageId}
+                      setLastMessageRef={props.setLastMessageRef}
                     />
                   </Show>
                 );
@@ -555,18 +670,81 @@ export function MessageList(props: MessageListProps) {
             </VList>
           </Match>
         </Switch>
-        <Show when={unviewedMessages() && !dismissUnviewedMessages()}>
+        <Show when={showJumpToUnviewedMessages() && unviewedMessages()}>
+          {(messages) => (
+            <TextButton
+              icon={ArrowDownIcon}
+              theme="base"
+              onMouseDown={jumpToUnviewedMessages}
+              text={`${messages().length} new message${messages().length === 1 ? '' : 's'}`}
+              secondaryIcon={XIcon}
+              onOptionClick={() => setDismissUnviewedMessages(true)}
+              showSeparator
+              class="absolute top-4 left-1/2 -translate-x-1/2"
+            />
+          )}
+        </Show>
+        <Show
+          when={
+            initialScrollComplete() &&
+            !dismissJumpToLatest() &&
+            !showJumpToUnviewedMessages() &&
+            !isNearBottom()
+          }
+        >
           <TextButton
             icon={ArrowDownIcon}
-            theme="accentOpaque"
-            onMouseDown={jumpToUnviewedMessages}
-            text={`${unviewedMessages()?.length} new message${unviewedMessages()?.length === 1 ? '' : 's'}`}
+            theme="base"
+            text="Jump to latest"
+            onMouseDown={() =>
+              scrollToBottomOrTarget({ forceBottom: true, onlyBottom: true })
+            }
             secondaryIcon={XIcon}
-            onOptionClick={() => setDismissUnviewedMessages(true)}
+            onOptionClick={() => setDismissJumpToLatest(true)}
             showSeparator
-            class="absolute top-4 left-1/2 -translate-x-1/2"
+            class="absolute top-4 left-1/2 -translate-x-1/2 transition-opacity duration-200"
           />
         </Show>
+        <CustomScrollbar
+          scrollContainer={() => {
+            // Track the same readiness conditions as the virtualized list
+            const hasInitialized = initialized();
+            const viewport = size();
+            const hasMessages = props.messages.length > 0;
+            if (!hasInitialized || !viewport || !hasMessages) {
+              return undefined;
+            }
+
+            // Find the actual scroll container (VList creates its own scroll container)
+            const container = listContainerRef();
+            if (!container) return undefined;
+
+            // First try to find by data attribute
+            let scrollContainer = container.querySelector(
+              '[data-channel-message-list]'
+            ) as HTMLElement | null;
+
+            // Fallback: find the element with overflow-y: scroll style
+            if (!scrollContainer) {
+              const allElements = container.querySelectorAll<HTMLElement>('*');
+              for (const el of allElements) {
+                const styles = window.getComputedStyle(el);
+                if (
+                  styles.overflowY === 'scroll' ||
+                  styles.overflowY === 'auto'
+                ) {
+                  scrollContainer = el;
+                  break;
+                }
+              }
+            }
+
+            return scrollContainer || undefined;
+          }}
+          label={scrollHintLabel()}
+          showLabel={isScrollHintVisible()}
+          enabled={hasUserScrolled()}
+        />
       </div>
       <ReplyInputsPortaler
         channelId={props.channelId}

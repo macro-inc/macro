@@ -5,33 +5,11 @@ use model::item::ShareableItemType;
 
 use crate::projects::get_project::get_sub_items::bulk_get_all_sub_project_ids;
 
-/// Given a list of document ids and a list of file types, this will
-/// return a subset list of items that are of the provided file types.
-#[tracing::instrument(skip(db), err)]
-pub async fn filter_documents_by_file_types(
-    db: &sqlx::PgPool,
-    documents: &[String],
-    file_types: &[String],
-) -> anyhow::Result<Vec<String>> {
-    let documents = sqlx::query!(
-        r#"
-        SELECT
-            d.id
-        FROM
-            "Document" d
-        WHERE
-            d.id = ANY($1)
-            AND d."fileType" = ANY($2)
-        "#,
-        documents,
-        file_types,
-    )
-    .map(|row| row.id)
-    .fetch_all(db)
-    .await?;
+mod channel;
+mod document;
 
-    Ok(documents)
-}
+pub use channel::*;
+pub use document::*;
 
 /// Given a list of item ids, the item type and a list of project_ids, this will
 /// return a subset list of items that are within the provided project ids and their sub-projects.

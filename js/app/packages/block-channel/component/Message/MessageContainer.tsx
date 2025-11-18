@@ -66,14 +66,14 @@ export function MessageFlag(props: MessageFlagProps) {
   return (
     <div class="flex flex-row items-stretch justify-start ml-[var(--left-of-connector)]">
       <div class="flex flex-col items-center justify-center">
-        <div class="border-l border-edge min-h-1/2 ]" />
+        <div class="border-l border-edge-muted min-h-1/2 ]" />
         <div
-          class={`border-l ${props.highlight ? 'border-accent' : 'border-edge'} min-h-1/2 `}
+          class={`border-l ${props.highlight ? 'border-accent' : 'border-edge-muted'} min-h-1/2 `}
         />
       </div>
       <div class="flex flex-col items-center justify-center">
         <div
-          class={`w-8 border-b ${props.highlight ? 'border-accent' : 'border-edge'}`}
+          class={`w-8 border-b ${props.highlight ? 'border-accent' : 'border-edge-muted'}`}
         />
       </div>
       <div
@@ -120,6 +120,7 @@ type MessageProps = {
   container?: HTMLDivElement;
   listContext: MessageListContext;
   targetMessageId: string | undefined;
+  setLastMessageRef?: Setter<HTMLDivElement | undefined>;
 };
 
 export function MessageContainer(props: MessageProps) {
@@ -128,7 +129,19 @@ export function MessageContainer(props: MessageProps) {
   const [contextMenuOpen, setContextMenuOpen] = createSignal(false);
   const [reactionSearchOpen, setReactionSearchOpen] = createSignal(false);
   const [topBarEmojiMenuOpen, setTopBarEmojiMenuOpen] = createSignal(false);
-  const [messageBodyRef, setMessageBodyRef] = createSignal<HTMLDivElement>();
+  const [messageBodyRef, setMessageBodyRefInner] =
+    createSignal<HTMLDivElement>();
+  const setMessageBodyRef = ((
+    value?:
+      | HTMLDivElement
+      | ((prev?: HTMLDivElement) => HTMLDivElement | undefined)
+  ): undefined => {
+    setMessageBodyRefInner(value);
+    if (props.setLastMessageRef && isLastMessage()) {
+      props.setLastMessageRef(value);
+    }
+    return undefined;
+  }) satisfies typeof setMessageBodyRefInner;
   const editMessage_ = createCallback(editMessage);
 
   const userId = useUserId();
@@ -574,6 +587,7 @@ export function MessageContainer(props: MessageProps) {
           >
             <ContextMenu.Trigger>
               <MessageComponent
+                ref={isLastMessage() ? props.setLastMessageRef : undefined}
                 id={message.id}
                 focused={props.isFocused}
                 senderId={message.sender_id}
@@ -650,7 +664,7 @@ export function MessageContainer(props: MessageProps) {
               </MessageComponent>
               <Show when={isLastInCollapsedThread()}>
                 <div
-                  class="border-l border-edge pb-1"
+                  class="border-l border-edge-muted pb-1"
                   style={{
                     'margin-left': `var(--left-of-connector)`,
                   }}

@@ -6,6 +6,7 @@ import clickOutside from '@core/directive/clickOutside';
 import { fileSelector } from '@core/directive/fileSelector';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
+import { fuzzyFilter } from '@core/util/fuzzy';
 import { getItemBlockName } from '@core/util/getItemBlockName';
 import {
   autoUpdate,
@@ -19,7 +20,6 @@ import DeviceMobileIcon from '@icon/regular/device-mobile-speaker.svg';
 import LaptopIcon from '@icon/regular/laptop.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import { useHistory } from '@service-storage/history';
-import fuzzy from 'fuzzy';
 import {
   createEffect,
   createMemo,
@@ -89,13 +89,8 @@ export function AttachMenu(props: AttachMenuProps) {
   });
 
   const rankedHistory = createMemo(() => {
-    const searchQuery = input().toLowerCase();
-    if (!searchQuery) return baseHistory();
-    return fuzzy
-      .filter(searchQuery, baseHistory(), {
-        extract: (item) => item.name,
-      })
-      .map((item) => item.original);
+    const searchQuery = input();
+    return fuzzyFilter(searchQuery, baseHistory(), (item) => item.name);
   });
 
   createEffect(() => {
@@ -135,7 +130,7 @@ export function AttachMenu(props: AttachMenuProps) {
           }}
         >
           <OldMenu>
-            <div class="flex flex-row items-center w-full p-2 gap-2 text-sm border-b border-edge text-ink mb-1">
+            <div class="flex flex-row items-center w-full p-2 gap-2 text-sm border-b border-edge-muted text-ink mb-1">
               <SearchIcon class="w-3 h-3" />
               <input
                 value={input()}

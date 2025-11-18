@@ -1,19 +1,19 @@
 use recursion::{Collapsible, Expandable, MappableFrame, PartiallyApplied};
 use serde::{Deserialize, Serialize};
 
-pub trait ExpandNode: Iterator {
-    fn expand<U, E>(
+pub trait TryExpandNode: Iterator {
+    fn try_expand<U, E>(
         self,
         cb: impl FnMut(<Self as Iterator>::Item) -> Result<U, E>,
         fold: impl Fn(Expr<U>, Expr<U>) -> Expr<U>,
     ) -> Result<Option<Expr<U>>, E>;
 }
 
-impl<I> ExpandNode for I
+impl<I> TryExpandNode for I
 where
     I: Iterator,
 {
-    fn expand<U, E>(
+    fn try_expand<U, E>(
         mut self,
         mut cb: impl FnMut(<Self as Iterator>::Item) -> Result<U, E>,
         fold: impl Fn(Expr<U>, Expr<U>) -> Expr<U>,
@@ -24,6 +24,23 @@ where
                 Some(acc) => fold(acc, node),
                 None => node,
             }))
+        })
+    }
+}
+
+pub trait FoldTree<T>: Iterator {
+    fn fold_with(self, fold: impl Fn(Expr<T>, Expr<T>) -> Expr<T>) -> Option<Expr<T>>;
+}
+
+impl<I, T> FoldTree<T> for I
+where
+    I: Iterator<Item = Option<Expr<T>>>,
+{
+    fn fold_with(self, fold: impl Fn(Expr<T>, Expr<T>) -> Expr<T>) -> Option<Expr<T>> {
+        self.fold(None, |acc, cur| match (acc, cur) {
+            (None, None) => None,
+            (Some(next), None) | (None, Some(next)) => Some(next),
+            (Some(a), Some(b)) => Some(fold(a, b)),
         })
     }
 }

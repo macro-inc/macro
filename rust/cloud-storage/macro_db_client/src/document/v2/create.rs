@@ -1,5 +1,4 @@
-use crate::history::upsert_item_last_accessed;
-use crate::history::upsert_user_history;
+use crate::history::{upsert_item_last_accessed_timestamp, upsert_user_history_timestamp};
 use crate::share_permission::create::create_document_permission;
 use model::document::DocumentMetadata;
 use model::document::FileType;
@@ -11,6 +10,7 @@ use sqlx::Pool;
 use sqlx::Postgres;
 use sqlx::Transaction;
 use tracing::instrument;
+use uuid::Uuid;
 
 /// struct for creating a document
 #[derive(Debug)]
@@ -24,6 +24,10 @@ pub struct CreateDocumentArgs<'a> {
     pub project_name: Option<&'a str>,
     pub share_permission: &'a SharePermissionV2,
     pub skip_history: bool,
+    /// Optional value. If set, creates entry in document_email
+    pub email_attachment_id: Option<Uuid>,
+    /// Optional value. defaults to now if not included
+    pub created_at: Option<&'a chrono::DateTime<chrono::Utc>>,
 }
 
 /// Creates a new document
@@ -52,7 +56,6 @@ pub async fn create_document_txn(
     args: CreateDocumentArgs<'_>,
 ) -> anyhow::Result<DocumentMetadata> {
     tracing::trace!("creating document");
-
     let CreateDocumentArgs {
         id,
         sha,
@@ -63,7 +66,13 @@ pub async fn create_document_txn(
         project_name: provided_project_name,
         share_permission,
         skip_history,
+        created_at: _, // overwritten below
+        email_attachment_id,
     } = args;
+
+    // default to now if created_at argument not included
+    let now = chrono::Utc::now();
+    let created_at = args.created_at.unwrap_or(&now);
 
     // Fetches project name for provided project_id if name is not provided
     let fetched_project_name: Option<String> = match (provided_project_name, project_id) {
@@ -97,13 +106,21 @@ pub async fn create_document_txn(
             document_name,
             file_type,
             project_id,
+            created_at,
         )
         .await?;
         id.to_string()
     } else {
-        insert_document_no_id(transaction, user_id, document_name, file_type, project_id)
-            .await?
-            .id
+        insert_document_no_id(
+            transaction,
+            user_id,
+            document_name,
+            file_type,
+            project_id,
+            created_at,
+        )
+        .await?
+        .id
     };
 
     // Docx documents have their versions associated with a DocumentBom
@@ -112,11 +129,12 @@ pub async fn create_document_txn(
         Some(FileType::Docx) => {
             let document_bom = sqlx::query!(
             r#"
-                INSERT INTO "DocumentBom" ("documentId")
-                VALUES ($1)
+                INSERT INTO "DocumentBom" ("documentId", "createdAt", "updatedAt")
+                VALUES ($1, $2, $2)
                 RETURNING id, "createdAt"::timestamptz as created_at, "updatedAt"::timestamptz as updated_at;
             "#,
-            &document_id,
+                &document_id,
+                created_at.naive_utc(),
             )
             .fetch_one(transaction.as_mut())
             .await?;
@@ -132,12 +150,13 @@ pub async fn create_document_txn(
             sqlx::query_as!(
                 VersionIDWithTimeStamps,
                 r#"
-                    INSERT INTO "DocumentInstance" ("documentId", "sha")
-                    VALUES ($1, $2)
+                    INSERT INTO "DocumentInstance" ("documentId", "sha", "createdAt", "updatedAt")
+                    VALUES ($1, $2, $3, $3)
                     RETURNING id, sha, "createdAt"::timestamptz as created_at, "updatedAt"::timestamptz as updated_at;
                 "#,
-            &document_id,
-            sha,
+                &document_id,
+                sha,
+                created_at.naive_utc()
         )
         .fetch_one(transaction.as_mut())
         .await?
@@ -149,8 +168,10 @@ pub async fn create_document_txn(
 
     // Add item to user history for creator
     if !skip_history {
-        upsert_user_history(transaction, user_id, &document_id, "document").await?;
-        upsert_item_last_accessed(transaction, &document_id, "document").await?;
+        upsert_user_history_timestamp(transaction, user_id, &document_id, "document", created_at)
+            .await?;
+        upsert_item_last_accessed_timestamp(transaction, &document_id, "document", created_at)
+            .await?;
     }
 
     crate::item_access::insert::insert_user_item_access(
@@ -162,6 +183,15 @@ pub async fn create_document_txn(
         None,
     )
     .await?;
+
+    if email_attachment_id.is_some() {
+        crate::document::document_email::create_document_email_record(
+            transaction,
+            &document_id,
+            email_attachment_id.unwrap(),
+        )
+        .await?;
+    }
 
     Ok(DocumentMetadata::new_document(
         &document_id,
@@ -188,18 +218,20 @@ async fn insert_document_no_id(
     document_name: &str,
     file_type: Option<FileType>,
     project_id: Option<&str>,
+    created_at: &chrono::DateTime<chrono::Utc>,
 ) -> anyhow::Result<ID> {
     sqlx::query_as!(
         ID,
         r#"
-            INSERT INTO "Document" (owner, name, "fileType", "projectId") 
-            VALUES ($1, $2, $3, $4)
+            INSERT INTO "Document" (owner, name, "fileType", "projectId", "createdAt", "updatedAt") 
+            VALUES ($1, $2, $3, $4, $5, $5)
             RETURNING id;
         "#,
         user_id,
         document_name,
         file_type.map(|file_type| file_type.as_str().to_string()),
         project_id,
+        created_at.naive_utc()
     )
     .fetch_one(&mut **transaction)
     .await
@@ -217,17 +249,19 @@ async fn insert_document_with_id(
     document_name: &str,
     file_type: Option<FileType>,
     project_id: Option<&str>,
+    created_at: &chrono::DateTime<chrono::Utc>,
 ) -> anyhow::Result<()> {
     let result = sqlx::query!(
         r#"
-            INSERT INTO "Document" (id, owner, name, "fileType", "projectId")
-            VALUES ($1, $2, $3, $4, $5)
+            INSERT INTO "Document" (id, owner, name, "fileType", "projectId", "createdAt", "updatedAt")
+            VALUES ($1, $2, $3, $4, $5, $6, $6)
         "#,
         id,
         user_id,
         document_name,
         file_type.map(|file_type| file_type.as_str().to_string()),
         project_id,
+        created_at.naive_utc()
     )
     .execute(&mut **transaction)
     .await;
@@ -256,6 +290,7 @@ async fn insert_document_with_id(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use chrono::{TimeZone, Utc};
     use sqlx::{Pool, Postgres};
 
     #[sqlx::test(fixtures(path = "../../../fixtures", scripts("basic_user_with_documents")))]
@@ -269,6 +304,7 @@ mod tests {
         .execute(&pool)
         .await?;
 
+        let ts = chrono::Utc.with_ymd_and_hms(1998, 1, 16, 0, 0, 0).unwrap();
         // document exists
         let document_metadata = create_document(
             &pool,
@@ -282,6 +318,8 @@ mod tests {
                 project_name: None,
                 share_permission: &SharePermissionV2::default(),
                 skip_history: false,
+                email_attachment_id: None,
+                created_at: Some(&ts),
             },
         )
         .await?;
@@ -291,6 +329,7 @@ mod tests {
         assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
         assert_eq!(document_metadata.project_id.as_deref(), Some("project-one"));
         assert_eq!(document_metadata.project_name.as_deref(), Some("name"));
+        assert_eq!(document_metadata.created_at, Some(ts));
 
         // document exists
         let document_metadata = create_document(
@@ -305,6 +344,8 @@ mod tests {
                 project_name: None,
                 share_permission: &SharePermissionV2::default(),
                 skip_history: false,
+                email_attachment_id: None,
+                created_at: None,
             },
         )
         .await?;
@@ -327,6 +368,7 @@ mod tests {
         .execute(&pool)
         .await?;
 
+        let ts = chrono::Utc.with_ymd_and_hms(1998, 1, 16, 0, 0, 0).unwrap();
         // document exists
         let document_metadata = create_document(
             &pool,
@@ -340,6 +382,8 @@ mod tests {
                 project_name: None,
                 share_permission: &SharePermissionV2::default(),
                 skip_history: false,
+                email_attachment_id: None,
+                created_at: Some(&ts),
             },
         )
         .await?;
@@ -352,6 +396,7 @@ mod tests {
         assert_eq!(document_metadata.owner, "macro|user@user.com".to_string());
         assert_eq!(document_metadata.project_id.as_deref(), Some("project-one"));
         assert_eq!(document_metadata.project_name.as_deref(), Some("name"));
+        assert_eq!(document_metadata.created_at, Some(ts));
 
         // document exists
         let document_metadata = create_document(
@@ -366,6 +411,8 @@ mod tests {
                 project_name: None,
                 share_permission: &SharePermissionV2::default(),
                 skip_history: false,
+                email_attachment_id: None,
+                created_at: None,
             },
         )
         .await?;
@@ -394,6 +441,8 @@ mod tests {
                 project_name: None,
                 share_permission: &SharePermissionV2::default(),
                 skip_history: false,
+                email_attachment_id: None,
+                created_at: None,
             },
         )
         .await;
@@ -414,6 +463,8 @@ mod tests {
         // First, create a document with the test ID
         let mut transaction = pool.begin().await?;
 
+        let ts = chrono::Utc.with_ymd_and_hms(1998, 1, 16, 0, 0, 0).unwrap();
+
         // Insert the first document
         insert_document_with_id(
             &mut transaction,
@@ -422,6 +473,7 @@ mod tests {
             "First Document",
             Some(FileType::Pdf),
             None,
+            &ts,
         )
         .await?;
 
@@ -437,6 +489,7 @@ mod tests {
             "Second Document with Same ID",
             Some(FileType::Pdf),
             None,
+            &ts,
         )
         .await;
 

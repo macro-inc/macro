@@ -2,6 +2,7 @@ use crate::document::types::{Data, DocumentContent};
 use anyhow::{Context, Error};
 use document_storage_service_client::DocumentStorageServiceClient;
 use lexical_client::LexicalClient;
+use model::document::FileTypeExt;
 use model::document::{DocumentBasic, FileType, response::LocationResponseV3};
 use std::fmt::Debug;
 use std::sync::Arc;

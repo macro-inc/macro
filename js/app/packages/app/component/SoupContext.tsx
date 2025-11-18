@@ -32,11 +32,13 @@ import {
   type Store,
 } from 'solid-js/store';
 import type { VirtualizerHandle } from 'virtua/solid';
+import { playSound } from '../util/sound';
 import { useGlobalNotificationSource } from './GlobalAppState';
 import type { SplitHandle } from './split-layout/layoutManager';
 import {
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS,
+  VIEWCONFIG_DEFAULTS_IDS,
   type ViewConfigBase,
   type ViewConfigEnhanced,
   type ViewData,
@@ -45,9 +47,7 @@ import {
 
 export type UnifiedListContext = {
   viewsDataStore: Store<ViewDataMap>;
-  setViewDataStore: SetStoreFunction<ViewDataMap>;
-  getSelectedViewStore: Accessor<Store<ViewData>>;
-  setSelectedViewStore: SetStoreFunction<ViewData>;
+  setViewDataStore: SetStoreFunction<Partial<ViewDataMap>>;
   selectedView: Accessor<ViewId>;
   setSelectedView: Setter<ViewId>;
   virtualizerHandleSignal: Signal<VirtualizerHandle | undefined>;
@@ -58,16 +58,15 @@ export type UnifiedListContext = {
   setShowHelpDrawer: Setter<Set<string>>;
 };
 
-const DEFAULT_VIEW_ID = 'all';
+const DEFAULT_VIEW_ID: View = 'all';
+
+const DEFAULT_VIEW_IDS_SET = new Set(VIEWCONFIG_DEFAULTS_IDS);
 
 export function createSoupContext(): UnifiedListContext {
   const [selectedView, setSelectedView] = createSignal<ViewId>(DEFAULT_VIEW_ID);
   const [viewsDataStore, setViewDataStore_] = useAllViews({
     selectedViewSignal: [selectedView, setSelectedView],
   });
-  const getSelectedViewStore = createLazyMemo(
-    () => viewsDataStore[selectedView()]
-  );
   const virtualizerHandleSignal = createSignal<VirtualizerHandle>();
   const entityListRefSignal = createSignal<HTMLDivElement>();
   const entitiesSignal = createSignal<EntityData[]>();
@@ -92,24 +91,10 @@ export function createSoupContext(): UnifiedListContext {
     // @ts-ignore narrowing set store function is annoying due to function overloading
     setViewDataStore_(...args);
   };
-  const setSelectedViewStore: SetStoreFunction<ViewData> = (...args: any[]) => {
-    // need to create new reference, causes bug where first entity persits highlighting
-    if (
-      args.length === 2 &&
-      args[0] === 'selectedEntity' &&
-      typeof args[1] !== 'function'
-    ) {
-      args[1] = { ...args[1] };
-    }
-    // @ts-ignore narrowing set store function is annoying due to function overloading
-    setViewDataStore(selectedView(), ...args);
-  };
 
   return {
     viewsDataStore,
     setViewDataStore,
-    getSelectedViewStore,
-    setSelectedViewStore,
     selectedView,
     setSelectedView,
     virtualizerHandleSignal,
@@ -128,7 +113,7 @@ function createViewData(
 ): ViewData {
   return {
     id: (viewProps?.id || view) ?? '',
-    view,
+    view: viewProps?.view ?? view,
     filters: {
       notificationFilter:
         viewProps?.filters?.notificationFilter ??
@@ -154,13 +139,9 @@ function createViewData(
       showUnreadIndicator:
         viewProps?.display?.showUnreadIndicator ??
         VIEWCONFIG_BASE.display.showUnreadIndicator,
-      showProjects:
-        viewProps?.display?.showProjects ??
-        VIEWCONFIG_BASE.display.showProjects,
       unrollNotifications:
         viewProps?.display?.unrollNotifications ??
         VIEWCONFIG_BASE.display.unrollNotifications,
-      preview: viewProps?.display?.preview ?? VIEWCONFIG_BASE.display.preview,
       limit: viewProps?.display?.limit,
     },
     sort: {
@@ -189,8 +170,7 @@ export function createNavigationEntityListShortcut({
 }) {
   const {
     viewsDataStore: viewsData,
-    getSelectedViewStore: viewData,
-    setSelectedViewStore,
+    setViewDataStore,
     entityListRefSignal: [entityListRef],
     virtualizerHandleSignal: [virtualizerHandle],
     selectedView,
@@ -198,6 +178,7 @@ export function createNavigationEntityListShortcut({
     // selectedEntitySignal: [selectedEntity, setSelectedEntity],
     entitiesSignal: [entities],
   } = unifiedListContext;
+  const viewData = createMemo(() => viewsData[selectedView()]);
   const viewIds = createMemo<ViewId[]>(() => Object.keys(viewsData));
 
   const selectedEntity = () => viewData().selectedEntity;
@@ -275,7 +256,7 @@ export function createNavigationEntityListShortcut({
     let index = getHighlightedEntity()?.index ?? -1;
     setJumpedToEnd(false);
 
-    setSelectedViewStore('hasUserInteractedEntity', true);
+    setViewDataStore(selectedView(), 'hasUserInteractedEntity', true);
 
     const entityEl = entityListRef()?.querySelector('[data-entity]');
     const scrollParent = getScrollParent(entityEl);
@@ -327,9 +308,24 @@ export function createNavigationEntityListShortcut({
 
       const selectedEntity = entities()?.at(index);
       if (selectedEntity) {
+        if (
+          splitHandle.content().type !== 'component' &&
+          splitHandle.content().type !== 'project'
+        ) {
+          const { type, id } = selectedEntity;
+          if (type === 'document') {
+            const { fileType } = selectedEntity;
+            splitHandle.replace(
+              { type: fileTypeToBlockName(fileType), id },
+              true
+            );
+          } else {
+            splitHandle.replace({ type, id }, true);
+          }
+        }
         batch(() => {
-          setSelectedViewStore('highlightedId', selectedEntity.id);
-          setSelectedViewStore('selectedEntity', selectedEntity);
+          setViewDataStore(selectedView(), 'highlightedId', selectedEntity.id);
+          setViewDataStore(selectedView(), 'selectedEntity', selectedEntity);
         });
       }
 
@@ -383,7 +379,11 @@ export function createNavigationEntityListShortcut({
 
     const onListScroll = () => {
       if (listScrollEl) {
-        setSelectedViewStore('scrollOffset', listScrollEl.scrollTop);
+        setViewDataStore(
+          selectedView(),
+          'scrollOffset',
+          listScrollEl.scrollTop
+        );
       }
     };
 
@@ -449,22 +449,24 @@ export function createNavigationEntityListShortcut({
   );
 
   registerHotkey({
-    hotkey: ['arrowdown', 'j'],
+    hotkey: ['j', 'arrowdown'],
     scopeId: splitHotkeyScope,
     description: 'Down',
     hotkeyToken: TOKENS.entity.step.end,
     keyDownHandler: () => {
+      playSound('down');
       navigateThroughList({ axis: 'end', mode: 'step' });
       return true;
     },
     hide: true,
   });
   registerHotkey({
-    hotkey: ['arrowup', 'k'],
+    hotkey: ['k', 'arrowup'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.step.start,
     description: 'Up',
     keyDownHandler: () => {
+      playSound('up');
       navigateThroughList({ axis: 'start', mode: 'step' });
       return true;
     },
@@ -509,19 +511,6 @@ export function createNavigationEntityListShortcut({
 
       return true;
     },
-  });
-  registerHotkey({
-    hotkey: ['p'],
-    scopeId: splitHotkeyScope,
-    description: 'Toggle Preview',
-    hotkeyToken: TOKENS.unifiedList.togglePreview,
-    keyDownHandler: () => {
-      if (!entityListRef()) return false;
-
-      setSelectedViewStore('display', 'preview', (prev) => !prev);
-      return true;
-    },
-    hide: true,
   });
 
   const navigateThroughViews = ({
@@ -679,10 +668,12 @@ const useAllViews = ({
 
         // Filter viewsData to exclude items that are not in savedViewConfigs, except for default views
         const savedViewIds = new Set(savedViewConfigs.map((view) => view.id));
-        const defaultViewIds = new Set(Object.keys(VIEWCONFIG_DEFAULTS));
         const filteredViewsData = Object.fromEntries(
           Object.entries(viewsData).filter(
-            ([viewId]) => savedViewIds.has(viewId) || defaultViewIds.has(viewId)
+            ([viewId, viewData]) =>
+              savedViewIds.has(viewId) ||
+              DEFAULT_VIEW_IDS_SET.has(viewId as View) ||
+              viewData.viewType !== undefined
           )
         );
 

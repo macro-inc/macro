@@ -1,4 +1,4 @@
-import { createMemo, For, Show } from 'solid-js';
+import { type Component, createMemo, For, Show } from 'solid-js';
 import { usePropertiesContext } from '../context/PropertiesContext';
 import type { Property } from '../types';
 import { PropertyRow } from './PropertyRow';
@@ -7,8 +7,8 @@ interface PropertiesListProps {
   properties: Property[];
 }
 
-export function PropertiesList(props: PropertiesListProps) {
-  const { openModal } = usePropertiesContext();
+export const PropertiesList: Component<PropertiesListProps> = (props) => {
+  const { openPropertyEditor, openDatePicker } = usePropertiesContext();
 
   const metadataProperties = createMemo(() =>
     props.properties.filter(
@@ -29,10 +29,15 @@ export function PropertiesList(props: PropertiesListProps) {
 
   const handleValueClick = (property: Property, anchor?: HTMLElement) => {
     if (property.valueType === 'DATE') {
-      openModal('date-picker', property, anchor);
-    } else {
-      openModal('edit-property', property, anchor);
+      openDatePicker(property, anchor);
+    } else if (
+      property.valueType === 'SELECT_STRING' ||
+      property.valueType === 'SELECT_NUMBER' ||
+      property.valueType === 'ENTITY'
+    ) {
+      openPropertyEditor(property, anchor);
     }
+    // LINK, STRING, NUMBER, BOOLEAN handle their own inline editing
   };
 
   return (
@@ -44,7 +49,7 @@ export function PropertiesList(props: PropertiesListProps) {
         </div>
       }
     >
-      <div class="grid grid-cols-[minmax(auto,50%)_1fr] gap-x-4 gap-y-3 pt-2">
+      <div class="grid grid-cols-[minmax(120px,50%)_minmax(150px,1fr)] gap-x-4 gap-y-3 pt-2 min-w-fit">
         <Show when={metadataProperties().length > 0}>
           <For each={metadataProperties()}>
             {(property) => (
@@ -73,4 +78,4 @@ export function PropertiesList(props: PropertiesListProps) {
       </div>
     </Show>
   );
-}
+};

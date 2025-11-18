@@ -4,11 +4,9 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { Model } from './model';
 import type { StreamErrorOneOfThreeStreamError } from './streamErrorOneOfThreeStreamError';
 
 export type StreamErrorOneOfThree = {
-  model: Model;
   stream_error: StreamErrorOneOfThreeStreamError;
   stream_id: string;
 };

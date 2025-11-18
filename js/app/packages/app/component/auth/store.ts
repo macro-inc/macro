@@ -1,12 +1,13 @@
 import { createSignal } from 'solid-js';
 import * as THREE from 'three';
+import { themeReactive } from '../../../block-theme/signals/themeReactive';
 
 export const [colorContrast, setColorContrast] = createSignal<THREE.Color>();
 export const [colorAccent, setColorAccent] = createSignal<THREE.Color>();
 export const [colorBase, setColorBase] = createSignal<THREE.Color>();
 export const rafSpeed = navigator.vendor?.includes('Apple') ? 2 : 1;
 export const [currentTheme, setCurrentTheme] = createSignal();
-export const [pixelation, setPixelation] = createSignal(0.78);
+export const [pixelation, setPixelation] = createSignal(1);
 export const [speed, setSpeed] = createSignal(1);
 
 export interface ThemeColor {
@@ -103,22 +104,21 @@ export function oklchToRgb(
 }
 
 export function getCurrentTheme(): ThemeColor {
-  const style = getComputedStyle(document.body);
   return {
     accent: oklchToRgb(
-      Number(style.getPropertyValue('--accent-l')),
-      Number(style.getPropertyValue('--accent-c')),
-      Number(style.getPropertyValue('--accent-h'))
+      themeReactive.a0.l[0](),
+      themeReactive.a0.c[0](),
+      themeReactive.a0.h[0]()
     ),
     surface: oklchToRgb(
-      Number(style.getPropertyValue('--surface-l')),
-      Number(style.getPropertyValue('--surface-c')),
-      Number(style.getPropertyValue('--surface-h'))
+      themeReactive.b0.l[0](),
+      themeReactive.b0.c[0](),
+      themeReactive.b0.h[0]()
     ),
     contrast: oklchToRgb(
-      Number(style.getPropertyValue('--contrast-l')),
-      Number(style.getPropertyValue('--contrast-c')),
-      Number(style.getPropertyValue('--contrast-h'))
+      themeReactive.c0.l[0](),
+      themeReactive.c0.c[0](),
+      themeReactive.c0.h[0]()
     ),
   };
 }

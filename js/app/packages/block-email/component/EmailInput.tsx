@@ -2,16 +2,17 @@ import type {
   MessageToSendDbId,
   MessageWithBodyReplyless,
 } from '@service-email/generated/schemas';
-import { type Accessor, createMemo, Show } from 'solid-js';
+import { type Accessor, createMemo, type Setter, Show } from 'solid-js';
 import { produce } from 'solid-js/store';
 import { decodeBase64Utf8 } from '../util/decodeBase64';
-import { scrollToLastMessage } from '../util/scrollToMessage';
 import { BaseInput } from './BaseInput';
 import { useEmailContext } from './EmailContext';
 
 interface EmailInputProps {
   replyingTo: Accessor<MessageWithBodyReplyless>;
   draft?: MessageWithBodyReplyless;
+  setShowReply?: Setter<boolean>;
+  markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }
 
 export function EmailInput(props: EmailInputProps) {
@@ -22,15 +23,6 @@ export function EmailInput(props: EmailInputProps) {
     if (!encoded) return '';
     const decodedHtml = decodeBase64Utf8(encoded);
     return decodedHtml;
-  });
-
-  const draftContainsAppendedReply = createMemo(() => {
-    if (!draftHTML()) return false;
-    return (
-      new DOMParser()
-        .parseFromString(draftHTML(), 'text/html')
-        .body.querySelector('div.macro_quote') !== null
-    );
   });
 
   function afterSend(newMessageId: MessageToSendDbId | null) {
@@ -47,19 +39,13 @@ export function EmailInput(props: EmailInputProps) {
       );
     }
 
+    props.setShowReply?.(false);
+
     // Refresh to get the new message
     resource.refresh();
 
     // Set focus to new message if provided
     if (newMessageId) ctx.setFocusedMessageId(newMessageId);
-
-    // Scroll last message into view after DOM updates
-    setTimeout(() => {
-      const container = ctx.messagesRef();
-      if (container) {
-        scrollToLastMessage(container, 'smooth');
-      }
-    }, 100);
   }
 
   return (
@@ -68,8 +54,9 @@ export function EmailInput(props: EmailInputProps) {
         replyingTo={props.replyingTo}
         draft={props.draft}
         preloadedHtml={draftHTML()}
-        draftContainsAppendedReply={draftContainsAppendedReply()}
         sideEffectOnSend={afterSend}
+        setShowReply={props.setShowReply}
+        markdownDomRef={props.markdownDomRef}
       />
     </Show>
   );

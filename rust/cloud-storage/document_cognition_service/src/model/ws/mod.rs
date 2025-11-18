@@ -267,7 +267,7 @@ pub enum StreamError {
     ProviderError { stream_id: String, model: Model },
 
     #[error("model context overflow")]
-    ModelContextOverflow { stream_id: String, model: Model },
+    ModelContextOverflow { stream_id: String },
 
     #[error("internal error")]
     InternalError { stream_id: String },
@@ -296,10 +296,9 @@ impl StreamWebSocketError {
             StreamWebSocketError::StreamError(StreamError::ProviderError { stream_id, .. }) => {
                 stream_id
             }
-            StreamWebSocketError::StreamError(StreamError::ModelContextOverflow {
-                stream_id,
-                ..
-            }) => stream_id,
+            StreamWebSocketError::StreamError(StreamError::ModelContextOverflow { stream_id }) => {
+                stream_id
+            }
             StreamWebSocketError::StreamError(StreamError::InternalError { stream_id, .. }) => {
                 stream_id
             }

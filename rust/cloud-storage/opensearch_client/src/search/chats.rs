@@ -3,19 +3,21 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{DefaultSearchResponse, parse_highlight_hit},
+        model::{DefaultSearchResponse, Highlight, parse_highlight_hit},
         query::Keys,
         utils::should_wildcard_field_query_builder,
     },
 };
 
 use crate::SearchOn;
-use opensearch_query_builder::{FieldSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson};
+use opensearch_query_builder::{
+    FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
+};
 use serde_json::Value;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChatIndex {
-    pub chat_id: String,
+    pub entity_id: String,
     pub chat_message_id: String,
     pub user_id: String,
     pub role: String,
@@ -32,20 +34,19 @@ pub struct ChatSearchResponse {
     pub role: String,
     pub updated_at: i64,
     pub title: String,
-    pub content: Option<Vec<String>>,
+    pub highlight: Highlight,
 }
 
 struct ChatSearchConfig;
 
 impl SearchQueryConfig for ChatSearchConfig {
-    const ID_KEY: &'static str = "chat_id";
     const INDEX: &'static str = CHAT_INDEX;
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "title";
 
     fn default_sort_types() -> Vec<SortType> {
         vec![
-            SortType::Field(FieldSort::new("updated_at_seconds", SortOrder::Desc)),
+            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
             SortType::Field(FieldSort::new("chat_message_id", SortOrder::Asc)),
         ]
@@ -76,6 +77,7 @@ impl ChatQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
+        fn disable_recency(disable_recency: bool) -> Self;
     }
 
     pub fn role(mut self, role: Vec<String>) -> Self {
@@ -118,6 +120,7 @@ pub struct ChatSearchArgs {
     pub search_on: SearchOn,
     pub collapse: bool,
     pub ids_only: bool,
+    pub disable_recency: bool,
 }
 
 impl ChatSearchArgs {
@@ -132,16 +135,17 @@ impl ChatSearchArgs {
             .search_on(self.search_on)
             .collapse(self.collapse)
             .ids_only(self.ids_only)
+            .disable_recency(self.disable_recency)
             .build_search_request()?
             .to_json())
     }
 }
 
+#[tracing::instrument(skip(client, args), err)]
 pub(crate) async fn search_chats(
     client: &opensearch::OpenSearch,
     args: ChatSearchArgs,
 ) -> Result<Vec<ChatSearchResponse>> {
-    let search_on = args.search_on;
     let query_body = args.build()?;
 
     let response = client
@@ -165,21 +169,23 @@ pub(crate) async fn search_chats(
         .hits
         .into_iter()
         .map(|hit| ChatSearchResponse {
-            chat_id: hit._source.chat_id,
+            chat_id: hit._source.entity_id,
             chat_message_id: hit._source.chat_message_id,
             user_id: hit._source.user_id,
             role: hit._source.role,
             title: hit._source.title,
-            content: hit.highlight.map(|h| {
-                parse_highlight_hit(
-                    h,
-                    Keys {
-                        title_key: ChatSearchConfig::TITLE_KEY,
-                        content_key: ChatSearchConfig::CONTENT_KEY,
-                    },
-                    search_on,
-                )
-            }),
+            highlight: hit
+                .highlight
+                .map(|h| {
+                    parse_highlight_hit(
+                        h,
+                        Keys {
+                            title_key: ChatSearchConfig::TITLE_KEY,
+                            content_key: ChatSearchConfig::CONTENT_KEY,
+                        },
+                    )
+                })
+                .unwrap_or_default(),
             updated_at: hit._source.updated_at_seconds,
         })
         .collect())
