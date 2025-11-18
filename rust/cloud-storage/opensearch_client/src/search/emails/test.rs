@@ -10,8 +10,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
         .user_id("user123")
         .search_on(SearchOn::Content)
         .collapse(true)
-        .ids(vec!["msg1".to_string(), "msg2".to_string()])
-        .thread_ids(vec!["thread1".to_string(), "thread2".to_string()])
+        .ids(vec!["thread1".to_string(), "thread2".to_string()])
         .link_ids(vec!["link1".to_string(), "link2".to_string()])
         .sender(vec!["sender@example.com".to_string()])
         .cc(vec!["cc@example.com".to_string()])
@@ -24,7 +23,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
         "from": 20,
         "size": 20,
         "collapse": {
-            "field": "message_id"
+            "field": "entity_id"
         },
         "sort": EmailSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
         "highlight": EmailSearchConfig::default_highlight().to_json(),
@@ -35,11 +34,6 @@ fn test_build_search_request() -> anyhow::Result<()> {
                     {
                         "match_phrase": {
                             "content": "test"
-                        }
-                    },
-                    {
-                        "terms": {
-                            "thread_id": ["thread1", "thread2"]
                         }
                     },
                     {
@@ -111,7 +105,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
                 "should": [
                     {
                         "terms": {
-                            "message_id": ["msg1", "msg2"]
+                            "entity_id": ["thread1", "thread2"]
                         }
                     },
                     {

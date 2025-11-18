@@ -1,16 +1,14 @@
 // biohazard
 use crate::api::context::ApiContext;
-use crate::core::model::{CHAT_MODELS, FALLBACK_MODEL};
+use crate::core::model::FALLBACK_MODEL;
 use crate::model::chats::ChatResponse;
 use ai::model_selection::ModelSelection;
-use ai::{model_selection::select_model, types::Model};
 use anyhow::Context;
 use macro_db_client::dcs::get_chat::{
     get_chat_db, get_messages, get_web_citations, raw_attachments,
 };
 use macro_db_client::dcs::get_document_name_and_type::get_document_name_and_type;
 use model::chat::{AttachmentMetadata, AttachmentType, ChatAttachmentWithName};
-use std::str::FromStr;
 use unfurl_service::GetUnfurlResponse;
 
 #[tracing::instrument(err, skip(ctx))]
@@ -92,15 +90,13 @@ pub async fn get_chat(
         .await
         .context("Failed to get messages")?;
 
-    let model = chat
-        .model
-        .map(|m| Model::from_str(&m).unwrap_or(FALLBACK_MODEL));
+    let model = Some(FALLBACK_MODEL);
 
-    let model_selection = select_model(None, chat.token_count.unwrap_or(0), CHAT_MODELS.to_vec())
-        .unwrap_or_else(|_| ModelSelection {
-            available_models: vec![],
-            new_model: None,
-        });
+    // relic of model selection
+    let model_selection = ModelSelection {
+        available_models: vec![FALLBACK_MODEL],
+        new_model: None,
+    };
 
     let web_citations = get_web_citations(&ctx.db, chat_id)
         .await

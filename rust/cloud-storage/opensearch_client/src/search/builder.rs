@@ -45,7 +45,7 @@ macro_rules! delegate_methods {
 
 pub trait SearchQueryConfig {
     /// Key for item id
-    const ID_KEY: &'static str;
+    const ID_KEY: &'static str = "entity_id";
     /// Index name
     #[allow(dead_code)]
     const INDEX: &'static str;
@@ -70,7 +70,7 @@ pub trait SearchQueryConfig {
         Highlight::new().require_field_match(true).field(
             "content",
             HighlightField::new()
-                .highlight_type("unified")
+                .highlight_type("plain")
                 .pre_tags(vec![MacroEm::Open.to_string()])
                 .post_tags(vec![MacroEm::Close.to_string()])
                 .number_of_fragments(500),
@@ -222,7 +222,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             SearchOn::Name => Highlight::new().require_field_match(true).field(
                 T::TITLE_KEY,
                 HighlightField::new()
-                    .highlight_type("unified")
+                    .highlight_type("plain")
                     .pre_tags(vec![MacroEm::Open.to_string()])
                     .post_tags(vec![MacroEm::Close.to_string()])
                     .number_of_fragments(1),
@@ -232,7 +232,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                 .field(
                     T::TITLE_KEY,
                     HighlightField::new()
-                        .highlight_type("unified")
+                        .highlight_type("plain")
                         .pre_tags(vec![MacroEm::Open.to_string()])
                         .post_tags(vec![MacroEm::Close.to_string()])
                         .number_of_fragments(1),
@@ -240,7 +240,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                 .field(
                     T::CONTENT_KEY,
                     HighlightField::new()
-                        .highlight_type("unified")
+                        .highlight_type("plain")
                         .pre_tags(vec![MacroEm::Open.to_string()])
                         .post_tags(vec![MacroEm::Close.to_string()])
                         .number_of_fragments(1),

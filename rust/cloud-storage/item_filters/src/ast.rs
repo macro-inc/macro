@@ -15,11 +15,16 @@ use serde::{Deserialize, Serialize};
 use std::{marker::PhantomData, sync::Arc};
 use thiserror::Error;
 
-mod channel;
-mod chat;
-mod document;
-mod email;
-mod project;
+/// contains the ast literal value for channels
+pub mod channel;
+/// contains the ast literal value for chat
+pub mod chat;
+/// contains the ast literal value for documents
+pub mod document;
+/// contains the ast literal value for emails
+pub mod email;
+/// contains the ast literal value for projects
+pub mod project;
 
 #[cfg(test)]
 mod tests;
@@ -86,6 +91,18 @@ impl EntityFilterAst {
                 chat_filter: ChatFilters::expand_ast(entity_filter.chat_filters)?,
             }),
         }))
+    }
+
+    /// mock function to create the an empty ast
+    #[cfg(feature = "mock")]
+    pub fn mock_empty() -> Self {
+        Self {
+            inner: Arc::new(EntityFilterInner {
+                document_filter: None,
+                project_filter: None,
+                chat_filter: None,
+            }),
+        }
     }
 }
 

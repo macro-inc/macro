@@ -1,14 +1,14 @@
 require('dotenv').config();
 
 import type { Client } from '@opensearch-project/opensearch';
-import { client } from './client';
+import { client } from '../client';
 import {
   CHANNEL_INDEX,
   CHAT_INDEX,
   DOCUMENT_INDEX,
   EMAIL_INDEX,
   PROJECT_INDEX,
-} from './constants';
+} from '../constants';
 
 interface FieldToRemove {
   fieldName: string;
@@ -180,7 +180,7 @@ async function removeFieldFromDocuments(
     if (body.failures && body.failures.length > 0) {
       console.error(
         `  ⚠️  Encountered ${body.failures.length} failures:`,
-        body.failures,
+        body.failures
       );
       throw new Error(`Update by query failed for some documents`);
     }
@@ -191,10 +191,10 @@ async function removeFieldFromDocuments(
     return updated;
   }
 
-    throw new Error(
-      `Update by query returned a task ID instead of completing synchronously. ` +
-        `Task ID: ${body.task}. This script does not support async operations.`,
-    );
+  throw new Error(
+    `Update by query returned a task ID instead of completing synchronously. ` +
+      `Task ID: ${body.task}. This script does not support async operations.`
+  );
 }
 
 async function verifyFieldRemoval(
@@ -340,11 +340,13 @@ async function runCleanup(dryRun: boolean = true) {
     `OpenSearch Field Cleanup Script ${dryRun ? '(DRY-RUN MODE)' : '(LIVE MODE)'}`
   );
   console.log('='.repeat(60));
+  console.log('\nThis script will remove old timestamp fields with incorrect');
   console.log(
-    '\nThis script will remove old timestamp fields with incorrect'
+    'epoch_millis interpretation after migration to *_seconds fields.'
   );
-  console.log('epoch_millis interpretation after migration to *_seconds fields.');
-  console.log('\n⚠️  WARNING: This will permanently delete data from documents!');
+  console.log(
+    '\n⚠️  WARNING: This will permanently delete data from documents!'
+  );
   console.log(
     'Make sure you have run migrate_timestamp_epoch_seconds.ts first.'
   );

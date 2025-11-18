@@ -997,7 +997,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             </Show>
             <DropdownMenu
               size="SM"
-              theme="secondary"
+              theme="primary"
               triggerLabel={<StyledTriggerLabel>Filter</StyledTriggerLabel>}
             >
               <div class="min-w-[10vw] max-w-md">

@@ -4,6 +4,7 @@ use crate::{CHAT_INDEX, Result, date_format::EpochSeconds, error::OpensearchClie
 #[derive(Debug, serde::Serialize)]
 pub struct UpsertChatMessageArgs {
     /// The id of the chat
+    #[serde(rename = "entity_id")]
     pub chat_id: String,
     /// The id of the chat message
     pub chat_message_id: String,

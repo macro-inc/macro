@@ -161,7 +161,7 @@ if (stack !== 'local') {
       envVars: {
         DYNAMODB_TABLE: pulumi.interpolate`${dynamoTableName}`,
         UPLOAD_BUCKET_NAME: pulumi.interpolate`${bulkUploadBucket.bucket.bucket}`,
-        DSS_AUTH_KEY: pulumi.interpolate`${documentStorageServiceAuthKey}`,
+        INTERNAL_API_SECRET_KEY: pulumi.interpolate`${documentStorageServiceAuthKey}`,
         DSS_URL: pulumi.interpolate`${cloudStorageServiceUrl}`,
         CONNECTION_GATEWAY_URL: pulumi.interpolate`${connectionGatewayUrl}`,
         ENVIRONMENT: stack,

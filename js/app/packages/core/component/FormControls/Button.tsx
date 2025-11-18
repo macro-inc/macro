@@ -39,7 +39,7 @@ export const Button: ParentComponent<{
   const hasHotkey = () => !!(props.hotkeyShortcut || props.hotkeyToken);
   return (
     <Polymorphic
-      class="relative flex items-stretch hover:opacity-80 disabled:opacity-50 [&:focus]:[--focus-border-inset:-4px] font-mono font-medium uppercase leading-none tracking-wide disabled:cursor-not-allowed"
+      class="relative flex items-stretch hover:opacity-80 disabled:opacity-50 [&:focus]:[--focus-border-inset:-4px] font-mono font-medium uppercase leading-none disabled:cursor-not-allowed"
       classList={{
         [`${sizeClass[props.size || 'Base']}`]: !hasHotkey(),
         [`${themeClass[props.theme || 'primary']}`]: !hasHotkey(),

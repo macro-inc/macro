@@ -1,5 +1,5 @@
 use crate::domain::{
-    models::{AdvancedSortParams, SimpleSortFilter, SimpleSortRequest},
+    models::{AdvancedSortParams, SimpleSortQuery, SimpleSortRequest},
     ports::SoupRepo,
 };
 use either::Either;
@@ -26,22 +26,33 @@ impl SoupRepo for PgSoupRepo {
         &self,
         req: SimpleSortRequest<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send {
-        match req.cursor.filter() {
-            Some(SimpleSortFilter::Ast(_ast) | SimpleSortFilter::FrecencyAst(_, _ast)) => todo!(),
-            Some(SimpleSortFilter::Frecency(f)) => {
-                let f = *f;
-                Either::Left(expanded::by_cursor::no_frecency_expanded_generic_soup(
+        match req.cursor {
+            SimpleSortQuery::ItemsAndFrecencyFilter(_) => {
+                Either::Left(Either::Left(not_implemented(req)))
+            }
+            SimpleSortQuery::ItemsFilter(ast) => Either::Left(Either::Right(
+                expanded::dynamic::expanded_dynamic_cursor_soup(
                     &self.inner,
                     req.user_id,
                     req.limit,
-                    req.cursor.map_filter(|_| f),
-                ))
-            }
-            None => Either::Right(expanded::by_cursor::expanded_generic_cursor_soup(
-                &self.inner,
-                req.user_id,
-                req.limit,
-                req.cursor.map_filter(|_| ()),
+                    ast,
+                ),
+            )),
+            SimpleSortQuery::FilterFrecency(f) => Either::Right(Either::Left(
+                expanded::by_cursor::no_frecency_expanded_generic_soup(
+                    &self.inner,
+                    req.user_id,
+                    req.limit,
+                    f,
+                ),
+            )),
+            SimpleSortQuery::NoFilter(f) => Either::Right(Either::Right(
+                expanded::by_cursor::expanded_generic_cursor_soup(
+                    &self.inner,
+                    req.user_id,
+                    req.limit,
+                    f,
+                ),
             )),
         }
     }
@@ -50,22 +61,26 @@ impl SoupRepo for PgSoupRepo {
         &self,
         req: SimpleSortRequest<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send {
-        match req.cursor.filter() {
-            Some(SimpleSortFilter::Ast(_ast) | SimpleSortFilter::FrecencyAst(_, _ast)) => todo!(),
-            Some(SimpleSortFilter::Frecency(f)) => {
-                let f = *f;
-                Either::Left(expanded::by_cursor::no_frecency_expanded_generic_soup(
+        match req.cursor {
+            SimpleSortQuery::ItemsFilter(_) => Either::Left(Either::Left(not_implemented(req))),
+            SimpleSortQuery::ItemsAndFrecencyFilter(_) => {
+                Either::Left(Either::Right(not_implemented(req)))
+            }
+            SimpleSortQuery::FilterFrecency(f) => Either::Right(Either::Left(
+                expanded::by_cursor::no_frecency_expanded_generic_soup(
                     &self.inner,
                     req.user_id,
                     req.limit,
-                    req.cursor.map_filter(|_| f),
-                ))
-            }
-            None => Either::Right(unexpanded::by_cursor::unexpanded_generic_cursor_soup(
-                &self.inner,
-                req.user_id,
-                req.limit,
-                req.cursor.map_filter(|_| ()),
+                    f,
+                ),
+            )),
+            SimpleSortQuery::NoFilter(f) => Either::Right(Either::Right(
+                unexpanded::by_cursor::unexpanded_generic_cursor_soup(
+                    &self.inner,
+                    req.user_id,
+                    req.limit,
+                    f,
+                ),
             )),
         }
     }
@@ -83,4 +98,11 @@ impl SoupRepo for PgSoupRepo {
     ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send {
         unexpanded::by_ids::unexpanded_soup_by_ids(&self.inner, req.user_id, req.entities)
     }
+}
+
+#[tracing::instrument(err)]
+async fn not_implemented<Ok>(_req: SimpleSortRequest<'_>) -> Result<Ok, sqlx::Error> {
+    Err(sqlx::Error::InvalidArgument(
+        "Unexpanded soup ast filters are not yet supported".to_string(),
+    ))
 }

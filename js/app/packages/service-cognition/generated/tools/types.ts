@@ -484,9 +484,9 @@ export interface UnifiedSearchInput {
      */
     match_type: 'exact' | 'partial' | 'regexp';
     /**
-     * If true, match the `terms` field on name only. If false, names will not be matched on in the search. False by default.
+     * Fields to search on (Name, Content, NameContent). Defaults to Content
      */
-    name_only: boolean | null;
+    search_on: 'name' | 'content' | 'name_content';
     /**
      * Multiple distinct search terms as separate strings. Use this for keyword-based searches where you want to find content containing any of these terms. Each term must be at least 3 characters (shorter terms are automatically filtered out). Examples: ['machine', 'learning', 'algorithms'], ['project', 'status', 'update']. `null` this field if searching without text terms to search all. This field matches query string against both name and content.
      */
@@ -513,10 +513,6 @@ export interface UnifiedSearchOutput {
     results: (
       | {
           /**
-           * The opensearch matches on the document
-           */
-          content?: string[] | null;
-          /**
            * The document id
            */
           document_id: string;
@@ -528,6 +524,19 @@ export interface UnifiedSearchOutput {
            * The file type
            */
           file_type: string;
+          /**
+           * The highlights on the document
+           */
+          highlight: {
+            /**
+             * The highlight match on the content field
+             */
+            content?: string[];
+            /**
+             * The highlight match on the name field
+             */
+            name?: string | null;
+          };
           /**
            * The node id
            */
@@ -556,9 +565,18 @@ export interface UnifiedSearchOutput {
            */
           chat_message_id: string;
           /**
-           * The opensearch matches on the chat
+           * The highlights on the chat
            */
-          content?: string[] | null;
+          highlight: {
+            /**
+             * The highlight match on the content field
+             */
+            content?: string[];
+            /**
+             * The highlight match on the name field
+             */
+            name?: string | null;
+          };
           /**
            * The role
            */
@@ -587,9 +605,18 @@ export interface UnifiedSearchOutput {
            */
           cc: string[];
           /**
-           * The opensearch matches on the email
+           * The highlights on the email
            */
-          content?: string[] | null;
+          highlight: {
+            /**
+             * The highlight match on the content field
+             */
+            content?: string[];
+            /**
+             * The highlight match on the name field
+             */
+            name?: string | null;
+          };
           /**
            * The labels
            */
@@ -646,13 +673,22 @@ export interface UnifiedSearchOutput {
            */
           channel_type: string;
           /**
-           * The opensearch matches on the channel message
-           */
-          content?: string[] | null;
-          /**
            * The time the channel message was created
            */
           created_at: string;
+          /**
+           * The highlights on the channel message
+           */
+          highlight: {
+            /**
+             * The highlight match on the content field
+             */
+            content?: string[];
+            /**
+             * The highlight match on the name field
+             */
+            name?: string | null;
+          };
           /**
            * The mentions
            */
@@ -681,17 +717,22 @@ export interface UnifiedSearchOutput {
         }
       | {
           /**
-           * The opensearch matches on the project
-           */
-          content?: string[] | null;
-          /**
            * The time the project was created
            */
           created_at: string;
           /**
-           * The parent project id
+           * The highlights on the project
            */
-          parent_project_id?: string | null;
+          highlight: {
+            /**
+             * The highlight match on the content field
+             */
+            content?: string[];
+            /**
+             * The highlight match on the name field
+             */
+            name?: string | null;
+          };
           /**
            * The project id
            */

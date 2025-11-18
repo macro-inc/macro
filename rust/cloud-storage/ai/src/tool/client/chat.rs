@@ -4,8 +4,7 @@ use crate::tool::types::{ChatCompletionStream, ToolResponse};
 
 use crate::types::openai::message::convert_message;
 use crate::types::{ChatCompletionRequest, ChatMessage, ChatMessages};
-use crate::types::{Client, RequestExtensions};
-use anyhow::Result;
+use crate::types::{Client, RequestExtensions, Result};
 use async_openai::types::{
     ChatCompletionMessageToolCall, ChatCompletionRequestAssistantMessage,
     ChatCompletionRequestAssistantMessageContent, ChatCompletionRequestMessage,
@@ -324,7 +323,7 @@ where
                             tool_calls = HashMap::new();
                         }
                     }
-                    Err(error) => yield Err(anyhow::Error::from(error)),
+                    Err(error) => yield Err(error.into()),
                 }
             }
         }))
