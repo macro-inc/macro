@@ -16,15 +16,18 @@ import { storageServiceClient } from '@service-storage/client';
 import { createEventBus } from '@solid-primitives/event-bus';
 import { raceTimeout, until } from '@solid-primitives/promise';
 import {
-  bebopPlugin,
+  BebopSerializer,
+  ConstantBackoff,
+  type UrlResolver,
+  untilMessage,
+  WebsocketBuilder,
+  WebsocketConnectionState,
+} from '@websocket';
+import {
   createReconnectEffect,
   createSocketEffect,
-  createWSState,
-  heartbeatPlugin,
-  makeDurableSocket,
-  untilMessage,
-  WebSocketState,
-} from '@websocket/index';
+} from '@websocket/solid/socket-effect';
+import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
 import { encodeFrontiers, type Frontiers } from 'loro-crdt';
 import { err, ok, type Result, ResultAsync } from 'neverthrow';
 import { createStore } from 'solid-js/store';
@@ -37,14 +40,15 @@ import {
 
 const SYNC_SERVICE_WS_URL = `${SYNC_SERVICE_HOSTS['ws']}/document`;
 
-function mapToSyncStatus(status: WebSocketState): SyncSourceStatus {
+function mapToSyncStatus(status: WebsocketConnectionState): SyncSourceStatus {
   switch (status) {
-    case WebSocketState.Connecting:
+    case WebsocketConnectionState.Connecting:
       return SyncSourceStatus.Connecting;
-    case WebSocketState.Open:
+    case WebsocketConnectionState.Open:
       return SyncSourceStatus.Connected;
-    case WebSocketState.Closed:
-    case WebSocketState.Closing:
+    case WebsocketConnectionState.Closed:
+    case WebsocketConnectionState.Closing:
+    case WebsocketConnectionState.Reconnecting:
       return SyncSourceStatus.Disconnected;
   }
 }
@@ -55,7 +59,7 @@ function createSyncServiceSocket(documentId: string, token: string) {
   /**
    * Refetches the token if it is expired
    */
-  const getUrl = async () => {
+  const getUrl: UrlResolver = async () => {
     const response =
       await storageServiceClient.permissionsTokens.createPermissionToken({
         document_id: documentId,
@@ -71,21 +75,18 @@ function createSyncServiceSocket(documentId: string, token: string) {
     return `${SYNC_SERVICE_WS_URL}/${documentId}/connect?token=${token}`;
   };
 
-  return makeDurableSocket(
-    URL,
-    {
-      backoffStrategy: 'constant',
-      delay: 500,
-      reconnectUrlResolver: getUrl,
-    },
-    [
-      heartbeatPlugin({
-        interval: 1_000,
-        wait: 1_000,
-      }),
-      bebopPlugin(FromPeer, FromRemote),
-    ]
-  );
+  return new WebsocketBuilder(getUrl)
+    .withSerializer(new BebopSerializer(FromPeer, FromRemote))
+    .withBackoff(new ConstantBackoff(500))
+    .withMaxRetries(20)
+    .withHeartbeat({
+      interval: 1_000,
+      timeout: 1_000,
+      pingMessage: 'ping',
+      pongMessage: 'pong',
+      maxMissedHeartbeats: 1,
+    })
+    .build();
 }
 
 const TIMEOUTS = {
@@ -128,7 +129,7 @@ export const createSyncServiceSource = async (
 
   const eventBus = createEventBus<SyncSourceEvent>();
 
-  const status = createWSState(ws);
+  const status = createWebsocketStateSignal(ws);
 
   const [awaitingAckStore, setAwaitingAck] = createStore<Record<string, true>>(
     {}

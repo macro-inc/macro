@@ -9,5 +9,5 @@
     "isolatedModules": true,
     "skipLibCheck": true,
     "moduleResolution": "bundler"
-  },
+  }
 }
