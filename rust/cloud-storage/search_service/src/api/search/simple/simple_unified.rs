@@ -1,4 +1,3 @@
-use super::{simple_channel, simple_chat, simple_document, simple_email, simple_project};
 use crate::api::{
     ApiContext,
     search::{
@@ -12,19 +11,9 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use futures::{FutureExt, StreamExt, stream::FuturesUnordered};
+use futures::FutureExt;
 use model::{response::ErrorResponse, user::UserContext};
-use models_search::{
-    channel::ChannelSearchRequest,
-    chat::ChatSearchRequest,
-    document::DocumentSearchRequest,
-    email::EmailSearchRequest,
-    project::ProjectSearchRequest,
-    unified::{
-        SimpleUnifiedSearchResponse, SimpleUnifiedSearchResponseItem, UnifiedSearchIndex,
-        UnifiedSearchRequest, UnifiedSearchResponseItem,
-    },
-};
+use models_search::unified::{SimpleUnifiedSearchResponse, UnifiedSearchRequest};
 use opensearch_client::search::unified::{
     UnifiedChannelMessageSearchArgs, UnifiedChatSearchArgs, UnifiedDocumentSearchArgs,
     UnifiedEmailSearchArgs, UnifiedProjectSearchArgs, UnifiedSearchArgs,
@@ -139,7 +128,6 @@ pub async fn handler(
         match_type: match_type.to_string(),
         search_on: search_on.into(),
         collapse,
-        ids_only: false, // TODO: implement using all filter ids_only?
         disable_recency,
         document_search_args: UnifiedDocumentSearchArgs {
             document_ids: filter_document_response.document_ids,
@@ -162,9 +150,11 @@ pub async fn handler(
         chat_search_args: UnifiedChatSearchArgs {
             chat_ids: Vec::new(),
             role: Vec::new(),
+            ids_only: false,
         },
         project_search_args: UnifiedProjectSearchArgs {
             project_ids: Vec::new(),
+            ids_only: false,
         },
     };
 

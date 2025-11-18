@@ -38,7 +38,6 @@ pub struct UnifiedSearchArgs {
     pub match_type: String,
     pub search_on: SearchOn,
     pub collapse: bool,
-    pub ids_only: bool,
     pub disable_recency: bool,
     pub document_search_args: UnifiedDocumentSearchArgs,
     pub email_search_args: UnifiedEmailSearchArgs,
@@ -74,7 +73,7 @@ impl From<UnifiedSearchArgs> for EmailSearchArgs {
             match_type: args.match_type,
             search_on: args.search_on,
             collapse: args.collapse,
-            ids_only: args.ids_only,
+            ids_only: false, // Email is never ids only at the moment
             disable_recency: args.disable_recency,
             thread_ids: args.email_search_args.thread_ids,
             link_ids: args.email_search_args.link_ids,
@@ -96,7 +95,7 @@ impl From<UnifiedSearchArgs> for ChannelMessageSearchArgs {
             match_type: args.match_type,
             search_on: args.search_on,
             collapse: args.collapse,
-            ids_only: args.ids_only,
+            ids_only: true, // channel messages are always ids only
             disable_recency: args.disable_recency,
             channel_ids: args.channel_message_search_args.channel_ids,
             thread_ids: args.channel_message_search_args.thread_ids,
@@ -116,7 +115,7 @@ impl From<UnifiedSearchArgs> for ChatSearchArgs {
             match_type: args.match_type,
             search_on: args.search_on,
             collapse: args.collapse,
-            ids_only: args.ids_only,
+            ids_only: args.chat_search_args.ids_only,
             disable_recency: args.disable_recency,
             chat_ids: args.chat_search_args.chat_ids,
             role: args.chat_search_args.role,
@@ -134,7 +133,7 @@ impl From<UnifiedSearchArgs> for ProjectSearchArgs {
             match_type: args.match_type,
             search_on: args.search_on,
             collapse: args.collapse,
-            ids_only: args.ids_only,
+            ids_only: args.project_search_args.ids_only,
             disable_recency: args.disable_recency,
             project_ids: args.project_search_args.project_ids,
         }
@@ -145,6 +144,7 @@ impl From<UnifiedSearchArgs> for ProjectSearchArgs {
 pub struct UnifiedChatSearchArgs {
     pub chat_ids: Vec<String>,
     pub role: Vec<String>,
+    pub ids_only: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -166,6 +166,7 @@ pub struct UnifiedEmailSearchArgs {
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedProjectSearchArgs {
     pub project_ids: Vec<String>,
+    pub ids_only: bool,
 }
 
 #[derive(Debug, Default, Clone)]

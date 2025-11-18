@@ -408,7 +408,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         match_type: "exact".to_string(),
         search_on: SearchOn::Content,
         collapse: true,
-        ids_only: false,
         disable_recency: false,
         document_search_args: UnifiedDocumentSearchArgs {
             document_ids: vec!["id1".to_string(), "id2".to_string()],
@@ -431,9 +430,11 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         chat_search_args: UnifiedChatSearchArgs {
             chat_ids: vec!["id1".to_string(), "id2".to_string()],
             role: vec!["id1".to_string(), "id2".to_string()],
+            ids_only: false,
         },
         project_search_args: UnifiedProjectSearchArgs {
             project_ids: vec!["id1".to_string(), "id2".to_string()],
+            ids_only: false,
         },
     };
 
@@ -675,11 +676,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                       ]
                     }
                   },
-                  {
-                    "term": {
-                      "sender_id": "user"
-                    }
-                  }
                 ]
               }
             },
@@ -799,10 +795,10 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
         match_type: "exact".to_string(),
         search_on: SearchOn::Name,
         collapse: true,
-        ids_only: false,
         disable_recency: false,
         document_search_args: UnifiedDocumentSearchArgs {
             document_ids: vec!["id1".to_string(), "id2".to_string()],
+            ids_only: false,
         },
         email_search_args: UnifiedEmailSearchArgs {
             thread_ids: vec!["id1".to_string(), "id2".to_string()],
@@ -821,9 +817,11 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
         chat_search_args: UnifiedChatSearchArgs {
             chat_ids: vec!["id1".to_string(), "id2".to_string()],
             role: vec!["id1".to_string(), "id2".to_string()],
+            ids_only: false,
         },
         project_search_args: UnifiedProjectSearchArgs {
             project_ids: vec!["id1".to_string(), "id2".to_string()],
+            ids_only: false,
         },
     };
 
@@ -1105,11 +1103,6 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
                       ]
                     }
                   },
-                  {
-                    "term": {
-                      "sender_id": "user"
-                    }
-                  }
                 ]
               }
             },
@@ -1229,10 +1222,10 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
         match_type: "exact".to_string(),
         search_on: SearchOn::NameContent,
         collapse: true,
-        ids_only: false,
         disable_recency: false,
         document_search_args: UnifiedDocumentSearchArgs {
             document_ids: vec!["id1".to_string(), "id2".to_string()],
+            ids_only: false,
         },
         email_search_args: UnifiedEmailSearchArgs {
             thread_ids: vec!["id1".to_string(), "id2".to_string()],
@@ -1251,9 +1244,11 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
         chat_search_args: UnifiedChatSearchArgs {
             chat_ids: vec!["id1".to_string(), "id2".to_string()],
             role: vec!["id1".to_string(), "id2".to_string()],
+            ids_only: false,
         },
         project_search_args: UnifiedProjectSearchArgs {
             project_ids: vec!["id1".to_string(), "id2".to_string()],
+            ids_only: false,
         },
     };
 
@@ -1677,11 +1672,6 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                           ]
                         }
                       },
-                      {
-                        "term": {
-                          "sender_id": "user"
-                        }
-                      }
                     ]
                   }
                 },
