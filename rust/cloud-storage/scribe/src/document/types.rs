@@ -1,5 +1,5 @@
+use crate::compress_image::make_compressed_base64_webp;
 use anyhow::Error;
-use base64::{Engine as _, engine::general_purpose};
 use bytes::Bytes;
 use lexical_client::types::CognitionResponseData;
 use model::document::response::LocationResponseV3;
@@ -47,12 +47,11 @@ impl DocumentContent {
     }
 
     #[tracing::instrument(err)]
-    pub fn base64_image_content(self) -> Result<String, Error> {
-        let data = self.data.binary_data();
-        if self.file_type.is_image() && data.is_some() {
-            let base64_string = general_purpose::STANDARD.encode(data.unwrap());
-            let content_type = self.file_type.mime_type();
-            Ok(format!("data:{};base64,{}", content_type, base64_string))
+    pub fn base64_compressed_webp(self) -> Result<String, Error> {
+        if self.file_type.is_image()
+            && let Some(bytes) = self.data.binary_data()
+        {
+            make_compressed_base64_webp(&bytes)
         } else {
             Err(anyhow::anyhow!("Data is not in image format"))
         }
