@@ -1,10 +1,19 @@
 //! Service port - defines the interface for property business logic
 
-use crate::domain::models::{
-    EntityProperty, EntityType, PropertyDefinition, PropertyOption, PropertyValue,
+use crate::domain::{
+    error::Result,
+    models::{
+        CreateOptionRequest, CreateOptionResponse, CreatePropertyRequest, CreatePropertyResponse,
+        CreatePropertyWithOptionsRequest, CreatePropertyWithOptionsResponse,
+        DeleteAllEntityPropertiesRequest, DeleteAllEntityPropertiesResponse,
+        DeleteEntityPropertyRequest, DeleteEntityPropertyResponse, DeleteOptionRequest,
+        DeleteOptionResponse, DeletePropertyRequest, DeletePropertyResponse,
+        GetBulkEntityPropertiesRequest, GetBulkEntityPropertiesResponse,
+        GetEntityPropertiesRequest, GetEntityPropertiesResponse, GetOptionsRequest,
+        GetOptionsResponse, ListPropertiesRequest, ListPropertiesResponse,
+        SetEntityPropertyRequest, SetEntityPropertyResponse,
+    },
 };
-use anyhow::Result;
-use uuid::Uuid;
 
 /// Port for checking permissions on property operations
 pub trait PermissionChecker: Send + Sync + 'static {
@@ -30,84 +39,82 @@ pub trait PermissionChecker: Send + Sync + 'static {
 #[cfg_attr(feature = "mock", mockall::automock)]
 pub trait PropertyService: Send + Sync + 'static {
     // Property Definition Operations
+
+    /// Create a new property definition
     fn create_property(
         &self,
-        user_id: &str,
-        definition: PropertyDefinition,
-    ) -> impl std::future::Future<Output = Result<PropertyDefinition>> + Send;
+        request: CreatePropertyRequest,
+    ) -> impl std::future::Future<Output = Result<CreatePropertyResponse>> + Send;
 
+    /// Create a property definition with options in a single transaction
     fn create_property_with_options(
         &self,
-        user_id: &str,
-        definition: PropertyDefinition,
-        options: Vec<PropertyOption>,
-    ) -> impl std::future::Future<Output = Result<PropertyDefinition>> + Send;
+        request: CreatePropertyWithOptionsRequest,
+    ) -> impl std::future::Future<Output = Result<CreatePropertyWithOptionsResponse>> + Send;
 
+    /// List property definitions with optional filtering
     fn list_properties(
         &self,
-        organization_id: Option<i32>,
-        user_id: Option<&str>,
-        limit: Option<i32>,
-        offset: Option<i32>,
-    ) -> impl std::future::Future<Output = Result<Vec<PropertyDefinition>>> + Send;
+        request: ListPropertiesRequest,
+    ) -> impl std::future::Future<Output = Result<ListPropertiesResponse>> + Send;
 
+    /// Delete a property definition
     fn delete_property(
         &self,
-        user_id: &str,
-        organization_id: Option<i32>,
-        property_id: Uuid,
-    ) -> impl std::future::Future<Output = Result<bool>> + Send;
+        request: DeletePropertyRequest,
+    ) -> impl std::future::Future<Output = Result<DeletePropertyResponse>> + Send;
 
     // Property Option Operations
+
+    /// Create a new property option
     fn create_option(
         &self,
-        option: PropertyOption,
-    ) -> impl std::future::Future<Output = Result<PropertyOption>> + Send;
+        request: CreateOptionRequest,
+    ) -> impl std::future::Future<Output = Result<CreateOptionResponse>> + Send;
 
+    /// Get all options for a property definition
     fn get_options(
         &self,
-        property_definition_id: Uuid,
-    ) -> impl std::future::Future<Output = Result<Vec<PropertyOption>>> + Send;
+        request: GetOptionsRequest,
+    ) -> impl std::future::Future<Output = Result<GetOptionsResponse>> + Send;
 
+    /// Delete a property option
     fn delete_option(
         &self,
-        option_id: Uuid,
-    ) -> impl std::future::Future<Output = Result<bool>> + Send;
+        request: DeleteOptionRequest,
+    ) -> impl std::future::Future<Output = Result<DeleteOptionResponse>> + Send;
 
     // Entity Property Operations
+
+    /// Get all properties for an entity (with definitions and values)
     fn get_entity_properties(
         &self,
-        user_id: &str,
-        entity_id: &str,
-        entity_type: EntityType,
-    ) -> impl std::future::Future<Output = Result<Vec<EntityProperty>>> + Send;
+        request: GetEntityPropertiesRequest,
+    ) -> impl std::future::Future<Output = Result<GetEntityPropertiesResponse>> + Send;
 
+    /// Set or update a property value for an entity
     fn set_entity_property(
         &self,
-        user_id: &str,
-        entity_id: String,
-        entity_type: EntityType,
-        property_definition_id: Uuid,
-        value: Option<PropertyValue>,
-    ) -> impl std::future::Future<Output = Result<EntityProperty>> + Send;
+        request: SetEntityPropertyRequest,
+    ) -> impl std::future::Future<Output = Result<SetEntityPropertyResponse>> + Send;
 
+    /// Delete an entity property assignment
     fn delete_entity_property(
         &self,
-        user_id: &str,
-        entity_property_id: Uuid,
-    ) -> impl std::future::Future<Output = Result<bool>> + Send;
+        request: DeleteEntityPropertyRequest,
+    ) -> impl std::future::Future<Output = Result<DeleteEntityPropertyResponse>> + Send;
 
     // Bulk/Internal Operations
-    /// Delete all properties for an entity (internal use)
+
+    /// Delete all properties for an entity
     fn delete_all_entity_properties(
         &self,
-        entity_id: &str,
-        entity_type: EntityType,
-    ) -> impl std::future::Future<Output = Result<()>> + Send;
+        request: DeleteAllEntityPropertiesRequest,
+    ) -> impl std::future::Future<Output = Result<DeleteAllEntityPropertiesResponse>> + Send;
 
-    /// Get properties for multiple entities in bulk (internal use)
+    /// Get properties for multiple entities in bulk
     fn get_bulk_entity_properties(
         &self,
-        entity_refs: Vec<(String, EntityType)>,
-    ) -> impl std::future::Future<Output = Result<Vec<(String, Vec<EntityProperty>)>>> + Send;
+        request: GetBulkEntityPropertiesRequest,
+    ) -> impl std::future::Future<Output = Result<GetBulkEntityPropertiesResponse>> + Send;
 }
