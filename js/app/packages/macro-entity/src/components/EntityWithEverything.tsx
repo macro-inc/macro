@@ -243,9 +243,6 @@ export function EntityWithEverything(
         </div>
       );
     }
-    const isDirectMessage = () =>
-      props.entity.type === 'channel' &&
-      props.entity.channelType === 'direct_message';
     const notification = createMemo(() => {
       const maybeNotification = props.entity.notifications?.().at(0);
       if (!maybeNotification) return;
@@ -255,27 +252,18 @@ export function EntityWithEverything(
 
       return withMetadata;
     });
-    const notificationMessageContent = createMemo(() => {
-      const metadata = notification()?.notificationMetadata;
-      if (!metadata || !('messageContent' in metadata)) return;
 
-      return metadata.messageContent;
-    });
-
-    const userName = createMemo(() => {
-      const [userName] = useDisplayName(notification()?.senderId);
-      return userName();
+    const lastMessage = createMemo(() => {
+      if (props.entity.type === 'channel') {
+        return props.entity.latestMessage;
+      }
+      return;
     });
 
     return (
       <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden">
         <span class="flex gap-1 truncate font-medium text-sm shrink-0 items-center">
-          <span
-            class="font-semibold truncate"
-            classList={{
-              'w-[20cqw]': hasNotifications() && !props.showUnrollNotifications,
-            }}
-          >
+          <span class="font-semibold truncate w-[20cqw]">
             <Show when={searchHighlightName()} fallback={props.entity.name}>
               {(name) => (
                 <StaticMarkdown
@@ -287,36 +275,26 @@ export function EntityWithEverything(
             </Show>
           </span>
 
-          <Show
-            when={
-              hasNotifications() &&
-              !props.showUnrollNotifications &&
-              !isDirectMessage()
-            }
-          >
-            <div class="flex items-center gap-1">
-              <ImportantBadge active={props.importantIndicatorActive} />
-              <span class="inline-block">
-                <span class="text-ink">{userName()}</span>
-              </span>
-            </div>
-          </Show>
-
-          <Show
-            when={
-              !props.showUnrollNotifications && notificationMessageContent()
-            }
-          >
-            {(messageContent) => (
-              <div class="text-sm truncate line-clamp-1 leading-none shrink text-ink-extra-muted py-1 flex items-center">
-                <StaticMarkdown
-                  markdown={messageContent()}
-                  theme={unifiedListMarkdownTheme}
-                  singleLine={true}
-                />
-              </div>
-            )}
-          </Show>
+          <div class="flex items-center gap-1">
+            <ImportantBadge active={notification()?.isImportantV0} />
+            <Show when={!props.showUnrollNotifications && lastMessage()}>
+              {(message) => {
+                const [sender] = useDisplayName(message().senderId);
+                return (
+                  <>
+                    <span>{sender()}</span>
+                    <div class="text-sm truncate line-clamp-1 leading-none shrink text-ink-extra-muted py-1 flex items-center">
+                      <StaticMarkdown
+                        markdown={message().content}
+                        theme={unifiedListMarkdownTheme}
+                        singleLine={true}
+                      />
+                    </div>
+                  </>
+                );
+              }}
+            </Show>
+          </div>
         </span>
       </div>
     );
