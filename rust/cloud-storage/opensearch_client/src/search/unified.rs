@@ -57,7 +57,7 @@ impl From<UnifiedSearchArgs> for DocumentSearchArgs {
             match_type: args.match_type,
             search_on: args.search_on,
             collapse: args.collapse,
-            ids_only: args.ids_only,
+            ids_only: args.document_search_args.ids_only,
             disable_recency: args.disable_recency,
             document_ids: args.document_search_args.document_ids,
         }
@@ -150,6 +150,7 @@ pub struct UnifiedChatSearchArgs {
 #[derive(Debug, Default, Clone)]
 pub struct UnifiedDocumentSearchArgs {
     pub document_ids: Vec<String>,
+    pub ids_only: bool,
 }
 
 #[derive(Debug, Default, Clone)]
@@ -177,6 +178,7 @@ pub struct UnifiedChannelMessageSearchArgs {
 
 /// Possible search result indices for unified search
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
 pub(crate) enum UnifiedSearchIndex {
     ChannelMessage(ChannelMessageIndex),
     Document(DocumentIndex),
@@ -508,6 +510,8 @@ pub(crate) async fn search_unified(
         .await
         .map_client_error()
         .await?;
+
+    println!("{:?}", response);
 
     let result = response
         .json::<DefaultSearchResponse<UnifiedSearchIndex>>()

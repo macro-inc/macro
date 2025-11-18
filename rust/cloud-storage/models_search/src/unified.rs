@@ -1,6 +1,6 @@
 use crate::channel::ChannelSearchResponseItemWithMetadata;
 use crate::chat::ChatSearchResponseItemWithMetadata;
-use crate::document::DocumentSearchResponseItemWithMetadata;
+use crate::document::{DocumentSearchResponse, DocumentSearchResponseItemWithMetadata};
 use crate::email::EmailSearchResponseItemWithMetadata;
 use crate::project::ProjectSearchResponseItemWithMetadata;
 use crate::{
@@ -111,6 +111,80 @@ pub enum SimpleUnifiedSearchResponseBaseItem<T> {
 
 pub type SimpleUnifiedSearchResponseItem =
     SimpleUnifiedSearchResponseBaseItem<crate::TimestampSeconds>;
+
+impl From<opensearch_client::search::unified::UnifiedSearchResponse>
+    for SimpleUnifiedSearchResponseItem
+{
+    fn from(response: opensearch_client::search::unified::UnifiedSearchResponse) -> Self {
+        match response {
+            opensearch_client::search::unified::UnifiedSearchResponse::Document(a) => {
+                SimpleUnifiedSearchResponseItem::Document(SimpleDocumentSearchResponseBaseItem {
+                    document_id: a.document_id,
+                    document_name: a.document_name,
+                    node_id: a.node_id,
+                    owner_id: a.owner_id,
+                    file_type: a.file_type,
+                    updated_at: a.updated_at.into(),
+                    highlight: a.highlight.into(),
+                    raw_content: a.raw_content,
+                })
+            }
+            opensearch_client::search::unified::UnifiedSearchResponse::Chat(a) => {
+                SimpleUnifiedSearchResponseItem::Chat(SimpleChatSearchResponseBaseItem {
+                    chat_id: a.chat_id,
+                    chat_message_id: a.chat_message_id,
+                    user_id: a.user_id,
+                    role: a.role,
+                    title: a.title,
+                    highlight: a.highlight.into(),
+                    updated_at: a.updated_at.into(),
+                })
+            }
+            opensearch_client::search::unified::UnifiedSearchResponse::Email(a) => {
+                SimpleUnifiedSearchResponseItem::Email(SimpleEmailSearchResponseBaseItem {
+                    thread_id: a.thread_id,
+                    message_id: a.message_id,
+                    subject: a.subject,
+                    sender: a.sender,
+                    recipients: a.recipients,
+                    cc: a.cc,
+                    bcc: a.bcc,
+                    labels: a.labels,
+                    link_id: a.link_id,
+                    user_id: a.user_id,
+                    updated_at: a.updated_at.into(),
+                    sent_at: a.sent_at.map(|a| a.into()),
+                    highlight: a.highlight.into(),
+                })
+            }
+            opensearch_client::search::unified::UnifiedSearchResponse::ChannelMessage(a) => {
+                SimpleUnifiedSearchResponseItem::Channel(SimpleChannelSearchReponseBaseItem {
+                    channel_id: a.channel_id,
+                    channel_name: a.channel_name,
+                    channel_type: a.channel_type,
+                    org_id: a.org_id,
+                    message_id: a.message_id,
+                    thread_id: a.thread_id,
+                    sender_id: a.sender_id,
+                    mentions: a.mentions,
+                    created_at: a.created_at.into(),
+                    updated_at: a.updated_at.into(),
+                    highlight: a.highlight.into(),
+                })
+            }
+            opensearch_client::search::unified::UnifiedSearchResponse::Project(a) => {
+                SimpleUnifiedSearchResponseItem::Project(SimpleProjectSearchResponseBaseItem {
+                    project_id: a.project_id,
+                    project_name: a.project_name,
+                    user_id: a.user_id,
+                    created_at: a.created_at.into(),
+                    updated_at: a.updated_at.into(),
+                    highlight: a.highlight.into(),
+                })
+            }
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, Default)]
 pub struct SimpleUnifiedSearchBaseResponse<T> {
