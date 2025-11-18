@@ -51,6 +51,7 @@ export const TOKENS = {
     searchMenu: 'global.searchMenu',
     toggleSettings: 'global.toggleSettings',
     createNewSplit: 'global.createNewSplit',
+    showHotkeys: 'global.showHotkeys',
   },
 
   // email
