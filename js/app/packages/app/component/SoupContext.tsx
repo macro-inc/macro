@@ -243,13 +243,31 @@ export function createNavigationEntityListShortcut({
 
   actionRegistry.register(
     'delete',
-    async (entities) => {
+    async (entitiesToDelete) => {
+      const entityList = entities();
+      if (!entityList) return { success: false };
+
+      const idToIndexMap = new Map(entityList.map(({ id }, i) => [id, i]));
+      let maxIndex = 0;
+      for (const entity of entitiesToDelete) {
+        const ndx = idToIndexMap.get(entity.id);
+        if (ndx && ndx > maxIndex) {
+          maxIndex = ndx;
+        }
+      }
+      const next =
+        maxIndex < entityList.length - 1 ? entityList[maxIndex + 1] : null;
+
       try {
         openBulkEditModal({
           view: 'delete',
-          entities: entities,
+          entities: entitiesToDelete,
           onFinish: () => {
             setViewDataStore(selectedView(), 'selectedEntities', []);
+            if (next !== null) {
+              setViewDataStore(selectedView(), 'selectedEntity', next);
+              setViewDataStore(selectedView(), 'highlightedId', next.id);
+            }
           },
         });
       } catch (err) {
@@ -923,25 +941,10 @@ export function createNavigationEntityListShortcut({
       if (entitiesForAction.entities.length === 0) {
         return false;
       }
-      actionRegistry
-        .execute(
-          'delete',
-          entitiesForAction.entities.map(({ entity }) => entity)
-        )
-        .then(({ success }) => {
-          if (success && entitiesForAction.afterEntity) {
-            setViewDataStore(
-              selectedView(),
-              'highlightedId',
-              entitiesForAction.afterEntity.id
-            );
-            setViewDataStore(
-              selectedView(),
-              'selectedEntity',
-              entitiesForAction.afterEntity
-            );
-          }
-        });
+      actionRegistry.execute(
+        'delete',
+        entitiesForAction.entities.map(({ entity }) => entity)
+      );
       return true;
     },
     tags: ['selection-modification'],
