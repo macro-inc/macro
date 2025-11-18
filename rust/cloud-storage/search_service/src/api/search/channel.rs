@@ -121,19 +121,16 @@ pub fn construct_search_result(
 
     let result: Vec<ChannelSearchResponseItemWithMetadata> = result
         .into_iter()
-        .map(|item| {
-            let channel_uuid = Uuid::parse_str(&item.channel_id).unwrap_or_else(|_| Uuid::nil());
-            let channel_history_info = channel_histories
-                .get(&channel_uuid)
-                .cloned()
-                .unwrap_or_default();
-            ChannelSearchResponseItemWithMetadata {
+        .filter_map(|item| {
+            let channel_uuid = Uuid::parse_str(&item.channel_id).ok()?;
+            let channel_history_info = channel_histories.get(&channel_uuid)?.clone();
+            Some(ChannelSearchResponseItemWithMetadata {
                 created_at: channel_history_info.created_at.timestamp(),
                 updated_at: channel_history_info.updated_at.timestamp(),
                 viewed_at: channel_history_info.viewed_at.map(|a| a.timestamp()),
                 interacted_at: channel_history_info.interacted_at.map(|a| a.timestamp()),
                 extra: item,
-            }
+            })
         })
         .collect();
     Ok(result)

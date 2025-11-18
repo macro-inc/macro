@@ -11,13 +11,20 @@ pub struct ProjectHistoryInfo {
     pub parent_project_id: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub enum ProjectHistoryStatus {
+    Found(ProjectHistoryInfo),
+    Deleted,
+}
+
 /// Gets project history information including when a user last viewed each project
+/// Returns a status enum that indicates whether the project was found or is deleted
 #[tracing::instrument(skip(db))]
 pub async fn get_project_history_info(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &str,
     project_ids: &[String],
-) -> anyhow::Result<HashMap<String, ProjectHistoryInfo>> {
+) -> anyhow::Result<HashMap<String, ProjectHistoryStatus>> {
     if project_ids.is_empty() {
         return Ok(HashMap::new());
     }
@@ -28,6 +35,7 @@ pub async fn get_project_history_info(
             p."id" as "item_id!",
             p."createdAt" as "created_at!",
             p."updatedAt" as "updated_at!",
+            p."deletedAt" as "deleted_at?",
             p."parentId" as "parent_project_id?",
             uh."updatedAt" as "viewed_at?"
         FROM
@@ -38,7 +46,6 @@ pub async fn get_project_history_info(
                 AND uh."itemType" = 'project'
         WHERE
             p."id" = ANY($2)
-            AND p."deletedAt" IS NULL
         ORDER BY
             p."updatedAt" DESC
         "#,
@@ -51,16 +58,21 @@ pub async fn get_project_history_info(
     let project_history_map = results
         .into_iter()
         .map(|row| {
-            let info = ProjectHistoryInfo {
-                item_id: row.item_id.clone(),
-                created_at: DateTime::<Utc>::from_naive_utc_and_offset(row.created_at, Utc),
-                updated_at: DateTime::<Utc>::from_naive_utc_and_offset(row.updated_at, Utc),
-                viewed_at: row
-                    .viewed_at
-                    .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
-                parent_project_id: row.parent_project_id,
+            let status = if row.deleted_at.is_some() {
+                ProjectHistoryStatus::Deleted
+            } else {
+                let info = ProjectHistoryInfo {
+                    item_id: row.item_id.clone(),
+                    created_at: DateTime::<Utc>::from_naive_utc_and_offset(row.created_at, Utc),
+                    updated_at: DateTime::<Utc>::from_naive_utc_and_offset(row.updated_at, Utc),
+                    viewed_at: row
+                        .viewed_at
+                        .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
+                    parent_project_id: row.parent_project_id,
+                };
+                ProjectHistoryStatus::Found(info)
             };
-            (row.item_id.clone(), info)
+            (row.item_id.clone(), status)
         })
         .collect();
 

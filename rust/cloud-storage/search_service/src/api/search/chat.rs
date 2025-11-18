@@ -7,7 +7,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use macro_db_client::chat::get::ChatHistoryInfo;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::chat::{
     ChatMessageSearchResult, ChatSearchMetadata, ChatSearchRequest, ChatSearchResponse,
@@ -81,7 +80,7 @@ pub async fn handler(
 
 pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::chats::ChatSearchResponse>,
-    chat_histories: HashMap<String, ChatHistoryInfo>,
+    chat_histories: HashMap<String, macro_db_client::chat::get::ChatHistoryStatus>,
 ) -> anyhow::Result<Vec<ChatSearchResponseItemWithMetadata>> {
     let search_results = search_results
         .into_iter()
@@ -96,19 +95,31 @@ pub fn construct_search_result(
     let result: Vec<ChatSearchResponseItem> = result.into_iter().map(|a| a.into()).collect();
 
     // Add metadata for each chat fetched from macrodb
+    // Filter out chats that are deleted
     let result: Vec<ChatSearchResponseItemWithMetadata> = result
         .into_iter()
-        .map(|item| {
-            let chat_history_info = chat_histories
-                .get(&item.chat_id)
-                .cloned()
-                .unwrap_or_default();
-            ChatSearchResponseItemWithMetadata {
-                created_at: chat_history_info.created_at.timestamp(),
-                updated_at: chat_history_info.updated_at.timestamp(),
-                viewed_at: chat_history_info.viewed_at.map(|a| a.timestamp()),
-                project_id: chat_history_info.project_id,
-                extra: item,
+        .filter_map(|item| {
+            match chat_histories.get(&item.chat_id) {
+                Some(macro_db_client::chat::get::ChatHistoryStatus::Found(info)) => {
+                    Some(ChatSearchResponseItemWithMetadata {
+                        created_at: info.created_at.timestamp(),
+                        updated_at: info.updated_at.timestamp(),
+                        viewed_at: info.viewed_at.map(|a| a.timestamp()),
+                        project_id: info.project_id.clone(),
+                        extra: item,
+                    })
+                }
+                Some(macro_db_client::chat::get::ChatHistoryStatus::Deleted) => None,
+                None => {
+                    // Chat not found in database at all - use default values
+                    Some(ChatSearchResponseItemWithMetadata {
+                        created_at: chrono::DateTime::<chrono::Utc>::default().timestamp(),
+                        updated_at: chrono::DateTime::<chrono::Utc>::default().timestamp(),
+                        viewed_at: None,
+                        project_id: None,
+                        extra: item,
+                    })
+                }
             }
         })
         .collect();

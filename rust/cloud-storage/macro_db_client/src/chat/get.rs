@@ -282,13 +282,20 @@ pub struct ChatHistoryInfo {
     pub project_id: Option<String>,
 }
 
+#[derive(Debug, Clone)]
+pub enum ChatHistoryStatus {
+    Found(ChatHistoryInfo),
+    Deleted,
+}
+
 /// Gets chat history information including when a user last viewed each chat
+/// Returns a status enum that indicates whether the chat was found or is deleted
 #[tracing::instrument(skip(db))]
 pub async fn get_chat_history_info(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &str,
     chat_ids: &[String],
-) -> anyhow::Result<HashMap<String, ChatHistoryInfo>> {
+) -> anyhow::Result<HashMap<String, ChatHistoryStatus>> {
     if chat_ids.is_empty() {
         return Ok(HashMap::new());
     }
@@ -299,6 +306,7 @@ pub async fn get_chat_history_info(
             c."id" as "item_id!",
             c."createdAt" as "created_at!",
             c."updatedAt" as "updated_at!",
+            c."deletedAt" as "deleted_at?",
             uh."updatedAt" as "viewed_at?",
             c."projectId" as "project_id?"
         FROM
@@ -309,7 +317,6 @@ pub async fn get_chat_history_info(
                 AND uh."itemType" = 'chat'
         WHERE
             c."id" = ANY($2)
-            AND c."deletedAt" IS NULL
         ORDER BY
             c."updatedAt" DESC
         "#,
@@ -322,16 +329,21 @@ pub async fn get_chat_history_info(
     let chat_history_map = results
         .into_iter()
         .map(|row| {
-            let info = ChatHistoryInfo {
-                item_id: row.item_id.clone(),
-                created_at: DateTime::<Utc>::from_naive_utc_and_offset(row.created_at, Utc),
-                updated_at: DateTime::<Utc>::from_naive_utc_and_offset(row.updated_at, Utc),
-                viewed_at: row
-                    .viewed_at
-                    .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
-                project_id: row.project_id,
+            let status = if row.deleted_at.is_some() {
+                ChatHistoryStatus::Deleted
+            } else {
+                let info = ChatHistoryInfo {
+                    item_id: row.item_id.clone(),
+                    created_at: DateTime::<Utc>::from_naive_utc_and_offset(row.created_at, Utc),
+                    updated_at: DateTime::<Utc>::from_naive_utc_and_offset(row.updated_at, Utc),
+                    viewed_at: row
+                        .viewed_at
+                        .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
+                    project_id: row.project_id,
+                };
+                ChatHistoryStatus::Found(info)
             };
-            (row.item_id.clone(), info)
+            (row.item_id.clone(), status)
         })
         .collect();
 

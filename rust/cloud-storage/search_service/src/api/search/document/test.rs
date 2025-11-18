@@ -1,3 +1,4 @@
+use macro_db_client::document::get_document_history::DocumentHistoryInfo;
 use opensearch_client::search::model::Highlight;
 
 use super::*;
@@ -27,7 +28,22 @@ fn test_construct_search_result_single_document() {
         },
     ];
 
-    let result = construct_search_result(search_results, HashMap::new()).unwrap();
+    let mut document_histories = HashMap::new();
+    let now = chrono::Utc::now();
+    document_histories.insert(
+        "doc1".to_string(),
+        macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(
+            DocumentHistoryInfo {
+                item_id: "doc1".to_string(),
+                created_at: now,
+                updated_at: now,
+                viewed_at: None,
+                project_id: None,
+            },
+        ),
+    );
+
+    let result = construct_search_result(search_results, document_histories).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.document_id, "doc1");
@@ -75,7 +91,22 @@ fn test_construct_search_result_multiple_nodes_same_document() {
         },
     ];
 
-    let result = construct_search_result(search_results, HashMap::new()).unwrap();
+    let mut document_histories = HashMap::new();
+    let now = chrono::Utc::now();
+    document_histories.insert(
+        "doc1".to_string(),
+        macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(
+            DocumentHistoryInfo {
+                item_id: "doc1".to_string(),
+                created_at: now,
+                updated_at: now,
+                viewed_at: None,
+                project_id: None,
+            },
+        ),
+    );
+
+    let result = construct_search_result(search_results, document_histories).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.document_id, "doc1");
@@ -137,7 +168,10 @@ fn test_document_history_timestamps() {
         project_id: Some("project_1".to_string()),
     };
 
-    document_histories.insert("doc_1".to_string(), history);
+    document_histories.insert(
+        "doc_1".to_string(),
+        macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(history),
+    );
 
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
@@ -171,15 +205,18 @@ fn test_document_history_missing_entry() {
         project_id: Some("project_1".to_string()),
     };
 
-    document_histories.insert("different_doc".to_string(), history);
+    document_histories.insert(
+        "different_doc".to_string(),
+        macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(history),
+    );
 
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
 
-    // Verify that default timestamps were used
+    // Documents without history info should use default values
     assert_eq!(result.len(), 1);
 
-    // Default values from DocumentHistoryInfo::default()
+    // Default values from DateTime::default()
     let default_time = chrono::DateTime::<chrono::Utc>::default().timestamp();
     assert_eq!(result[0].created_at, default_time);
     assert_eq!(result[0].updated_at, default_time);
@@ -208,7 +245,10 @@ fn test_document_history_null_viewed_at() {
         project_id: Some("project_1".to_string()),
     };
 
-    document_histories.insert("doc_1".to_string(), history);
+    document_histories.insert(
+        "doc_1".to_string(),
+        macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(history),
+    );
 
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
@@ -259,8 +299,14 @@ fn test_document_history_multiple_documents() {
         project_id: Some("project_2".to_string()),
     };
 
-    document_histories.insert("doc_1".to_string(), history1);
-    document_histories.insert("doc_2".to_string(), history2);
+    document_histories.insert(
+        "doc_1".to_string(),
+        macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(history1),
+    );
+    document_histories.insert(
+        "doc_2".to_string(),
+        macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(history2),
+    );
 
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
@@ -317,32 +363,57 @@ fn test_document_history_partial_missing_entries() {
         project_id: Some("project_1".to_string()),
     };
 
-    document_histories.insert("doc_exists".to_string(), history);
+    document_histories.insert(
+        "doc_exists".to_string(),
+        macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(history),
+    );
 
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
 
-    // Verify results
+    // We should have 2 results - one with real data, one with defaults
     assert_eq!(result.len(), 2);
 
-    // Find each document in results
+    // The existing document should have real timestamps
     let existing_doc = result
         .iter()
         .find(|r| r.extra.document_id == "doc_exists")
         .unwrap();
-    let missing_doc = result
-        .iter()
-        .find(|r| r.extra.document_id == "doc_missing")
-        .unwrap();
-
-    // Existing document should have real timestamps
     assert_eq!(existing_doc.created_at, now.timestamp());
     assert_eq!(existing_doc.updated_at, now.timestamp());
     assert_eq!(existing_doc.viewed_at, Some(now.timestamp()));
 
-    // Missing document should have default timestamps
+    // The missing document should have default timestamps
+    let missing_doc = result
+        .iter()
+        .find(|r| r.extra.document_id == "doc_missing")
+        .unwrap();
     let default_time = chrono::DateTime::<chrono::Utc>::default().timestamp();
     assert_eq!(missing_doc.created_at, default_time);
     assert_eq!(missing_doc.updated_at, default_time);
     assert_eq!(missing_doc.viewed_at, None);
+}
+
+#[test]
+fn test_document_history_deleted() {
+    // Create a test response for a deleted document
+    let input = vec![create_test_document_response(
+        "doc_deleted",
+        "node_1",
+        "user_1",
+        Some(vec!["hello world".to_string()]),
+    )];
+
+    // Create a mock document history indicating the document is deleted
+    let mut document_histories = HashMap::new();
+    document_histories.insert(
+        "doc_deleted".to_string(),
+        macro_db_client::document::get_document_history::DocumentHistoryStatus::Deleted,
+    );
+
+    // Call the function under test
+    let result = construct_search_result(input, document_histories).unwrap();
+
+    // Deleted documents should be filtered out
+    assert_eq!(result.len(), 0);
 }

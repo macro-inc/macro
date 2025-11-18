@@ -8,7 +8,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use macro_db_client::projects::get_project_history::ProjectHistoryInfo;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::project::{
     ProjectSearchMetadata, ProjectSearchRequest, ProjectSearchResponse, ProjectSearchResponseItem,
@@ -88,7 +87,10 @@ pub async fn handler(
 
 pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::projects::ProjectSearchResponse>,
-    project_histories: HashMap<String, ProjectHistoryInfo>,
+    project_histories: HashMap<
+        String,
+        macro_db_client::projects::get_project_history::ProjectHistoryStatus,
+    >,
 ) -> anyhow::Result<Vec<ProjectSearchResponseItemWithMetadata>> {
     let search_results = search_results
         .into_iter()
@@ -101,16 +103,35 @@ pub fn construct_search_result(
     >(search_results)?;
     let result: Vec<ProjectSearchResponseItem> = result.into_iter().map(|a| a.into()).collect();
     // Add metadata for each project, fetched from macrodb
+    // Filter out projects that are deleted
     let result: Vec<ProjectSearchResponseItemWithMetadata> = result
         .into_iter()
-        .map(|item| {
-            let project_history_info = project_histories.get(&item.id).cloned().unwrap_or_default();
-            ProjectSearchResponseItemWithMetadata {
-                created_at: project_history_info.created_at.timestamp(),
-                updated_at: project_history_info.updated_at.timestamp(),
-                viewed_at: project_history_info.viewed_at.map(|a| a.timestamp()),
-                parent_project_id: project_history_info.parent_project_id,
-                extra: item,
+        .filter_map(|item| {
+            match project_histories.get(&item.id) {
+                Some(
+                    macro_db_client::projects::get_project_history::ProjectHistoryStatus::Found(
+                        info,
+                    ),
+                ) => Some(ProjectSearchResponseItemWithMetadata {
+                    created_at: info.created_at.timestamp(),
+                    updated_at: info.updated_at.timestamp(),
+                    viewed_at: info.viewed_at.map(|a| a.timestamp()),
+                    parent_project_id: info.parent_project_id.clone(),
+                    extra: item,
+                }),
+                Some(
+                    macro_db_client::projects::get_project_history::ProjectHistoryStatus::Deleted,
+                ) => None,
+                None => {
+                    // Project not found in database at all - use default values
+                    Some(ProjectSearchResponseItemWithMetadata {
+                        created_at: chrono::DateTime::<chrono::Utc>::default().timestamp(),
+                        updated_at: chrono::DateTime::<chrono::Utc>::default().timestamp(),
+                        viewed_at: None,
+                        parent_project_id: None,
+                        extra: item,
+                    })
+                }
             }
         })
         .collect();

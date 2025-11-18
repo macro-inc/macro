@@ -8,7 +8,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use macro_db_client::document::get_document_history::DocumentHistoryInfo;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::document::{
     DocumentSearchMetadata, DocumentSearchRequest, DocumentSearchResponse,
@@ -87,7 +86,10 @@ pub async fn handler(
 
 pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::documents::DocumentSearchResponse>,
-    document_histories: HashMap<String, DocumentHistoryInfo>,
+    document_histories: HashMap<
+        String,
+        macro_db_client::document::get_document_history::DocumentHistoryStatus,
+    >,
 ) -> anyhow::Result<Vec<DocumentSearchResponseItemWithMetadata>> {
     let search_results = search_results
         .into_iter()
@@ -102,19 +104,35 @@ pub fn construct_search_result(
     let result: Vec<DocumentSearchResponseItem> = result.into_iter().map(|a| a.into()).collect();
 
     // Add metadata for each document, fetched from macrodb
+    // Filter out documents that are deleted
     let result: Vec<DocumentSearchResponseItemWithMetadata> = result
         .into_iter()
-        .map(|item| {
-            let document_history_info = document_histories
-                .get(&item.document_id)
-                .cloned()
-                .unwrap_or_default();
-            DocumentSearchResponseItemWithMetadata {
-                created_at: document_history_info.created_at.timestamp(),
-                updated_at: document_history_info.updated_at.timestamp(),
-                viewed_at: document_history_info.viewed_at.map(|a| a.timestamp()),
-                project_id: document_history_info.project_id,
-                extra: item,
+        .filter_map(|item| {
+            match document_histories.get(&item.document_id) {
+                Some(
+                    macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(
+                        info,
+                    ),
+                ) => Some(DocumentSearchResponseItemWithMetadata {
+                    created_at: info.created_at.timestamp(),
+                    updated_at: info.updated_at.timestamp(),
+                    viewed_at: info.viewed_at.map(|a| a.timestamp()),
+                    project_id: info.project_id.clone(),
+                    extra: item,
+                }),
+                Some(
+                    macro_db_client::document::get_document_history::DocumentHistoryStatus::Deleted,
+                ) => None,
+                None => {
+                    // Document not found in database at all - use default values
+                    Some(DocumentSearchResponseItemWithMetadata {
+                        created_at: chrono::DateTime::<chrono::Utc>::default().timestamp(),
+                        updated_at: chrono::DateTime::<chrono::Utc>::default().timestamp(),
+                        viewed_at: None,
+                        project_id: None,
+                        extra: item,
+                    })
+                }
             }
         })
         .collect();
