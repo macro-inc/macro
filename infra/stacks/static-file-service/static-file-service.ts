@@ -1,15 +1,15 @@
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
-import { serviceLoadBalancer } from '@resources';
-import { ALLOWED_ORIGINS } from '@resources/resources/cors';
-import { EcrImage } from '@service';
-import { BASE_DOMAIN, MACRO_SUBDOMAIN_CERT } from '@shared';
 import {
   DATADOG_API_KEY,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
-} from './datadog';
+  serviceLoadBalancer,
+} from '@resources';
+import { ALLOWED_ORIGINS } from '@resources/resources/cors';
+import { EcrImage } from '@service';
+import { BASE_DOMAIN, MACRO_SUBDOMAIN_CERT } from '@shared';
 import { StaticFileCloudFront } from './distribution';
 
 const stack = pulumi.getStack();
