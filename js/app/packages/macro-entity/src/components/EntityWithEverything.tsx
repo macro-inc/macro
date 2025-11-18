@@ -1,11 +1,12 @@
 import { matches } from '@core/util/match';
 import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
-import { useEmail } from '@service-gql/client';
+import { useEmail, useUserId } from '@service-gql/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
+import { UserIcon } from 'core/component/UserIcon';
 import { emailToId, useDisplayName } from 'core/user';
 import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
 import { notificationWithMetadata } from 'notifications/notificationMetadata';
@@ -51,16 +52,16 @@ function UnreadIndicator(props: { active?: boolean }) {
   );
 }
 
-function ImportantBadge(props: { active?: boolean }) {
-  return (
-    <Show when={props.active}>
-      <div class="font-mono font-medium user-select-none uppercase flex items-center text-accent bg-accent/10 p-0.5 px-2 text-[0.625rem] rounded-full border border-accent/10">
-        <span class="@max-xl/split:hidden">Important</span>
-        <span class="hidden @max-xl/split:block font-bold">!</span>
-      </div>
-    </Show>
-  );
-}
+// function ImportantBadge(props: { active?: boolean }) {
+//   return (
+//     <Show when={props.active}>
+//       <div class="font-mono font-medium user-select-none uppercase flex items-center text-accent bg-accent/10 p-0.5 px-2 text-[0.625rem] rounded-full border border-accent/10">
+//         <span class="@max-xl/split:hidden">Important</span>
+//         <span class="hidden @max-xl/split:block font-bold">!</span>
+//       </div>
+//     </Show>
+//   );
+// }
 
 interface EntityProps<T extends WithNotification<EntityData>>
   extends ParentProps {
@@ -222,7 +223,7 @@ export function EntityWithEverything(
             </Show> */}
           </div>
           {/* Subject */}
-          <ImportantBadge active={props.importantIndicatorActive} />
+          {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
           <div class="flex items-center w-full gap-4 flex-1 min-w-0">
             <div class="font-medium shrink-0 truncate">
               <Show when={searchHighlightName()} fallback={props.entity.name}>
@@ -243,27 +244,31 @@ export function EntityWithEverything(
         </div>
       );
     }
-    const notification = createMemo(() => {
-      const maybeNotification = props.entity.notifications?.().at(0);
-      if (!maybeNotification) return;
 
-      const withMetadata = notificationWithMetadata(maybeNotification);
-      if (!withMetadata) return;
+    const channelEntity = createMemo(() =>
+      props.entity.type === 'channel' ? props.entity : null
+    );
 
-      return withMetadata;
-    });
+    const lastMessageContent = createMemo(
+      () => channelEntity()?.latestMessage?.content
+    );
 
-    const lastMessage = createMemo(() => {
-      if (props.entity.type === 'channel') {
-        return props.entity.latestMessage;
-      }
-      return;
+    const userNameFromSender = createMemo(() => {
+      const senderId = channelEntity()?.latestMessage?.senderId;
+      if (!senderId) return;
+      const [userName] = useDisplayName(senderId);
+      return userName();
     });
 
     return (
       <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden">
         <span class="flex gap-1 truncate font-medium text-sm shrink-0 items-center">
-          <span class="font-semibold truncate w-[20cqw]">
+          <span
+            class="font-semibold truncate"
+            classList={{
+              'w-[20cqw]': !props.showUnrollNotifications,
+            }}
+          >
             <Show when={searchHighlightName()} fallback={props.entity.name}>
               {(name) => (
                 <StaticMarkdown
@@ -275,26 +280,6 @@ export function EntityWithEverything(
             </Show>
           </span>
 
-          <div class="flex items-center gap-1">
-            <ImportantBadge active={notification()?.isImportantV0} />
-            <Show when={!props.showUnrollNotifications && lastMessage()}>
-              {(message) => {
-                const [sender] = useDisplayName(message().senderId);
-                return (
-                  <>
-                    <span>{sender()}</span>
-                    <div class="text-sm truncate line-clamp-1 leading-none shrink text-ink-extra-muted py-1 flex items-center">
-                      <StaticMarkdown
-                        markdown={message().content}
-                        theme={unifiedListMarkdownTheme}
-                        singleLine={true}
-                      />
-                    </div>
-                  </>
-                );
-              }}
-            </Show>
-          </div>
         </span>
       </div>
     );
@@ -430,10 +415,20 @@ export function EntityWithEverything(
           }}
         >
           <div class="flex size-5 shrink-0 items-center justify-center">
-            <Dynamic
-              component={getIcon().icon}
-              class={`flex size-full ${getIcon().foreground}`}
-            />
+            <Show
+              when={
+                props.entity.type === 'channel' &&
+                props.entity.channelType === 'direct_message'
+              }
+              fallback={
+                <Dynamic
+                  component={getIcon().icon}
+                  class={`flex size-full ${getIcon().foreground}`}
+                />
+              }
+            >
+              <DirectMessageIcon entity={props.entity} />
+            </Show>
           </div>
           <EntityTitle />
         </div>
@@ -593,12 +588,12 @@ export function EntityWithEverything(
                         </span>
                       </div>
 
-                      <ImportantBadge
+                      {/*<ImportantBadge
                         active={
                           notification.viewedAt === null &&
                           notification.isImportantV0
                         }
-                      />
+                      />*/}
                       <div class="text-sm shrink truncate min-w-0 max-h-5 opacity-70 overflow-clip">
                         <MessageContent />
                       </div>
@@ -644,6 +639,29 @@ export function EntityWithEverything(
           </div>
         </Show>
       </div>
+    </div>
+  );
+}
+
+function DirectMessageIcon(props: { entity: EntityData }) {
+  const userId = useUserId();
+  const participantId = () =>
+    props.entity.type === 'channel'
+      ? (props.entity.particpantIds ?? []).filter((id) => id !== userId()).at(0)
+      : undefined;
+
+  const Fallback = () => (
+    <Dynamic
+      component={getIconConfig('directMessage').icon}
+      class={`flex size-full ${getIconConfig('directMessage').foreground}`}
+    />
+  );
+
+  return (
+    <div class="bg-panel size-5 rounded-full p-[2px]">
+      <Show when={participantId()} fallback={<Fallback />}>
+        {(id) => <UserIcon id={id()} isDeleted={false} size="fill" />}
+      </Show>
     </div>
   );
 }

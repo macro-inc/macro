@@ -51,7 +51,8 @@ export default function BlockMarkdown() {
           <Show when={!isInstructionsMd()} fallback={<InstructionsTopBar />}>
             <TopBar />
           </Show>
-          <Show when={!isInstructionsMd()}>
+          {/* off until - https://linear.app/macro-eng/issue/M-5203/markdown-unloads-completely-after-find */}
+          <Show when={!isInstructionsMd() && false}>
             <div class="absolute right-4 bottom-[-12] translate-y-full z-action-menu flex justify-end">
               <FindAndReplace />
             </div>
