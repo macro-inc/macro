@@ -487,7 +487,6 @@ export function EntityWithEverything(
                 <button
                   class="flex items-center justify-center size-8 hover:bg-accent hover:text-panel"
                   onClick={() => {
-                    console.log('CLICK CHECK BUTTON');
                     props.onClickRowAction?.(props.entity, 'done');
                   }}
                   ref={setActionButtonRef}

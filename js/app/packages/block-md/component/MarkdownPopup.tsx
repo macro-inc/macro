@@ -179,7 +179,6 @@ export function MarkdownPopup(props: {
       }
     }),
     registerRootEventListener(editor, 'focusout', ({ relatedTarget }) => {
-      console.log('RELATED TARGET', relatedTarget);
       if (relatedTarget && relatedTarget instanceof Node) {
         if (menuRef()?.contains(relatedTarget)) return;
       }
