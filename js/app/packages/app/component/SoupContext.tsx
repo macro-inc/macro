@@ -221,12 +221,11 @@ export function createNavigationEntityListShortcut({
 
   const notificationSource = useGlobalNotificationSource();
 
-  // const markEntityAsDone = (entity: EntityData) =>
-  //   defaultHotkeyE()?.(entity, {
-  //     notificationSource,
-  //     soupContext: unifiedListContext,
-  //   });
-  //
+  const isViewingList = createMemo(() => {
+    return splitHandle.content().id === 'unified-list';
+  });
+  createEffect(() => console.log('IS VIEWING LIST', isViewingList()));
+
   actionRegistry.register('mark_as_done', async (entities) => {
     const handler =
       VIEWCONFIG_DEFAULTS[selectedView() as View]?.hotkeyOptions?.e;
@@ -690,7 +689,7 @@ export function createNavigationEntityListShortcut({
     scopeId: splitHotkeyScope,
     description: 'Root Modify selection',
     hotkey: 'cmd+k',
-    condition: () => !konsoleOpen(),
+    condition: () => !konsoleOpen() && isViewingList(),
     keyDownHandler: (e) => {
       e?.preventDefault();
       const selectedEntities = viewData().selectedEntities;
@@ -885,6 +884,7 @@ export function createNavigationEntityListShortcut({
     hotkey: ['e'],
     scopeId: entityHotkeyScope,
     description: 'Mark done',
+    condition: isViewingList,
     keyDownHandler: () => {
       const entitiesForAction = getEntitiesForAction();
       if (entitiesForAction.entities.length === 0) {
@@ -912,6 +912,7 @@ export function createNavigationEntityListShortcut({
     hotkey: ['x'],
     scopeId: entityHotkeyScope,
     description: 'Toggle select item',
+    condition: isViewingList,
     keyDownHandler: () => {
       const entity = getHighlightedEntity();
       if (!entity) return false;
@@ -924,7 +925,7 @@ export function createNavigationEntityListShortcut({
     hotkey: ['escape'],
     scopeId: splitHotkeyScope,
     description: 'Clear multi selection',
-    condition: () => viewData().selectedEntities.length > 0,
+    condition: () => isViewingList() && viewData().selectedEntities.length > 0,
     keyDownHandler: () => {
       const length = viewData().selectedEntities.length;
       setViewDataStore(selectedView(), 'selectedEntities', []);
@@ -936,6 +937,7 @@ export function createNavigationEntityListShortcut({
     scopeId: splitHotkeyScope,
     description: () =>
       viewData().selectedEntities.length > 1 ? 'Delete items' : 'Delete item',
+    condition: isViewingList,
     keyDownHandler: () => {
       const entitiesForAction = getEntitiesForAction();
       if (entitiesForAction.entities.length === 0) {
