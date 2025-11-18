@@ -6,5 +6,23 @@ export default defineConfig({
   plugins: [tsconfigPaths(), solidPlugin()],
   test: {
     exclude: [...configDefaults.exclude],
+    projects: [
+      {
+        // WebSocket tests with Node.js environment
+        extends: './packages/websocket/vitest.config.ts',
+        test: {
+          include: ['packages/websocket/**/*.test.{ts,tsx}'],
+          name: 'websocket',
+        },
+      },
+      {
+        // Default app tests with browser environment
+        test: {
+          include: ['packages/app/**/*.test.{ts,tsx}'],
+          name: 'app',
+          environment: 'jsdom',
+        },
+      },
+    ],
   },
 });
