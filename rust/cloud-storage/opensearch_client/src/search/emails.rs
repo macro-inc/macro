@@ -178,7 +178,7 @@ pub(crate) struct EmailIndex {
     pub content: String,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct EmailSearchResponse {
     pub thread_id: String,
     pub message_id: String,

@@ -1,6 +1,6 @@
 use crate::channel::ChannelSearchResponseItemWithMetadata;
 use crate::chat::ChatSearchResponseItemWithMetadata;
-use crate::document::{DocumentSearchResponse, DocumentSearchResponseItemWithMetadata};
+use crate::document::DocumentSearchResponseItemWithMetadata;
 use crate::email::EmailSearchResponseItemWithMetadata;
 use crate::project::ProjectSearchResponseItemWithMetadata;
 use crate::{

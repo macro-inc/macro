@@ -27,7 +27,7 @@ pub(crate) struct ChatIndex {
     pub content: String,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct ChatSearchResponse {
     pub chat_id: String,
     pub chat_message_id: String,

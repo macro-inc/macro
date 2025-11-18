@@ -123,7 +123,7 @@ impl ProjectSearchArgs {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct ProjectSearchResponse {
     pub project_id: String,
     pub user_id: String,

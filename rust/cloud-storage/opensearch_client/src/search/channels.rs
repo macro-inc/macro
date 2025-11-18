@@ -30,7 +30,7 @@ pub(crate) struct ChannelMessageIndex {
     pub updated_at_seconds: i64,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct ChannelMessageSearchResponse {
     pub channel_id: String,
     pub channel_name: Option<String>,

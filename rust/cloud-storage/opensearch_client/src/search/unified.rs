@@ -512,8 +512,6 @@ pub(crate) async fn search_unified(
         .map_client_error()
         .await?;
 
-    println!("{:?}", response);
-
     let result = response
         .json::<DefaultSearchResponse<UnifiedSearchIndex>>()
         .await
@@ -521,8 +519,6 @@ pub(crate) async fn search_unified(
             details: e.to_string(),
             method: Some("search_unified".to_string()),
         })?;
-
-    println!("{:?}", result);
 
     Ok(result.hits.hits.into_iter().map(|h| h.into()).collect())
 }

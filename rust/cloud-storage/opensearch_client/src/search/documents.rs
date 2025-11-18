@@ -84,7 +84,7 @@ pub(crate) struct DocumentIndex {
     pub updated_at_seconds: i64,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct DocumentSearchResponse {
     pub document_id: String,
     pub document_name: String,
