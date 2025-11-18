@@ -57,8 +57,7 @@ pub trait AggregateFrecencyStorage: Send + Sync + 'static {
     /// retrieve the top frecency score records for this user
     fn get_top_entities(
         &self,
-        user_id: MacroUserIdStr<'_>,
-        limit: u32,
+        req: FrecencyPageRequest<'_>,
     ) -> impl Future<Output = Result<Vec<AggregateFrecency>, Self::Err>> + Send;
 
     /// write an [AggregateFrecency] back to storage
@@ -66,13 +65,6 @@ pub trait AggregateFrecencyStorage: Send + Sync + 'static {
         &self,
         frecency: AggregateFrecency,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-
-    /// retrieve the specific aggregate record for this entity + user pair
-    fn get_aggregate_for_user_entity_pair(
-        &self,
-        user_id: MacroUserIdStr<'_>,
-        entity: Entity<'_>,
-    ) -> impl Future<Output = Result<Option<AggregateFrecency>, Self::Err>> + Send;
 
     /// retrieve the specific aggregate record for the input entities + user pair
     fn get_aggregate_for_user_entities<T>(
