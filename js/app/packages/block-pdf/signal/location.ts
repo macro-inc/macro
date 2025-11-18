@@ -19,6 +19,7 @@ import { pdfViewLocation } from './document';
 import {
   updateFindControlStateSignal,
   useGetRootViewer,
+  viewerHasVisiblePagesSignal,
   viewerReadySignal,
 } from './pdfViewer';
 
@@ -120,25 +121,24 @@ export type PdfOrderInfo = z.infer<typeof PdfOrderInfoSchema>;
 
 export const locationChangedSignal = createBlockSignal<boolean>(false);
 
-// go to this location when it changes
-export const pendingLocationSignal = createBlockSignal<
-  PdfLocation | undefined
->();
-
 export const pendingLocationParamsSignal = createBlockSignal<
   Record<string, string> | undefined
 >();
 
+// TODO: fix the aboslute clusterfuck that is location params
 createBlockEffect(() => {
-  const viewerReady = viewerReadySignal();
+  const viewerReady = viewerReadySignal() && viewerHasVisiblePagesSignal();
   const params = pendingLocationParamsSignal();
   if (viewerReady && params) {
+    // TODO: do we need to clear all overlays here
     const getViewer = useGetRootViewer();
     const viewer = getViewer();
     viewer?.clearAllOverlays();
+
     goToLinkLocationFromParams(params);
   }
 });
+
 export const locationStore = createBlockStore<{
   general: GeneralLocation | undefined;
   precise: PreciseLocation | undefined;
@@ -149,14 +149,6 @@ export const locationStore = createBlockStore<{
   precise: undefined,
   annotation: undefined,
   search: undefined,
-});
-
-createBlockEffect(() => {
-  const viewerReady = viewerReadySignal();
-  const location = pendingLocationSignal();
-  if (viewerReady && location) {
-    goToPdfLocation(location);
-  }
 });
 
 export function useSetLocationStore() {
@@ -465,7 +457,7 @@ export async function goToPdfLocation(location: PdfLocation) {
   const getRootViewer = useGetRootViewer();
   const viewer = getRootViewer();
   const documentId = useBlockId();
-  const findControlelrStateEventSignal = updateFindControlStateSignal.get;
+  const findControllerStateEventSignal = updateFindControlStateSignal.get;
   if (!viewer || !documentId) return;
 
   switch (location.type) {
@@ -483,9 +475,7 @@ export async function goToPdfLocation(location: PdfLocation) {
       viewer.generateOverlayForSelectionRect(location.pageIndex - 1, location);
       break;
     case 'annotation':
-      //TODO: @synoet @gbirman
-      // once macrotations are implemented, this should be changed to
-      // properly port over gotoMacrotation
+      // TODO: implement specific annotation navigation, e.g. comments
       await viewer.scrollTo({
         pageNumber: location.pageIndex,
         yPos: 0,
@@ -512,7 +502,7 @@ export async function goToPdfLocation(location: PdfLocation) {
 
       // Wait for the find controller to be ready
       const findControllerStateEvent = await waitForSignal(
-        findControlelrStateEventSignal,
+        findControllerStateEventSignal,
         // NOTE: if we run into a race condition where find controller is not cleared a cleaner solution would be to set updateFindControlStateSignal to
         // undefined before you call hidden search then wait for search state to update
         (val) =>
@@ -534,40 +524,31 @@ export async function goToPdfLocation(location: PdfLocation) {
   }
 }
 
-export async function goToLinkLocationFromSearchParams(
-  searchPage: string,
-  searchMatchNumOnPage: string,
-  searchTerm: string
-) {
-  const location = {
-    type: 'search',
-    pageIndex: Number(searchPage) + 1,
-    matchNum: Number(searchMatchNumOnPage),
-    term: searchTerm,
-  } as PdfLocation;
+// TODO: this should be a hook
+const goToPreviousLocation = () => {
+  const getViewer = useGetRootViewer();
+  const viewer = getViewer();
 
-  if (location) {
-    return await goToPdfLocation(location);
-  }
-}
+  // since this is not a hook we wait an arbitrary amount of time for the signal to be set
+  waitForSignal(pdfViewLocation, (location) => !!location, 300).then(
+    (prevLocationHash) => {
+      if (viewer && prevLocationHash) {
+        viewer.goToLocationHash(prevLocationHash);
+      }
+    }
+  );
+};
 
 /**
  * Go to the location in the pdf viewer based on the current url
  */
 export async function goToLinkLocation(params: LocationSearchParams) {
-  //const params = makeLocationSearchParams(searchParams);
   const location = parseLocationFromUrl(params);
   if (location) {
     return await goToPdfLocation(location);
   }
 
-  const getViewer = useGetRootViewer();
-  const viewer = getViewer();
-  // TODO: this should be a hook?
-  const prevLocationHash = pdfViewLocation();
-  if (viewer && prevLocationHash) {
-    viewer.goToLocationHash(prevLocationHash);
-  }
+  goToPreviousLocation();
 }
 
 /**
@@ -576,18 +557,10 @@ export async function goToLinkLocation(params: LocationSearchParams) {
 export async function goToLinkLocationFromParams(
   params: Record<string, string>
 ) {
-  console.log(' go to link location, ', params);
   const location = parseLocationFromBlockParams(params);
-  console.log({ location });
   if (location) {
     return await goToPdfLocation(location);
   }
 
-  const getViewer = useGetRootViewer();
-  const viewer = getViewer();
-  // TODO: this should be a hook?
-  const prevLocationHash = pdfViewLocation();
-  if (viewer && prevLocationHash) {
-    viewer.goToLocationHash(prevLocationHash);
-  }
+  goToPreviousLocation();
 }
