@@ -7,10 +7,12 @@
 
 #[cfg(feature = "axum")]
 mod axum;
+mod collections;
 mod cursor;
 mod sort;
 
 #[cfg(feature = "axum")]
 pub use axum::*;
+pub use collections::*;
 pub use cursor::*;
 pub use sort::*;
