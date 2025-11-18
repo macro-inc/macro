@@ -8,7 +8,7 @@ import {
   PropertiesProvider,
   usePropertiesContext,
 } from './context/PropertiesContext';
-import { useProperties } from './hooks';
+import { useEntityProperties } from './hooks';
 import type { PropertiesPanelProps, Property } from './types';
 
 const CONTAINER_CLASSES =
@@ -19,7 +19,7 @@ const SPINNER_CLASSES = 'w-5 h-5 animate-spin';
 export function PropertiesView(props: PropertiesPanelProps) {
   const blockId = useBlockId();
 
-  const { properties, isLoading, error, refetch } = useProperties(
+  const { properties, isLoading, error, refetch } = useEntityProperties(
     blockId,
     props.entityType,
     true // includeMetadata

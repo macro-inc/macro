@@ -1,4 +1,4 @@
-export { useBooleanToggle } from './useBooleanToggle';
+export { useBooleanEditor } from './useBooleanEditor';
 export { useInlineEditor } from './useInlineEditor';
-export { useProperties } from './useProperties';
-export { usePropertyManagement } from './usePropertyManagement';
+export { useEntityProperties } from './useEntityProperties';
+export { usePropertyModals } from './usePropertyModals';

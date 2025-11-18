@@ -2,7 +2,7 @@ import CheckIcon from '@icon/bold/check-bold.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
-import { useBooleanToggle } from '../../hooks';
+import { useBooleanEditor } from '../../hooks';
 import type { Property } from '../../types';
 
 type BooleanValueProps = {
@@ -17,7 +17,7 @@ type BooleanValueProps = {
  * Treats undefined as false (unchecked)
  */
 export const BooleanValue: Component<BooleanValueProps> = (props) => {
-  const { value, isSaving, toggle } = useBooleanToggle(
+  const { value, isSaving, toggle } = useBooleanEditor(
     props.property as Property & { valueType: 'boolean' },
     props.entityType,
     props.onRefresh

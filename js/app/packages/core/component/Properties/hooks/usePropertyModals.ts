@@ -15,7 +15,7 @@ export interface PropertyManagementState {
   error: string | null;
 }
 
-export function usePropertyManagement(
+export function usePropertyModals(
   existingPropertyIds: string[],
   searchQuery?: () => string
 ) {

@@ -17,7 +17,7 @@ import {
   SECONDARY_BUTTON_CLASSES,
 } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
-import { usePropertyManagement } from '../../hooks/usePropertyManagement';
+import { usePropertyModals } from '../../hooks/usePropertyModals';
 import { PROPERTY_STYLES } from '../../styles/propertyStyles';
 import type { PropertySelectorProps } from '../../types';
 import { getPropertyDefinitionTypeDisplay, useSearchInputFocus } from '../../utils';
@@ -38,7 +38,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
     filteredProperties,
     fetchAvailableProperties,
     togglePropertySelection,
-  } = usePropertyManagement(props.existingPropertyIds, () => searchQuery());
+  } = usePropertyModals(props.existingPropertyIds, () => searchQuery());
 
   const handleAddProperties = async () => {
     const selected = state().selectedPropertyIds;
