@@ -1,6 +1,7 @@
 import { getClippedOverlayRect } from '@app/util/getClippedOverlayRect';
 import { getScrollElementParent } from '@app/util/getScrollElementParent';
 import { Hotkey } from '@core/component/Hotkey';
+import { CommandWithInfo, useActiveCommands } from '@core/hotkey/getCommands';
 import { hotkeyScopeTree } from '@core/hotkey/state';
 import { tokenMap } from '@core/hotkey/tokens';
 import type { HotkeyCommand, ValidHotkey } from '@core/hotkey/types';
@@ -18,6 +19,7 @@ import {
   type Accessor,
   type Component,
   createEffect,
+  createMemo,
   createSignal,
   createUniqueId,
   For,
@@ -65,8 +67,6 @@ const Visor: Component<{
   };
 
   const runVisor = () => {
-    console.log('Running Visor, current scope tree: ', hotkeyScopeTree);
-    console.log('current tokenMap: ', tokenMap);
     const root = props.parent?.() ?? document.getElementById('root')!;
 
     const hotkeyEls = Array.from(
@@ -97,10 +97,8 @@ const Visor: Component<{
         const id = createUniqueId();
         const tokenString = hotkeyEl.dataset.hotkeyToken ?? '';
         const token = tokenMap.get(tokenString);
-        console.log('checking token: ', token);
         if (!token) return acc;
         const command = getActiveCommandByToken(token);
-        console.log('active command: ', command);
         const primaryHotkey = command?.hotkeys?.[0];
         // We only want to show visor for hotkeys that are in the current active scope branch.
         if (
@@ -174,15 +172,79 @@ const Visor: Component<{
   });
 
   return (
-    // <Portal mount={props.mount ?? document.getElementById('root')!}>
-    <div>
-      <For each={visorLabels}>
-        {(jumpLabel) => <VisorLabelOverlay {...jumpLabel} />}
-      </For>
-    </div>
-    // </Portal>
+    <>
+      <WhichKey />
+      <div>
+        <For each={visorLabels}>
+          {(jumpLabel) => <VisorLabelOverlay {...jumpLabel} />}
+        </For>
+      </div>
+    </>
   );
 };
+
+function WhichKey() {
+  const activeCommands = useActiveCommands({ hideCommandsWithoutHotkeys: true});
+
+  const commandsWithActivateScope = createMemo(() => {
+    return activeCommands().filter(
+      (command) => command.activateCommandScopeId
+    );
+  });
+
+  const commandsWithoutActivateScope = createMemo(() => {
+    return activeCommands().filter(
+      (command) => !command.activateCommandScopeId
+    );
+  });
+
+  return (
+    <div class="absolute z-9999 left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] max-w-80ch w-1/2">
+      <div class="absolute -z-1 top-4 left-4 pattern-edge pattern-diagonal-4 opacity-100 w-full h-full mask-r-from-[calc(100%_-_1rem)] mask-b-from-[calc(100%_-_1rem)]" />
+      <div class="p-2 w-full h-full bg-dialog border-2 border-accent text-sm">
+        <div class="mb-4">
+          <h3 class="font-medium mb-2">Modes</h3>
+          <For each={commandsWithActivateScope()}>
+            {(command) => (
+              <div class="grid grid-cols-[8ch_1fr] gap-2">
+                <Hotkey
+                  class="font-mono"
+                  token={command.hotkeyToken}
+                  shortcut={prettyPrintHotkeyString(command.hotkeys.at(0))}
+                />
+                <div>
+                  {typeof command.description === 'function'
+                    ? command.description()
+                    : command.description}{' '}
+                </div>
+              </div>
+            )}
+          </For>
+        </div>
+
+        <div>
+          <h3 class="font-medium mb-2">Commands</h3>
+          <For each={commandsWithoutActivateScope()}>
+            {(command) => (
+              <div class="grid grid-cols-[8ch_1fr] gap-2">
+                <Hotkey
+                  class="font-mono"
+                  token={command.hotkeyToken}
+                  shortcut={prettyPrintHotkeyString(command.hotkeys.at(0))}
+                />
+                <div>
+                  {typeof command.description === 'function'
+                    ? command.description()
+                    : command.description}{' '}
+                </div>
+              </div>
+            )}
+          </For>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 const VisorLabelOverlay: Component<VisorLabel> = (props) => {
   const [targetData, setTargetData] = createStore({

@@ -30,10 +30,6 @@ import {
 } from './command/state';
 import { CREATABLE_BLOCKS, toggleCreateMenu } from './dock/CreateMenu';
 import { fireMacroJump } from './MacroJump';
-import {
-  quickCreateMenuOpenSignal,
-  selectedQuickCreateTypeSignal,
-} from './QuickCreateMenu';
 import { focusAdjacentSplit } from './split-layout/layoutUtils';
 import { fireVisor } from './Visor';
 
@@ -87,67 +83,8 @@ export default function GlobalShortcuts() {
     });
   });
 
-  const quickCreateScope = registerHotkey({
-    hotkeyToken: TOKENS.global.quickCreateCommand,
-    hotkey: 'q',
-    scopeId: 'global',
-    description: 'Quick send',
-    keyDownHandler: () => {
-      return true;
-    },
-    activateCommandScope: true,
-    displayPriority: 4,
-  });
-
-  const [_selectedQuickCreateType, setSelectedQuickCreateType] =
-    selectedQuickCreateTypeSignal;
-  const [_quickCreateMenuOpen, setQuickCreateMenuOpen] =
-    quickCreateMenuOpenSignal;
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.quickCreate.note,
-    hotkey: 'n',
-    scopeId: quickCreateScope.commandScopeId,
-    description: 'Create note',
-    keyDownHandler: () => {
-      setSelectedQuickCreateType('note');
-      setQuickCreateMenuOpen(true);
-      return true;
-    },
-    displayPriority: 10,
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.quickCreate.email,
-    hotkey: 'e',
-    scopeId: quickCreateScope.commandScopeId,
-    description: 'Create email',
-    keyDownHandler: () => {
-      setSelectedQuickCreateType('email');
-      setQuickCreateMenuOpen(true);
-      return true;
-    },
-    displayPriority: 10,
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.quickCreate.message,
-    hotkey: 'm',
-    scopeId: quickCreateScope.commandScopeId,
-    description: 'Create message',
-    keyDownHandler: () => {
-      setSelectedQuickCreateType('message');
-      setQuickCreateMenuOpen(true);
-      return true;
-    },
-    displayPriority: 10,
-    runWithInputFocused: true,
-  });
-
   const moveScope = registerHotkey({
-    hotkeyToken: TOKENS.global.jumpCommand,
+    hotkeyToken: TOKENS.global.moveCommand,
     hotkey: 'm',
     scopeId: 'global',
     description: 'Move',
@@ -158,7 +95,7 @@ export default function GlobalShortcuts() {
   });
 
   registerHotkey({
-    hotkeyToken: TOKENS.global.jump.macroJump,
+    hotkeyToken: TOKENS.global.move.macroJump,
     hotkey: 'm',
     scopeId: moveScope.commandScopeId,
     description: 'Macro Jump',
@@ -169,7 +106,7 @@ export default function GlobalShortcuts() {
   });
 
   registerHotkey({
-    hotkeyToken: TOKENS.global.jump.focusSplitRight,
+    hotkeyToken: TOKENS.global.move.focusSplitRight,
     hotkey: 'arrowright',
     scopeId: moveScope.commandScopeId,
     description: 'Focus split right',
@@ -180,7 +117,7 @@ export default function GlobalShortcuts() {
   });
 
   registerHotkey({
-    hotkeyToken: TOKENS.global.jump.focusSplitLeft,
+    hotkeyToken: TOKENS.global.move.focusSplitLeft,
     hotkey: 'arrowleft',
     scopeId: moveScope.commandScopeId,
     description: 'Focus split left',
