@@ -26,17 +26,17 @@ export function usePropertyModals(
     error: null,
   });
 
+  // Memoize Set creation to avoid recreation on every search keystroke
+  const existingPropertyIdsSet = createMemo(() => new Set(existingPropertyIds));
+
   const filteredProperties = createMemo(() => {
     const currentState = state();
     const query = searchQuery ? searchQuery().toLowerCase().trim() : '';
-
-    // Convert existing property IDs to Set for O(1) lookup
-    const existingPropertyIdsSet = new Set(existingPropertyIds);
+    const existingIds = existingPropertyIdsSet();
 
     // First filter out existing properties (reactive to existingPropertyIds changes)
     const availableProperties = currentState.availableProperties.filter(
-      (property) =>
-        property && property.id && !existingPropertyIdsSet.has(property.id)
+      (property) => property && property.id && !existingIds.has(property.id)
     );
 
     // Then apply search filter

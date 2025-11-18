@@ -20,8 +20,6 @@ type LinkValueProps = {
   onRefresh?: () => void;
 };
 
-const [badLinks, setBadLinks] = createStore<Record<string, true>>({});
-
 export const LinkValue: Component<LinkValueProps> = (props) => {
   const blockId = useBlockId();
   const [isAdding, setIsAdding] = createSignal(false);
@@ -29,6 +27,7 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
   const [error, setError] = createSignal<string | null>(null);
   const [hoveredLink, setHoveredLink] = createSignal<string | null>(null);
   const [isSaving, setIsSaving] = createSignal(false);
+  const [badLinks, setBadLinks] = createStore<Record<string, true>>({});
 
   const isReadOnly = () => props.property.isMetadata || !props.canEdit;
   const linkValues = (props.property.value || []) as string[];
@@ -174,6 +173,8 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
             isRemoving={isSaving()}
             hoveredLink={hoveredLink()}
             setHoveredLink={setHoveredLink}
+            badLinks={badLinks}
+            setBadLinks={setBadLinks}
           />
         )}
       </For>
@@ -211,6 +212,8 @@ type LinkDisplayProps = {
   isRemoving: boolean;
   hoveredLink: string | null;
   setHoveredLink: (url: string | null) => void;
+  badLinks: Record<string, true>;
+  setBadLinks: (key: string, value: true) => void;
 };
 
 const LinkDisplay: Component<LinkDisplayProps> = (props) => {
@@ -264,7 +267,9 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
       >
         <div class="shrink-0 w-4 h-4 flex items-center justify-center">
           <Show
-            when={faviconUrl() && !imageError() && !badLinks[faviconUrl()!]}
+            when={
+              faviconUrl() && !imageError() && !props.badLinks[faviconUrl()!]
+            }
             fallback={<LinkIcon class="w-3.5 h-3.5 text-ink-muted" />}
           >
             <img
@@ -275,7 +280,7 @@ const LinkDisplay: Component<LinkDisplayProps> = (props) => {
               onError={() => {
                 setImageError(true);
                 if (faviconUrl()) {
-                  setBadLinks(faviconUrl()!, true);
+                  props.setBadLinks(faviconUrl()!, true);
                 }
               }}
             />
