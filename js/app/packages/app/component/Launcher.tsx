@@ -11,6 +11,7 @@ import {
   createCodeFileFromText,
   createMarkdownFile,
 } from '@core/util/create';
+import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { isErr } from '@core/util/maybeResult';
 import { Dialog } from '@kobalte/core/dialog';
 import PixelChat from '@macro-icons/pixel/ai.svg';
@@ -32,7 +33,7 @@ import {
 
 import { type FocusableElement, tabbable } from 'tabbable';
 
-import { useSplitLayout } from '../split-layout/layout';
+import { useSplitLayout } from './split-layout/layout';
 
 type LauncherMenuItemProps = {
   label: string;
@@ -49,6 +50,13 @@ type LauncherMenuItemProps = {
 };
 
 const USE_ENTITY_COLORS = true;
+
+export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal();
+
+export const toggleCreateMenu = () => {
+  const isOpen = createMenuOpen();
+  setCreateMenuOpen(!isOpen);
+};
 
 const LauncherMenuItem = (props: LauncherMenuItemProps) => {
   let buttonRef!: HTMLButtonElement;
