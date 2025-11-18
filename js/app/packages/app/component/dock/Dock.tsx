@@ -27,8 +27,10 @@ import SplitIcon from '@icon/regular/square-split-horizontal.svg';
 import IconAtom from '@macro-icons/macro-atom.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
 import IconPower from '@phosphor-icons/core/regular/power.svg';
+import IconKeyboard from '@phosphor-icons/core/regular/keyboard.svg';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { setKonsoleOpen } from '../command/state';
+import { hotkeysModalOpen, setHotkeysModalOpen } from '../GlobalHotkeys';
 import { useGlobalNotificationSource } from '../GlobalAppState';
 import { BasicTierLimit } from './BasicTierLimit';
 import { CreateMenu } from './CreateMenu';
@@ -310,6 +312,21 @@ export function Dock() {
               }}
               class="h-full aspect-square"
               onClick={togglePresentMode}
+            />
+
+            <IconButton
+              icon={IconKeyboard}
+              theme={hotkeysModalOpen() ? 'accent' : 'clear'}
+              tooltip={{
+                label: hotkeysModalOpen()
+                  ? 'Close Keyboard Shortcuts'
+                  : 'Show Keyboard Shortcuts',
+                hotkeyToken: TOKENS.global.showHotkeys,
+              }}
+              class="h-full aspect-square"
+              onClick={() => {
+                setHotkeysModalOpen(!hotkeysModalOpen());
+              }}
             />
 
             <IconButton
