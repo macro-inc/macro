@@ -141,8 +141,6 @@ export const ENABLE_SVG_PREVIEW = true;
 
 export const USE_PIXEL_BLOCK_ICONS = false;
 
-export const ENABLE_RIGHTHAND_SIDEBAR = true;
-
 export const ENABLE_PROPERTIES_METADATA = DEV_MODE_ENV;
 
 export const ENABLE_EMAIL_VIEW = true;
