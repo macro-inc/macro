@@ -1,5 +1,5 @@
 import { getCustomCursorEnabled } from '@app/util/cursor';
-import { isMobile } from "@solid-primitives/platform";
+import { isMobile } from '@solid-primitives/platform';
 import { createEffect, createRoot } from 'solid-js';
 import { themeReactive } from '../../../block-theme/signals/themeReactive';
 import busySvgRaw from './cursor-svg/busy.svg?raw';
@@ -44,11 +44,11 @@ let defaultCursor: string = '';
 let hexColor: string = '';
 let cursorCache: Record<string, string> = {};
 let currentCursorType: string | null = null;
-const shadowRoots = new Set<ShadowRoot>()
-let overridedCursorTargetEl: HTMLElement | null = null
-const overrideCursorAttr = 'data-override-cursor'
+const shadowRoots = new Set<ShadowRoot>();
+let overridedCursorTargetEl: HTMLElement | null = null;
+const overrideCursorAttr = 'data-override-cursor';
 // const overrideCursorSelector = `[${overrideCursorAttr}]`
-const overrideCursorSelector = `*`
+const overrideCursorSelector = `*`;
 
 // Get or create style elements in all matching shadow roots
 function getShadowRootStyleEls(): HTMLStyleElement[] {
@@ -82,7 +82,11 @@ function extractFallbackCursor(cursor: string): string {
 }
 
 // Recursively find element at point, traversing into shadow roots
-function deepElementFromPoint(x: number, y: number, root: Document | ShadowRoot = document): Element | null {
+function deepElementFromPoint(
+  x: number,
+  y: number,
+  root: Document | ShadowRoot = document
+): Element | null {
   const el = root.elementFromPoint(x, y);
   if (!el) return null;
 
@@ -136,7 +140,9 @@ function isOverTextGlyph(clientX: number, clientY: number): boolean {
   const textNodes = getTextNodes(node);
   if (!textNodes.length) return false;
 
-  const isOverText = textNodes.some((tn) => isPointInTextLine(tn, clientX, clientY));
+  const isOverText = textNodes.some((tn) =>
+    isPointInTextLine(tn, clientX, clientY)
+  );
   return isOverText;
 }
 
@@ -155,26 +161,39 @@ function getHexColor(cssColor: string): string {
   return '#' + [r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
 
-function replaceColorAttrWithAccent(svgContent: string, accentHex: string): string {
+function replaceColorAttrWithAccent(
+  svgContent: string,
+  accentHex: string
+): string {
   if (!accentHex) return svgContent;
-  return svgContent
-    .replace(/%COLOR-ACCENT%/gi, accentHex)
+  return svgContent.replace(/%COLOR-ACCENT%/gi, accentHex);
 }
 
 // Convert SVG string to data URL cursor CSS
-function svgToCursor(svgContent: string, fallback: string, position: string = '11 9'): string {
+function svgToCursor(
+  svgContent: string,
+  fallback: string,
+  position: string = '11 9'
+): string {
   const encodedSvg = encodeURIComponent(svgContent);
   return `url('data:image/svg+xml;utf8,${encodedSvg}') ${position}, ${fallback}`;
 }
 
 // Map of cursor states to SVG raw content and fallback cursor
-const cursorSvgMap: Record<string, { svg: string; fallback: string; position: string }> = {
+const cursorSvgMap: Record<
+  string,
+  { svg: string; fallback: string; position: string }
+> = {
   // general cursors
   auto: { svg: defaultSvgRaw, fallback: 'auto', position: '11 9' },
   default: { svg: defaultSvgRaw, fallback: 'auto', position: '11 9' }, // Will be set dynamically
   none: { svg: '', fallback: 'none', position: '11 9' },
   // link and status cursors
-  'context-menu': { svg: contextualmenuSvgRaw, fallback: 'context-menu', position: '11 9' },
+  'context-menu': {
+    svg: contextualmenuSvgRaw,
+    fallback: 'context-menu',
+    position: '11 9',
+  },
   help: { svg: helpSvgRaw, fallback: 'help', position: '11 9' },
   pointer: { svg: handpointingSvgRaw, fallback: 'pointer', position: '11 9' },
   progress: { svg: busySvgRaw, fallback: 'progress', position: '11 9' },
@@ -183,29 +202,77 @@ const cursorSvgMap: Record<string, { svg: string; fallback: string; position: st
   cell: { svg: cellSvgRaw, fallback: 'cell', position: '11 9' },
   crosshair: { svg: crossSvgRaw, fallback: 'crosshair', position: '11 9' },
   text: { svg: textcursorSvgRaw, fallback: 'text', position: '16 16' },
-  'vertical-text': { svg: textcursorverticalSvgRaw, fallback: 'vertical-text', position: '11 9' },
+  'vertical-text': {
+    svg: textcursorverticalSvgRaw,
+    fallback: 'vertical-text',
+    position: '11 9',
+  },
   // drag-and-drop cursors
   alias: { svg: aliasSvgRaw, fallback: 'alias', position: '11 9' },
   copy: { svg: copySvgRaw, fallback: 'copy', position: '11 9' },
   move: { svg: moveSvgRaw, fallback: 'move', position: '11 9' },
   'no-drop': { svg: notallowedSvgRaw, fallback: 'no-drop', position: '8 0' },
-  'not-allowed': { svg: notallowedSvgRaw, fallback: 'not-allowed', position: '8 0' },
+  'not-allowed': {
+    svg: notallowedSvgRaw,
+    fallback: 'not-allowed',
+    position: '8 0',
+  },
   grab: { svg: handopenSvgRaw, fallback: 'grab', position: '11 9' },
   grabbing: { svg: handgrabbingSvgRaw, fallback: 'grabbing', position: '11 9' },
   // resizing and scrolling cursors
   'all-scroll': { svg: moveSvgRaw, fallback: 'all-scroll', position: '11 9' },
-  'col-resize': { svg: resizeleftrightSvgRaw, fallback: 'col-resize', position: '16 16' },
-  'row-resize': { svg: resizeupdownSvgRaw, fallback: 'row-resize', position: '11 9' },
-  'n-resize': { svg: resizenorthSvgRaw, fallback: 'n-resize', position: '11 9' },
-  's-resize': { svg: resizesouthSvgRaw, fallback: 's-resize', position: '11 9' },
+  'col-resize': {
+    svg: resizeleftrightSvgRaw,
+    fallback: 'col-resize',
+    position: '16 16',
+  },
+  'row-resize': {
+    svg: resizeupdownSvgRaw,
+    fallback: 'row-resize',
+    position: '11 9',
+  },
+  'n-resize': {
+    svg: resizenorthSvgRaw,
+    fallback: 'n-resize',
+    position: '11 9',
+  },
+  's-resize': {
+    svg: resizesouthSvgRaw,
+    fallback: 's-resize',
+    position: '11 9',
+  },
   'e-resize': { svg: resizeeastSvgRaw, fallback: 'e-resize', position: '11 9' },
   'w-resize': { svg: resizewestSvgRaw, fallback: 'w-resize', position: '11 9' },
-  'ns-resize': { svg: resizenorthsouthSvgRaw, fallback: 'ns-resize', position: '11 9' },
-  'ew-resize': { svg: resizewesteastSvgRaw, fallback: 'ew-resize', position: '11 9' },
-  'ne-resize': { svg: resizenortheastSvgRaw, fallback: 'ne-resize', position: '11 9' },
-  'nw-resize': { svg: resizenorthwestSvgRaw, fallback: 'nw-resize', position: '11 9' },
-  'se-resize': { svg: resizesoutheastSvgRaw, fallback: 'se-resize', position: '11 9' },
-  'sw-resize': { svg: resizesouthwestSvgRaw, fallback: 'sw-resize', position: '11 9' },
+  'ns-resize': {
+    svg: resizenorthsouthSvgRaw,
+    fallback: 'ns-resize',
+    position: '11 9',
+  },
+  'ew-resize': {
+    svg: resizewesteastSvgRaw,
+    fallback: 'ew-resize',
+    position: '11 9',
+  },
+  'ne-resize': {
+    svg: resizenortheastSvgRaw,
+    fallback: 'ne-resize',
+    position: '11 9',
+  },
+  'nw-resize': {
+    svg: resizenorthwestSvgRaw,
+    fallback: 'nw-resize',
+    position: '11 9',
+  },
+  'se-resize': {
+    svg: resizesoutheastSvgRaw,
+    fallback: 'se-resize',
+    position: '11 9',
+  },
+  'sw-resize': {
+    svg: resizesouthwestSvgRaw,
+    fallback: 'sw-resize',
+    position: '11 9',
+  },
   'nesw-resize': {
     svg: resizenortheastsouthwestSvgRaw,
     fallback: 'nesw-resize',
@@ -244,18 +311,22 @@ function getCursor(cursorType: string): string {
   }
 
   // Convert to cursor CSS
-  const cursorCss = svgToCursor(processedSvg, cursorDef.fallback, cursorDef.position);
+  const cursorCss = svgToCursor(
+    processedSvg,
+    cursorDef.fallback,
+    cursorDef.position
+  );
   cursorCache[cacheKey] = cursorCss;
   return cursorCss;
 }
 
-
 function updateCursorStyle() {
-  if (!currentCursorType) return
-  const cursor = getCursor(currentCursorType)
+  if (!currentCursorType) return;
+  const cursor = getCursor(currentCursorType);
 
-
-  const cursorStyle = cursor ? `${overrideCursorSelector} { cursor: ${cursor} !important; }` : '';
+  const cursorStyle = cursor
+    ? `${overrideCursorSelector} { cursor: ${cursor} !important; }`
+    : '';
 
   if (cursor) {
     cursorStyleEl!.textContent = cursorStyle;
@@ -273,8 +344,8 @@ function updateCursorStyle() {
 }
 
 function updateCursor() {
-  updateCustomCursor()
-  updateCursorStyle()
+  updateCustomCursor();
+  updateCursorStyle();
 }
 
 function updateCustomCursor() {
@@ -307,21 +378,18 @@ function updateCustomCursor() {
   cursorMap.default = defaultCursor;
 }
 
-
-
 const clearCursorOverrideStyle = () => {
   cursorStyleEl!.textContent = '';
   const shadowStyleEls = getShadowRootStyleEls();
   for (const shadowStyleEl of shadowStyleEls) {
     shadowStyleEl.textContent = '';
   }
-}
-
+};
 
 // Initialize cursor
 function initCursor() {
-  if (isMobile) return
-  updateCustomCursor()
+  if (isMobile) return;
+  updateCustomCursor();
 
   // Initialize cursor style element
   if (!cursorStyleEl) {
@@ -330,11 +398,10 @@ function initCursor() {
     document.head.appendChild(cursorStyleEl);
   }
 
-
   // Add mousemove listener to handle cursor states and text glyph detection
   const onMouseMove = (e: MouseEvent) => {
     if (!getCustomCursorEnabled()) {
-      clearCursorOverrideStyle()
+      clearCursorOverrideStyle();
       return;
     }
 
@@ -342,16 +409,15 @@ function initCursor() {
 
     if (target.shadowRoot) {
       shadowRoots.add(target.shadowRoot);
-      [...target.shadowRoot.children].forEach(child => {
-        child.addEventListener('mousemove', onMouseMove)
-      })
-      return
+      [...target.shadowRoot.children].forEach((child) => {
+        child.addEventListener('mousemove', onMouseMove);
+      });
+      return;
     }
 
+    clearCursorOverrideStyle();
 
-    clearCursorOverrideStyle()
-
-    const targetComputedStyle = getComputedStyle(target)
+    const targetComputedStyle = getComputedStyle(target);
     const computedCursor = targetComputedStyle.cursor;
     const computedUserSelect = targetComputedStyle.userSelect;
     // TODO: maybe use attribute selector instead of wild card selector to improve perf
@@ -377,18 +443,18 @@ function initCursor() {
         cs = 'text';
       }
       if (target.tagName === 'BUTTON' || target.closest('button')) {
-        cs = 'default'
+        cs = 'default';
       }
     }
-    currentCursorType = cs
+    currentCursorType = cs;
 
     // TODO: Only update if cursor type changed
     // if (cs === currentCursorType) {
     //   return;
     // }
 
-    updateCursorStyle()
-  }
+    updateCursorStyle();
+  };
 
   document.addEventListener('mousemove', onMouseMove);
 }
@@ -418,10 +484,10 @@ createRoot(() => {
       lastAccentColor = currentAccentColor;
       lastCursorEnabled = currentCursorEnabled;
 
-      updateCursor()
+      updateCursor();
     }
-  })
-})
+  });
+});
 
 // Listen for immediate preference changes
 window.addEventListener('cursor-preference-changed', () => {
