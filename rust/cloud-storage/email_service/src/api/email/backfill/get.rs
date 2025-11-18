@@ -89,7 +89,7 @@ pub struct GetActiveBackfillJobResponse {
     operation_id = "get_backfill_gmail_active",
     responses(
             (status = 200, body=GetActiveBackfillJobResponse),
-            (status = 204),
+            (status = 204, body=EmptyResponse),
             (status = 401, body=ErrorResponse),
             (status = 500, body=ErrorResponse),
     )
