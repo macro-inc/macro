@@ -1,8 +1,8 @@
 import { useBlockId } from '@core/block';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import { type Accessor, createMemo, Show } from 'solid-js';
-import { AddPropertyButton } from './components/AddPropertyButton';
-import { PropertiesContent } from './components/PropertiesContent';
+import { AddPropertyButton } from './component/panel/AddPropertyButton';
+import { PanelContainer } from './component/panel/PanelContainer';
 import { PropertiesModals } from './components/PropertiesModals';
 import {
   PropertiesProvider,
@@ -89,7 +89,7 @@ function PropertiesViewContent(props: {
         <div class="text-failure-ink text-center py-4">{props.error()}</div>
       </Show>
 
-      <PropertiesContent
+      <PanelContainer
         properties={props.properties}
         isLoading={props.isLoading}
         error={props.error}
