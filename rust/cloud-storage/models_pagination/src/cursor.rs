@@ -381,6 +381,28 @@ impl<I, T: Sortable, F> Query<I, T, F> {
         }
     }
 
+    /// maps this filter type into another one via a callback fn.
+    /// This is analagous to [Option::map] over just the filter generic type
+    pub fn map_filter<Cb, F2>(self, cb: Cb) -> Query<I, T, F2>
+    where
+        Cb: FnOnce(F) -> F2,
+    {
+        match self {
+            Query::Sort(a, b) => Query::Sort(a, cb(b)),
+            Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter,
+            }) => Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter: cb(filter),
+            }),
+        }
+    }
+
     /// returns the entity [Uuid] and [Sortable::Value] if they exist
     pub fn vals(&self) -> (Option<&I>, Option<&T::Value>) {
         match self {

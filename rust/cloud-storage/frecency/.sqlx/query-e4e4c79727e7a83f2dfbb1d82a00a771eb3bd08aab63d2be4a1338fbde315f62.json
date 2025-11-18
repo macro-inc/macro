@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n                SELECT *\n                FROM frecency_aggregates\n                WHERE user_id = $1\n                ORDER BY frecency_score DESC\n                LIMIT $2\n                ",
+  "query": "\n                SELECT *\n                FROM frecency_aggregates\n                WHERE user_id = $1 AND ($2::float8 IS NULL OR frecency_score < $2)\n                ORDER BY frecency_score DESC\n                LIMIT $3\n                ",
   "describe": {
     "columns": [
       {
@@ -47,6 +47,7 @@
     "parameters": {
       "Left": [
         "Text",
+        "Float8",
         "Int8"
       ]
     },
@@ -61,5 +62,5 @@
       false
     ]
   },
-  "hash": "6f28cc8e7fbeec39222138e163c2eff0d63b1159c8f80e8c2821fbc3c820db9c"
+  "hash": "e4e4c79727e7a83f2dfbb1d82a00a771eb3bd08aab63d2be4a1338fbde315f62"
 }
