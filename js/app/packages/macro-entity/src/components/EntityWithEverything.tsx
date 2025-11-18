@@ -52,16 +52,16 @@ function UnreadIndicator(props: { active?: boolean }) {
   );
 }
 
-function ImportantBadge(props: { active?: boolean }) {
-  return (
-    <Show when={props.active}>
-      <div class="font-mono font-medium user-select-none uppercase flex items-center text-accent bg-accent/10 p-0.5 px-2 text-[0.625rem] rounded-full border border-accent/10">
-        <span class="@max-xl/split:hidden">Important</span>
-        <span class="hidden @max-xl/split:block font-bold">!</span>
-      </div>
-    </Show>
-  );
-}
+// function ImportantBadge(props: { active?: boolean }) {
+//   return (
+//     <Show when={props.active}>
+//       <div class="font-mono font-medium user-select-none uppercase flex items-center text-accent bg-accent/10 p-0.5 px-2 text-[0.625rem] rounded-full border border-accent/10">
+//         <span class="@max-xl/split:hidden">Important</span>
+//         <span class="hidden @max-xl/split:block font-bold">!</span>
+//       </div>
+//     </Show>
+//   );
+// }
 
 interface EntityProps<T extends WithNotification<EntityData>>
   extends ParentProps {
@@ -228,7 +228,7 @@ export function EntityWithEverything(
             </Show> */}
           </div>
           {/* Subject */}
-          <ImportantBadge active={props.importantIndicatorActive} />
+          {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
           <div class="flex items-center w-full gap-4 flex-1 min-w-0">
             <div class="font-medium shrink-0 truncate">
               <Show when={searchHighlightName()} fallback={props.entity.name}>
@@ -287,9 +287,7 @@ export function EntityWithEverything(
 
           <Show when={!props.showUnrollNotifications}>
             <div class="flex items-center gap-1">
-              <Show when={props.showUnrollNotifications}>
-                <ImportantBadge active={props.importantIndicatorActive} />
-              </Show>
+              {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
               <span class="font-medium shrink-0 truncate">
                 {userNameFromSender()}
               </span>
@@ -603,12 +601,12 @@ export function EntityWithEverything(
                         </span>
                       </div>
 
-                      <ImportantBadge
+                      {/*<ImportantBadge
                         active={
                           notification.viewedAt === null &&
                           notification.isImportantV0
                         }
-                      />
+                      />*/}
                       <div class="text-sm shrink truncate min-w-0 max-h-5 opacity-70 overflow-clip">
                         <MessageContent />
                       </div>
