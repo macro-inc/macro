@@ -9,10 +9,10 @@ import {
 } from 'solid-js';
 import {
   commandCategoryIndex,
-  SEARCH_CATEGORY,
+  searchCategories,
   setCommandCategoryIndex,
 } from './KonsoleItem';
-import { currentKonsoleMode, konsoleOpen } from './state';
+import { konsoleOpen } from './state';
 
 export function KonsoleFilter() {
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
@@ -27,9 +27,15 @@ export function KonsoleFilter() {
         setCommandCategoryIndex((prev) => {
           let nextCategoryIndex = -1;
           if (e.shiftKey) {
-            nextCategoryIndex = findNextCategoryIndex(prev, true);
+            nextCategoryIndex = searchCategories.findNextCategoryIndex(
+              prev,
+              true
+            );
           } else {
-            nextCategoryIndex = findNextCategoryIndex(prev, false);
+            nextCategoryIndex = searchCategories.findNextCategoryIndex(
+              prev,
+              false
+            );
           }
           return Math.max(nextCategoryIndex, 0);
         });
@@ -41,46 +47,6 @@ export function KonsoleFilter() {
       document.removeEventListener('keydown', down);
     });
   });
-
-  function isCategoryActive(category: number): boolean {
-    if (SEARCH_CATEGORY[category] === 'Emails') {
-      // only use emails for the search bar
-      if (currentKonsoleMode() !== 'FULL_TEXT_SEARCH') return false;
-
-      // TODO only show emails if they are enabled
-      // NOTE: this also seems to trigger a "computations created outside a 'createRoot' will never be disposed error
-      //const emailActive = useEmailActive();
-      const emailEnabled = () => {
-        // TODO: this causes a loop
-        //if (emailActive()?.link_exists) return true;
-        return true;
-      };
-      return emailEnabled();
-    }
-    return true;
-  }
-
-  function findNextCategoryIndex(category: number, backwards: boolean): number {
-    let candidateCategory = -1;
-    for (let i = 1; i < SEARCH_CATEGORY.length; i++) {
-      if (backwards) {
-        candidateCategory = category - i;
-      } else {
-        candidateCategory = category + i;
-      }
-
-      // Perform wrap-around
-      if (candidateCategory >= SEARCH_CATEGORY.length) {
-        candidateCategory = 0;
-      } else if (candidateCategory < 0) {
-        candidateCategory = SEARCH_CATEGORY.length + candidateCategory;
-      }
-
-      if (isCategoryActive(candidateCategory)) break;
-      candidateCategory = -1;
-    }
-    return candidateCategory;
-  }
 
   // Scroll selected category into view when selection changes
   createEffect(() => {
@@ -121,9 +87,9 @@ export function KonsoleFilter() {
       ref={setContainerRef}
       class="flex pb-4 overflow-x-auto scrollbar-hidden bg-transparent"
     >
-      <For each={SEARCH_CATEGORY}>
+      <For each={searchCategories.listVisible()}>
         {(item, index) => (
-          <Show when={isCategoryActive(index())}>
+          <Show when={searchCategories.isCategoryActive(index())}>
             <TextButton
               ref={(el) => {
                 if (el) buttonRefs[index()] = el;
@@ -131,7 +97,7 @@ export function KonsoleFilter() {
               theme={
                 index() === commandCategoryIndex() ? 'accentFill' : 'clear'
               }
-              text={item}
+              text={item.name}
               onMouseDown={() => setCommandCategoryIndex(index())}
               class="flex-shrink-0 h-auto *:h-7 *:px-2"
             />

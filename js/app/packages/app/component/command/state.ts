@@ -40,6 +40,7 @@ export const COMMAND_MODES = [
   // { id: "REGEX_SEARCH", sigil: "/", label: "Regex Search" },
   // { id: "RUN_COMMAND", sigil: ">", label: "Run" },
   // { id: "TEMP_CHAT", sigil: " ", label: "Temporary Chat" },
+  { id: 'SELECTION_MODIFICATION', sigil: '', label: 'Modify selection' },
 ];
 export const DEFAULT_MODE = {
   id: 'ENTITY_SEARCH',
