@@ -155,27 +155,10 @@ function getHexColor(cssColor: string): string {
   return '#' + [r, g, b].map((x) => x.toString(16).padStart(2, '0')).join('');
 }
 
-// Replace white fills (#fff, #FFF, #ffffff, #FFFFFF) with accent color
-function replaceWhiteFill(svgContent: string, accentHex: string): string {
+function replaceColorAttrWithAccent(svgContent: string, accentHex: string): string {
   if (!accentHex) return svgContent;
-  // Replace all variations of white fill (case-insensitive, with single or double quotes)
   return svgContent
-    .replace(/fill=["']#fff["']/gi, (match) => {
-      const quote = match.includes('"') ? '"' : "'";
-      return `fill=${quote}${accentHex}${quote}`;
-    })
-    .replace(/stroke=["']#fff["']/gi, (match) => {
-      const quote = match.includes('"') ? '"' : "'";
-      return `stroke=${quote}${accentHex}${quote}`;
-    })
-    .replace(/stroke=["']#ffffff["']/gi, (match) => {
-      const quote = match.includes('"') ? '"' : "'";
-      return `stroke=${quote}${accentHex}${quote}`;
-    })
-    .replace(/fill=["']#ffffff["']/gi, (match) => {
-      const quote = match.includes('"') ? '"' : "'";
-      return `fill=${quote}${accentHex}${quote}`;
-    });
+    .replace(/%COLOR-ACCENT%/gi, accentHex)
 }
 
 // Convert SVG string to data URL cursor CSS
@@ -257,7 +240,7 @@ function getCursor(cursorType: string): string {
   // Process SVG: replace white fills with accent color
   let processedSvg = cursorDef.svg;
   if (hexColor) {
-    processedSvg = replaceWhiteFill(processedSvg, hexColor);
+    processedSvg = replaceColorAttrWithAccent(processedSvg, hexColor);
   }
 
   // Convert to cursor CSS
