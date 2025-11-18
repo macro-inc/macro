@@ -321,7 +321,6 @@ function getCursor(cursorType: string): string {
 }
 
 function updateCursorStyle() {
-  console.log({ currentCursorType });
   if (!currentCursorType) return;
   const cursor = getCursor(currentCursorType);
 
