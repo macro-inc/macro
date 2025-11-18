@@ -214,7 +214,7 @@ ol.static-md.depth-6>li:not(.list-none)::before {
   padding-top: 3.5rem;
 }
 
-.md-static-code-container .md-code-box {
+.md-static-code-container .md-code-box:not(.no-accessory) {
   margin-top: -1.5rem;
 }
 
@@ -499,7 +499,7 @@ ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
   outline: 2px solid rgb(60, 132, 244);
 }
 
-.md-quote + .md-quote {
+.md-quote+.md-quote {
   margin-top: -1rem;
 }
 

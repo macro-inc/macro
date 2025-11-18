@@ -715,12 +715,10 @@ export function StaticMarkdown(props: {
     }
 
     setEditorStateFromMarkdown(editor, content(), props.target);
-
     setEditorState(editor.getEditorState());
   });
 
   // TODO: Move citations to bulk query when built in backend
-
   createEffect(() => {
     const isGenerating = props.isGenerating?.() ?? false;
     if (!isGenerating) {
