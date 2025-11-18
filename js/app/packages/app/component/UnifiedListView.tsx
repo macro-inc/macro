@@ -6,18 +6,13 @@ import {
   emailRefetchInterval,
   useEmailLinksStatus,
 } from '@app/signal/emailAuth';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { Button } from '@core/component/FormControls/Button';
 import DropdownMenu from '@core/component/FormControls/DropdownMenu';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ToggleButton } from '@core/component/FormControls/ToggleButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { IconButton } from '@core/component/IconButton';
-import {
-  ContextMenuContent,
-  MenuItem,
-  MenuSeparator,
-} from '@core/component/Menu';
+import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import {
   blockAcceptsFileExtension,
@@ -37,7 +32,6 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { supportedExtensions } from '@lexical-core/utils';
 import {
   createChannelsQuery,
-  createDeleteDssItemMutation,
   createDssInfiniteQuery,
   createEmailsInfiniteQuery,
   createFilterComposer,
@@ -104,9 +98,21 @@ import {
 } from 'solid-js';
 import { createStore, type SetStoreFunction, unwrap } from 'solid-js/store';
 import { EntityWithEverything } from '../../macro-entity/src/components/EntityWithEverything';
-import { createCopyDssEntityMutation } from '../../macro-entity/src/queries/dss';
 import type { FetchPaginatedEmailsParams } from '../../macro-entity/src/queries/email';
+import {
+  resetCommandCategoryIndex,
+  searchCategories,
+  setCommandCategoryIndex,
+  setKonsoleContextInformation,
+} from './command/KonsoleItem';
+import {
+  resetKonsoleMode,
+  setKonsoleMode,
+  toggleKonsoleVisibility,
+} from './command/state';
+import { EntityActionsMenuItems } from './EntityActionsMenuItems';
 import { EntityModal } from './EntityModal/EntityModal';
+import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
 import { useUpsertSavedViewMutation } from './Soup';
 import {
   SplitToolbarLeft,
@@ -173,21 +179,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     selectedEntity: undefined,
     prevSelectedEntity: undefined,
   });
-
-  const openEntityModal = (view: 'rename' | 'moveToProject') => {
-    // terrible will fix
-    // context menu upon closing steals focus from mounted menu
-    setTimeout(() => {
-      setTimeout(() => {
-        setContextAndModalState((prev) => ({
-          ...prev,
-          modalOpen: true,
-          modalView: view,
-          selectedEntity: prev.prevSelectedEntity,
-        }));
-      }, 100);
-    });
-  };
 
   const [localEntityListRef, setLocalEntityListRef] = createSignal<
     HTMLDivElement | undefined
@@ -860,16 +851,17 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     handle?.activate();
   };
 
-  const { mutate: deleteDssItem } = createDeleteDssItemMutation();
-  const { mutate: copyDssItem } = createCopyDssEntityMutation();
-
   const StyledTriggerLabel = (props: ParentProps) => {
     return <span class="text-[0.625rem]">{props.children}</span>;
   };
 
   const highlightedSelector = createSelector(() => view()?.highlightedId);
 
-  const selectedSelector = createSelector(() => selectedEntity()?.id);
+  const focusedSelector = createSelector(() => selectedEntity()?.id);
+  const selectedSelector = createSelector(
+    () => view()?.selectedEntities,
+    (a: string, b: EntityData[]) => b.find((e) => e.id === a) !== undefined
+  );
 
   const saveViewMutation = useUpsertSavedViewMutation();
 
@@ -1162,6 +1154,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         </SplitToolbarRight>
       </Show>
       <ContextMenu
+        forceMount={contextAndModalState.contextMenuOpen}
         onOpenChange={(open) => {
           setContextAndModalState((prev) => {
             if (open) {
@@ -1179,7 +1172,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           });
         }}
       >
-        <ContextMenu.Trigger class="size-full">
+        <ContextMenu.Trigger class="size-full unified-list-root">
           <UnifiedListComponent
             entityListRef={setLocalEntityListRef}
             virtualizerHandle={setVirtualizerHandle}
@@ -1283,8 +1276,21 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   showDoneButton={displayDoneButton()}
                   highlighted={highlightedSelector?.(innerProps.entity.id)}
                   selected={
-                    isPanelActive() && selectedSelector(innerProps.entity.id)
+                    isPanelActive() && focusedSelector(innerProps.entity.id)
                   }
+                  checked={selectedSelector(innerProps.entity.id)}
+                  onChecked={(next) => {
+                    unifiedListContext.setViewDataStore(
+                      selectedView(),
+                      'selectedEntities',
+                      (p) => {
+                        if (!next) {
+                          return p.filter((e) => e.id !== innerProps.entity.id);
+                        }
+                        return p.concat(innerProps.entity);
+                      }
+                    );
+                  }}
                 />
               );
             }}
@@ -1322,91 +1328,61 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     />
                     <MenuSeparator />
                   </Show>
-                  <Show when={markEntityAsDone}>
-                    {(fnAccessor) => {
-                      const entityDisabled = (
-                        entity: WithNotification<EntityData>
-                      ) => {
-                        return entity.type === 'email'
-                          ? entity.done
-                          : entity.notifications?.().every(({ done }) => done);
-                      };
-                      return (
-                        <MenuItem
-                          text="Mark as Done"
-                          onClick={() => fnAccessor()(selectedEntity())}
-                          disabled={entityDisabled(selectedEntity())}
-                        />
-                      );
-                    }}
-                  </Show>
-                  <MenuItem
-                    text="Delete"
-                    onClick={() => deleteDssItem(selectedEntity())}
-                    disabled={
-                      selectedEntity().type !== 'document' &&
-                      selectedEntity().type !== 'project' &&
-                      selectedEntity().type !== 'chat'
-                    }
-                  />
-                  <MenuItem
-                    text="Rename"
-                    onClick={() => openEntityModal('rename')}
-                    disabled={
-                      selectedEntity().type !== 'document' &&
-                      selectedEntity().type !== 'chat'
-                    }
-                  />
-                  <MenuItem
-                    text="Move to Project"
-                    onClick={() => {
-                      openEntityModal('moveToProject');
-                    }}
-                    disabled={
-                      selectedEntity().type !== 'document' &&
-                      selectedEntity().type !== 'project' &&
-                      selectedEntity().type !== 'chat'
-                    }
-                  />
-                  <MenuItem
-                    text="Copy"
-                    onClick={() => {
-                      copyDssItem({ entity: selectedEntity() });
-                    }}
-                    disabled={
-                      selectedEntity().type !== 'document' &&
-                      selectedEntity().type !== 'chat'
-                    }
-                  />
-                  <MenuItem
-                    text="Open in new split"
-                    onClick={() => {
-                      const splitManager = globalSplitManager();
-                      if (!splitManager) {
-                        console.error('No split manager available');
-                        return;
-                      }
-                      const entity = selectedEntity();
-                      if (entity.type === 'document') {
-                        const { fileType, id } = entity;
-                        splitManager.createNewSplit({
-                          type: fileTypeToBlockName(fileType),
-                          id,
-                        });
-                      } else {
-                        const { id, type } = entity;
-                        splitManager.createNewSplit({
-                          type,
-                          id,
-                        });
-                      }
-                    }}
+                  <EntityActionsMenuItems
+                    entity={selectedEntity()}
+                    onSelectAction={() => {}}
                   />
                 </ContextMenuContent>
               )}
             </Show>
           </ContextMenu.Portal>
         </ContextMenu.Trigger>
+        <Show when={view()?.selectedEntities.length}>
+          <EntitySelectionToolbarModal
+            selectedEntities={view()?.selectedEntities ?? []}
+            onClose={() =>
+              unifiedListContext.setViewDataStore(
+                selectedView(),
+                'selectedEntities',
+                []
+              )
+            }
+            onAction={() => {
+              const selectedEntities =
+                viewsData[selectedView()].selectedEntities;
+              const hasSelection = selectedEntities.length > 0;
+              if (hasSelection) {
+                setKonsoleMode('SELECTION_MODIFICATION');
+                const selectionIndex =
+                  searchCategories.getCateoryIndex('Selection');
+
+                if (selectionIndex === undefined) return false;
+
+                setCommandCategoryIndex(selectionIndex);
+
+                searchCategories.showCategory('Selection');
+
+                setKonsoleContextInformation({
+                  selectedEntities: selectedEntities.slice(),
+                  clearSelection: () => {
+                    unifiedListContext.setViewDataStore(
+                      selectedView(),
+                      'selectedEntities',
+                      []
+                    );
+                  },
+                });
+
+                toggleKonsoleVisibility();
+                return true;
+              }
+              searchCategories.hideCategory('Selection');
+              resetCommandCategoryIndex();
+              resetKonsoleMode();
+              return false;
+            }}
+          />
+        </Show>{' '}
       </ContextMenu>
     </>
   );
@@ -1543,7 +1519,7 @@ function SearchBar(props: {
       keyDownHandler: () => {
         setTimeout(() => {
           const searchInput = document.getElementById(
-            `search-input-${selectedView()}`
+            `search-input-${splitContext.handle.id}-${selectedView()}`
           ) as HTMLInputElement;
           searchInput?.focus();
         }, 0);
@@ -1569,7 +1545,7 @@ function SearchBar(props: {
         </Show>
         <input
           ref={inputRef}
-          id={`search-input-${selectedView()}`}
+          id={`search-input-${splitContext.handle.id}-${selectedView()}`}
           placeholder={`Search in ${viewName()}`}
           value={searchText()}
           onInput={(e) => {

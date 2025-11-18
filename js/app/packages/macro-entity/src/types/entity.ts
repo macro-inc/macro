@@ -1,3 +1,4 @@
+import { isEntityType } from '@core/types/utils';
 import type { JSX } from 'solid-js';
 
 export type EntityBase = {
@@ -65,6 +66,18 @@ export type EntityData =
   | DocumentEntity
   | EmailEntity
   | ProjectEntity;
+
+export const isEntityData = (item: unknown): item is EntityData => {
+  if (typeof item !== 'object') return false;
+
+  if (!item) return false;
+
+  if (!('type' in item)) return false;
+
+  if (typeof item.type !== 'string') return false;
+
+  return isEntityType(item.type);
+};
 
 export type EntityType = EntityData['type'];
 

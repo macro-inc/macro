@@ -694,6 +694,11 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
     --pattern-color: color-mix(in srgb, var(--color-overlay), var(--color-ink) 2%);
 }
 
+@utility bg-modal-overlay-konsole {
+  background-color: var(--color-overlay);
+  background-image: linear-gradient(rgba(from var(--color-accent) r g b / 0.1) 0%, transparent 25%);
+}
+
 @utility portal-scope {
     --documentation: "Set this element as a bounding scope for the ScopedPortal component";
 }
