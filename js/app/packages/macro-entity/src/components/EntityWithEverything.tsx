@@ -267,20 +267,13 @@ export function EntityWithEverything(
       return userName();
     });
 
-    const userNameFromNotification = createMemo(() => {
-      const notification = props.entity.notifications?.().at(0);
-      if (!notification) return;
-      const [userName] = useDisplayName(notification.senderId);
-      return userName();
-    });
-
     return (
       <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden">
         <span class="flex gap-1 truncate font-medium text-sm shrink-0 items-center">
           <span
             class="font-semibold truncate"
             classList={{
-              'w-[20cqw]': hasNotifications() && !props.showUnrollNotifications,
+              'w-[20cqw]': !props.showUnrollNotifications,
             }}
           >
             <Show when={searchHighlightName()} fallback={props.entity.name}>
@@ -296,26 +289,21 @@ export function EntityWithEverything(
 
           <Show
             when={
-              hasNotifications() &&
               !props.showUnrollNotifications &&
               !isDirectMessage()
             }
           >
             <div class="flex items-center gap-1">
               <ImportantBadge active={props.importantIndicatorActive} />
-              <span class="inline-block">
-                <span class="text-ink">
-                  {props.showUnrollNotifications
-                    ? userNameFromNotification()
-                    : userNameFromSender()}
-                </span>
+              <span class="font-medium shrink-0 truncate">
+                {userNameFromSender()}
               </span>
             </div>
           </Show>
 
           <Show when={!props.showUnrollNotifications && lastMessageContent()}>
             {(lastMessageContent) => (
-              <div class="text-sm truncate line-clamp-1 leading-none shrink text-ink-extra-muted py-1">
+              <div class="truncate shrink grow opacity-60">
                 <StaticMarkdown
                   markdown={lastMessageContent()}
                   theme={unifiedListMarkdownTheme}
