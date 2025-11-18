@@ -12,7 +12,7 @@ export const toggleCreateMenu = () => {
 export function CreateMenu() {
   return (
     <>
-      <button
+      {/*<button
         onClick={() => setCreateMenuOpen(true)}
         class="relative flex justify-between items-center gap-2 data-expanded:bg-accent data-expanded:border-accent **:border-none! font-medium text-ink-muted data-expanded:text-default-bg hover:text-accent text-base bracket-never"
         classList={{
@@ -24,7 +24,7 @@ export function CreateMenu() {
             class={`h-2.5 ${createMenuOpen() ? 'fill-dialog/70' : 'fill-accent/70 transition-all duration-300'}`}
           />
         </span>
-      </button>
+      </button>*/}
       <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
     </>
   );

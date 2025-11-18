@@ -1,19 +1,19 @@
-import { DEV_MODE_ENV, ENABLE_DOCK_NOTITIFCATIONS } from '@core/constant/featureFlags';
 import { setSettingsOpen, useSettingsState } from '@core/constant/SettingsState';
-import IconTerminal from '@phosphor-icons/core/regular/terminal.svg?component-solid';
 import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
+import { ENABLE_DOCK_NOTITIFCATIONS } from '@core/constant/featureFlags';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import SplitIcon from '@icon/regular/square-split-horizontal.svg';
 import { useGlobalNotificationSource } from '../GlobalAppState';
 import IconPower from '@phosphor-icons/core/regular/power.svg';
+import MacroCreateIcon from '@macro-icons/macro-create-b.svg';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { PresentModeGlitch } from './PresentModeGlitch';
 import { IconButton } from '@core/component/IconButton';
 import IconQuestion from '@icon/regular/question.svg';
-import { BasicHotkey } from '@core/component/Hotkey';
+
 import { withAnalytics } from '@coparse/analytics';
 import IconAtom from '@macro-icons/macro-atom.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
@@ -26,24 +26,26 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { playSound } from '@app/util/sound';
 import { QuickAccess } from './QuickAccess';
 import { CreateMenu } from './CreateMenu';
+// import { Debug } from './Debug';
 import Hints from './Hints';
 
-const { track, TrackingEvents } = withAnalytics();
-
-export function Dock() {
-  const hasPaid = useHasPaidAccess();
-  const { settingsOpen } = useSettingsState();
-  const toggleRightPanel = useToggleRightPanel();
-  const isRightPanelCollapsed = () => !isRightPanelOpen();
+export function Dock(){
   const activeSplitId = createMemo(() => globalSplitManager()?.activeSplitId());
-
+  const [showGlitchEffect, setShowGlitchEffect] = createSignal(false);
+  const [isPresentMode, setIsPresentMode] = createSignal(false);
   const notificationSource = useGlobalNotificationSource();
+  const isRightPanelCollapsed = () => !isRightPanelOpen();
+  const [debugOpen, setDebugOpen] = createSignal(false);
+  const { track, TrackingEvents } = withAnalytics();
+  const toggleRightPanel = useToggleRightPanel();
+  const { settingsOpen } = useSettingsState();
+  const hasPaid = useHasPaidAccess();
 
   const isSoupActive = createMemo(() => {
     const splitId = globalSplitManager()?.activeSplitId();
-    if (!splitId) return false;
+    if(!splitId){return false};
     const split = globalSplitManager()?.getSplit(splitId);
-    if (!split) return false;
+    if(!split){return false};
     return split.content().id === 'unified-list';
   });
 
@@ -64,10 +66,6 @@ export function Dock() {
     if(!splitNode){return undefined};
     return splitNode.hotkeyCommands.get('shift+/');
   };
-
-  const [debugOpen, setDebugOpen] = createSignal(false);
-  const [isPresentMode, setIsPresentMode] = createSignal(false);
-  const [showGlitchEffect, setShowGlitchEffect] = createSignal(false);
 
   async function enterPresentMode(){
     try{
@@ -117,11 +115,7 @@ export function Dock() {
 
   // Check if we're in fullscreen
   function checkFullscreen(){
-    const isFullscreen =
-      document.fullscreenElement ||
-      (document as any).webkitFullscreenElement ||
-      (document as any).mozFullScreenElement ||
-      (document as any).msFullscreenElement;
+    const isFullscreen = document.fullscreenElement || (document as any).webkitFullscreenElement || (document as any).mozFullScreenElement || (document as any).msFullscreenElement;
     setIsPresentMode(!!isFullscreen);
   };
 
@@ -141,41 +135,58 @@ export function Dock() {
 
   return(
     <>
-      <div style={{
-        'padding': '0 0.5rem 0.5rem 0.5rem'
-      }}>
+      <div
+        style={{
+          'padding': '0 0.5rem 0.5rem 0.5rem'
+        }}
+      >
         <Show when={!isMobileWidth()}>
           <div style={{
-            'grid-template-columns': 'min-content min-content 1fr min-content',
+            'grid-template-columns': 'min-content 1fr min-content',
             'border': '1px solid var(--color-edge-muted)',
             'background-color': 'var(--color-panel)',
-            'grid-template-rows': 'min-content',
             'box-sizing': 'border-box',
             'align-content': 'center',
-            'position': 'relative',
             'padding': '0 7px',
             'display': 'grid',
             'height': '40px',
             'z-index': '1',
-            'gap': '8px',
+            'gap': '4px',
           }}>
 
-            <IconButton
-              tooltip={{
-                // hotkeyToken: TOKENS.global.createNewSplit,
-                label: 'Open Command Menu'
+            <div
+              style={{
+                'grid-auto-columns': 'min-content',
+                'grid-auto-flow': 'column',
+                'align-items': 'center',
+                'display': 'grid',
+                'gap': '7px'
               }}
-              onClick={() => {setKonsoleOpen(true)}}
-              icon={IconTerminal}
-              theme="clear"
-              size="sm"
-            />
+            >
+              <IconButton
+                tooltip={{
+                  hotkeyToken: TOKENS.global.commandMenu,
+                  label: 'Open Command Menu'
+                }}
+                onClick={() => {setKonsoleOpen(true)}}
+                icon={IconLogo}
+                theme="clear"
+                size="sm"
+              />
 
-            <CreateMenu />
+              <IconButton
+                tooltip={{
+                  hotkeyToken: TOKENS.global.commandMenu,
+                  label: 'Open Command Menu'
+                }}
+                class="[&_svg]:!w-auto [&_svg]:max-w-none"
+                onClick={() => {setKonsoleOpen(true)}}
+                icon={MacroCreateIcon}
+                theme="clear"
+              />
 
-            <Show when={!hasPaid()}>
-              <BasicTierLimit />
-            </Show>
+                {/*<CreateMenu/>*/}
+            </div>
 
             <div style={{
               'border-top': '1px solid var(--edge-muted)',
@@ -185,11 +196,13 @@ export function Dock() {
               'align-items': 'center',
               'font-size': '0.75rem',
               'line-height': '1rem',
-              'padding': '0 1.5rem',
               'display': 'flex',
-              'gap': '1.5rem',
+              'gap': '4px',
               'flex': '1',
             }}>
+              <Show when={!hasPaid()}>
+                <BasicTierLimit />
+              </Show>
 
               <Show when={hasPaid()}>
                 <Hints />
@@ -202,32 +215,29 @@ export function Dock() {
             </div>
 
             <div style={{
-              'border-right': '1px solid var(--edge-muted)',
-              'border-top': '1px solid var(--edge-muted)',
-              'align-items': 'stretch',
-              'display': 'flex',
+              'grid-auto-columns': 'min-content',
+              'grid-auto-flow': 'column',
+              'align-items': 'center',
+              'display': 'grid',
               'gap': '4px'
             }}>
-              <IconButton
-                style={{
-                  'pointer-events': isSoupActive() ? 'auto' : 'none',
-                  'opacity': isSoupActive() ? 1 : 0,
-                  'aspect-ratio': '1',
-                  'height': '100%',
-                }}
-                tooltip={{
-                  hotkeyToken: TOKENS.split.showHelpDrawer,
-                  label: 'Help',
-                }}
-                onClick={() => {
-                  const showHelp = activeSoupDrawerCommand();
-                  if(!showHelp){return};
-                  runCommand(showHelp);
-                }}
-                icon={IconQuestion}
-                theme="clear"
-                size="sm"
-              />
+              <Show when={isSoupActive()}>
+                <IconButton
+                  onClick={() => {
+                    const showHelp = activeSoupDrawerCommand();
+                    if(!showHelp){return};
+                    runCommand(showHelp);
+                  }}
+                  tooltip={{
+                    hotkeyToken: TOKENS.split.showHelpDrawer,
+                    label: 'Help',
+                  }}
+                  icon={IconQuestion}
+                  theme="clear"
+                  size="sm"
+                />
+              </Show>
+
               <IconButton
                 onClick={() => {
                   if(isRightPanelCollapsed()){track(TrackingEvents.RIGHTBAR.OPEN)}
@@ -239,13 +249,10 @@ export function Dock() {
                   hotkeyToken: TOKENS.global.toggleRightPanel,
                   label: 'Toggle AI Panel',
                 }}
-                style={{
-                  'aspect-ratio': '1',
-                  'height': '100%',
-                }}
                 icon={IconAtom}
                 size="sm"
               />
+
               <IconButton
                 tooltip={{
                   hotkeyToken: TOKENS.global.createNewSplit,
@@ -255,30 +262,26 @@ export function Dock() {
                   const manager = globalSplitManager();
                   if(manager){
                     manager.createNewSplit({
-                      type: 'component',
                       id: 'unified-list',
+                      type: 'component',
                     });
                   }
-                }}
-                style={{
-                  'aspect-ratio': '1',
-                  'height': '100%',
                 }}
                 icon={SplitIcon}
                 theme="clear"
                 size="sm"
               />
+
               <IconButton
-                tooltip={{label: isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'}}
+                tooltip={{
+                  label: isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'
+                }}
                 theme={isPresentMode() ? 'accent' : 'clear'}
                 onClick={togglePresentMode}
-                style={{
-                  'aspect-ratio': '1',
-                  'height': '100%',
-                }}
                 icon={IconPower}
                 size="sm"
               />
+
               <IconButton
                 tooltip={{
                   label: settingsOpen() ? 'Close Settings' : 'Open Settings',
@@ -286,11 +289,6 @@ export function Dock() {
                 }}
                 theme={settingsOpen() ? 'accent' : 'clear'}
                 onDeepClick={() => {setSettingsOpen(true)}}
-                style={{
-                  'aspect-ratio': '1',
-                  'height': '100%',
-                }}
-                data-settings-button
                 icon={IconGear}
                 size="sm"
               />
@@ -305,69 +303,9 @@ export function Dock() {
         onComplete={() => setShowGlitchEffect(false)}
       />
 
-      <Show when={DEV_MODE_ENV}>
-        <div
-          onMouseLeave={(e) => {if (!debugOpen()) e.currentTarget.style.opacity = '0.5'}}
-          onMouseEnter={(e) => {if (!debugOpen()) e.currentTarget.style.opacity = '1'}}
-          style={{
-            'transform': debugOpen() ? 'translateX(0)' : 'translateX(100%)',
-            'outline': '1px solid rgb(239 68 68)',
-            'opacity': debugOpen() ? '1' : '0.5',
-            'font-family': 'monospace',
-            'transition': 'all 500ms',
-            'position': 'absolute',
-            'font-size': '0.75rem',
-            'line-height': '1rem',
-            'cursor': 'pointer',
-            'right': '-0.5rem',
-            'bottom': '100%',
-          }}
-          onClick={() => setDebugOpen((p) => !p)}
-          title="Click to keep open"
-        >
-          <h3 style={{
-            'transform-origin': 'bottom right',
-            'background-color': 'var(--ink)',
-            'transform': 'rotate(-90deg)',
-            'padding-right': '0.25rem',
-            'padding-left': '0.25rem',
-            'padding-bottom': '1px',
-            'white-space': 'nowrap',
-            'position': 'absolute',
-            'padding-top': '1px',
-            'right': '100%',
-            'bottom': '7ch',
-          }}>
-            Debug
-          </h3>
-          <ol style={{
-            'background-color': 'rgba(var(--ink-rgb), 0.5)',
-            'list-style-position': 'inside',
-            'list-style-type': 'decimal',
-            'flex-direction': 'column',
-            'padding-bottom': '1lh',
-            'padding-right': '1ch',
-            'padding-left': '1ch',
-            'padding-top': '1lh',
-            'display': 'flex',
-          }}>
-            <li style={{
-              'white-space': 'nowrap',
-              'display': 'list-item'
-            }}>
-              <span style={{
-                'background-color': 'var(--ink)',
-                'padding-right': '0.25rem',
-                'padding-left': '0.25rem',
-                'padding-bottom': '1px',
-                'padding-top': '1px',
-              }}>
-                {activeScope()}
-              </span>
-            </li>
-          </ol>
-        </div>
-      </Show>
+      {/*<Show when={DEV_MODE_ENV}>
+        <Debug/>
+      </Show>*/}
     </>
   );
 }
