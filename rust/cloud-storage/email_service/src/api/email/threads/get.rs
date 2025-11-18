@@ -159,6 +159,7 @@ pub async fn get_thread_handler(
 // TODO: deduplicate with internal api
 #[utoipa::path(
     get,
+    tag = "Threads",
     path = "/email/threads/{id}/messages",
     params(
         ("id" = String, Path, description = "Thread ID"),

@@ -1,3 +1,4 @@
+use crate::api::settings::Settings;
 use crate::service;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -34,12 +35,13 @@ pub struct Link {
     pub provider: UserProvider,
     pub is_sync_active: bool,
     pub signature: Option<String>,
+    pub settings: Settings,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
 }
 
 impl Link {
-    pub fn new(source: service::link::Link, signature: Option<String>) -> Self {
+    pub fn new(source: service::link::Link, signature: Option<String>, settings: Settings) -> Self {
         Link {
             id: source.id,
             macro_id: source.macro_id,
@@ -48,6 +50,7 @@ impl Link {
             provider: UserProvider::from(source.provider),
             is_sync_active: source.is_sync_active,
             signature,
+            settings,
             created_at: source.created_at,
             updated_at: source.updated_at,
         }

@@ -15,11 +15,11 @@ use thiserror::Error;
 
 #[derive(Debug, Error, AsRefStr)]
 pub enum ListLinksError {
-    #[error("Failed to fetch links from database")]
-    DatabaseError(#[from] sqlx::Error),
+    #[error("Database error")]
+    DatabaseError(anyhow::Error),
 
     #[error("Failed to fetch Gmail access token")]
-    AuthError(#[from] anyhow::Error),
+    AuthError(anyhow::Error),
 }
 
 impl IntoResponse for ListLinksError {
@@ -63,17 +63,23 @@ pub async fn list_links_handler(
         &ctx.db,
         &user_context.fusion_user_id,
     )
-    .await?;
+    .await
+    .map_err(ListLinksError::DatabaseError)?;
 
     let tasks = links.into_iter().map(|link| {
         let ctx = ctx.clone();
         async move {
+            let settings = email_db_client::settings::fetch_settings(&ctx.db, link.id)
+                .await
+                .map_err(ListLinksError::DatabaseError)?;
+
             let access_token = fetch_gmail_access_token_from_link(
                 &link,
                 &ctx.redis_client,
                 &ctx.auth_service_client,
             )
-            .await?;
+            .await
+            .map_err(ListLinksError::AuthError)?;
 
             let signature = ctx
                 .gmail_client
@@ -81,7 +87,11 @@ pub async fn list_links_handler(
                 .await
                 .unwrap_or_else(|_| None);
 
-            Ok::<api::link::Link, ListLinksError>(api::link::Link::new(link, signature))
+            Ok(api::link::Link::new(
+                link,
+                signature,
+                api::settings::Settings::from(settings),
+            ))
         }
     });
 
