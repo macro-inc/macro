@@ -1,6 +1,9 @@
 //! Domain response models for property operations
 
-use super::{EntityProperty, PropertyDefinition, PropertyOption, PropertyValue};
+use super::{
+    EntityPropertyWithDefinition, PropertyDefinition, PropertyOption, PropertyWithOptions,
+};
+use std::collections::HashMap;
 
 // ===== Property Definition Responses =====
 
@@ -11,12 +14,12 @@ pub struct CreatePropertyResponse {
 
 #[derive(Debug, Clone)]
 pub struct CreatePropertyWithOptionsResponse {
-    pub property: PropertyDefinition,
+    pub property_with_options: PropertyWithOptions,
 }
 
 #[derive(Debug, Clone)]
 pub struct ListPropertiesResponse {
-    pub properties: Vec<PropertyDefinition>,
+    pub properties: Vec<PropertyWithOptions>,
 }
 
 #[derive(Debug, Clone)]
@@ -39,16 +42,6 @@ pub struct DeleteOptionResponse {}
 
 // ===== Entity Property Responses =====
 
-/// Entity property with its definition and optional value/options
-/// Used for rich entity property queries
-#[derive(Debug, Clone)]
-pub struct EntityPropertyWithDefinition {
-    pub property: EntityProperty,
-    pub definition: PropertyDefinition,
-    pub value: Option<PropertyValue>,
-    pub options: Option<Vec<PropertyOption>>,
-}
-
 #[derive(Debug, Clone)]
 pub struct GetEntityPropertiesResponse {
     pub entity_id: String,
@@ -68,5 +61,5 @@ pub struct DeleteAllEntityPropertiesResponse {}
 
 #[derive(Debug, Clone)]
 pub struct GetBulkEntityPropertiesResponse {
-    pub results: Vec<(String, Vec<EntityPropertyWithDefinition>)>,
+    pub results: HashMap<String, GetEntityPropertiesResponse>,
 }

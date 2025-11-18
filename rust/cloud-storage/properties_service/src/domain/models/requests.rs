@@ -1,33 +1,39 @@
 //! Domain request models for property operations
 
-use super::{EntityType, PropertyDefinition, PropertyOption, PropertyValue};
+use super::{DataType, EntityType, PropertyOptionValue, PropertyOwner, PropertyValue};
 use uuid::Uuid;
 
 // ===== Property Definition Requests =====
 
 #[derive(Debug, Clone)]
 pub struct CreatePropertyRequest {
-    pub user_id: String,
-    pub definition: PropertyDefinition,
+    pub owner: PropertyOwner,
+    pub display_name: String,
+    pub data_type: DataType,
+    pub is_multi_select: bool,
+    pub specific_entity_type: Option<EntityType>,
 }
 
+/// Request to create a property with options (for select types)
 #[derive(Debug, Clone)]
 pub struct CreatePropertyWithOptionsRequest {
-    pub user_id: String,
-    pub definition: PropertyDefinition,
-    pub options: Vec<PropertyOption>,
+    pub owner: PropertyOwner,
+    pub display_name: String,
+    pub data_type: DataType,
+    pub is_multi_select: bool,
+    pub specific_entity_type: Option<EntityType>,
+    pub options: Vec<(PropertyOptionValue, i32)>, // (value, display_order)
 }
 
 #[derive(Debug, Clone)]
 pub struct ListPropertiesRequest {
-    pub organization_id: Option<i32>,
-    pub user_id: Option<String>,
+    pub owner: PropertyOwner,
+    pub include_options: bool,
 }
 
 #[derive(Debug, Clone)]
 pub struct DeletePropertyRequest {
-    pub user_id: String,
-    pub organization_id: Option<i32>,
+    pub owner: PropertyOwner,
     pub property_id: Uuid,
 }
 
@@ -36,7 +42,8 @@ pub struct DeletePropertyRequest {
 #[derive(Debug, Clone)]
 pub struct CreateOptionRequest {
     pub property_definition_id: Uuid,
-    pub option: PropertyOption,
+    pub value: PropertyOptionValue,
+    pub display_order: i32,
 }
 
 #[derive(Debug, Clone)]
@@ -57,6 +64,7 @@ pub struct GetEntityPropertiesRequest {
     pub user_id: String,
     pub entity_id: String,
     pub entity_type: EntityType,
+    pub include_metadata: bool,
 }
 
 #[derive(Debug, Clone)]

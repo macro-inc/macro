@@ -1,5 +1,6 @@
 //! Domain models - core business entities
 
+pub mod common;
 pub mod data_type;
 pub mod entity_property;
 pub mod entity_reference;
@@ -19,6 +20,9 @@ pub use property_definition::PropertyDefinition;
 pub use property_option::{PropertyOption, PropertyOptionValue};
 pub use property_owner::PropertyOwner;
 pub use property_value::PropertyValue;
+
+// Re-export common domain models
+pub use common::*;
 
 // Re-export request/response types
 pub use requests::*;
