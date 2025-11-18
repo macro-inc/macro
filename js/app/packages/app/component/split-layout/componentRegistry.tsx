@@ -71,6 +71,10 @@ if (LOCAL_ONLY) {
     )
   );
   registerComponent(
+    'custom-cursor',
+    lazy(() => import('@app/component/CustomCursorDemo'))
+  );
+  registerComponent(
     'resize',
     lazy(() => import('@core/internal/ResizeDemo'))
   );
