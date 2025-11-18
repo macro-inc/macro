@@ -7,7 +7,7 @@ import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
 import { createEffect, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { addEntityProperty } from '../../apiUtils';
+import { addEntityProperty } from '../../api/utils';
 import {
   ACCENT_BUTTON_CLASSES,
   BUTTON_BASE_CLASSES,

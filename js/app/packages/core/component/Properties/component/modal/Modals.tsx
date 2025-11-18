@@ -2,7 +2,7 @@ import { useBlockId } from '@core/block';
 import { DatePicker } from '@core/component/DatePicker';
 import { type Component, createMemo } from 'solid-js';
 import { Portal, Show } from 'solid-js/web';
-import { savePropertyValue } from '../../apiUtils';
+import { savePropertyValue } from '../../api/utils';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
 import { CreatePropertyModal } from './CreatePropertyModal';
