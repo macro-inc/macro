@@ -43,7 +43,7 @@ let cursorStyleEl: HTMLStyleElement | null = null;
 let defaultCursor: string = '';
 let hexColor: string = '';
 let cursorCache: Record<string, string> = {};
-let currentCursorType: string | null = null;
+let currentCursorType: string | null = 'auto';
 const shadowRoots = new Set<ShadowRoot>();
 let overridedCursorTargetEl: HTMLElement | null = null;
 const overrideCursorAttr = 'data-override-cursor';
@@ -456,7 +456,7 @@ function initCursor() {
     updateCursorStyle();
   };
 
-  document.addEventListener('mousemove', onMouseMove);
+  // document.addEventListener('mousemove', onMouseMove);
 }
 
 if (document.readyState === 'loading') {
