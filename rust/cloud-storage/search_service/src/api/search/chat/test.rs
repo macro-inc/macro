@@ -31,6 +31,7 @@ fn create_chat_history(chat_id: &str) -> macro_db_client::chat::get::ChatHistory
         updated_at: now,
         viewed_at: None,
         project_id: None,
+        ..Default::default()
     }
 }
 
@@ -61,6 +62,7 @@ fn test_single_chat_with_content() {
                 updated_at: now,
                 viewed_at: None,
                 project_id: None,
+                ..Default::default()
             },
         ),
     );
@@ -260,6 +262,7 @@ fn test_chat_history_timestamps() {
         updated_at: now,
         viewed_at: Some(now),
         project_id: Some("project_1".to_string()),
+        ..Default::default()
     };
 
     chat_histories.insert(
@@ -272,9 +275,18 @@ fn test_chat_history_timestamps() {
 
     // Verify that timestamps were copied from the chat history
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].created_at, now.timestamp());
-    assert_eq!(result[0].updated_at, now.timestamp());
-    assert_eq!(result[0].viewed_at, Some(now.timestamp()));
+    assert_eq!(
+        result[0].metadata.as_ref().unwrap().created_at,
+        now.timestamp()
+    );
+    assert_eq!(
+        result[0].metadata.as_ref().unwrap().updated_at,
+        now.timestamp()
+    );
+    assert_eq!(
+        result[0].metadata.as_ref().unwrap().viewed_at,
+        Some(now.timestamp())
+    );
 }
 
 #[test]
@@ -297,6 +309,7 @@ fn test_chat_history_missing_entry() {
         updated_at: now,
         viewed_at: None,
         project_id: Some("project_1".to_string()),
+        ..Default::default()
     };
 
     chat_histories.insert(
@@ -307,38 +320,63 @@ fn test_chat_history_missing_entry() {
     // Call the function under test
     let result = construct_search_result(input, chat_histories).unwrap();
 
-    // Chats without history info should use default values
+    // Chats without history info should have metadata=None
     assert_eq!(result.len(), 1);
-
-    // Default values from DateTime::default()
-    let default_time = chrono::DateTime::<chrono::Utc>::default().timestamp();
-    assert_eq!(result[0].created_at, default_time);
-    assert_eq!(result[0].updated_at, default_time);
-    assert_eq!(result[0].viewed_at, None);
+    assert!(result[0].metadata.is_none());
 }
 
 #[test]
 fn test_chat_history_deleted() {
-    // Create a test response for a deleted chat
-    let input = vec![create_test_response(
+    let now = chrono::Utc::now();
+
+    // Test 1: Chat that exists but is soft-deleted
+    let input_deleted = vec![create_test_response(
         "chat_deleted",
         "msg_1",
         "user_1",
         Some(vec!["hello world".to_string()]),
     )];
 
-    // Create a mock chat history indicating the chat is deleted
     let mut chat_histories = HashMap::new();
     chat_histories.insert(
         "chat_deleted".to_string(),
-        macro_db_client::chat::get::ChatHistoryStatus::Deleted,
+        macro_db_client::chat::get::ChatHistoryStatus::Found(
+            macro_db_client::chat::get::ChatHistoryInfo {
+                item_id: "chat_deleted".to_string(),
+                created_at: now,
+                updated_at: now,
+                viewed_at: Some(now),
+                project_id: Some("project_1".to_string()),
+                deleted_at: Some(now), // Soft deleted
+            },
+        ),
     );
 
-    // Call the function under test
-    let result = construct_search_result(input, chat_histories).unwrap();
+    let result = construct_search_result(input_deleted, chat_histories).unwrap();
 
-    // Deleted chats should be filtered out
-    assert_eq!(result.len(), 0);
+    // Deleted chat should be returned with metadata including deleted_at
+    assert_eq!(result.len(), 1);
+    assert!(result[0].metadata.is_some());
+    let metadata = result[0].metadata.as_ref().unwrap();
+    assert_eq!(metadata.deleted_at, Some(now.timestamp()));
+    assert_eq!(metadata.project_id, Some("project_1".to_string()));
+
+    // Test 2: Chat that doesn't exist in DB (OpenSearch has stale data)
+    let input_not_found = vec![create_test_response(
+        "chat_not_found",
+        "msg_2",
+        "user_1",
+        Some(vec!["stale data".to_string()]),
+    )];
+
+    let chat_histories_not_found = HashMap::new(); // No entry = not found
+
+    let result_not_found =
+        construct_search_result(input_not_found, chat_histories_not_found).unwrap();
+
+    // Chat not in DB should be returned with metadata=None
+    assert_eq!(result_not_found.len(), 1);
+    assert!(result_not_found[0].metadata.is_none());
 }
 
 #[test]
@@ -361,6 +399,7 @@ fn test_chat_history_null_viewed_at() {
         updated_at: now,
         viewed_at: None, // This user has never viewed this chat
         project_id: Some("project_1".to_string()),
+        ..Default::default()
     };
 
     chat_histories.insert(
@@ -373,7 +412,13 @@ fn test_chat_history_null_viewed_at() {
 
     // Verify that timestamps were copied correctly and viewed_at is None
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].created_at, now.timestamp());
-    assert_eq!(result[0].updated_at, now.timestamp());
-    assert_eq!(result[0].viewed_at, None);
+    assert_eq!(
+        result[0].metadata.as_ref().unwrap().created_at,
+        now.timestamp()
+    );
+    assert_eq!(
+        result[0].metadata.as_ref().unwrap().updated_at,
+        now.timestamp()
+    );
+    assert_eq!(result[0].metadata.as_ref().unwrap().viewed_at, None);
 }

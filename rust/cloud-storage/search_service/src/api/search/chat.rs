@@ -95,31 +95,25 @@ pub fn construct_search_result(
     let result: Vec<ChatSearchResponseItem> = result.into_iter().map(|a| a.into()).collect();
 
     // Add metadata for each chat fetched from macrodb
-    // Filter out chats that are deleted
     let result: Vec<ChatSearchResponseItemWithMetadata> = result
         .into_iter()
-        .filter_map(|item| {
-            match chat_histories.get(&item.chat_id) {
+        .map(|item| {
+            let metadata = match chat_histories.get(&item.chat_id) {
                 Some(macro_db_client::chat::get::ChatHistoryStatus::Found(info)) => {
-                    Some(ChatSearchResponseItemWithMetadata {
+                    Some(models_search::chat::ChatMetadata {
                         created_at: info.created_at.timestamp(),
                         updated_at: info.updated_at.timestamp(),
                         viewed_at: info.viewed_at.map(|a| a.timestamp()),
                         project_id: info.project_id.clone(),
-                        extra: item,
+                        deleted_at: info.deleted_at.map(|a| a.timestamp()),
                     })
                 }
-                Some(macro_db_client::chat::get::ChatHistoryStatus::Deleted) => None,
-                None => {
-                    // Chat not found in database at all - use default values
-                    Some(ChatSearchResponseItemWithMetadata {
-                        created_at: chrono::DateTime::<chrono::Utc>::default().timestamp(),
-                        updated_at: chrono::DateTime::<chrono::Utc>::default().timestamp(),
-                        viewed_at: None,
-                        project_id: None,
-                        extra: item,
-                    })
-                }
+                Some(macro_db_client::chat::get::ChatHistoryStatus::NotFound) | None => None,
+            };
+
+            ChatSearchResponseItemWithMetadata {
+                metadata,
+                extra: item,
             }
         })
         .collect();

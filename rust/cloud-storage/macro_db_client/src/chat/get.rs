@@ -280,12 +280,13 @@ pub struct ChatHistoryInfo {
     pub updated_at: DateTime<Utc>,
     pub viewed_at: Option<DateTime<Utc>>,
     pub project_id: Option<String>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone)]
 pub enum ChatHistoryStatus {
     Found(ChatHistoryInfo),
-    Deleted,
+    NotFound,
 }
 
 /// Gets chat history information including when a user last viewed each chat
@@ -329,21 +330,19 @@ pub async fn get_chat_history_info(
     let chat_history_map = results
         .into_iter()
         .map(|row| {
-            let status = if row.deleted_at.is_some() {
-                ChatHistoryStatus::Deleted
-            } else {
-                let info = ChatHistoryInfo {
-                    item_id: row.item_id.clone(),
-                    created_at: DateTime::<Utc>::from_naive_utc_and_offset(row.created_at, Utc),
-                    updated_at: DateTime::<Utc>::from_naive_utc_and_offset(row.updated_at, Utc),
-                    viewed_at: row
-                        .viewed_at
-                        .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
-                    project_id: row.project_id,
-                };
-                ChatHistoryStatus::Found(info)
+            let info = ChatHistoryInfo {
+                item_id: row.item_id.clone(),
+                created_at: DateTime::<Utc>::from_naive_utc_and_offset(row.created_at, Utc),
+                updated_at: DateTime::<Utc>::from_naive_utc_and_offset(row.updated_at, Utc),
+                viewed_at: row
+                    .viewed_at
+                    .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
+                project_id: row.project_id,
+                deleted_at: row
+                    .deleted_at
+                    .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
             };
-            (row.item_id.clone(), status)
+            (row.item_id.clone(), ChatHistoryStatus::Found(info))
         })
         .collect();
 

@@ -104,35 +104,29 @@ pub fn construct_search_result(
     let result: Vec<DocumentSearchResponseItem> = result.into_iter().map(|a| a.into()).collect();
 
     // Add metadata for each document, fetched from macrodb
-    // Filter out documents that are deleted
     let result: Vec<DocumentSearchResponseItemWithMetadata> = result
         .into_iter()
-        .filter_map(|item| {
-            match document_histories.get(&item.document_id) {
+        .map(|item| {
+            let metadata = match document_histories.get(&item.document_id) {
                 Some(
                     macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(
                         info,
                     ),
-                ) => Some(DocumentSearchResponseItemWithMetadata {
+                ) => Some(models_search::document::DocumentMetadata {
                     created_at: info.created_at.timestamp(),
                     updated_at: info.updated_at.timestamp(),
                     viewed_at: info.viewed_at.map(|a| a.timestamp()),
                     project_id: info.project_id.clone(),
-                    extra: item,
+                    deleted_at: info.deleted_at.map(|a| a.timestamp()),
                 }),
                 Some(
-                    macro_db_client::document::get_document_history::DocumentHistoryStatus::Deleted,
-                ) => None,
-                None => {
-                    // Document not found in database at all - use default values
-                    Some(DocumentSearchResponseItemWithMetadata {
-                        created_at: chrono::DateTime::<chrono::Utc>::default().timestamp(),
-                        updated_at: chrono::DateTime::<chrono::Utc>::default().timestamp(),
-                        viewed_at: None,
-                        project_id: None,
-                        extra: item,
-                    })
-                }
+                    macro_db_client::document::get_document_history::DocumentHistoryStatus::NotFound,
+                ) | None => None,
+            };
+
+            DocumentSearchResponseItemWithMetadata {
+                metadata,
+                extra: item,
             }
         })
         .collect();

@@ -9,12 +9,13 @@ pub struct DocumentHistoryInfo {
     pub updated_at: DateTime<Utc>,
     pub viewed_at: Option<DateTime<Utc>>,
     pub project_id: Option<String>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone)]
 pub enum DocumentHistoryStatus {
     Found(DocumentHistoryInfo),
-    Deleted,
+    NotFound,
 }
 
 /// Gets document history information including when a user last viewed each document
@@ -58,21 +59,19 @@ pub async fn get_document_history_info(
     let document_history_map = results
         .into_iter()
         .map(|row| {
-            let status = if row.deleted_at.is_some() {
-                DocumentHistoryStatus::Deleted
-            } else {
-                let info = DocumentHistoryInfo {
-                    item_id: row.item_id.clone(),
-                    created_at: DateTime::<Utc>::from_naive_utc_and_offset(row.created_at, Utc),
-                    updated_at: DateTime::<Utc>::from_naive_utc_and_offset(row.updated_at, Utc),
-                    viewed_at: row
-                        .viewed_at
-                        .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
-                    project_id: row.project_id,
-                };
-                DocumentHistoryStatus::Found(info)
+            let info = DocumentHistoryInfo {
+                item_id: row.item_id.clone(),
+                created_at: DateTime::<Utc>::from_naive_utc_and_offset(row.created_at, Utc),
+                updated_at: DateTime::<Utc>::from_naive_utc_and_offset(row.updated_at, Utc),
+                viewed_at: row
+                    .viewed_at
+                    .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
+                project_id: row.project_id,
+                deleted_at: row
+                    .deleted_at
+                    .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
             };
-            (row.item_id.clone(), status)
+            (row.item_id.clone(), DocumentHistoryStatus::Found(info))
         })
         .collect();
 

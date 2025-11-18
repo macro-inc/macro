@@ -103,35 +103,30 @@ pub fn construct_search_result(
     >(search_results)?;
     let result: Vec<ProjectSearchResponseItem> = result.into_iter().map(|a| a.into()).collect();
     // Add metadata for each project, fetched from macrodb
-    // Filter out projects that are deleted
     let result: Vec<ProjectSearchResponseItemWithMetadata> = result
         .into_iter()
-        .filter_map(|item| {
-            match project_histories.get(&item.id) {
+        .map(|item| {
+            let metadata = match project_histories.get(&item.id) {
                 Some(
                     macro_db_client::projects::get_project_history::ProjectHistoryStatus::Found(
                         info,
                     ),
-                ) => Some(ProjectSearchResponseItemWithMetadata {
+                ) => Some(models_search::project::ProjectMetadata {
                     created_at: info.created_at.timestamp(),
                     updated_at: info.updated_at.timestamp(),
                     viewed_at: info.viewed_at.map(|a| a.timestamp()),
                     parent_project_id: info.parent_project_id.clone(),
-                    extra: item,
+                    deleted_at: info.deleted_at.map(|a| a.timestamp()),
                 }),
                 Some(
-                    macro_db_client::projects::get_project_history::ProjectHistoryStatus::Deleted,
-                ) => None,
-                None => {
-                    // Project not found in database at all - use default values
-                    Some(ProjectSearchResponseItemWithMetadata {
-                        created_at: chrono::DateTime::<chrono::Utc>::default().timestamp(),
-                        updated_at: chrono::DateTime::<chrono::Utc>::default().timestamp(),
-                        viewed_at: None,
-                        parent_project_id: None,
-                        extra: item,
-                    })
-                }
+                    macro_db_client::projects::get_project_history::ProjectHistoryStatus::NotFound,
+                )
+                | None => None,
+            };
+
+            ProjectSearchResponseItemWithMetadata {
+                metadata,
+                extra: item,
             }
         })
         .collect();

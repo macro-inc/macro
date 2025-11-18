@@ -9,12 +9,13 @@ pub struct ProjectHistoryInfo {
     pub updated_at: DateTime<Utc>,
     pub viewed_at: Option<DateTime<Utc>>,
     pub parent_project_id: Option<String>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 #[derive(Debug, Clone)]
 pub enum ProjectHistoryStatus {
     Found(ProjectHistoryInfo),
-    Deleted,
+    NotFound,
 }
 
 /// Gets project history information including when a user last viewed each project
@@ -58,21 +59,19 @@ pub async fn get_project_history_info(
     let project_history_map = results
         .into_iter()
         .map(|row| {
-            let status = if row.deleted_at.is_some() {
-                ProjectHistoryStatus::Deleted
-            } else {
-                let info = ProjectHistoryInfo {
-                    item_id: row.item_id.clone(),
-                    created_at: DateTime::<Utc>::from_naive_utc_and_offset(row.created_at, Utc),
-                    updated_at: DateTime::<Utc>::from_naive_utc_and_offset(row.updated_at, Utc),
-                    viewed_at: row
-                        .viewed_at
-                        .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
-                    parent_project_id: row.parent_project_id,
-                };
-                ProjectHistoryStatus::Found(info)
+            let info = ProjectHistoryInfo {
+                item_id: row.item_id.clone(),
+                created_at: DateTime::<Utc>::from_naive_utc_and_offset(row.created_at, Utc),
+                updated_at: DateTime::<Utc>::from_naive_utc_and_offset(row.updated_at, Utc),
+                viewed_at: row
+                    .viewed_at
+                    .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
+                parent_project_id: row.parent_project_id,
+                deleted_at: row
+                    .deleted_at
+                    .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
             };
-            (row.item_id.clone(), status)
+            (row.item_id.clone(), ProjectHistoryStatus::Found(info))
         })
         .collect();
 
