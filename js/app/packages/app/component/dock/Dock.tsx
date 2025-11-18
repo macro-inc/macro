@@ -1,333 +1,380 @@
-import { withAnalytics } from '@coparse/analytics';
-import { IconButton } from '@core/component/IconButton';
-
-const { track, TrackingEvents } = withAnalytics();
-
-import { globalSplitManager } from '@app/signal/splitLayout';
-import { playSound } from '@app/util/sound';
-import { useHasPaidAccess } from '@core/auth';
+import { setSettingsOpen, useSettingsState } from '@core/constant/SettingsState';
 import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
-import { BasicHotkey } from '@core/component/Hotkey';
-import {
-  DEV_MODE_ENV,
-  ENABLE_DOCK_NOTITIFCATIONS,
-  ENABLE_RIGHTHAND_SIDEBAR,
-} from '@core/constant/featureFlags';
-import {
-  setSettingsOpen,
-  useSettingsState,
-} from '@core/constant/SettingsState';
-import { runCommand } from '@core/hotkey/hotkeys';
-import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
-import { TOKENS } from '@core/hotkey/tokens';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
-import IconQuestion from '@icon/regular/question.svg';
+import { ENABLE_DOCK_NOTITIFCATIONS } from '@core/constant/featureFlags';
+import { /* Hotkey, */ BasicHotkey } from '@core/component/Hotkey';
+import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import SplitIcon from '@icon/regular/square-split-horizontal.svg';
+import { useGlobalNotificationSource } from '../GlobalAppState';
+import IconPower from '@phosphor-icons/core/regular/power.svg';
+import MacroCreateIcon from '@macro-icons/macro-create-b.svg';
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { PresentModeGlitch } from './PresentModeGlitch';
+import { IconButton } from '@core/component/IconButton';
+import IconQuestion from '@icon/regular/question.svg';
+import { withAnalytics } from '@coparse/analytics';
 import IconAtom from '@macro-icons/macro-atom.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
-import IconPower from '@phosphor-icons/core/regular/power.svg';
-import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
-import { setKonsoleOpen } from '../command/state';
-import { useGlobalNotificationSource } from '../GlobalAppState';
+import IconLogo from '@macro-icons/macro-logo.svg';
 import { BasicTierLimit } from './BasicTierLimit';
-import { CreateMenu } from './CreateMenu';
-import Hints from './Hints';
-import { PresentModeGlitch } from './PresentModeGlitch';
+import { setKonsoleOpen } from '../command/state';
+import { runCommand } from '@core/hotkey/hotkeys';
+import { setCreateMenuOpen } from '../Launcher';
+import { useHasPaidAccess } from '@core/auth';
+import { TOKENS } from '@core/hotkey/tokens';
+import { playSound } from '@app/util/sound';
 import { QuickAccess } from './QuickAccess';
+// import { Debug } from './Debug';
+import Hints from './Hints';
 
-export function Dock() {
-  const hasPaid = useHasPaidAccess();
-  const { settingsOpen } = useSettingsState();
-  const toggleRightPanel = useToggleRightPanel();
-  const isRightPanelCollapsed = () => !isRightPanelOpen();
+export function Dock(){
   const activeSplitId = createMemo(() => globalSplitManager()?.activeSplitId());
-
+  const [showGlitchEffect, setShowGlitchEffect] = createSignal(false);
+  const [isPresentMode, setIsPresentMode] = createSignal(false);
   const notificationSource = useGlobalNotificationSource();
+  const isRightPanelCollapsed = () => !isRightPanelOpen();
+  // const [debugOpen, setDebugOpen] = createSignal(false);
+  const { track, TrackingEvents } = withAnalytics();
+  const toggleRightPanel = useToggleRightPanel();
+  const { settingsOpen } = useSettingsState();
+  const hasPaid = useHasPaidAccess();
 
   const isSoupActive = createMemo(() => {
     const splitId = globalSplitManager()?.activeSplitId();
-    if (!splitId) return false;
+    if(!splitId){return false};
     const split = globalSplitManager()?.getSplit(splitId);
-    if (!split) return false;
+    if(!split){return false};
     return split.content().id === 'unified-list';
   });
-  // This method of opening the correct help drawer is disgusting, but it works and doesn't require changing anything else.
-  const activeSoupDrawerCommand = () => {
+
+  // This method of opening the correct help drawer is disgusting,
+  // but it works and doesn't require changing anything else.
+  function activeSoupDrawerCommand(){
     const currentActiveScope = activeScope();
-    if (!currentActiveScope) return undefined;
+    if(!currentActiveScope){return undefined};
     let activeScopeNode = hotkeyScopeTree.get(currentActiveScope);
-    if (!activeScopeNode) return undefined;
-    if (activeScopeNode?.type !== 'dom') return;
+    if(!activeScopeNode){return undefined};
+    if(activeScopeNode?.type !== 'dom'){return};
     const dom = activeScopeNode.element;
     const closestSplitScope = dom.closest('[data-hotkey-scope^="split"]');
-    if (!closestSplitScope || !(closestSplitScope instanceof HTMLElement))
-      return;
+    if(!closestSplitScope || !(closestSplitScope instanceof HTMLElement)){return};
     const scopeId = closestSplitScope.dataset.hotkeyScope;
-    if (!scopeId) return undefined;
+    if(!scopeId){return undefined};
     const splitNode = hotkeyScopeTree.get(scopeId);
-    if (!splitNode) return undefined;
+    if(!splitNode){return undefined};
     return splitNode.hotkeyCommands.get('shift+/');
   };
 
-  const [debugOpen, setDebugOpen] = createSignal(false);
-  const [isPresentMode, setIsPresentMode] = createSignal(false);
-  const [showGlitchEffect, setShowGlitchEffect] = createSignal(false);
-
-  // Fullscreen API helpers
-  const enterPresentMode = async () => {
-    try {
+  async function enterPresentMode(){
+    try{
       playSound('Stab_Destruct');
       const element = document.documentElement;
-      if (element.requestFullscreen) {
-        await element.requestFullscreen();
-      } else if ((element as any).webkitRequestFullscreen) {
-        // Safari
-        await (element as any).webkitRequestFullscreen();
-      } else if ((element as any).mozRequestFullScreen) {
-        // Firefox
-        await (element as any).mozRequestFullScreen();
-      } else if ((element as any).msRequestFullscreen) {
-        // IE/Edge
-        await (element as any).msRequestFullscreen();
-      }
+      if(element.requestFullscreen){await element.requestFullscreen()}
+      else if((element as any).webkitRequestFullscreen){await (element as any).webkitRequestFullscreen()}// Safari
+      else if((element as any).mozRequestFullScreen){await (element as any).mozRequestFullScreen()}// Firefox
+      else if((element as any).msRequestFullscreen){await (element as any).msRequestFullscreen()}// IE/Edge
       focusActiveSplit();
-    } catch (error) {
+    }
+    catch(error){
       console.error('Error entering present mode:', error);
     }
   };
 
-  const exitPresentMode = async () => {
-    try {
-      if (document.exitFullscreen) {
-        await document.exitFullscreen();
-      } else if ((document as any).webkitExitFullscreen) {
-        // Safari
-        await (document as any).webkitExitFullscreen();
-      } else if ((document as any).mozCancelFullScreen) {
-        // Firefox
-        await (document as any).mozCancelFullScreen();
-      } else if ((document as any).msExitFullscreen) {
-        // IE/Edge
-        await (document as any).msExitFullscreen();
-      }
+  async function exitPresentMode(){
+    try{
+      if(document.exitFullscreen){await document.exitFullscreen()}
+      else if((document as any).webkitExitFullscreen){await (document as any).webkitExitFullscreen()}// Safari
+      else if((document as any).mozCancelFullScreen){await (document as any).mozCancelFullScreen()}// Firefox
+      else if((document as any).msExitFullscreen){await (document as any).msExitFullscreen()}// IE/Edge
       focusActiveSplit();
-    } catch (error) {
+    }
+    catch(error){
       console.error('Error exiting present mode:', error);
     }
   };
 
-  const focusActiveSplit = () => {
+  async function focusActiveSplit(){
     const id = activeSplitId();
     if (!id) return null;
-    const splitEl = document.querySelector(
-      `[data-split-id="${id}"]`
-    ) as HTMLElement;
+    const splitEl = document.querySelector(`[data-split-id="${id}"]`) as HTMLElement;
     splitEl?.focus();
   };
 
-  const togglePresentMode = () => {
-    if (isPresentMode()) {
+  function togglePresentMode(){
+    if(isPresentMode()){
       exitPresentMode();
       setShowGlitchEffect(false);
-    } else {
-      // Show glitch effect before entering fullscreen
-      setShowGlitchEffect(true);
-      // Enter fullscreen after a brief delay to let glitch start
-      setTimeout(() => {
-        enterPresentMode();
-      }, 200);
+    }
+    else{
+      setShowGlitchEffect(true); // Show glitch effect before entering fullscreen
+      setTimeout(() => {enterPresentMode()}, 200); // Enter fullscreen after a brief delay to let glitch start
     }
   };
 
   // Check if we're in fullscreen
-  const checkFullscreen = () => {
-    const isFullscreen =
-      document.fullscreenElement ||
-      (document as any).webkitFullscreenElement ||
-      (document as any).mozFullScreenElement ||
-      (document as any).msFullscreenElement;
+  function checkFullscreen(){
+    const isFullscreen = document.fullscreenElement || (document as any).webkitFullscreenElement || (document as any).mozFullScreenElement || (document as any).msFullscreenElement;
     setIsPresentMode(!!isFullscreen);
   };
 
   // Listen for fullscreen changes
   onMount(() => {
-    const events = [
-      'fullscreenchange',
-      'webkitfullscreenchange',
-      'mozfullscreenchange',
-      'MSFullscreenChange',
-    ];
+    const events = ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'];
 
-    events.forEach((event) => {
-      document.addEventListener(event, checkFullscreen);
-    });
-
-    // Also listen for ESC key to exit
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && isPresentMode()) {
-        exitPresentMode();
-      }
-    };
+    events.forEach((event) => {document.addEventListener(event, checkFullscreen)});
+    const handleKeyDown = (e: KeyboardEvent) => {if(e.key === 'Escape' && isPresentMode()){exitPresentMode()}};
     document.addEventListener('keydown', handleKeyDown);
 
     onCleanup(() => {
-      events.forEach((event) => {
-        document.removeEventListener(event, checkFullscreen);
-      });
+      events.forEach((event) => {document.removeEventListener(event, checkFullscreen)});
       document.removeEventListener('keydown', handleKeyDown);
     });
   });
 
-  return (
+  return(
     <>
-      <PresentModeGlitch
-        show={showGlitchEffect()}
-        onComplete={() => setShowGlitchEffect(false)}
-      />
-      <Show when={!isMobileWidth()}>
-        <div class="z-1 relative flex shrink-0 bg-panel">
+      <style>{`
+        .dock-button-hover{
+          transition: var(--transition);
+          background-color: #0000;
+        }
+        @media(hover){
+          .dock-button-hover:hover{
+            background-color: var(--color-hover);
+            transition: none;
+          }
+        }
+      `}</style>
+
+      <div
+        style={{
+          'padding': '0 0.5rem 0.5rem 0.5rem'
+        }}
+      >
+        <div style={{
+          'grid-template-columns':'min-content 1fr min-content',
+          'border': '1px solid var(--color-edge-muted)',
+          'background-color': 'var(--color-panel)',
+          'box-sizing': 'border-box',
+          'scrollbar-width': 'none',
+          'align-content': 'center',
+          'overflow-y': 'hidden',
+          'padding': '0 7px',
+          'display': 'grid',
+          'height': '40px',
+          'z-index': '1',
+          'gap': '7px',
+        }}>
+
           <div
-            onMouseDown={() => setKonsoleOpen(true)}
-            class="group *:border-b-0 *:h-full relative border-t border-edge-muted flex justify-between items-center gap-2 pl-3 py-2"
+            style={{
+              'border-right': '1px solid var(--color-edge-muted)',
+              'grid-auto-columns': 'min-content',
+              'grid-auto-flow': 'column',
+              'align-items': 'center',
+              'padding-right': '7px',
+              'display': 'grid',
+              'gap': '7px'
+            }}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              class="text-ink-muted group-hover:text-accent transition-all duration-300 size-6 mb-px"
-              viewBox="0 0 185.062 122.8"
-            >
-              <path
-                d="M48.143,0l-17.298,6.784v44.891l10.281,9.711v9.738l-10.281-9.72v-9.729l-13.547-12.792L0,45.664v51.515c0,.98.2,1.95.587,2.85.388.9.955,1.712,1.667,2.386l21.558,20.385,17.313-6.781v-44.891l54.654,51.673,17.313-6.781v-44.891l54.672,51.673,17.298-6.781v-51.515c0-.98-.2-1.95-.587-2.85-.388-.9-.955-1.712-1.667-2.385L120.127,0l-17.316,6.784v44.891l10.281,9.717-.1,9.638-10.181-9.623v-9.732L48.143,0Z"
-                fill="currentColor"
-              />
-            </svg>
-            <div class="**:border-none! flex size-full">
-              <BasicHotkey shortcut="cmd+k" />
-            </div>
-          </div>
-
-          <div class="*:border-b-0 *:h-full">
-            <CreateMenu />
-          </div>
-          <Show when={DEV_MODE_ENV}>
             <div
-              class="-right-2 bottom-full absolute opacity-50 hover:opacity-100 outline outline-red-500right-0 font-mono text-dialog text-xs transition translate-x-full hover:translate-0 duration-500"
-              title="Click to keep open"
-              classList={{
-                'translate-0!': debugOpen(),
+              style={{
+                'grid-template-columns': 'min-content min-content',
+                'box-sizing': 'border-box',
+                'align-items': 'center',
+                'padding': '0 4px',
+                'display': 'grid',
+                'height': '24px',
+                'gap': '7px'
               }}
-              onClick={() => setDebugOpen((p) => !p)}
+              onClick={() => {setKonsoleOpen(true)}}
+              class="dock-button-hover"
             >
-              <h3 class="right-full bottom-[7ch] absolute bg-ink px-1 py-px whitespace-nowrap -rotate-90 origin-bottom-right">
-                Debug
-              </h3>
-              <ol class="flex flex-col bg-ink/50 px-[1ch] py-[1lh] list-decimal list-inside">
-                <li class="whitespace-nowrap list-item">
-                  <span class="bg-ink px-1 py-px">{activeScope()}</span>
-                </li>
-              </ol>
+              <IconLogo
+                style={{
+                  'display': 'block',
+                  'height': '9px'
+                }}
+              />
+              {/*<div style={{
+                'font-family': 'monospace',
+                'background-color': '#f00',
+                'font-size': '10px',
+                'padding': '0 4px',
+              }}>
+                <Hotkey token={TOKENS.global.createCommand}/>
+              </div>*/}
+              <div class="**:border-none! flex size-full">
+                <BasicHotkey shortcut="cmd+k" />
+              </div>
+            </div>
+
+            <div style={{
+              'background-color': 'var(--color-edge-muted)',
+              'height': '38px',
+              'width': '1px',
+            }}/>
+
+            <div
+              style={{
+                'grid-template-columns': 'min-content min-content',
+                'box-sizing': 'border-box',
+                'align-items': 'center',
+                'padding': '0 4px',
+                'display': 'grid',
+                'height': '24px',
+                'gap': '10px'
+              }}
+              onClick={() => {setCreateMenuOpen(true)}}
+              class="dock-button-hover"
+            >
+              <MacroCreateIcon
+                style={{
+                  'display': 'block',
+                  'height': '9px'
+                }}
+              />
+              {/*<div style={{
+                'background-color': '#f00',
+                'font-family': 'monospace',
+                'font-size': '10px',
+                'padding': '0 4px',
+              }}>
+                <Hotkey token={TOKENS.global.commandMenu}/>
+              </div>*/}
+              <div class="**:border-none! flex size-full">
+                <BasicHotkey shortcut="c" />
+              </div>
+            </div>
+          </div>
+
+          <Show when={!isMobileWidth()}>
+            <div style={{
+              'border-top': '1px solid var(--edge-muted)',
+              'color': 'var(--ink-extra-muted)',
+              'justify-content': 'center',
+              'font-family': 'monospace',
+              'align-items': 'center',
+              'font-size': '0.75rem',
+              'line-height': '1rem',
+              'display': 'flex',
+              'gap': '4px',
+            }}>
+              <Show when={!hasPaid()}>
+                <BasicTierLimit />
+              </Show>
+
+              <Show when={hasPaid()}>
+                <Hints />
+              </Show>
+
+              <Show when={ENABLE_DOCK_NOTITIFCATIONS}>
+                <QuickAccess />
+                <GlobalNotificationBell notificationSource={notificationSource} />
+              </Show>
             </div>
           </Show>
 
-          <Show when={!hasPaid()}>
-            <BasicTierLimit />
+          <Show when={isMobileWidth()}>
+            <div></div>
           </Show>
 
-          <div class="flex flex-1 justify-center items-center gap-6 px-6 border-edge-muted border-t font-mono text-ink-extra-muted text-xs">
-            <Show when={hasPaid()}>
-              <Hints />
-            </Show>
-            <Show when={ENABLE_DOCK_NOTITIFCATIONS}>
-              <QuickAccess />
-              <GlobalNotificationBell notificationSource={notificationSource} />
-            </Show>
-          </div>
-
-          <div class="flex items-stretch border-edge-muted border-t border-r">
-            <IconButton
-              icon={IconQuestion}
-              theme="clear"
-              class="h-full aspect-square"
-              classList={{
-                'opacity-0 pointer-events-none': !isSoupActive(),
-              }}
-              tooltip={{
-                label: 'Help',
-                hotkeyToken: TOKENS.split.showHelpDrawer,
-              }}
-              onClick={() => {
-                const showHelp = activeSoupDrawerCommand();
-                if (!showHelp) return;
-                runCommand(showHelp);
-              }}
-            />
-            <Show when={ENABLE_RIGHTHAND_SIDEBAR}>
+          <div style={{
+            'border-left': '1px solid var(--color-edge-muted)',
+            'grid-auto-columns': 'min-content',
+            'grid-auto-flow': 'column',
+            'align-items': 'center',
+            'padding-left': '7px',
+            'display': 'grid',
+            'height': '38px',
+            'gap': '4px'
+          }}>
+            <Show when={isSoupActive()}>
               <IconButton
-                icon={IconAtom}
-                theme={isRightPanelCollapsed() ? 'clear' : 'accent'}
-                tooltip={{
-                  label: 'Toggle AI Panel',
-                  hotkeyToken: TOKENS.global.toggleRightPanel,
-                }}
-                class="h-full aspect-square"
                 onClick={() => {
-                  if (isRightPanelCollapsed()) {
-                    track(TrackingEvents.RIGHTBAR.OPEN);
-                  } else {
-                    track(TrackingEvents.RIGHTBAR.CLOSE);
-                  }
-                  toggleRightPanel();
+                  const showHelp = activeSoupDrawerCommand();
+                  if(!showHelp){return};
+                  runCommand(showHelp);
                 }}
+                tooltip={{
+                  hotkeyToken: TOKENS.split.showHelpDrawer,
+                  label: 'Help',
+                }}
+                icon={IconQuestion}
+                theme="clear"
+                size="sm"
               />
             </Show>
 
             <IconButton
-              icon={SplitIcon}
-              theme="clear"
-              tooltip={{
-                label: 'Create New Split',
-                hotkeyToken: TOKENS.global.createNewSplit,
+              onClick={() => {
+                if(isRightPanelCollapsed()){track(TrackingEvents.RIGHTBAR.OPEN)}
+                else{track(TrackingEvents.RIGHTBAR.CLOSE)}
+                toggleRightPanel();
               }}
-              class="h-full aspect-square"
+              theme={isRightPanelCollapsed() ? 'clear' : 'accent'}
+              tooltip={{
+                hotkeyToken: TOKENS.global.toggleRightPanel,
+                label: 'Toggle AI Panel',
+              }}
+              icon={IconAtom}
+              size="sm"
+            />
+
+            <IconButton
+              tooltip={{
+                hotkeyToken: TOKENS.global.createNewSplit,
+                label: 'Create New Split'
+              }}
               onClick={() => {
                 const manager = globalSplitManager();
-                if (manager) {
+                if(manager){
                   manager.createNewSplit({
-                    type: 'component',
                     id: 'unified-list',
+                    type: 'component',
                   });
                 }
               }}
+              icon={SplitIcon}
+              theme="clear"
+              size="sm"
             />
 
             <IconButton
-              icon={IconPower}
-              theme={isPresentMode() ? 'accent' : 'clear'}
               tooltip={{
-                label: isPresentMode()
-                  ? 'Exit Present Mode'
-                  : 'Enter Present Mode',
+                label: isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'
               }}
-              class="h-full aspect-square"
+              theme={isPresentMode() ? 'accent' : 'clear'}
               onClick={togglePresentMode}
+              icon={IconPower}
+              size="sm"
             />
 
             <IconButton
-              icon={IconGear}
-              theme={settingsOpen() ? 'accent' : 'clear'}
               tooltip={{
                 label: settingsOpen() ? 'Close Settings' : 'Open Settings',
                 hotkeyToken: TOKENS.global.toggleSettings,
               }}
-              class="h-full aspect-square"
-              data-settings-button
-              onDeepClick={() => {
-                setSettingsOpen(true);
-              }}
+              theme={settingsOpen() ? 'accent' : 'clear'}
+              onDeepClick={() => {setSettingsOpen(true)}}
+              icon={IconGear}
+              size="sm"
             />
           </div>
+
         </div>
-      </Show>
+      </div>
+
+      <PresentModeGlitch
+        show={showGlitchEffect()}
+        onComplete={() => setShowGlitchEffect(false)}
+      />
+
+      {/*<Show when={DEV_MODE_ENV}>
+        <Debug/>
+      </Show>*/}
     </>
   );
 }
