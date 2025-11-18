@@ -27,7 +27,7 @@ import {
   setKonsoleMode,
   toggleKonsoleVisibility,
 } from './command/state';
-import { toggleCreateMenu } from './dock/CreateMenu';
+import { toggleCreateMenu } from './Launcher';
 import { fireMacroJump } from './MacroJump';
 import {
   quickCreateMenuOpenSignal,
