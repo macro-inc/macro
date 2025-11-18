@@ -4,8 +4,8 @@ import { useEmail, useUserId } from '@service-gql/client';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
-import { UserIcon } from 'core/component/UserIcon';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
+import { UserIcon } from 'core/component/UserIcon';
 import { emailToId, useDisplayName } from 'core/user';
 import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
 import { useSplitNavigationHandler } from 'core/util/useSplitNavigationHandler';
@@ -249,9 +249,6 @@ export function EntityWithEverything(
         </div>
       );
     }
-    const isDirectMessage = () =>
-      props.entity.type === 'channel' &&
-      props.entity.channelType === 'direct_message';
 
     const channelEntity = createMemo(() =>
       props.entity.type === 'channel' ? props.entity : null
@@ -288,9 +285,11 @@ export function EntityWithEverything(
             </Show>
           </span>
 
-          <Show when={!props.showUnrollNotifications && !isDirectMessage()}>
+          <Show when={!props.showUnrollNotifications}>
             <div class="flex items-center gap-1">
-              <ImportantBadge active={props.importantIndicatorActive} />
+              <Show when={props.showUnrollNotifications}>
+                <ImportantBadge active={props.importantIndicatorActive} />
+              </Show>
               <span class="font-medium shrink-0 truncate">
                 {userNameFromSender()}
               </span>
