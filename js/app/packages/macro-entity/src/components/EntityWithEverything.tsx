@@ -313,11 +313,11 @@ export function EntityWithEverything(
             }
           >
             {(messageContent) => (
-              <div class="text-sm truncate line-clamp-1 leading-none shrink text-ink-extra-muted py-1">
+              <div class="text-sm truncate line-clamp-1 leading-none shrink text-ink-extra-muted py-1 flex items-center">
                 <StaticMarkdown
                   markdown={messageContent()}
                   theme={unifiedListMarkdownTheme}
-                  singleLine={false}
+                  singleLine={true}
                 />
               </div>
             )}
@@ -420,7 +420,7 @@ export function EntityWithEverything(
           <div
             class="size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-accent group-hover/button:border"
             classList={{
-              'ring ring-edge-muted': props.selected || entityHovered(),
+              'ring ring-edge-muted': props.selected,
               'bg-panel': !props.checked && (props.selected || entityHovered()),
               'bg-accent border border-accent': props.checked,
             }}
