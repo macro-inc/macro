@@ -54,7 +54,7 @@ impl IntoResponse for DisableSyncError {
     path = "/email/sync",
     operation_id = "disable_sync",
     responses(
-            (status = 204, body=EmptyResponse),
+            (status = 204),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
             (status = 500, body=ErrorResponse),

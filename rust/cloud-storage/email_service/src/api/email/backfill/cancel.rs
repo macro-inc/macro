@@ -25,7 +25,7 @@ pub struct CancelBackfillParams {
     operation_id = "cancel_backfill_gmail",
     request_body = CancelBackfillParams,
     responses(
-            (status = 201, body=EmptyResponse),
+            (status = 204),
             (status = 429, body=ErrorResponse),
             (status = 404, body=ErrorResponse),
             (status = 500, body=ErrorResponse),

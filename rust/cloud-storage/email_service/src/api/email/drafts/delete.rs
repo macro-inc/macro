@@ -56,7 +56,7 @@ impl IntoResponse for DeleteDraftError {
         ("id" = Uuid, Path, description = "Draft ID."),
     ),
     responses(
-            (status = 204, body=EmptyResponse),
+            (status = 204),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
             (status = 404, body=ErrorResponse),
