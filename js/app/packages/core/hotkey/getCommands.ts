@@ -38,11 +38,17 @@ export function getActiveCommandsFromScope(
   scopeId: string,
   displayOptions: sortAndFilterOptions = {}
 ) {
+  console.log('hotkeyScopeTree: ', hotkeyScopeTree);
   let currentScopeNode = hotkeyScopeTree.get(scopeId);
   const hotkeySet: Set<ValidHotkey> = new Set();
   const commands: CommandWithInfo[] = [];
   let scopeLevel = 0;
   while (currentScopeNode) {
+    console.log('currentScopeNode', currentScopeNode);
+    console.log('unfiltered commands: ', Array.from([
+      ...(currentScopeNode?.hotkeyCommands.values() ?? []),
+      ...(currentScopeNode?.unkeyedCommands ?? []),
+    ]))
     const scopeCommands = Array.from([
       ...(currentScopeNode?.hotkeyCommands.values() ?? []),
       ...(currentScopeNode?.unkeyedCommands ?? []),
@@ -63,9 +69,6 @@ export function getActiveCommandsFromScope(
     );
     scopeLevel++;
   }
-  if (displayOptions.hideShadowedCommands) {
-    commands.filter((command) => !command.hotkeyIsShadowed);
-  }
   commands.sort((a, b) => {
     if (displayOptions.sortByScopeLevel) {
       if (a.scopeLevel !== b.scopeLevel) {
@@ -75,7 +78,9 @@ export function getActiveCommandsFromScope(
     }
     return (b.displayPriority ?? 0) - (a.displayPriority ?? 0);
   });
-  return commands;
+  return displayOptions.hideShadowedCommands
+    ? commands.filter((command) => !command.hotkeyIsShadowed)
+    : commands;
 }
 
 const filterCommands = (displayOptions: sortAndFilterOptions) => {

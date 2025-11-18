@@ -35,6 +35,7 @@ import {
   type SplitState,
 } from './layoutManager';
 import { decodePairs } from './layoutUtils';
+import { useSplitLayout } from './layout';
 
 type SplitLayoutContainerProps = {
   pairs: string[];
@@ -354,7 +355,7 @@ function SplitPanel(props: SplitPanelProps) {
   registerHotkey({
     scopeId: splitHotkeyScope,
     hotkey: 'w',
-    description: `Close ${splitName()}`,
+    description: `Close split`,
     keyDownHandler: () => {
       props.handle.close();
       return true;
@@ -410,8 +411,32 @@ function SplitPanel(props: SplitPanelProps) {
       props.handle.goForward();
       return true;
     },
-
   });
+  
+  const goScope = registerHotkey({
+    scopeId: splitHotkeyScope,
+    hotkey: 'g',
+    description: 'Go',
+    keyDownHandler: () => {
+      return true;
+    },
+    activateCommandScope: true,
+    hotkeyToken: TOKENS.split.goCommand,
+  });
+  
+  const { replaceSplit } = useSplitLayout();
+
+  registerHotkey({
+    scopeId: goScope.commandScopeId,
+    hotkey: 'h',
+    description: 'Go home',
+    keyDownHandler: () => {
+      replaceSplit({type: 'component', id: 'unified-list'})
+      return true;
+    },
+    hotkeyToken: TOKENS.split.go.home,
+  });
+
 
   const unifiedListContext = createSoupContext();
   createNavigationEntityListShortcut({
@@ -419,6 +444,7 @@ function SplitPanel(props: SplitPanelProps) {
     splitHandle: props.handle,
     splitHotkeyScope,
     unifiedListContext,
+    goScopeId: goScope.commandScopeId
   });
 
   // Create ephemeral preview state for unified-list component

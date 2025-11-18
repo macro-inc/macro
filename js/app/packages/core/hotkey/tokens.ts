@@ -55,8 +55,8 @@ export const TOKENS = {
       message: 'global.quickCreate.message',
       menuFormat: 'global.quickCreate.menuFormat',
     },
-    jumpCommand: 'global.jumpCommand',
-    jump: {
+    moveCommand: 'global.jumpCommand',
+    move: {
       macroJump: 'global.jump.macroJump',
       focusSplitRight: 'global.jump.focusSplitRight',
       focusSplitLeft: 'global.jump.focusSplitLeft',
@@ -87,6 +87,11 @@ export const TOKENS = {
   // split
   split: {
     close: 'split.close',
+    goCommand: 'split.goCommand',
+    go: {
+      home: 'split.go.home',
+      
+    },
     spotlight: {
       toggle: 'split.spotlight.toggle',
       close: 'split.spotlight.close',

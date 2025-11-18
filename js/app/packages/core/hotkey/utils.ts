@@ -171,8 +171,6 @@ export function updateActiveScopeBranch(activeScopeId: string | undefined) {
     }
   }
   
-  console.log('ACTIVE SCOPE BRANCH', branch);
-
   setActiveScopeBranch(branch);
 }
 

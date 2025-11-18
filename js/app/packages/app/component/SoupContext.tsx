@@ -158,11 +158,13 @@ export function createNavigationEntityListShortcut({
   splitHandle,
   splitHotkeyScope,
   unifiedListContext,
+  goScopeId,
 }: {
   splitName: Accessor<string>;
   splitHandle: SplitHandle;
   splitHotkeyScope: string;
   unifiedListContext: UnifiedListContext;
+  goScopeId: string;
 }) {
   const {
     viewsDataStore: viewsData,
@@ -481,25 +483,18 @@ export function createNavigationEntityListShortcut({
     hotkey: ['shift+g', 'end'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.jump.end,
-    description: 'Bottom',
+    description: 'Go to bottom of list',
     keyDownHandler: () => {
       navigateThroughList({ axis: 'end', mode: 'jump' });
       return true;
     },
     hide: true,
   });
-  const topGScope = registerHotkey({
-    hotkey: ['g'],
-    scopeId: splitHotkeyScope,
-    description: 'Top',
-    keyDownHandler: () => true,
-    activateCommandScope: true,
-    hide: true,
-  });
+
   registerHotkey({
     hotkey: ['g'],
-    scopeId: topGScope.commandScopeId,
-    description: 'Top',
+    scopeId: goScopeId,
+    description: 'Go to top of list',
     keyDownHandler: () => {
       navigateThroughList({ axis: 'start', mode: 'jump' });
 
