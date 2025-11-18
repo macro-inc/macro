@@ -7,7 +7,7 @@ pub use client::StaticFileClient;
 pub use fetcher::{NewStaticFileFetcher, StaticFileFetcher};
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
-pub use types::{StaticFileContent, StaticFileData};
+pub use types::{Data, StaticFileContent};
 
 impl<D, C, A, E, S> ScribeClient<D, C, A, E, S> {
     pub fn with_static_file_client<T: Into<Arc<StaticFileServiceClient>>>(

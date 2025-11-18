@@ -1,4 +1,4 @@
-use crate::static_file::types::{StaticFileContent, StaticFileData};
+use crate::static_file::types::{Data, StaticFileContent};
 use anyhow::{Context, Error};
 use model::document::{ContentType, ContentTypeExt};
 use models_sfs::FileMetadata;
@@ -100,13 +100,13 @@ impl<L: Debug, D: Debug> StaticFileFetcher<L, D> {
             .context("Failed to read file data")?;
 
         let data = if content_type.is_image() {
-            StaticFileData::Binary(file_data)
+            Data::Binary(file_data)
         } else if content_type.is_text_content() {
             let text = String::from_utf8(file_data.to_vec())
                 .context("Failed to convert file data to text")?;
-            StaticFileData::Text(text)
+            Data::Text(text)
         } else {
-            StaticFileData::Binary(file_data)
+            Data::Binary(file_data)
         };
 
         Ok(StaticFileContent {
