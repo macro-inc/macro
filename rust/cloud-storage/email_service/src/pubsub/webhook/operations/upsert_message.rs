@@ -132,7 +132,9 @@ pub async fn upsert_message(
 
     // temporarily only for macro emails, for testing purposes
     if link.macro_id.ends_with("@macro.com")
-        && !cfg!(feature = "disable_attachment_upload") && message_attachment_count > 0 {
+        && !cfg!(feature = "disable_attachment_upload")
+        && message_attachment_count > 0
+    {
         // upload attachments to Macro
         let attachments = email_db_client::attachments::provider::upload::fetch_insertable_attachments_for_new_email(
             &ctx.db,
