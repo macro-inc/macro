@@ -4,6 +4,7 @@ import { useEmail } from '@service-gql/client';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { UserIcon } from 'core/component/UserIcon';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { emailToId, useDisplayName } from 'core/user';
 import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
@@ -435,10 +436,20 @@ export function EntityWithEverything(
           }}
         >
           <div class="flex size-5 shrink-0 items-center justify-center">
-            <Dynamic
-              component={getIcon().icon}
-              class={`flex size-full ${getIcon().foreground}`}
-            />
+            <Show
+              when={
+                props.entity.type === 'channel' &&
+                props.entity.channelType === 'direct_message'
+              }
+              fallback={
+                <Dynamic
+                  component={getIcon().icon}
+                  class={`flex size-full ${getIcon().foreground}`}
+                />
+              }
+            >
+              <DirectMessageIcon entity={props.entity} />
+            </Show>
           </div>
           <EntityTitle />
         </div>
@@ -648,6 +659,30 @@ export function EntityWithEverything(
           </div>
         </Show>
       </div>
+    </div>
+  );
+}
+
+function DirectMessageIcon(props: { entity: EntityData }) {
+  const participantId = createMemo(() => {
+    if (props.entity.type !== 'channel') return null;
+    const senderId = props.entity.latestMessage?.senderId;
+    return senderId || null;
+  });
+
+  const Fallback = () => (
+    <Dynamic
+      component={getIconConfig('directMessage').icon}
+      class={`flex size-full ${getIconConfig('directMessage').foreground}`}
+    />
+  );
+
+  const id = participantId();
+  if (!id) return <Fallback />;
+
+  return (
+    <div class="bg-panel size-5 rounded-full p-[2px]">
+      <UserIcon id={id} isDeleted={false} size="fill" />
     </div>
   );
 }
