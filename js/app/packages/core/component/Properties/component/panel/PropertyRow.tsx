@@ -1,6 +1,6 @@
 import type { Component } from 'solid-js';
-import { PropertyValue } from '../../components/property-display/PropertyValue';
 import type { Property } from '../../types';
+import { PropertyValue } from '../propertyValue/PropertyValue';
 import { PropertyLabel } from './PropertyLabel';
 
 interface PropertyRowProps {

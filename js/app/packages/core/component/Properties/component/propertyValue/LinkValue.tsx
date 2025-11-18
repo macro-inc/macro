@@ -11,7 +11,7 @@ import { createStore } from 'solid-js/store';
 import { savePropertyValue } from '../../api/propertyValues';
 import type { Property } from '../../types';
 import { extractDomain, isValidUrl, normalizeUrl } from '../../utils';
-import { AddPropertyValueButton, EmptyValue } from './PropertyValuePrimitives';
+import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
 
 type LinkValueProps = {
   property: Property;

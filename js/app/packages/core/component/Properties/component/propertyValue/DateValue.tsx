@@ -2,7 +2,7 @@ import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import type { Property } from '../../types';
 import { formatDate } from '../../utils';
-import { EmptyValue } from './PropertyValuePrimitives';
+import { EmptyValue } from './ValueComponents';
 
 type DateValueProps = {
   property: Property;
