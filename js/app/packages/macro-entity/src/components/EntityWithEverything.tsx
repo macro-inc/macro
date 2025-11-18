@@ -251,24 +251,26 @@ export function EntityWithEverything(
     const isDirectMessage = () =>
       props.entity.type === 'channel' &&
       props.entity.channelType === 'direct_message';
-    const notification = createMemo(() => {
-      const maybeNotification = props.entity.notifications?.().at(0);
-      if (!maybeNotification) return;
 
-      const withMetadata = notificationWithMetadata(maybeNotification);
-      if (!withMetadata) return;
+    const channelEntity = createMemo(() =>
+      props.entity.type === 'channel' ? props.entity : null
+    );
 
-      return withMetadata;
+    const lastMessageContent = createMemo(
+      () => channelEntity()?.latestMessage?.content
+    );
+
+    const userNameFromSender = createMemo(() => {
+      const senderId = channelEntity()?.latestMessage?.senderId;
+      if (!senderId) return;
+      const [userName] = useDisplayName(senderId);
+      return userName();
     });
-    const notificationMessageContent = createMemo(() => {
-      const metadata = notification()?.notificationMetadata;
-      if (!metadata || !('messageContent' in metadata)) return;
 
-      return metadata.messageContent;
-    });
-
-    const userName = createMemo(() => {
-      const [userName] = useDisplayName(notification()?.senderId);
+    const userNameFromNotification = createMemo(() => {
+      const notification = props.entity.notifications?.().at(0);
+      if (!notification) return;
+      const [userName] = useDisplayName(notification.senderId);
       return userName();
     });
 
@@ -302,20 +304,20 @@ export function EntityWithEverything(
             <div class="flex items-center gap-1">
               <ImportantBadge active={props.importantIndicatorActive} />
               <span class="inline-block">
-                <span class="text-ink">{userName()}</span>
+                <span class="text-ink">
+                  {props.showUnrollNotifications
+                    ? userNameFromNotification()
+                    : userNameFromSender()}
+                </span>
               </span>
             </div>
           </Show>
 
-          <Show
-            when={
-              !props.showUnrollNotifications && notificationMessageContent()
-            }
-          >
-            {(messageContent) => (
+          <Show when={!props.showUnrollNotifications && lastMessageContent()}>
+            {(lastMessageContent) => (
               <div class="text-sm truncate line-clamp-1 leading-none shrink text-ink-extra-muted py-1">
                 <StaticMarkdown
-                  markdown={messageContent()}
+                  markdown={lastMessageContent()}
                   theme={unifiedListMarkdownTheme}
                   singleLine={false}
                 />
@@ -528,7 +530,7 @@ export function EntityWithEverything(
                   if (
                     notification.notificationEventType === 'document_mention' ||
                     notification.notificationEventType ===
-                      'channel_message_document'
+                    'channel_message_document'
                   ) {
                     return 'shared';
                   }
@@ -551,7 +553,7 @@ export function EntityWithEverything(
                   if (
                     notification.notificationEventType === 'document_mention' ||
                     notification.notificationEventType ===
-                      'channel_message_document'
+                    'channel_message_document'
                   ) {
                     return '';
                   }
@@ -587,12 +589,12 @@ export function EntityWithEverything(
                     onClick={
                       props.onClickNotification
                         ? [
-                            props.onClickNotification,
-                            {
-                              ...props.entity,
-                              notification,
-                            },
-                          ]
+                          props.onClickNotification,
+                          {
+                            ...props.entity,
+                            notification,
+                          },
+                        ]
                         : undefined
                     }
                   >
