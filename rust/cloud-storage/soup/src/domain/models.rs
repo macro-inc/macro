@@ -1,11 +1,9 @@
-use std::sync::Arc;
-
 use frecency::domain::{models::AggregateFrecency, ports::FrecencyQueryErr};
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_pagination::{
-    CursorVal, Frecency, FrecencyValue, Identify, Query, SimpleSortMethod, SortOn,
+    Cursor, CursorVal, Frecency, FrecencyValue, Identify, Query, SimpleSortMethod, SortOn,
 };
 use models_soup::item::SoupItem;
 use thiserror::Error;
@@ -16,32 +14,73 @@ pub enum SoupType {
     UnExpanded,
 }
 
-/// possible things we can exclude from the results
-#[derive(Debug)]
-pub(crate) enum SoupFilter {
-    /// excludes any item that has a frecency record from the results
-    Frecency,
-    Ast(AstFilter),
-}
-
-#[derive(Debug)]
-#[expect(dead_code)]
-pub(crate) enum AstFilter {
-    Normal(Arc<EntityFilterAst>),
-    Frecency(Arc<EntityFilterAst>),
-}
-
 /// the parameters required for a [SimpleSortMethod]
 #[derive(Debug)]
 pub struct SimpleSortRequest<'a> {
     /// the limit of the number of items to return
-    pub limit: u16,
-    /// the [ParsedCursor] the client passes (if any)
-    pub cursor: Query<String, SimpleSortMethod, EntityFilterAst>,
+    pub(crate) limit: u16,
+    /// the [Query] the client passes (if any)
+    pub(crate) cursor: SimpleSortQuery,
     /// the id of the user
-    pub user_id: MacroUserIdStr<'a>,
-    /// a list of things that should be excluded from the query
-    pub(crate) filters: Option<SoupFilter>,
+    pub(crate) user_id: MacroUserIdStr<'a>,
+}
+
+#[derive(Debug)]
+pub(crate) enum SimpleSortQuery {
+    /// we dont have anything to filter out
+    NoFilter(Query<String, SimpleSortMethod, ()>),
+    /// we filter out items that DO have a [Frecency] record
+    FilterFrecency(Query<String, SimpleSortMethod, Frecency>),
+    /// we filter out items based on the input [EntityFilterAst]
+    ItemsFilter(Query<String, SimpleSortMethod, EntityFilterAst>),
+    /// we filter out items based on the input [EntityFilterAst] IN ADDITION to ANY items that DO have a [Frecency] score
+    #[allow(dead_code, reason = "this is used in a later PR")]
+    ItemsAndFrecencyFilter(Query<String, SimpleSortMethod, (Frecency, EntityFilterAst)>),
+}
+
+impl SimpleSortQuery {
+    pub(crate) fn from_entity_cursor(
+        cursor: Query<String, SimpleSortMethod, Option<EntityFilterAst>>,
+    ) -> Self {
+        match cursor {
+            Query::Sort(s, Some(f)) => SimpleSortQuery::ItemsFilter(Query::Sort(s, f)),
+            Query::Sort(s, None) => SimpleSortQuery::NoFilter(Query::Sort(s, ())),
+            Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter: Some(filter),
+            }) => SimpleSortQuery::ItemsFilter(Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter,
+            })),
+            Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter: None,
+            }) => SimpleSortQuery::NoFilter(Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter: (),
+            })),
+        }
+    }
+}
+
+impl SimpleSortQuery {
+    #[cfg(test)]
+    pub(crate) fn sort_method(&self) -> &SimpleSortMethod {
+        match self {
+            SimpleSortQuery::NoFilter(query) => query.sort_method(),
+            SimpleSortQuery::FilterFrecency(query) => query.sort_method(),
+            SimpleSortQuery::ItemsFilter(query) => query.sort_method(),
+            SimpleSortQuery::ItemsAndFrecencyFilter(query) => query.sort_method(),
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -51,8 +90,17 @@ pub struct AdvancedSortParams<'a> {
 }
 
 pub enum SoupQuery {
-    Simple(Query<String, SimpleSortMethod, EntityFilterAst>),
-    Frecency(Query<String, Frecency, EntityFilterAst>),
+    Simple(Query<String, SimpleSortMethod, Option<EntityFilterAst>>),
+    Frecency(Query<String, Frecency, Option<EntityFilterAst>>),
+}
+
+impl SoupQuery {
+    pub(crate) fn filter(&self) -> Option<&EntityFilterAst> {
+        match self {
+            SoupQuery::Simple(query) => query.filter().as_ref(),
+            SoupQuery::Frecency(query) => query.filter().as_ref(),
+        }
+    }
 }
 
 pub struct SoupRequest {
@@ -60,7 +108,6 @@ pub struct SoupRequest {
     pub limit: u16,
     pub cursor: SoupQuery,
     pub user: MacroUserIdStr<'static>,
-    pub filters: Arc<EntityFilterAst>,
 }
 
 /// a [SoupItem] with an associated frecency score
@@ -82,10 +129,9 @@ impl Identify for FrecencySoupItem {
 }
 
 impl SortOn<Frecency> for FrecencySoupItem {
-    fn sort_on<F>(
+    fn sort_on(
         sort_type: Frecency,
-        filter: F,
-    ) -> impl FnOnce(&Self) -> models_pagination::CursorVal<Frecency, F> {
+    ) -> impl FnOnce(&Self) -> models_pagination::CursorVal<Frecency> {
         move |val| CursorVal {
             sort_type,
             // if this record does not have a frecency score we fallback to created_at as the sort
@@ -93,17 +139,13 @@ impl SortOn<Frecency> for FrecencySoupItem {
                 Some(f) => FrecencyValue::FrecencyScore(f.data.frecency_score),
                 None => FrecencyValue::UpdatedAt(val.item.updated_at()),
             },
-            filter,
         }
     }
 }
 
 impl SortOn<SimpleSortMethod> for FrecencySoupItem {
-    fn sort_on<F>(
-        sort: SimpleSortMethod,
-        filter: F,
-    ) -> impl FnOnce(&Self) -> CursorVal<SimpleSortMethod, F> {
-        let cb = SoupItem::sort_on(sort, filter);
+    fn sort_on(sort: SimpleSortMethod) -> impl FnOnce(&Self) -> CursorVal<SimpleSortMethod> {
+        let cb = SoupItem::sort_on(sort);
         move |v| cb(&v.item)
     }
 }

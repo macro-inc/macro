@@ -87,9 +87,13 @@ export class HtmlRenderNode extends DecoratorBlockNode<
         return null;
       }
 
+      const dsdTemplate = domNode.querySelector('template[shadowrootmode]');
+
       const htmlAttr = domNode.getAttribute('data-html');
       const htmlFromAttr = htmlAttr ? JSON.parse(htmlAttr) : null;
-      const htmlString = htmlFromAttr ?? domNode.innerHTML;
+      const htmlString = dsdTemplate
+        ? dsdTemplate.innerHTML
+        : (htmlFromAttr ?? domNode.innerHTML);
 
       const node = $createHtmlRenderNode({ html: htmlString });
       return { node };
@@ -101,10 +105,15 @@ export class HtmlRenderNode extends DecoratorBlockNode<
   }
 
   exportDOM() {
-    const element = document.createElement('div');
-    element.setAttribute('data-html-render', 'true');
-    element.innerHTML = this.__html;
-    return { element };
+    const host = document.createElement('div');
+    host.setAttribute('data-html-render', 'true');
+
+    const template = document.createElement('template');
+    template.setAttribute('shadowrootmode', 'open');
+    template.innerHTML = this.__html;
+
+    host.appendChild(template);
+    return { element: host };
   }
 
   getTextContent(): string {

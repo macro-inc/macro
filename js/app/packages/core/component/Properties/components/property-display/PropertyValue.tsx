@@ -4,6 +4,7 @@ import type { Property } from '../../types';
 import { BooleanValue } from './BooleanValue';
 import { DateValue } from './DateValue';
 import { EntityValue } from './EntityValue';
+import { LinkValue } from './LinkValue';
 import { NumberValue } from './NumberValue';
 import { SelectValue } from './SelectValue';
 import { TextValue } from './TextValue';
@@ -67,7 +68,9 @@ export const PropertyValue: Component<PropertyValueProps> = (props) => {
         <SelectValue
           property={props.property}
           canEdit={canEdit}
+          entityType={entityType}
           onEdit={props.onEdit}
+          onRefresh={onRefresh}
         />
       );
 
@@ -78,17 +81,33 @@ export const PropertyValue: Component<PropertyValueProps> = (props) => {
           canEdit={canEdit}
           entityType={entityType}
           onEdit={props.onEdit}
+          onRefresh={onRefresh}
         />
       );
 
     case 'LINK':
       return (
-        <TextValue
+        <LinkValue
           property={props.property}
           canEdit={canEdit}
           entityType={entityType}
           onRefresh={onRefresh}
         />
       );
+
+    default: {
+      // Exhaustive check: if we reach here, TypeScript will error
+      // because we haven't handled all PropertyValue types
+      const _exhaustiveCheck: never = props.property;
+      console.error(
+        'Unhandled property type in PropertyValue:',
+        (_exhaustiveCheck as Property).valueType
+      );
+      return (
+        <div class="text-failure-ink text-xs px-2 py-1">
+          Unsupported Property Type
+        </div>
+      );
+    }
   }
 };

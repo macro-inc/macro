@@ -1,4 +1,4 @@
-import type { Accessor } from 'solid-js';
+import type { Accessor, Component } from 'solid-js';
 import { createMemo, Show } from 'solid-js';
 import type { Property } from '../types';
 import { PropertiesList } from './PropertiesList';
@@ -10,7 +10,7 @@ interface PropertiesContentProps {
   emptyMessage?: string;
 }
 
-export function PropertiesContent(props: PropertiesContentProps) {
+export const PropertiesContent: Component<PropertiesContentProps> = (props) => {
   const hasProperties = createMemo(() => props.properties().length > 0);
   const showContent = createMemo(
     () => hasProperties() || (!props.isLoading() && !props.error())
@@ -25,10 +25,10 @@ export function PropertiesContent(props: PropertiesContentProps) {
       </Show>
 
       <Show when={hasProperties()}>
-        <div class="flex-1 overflow-y-auto px-2 pb-2">
+        <div class="flex-1 overflow-y-auto overflow-x-auto px-2 pb-2">
           <PropertiesList properties={props.properties()} />
         </div>
       </Show>
     </Show>
   );
-}
+};

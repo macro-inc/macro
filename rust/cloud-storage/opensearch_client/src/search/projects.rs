@@ -3,15 +3,13 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{MacroEm, SearchResponse, parse_highlight_hit},
+        model::{Highlight, MacroEm, SearchResponse, parse_highlight_hit},
         query::Keys,
     },
 };
 
 use crate::SearchOn;
-use opensearch_query_builder::{
-    FieldSort, Highlight, HighlightField, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
-};
+use opensearch_query_builder::{HighlightField, SearchRequest, ToOpenSearchJson};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -19,28 +17,22 @@ use serde_json::Value;
 struct ProjectSearchConfig;
 
 impl SearchQueryConfig for ProjectSearchConfig {
-    const ID_KEY: &'static str = "project_id";
     const INDEX: &'static str = PROJECT_INDEX;
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "project_name";
 
-    fn default_sort_types() -> Vec<SortType> {
-        vec![
-            SortType::Field(FieldSort::new("updated_at_seconds", SortOrder::Desc)),
-            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
-        ]
-    }
-
     // Projects have no "content" to highlight match on, so match on the TITLE_KEY instead
-    fn default_highlight() -> Highlight {
-        Highlight::new().require_field_match(true).field(
-            Self::TITLE_KEY,
-            HighlightField::new()
-                .highlight_type("unified")
-                .number_of_fragments(1)
-                .pre_tags(vec![MacroEm::Open.to_string()])
-                .post_tags(vec![MacroEm::Close.to_string()]),
-        )
+    fn default_highlight() -> opensearch_query_builder::Highlight {
+        opensearch_query_builder::Highlight::new()
+            .require_field_match(true)
+            .field(
+                Self::TITLE_KEY,
+                HighlightField::new()
+                    .highlight_type("plain")
+                    .number_of_fragments(1)
+                    .pre_tags(vec![MacroEm::Open.to_string()])
+                    .post_tags(vec![MacroEm::Close.to_string()]),
+            )
     }
 }
 
@@ -66,6 +58,7 @@ impl ProjectQueryBuilder {
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
+        fn disable_recency(disable_recency: bool) -> Self;
     }
 
     fn build_search_request(self) -> Result<SearchRequest> {
@@ -83,7 +76,7 @@ impl ProjectQueryBuilder {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct ProjectIndex {
-    pub project_id: String,
+    pub entity_id: String,
     pub user_id: String,
     pub parent_project_id: Option<String>,
     pub project_name: String,
@@ -102,11 +95,12 @@ pub struct ProjectSearchArgs {
     pub search_on: SearchOn,
     pub collapse: bool,
     pub ids_only: bool,
+    pub disable_recency: bool,
 }
 
 impl ProjectSearchArgs {
     pub fn build(self) -> Result<Value> {
-        let builder = ProjectQueryBuilder::new(self.terms)
+        Ok(ProjectQueryBuilder::new(self.terms)
             .match_type(&self.match_type)
             .page_size(self.page_size)
             .page(self.page)
@@ -114,9 +108,10 @@ impl ProjectSearchArgs {
             .search_on(self.search_on)
             .collapse(self.collapse)
             .ids(self.project_ids)
-            .ids_only(self.ids_only);
-
-        Ok(builder.build_search_request()?.to_json())
+            .ids_only(self.ids_only)
+            .disable_recency(self.disable_recency)
+            .build_search_request()?
+            .to_json())
     }
 }
 
@@ -127,14 +122,14 @@ pub struct ProjectSearchResponse {
     pub project_name: String,
     pub created_at: i64,
     pub updated_at: i64,
-    pub content: Option<Vec<String>>,
+    pub highlight: Highlight,
 }
 
+#[tracing::instrument(skip(client, args), err)]
 pub(crate) async fn search_projects(
     client: &opensearch::OpenSearch,
     args: ProjectSearchArgs,
 ) -> Result<Vec<ProjectSearchResponse>> {
-    let search_on = args.search_on;
     let query_body = args.build()?;
 
     let response = client
@@ -166,21 +161,23 @@ pub(crate) async fn search_projects(
         .hits
         .into_iter()
         .map(|hit| ProjectSearchResponse {
-            project_id: hit._source.project_id,
+            project_id: hit._source.entity_id,
             user_id: hit._source.user_id,
             project_name: hit._source.project_name,
             created_at: hit._source.created_at_seconds,
             updated_at: hit._source.updated_at_seconds,
-            content: hit.highlight.map(|h| {
-                parse_highlight_hit(
-                    h,
-                    Keys {
-                        title_key: ProjectSearchConfig::TITLE_KEY,
-                        content_key: ProjectSearchConfig::CONTENT_KEY,
-                    },
-                    search_on,
-                )
-            }),
+            highlight: hit
+                .highlight
+                .map(|h| {
+                    parse_highlight_hit(
+                        h,
+                        Keys {
+                            title_key: ProjectSearchConfig::TITLE_KEY,
+                            content_key: ProjectSearchConfig::CONTENT_KEY,
+                        },
+                    )
+                })
+                .unwrap_or_default(),
         })
         .collect())
 }

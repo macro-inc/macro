@@ -1,5 +1,6 @@
+import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 import { IconButton } from '@core/component/IconButton';
-import { ResizeZoneContext } from '@core/component/Resize/Resize';
+import { ENABLE_PREVIEW } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { cornerClip } from '@core/util/clipPath';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
@@ -10,6 +11,7 @@ import SplitIcon from '@icon/regular/square-split-horizontal.svg';
 import CloseIcon from '@icon/regular/x.svg';
 import {
   createEffect,
+  createMemo,
   createSignal,
   type ParentProps,
   type Setter,
@@ -21,7 +23,7 @@ import { SplitLayoutContext, SplitPanelContext } from '../context';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
-  if (!context) return '';
+  if (!context) return null;
   return (
     <IconButton
       size="sm"
@@ -45,42 +47,6 @@ function SplitForwardButton() {
       disabled={!context.handle.canGoForward()}
       theme="current"
       onClick={context.handle.goForward}
-    />
-  );
-}
-
-// TODO: Move to Dock
-//   (would likely require global split context, or at least a bit higher in the tree)
-function SplitCreateButton() {
-  const context = useContext(SplitLayoutContext);
-  const zoneContext = useContext(ResizeZoneContext);
-  if (!context || !zoneContext) return '';
-
-  // TODO (seamus) : What should the behavior be for not enough space for split?
-  // Block, replace, toast? This should be consistent everywhere:
-  // 1) keyboard shortcut
-  // 2) here
-  // 3) opt-click and open-in-split button
-  const canAdd = () => zoneContext.canFit({ minSize: 400 });
-
-  return (
-    <IconButton
-      size="sm"
-      icon={SplitIcon}
-      theme="current"
-      disabled={!canAdd()}
-      tooltip={{
-        hotkeyToken: canAdd() ? TOKENS.global.createNewSplit : undefined,
-        label: canAdd()
-          ? 'Create New Split'
-          : 'Not Enough Space for a New Split',
-      }}
-      onClick={() => {
-        context.manager.createNewSplit({
-          type: 'component',
-          id: 'unified-list',
-        });
-      }}
     />
   );
 }
@@ -112,7 +78,7 @@ function SplitSpotlightButton() {
 
 function SplitCloseButton() {
   const context = useContext(SplitPanelContext);
-  if (!context) return '';
+  if (!context) return null;
   return (
     <IconButton
       size="sm"
@@ -122,6 +88,34 @@ function SplitCloseButton() {
       tooltip={{ label: 'Close', hotkeyToken: TOKENS.split.close }}
       onClick={context.handle.close}
     />
+  );
+}
+
+function SplitPreviewToggle() {
+  const context = useContext(SplitPanelContext);
+  if (!ENABLE_PREVIEW || !context || !context.previewState) return null;
+
+  // Only show toggle for unified-list component, not for blocks
+  const isUnifiedList = createMemo(() => {
+    const content = context.handle.content();
+    return content.type === 'component' && content.id === 'unified-list';
+  });
+
+  const [preview, setPreview] = context.previewState;
+
+  return (
+    <Show when={isUnifiedList()}>
+      <IconButton
+        size="sm"
+        icon={SplitIcon}
+        theme={preview() ? 'accent' : 'current'}
+        tooltip={{
+          label: preview() ? 'Split View' : 'Full View',
+          hotkeyToken: TOKENS.unifiedList.togglePreview,
+        }}
+        onClick={() => setPreview((prev) => !prev)}
+      />
+    </Show>
   );
 }
 
@@ -170,8 +164,9 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
           }}
         />
         <div class="z-2 relative flex items-center bg-panel pr-2 border-t border-t-edge-muted border-b border-b-edge-muted h-full">
+          <EntityNavigationIndicator />
+          <SplitPreviewToggle />
           <SplitSpotlightButton />
-          <SplitCreateButton />
         </div>
       </div>
     </div>

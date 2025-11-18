@@ -3,20 +3,49 @@ import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { isErr } from '@core/util/maybeResult';
 import type { ChannelType } from '@service-comms/generated/models';
 import { type PaginatedSearchArgs, searchClient } from '@service-search/client';
-import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
+import type {
+  ChannelSearchResult,
+  ChatMessageSearchResult,
+  DocumentSearchResult,
+  EmailSearchResult,
+  ProjectSearchResult,
+  UnifiedSearchResponseItem,
+} from '@service-search/generated/models';
+import { useHistory } from '@service-storage/history';
 import { useInfiniteQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { EntityData } from '../types/entity';
+import type { WithSearch } from '../types/search';
 import type { EntityInfiniteQuery } from './entity';
 import { queryKeys } from './key';
+
+type Entity = WithSearch<EntityData>;
+
+type InnerSearchResult =
+  | DocumentSearchResult
+  | EmailSearchResult
+  | ChatMessageSearchResult
+  | ChannelSearchResult
+  | ProjectSearchResult;
+
+const getHighlights = (innerResults: InnerSearchResult[]) => {
+  return {
+    nameHighlight: innerResults.at(0)?.highlight.name ?? null,
+    contentHighlights: innerResults.flatMap((r) => r.highlight.content ?? []),
+    source: 'service' as const,
+  };
+};
 
 const useMapSearchResponseItem = () => {
   const channelsContext = useChannelsContext();
   const channels = () => channelsContext.channels();
 
-  return (result: UnifiedSearchResponseItem): EntityData | undefined => {
+  const history = useHistory();
+
+  return (result: UnifiedSearchResponseItem): Entity | undefined => {
     switch (result.type) {
-      case 'document':
+      case 'document': {
+        const search = getHighlights(result.document_search_results);
         return {
           type: 'document',
           id: result.document_id,
@@ -26,14 +55,17 @@ const useMapSearchResponseItem = () => {
           updatedAt: result.updated_at,
           fileType: result.file_type || undefined,
           projectId: result.project_id ?? undefined,
+          search,
         };
-
-      case 'email':
+      }
+      case 'email': {
         const emailResult = result.email_message_search_results.at(0);
+        // TODO: distinguish email message result from thread result
         if (!emailResult) {
           console.error('Email result not found', result);
           return;
         }
+        const search = getHighlights(result.email_message_search_results);
         return {
           type: 'email',
           id: result.thread_id,
@@ -46,49 +78,65 @@ const useMapSearchResponseItem = () => {
           isImportant: emailResult.labels.includes('IMPORTANT'),
           done: !emailResult.labels.includes('INBOX'),
           senderName: emailResult.sender,
+          search,
         };
-
-      case 'chat':
+      }
+      case 'chat': {
+        const search = getHighlights(result.chat_search_results);
+        let name = result.name;
+        if (!name || name === 'New Chat') {
+          const chat = history().find((item) => item.id === result.chat_id);
+          if (chat) {
+            name = chat.name;
+          }
+        }
         return {
           type: 'chat',
           id: result.chat_id,
-          name: result.name,
+          name,
           ownerId: result.user_id,
           createdAt: result.created_at,
           updatedAt: result.updated_at,
           projectId: result.project_id ?? undefined,
+          search,
         };
+      }
+      case 'channel': {
+        const channelWithLatest = channels().find(
+          (c) => c.id === result.channel_id
+        );
 
-      case 'channel':
-        // sort in ascending order by created at and take the last result
-        const channelResult = result.channel_message_search_results
-          .toSorted((a, b) => a.created_at - b.created_at)
-          .at(-1);
+        // TODO: serialize correctly from backend
+        const latestMessage = channelWithLatest?.latest_message
+          ? {
+              content: channelWithLatest.latest_message.content,
+              senderId: channelWithLatest.latest_message.sender_id,
+              createdAt:
+                new Date(
+                  channelWithLatest.latest_message.created_at
+                ).getTime() / 1000,
+            }
+          : undefined;
+
+        const search = getHighlights(result.channel_message_search_results);
 
         return {
           type: 'channel',
           // TODO: distinguish channel name match from channel message match
           id: result.channel_id,
-          name:
-            result.name ??
-            // TODO: we will need to hydrate dynamic name from the backend
-            channels().find((c) => c.id === result.channel_id)?.name ??
-            '',
+          name: result.name ?? channelWithLatest?.name ?? '',
           ownerId: result.owner_id ?? '',
           createdAt: result.created_at,
           updatedAt: result.updated_at,
           channelType: result.channel_type as ChannelType,
           interactedAt: result.interacted_at ?? undefined,
-          latestMessage: channelResult
-            ? {
-                content: channelResult.content.at(0) ?? '',
-                senderId: channelResult.sender_id,
-                createdAt: channelResult.created_at,
-              }
-            : undefined,
+          latestMessage,
+          search,
         };
+      }
 
-      case 'project':
+      case 'project': {
+        const search = getHighlights(result.project_search_results);
         return {
           type: 'project',
           id: result.id,
@@ -97,7 +145,9 @@ const useMapSearchResponseItem = () => {
           createdAt: result.created_at,
           updatedAt: result.updated_at,
           parentId: result.parent_project_id ?? undefined,
+          search,
         };
+      }
     }
   };
 };
@@ -114,7 +164,7 @@ export function createUnifiedSearchInfiniteQuery(
   options?: {
     disabled?: Accessor<boolean>;
   }
-): EntityInfiniteQuery {
+): EntityInfiniteQuery<Entity> {
   const params = createMemo(() => args());
   const pageParams = createMemo(() => params().params);
   const request = createMemo(() => params().request);
@@ -173,7 +223,7 @@ export function createUnifiedSearchInfiniteQuery(
       data.pages.flatMap((page) =>
         page.results
           .map(mapSearchResponseItem)
-          .filter((entity): entity is EntityData => !!entity)
+          .filter((entity): entity is Entity => !!entity)
       ),
     enabled: enabled(),
   }));

@@ -8,7 +8,6 @@ fn main() {
         page: 1,
         page_size: 20,
         match_type: "exact".to_string(),
-        org_id: Some(42),
         thread_ids: vec!["thread1".to_string(), "thread2".to_string()],
         mentions: vec!["@alice".to_string(), "@bob".to_string()],
         ..Default::default()

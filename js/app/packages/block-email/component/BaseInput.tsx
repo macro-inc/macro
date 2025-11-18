@@ -1,5 +1,6 @@
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { useBlockId } from '@core/block';
+import { BrightJoins } from '@core/component/BrightJoins';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
@@ -18,7 +19,6 @@ import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
 import DotsThree from '@icon/regular/dots-three.svg';
-import PaperPlaneRight from '@icon/regular/paper-plane-right.svg';
 import Plus from '@icon/regular/plus.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import Trash from '@icon/regular/trash.svg';
@@ -26,6 +26,7 @@ import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { DocumentMentionInfo } from '@lexical-core';
 import { logger } from '@observability';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
   AttachmentMacro,
@@ -47,7 +48,6 @@ import {
 } from 'core/component/LexicalMarkdown/plugins/node-transform/nodeTransformPlugin';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
-  $createParagraphNode,
   $getRoot,
   FORMAT_TEXT_COMMAND,
   type LexicalEditor,
@@ -61,11 +61,11 @@ import {
   For,
   onCleanup,
   onMount,
+  type Setter,
   Show,
   untrack,
 } from 'solid-js';
 import { createStore, produce } from 'solid-js/store';
-import { sendEmail } from '../signal/email';
 import { deleteEmailDraft, saveEmailDraft } from '../signal/emailDraft';
 import { handleFileUpload } from '../util/handleFileUpload';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
@@ -73,6 +73,7 @@ import { getFirstName } from '../util/name';
 import {
   APPEND_PREVIOUS_EMAIL_COMMAND,
   appendItemsAsMacroMentions,
+  clearEmailBody,
   prepareEmailBody,
   registerAppendPreviousEmail,
 } from '../util/prepareEmailBody';
@@ -128,9 +129,10 @@ export function BaseInput(props: {
   draft?: MessageWithBodyReplyless;
   preloadedBody?: string;
   preloadedHtml?: string;
-  draftContainsAppendedReply?: boolean;
   preloadedAttachments?: AttachmentMacro[];
   sideEffectOnSend?: (newMessageId: MessageToSendDbId | null) => void;
+  setShowReply?: Setter<boolean>;
+  markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }) {
   const ctx = useEmailContext();
   const form = createMemo(() =>
@@ -148,6 +150,7 @@ export function BaseInput(props: {
     createSignal<boolean>(false);
   const [isDragging, setIsDragging] = createSignal<boolean>();
   const [isPendingUpload, setIsPendingUpload] = createSignal<boolean>(false);
+  const [isPendingSend, setIsPendingSend] = createSignal<boolean>(false);
   const [showFormatRibbon, setShowFormatRibbon] = createSignal<boolean>(
     props.newMessage ?? false
   );
@@ -159,10 +162,6 @@ export function BaseInput(props: {
   const [bccRef, setBccRef] = createSignal<HTMLInputElement>();
   const [showCc, setShowCc] = createSignal<boolean>();
   const [showBcc, setShowBcc] = createSignal<boolean>();
-
-  const [replyAppended, setReplyAppended] = createSignal<boolean>(
-    props.draftContainsAppendedReply ?? false
-  );
 
   const [savedDraftId, setSavedDraftId] = createSignal<
     MessageToSendDbId | undefined
@@ -233,7 +232,7 @@ export function BaseInput(props: {
   }
 
   async function executeSaveDraft() {
-    if (bodyMacro().trim().length === 0) {
+    if (isPendingSend()) {
       return;
     }
     const draftToSave = collectDraft();
@@ -353,7 +352,9 @@ export function BaseInput(props: {
     useHotkeyDOMScope('compose-message');
   let composeContainerRef: HTMLDivElement | undefined;
 
-  const sendEmail_ = async () => {
+  const sendEmail = async () => {
+    if (isPendingSend() || isPendingUpload()) return;
+    setIsPendingSend(true);
     const to = form().recipients.to.map(convertEmailRecipientToContactInfo);
     const cc = form().recipients.cc.map(convertEmailRecipientToContactInfo);
     const bcc = form().recipients.bcc.map(convertEmailRecipientToContactInfo);
@@ -395,58 +396,53 @@ export function BaseInput(props: {
     });
     if (!prepared) return;
 
-    const response = await sendEmail({
-      bcc,
-      body_html: prepared.bodyHtml,
-      body_macro: bodyMacro(),
-      body_text: prepared.bodyText,
-      cc,
-      provider_id: props.draft?.provider_id,
-      provider_thread_id: currentThread?.provider_id,
-      replying_to_id: props.replyingTo()?.db_id,
-      subject: form().subject(),
-      thread_db_id: currentThread?.db_id,
-      to,
-      link_id: linkId!,
+    const response = await emailClient.sendMessage({
+      message: {
+        bcc,
+        body_html: prepared.bodyHtml,
+        body_macro: bodyMacro(),
+        body_text: prepared.bodyText,
+        cc,
+        provider_id: props.draft?.provider_id,
+        provider_thread_id: currentThread?.provider_id,
+        replying_to_id: props.replyingTo()?.db_id,
+        subject: form().subject(),
+        thread_db_id: currentThread?.db_id,
+        to,
+        link_id: linkId!,
+      },
     });
     if (isOk(response)) {
+      toast.success('Email sent');
       const [, { message }] = response;
       prepared.mentions.forEach((mention) => {
         trackMention(blockId, 'document', mention.documentId);
       });
-      editor()?.update(
-        () => {
-          const root = $getRoot();
-          const paragraph = $createParagraphNode();
-          root.clear();
-          root.append(paragraph);
-        },
-        { tag: 'external' }
-      );
+      clearEmailBody(editor());
       resetState();
       if (props.sideEffectOnSend) {
         props.sideEffectOnSend(message.db_id ?? null);
       }
+    } else {
+      toast.failure('Failed to send email');
     }
+
+    setIsPendingSend(false);
   };
 
   const resetState = () => {
     setBodyMacro('');
-    setReplyAppended(props.draftContainsAppendedReply ?? false);
     setSavedDraftId(undefined);
-
     form().reset();
   };
 
   const handleDeleteDraft = () => {
     const draftId = savedDraftId();
     if (!draftId) {
-      toast.failure('No draft to delete');
-      return;
+      return console.error('No draft to delete');
     }
     deleteEmailDraft(draftId).then((success) => {
       if (success) {
-        toast.success('Draft deleted');
         if (props.replyingTo()?.db_id) {
           ctx.setMessageDbIdToDraftChildren(
             produce((state) => {
@@ -455,16 +451,9 @@ export function BaseInput(props: {
             })
           );
         }
-        editor()?.update(
-          () => {
-            const root = $getRoot();
-            const paragraph = $createParagraphNode();
-            root.clear();
-            root.append(paragraph);
-          },
-          { tag: 'external' }
-        );
+        clearEmailBody(editor());
         resetState();
+        props.setShowReply?.(false);
       } else {
         toast.failure('Failed to delete draft');
       }
@@ -517,7 +506,7 @@ export function BaseInput(props: {
         scopeId: composeHotkeyScope,
         description: 'Send email',
         keyDownHandler: () => {
-          sendEmail_();
+          sendEmail();
           return true;
         },
         runWithInputFocused: true,
@@ -556,10 +545,11 @@ export function BaseInput(props: {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class={`macro-message-width relative flex-1 flex flex-col border border-edge px-3 py-2 bg-input`}
+      class="relative flex flex-col flex-1 bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px]"
     >
+      <BrightJoins dots={[false, false, true, true]} />
       {/* Top Bar */}
-      <div class="flex items-start gap-2">
+      <div class="flex items-start gap-2 p-2">
         <DropdownMenu>
           <DropdownMenu.Trigger>{ReplyIcon()}</DropdownMenu.Trigger>
           <DropdownMenu.Portal>
@@ -594,7 +584,7 @@ export function BaseInput(props: {
           when={showExpandedRecipients()}
           fallback={
             <div
-              class="flex items-center text-sm font-mono truncate overflow-hidden"
+              class="flex items-center text-sm font-mono truncate overflow-hidden mt-1"
               onclick={() => setShowExpandedRecipients(true)}
             >
               <Show
@@ -633,7 +623,7 @@ export function BaseInput(props: {
             </div>
           }
         >
-          <div ref={setExpandedRecipientsRef}>
+          <div ref={setExpandedRecipientsRef} class="w-full">
             {/* Expanded FROM */}
             <div class="flex flex-row items-baseline font-mono">
               <span class="text-sm text-ink-muted min-w-8">
@@ -739,7 +729,7 @@ export function BaseInput(props: {
           />
         </Show>
         <div
-          class="min-h-20 max-h-80 overflow-y-scroll w-full flex flex-col cursor-text"
+          class="min-h-20 max-h-80 overflow-y-scroll w-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 px-3 pt-2 sm:pb-4"
           ref={bodyDiv}
           onclick={() => {
             editor()?.focus();
@@ -765,12 +755,15 @@ export function BaseInput(props: {
             <FileDropOverlay>Drop file(s) to attach</FileDropOverlay>
           </div>
           <MarkdownTextarea
-            captureEditor={setEditor}
+            captureEditor={(editor) => {
+              setEditor(editor);
+              form().setCapturedEditor(editor);
+            }}
             class={`text-sm break-words text-ink ${isDragging() && 'blur'}`}
-            editable={() => true}
+            editable={() => !isPendingSend()}
             initialValue={props.preloadedBody}
             initialHtml={props.preloadedHtml}
-            placeholder=""
+            placeholder="Reply — @mention to share or cc people"
             onChange={handleChange}
             onDocumentMention={(item) => {
               makeAttachmentPublic(item.id);
@@ -779,15 +772,16 @@ export function BaseInput(props: {
             portalScope="local"
             formatState={formatState}
             setFormatState={setFormatState}
+            domRef={props.markdownDomRef}
           />
         </div>
-        <Show when={!replyAppended()}>
+        <Show when={!form().replyAppended()}>
           <div class="flex flex-row items-center space-x-2">
             <IconButton
               theme="clear"
               icon={DotsThree}
               onclick={() => {
-                setReplyAppended(true);
+                form().setReplyAppended(true);
                 editor()?.dispatchCommand(APPEND_PREVIOUS_EMAIL_COMMAND, {
                   replyingTo: props.replyingTo(),
                   replyType: effectiveReplyType(),
@@ -799,54 +793,63 @@ export function BaseInput(props: {
             />
           </div>
         </Show>
-        <div class="flex flex-row items-center space-x-2">
-          <div class="relative" ref={attachButtonRef}>
-            <IconButton
-              theme="clear"
-              icon={Plus}
-              tooltip={{ label: 'Attach' }}
-              onClick={() => setAttachMenuOpen(true)}
-            />
-            <AttachMenu
-              open={attachMenuOpen()}
-              close={() => setAttachMenuOpen(false)}
-              anchorRef={attachButtonRef}
-              containerRef={bodyDiv}
-              onAttach={onAttach}
-              onAttachDocuments={onAttachDocuments}
-              setIsPending={setIsPendingUpload}
-            />
-          </div>
-          <IconButton
-            theme="clear"
-            icon={TextAa}
-            onclick={() => {
-              setShowFormatRibbon(!showFormatRibbon());
-            }}
-          />
-          <Show when={savedDraftId()}>
-            <IconButton
-              theme="clear"
-              icon={Trash}
-              onclick={handleDeleteDraft}
-              tooltip={{ label: 'Delete draft' }}
-            />
-          </Show>
-          <div class="ml-auto flex flex-row">
-            <Show
-              when={!isPendingUpload()}
-              fallback={
-                <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
-              }
-            >
+        <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2 allow-css-brackets">
+          <div class="flex flex-row items-center gap-2">
+            <div class="relative" ref={attachButtonRef}>
               <IconButton
-                theme="clear"
-                icon={PaperPlaneRight}
-                tooltip={{ label: 'Send' }}
-                onClick={sendEmail_}
+                theme="base"
+                icon={Plus}
+                tooltip={{ label: 'Attach' }}
+                onClick={() => setAttachMenuOpen(true)}
+              />
+              <AttachMenu
+                open={attachMenuOpen()}
+                close={() => setAttachMenuOpen(false)}
+                anchorRef={attachButtonRef}
+                containerRef={bodyDiv}
+                onAttach={onAttach}
+                onAttachDocuments={onAttachDocuments}
+                setIsPending={setIsPendingUpload}
+              />
+            </div>
+            <IconButton
+              theme="base"
+              icon={TextAa}
+              onclick={() => {
+                setShowFormatRibbon(!showFormatRibbon());
+              }}
+            />
+            <Show when={savedDraftId()}>
+              <IconButton
+                theme="base"
+                icon={Trash}
+                onclick={handleDeleteDraft}
+                tooltip={{ label: 'Delete draft' }}
               />
             </Show>
           </div>
+          <button
+            disabled={isPendingUpload() || isPendingSend()}
+            onClick={() => {
+              sendEmail();
+            }}
+            class="text-ink-muted bg-transparent rounded-full hover:scale-110! transition ease-in-out delay-150 flex flex-col justify-center items-center"
+          >
+            <div class="bg-transparent rounded-full size-8 flex flex-row justify-center items-center">
+              <Show
+                when={!isPendingUpload() && !isPendingSend()}
+                fallback={
+                  <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
+                }
+              >
+                <ArrowFatLineUp
+                  width={20}
+                  height={20}
+                  class="!text-accent-ink !fill-accent"
+                />
+              </Show>
+            </div>
+          </button>
         </div>
       </div>
     </div>

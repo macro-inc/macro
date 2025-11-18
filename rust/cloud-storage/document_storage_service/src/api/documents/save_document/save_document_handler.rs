@@ -1,11 +1,10 @@
+use std::str::FromStr;
+
 use crate::{
     api::{context::ApiContext, documents::utils},
     model::{
         request::documents::save::SaveDocumentRequest,
-        response::documents::{
-            DocumentResponseMetadata,
-            save::{SaveDocumentResponse, SaveDocumentResponseData},
-        },
+        response::documents::save::{SaveDocumentResponse, SaveDocumentResponseData},
     },
 };
 use axum::{
@@ -17,8 +16,9 @@ use axum::{
 use macro_middleware::cloud_storage::ensure_access::{
     document::DocumentAccessExtractor, project::ProjectBodyAccessLevelExtractor,
 };
+use model::document::response::DocumentResponseMetadata;
 use model::{
-    document::{DocumentBasic, FileType, build_cloud_storage_bucket_document_key},
+    document::{DocumentBasic, FileType, FileTypeExt, build_cloud_storage_bucket_document_key},
     response::{ErrorResponse, GenericErrorResponse, GenericResponse},
     user::UserContext,
 };
@@ -73,7 +73,7 @@ pub async fn save_document_handler(
     let file_type: FileType = match document_context
         .file_type
         .as_deref()
-        .and_then(|f| f.try_into().ok())
+        .and_then(|f| FileType::from_str(f).ok())
     {
         Some(file_type) => file_type,
         None => {

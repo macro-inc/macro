@@ -1,17 +1,39 @@
-target/
-infra/
-**/fixtures/*
-**/migrations/*
-**/load-test/*
-search_processing_service/helpers/*
-convert_service/helpers/*
+# Git
 .gitignore
+
+# Docker
 .dockerignore
 Dockerfile*
+
+# Rust
+target/
 Cross.toml
+deny.toml
+
+# SQLX
+**/fixtures/*
+**/migrations/*
+
+# build
+justfile
+*.just
+*.sh
 Makefile
+scripts/
+
+# Helpers
+search_processing_service/helpers/*
+convert_service/helpers/*
+
+# Testing 
+**/load-test/*
+**/test.rs
+
+# Documentation 
 README.md
-build-local.sh
+CLAUDE.md
+
+# Mac stuff
 .DS_Store
 *.swp
 *.swo

@@ -1,9 +1,5 @@
 import { withAnalytics } from '@coparse/analytics';
 import { SUPPORTED_ATTACHMENT_EXTENSIONS } from '@core/component/AI/constant';
-import type { Item } from '@service-storage/generated/schemas/item';
-
-const { track, TrackingEvents } = withAnalytics();
-
 import {
   useChatAttachableHistory,
   useGetChatAttachmentInfo,
@@ -14,6 +10,7 @@ import { OldMenu, OldMenuItem } from '@core/component/OldMenu';
 import clickOutside from '@core/directive/clickOutside';
 import { fileSelector } from '@core/directive/fileSelector';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fuzzyFilter } from '@core/util/fuzzy';
 import { getItemBlockName } from '@core/util/getItemBlockName';
 import {
   autoUpdate,
@@ -26,7 +23,7 @@ import {
 import DeviceMobileIcon from '@icon/regular/device-mobile-speaker.svg';
 import LaptopIcon from '@icon/regular/laptop.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
-import fuzzy from 'fuzzy';
+import type { Item } from '@service-storage/generated/schemas/item';
 import {
   createEffect,
   createMemo,
@@ -35,6 +32,8 @@ import {
   Show,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
+
+const { track, TrackingEvents } = withAnalytics();
 
 // NOTE: solid directives
 false && fileSelector;
@@ -89,13 +88,8 @@ export function ChatAttachMenu(props: ChatAttachMenuProps) {
   };
 
   const rankedHistory = createMemo(() => {
-    const searchQuery = input().toLowerCase();
-    if (!searchQuery) return history();
-    return fuzzy
-      .filter(searchQuery, history(), {
-        extract: (item) => item.name,
-      })
-      .map((item) => item.original);
+    const searchQuery = input();
+    return fuzzyFilter(searchQuery, history(), (item) => item.name);
   });
 
   // Reset selected index when results change

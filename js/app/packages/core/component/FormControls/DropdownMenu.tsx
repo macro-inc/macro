@@ -1,5 +1,5 @@
 import MacroJump from '@app/component/MacroJump';
-import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { Popover, type PopoverRootProps } from '@kobalte/core/popover';
 import { createMutationObserver } from '@solid-primitives/mutation-observer';
 import {
@@ -30,13 +30,7 @@ const DropdownMenu: ParentComponent<
     ref?: (ref: HTMLButtonElement) => void | HTMLButtonElement;
   } & PopoverRootProps
 > = (props) => {
-  const { panelRef } = (() => {
-    try {
-      return useSplitPanelOrThrow();
-    } catch (_err) {
-      return { panelRef: undefined };
-    }
-  })();
+  const panelRef = useSplitPanel()?.panelRef;
   const [open, setOpen] = createSignal(props.open ?? false);
   const [triggerSize, setTriggerSize] = createSignal({ width: 0, height: 0 });
   const [popoverPosition, setPopoverPosition] = createSignal<
@@ -91,6 +85,7 @@ const DropdownMenu: ParentComponent<
     start();
     observe(_popoverPortalEl);
   });
+
   return (
     <Popover
       modal
@@ -106,9 +101,11 @@ const DropdownMenu: ParentComponent<
       <Popover.Trigger
         size={props.size}
         active={open()}
-        classList={{ '!block': true }}
+        classList={{
+          '!block': true,
+        }}
         as={Button}
-        theme="primary"
+        theme={props.theme}
         ref={triggerEl}
       >
         {props.triggerLabel}

@@ -25,6 +25,7 @@ import {
   useItemPreview,
 } from '@core/signal/preview';
 import { matches } from '@core/util/match';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import EyeSlashDuo from '@icon/duotone/eye-slash-duotone.svg';
 import TrashSimple from '@icon/duotone/trash-simple-duotone.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
@@ -313,6 +314,13 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
     });
   };
 
+  const navHandlers = useSplitNavigationHandler<HTMLSpanElement>((e) => {
+    e.stopPropagation();
+    if (matches(item(), (i) => !i.loading && i.access === 'access')) {
+      open(e);
+    }
+  });
+
   return (
     <>
       <span class="relative">
@@ -349,12 +357,7 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
               }
             }
           }}
-          on:click={(e) => {
-            e.stopPropagation();
-            if (matches(item(), (i) => !i.loading && i.access === 'access')) {
-              open(e);
-            }
-          }}
+          {...navHandlers}
         >
           <Switch>
             <Match when={item().loading}>

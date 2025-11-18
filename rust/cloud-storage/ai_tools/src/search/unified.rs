@@ -215,6 +215,7 @@ impl AsyncTool<ToolServiceContext, RequestContext> for UnifiedSearch {
             search_on: self.request.search_on,
             collapse: Some(false), // collapse=true will return one result per opensearch document
             include: self.request.include.clone(),
+            disable_recency: self.request.disable_recency,
         };
         tracing::info!(search_request=?search_request, "Unified search request");
 

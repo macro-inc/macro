@@ -26,16 +26,135 @@ import type {
   EntityQueryOperations,
   EntityQueryWithOperations,
 } from '../queries/entity';
-import {
-  type EntitiesFilter,
-  type EntityComparator,
-  type EntityData,
-  type EntityFilter,
-  type EntityMapper,
-  type EntityRenderer,
-  getEntityProjectId,
+import type {
+  EntitiesFilter,
+  EntityComparator,
+  EntityData,
+  EntityFilter,
+  EntityMapper,
+  EntityRenderer,
 } from '../types/entity';
+import type { WithSearch } from '../types/search';
+import { CustomScrollbar } from './CustomScrollbar';
 import { Entity } from './Entity';
+
+const isSearchEntity = (entity: EntityData): entity is WithSearch<EntityData> =>
+  'search' in entity;
+
+/**
+ * Merges search data from two entities, preferring service source with local as fallback.
+ * - Uses service entity as base
+ * - Falls back to local nameHighlight if service doesn't have one
+ * - Falls back to local contentHighlights if service doesn't have any
+ */
+const mergeSearchEntities = <T extends EntityData>(
+  first: T & WithSearch<EntityData>,
+  second: T & WithSearch<EntityData>
+): T => {
+  const serviceEntity = first.search.source === 'service' ? first : second;
+  const localEntity = first.search.source === 'local' ? first : second;
+
+  return {
+    ...serviceEntity,
+    search: {
+      ...serviceEntity.search,
+      nameHighlight:
+        serviceEntity.search.nameHighlight || localEntity.search.nameHighlight,
+      contentHighlights: serviceEntity.search.contentHighlights?.length
+        ? serviceEntity.search.contentHighlights
+        : localEntity.search.contentHighlights,
+    },
+  } as T;
+};
+
+/**
+ * Gets the timestamp of an entity (updatedAt or createdAt)
+ */
+const getEntityTimestamp = (entity: EntityData): number => {
+  return entity.updatedAt ?? entity.createdAt ?? 0;
+};
+
+/**
+ * Returns true if the new entity should replace the existing one based on timestamp
+ */
+const isNewerEntity = (
+  newEntity: EntityData,
+  existing: EntityData
+): boolean => {
+  return getEntityTimestamp(newEntity) > getEntityTimestamp(existing);
+};
+
+/**
+ * Deduplicates entities by id, preferring entities with search data from 'service' source
+ * over 'local' source, and using latest timestamp as a tiebreaker.
+ * When preferring service results, merges local nameHighlight if service doesn't have one.
+ */
+const deduplicateEntities = <T extends EntityData>(entities: T[]): T[] => {
+  const entityMap = new Map<string, T>();
+
+  for (const entity of entities) {
+    const existing = entityMap.get(entity.id);
+
+    if (!existing) {
+      entityMap.set(entity.id, entity);
+      continue;
+    }
+
+    const existingHasSearch = isSearchEntity(existing);
+    const newHasSearch = isSearchEntity(entity);
+
+    // Prefer entities with search data
+    if (newHasSearch && !existingHasSearch) {
+      entityMap.set(entity.id, entity);
+      continue;
+    }
+
+    // If both have search data, prefer 'service' over 'local'
+    if (existingHasSearch && newHasSearch) {
+      const existingSource = existing.search.source;
+      const newSource = entity.search.source;
+
+      if (
+        (newSource === 'service' && existingSource === 'local') ||
+        (existingSource === 'service' && newSource === 'local')
+      ) {
+        // Merge service and local search data
+        entityMap.set(entity.id, mergeSearchEntities(entity, existing));
+        continue;
+      }
+
+      // If both are the same source, keep the one with latest timestamp
+      if (isNewerEntity(entity, existing)) {
+        entityMap.set(entity.id, entity);
+      }
+      continue;
+    }
+
+    // If neither has search, keep the one with latest timestamp
+    if (!existingHasSearch && !newHasSearch) {
+      if (isNewerEntity(entity, existing)) {
+        entityMap.set(entity.id, entity);
+      }
+    }
+    // Otherwise keep existing (it has search and new doesn't)
+  }
+
+  return Array.from(entityMap.values());
+};
+
+/**
+ * Sorts entities for search mode
+ */
+const _sortEntitiesForSearch = <T extends EntityData>(a: T, b: T): number => {
+  const aHasSearch = isSearchEntity(a);
+  const bHasSearch = isSearchEntity(b);
+
+  if (aHasSearch && bHasSearch) {
+    // custom sort here
+  }
+
+  return 0;
+};
 
 const DEBOUNCE_FETCH_MORE_MS = 50;
 
@@ -63,14 +182,19 @@ const getOperations = <T extends Partial<EntityQueryOperations>>(
 };
 
 interface UnifiedInfiniteListContext<T extends EntityData> {
-  showProjects: Accessor<boolean>;
-  entityInfiniteQueries: Array<EntityQueryWithOperations<EntityInfiniteQuery>>;
-  entityQueries?: Array<EntityQueryWithOperations<EntityQuery>>;
+  entityInfiniteQueries: Array<
+    EntityQueryWithOperations<
+      EntityData | WithSearch<EntityData>,
+      EntityInfiniteQuery
+    >
+  >;
+  entityQueries?: Array<EntityQueryWithOperations<EntityData, EntityQuery>>;
   entityMapper?: EntityMapper<T>;
   requiredFilter?: Accessor<EntityFilter<T>>;
   optionalFilter?: Accessor<EntityFilter<T>>;
   entitySort?: Accessor<EntityComparator<T>>;
   searchFilter?: Accessor<EntitiesFilter<T> | undefined>;
+  isSearchActive?: Accessor<boolean>;
   // TODO: deduplicate entities for same match
   deduplicate?: Accessor<(prev: T, next: T) => boolean>;
 }
@@ -82,8 +206,8 @@ export function createUnifiedInfiniteList<T extends EntityData>({
   requiredFilter,
   optionalFilter,
   entitySort,
-  showProjects,
   searchFilter,
+  isSearchActive,
 }: UnifiedInfiniteListContext<T>) {
   const [sortedEntitiesStore, setSortedEntitiesStore] = createStore<T[]>([]);
   const allEntities = createMemo(() => {
@@ -168,54 +292,25 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     return entities;
   });
 
-  // deduplicate by id, taking latest timestamp
-  const deduplicatedEntities = createMemo(() => {
-    const entityMap = new Map<string, T>();
-    for (const entity of filteredEntities()) {
-      const id = entity.id;
-      const existing = entityMap.get(id);
-
-      if (existing) {
-        const existingTimestamp = existing.updatedAt ?? existing.createdAt ?? 0;
-        const newTimestamp = entity.updatedAt ?? entity.createdAt ?? 0;
-
-        if (newTimestamp > existingTimestamp) {
-          entityMap.set(id, entity);
-        }
-      } else {
-        entityMap.set(id, entity);
-      }
-    }
-
-    return Array.from(entityMap.values());
-  });
-
-  const projectFilterEntities = createMemo(() => {
-    const entities = deduplicatedEntities();
-    if (showProjects()) {
-      const projectEntityIds = new Set(
-        entities.filter((e) => e.type === 'project').map((p) => p.id)
-      );
-
-      // filter out all entities that have a projectid included in projectEntities
-      return entities.filter((e) => {
-        if (e.type === 'project') return true;
-        const projectId = getEntityProjectId(e);
-        if (projectId) return projectEntityIds.has(projectId);
-        return false;
-      });
-    } else {
-      return entities.filter((e) => e.type !== 'project');
-    }
-  });
+  const deduplicatedEntities = createMemo(() =>
+    deduplicateEntities(filteredEntities())
+  );
 
   const sortedEntities = createMemo<T[]>(() => {
-    // TODO: process entities in a pipeline
-    const entities = projectFilterEntities();
+    const entities = deduplicatedEntities();
     const sortFn = entitySort?.();
-    if (sortFn) return entities.toSorted(sortFn);
+    const searching = isSearchActive?.();
 
-    return entities;
+    if (searching) {
+      // NOTE: the default sort will be channels, then local fuzzy name, then serach service
+      // avoiding doing an extra sort as a speed optimization
+      return entities;
+      // return entities.toSorted(sortEntitiesForSearch);
+    }
+
+    if (!sortFn) return entities;
+
+    return entities.toSorted(sortFn);
   });
 
   const isLoading = createMemo(() => {
@@ -264,7 +359,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
   let noResultsTimeoutId: ReturnType<typeof setTimeout> | undefined;
   createEffect(
     on(
-      [() => sortedEntitiesStore.length, debouncedIsLoading],
+      [() => sortedEntities().length, debouncedIsLoading],
       ([entitiesLength, loading]) => {
         if (noResultsTimeoutId) clearTimeout(noResultsTimeoutId);
 
@@ -358,7 +453,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     // because it's possible that the match exists on the server
     createEffect(
       on(
-        [() => sortedEntitiesStore, viewportItemCount, loadingCount],
+        [sortedEntities, viewportItemCount, loadingCount],
         ([sortedEntities, viewportItemCount, loadingCount]) => {
           if (sortedEntities.length >= viewportItemCount) return;
           if (loadingCount > 0) return;
@@ -387,7 +482,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
           {/* TODO: Filtered Empty State */}
         </Match>
         <Match when={true}>
-          <div class="flex size-full" ref={setListRef}>
+          <div class="flex size-full relative" ref={setListRef}>
             <StaticMarkdownContext>
               <Fragment
                 ref={(el) => {
@@ -399,16 +494,14 @@ export function createUnifiedInfiniteList<T extends EntityData>({
                 <VList
                   ref={props.virtualizerHandle}
                   data={sortedEntitiesStore}
-                  class={LIST_WRAPPER}
+                  class={`${LIST_WRAPPER} scrollbar-hidden`}
                   data-unified-entity-list
                   overscan={computedOverscan()}
                 >
                   {(entity, index) => {
                     if (
                       untrack(index) ===
-                      Math.floor(
-                        untrack(() => sortedEntitiesStore).length * 0.9
-                      )
+                      Math.floor(untrack(sortedEntities).length * 0.9)
                     )
                       debouncedFetchMore();
                     return <EntityRenderer entity={entity} index={index()} />;
@@ -428,6 +521,17 @@ export function createUnifiedInfiniteList<T extends EntityData>({
               </div> */}
               </Fragment>
             </StaticMarkdownContext>
+            <CustomScrollbar
+              scrollContainer={() => {
+                // Find the actual scroll container (VList creates its own scroll container)
+                const listEl = listRef();
+                if (!listEl) return undefined;
+                const scrollContainer = listEl.querySelector(
+                  '[data-unified-entity-list]'
+                ) as HTMLElement;
+                return scrollContainer || undefined;
+              }}
+            />
           </div>
         </Match>
       </Switch>

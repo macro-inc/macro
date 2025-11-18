@@ -70,7 +70,7 @@ export function MessageReactions(props: MessageReactionsProps) {
                           ${
                             didCurrentUserReact
                               ? 'text-accent-ink border border-accent'
-                              : 'hover:bg-hover transition-transform border border-edge transition-none hover:transition hover:scale-105'
+                              : 'hover:bg-hover transition-transform border border-edge-muted transition-none hover:transition hover:scale-105'
                           } 
                           cursor-default h-8
                         `}

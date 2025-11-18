@@ -85,6 +85,7 @@ pub async fn handler(
     // no filters means search all
     let filters = req.filters.unwrap_or_default();
     let match_type = req.match_type;
+    let disable_recency = req.disable_recency;
 
     let mut tasks = FuturesUnordered::new();
 
@@ -103,6 +104,7 @@ pub async fn handler(
             filters: filters.document,
             search_on,
             collapse: Some(collapse),
+            disable_recency,
         };
 
         let ctx = ctx.clone();
@@ -127,6 +129,7 @@ pub async fn handler(
             filters: filters.chat,
             search_on,
             collapse: Some(collapse),
+            disable_recency,
         };
 
         let ctx = ctx.clone();
@@ -151,6 +154,7 @@ pub async fn handler(
             filters: filters.email,
             search_on,
             collapse: Some(collapse),
+            disable_recency,
         };
 
         let ctx = ctx.clone();
@@ -175,6 +179,7 @@ pub async fn handler(
             filters: filters.channel,
             search_on,
             collapse: Some(collapse),
+            disable_recency,
         };
 
         let ctx = ctx.clone();
@@ -208,6 +213,7 @@ pub async fn handler(
             filters: filters.project,
             search_on,
             collapse: Some(collapse),
+            disable_recency,
         };
 
         let ctx = ctx.clone();

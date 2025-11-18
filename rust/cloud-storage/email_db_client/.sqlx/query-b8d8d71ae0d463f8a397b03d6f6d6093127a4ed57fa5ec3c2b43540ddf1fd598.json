@@ -11,7 +11,7 @@
         "TextArray",
         {
           "Custom": {
-            "name": "_email_message_list_visibility_enum",
+            "name": "email_message_list_visibility_enum[]",
             "kind": {
               "Array": {
                 "Custom": {
@@ -29,7 +29,7 @@
         },
         {
           "Custom": {
-            "name": "_email_label_list_visibility_enum",
+            "name": "email_label_list_visibility_enum[]",
             "kind": {
               "Array": {
                 "Custom": {
@@ -48,7 +48,7 @@
         },
         {
           "Custom": {
-            "name": "_email_label_type_enum",
+            "name": "email_label_type_enum[]",
             "kind": {
               "Array": {
                 "Custom": {

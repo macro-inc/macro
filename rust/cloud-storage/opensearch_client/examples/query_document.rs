@@ -21,12 +21,13 @@ async fn main() -> anyhow::Result<()> {
             search_on: SearchOn::Content,
             ids_only: false,
             collapse: false,
+            disable_recency: false,
         })
         .await?;
 
     for document in result {
         println!("{:?}", document.document_id);
-        println!("{:?}", document.content);
+        println!("{:?}", document.highlight);
     }
 
     Ok(())

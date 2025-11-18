@@ -4,13 +4,13 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SimpleProjectSearchResponseBaseItemContent } from './simpleProjectSearchResponseBaseItemContent';
+import type { SearchHighlight } from './searchHighlight';
 
 export interface SimpleProjectSearchResponseBaseItem {
-  /** The opensearch matches on the project */
-  content?: SimpleProjectSearchResponseBaseItemContent;
   /** The time the project was created */
   created_at: number;
+  /** The highlights on the project */
+  highlight: SearchHighlight;
   /** The project id */
   project_id: string;
   /** The project name */

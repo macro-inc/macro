@@ -19,7 +19,7 @@ const LEGACY_PRIVATE_SUBNETS = [
 export function get_coparse_api_vpc() {
   return {
     vpcId: 'vpc-0c7510191d4fc9263',
-    privateSubnetIds: LEGACY_PRIVATE_SUBNETS.map(n => n.value),
+    privateSubnetIds: LEGACY_PRIVATE_SUBNETS.map((n) => n.value),
     publicSubnetIds: [
       'subnet-0911c0ebea104055d', // CoparseApiOrganizationVPCStack/coparse-api-vpc/public-dataSubnet1
       'subnet-0269c74c37f76ddab', // CoparseApiOrganizationVPCStack/coparse-api-vpc/public-dataSubnet2
@@ -29,9 +29,9 @@ export function get_coparse_api_vpc() {
 }
 
 export function coparse_api_vpc_filtered_subnets(az: string[]) {
-  const result = LEGACY_PRIVATE_SUBNETS.filter(n => az.includes(n.az));
+  const result = LEGACY_PRIVATE_SUBNETS.filter((n) => az.includes(n.az));
   if (result.length === 0) {
     throw new Error('no valid subnets after filter');
   }
-  return result.map(n => n.value);
+  return result.map((n) => n.value);
 }

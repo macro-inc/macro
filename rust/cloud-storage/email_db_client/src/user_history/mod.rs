@@ -29,9 +29,9 @@ pub async fn upsert_user_history(
     Ok(())
 }
 
-// get history info for threads. created_at is when the first message was created, updated_at is when
-// the latest message was created, viewed_at is the last time the thread was opened by the user
-#[tracing::instrument(skip(pool), level = "info")]
+/// get history info for threads. created_at is when the first message was created, updated_at is when
+/// the latest message was created, viewed_at is the last time the thread was opened by the user
+#[tracing::instrument(skip(pool), err)]
 pub async fn get_thread_summary_info(
     pool: &PgPool,
     link_id: Uuid,
@@ -47,12 +47,13 @@ pub async fn get_thread_summary_info(
             m.thread_id,
             MIN(m.created_at) as "earliest_created_at!",
             MAX(m.created_at) as "latest_updated_at!",
-            uh.updated_at as "viewed_at?"
+            uh.updated_at as "viewed_at?",
+            m.snippet
         FROM email_messages m
         LEFT JOIN email_user_history uh ON uh.thread_id = m.thread_id AND uh.link_id = $1
         WHERE m.thread_id = ANY($2)
         AND m.link_id = $1
-        GROUP BY m.thread_id, uh.updated_at
+        GROUP BY m.thread_id, uh.updated_at, m.snippet
         "#,
         link_id,
         thread_ids
@@ -66,6 +67,7 @@ pub async fn get_thread_summary_info(
     for row in rows {
         let summary_info = ThreadHistoryInfo {
             item_id: row.thread_id,
+            snippet: row.snippet,
             created_at: row.earliest_created_at,
             updated_at: row.latest_updated_at,
             viewed_at: row.viewed_at.and_then(|viewed| {

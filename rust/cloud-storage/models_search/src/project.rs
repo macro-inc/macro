@@ -1,4 +1,4 @@
-use crate::{MatchType, SearchOn, SearchResponse, SearchResponseItem};
+use crate::{MatchType, SearchHighlight, SearchOn, SearchResponse, SearchResponseItem};
 use item_filters::ProjectFilters;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -6,8 +6,7 @@ use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ProjectSearchResult {
-    /// array of content matches for a project
-    pub content: Vec<String>,
+    pub highlight: SearchHighlight,
 }
 
 /// Metadata associated with Project Search, to be used with SearchResponseItem
@@ -74,6 +73,10 @@ pub struct ProjectSearchRequest {
     pub terms: Option<Vec<String>>,
     /// The match type to use when searching
     pub match_type: MatchType,
+    /// If search_on is set to NameContent, you can disable the recency filter
+    /// by setting to true.
+    #[serde(default)]
+    pub disable_recency: bool,
     /// Search filters for chat
     #[serde(flatten)]
     pub filters: Option<ProjectFilters>,
@@ -98,8 +101,8 @@ pub struct SimpleProjectSearchResponseBaseItem<T> {
     pub project_name: String,
     /// The id of the user who created the project
     pub user_id: String,
-    /// The opensearch matches on the project
-    pub content: Option<Vec<String>>,
+    /// The highlights on the project
+    pub highlight: SearchHighlight,
 }
 
 pub type SimpleProjectSearchResponseItem =
@@ -115,7 +118,7 @@ impl From<opensearch_client::search::projects::ProjectSearchResponse>
             created_at: response.created_at.into(),
             project_name: response.project_name,
             user_id: response.user_id,
-            content: response.content,
+            highlight: response.highlight.into(),
         }
     }
 }

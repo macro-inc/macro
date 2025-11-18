@@ -45,7 +45,7 @@ macro_rules! delegate_methods {
 
 pub trait SearchQueryConfig {
     /// Key for item id
-    const ID_KEY: &'static str;
+    const ID_KEY: &'static str = "entity_id";
     /// Index name
     #[allow(dead_code)]
     const INDEX: &'static str;
@@ -59,10 +59,10 @@ pub trait SearchQueryConfig {
     /// Returns the default sort types that are used on the search query.
     /// Override this method if you need custom sort logic
     fn default_sort_types() -> Vec<SortType> {
-        vec![SortType::Field(FieldSort::new(
-            "updated_at_seconds",
-            SortOrder::Desc,
-        ))]
+        vec![
+            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
+            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
+        ]
     }
 
     /// Override this method if you need custom highlight logic
@@ -70,7 +70,7 @@ pub trait SearchQueryConfig {
         Highlight::new().require_field_match(true).field(
             "content",
             HighlightField::new()
-                .highlight_type("unified")
+                .highlight_type("plain")
                 .pre_tags(vec![MacroEm::Open.to_string()])
                 .post_tags(vec![MacroEm::Close.to_string()])
                 .number_of_fragments(500),
@@ -103,6 +103,9 @@ pub struct SearchQueryBuilder<T: SearchQueryConfig> {
     pub ids_only: bool,
     /// The ids to search for defaults to an empty vector
     pub ids: Vec<String>,
+    /// If true, disable the recency filter.
+    /// This only applies to the NameContent search_on
+    pub disable_recency: bool,
 
     _phantom: std::marker::PhantomData<T>,
 }
@@ -119,6 +122,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             collapse: false,
             ids_only: false,
             ids: Vec::new(),
+            disable_recency: false,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -160,6 +164,11 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
     pub fn ids(mut self, ids: Vec<String>) -> Self {
         self.ids = ids;
+        self
+    }
+
+    pub fn disable_recency(mut self, disable_recency: bool) -> Self {
+        self.disable_recency = disable_recency;
         self
     }
 
@@ -208,23 +217,12 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             search_request.collapse(Collapse::new(T::ID_KEY));
         }
 
-        // We need to set the sort and highlight and any aggs depending on the search_on
-        let sort_types = match self.search_on {
-            SearchOn::Name | SearchOn::Content => T::default_sort_types(),
-            SearchOn::NameContent => {
-                vec![
-                    SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-                    SortType::Field(FieldSort::new(T::ID_KEY, SortOrder::Asc)),
-                ]
-            }
-        };
-
         let highlight = match self.search_on {
             SearchOn::Content => T::default_highlight(),
             SearchOn::Name => Highlight::new().require_field_match(true).field(
                 T::TITLE_KEY,
                 HighlightField::new()
-                    .highlight_type("unified")
+                    .highlight_type("plain")
                     .pre_tags(vec![MacroEm::Open.to_string()])
                     .post_tags(vec![MacroEm::Close.to_string()])
                     .number_of_fragments(1),
@@ -234,7 +232,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                 .field(
                     T::TITLE_KEY,
                     HighlightField::new()
-                        .highlight_type("unified")
+                        .highlight_type("plain")
                         .pre_tags(vec![MacroEm::Open.to_string()])
                         .post_tags(vec![MacroEm::Close.to_string()])
                         .number_of_fragments(1),
@@ -242,7 +240,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                 .field(
                     T::CONTENT_KEY,
                     HighlightField::new()
-                        .highlight_type("unified")
+                        .highlight_type("plain")
                         .pre_tags(vec![MacroEm::Open.to_string()])
                         .post_tags(vec![MacroEm::Close.to_string()])
                         .number_of_fragments(1),
@@ -250,7 +248,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         };
 
         search_request.highlight(highlight);
-        search_request.set_sorts(sort_types);
+        search_request.set_sorts(T::default_sort_types());
 
         search_request.from(self.page * self.page_size);
         search_request.size(self.page_size);
@@ -258,31 +256,35 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         let built_query: QueryType = match self.search_on {
             SearchOn::Name | SearchOn::Content => query_object.into(),
             SearchOn::NameContent => {
-                let mut function_score_query = FunctionScoreQueryBuilder::new();
+                if self.disable_recency {
+                    query_object.into()
+                } else {
+                    let mut function_score_query = FunctionScoreQueryBuilder::new();
 
-                function_score_query.query(query_object.into());
+                    function_score_query.query(query_object.into());
 
-                function_score_query.function(ScoreFunction {
-                    function: ScoreFunctionType::Gauss(DecayFunction {
-                        field: "updated_at_seconds".to_string(),
-                        origin: Some("now".into()),
-                        scale: "21d".to_string(),
-                        offset: Some("3d".to_string()),
-                        decay: Some(0.5),
-                    }),
-                    filter: None,
-                    weight: Some(1.3),
-                });
+                    function_score_query.function(ScoreFunction {
+                        function: ScoreFunctionType::Gauss(DecayFunction {
+                            field: "updated_at_seconds".to_string(),
+                            origin: Some("now".into()),
+                            scale: "21d".to_string(),
+                            offset: Some("3d".to_string()),
+                            decay: Some(0.5),
+                        }),
+                        filter: None,
+                        weight: Some(1.3),
+                    });
 
-                function_score_query.boost_mode(BoostMode::Multiply);
-                function_score_query.score_mode(ScoreMode::Multiply);
+                    function_score_query.boost_mode(BoostMode::Multiply);
+                    function_score_query.score_mode(ScoreMode::Multiply);
 
-                function_score_query.build().into()
+                    function_score_query.build().into()
+                }
             }
         };
 
         // We need to add aggregration and tracking to the query if we are searching on NameContent
-        if self.search_on == SearchOn::NameContent {
+        if self.search_on == SearchOn::NameContent && !self.disable_recency {
             search_request.track_total_hits(true);
             search_request.add_agg(
                 "total_uniques".to_string(),

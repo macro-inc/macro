@@ -3,19 +3,17 @@ import {
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
+import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { Button } from '@core/component/FormControls/Button';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
-import { IconButton } from '@core/component/IconButton';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import {
-  ENABLE_FOLDER_UPLOAD,
-  ENABLE_SEARCH_VIEW,
-} from '@core/constant/featureFlags';
+import { ENABLE_FOLDER_UPLOAD } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
+import type { BlockOrchestrator } from '@core/orchestrator';
 import {
   CONDITIONAL_VIEWS,
   DEFAULT_VIEWS,
@@ -23,27 +21,23 @@ import {
   VIEWS,
   type View,
   type ViewId,
+  type ViewLabel,
 } from '@core/types/view';
 import { handleFileFolderDrop } from '@core/util/upload';
-import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
-import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
-import XIcon from '@icon/regular/x.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Tabs } from '@kobalte/core/tabs';
+import type { EntityData } from '@macro-entity';
 import {
   queryKeys,
   useQueryClient as useEntityQueryClient,
 } from '@macro-entity';
 import { createEffectOnEntityTypeNotification } from '@notifications/notificationHelpers';
 import { storageServiceClient } from '@service-storage/client';
-import { debounce } from '@solid-primitives/scheduled';
 import { Navigate } from '@solidjs/router';
 import { useMutation, useQueryClient } from '@tanstack/solid-query';
 import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import {
-  type Accessor,
-  batch,
   type Component,
   createMemo,
   createRenderEffect,
@@ -51,9 +45,7 @@ import {
   For,
   Match,
   onCleanup,
-  onMount,
   type ParentComponent,
-  type Setter,
   Show,
   Suspense,
   Switch,
@@ -63,59 +55,38 @@ import { EntityModal } from './EntityModal/EntityModal';
 import { HelpDrawer } from './HelpDrawer';
 import { SplitHeaderLeft } from './split-layout/components/SplitHeader';
 import { SplitTabs } from './split-layout/components/SplitTabs';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from './split-layout/components/SplitToolbar';
+import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
+import type { SplitPanelContextType } from './split-layout/context';
 import { SplitPanelContext } from './split-layout/context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { UnifiedListView } from './UnifiedListView';
 import {
   VIEWCONFIG_BASE,
-  VIEWCONFIG_DEFAULTS_NAMES,
+  VIEWCONFIG_DEFAULTS_IDS,
   type ViewConfigBase,
-  type ViewConfigDefaultsName,
 } from './ViewConfig';
 
 false && fileFolderDrop;
 
 const ViewTab: ParentComponent<{
-  view: ViewId;
-  isLoading: Accessor<boolean>;
-  setIsLoading: Setter<boolean>;
+  viewId: ViewId;
 }> = (props) => {
   return (
-    <Tabs.Content class="flex flex-col size-full" value={props.view}>
+    <Tabs.Content class="flex flex-col size-full" value={props.viewId}>
       {/* If Kobalte TabContent recieves Suspense as direct child, Suspense owner doesn't cleanup and causes memory leak */}
       {/* Make sure Suspense isn't root child by by wrapping children with DOM node */}
       <div class="contents">{props.children}</div>
-      <SearchBar
-        viewId={props.view}
-        isLoading={props.isLoading}
-        setIsLoading={props.setIsLoading}
-      />
     </Tabs.Content>
   );
 };
 
 const DefaultViewTab: Component<{
-  view: ViewId;
-  searchText: string;
-  isLoading: Accessor<boolean>;
-  setIsLoading: Setter<boolean>;
+  viewId: ViewId;
 }> = (props) => {
   return (
-    <ViewTab
-      view={props.view}
-      isLoading={props.isLoading}
-      setIsLoading={props.setIsLoading}
-    >
+    <ViewTab viewId={props.viewId}>
       <Suspense>
-        <UnifiedListView
-          viewId={props.view}
-          searchText={props.searchText}
-          onLoadingChange={props.setIsLoading}
-        />
+        <UnifiedListView />
       </Suspense>
     </ViewTab>
   );
@@ -123,61 +94,118 @@ const DefaultViewTab: Component<{
 
 const ConditionalViewTab: ParentComponent<{
   view: Exclude<View, DefaultView>;
-  isLoading: Accessor<boolean>;
-  setIsLoading: Setter<boolean>;
 }> = (props) => {
   return (
     <Show when={VIEWS.includes(props.view)}>
-      <ViewTab
-        view={props.view}
-        isLoading={props.isLoading}
-        setIsLoading={props.setIsLoading}
-      >
-        {props.children}
-      </ViewTab>
+      <ViewTab viewId={props.view}>{props.children}</ViewTab>
     </Show>
   );
 };
 
-const UltimateView: Component<{ view: ViewId }> = (props) => {
-  const { getSelectedViewStore: viewData } =
-    useSplitPanelOrThrow().unifiedListContext;
-  const searchText = createMemo<string>(() => viewData().searchText ?? '');
-  const [isLoading, setIsLoading] = createSignal(false);
-
+const ViewWithSearch: Component<{
+  viewId: ViewId;
+}> = (props) => {
   return (
     <Switch>
-      <Match when={props.view === 'emails'}>
-        <ConditionalViewTab
-          view="emails"
-          isLoading={isLoading}
-          setIsLoading={setIsLoading}
-        >
+      <Match when={props.viewId === 'emails'}>
+        <ConditionalViewTab view="emails">
           <Suspense>
-            <EmailView searchText={searchText()} setIsLoading={setIsLoading} />
+            <EmailView />
           </Suspense>
         </ConditionalViewTab>
       </Match>
-      <Match when={props.view === 'all'}>
-        <ConditionalViewTab
-          view="all"
-          isLoading={isLoading}
-          setIsLoading={setIsLoading}
-        >
+      <Match when={props.viewId === 'all'}>
+        <ConditionalViewTab view="all">
           <Suspense>
-            <AllView searchText={searchText()} setIsLoading={setIsLoading} />
+            <AllView />
           </Suspense>
         </ConditionalViewTab>
       </Match>
       <Match when={true}>
-        <DefaultViewTab
-          view={props.view}
-          searchText={searchText()}
-          isLoading={isLoading}
-          setIsLoading={setIsLoading}
-        />
+        <DefaultViewTab viewId={props.viewId} />
       </Match>
     </Switch>
+  );
+};
+
+const PreviewPanelContent: Component<{
+  selectedEntity: EntityData;
+  orchestrator: BlockOrchestrator;
+  splitPanelContext: SplitPanelContextType;
+}> = (props) => {
+  const blockInstance = () =>
+    props.orchestrator.createBlockInstance(
+      props.selectedEntity.type === 'document'
+        ? fileTypeToBlockName(props.selectedEntity.fileType)
+        : props.selectedEntity.type,
+      props.selectedEntity.id
+    );
+  const [interactedWithMouseDown, setInteractedWithMouseDown] =
+    createSignal(false);
+
+  createRenderEffect((prevId: string) => {
+    const id = props.selectedEntity.id;
+    if (id !== prevId) {
+      setInteractedWithMouseDown(false);
+    }
+    return id;
+  }, props.selectedEntity.id);
+
+  return (
+    <div
+      class="size-full"
+      onFocusIn={(event) => {
+        if (interactedWithMouseDown()) return;
+        const relatedTarget = event.relatedTarget as HTMLElement;
+        const currentTarget = event.currentTarget as HTMLElement;
+
+        if (!currentTarget.contains(relatedTarget)) {
+          relatedTarget.focus();
+        }
+      }}
+      onPointerDown={() => {
+        setInteractedWithMouseDown(true);
+      }}
+    >
+      <SplitPanelContext.Provider
+        value={{
+          ...props.splitPanelContext,
+          layoutRefs: {
+            ...props.splitPanelContext.layoutRefs,
+            headerLeft: undefined,
+            headerRight: undefined,
+          },
+          halfSplitState: () => ({
+            side: 'right',
+            percentage: 30,
+          }),
+        }}
+      >
+        <Dynamic component={blockInstance().element} />
+      </SplitPanelContext.Provider>
+    </div>
+  );
+};
+
+const PreviewPanel: Component<{
+  selectedEntity: EntityData | undefined;
+  orchestrator: BlockOrchestrator;
+  splitPanelContext: SplitPanelContextType;
+}> = (props) => {
+  return (
+    <div class="flex flex-row size-full w-[70%] shrink-0">
+      <Show
+        when={props.selectedEntity?.type !== 'project' && props.selectedEntity}
+      >
+        {(selectedEntity) => (
+          <PreviewPanelContent
+            selectedEntity={selectedEntity()}
+            orchestrator={props.orchestrator}
+            splitPanelContext={props.splitPanelContext}
+          />
+        )}
+      </Show>
+    </div>
   );
 };
 
@@ -198,36 +226,25 @@ export function Soup() {
     },
   } = splitPanelContext;
   const view = createMemo(() => viewsData[selectedView()]);
-  const preview = () => view().display.preview;
+  // Use preview state from SplitPanelContext (created in SplitLayout for unified-list)
+  const previewState = () => splitPanelContext.previewState;
+  const preview = () => previewState()?.[0]?.() ?? false;
+  const setPreview = (value: boolean | ((prev: boolean) => boolean)) => {
+    const state = previewState();
+    if (state) {
+      const [, setState] = state;
+      if (typeof value === 'function') {
+        setState((prev) => value(prev));
+      } else {
+        setState(value);
+      }
+    }
+  };
   const selectedEntity = () => view().selectedEntity;
 
   const orchestrator = useGlobalBlockOrchestrator();
 
   const entityQueryClient = useEntityQueryClient();
-
-  onMount(() => {
-    if (!ENABLE_SEARCH_VIEW) return;
-
-    const { dispose } = registerHotkey({
-      hotkey: ['/'],
-      scopeId: splitHotkeyScope,
-      description: 'Search in current view',
-      hotkeyToken: TOKENS.soup.openSearch,
-      keyDownHandler: () => {
-        setTimeout(() => {
-          const searchInput = document.getElementById(
-            `search-input-${selectedView()}`
-          ) as HTMLInputElement;
-          searchInput?.focus();
-        }, 0);
-        return true;
-      },
-      displayPriority: 5,
-    });
-    onCleanup(() => {
-      dispose();
-    });
-  });
 
   registerHotkey({
     hotkey: ['shift+/'],
@@ -243,6 +260,19 @@ export function Soup() {
       }
       return true;
     },
+  });
+
+  registerHotkey({
+    hotkey: ['p'],
+    scopeId: splitHotkeyScope,
+    description: 'Toggle Preview',
+    hotkeyToken: TOKENS.unifiedList.togglePreview,
+    keyDownHandler: () => {
+      playSound('open');
+      setPreview((prev) => !prev);
+      return true;
+    },
+    hide: true,
   });
 
   const [isDragging, setIsDragging] = createSignal(false);
@@ -294,17 +324,17 @@ export function Soup() {
 
   const TabContextMenu = (props: { value: ViewId; label: string }) => {
     const [isModalOpen, setIsModalOpen] = createSignal(false);
+    const isDefaultView = () =>
+      VIEWCONFIG_DEFAULTS_IDS.includes(props.value as View);
     return (
-      <Show when={!VIEWCONFIG_DEFAULTS_NAMES.includes(props.value as any)}>
+      <Show when={!isDefaultView()}>
         <ContextMenu>
           <ContextMenu.Trigger class="absolute inset-0" />
           <ContextMenu.Portal>
             <ContextMenuContent mobileFullScreen>
               <MenuItem
                 text="Rename"
-                disabled={VIEWCONFIG_DEFAULTS_NAMES.includes(
-                  props.value as any
-                )}
+                disabled={isDefaultView()}
                 onClick={() => {
                   setTimeout(() => {
                     setIsModalOpen(true);
@@ -314,9 +344,7 @@ export function Soup() {
               />
               <MenuItem
                 text="Delete"
-                disabled={VIEWCONFIG_DEFAULTS_NAMES.includes(
-                  props.value as any
-                )}
+                disabled={isDefaultView()}
                 onClick={() => {
                   saveViewMutation.mutate({
                     id: props.value,
@@ -373,7 +401,7 @@ export function Soup() {
         >
           <Tabs
             ref={tabsRef}
-            class="@container/soup flex flex-col gap-1 size-full p-2 overflow-x-clip"
+            class="@container/soup flex flex-col gap-1 size-full overflow-x-clip"
             classList={{
               'border-r border-edge-muted': preview(),
               'pt-2 pb-0': showHelpDrawer().has(selectedView()),
@@ -412,255 +440,44 @@ export function Soup() {
               />
             </SplitHeaderLeft>
             <For each={Object.keys(viewsData)}>
-              {(viewId) => <UltimateView view={viewId} />}
+              {(viewId) => <ViewWithSearch viewId={viewId} />}
             </For>
           </Tabs>
         </SplitPanelContext.Provider>
         <Show when={preview()}>
-          <div class="flex flex-row size-full w-[70%] shrink-0">
-            {/* must access property, id, on selectedEntity in order to make it reactive   */}
-            <Show when={selectedEntity()?.id && selectedEntity()}>
-              {(_) => {
-                const entity = selectedEntity()!;
-                const blockInstance = () =>
-                  orchestrator.createBlockInstance(
-                    entity.type === 'document'
-                      ? fileTypeToBlockName(entity.fileType)
-                      : entity.type,
-                    entity.id
-                  );
-                const [interactedWithMouseDown, setInteractedWithMouseDown] =
-                  createSignal(false);
-
-                // Reset interaction state whenever the previewed entity changes
-                createRenderEffect(
-                  (prevId: string | undefined) => {
-                    const id = entity.id as string | undefined;
-                    if (id !== prevId) {
-                      setInteractedWithMouseDown(false);
-                    }
-                    return id;
-                  },
-                  entity.id as string | undefined
-                );
-
-                return (
-                  <div
-                    class="size-full"
-                    onFocusIn={(event) => {
-                      if (interactedWithMouseDown()) return;
-                      const relatedTarget = event.relatedTarget as HTMLElement;
-                      const currentTarget = event.currentTarget as HTMLElement;
-
-                      if (!currentTarget.contains(relatedTarget)) {
-                        relatedTarget.focus();
-                      }
-                    }}
-                    onPointerDown={() => {
-                      setInteractedWithMouseDown(true);
-                    }}
-                  >
-                    <SplitPanelContext.Provider
-                      value={{
-                        ...splitPanelContext,
-                        layoutRefs: {
-                          ...splitPanelContext.layoutRefs,
-                          headerLeft: undefined,
-                          headerRight: undefined,
-                        },
-                        halfSplitState: () => ({
-                          side: 'right',
-                          percentage: 30,
-                        }),
-                      }}
-                    >
-                      <Dynamic component={blockInstance().element} />
-                    </SplitPanelContext.Provider>
-                  </div>
-                );
-              }}
-            </Show>
-          </div>
+          <PreviewPanel
+            selectedEntity={selectedEntity()}
+            orchestrator={orchestrator}
+            splitPanelContext={splitPanelContext}
+          />
         </Show>
       </div>
       <Show when={showHelpDrawer().has(selectedView())}>
-        <HelpDrawer view={view().view} />
+        <HelpDrawer viewId={view().id} />
       </Show>
     </div>
   );
 }
 
-function SearchBar(props: {
-  viewId: ViewId;
-  isLoading: Accessor<boolean>;
-  setIsLoading: Setter<boolean>;
-}) {
-  const {
-    getSelectedViewStore: viewData,
-    setSelectedViewStore,
-    entitiesSignal: [entities],
-    virtualizerHandleSignal: [virtualizerHandle],
-    entityListRefSignal: [entityListRef],
-  } = useSplitPanelOrThrow().unifiedListContext;
-
-  let inputRef: HTMLInputElement | undefined;
-
-  const searchText = createMemo<string>(() => viewData().searchText ?? '');
-  const setSearchText = (text: string) => {
-    setSelectedViewStore('searchText', text);
-  };
-
-  const debouncedSetSearch = debounce(setSearchText, 200);
-
-  const isElementInViewport = (element: Element): Promise<boolean> => {
-    return new Promise((resolve) => {
-      const observer = new IntersectionObserver(
-        (entries) => {
-          resolve(entries[0].isIntersecting);
-          observer.disconnect();
-        },
-        { threshold: 0.1 }
-      );
-      observer.observe(element);
-    });
-  };
-
-  const focusFirstEntity = async () => {
-    const highlightedId = viewData()?.highlightedId;
-    const id = highlightedId;
-
-    if (id) {
-      const highlightedEntityEl = entityListRef()?.querySelector(
-        `[data-entity-id="${id}"]`
-      );
-
-      if (
-        highlightedEntityEl instanceof HTMLElement &&
-        (await isElementInViewport(highlightedEntityEl))
-      ) {
-        highlightedEntityEl.focus();
-        const entity = entities()?.find(({ id: entityId }) => entityId === id);
-        if (entity) {
-          setSelectedViewStore('selectedEntity', entity);
-          return;
-        }
-      }
-    }
-
-    // Fallback to first entity
-    const firstEntity = entityListRef()?.querySelector('[data-entity]');
-    if (firstEntity instanceof HTMLElement) firstEntity.focus();
-  };
-
-  const [waitForLoadingEnd, setWaitForLoadingEnd] = createSignal(false);
-
-  // When search text changes, mark that we're waiting for loading to end
-  createRenderEffect((prevText: string) => {
-    const text = searchText().trim();
-    if (text !== prevText) {
-      batch(() => {
-        setSelectedViewStore('selectedEntity', undefined);
-        setSelectedViewStore('highlightedId', undefined);
-      });
-      virtualizerHandle()?.scrollToIndex(0);
-      setWaitForLoadingEnd(true);
-    }
-    return text;
-  }, searchText());
-
-  // When we're no longer loading but still waiting, reset the list
-  createRenderEffect((prevLoading: boolean) => {
-    const loading = props.isLoading();
-
-    if (prevLoading && !loading && waitForLoadingEnd()) {
-      // Loading just ended and we were waiting for it
-      setWaitForLoadingEnd(false);
-      virtualizerHandle()?.scrollToIndex(0);
-    }
-
-    return loading;
-  }, props.isLoading());
-
-  return (
-    <SplitToolbarLeft>
-      <div class="flex mx-2 h-full items-center gap-1">
-        <Show
-          when={!props.isLoading() || !searchText()}
-          fallback={
-            <LoadingSpinner class="w-4 h-4 text-ink-muted animate-spin shrink-0" />
-          }
-        >
-          <SearchIcon class="w-4 h-4 text-ink-muted shrink-0" />
-        </Show>
-        <input
-          ref={inputRef}
-          id={`search-input-${props.viewId}`}
-          placeholder="Search"
-          value={searchText()}
-          onInput={(e) => {
-            debouncedSetSearch(e.target.value);
-          }}
-          onKeyDown={(e) => {
-            if (
-              e.key === 'Escape' ||
-              e.key === 'ArrowDown' ||
-              e.key === 'Enter'
-            ) {
-              e.preventDefault();
-              e.currentTarget.blur();
-              focusFirstEntity();
-            }
-          }}
-          class="p-1 pr-0 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 flex-1 text-ink text-sm truncate"
-        />
-        <Show when={searchText()}>
-          <IconButton
-            theme="clear"
-            size="sm"
-            tooltip={{ label: 'Clear search' }}
-            icon={XIcon}
-            onClick={() => {
-              setSearchText('');
-              setTimeout(() => {
-                inputRef?.focus();
-              }, 0);
-            }}
-          />
-        </Show>
-      </div>
-    </SplitToolbarLeft>
-  );
+function AllView() {
+  return <UnifiedListView />;
 }
 
-function AllView(props: { searchText: string; setIsLoading: Setter<boolean> }) {
-  return (
-    <UnifiedListView
-      viewId="all"
-      searchText={props.searchText}
-      onLoadingChange={props.setIsLoading}
-    />
-  );
-}
-
-function EmailView(props: {
-  searchText: string;
-  setIsLoading: Setter<boolean>;
-}) {
+function EmailView() {
   const {
     emailViewSignal: [emailView, setEmailView],
+    viewsDataStore,
+    selectedView,
   } = useSplitPanelOrThrow().unifiedListContext;
+  const viewData = createMemo(() => viewsDataStore[selectedView()]);
 
   return (
     <>
-      <UnifiedListView
-        viewId="emails"
-        searchText={props.searchText}
-        onLoadingChange={props.setIsLoading}
-      />
+      <UnifiedListView />
       <SplitToolbarRight>
         <div class="flex flex-row items-center pr-2">
           <SegmentedControl
-            disabled={props.searchText.length > 0}
+            disabled={!!viewData().searchText}
             size="SM"
             label="View"
             list={['inbox', 'sent', 'drafts']}
@@ -680,22 +497,25 @@ export const useUpsertSavedViewMutation = () => {
       viewData:
         | {
             config: ViewConfigBase;
-            id?: ViewConfigDefaultsName | string;
-            name: string;
+            id?: ViewId;
+            name: ViewLabel;
           }
         | {
-            id: ViewConfigDefaultsName | string;
+            id: ViewId;
           }
     ) => {
+      const isDefaultView = VIEWCONFIG_DEFAULTS_IDS.includes(
+        viewData.id as View
+      );
       if ('config' in viewData) {
         // if data id is in defaults, exclude default, set up args to create new view
-        if (VIEWCONFIG_DEFAULTS_NAMES.includes(viewData.id as any)) {
+        if (isDefaultView) {
           // don't exclude default view on editing default view config
           // await storageServiceClient.views.excludeDefaultView({
           //   defaultViewId: viewData.id!,
           // });
           viewData.id = undefined;
-          viewData.name = 'My ' + viewData.name;
+          viewData.name = `My ${viewData.name}`;
         }
         // create new view
         if (!viewData.id) {
@@ -713,7 +533,7 @@ export const useUpsertSavedViewMutation = () => {
         }
       } else {
         // delete or exclude view
-        if (VIEWCONFIG_DEFAULTS_NAMES.includes(viewData.id as any)) {
+        if (isDefaultView) {
           // for now don't exclude default view
           // return await storageServiceClient.views.excludeDefaultView({
           //   defaultViewId: viewData.id,

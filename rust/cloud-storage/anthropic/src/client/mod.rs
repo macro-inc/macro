@@ -1,6 +1,7 @@
 pub mod chat;
 use crate::config::Config;
 use crate::error::AnthropicError;
+use crate::prelude::ApiError;
 use futures::stream::{Stream, StreamExt};
 use reqwest::Client as RequestClient;
 use reqwest_eventsource::{Event, EventSource, RequestBuilderExt};
@@ -77,6 +78,19 @@ where
                 Err(e) => {
                     match e {
                         reqwest_eventsource::Error::StreamEnded => break,
+                        reqwest_eventsource::Error::InvalidStatusCode(code, response) => {
+                            let response_err = match response.json::<serde_json::Value>().await {
+                                Err(e) => AnthropicError::Reqwest(e),
+                                Ok(json) => match serde_json::from_value::<ApiError>(json) {
+                                    Ok(api_error) => AnthropicError::ApiError {
+                                        api_error,
+                                        status_code: code,
+                                    },
+                                    Err(deserial) => AnthropicError::JsonDeserialize(deserial),
+                                },
+                            };
+                            let _ = tx.send(Err(response_err));
+                        }
                         other => {
                             let _ = tx.send(Err(AnthropicError::StreamError(other.to_string())));
                         }

@@ -1,9 +1,12 @@
+use std::str::FromStr;
+
 use anyhow::Context;
 use aws_lambda_events::event::eventbridge::EventBridgeEvent;
 use lambda_runtime::{
     Error, LambdaEvent,
     tracing::{self},
 };
+use model_file_type::FileType;
 use sqs_client::search::{SearchQueueMessage, document::SearchExtractorMessage};
 
 #[derive(Debug)]
@@ -82,10 +85,7 @@ pub async fn handler(
 
     tracing::trace!(document_key_parts=?document_key_parts, "processing document key");
 
-    let file_type = document_key_parts
-        .file_type
-        .as_str()
-        .try_into()
+    let file_type = FileType::from_str(document_key_parts.file_type.as_str())
         .context("unable to parse file type")?;
 
     let search_extractor_message = SearchExtractorMessage {

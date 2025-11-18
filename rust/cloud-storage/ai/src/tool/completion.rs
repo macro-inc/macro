@@ -1,7 +1,7 @@
 use super::types::ToolCall;
 use super::types::tool_object::ToolObject;
+use crate::types::{AiError, Result};
 use crate::types::{ChatCompletionRequest, OpenRouterClient};
-use anyhow::Result;
 use async_openai::types::{
     ChatCompletionTool, ChatCompletionToolChoiceOption, CreateChatCompletionRequest,
 };
@@ -22,15 +22,15 @@ pub async fn tool_completion<T>(
     response
         .choices
         .first()
-        .ok_or_else(|| anyhow::anyhow!("No choices"))
+        .ok_or_else(|| anyhow::anyhow!("No choices").into())
         .and_then(|choice| {
             let call = choice
                 .message
                 .tool_calls
                 .as_ref()
-                .ok_or_else(|| anyhow::anyhow!("No tool calls"))?
+                .ok_or_else(|| AiError::from(anyhow::anyhow!("No tool calls")))?
                 .first()
-                .ok_or_else(|| anyhow::anyhow!("No tool calls"))?;
+                .ok_or_else(|| AiError::from(anyhow::anyhow!("No tool calls")))?;
             Ok(ToolCall {
                 id: call.id.clone(),
                 json: serde_json::from_str(&call.function.arguments)?,

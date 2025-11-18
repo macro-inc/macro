@@ -1,3 +1,7 @@
+use std::str::FromStr;
+
+use crate::document::FileTypeExt;
+
 use super::file_type::FileType;
 use chrono::serde::ts_seconds_option;
 use utoipa::ToSchema;
@@ -130,12 +134,16 @@ pub struct DocumentInfo {
 impl DocumentBasic {
     pub fn is_text_content(&self) -> bool {
         self.file_type
-            .clone()
-            .and_then(|f| FileType::from_str(f.as_str()))
+            .as_deref()
+            .map(FileType::from_str)
+            .and_then(Result::ok)
             .map(|ft| ft.is_text_content())
             .unwrap_or(false)
     }
     pub fn try_file_type(&self) -> Option<FileType> {
-        self.file_type.as_deref().and_then(FileType::from_str)
+        self.file_type
+            .as_deref()
+            .map(FileType::from_str)
+            .and_then(Result::ok)
     }
 }
