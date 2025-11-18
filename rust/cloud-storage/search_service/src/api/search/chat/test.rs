@@ -55,16 +55,14 @@ fn test_single_chat_with_content() {
     let now = chrono::Utc::now();
     chat_histories.insert(
         "chat_1".to_string(),
-        macro_db_client::chat::get::ChatHistoryStatus::Found(
-            macro_db_client::chat::get::ChatHistoryInfo {
-                item_id: "chat_1".to_string(),
-                created_at: now,
-                updated_at: now,
-                viewed_at: None,
-                project_id: None,
-                ..Default::default()
-            },
-        ),
+        macro_db_client::chat::get::ChatHistoryInfo {
+            item_id: "chat_1".to_string(),
+            created_at: now,
+            updated_at: now,
+            viewed_at: None,
+            project_id: None,
+            ..Default::default()
+        },
     );
 
     let result = construct_search_result(input, chat_histories).unwrap();
@@ -91,10 +89,7 @@ fn test_single_chat_without_content() {
     let input = vec![create_test_response("chat_1", "msg_1", "user_1", None)];
 
     let mut chat_histories = HashMap::new();
-    chat_histories.insert(
-        "chat_1".to_string(),
-        macro_db_client::chat::get::ChatHistoryStatus::Found(create_chat_history("chat_1")),
-    );
+    chat_histories.insert("chat_1".to_string(), create_chat_history("chat_1"));
 
     let result = construct_search_result(input, chat_histories).unwrap();
 
@@ -115,10 +110,7 @@ fn test_single_chat_multiple_messages() {
     ];
 
     let mut chat_histories = HashMap::new();
-    chat_histories.insert(
-        "chat_1".to_string(),
-        macro_db_client::chat::get::ChatHistoryStatus::Found(create_chat_history("chat_1")),
-    );
+    chat_histories.insert("chat_1".to_string(), create_chat_history("chat_1"));
 
     let result = construct_search_result(input, chat_histories).unwrap();
 
@@ -146,14 +138,8 @@ fn test_multiple_chats() {
     ];
 
     let mut chat_histories = HashMap::new();
-    chat_histories.insert(
-        "chat_1".to_string(),
-        macro_db_client::chat::get::ChatHistoryStatus::Found(create_chat_history("chat_1")),
-    );
-    chat_histories.insert(
-        "chat_2".to_string(),
-        macro_db_client::chat::get::ChatHistoryStatus::Found(create_chat_history("chat_2")),
-    );
+    chat_histories.insert("chat_1".to_string(), create_chat_history("chat_1"));
+    chat_histories.insert("chat_2".to_string(), create_chat_history("chat_2"));
 
     let result = construct_search_result(input, chat_histories).unwrap();
 
@@ -189,10 +175,7 @@ fn test_mixed_content_presence() {
     ];
 
     let mut chat_histories = HashMap::new();
-    chat_histories.insert(
-        "chat_1".to_string(),
-        macro_db_client::chat::get::ChatHistoryStatus::Found(create_chat_history("chat_1")),
-    );
+    chat_histories.insert("chat_1".to_string(), create_chat_history("chat_1"));
 
     let result = construct_search_result(input, chat_histories).unwrap();
 
@@ -229,10 +212,7 @@ fn test_user_id_taken_from_first_result() {
     ];
 
     let mut chat_histories = HashMap::new();
-    chat_histories.insert(
-        "chat_1".to_string(),
-        macro_db_client::chat::get::ChatHistoryStatus::Found(create_chat_history("chat_1")),
-    );
+    chat_histories.insert("chat_1".to_string(), create_chat_history("chat_1"));
 
     let result = construct_search_result(input, chat_histories).unwrap();
 
@@ -265,10 +245,7 @@ fn test_chat_history_timestamps() {
         ..Default::default()
     };
 
-    chat_histories.insert(
-        "chat_1".to_string(),
-        macro_db_client::chat::get::ChatHistoryStatus::Found(history),
-    );
+    chat_histories.insert("chat_1".to_string(), history);
 
     // Call the function under test
     let result = construct_search_result(input, chat_histories).unwrap();
@@ -312,10 +289,7 @@ fn test_chat_history_missing_entry() {
         ..Default::default()
     };
 
-    chat_histories.insert(
-        "different_chat".to_string(),
-        macro_db_client::chat::get::ChatHistoryStatus::Found(history),
-    );
+    chat_histories.insert("different_chat".to_string(), history);
 
     // Call the function under test
     let result = construct_search_result(input, chat_histories).unwrap();
@@ -340,16 +314,14 @@ fn test_chat_history_deleted() {
     let mut chat_histories = HashMap::new();
     chat_histories.insert(
         "chat_deleted".to_string(),
-        macro_db_client::chat::get::ChatHistoryStatus::Found(
-            macro_db_client::chat::get::ChatHistoryInfo {
-                item_id: "chat_deleted".to_string(),
-                created_at: now,
-                updated_at: now,
-                viewed_at: Some(now),
-                project_id: Some("project_1".to_string()),
-                deleted_at: Some(now), // Soft deleted
-            },
-        ),
+        macro_db_client::chat::get::ChatHistoryInfo {
+            item_id: "chat_deleted".to_string(),
+            created_at: now,
+            updated_at: now,
+            viewed_at: Some(now),
+            project_id: Some("project_1".to_string()),
+            deleted_at: Some(now), // Soft deleted
+        },
     );
 
     let result = construct_search_result(input_deleted, chat_histories).unwrap();
@@ -402,10 +374,7 @@ fn test_chat_history_null_viewed_at() {
         ..Default::default()
     };
 
-    chat_histories.insert(
-        "chat_1".to_string(),
-        macro_db_client::chat::get::ChatHistoryStatus::Found(history),
-    );
+    chat_histories.insert("chat_1".to_string(), history);
 
     // Call the function under test
     let result = construct_search_result(input, chat_histories).unwrap();

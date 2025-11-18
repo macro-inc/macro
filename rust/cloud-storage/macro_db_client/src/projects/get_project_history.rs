@@ -12,20 +12,14 @@ pub struct ProjectHistoryInfo {
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone)]
-pub enum ProjectHistoryStatus {
-    Found(ProjectHistoryInfo),
-    NotFound,
-}
-
 /// Gets project history information including when a user last viewed each project
-/// Returns a status enum that indicates whether the project was found or is deleted
+/// Returns only entries that exist in the database
 #[tracing::instrument(skip(db))]
 pub async fn get_project_history_info(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &str,
     project_ids: &[String],
-) -> anyhow::Result<HashMap<String, ProjectHistoryStatus>> {
+) -> anyhow::Result<HashMap<String, ProjectHistoryInfo>> {
     if project_ids.is_empty() {
         return Ok(HashMap::new());
     }
@@ -56,7 +50,7 @@ pub async fn get_project_history_info(
     .fetch_all(db)
     .await?;
 
-    let project_history_map = results
+    let project_history_map: HashMap<String, ProjectHistoryInfo> = results
         .into_iter()
         .map(|row| {
             let info = ProjectHistoryInfo {
@@ -71,7 +65,7 @@ pub async fn get_project_history_info(
                     .deleted_at
                     .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
             };
-            (row.item_id.clone(), ProjectHistoryStatus::Found(info))
+            (row.item_id, info)
         })
         .collect();
 

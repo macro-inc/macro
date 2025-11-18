@@ -32,16 +32,14 @@ fn test_construct_search_result_single_document() {
     let now = chrono::Utc::now();
     document_histories.insert(
         "doc1".to_string(),
-        macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(
-            DocumentHistoryInfo {
-                item_id: "doc1".to_string(),
-                created_at: now,
-                updated_at: now,
-                viewed_at: None,
-                project_id: None,
-                ..Default::default()
-            },
-        ),
+        DocumentHistoryInfo {
+            item_id: "doc1".to_string(),
+            created_at: now,
+            updated_at: now,
+            viewed_at: None,
+            project_id: None,
+            ..Default::default()
+        },
     );
 
     let result = construct_search_result(search_results, document_histories).unwrap();
@@ -96,16 +94,14 @@ fn test_construct_search_result_multiple_nodes_same_document() {
     let now = chrono::Utc::now();
     document_histories.insert(
         "doc1".to_string(),
-        macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(
-            DocumentHistoryInfo {
-                item_id: "doc1".to_string(),
-                created_at: now,
-                updated_at: now,
-                viewed_at: None,
-                project_id: None,
-                ..Default::default()
-            },
-        ),
+        DocumentHistoryInfo {
+            item_id: "doc1".to_string(),
+            created_at: now,
+            updated_at: now,
+            viewed_at: None,
+            project_id: None,
+            ..Default::default()
+        },
     );
 
     let result = construct_search_result(search_results, document_histories).unwrap();
@@ -171,10 +167,7 @@ fn test_document_history_timestamps() {
         ..Default::default()
     };
 
-    document_histories.insert(
-        "doc_1".to_string(),
-        macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(history),
-    );
+    document_histories.insert("doc_1".to_string(), history);
 
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
@@ -218,10 +211,7 @@ fn test_document_history_missing_entry() {
         ..Default::default()
     };
 
-    document_histories.insert(
-        "different_doc".to_string(),
-        macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(history),
-    );
+    document_histories.insert("different_doc".to_string(), history);
 
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
@@ -254,10 +244,7 @@ fn test_document_history_null_viewed_at() {
         ..Default::default()
     };
 
-    document_histories.insert(
-        "doc_1".to_string(),
-        macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(history),
-    );
+    document_histories.insert("doc_1".to_string(), history);
 
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
@@ -316,14 +303,8 @@ fn test_document_history_multiple_documents() {
         ..Default::default()
     };
 
-    document_histories.insert(
-        "doc_1".to_string(),
-        macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(history1),
-    );
-    document_histories.insert(
-        "doc_2".to_string(),
-        macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(history2),
-    );
+    document_histories.insert("doc_1".to_string(), history1);
+    document_histories.insert("doc_2".to_string(), history2);
 
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
@@ -383,10 +364,7 @@ fn test_document_history_partial_missing_entries() {
         ..Default::default()
     };
 
-    document_histories.insert(
-        "doc_exists".to_string(),
-        macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(history),
-    );
+    document_histories.insert("doc_exists".to_string(), history);
 
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
@@ -428,16 +406,14 @@ fn test_document_history_deleted() {
     let mut document_histories = HashMap::new();
     document_histories.insert(
         "doc_deleted".to_string(),
-        macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(
-            macro_db_client::document::get_document_history::DocumentHistoryInfo {
-                item_id: "doc_deleted".to_string(),
-                created_at: now,
-                updated_at: now,
-                viewed_at: Some(now),
-                project_id: Some("project_1".to_string()),
-                deleted_at: Some(now), // Soft deleted
-            },
-        ),
+        macro_db_client::document::get_document_history::DocumentHistoryInfo {
+            item_id: "doc_deleted".to_string(),
+            created_at: now,
+            updated_at: now,
+            viewed_at: Some(now),
+            project_id: Some("project_1".to_string()),
+            deleted_at: Some(now), // Soft deleted
+        },
     );
 
     let result = construct_search_result(input_deleted, document_histories).unwrap();

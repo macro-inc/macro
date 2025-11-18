@@ -12,20 +12,14 @@ pub struct DocumentHistoryInfo {
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone)]
-pub enum DocumentHistoryStatus {
-    Found(DocumentHistoryInfo),
-    NotFound,
-}
-
 /// Gets document history information including when a user last viewed each document
-/// Returns a status enum that indicates whether the document was found or is deleted
+/// Returns only entries that exist in the database
 #[tracing::instrument(skip(db))]
 pub async fn get_document_history_info(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &str,
     document_ids: &[String],
-) -> anyhow::Result<HashMap<String, DocumentHistoryStatus>> {
+) -> anyhow::Result<HashMap<String, DocumentHistoryInfo>> {
     if document_ids.is_empty() {
         return Ok(HashMap::new());
     }
@@ -56,7 +50,7 @@ pub async fn get_document_history_info(
     .fetch_all(db)
     .await?;
 
-    let document_history_map = results
+    let document_history_map: HashMap<String, DocumentHistoryInfo> = results
         .into_iter()
         .map(|row| {
             let info = DocumentHistoryInfo {
@@ -71,7 +65,7 @@ pub async fn get_document_history_info(
                     .deleted_at
                     .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
             };
-            (row.item_id.clone(), DocumentHistoryStatus::Found(info))
+            (row.item_id, info)
         })
         .collect();
 

@@ -80,7 +80,7 @@ pub async fn handler(
 
 pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::chats::ChatSearchResponse>,
-    chat_histories: HashMap<String, macro_db_client::chat::get::ChatHistoryStatus>,
+    chat_histories: HashMap<String, macro_db_client::chat::get::ChatHistoryInfo>,
 ) -> anyhow::Result<Vec<ChatSearchResponseItemWithMetadata>> {
     let search_results = search_results
         .into_iter()
@@ -98,18 +98,16 @@ pub fn construct_search_result(
     let result: Vec<ChatSearchResponseItemWithMetadata> = result
         .into_iter()
         .map(|item| {
-            let metadata = match chat_histories.get(&item.chat_id) {
-                Some(macro_db_client::chat::get::ChatHistoryStatus::Found(info)) => {
-                    Some(models_search::chat::ChatMetadata {
+            let metadata =
+                chat_histories
+                    .get(&item.chat_id)
+                    .map(|info| models_search::chat::ChatMetadata {
                         created_at: info.created_at.timestamp(),
                         updated_at: info.updated_at.timestamp(),
                         viewed_at: info.viewed_at.map(|a| a.timestamp()),
                         project_id: info.project_id.clone(),
                         deleted_at: info.deleted_at.map(|a| a.timestamp()),
-                    })
-                }
-                Some(macro_db_client::chat::get::ChatHistoryStatus::NotFound) | None => None,
-            };
+                    });
 
             ChatSearchResponseItemWithMetadata {
                 metadata,

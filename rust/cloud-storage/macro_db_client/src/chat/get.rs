@@ -283,20 +283,14 @@ pub struct ChatHistoryInfo {
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
-#[derive(Debug, Clone)]
-pub enum ChatHistoryStatus {
-    Found(ChatHistoryInfo),
-    NotFound,
-}
-
 /// Gets chat history information including when a user last viewed each chat
-/// Returns a status enum that indicates whether the chat was found or is deleted
+/// Returns only entries that exist in the database
 #[tracing::instrument(skip(db))]
 pub async fn get_chat_history_info(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &str,
     chat_ids: &[String],
-) -> anyhow::Result<HashMap<String, ChatHistoryStatus>> {
+) -> anyhow::Result<HashMap<String, ChatHistoryInfo>> {
     if chat_ids.is_empty() {
         return Ok(HashMap::new());
     }
@@ -327,7 +321,7 @@ pub async fn get_chat_history_info(
     .fetch_all(db)
     .await?;
 
-    let chat_history_map = results
+    let chat_history_map: HashMap<String, ChatHistoryInfo> = results
         .into_iter()
         .map(|row| {
             let info = ChatHistoryInfo {
@@ -342,7 +336,7 @@ pub async fn get_chat_history_info(
                     .deleted_at
                     .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
             };
-            (row.item_id.clone(), ChatHistoryStatus::Found(info))
+            (row.item_id, info)
         })
         .collect();
 

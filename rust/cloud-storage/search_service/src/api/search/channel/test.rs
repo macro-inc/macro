@@ -250,10 +250,12 @@ fn test_channel_history_timestamps() {
 
     // Verify that timestamps were copied from the channel history
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].created_at, now.timestamp());
-    assert_eq!(result[0].updated_at, now.timestamp());
-    assert_eq!(result[0].viewed_at, Some(now.timestamp()));
-    assert_eq!(result[0].interacted_at, Some(now.timestamp()));
+    assert!(result[0].metadata.is_some());
+    let metadata = result[0].metadata.as_ref().unwrap();
+    assert_eq!(metadata.created_at, now.timestamp());
+    assert_eq!(metadata.updated_at, now.timestamp());
+    assert_eq!(metadata.viewed_at, Some(now.timestamp()));
+    assert_eq!(metadata.interacted_at, Some(now.timestamp()));
 }
 
 #[test]
@@ -285,8 +287,9 @@ fn test_channel_history_missing_entry() {
     // Call the function under test
     let result = construct_search_result(input, channel_histories).unwrap();
 
-    // Channels without history info (e.g., deleted channels) should be filtered out
-    assert_eq!(result.len(), 0);
+    // Channels without history info should still be returned but with None metadata
+    assert_eq!(result.len(), 1);
+    assert!(result[0].metadata.is_none());
 }
 
 #[test]
@@ -319,10 +322,12 @@ fn test_channel_history_null_viewed_at() {
 
     // Verify that timestamps were copied correctly and viewed_at is None
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].created_at, now.timestamp());
-    assert_eq!(result[0].updated_at, now.timestamp());
-    assert_eq!(result[0].viewed_at, None);
-    assert_eq!(result[0].interacted_at, None);
+    assert!(result[0].metadata.is_some());
+    let metadata = result[0].metadata.as_ref().unwrap();
+    assert_eq!(metadata.created_at, now.timestamp());
+    assert_eq!(metadata.updated_at, now.timestamp());
+    assert_eq!(metadata.viewed_at, None);
+    assert_eq!(metadata.interacted_at, None);
 }
 
 #[test]
@@ -341,6 +346,7 @@ fn test_channel_history_invalid_uuid() {
     // Call the function under test
     let result = construct_search_result(input, channel_histories).unwrap();
 
-    // Channels with invalid UUIDs should be filtered out (can't parse UUID to look up history)
-    assert_eq!(result.len(), 0);
+    // Channels with invalid UUIDs should still be returned but with None metadata
+    assert_eq!(result.len(), 1);
+    assert!(result[0].metadata.is_none());
 }

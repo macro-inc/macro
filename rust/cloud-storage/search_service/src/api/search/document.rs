@@ -88,7 +88,7 @@ pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::documents::DocumentSearchResponse>,
     document_histories: HashMap<
         String,
-        macro_db_client::document::get_document_history::DocumentHistoryStatus,
+        macro_db_client::document::get_document_history::DocumentHistoryInfo,
     >,
 ) -> anyhow::Result<Vec<DocumentSearchResponseItemWithMetadata>> {
     let search_results = search_results
@@ -107,22 +107,15 @@ pub fn construct_search_result(
     let result: Vec<DocumentSearchResponseItemWithMetadata> = result
         .into_iter()
         .map(|item| {
-            let metadata = match document_histories.get(&item.document_id) {
-                Some(
-                    macro_db_client::document::get_document_history::DocumentHistoryStatus::Found(
-                        info,
-                    ),
-                ) => Some(models_search::document::DocumentMetadata {
+            let metadata = document_histories.get(&item.document_id).map(|info| {
+                models_search::document::DocumentMetadata {
                     created_at: info.created_at.timestamp(),
                     updated_at: info.updated_at.timestamp(),
                     viewed_at: info.viewed_at.map(|a| a.timestamp()),
                     project_id: info.project_id.clone(),
                     deleted_at: info.deleted_at.map(|a| a.timestamp()),
-                }),
-                Some(
-                    macro_db_client::document::get_document_history::DocumentHistoryStatus::NotFound,
-                ) | None => None,
-            };
+                }
+            });
 
             DocumentSearchResponseItemWithMetadata {
                 metadata,

@@ -89,7 +89,7 @@ pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::projects::ProjectSearchResponse>,
     project_histories: HashMap<
         String,
-        macro_db_client::projects::get_project_history::ProjectHistoryStatus,
+        macro_db_client::projects::get_project_history::ProjectHistoryInfo,
     >,
 ) -> anyhow::Result<Vec<ProjectSearchResponseItemWithMetadata>> {
     let search_results = search_results
@@ -106,23 +106,15 @@ pub fn construct_search_result(
     let result: Vec<ProjectSearchResponseItemWithMetadata> = result
         .into_iter()
         .map(|item| {
-            let metadata = match project_histories.get(&item.id) {
-                Some(
-                    macro_db_client::projects::get_project_history::ProjectHistoryStatus::Found(
-                        info,
-                    ),
-                ) => Some(models_search::project::ProjectMetadata {
+            let metadata = project_histories.get(&item.id).map(|info| {
+                models_search::project::ProjectMetadata {
                     created_at: info.created_at.timestamp(),
                     updated_at: info.updated_at.timestamp(),
                     viewed_at: info.viewed_at.map(|a| a.timestamp()),
                     parent_project_id: info.parent_project_id.clone(),
                     deleted_at: info.deleted_at.map(|a| a.timestamp()),
-                }),
-                Some(
-                    macro_db_client::projects::get_project_history::ProjectHistoryStatus::NotFound,
-                )
-                | None => None,
-            };
+                }
+            });
 
             ProjectSearchResponseItemWithMetadata {
                 metadata,
