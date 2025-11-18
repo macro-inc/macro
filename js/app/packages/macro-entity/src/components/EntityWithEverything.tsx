@@ -280,6 +280,26 @@ export function EntityWithEverything(
             </Show>
           </span>
 
+          <Show when={!props.showUnrollNotifications}>
+            <div class="flex items-center gap-1">
+              {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
+              <span class="font-medium shrink-0 truncate">
+                {userNameFromSender()}
+              </span>
+            </div>
+          </Show>
+
+          <Show when={!props.showUnrollNotifications && lastMessageContent()}>
+            {(lastMessageContent) => (
+              <div class="truncate shrink grow opacity-60">
+                <StaticMarkdown
+                  markdown={lastMessageContent()}
+                  theme={unifiedListMarkdownTheme}
+                  singleLine={false}
+                />
+              </div>
+            )}
+          </Show>
         </span>
       </div>
     );
@@ -390,7 +410,7 @@ export function EntityWithEverything(
           <div
             class="size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-accent group-hover/button:border pointer-events-none"
             classList={{
-              'ring ring-edge-muted': props.selected,
+              'ring ring-edge-muted': props.selected || entityHovered(),
               'bg-panel': !props.checked && (props.selected || entityHovered()),
               'bg-accent border border-accent': props.checked,
             }}
