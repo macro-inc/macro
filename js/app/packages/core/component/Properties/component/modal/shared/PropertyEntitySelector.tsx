@@ -21,7 +21,7 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import type { Item } from '@service-storage/generated/schemas/item';
 import { useHistory } from '@service-storage/history';
 import { createMemo, createSignal, For, on, Show } from 'solid-js';
-import { PROPERTY_STYLES } from '../../../styles/propertyStyles';
+import { PROPERTY_STYLES } from '../../../styles/styles';
 import type { Property } from '../../../types';
 import { useSearchInputFocus } from '../../../utils';
 

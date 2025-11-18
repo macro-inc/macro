@@ -5,7 +5,7 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 import { savePropertyValue } from '../../api/propertyValues';
-import { PROPERTY_STYLES } from '../../styles/propertyStyles';
+import { PROPERTY_STYLES } from '../../styles/styles';
 import type { Property } from '../../types';
 import { formatPropertyValue } from '../../utils';
 import { AddPropertyValueButton, EmptyValue } from './ValueComponents';

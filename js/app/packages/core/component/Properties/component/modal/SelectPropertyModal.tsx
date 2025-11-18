@@ -18,7 +18,7 @@ import {
 } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import { usePropertyModals } from '../../hooks/usePropertyModals';
-import { PROPERTY_STYLES } from '../../styles/propertyStyles';
+import { PROPERTY_STYLES } from '../../styles/styles';
 import type { PropertySelectorProps } from '../../types';
 import { getPropertyDefinitionTypeDisplay, useSearchInputFocus } from '../../utils';
 import { CreatePropertyModal } from './CreatePropertyModal';

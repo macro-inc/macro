@@ -5,7 +5,7 @@ import LoadingSpinner from '@icon/regular/spinner.svg';
 import type * as schemas from '@service-properties/generated/zod';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import type { z } from 'zod';
-import { PROPERTY_STYLES } from '../../../styles/propertyStyles';
+import { PROPERTY_STYLES } from '../../../styles/styles';
 import type { Property } from '../../../types';
 import { formatOptionValue, useSearchInputFocus } from '../../../utils';
 import { ErrorHandler } from '../../../utils/errorHandling';
