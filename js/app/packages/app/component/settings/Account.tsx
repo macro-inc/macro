@@ -33,7 +33,7 @@ import {
   connectEmail,
   disconnectEmail,
   useEmailLinksStatus,
-} from '../../signal/emailAuth';
+} from '../../signal/emailLink';
 import { BetaTooltip } from '../BetaTooltip';
 import { deleteAccount, unregisterFromPushNotifications } from './Mobile';
 

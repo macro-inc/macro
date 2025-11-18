@@ -18,11 +18,8 @@ export class MockLocalStorage {
   }
 }
 
-
 export function mockLocalStorage(): MockLocalStorage {
   const localStorage = new MockLocalStorage();
   Object.defineProperty(global, 'localStorage', { value: localStorage });
   return localStorage;
 }
-
-

@@ -1,4 +1,7 @@
-import { connectEmail, useEmailLinksStatus } from '@app/signal/emailAuth';
+import {
+  connectEmail,
+  useEmailLinksStatus,
+} from '@app/signal/onboarding/email-link';
 import { IconButton } from '@core/component/IconButton';
 import { toast } from '@core/component/Toast/Toast';
 import { fileSelector } from '@core/directive/fileSelector';

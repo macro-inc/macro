@@ -89,7 +89,7 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
-import { useEmailLinksStatus } from '../signal/emailAuth';
+import { useEmailLinksStatus } from '../signal/emailLink';
 import { useSplitLayout } from './split-layout/layout';
 
 type CreateType = 'note' | 'email' | 'message';

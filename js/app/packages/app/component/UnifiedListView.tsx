@@ -5,7 +5,7 @@ import {
 import {
   emailRefetchInterval,
   useEmailLinksStatus,
-} from '@app/signal/emailAuth';
+} from '@app/signal/onboarding/email-link';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { Button } from '@core/component/FormControls/Button';
 import DropdownMenu from '@core/component/FormControls/DropdownMenu';
