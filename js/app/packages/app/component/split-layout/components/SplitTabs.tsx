@@ -170,7 +170,7 @@ export function SplitTabs(props: {
                     !isActive(),
                 }}
               >
-                <span class="flex items-center gap-1 w-full">
+                <span class="flex items-baseline gap-1 w-full">
                   <span class="text-xs font-mono opacity-70 mr-0.5">
                     {(i() + 1).toString()}
                   </span>
