@@ -1247,14 +1247,6 @@ export function InstructionsMarkdownEditor() {
     );
   };
 
-  // better focus in handling. preserves selection on regain focus!
-  autoRegister(
-    registerRootEventListener(editor, 'focusin', (e) => {
-      e.preventDefault();
-      editor.focus();
-    })
-  );
-
   const [fileArrayBuffer, setFileArrayBuffer] = createSignal<ArrayBuffer>();
   createEffect(() => {
     const file = blockFileSignal();

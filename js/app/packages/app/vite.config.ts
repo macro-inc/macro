@@ -66,7 +66,6 @@ export default defineConfig(({ command, mode }) => {
       emptyOutDir: true,
       minify: !NO_MINIFY,
       rollupOptions: {
-        preserveSymlinks: true,
         input: {
           app: resolve(__dirname, 'index.html'),
         },
@@ -128,6 +127,12 @@ export default defineConfig(({ command, mode }) => {
       watch: {
         usePolling: true,
         interval: 100,
+      },
+      fs: {
+        allow: [
+          // Allow serving files from the workspace root
+          resolve(__dirname, '../../'),
+        ],
       },
     },
   };

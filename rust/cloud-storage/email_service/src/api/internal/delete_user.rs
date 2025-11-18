@@ -40,7 +40,7 @@ pub async fn handler(
         };
 
         let gmail_access_token = match crate::util::gmail::auth::fetch_gmail_access_token_from_link(
-            link.clone(),
+            &link,
             &ctx.redis_client,
             &ctx.auth_service_client,
         )
