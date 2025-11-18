@@ -64,6 +64,7 @@ pub async fn upsert_message(
             return Ok(());
         }
     };
+    let message_attachment_count = message.attachments.len();
 
     // will always exist because we just fetched it
     let provider_thread_id = message.provider_thread_id.clone().unwrap();
@@ -130,7 +131,10 @@ pub async fn upsert_message(
     notify_for_new_messages(ctx, link, new_message_provider_ids).await?;
 
     // temporarily only for macro emails, for testing purposes
-    if link.macro_id.ends_with("@macro.com") && !cfg!(feature = "disable_attachment_upload") {
+    if link.macro_id.ends_with("@macro.com")
+        && !cfg!(feature = "disable_attachment_upload")
+        && message_attachment_count > 0
+    {
         // upload attachments to Macro
         let attachments = email_db_client::attachments::provider::upload::fetch_insertable_attachments_for_new_email(
             &ctx.db,
