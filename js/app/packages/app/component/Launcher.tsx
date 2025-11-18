@@ -5,6 +5,7 @@ import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import type { CommandDisplayPriority, ValidHotkey } from '@core/hotkey/types';
+import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import {
   createCanvasFileFromJsonString,
   createChat,
@@ -32,7 +33,7 @@ import {
 
 import { type FocusableElement, tabbable } from 'tabbable';
 
-import { useSplitLayout } from '../split-layout/layout';
+import { useSplitLayout } from './split-layout/layout';
 
 type LauncherMenuItemProps = {
   label: string;
@@ -49,6 +50,13 @@ type LauncherMenuItemProps = {
 };
 
 const USE_ENTITY_COLORS = true;
+
+export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal();
+
+export const toggleCreateMenu = () => {
+  const isOpen = createMenuOpen();
+  setCreateMenuOpen(!isOpen);
+};
 
 const LauncherMenuItem = (props: LauncherMenuItemProps) => {
   let buttonRef!: HTMLButtonElement;

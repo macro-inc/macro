@@ -3,7 +3,7 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useBigChat } from '@core/signal/layout/bigChat';
 import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { setKonsoleMode, setKonsoleOpen } from '../command/state';
-import { setCreateMenuOpen } from './CreateMenu';
+import { setCreateMenuOpen } from '../Launcher';
 
 type HintItem = {
   text: string;

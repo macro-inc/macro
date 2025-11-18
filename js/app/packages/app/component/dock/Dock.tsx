@@ -13,7 +13,6 @@ import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { PresentModeGlitch } from './PresentModeGlitch';
 import { IconButton } from '@core/component/IconButton';
 import IconQuestion from '@icon/regular/question.svg';
-
 import { withAnalytics } from '@coparse/analytics';
 import IconAtom from '@macro-icons/macro-atom.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
@@ -21,11 +20,11 @@ import IconLogo from '@macro-icons/macro-logo.svg';
 import { BasicTierLimit } from './BasicTierLimit';
 import { setKonsoleOpen } from '../command/state';
 import { runCommand } from '@core/hotkey/hotkeys';
+import { setCreateMenuOpen } from '../Launcher';
 import { useHasPaidAccess } from '@core/auth';
 import { TOKENS } from '@core/hotkey/tokens';
 import { playSound } from '@app/util/sound';
 import { QuickAccess } from './QuickAccess';
-import { CreateMenu } from './CreateMenu';
 // import { Debug } from './Debug';
 import Hints from './Hints';
 
@@ -35,7 +34,7 @@ export function Dock(){
   const [isPresentMode, setIsPresentMode] = createSignal(false);
   const notificationSource = useGlobalNotificationSource();
   const isRightPanelCollapsed = () => !isRightPanelOpen();
-  const [debugOpen, setDebugOpen] = createSignal(false);
+  // const [debugOpen, setDebugOpen] = createSignal(false);
   const { track, TrackingEvents } = withAnalytics();
   const toggleRightPanel = useToggleRightPanel();
   const { settingsOpen } = useSettingsState();
@@ -135,6 +134,19 @@ export function Dock(){
 
   return(
     <>
+      <style>{`
+        .dock-button-hover{
+          transition: var(--transition);
+          background-color: #0000;
+        }
+        @media(hover){
+          .dock-button-hover:hover{
+            background-color: var(--color-hover);
+            transition: none;
+          }
+        }
+      `}</style>
+
       <div
         style={{
           'padding': '0 0.5rem 0.5rem 0.5rem'
@@ -142,7 +154,7 @@ export function Dock(){
       >
         <Show when={!isMobileWidth()}>
           <div style={{
-            'grid-template-columns': 'min-content 1fr min-content',
+            'grid-template-columns':'min-content 1fr min-content',
             'border': '1px solid var(--color-edge-muted)',
             'background-color': 'var(--color-panel)',
             'box-sizing': 'border-box',
@@ -156,36 +168,62 @@ export function Dock(){
 
             <div
               style={{
+                'border-right': '1px solid var(--color-edge-muted)',
                 'grid-auto-columns': 'min-content',
                 'grid-auto-flow': 'column',
                 'align-items': 'center',
+                'padding-right': '7px',
                 'display': 'grid',
                 'gap': '7px'
               }}
             >
-              <IconButton
-                tooltip={{
-                  hotkeyToken: TOKENS.global.commandMenu,
-                  label: 'Open Command Menu'
+              <div
+                style={{
+                  'grid-template-columns': 'min-content min-content',
+                  'box-sizing': 'border-box',
+                  'align-items': 'center',
+                  'padding': '0 4px',
+                  'display': 'grid',
+                  'height': '24px',
+                  'gap': '4px'
                 }}
                 onClick={() => {setKonsoleOpen(true)}}
-                icon={IconLogo}
-                theme="clear"
-                size="sm"
-              />
+                class="dock-button-hover"
+              >
+                <IconLogo
+                  style={{
+                    'display': 'block',
+                    'height': '12px'
+                  }}
+                />
+              </div>
 
-              <IconButton
-                tooltip={{
-                  hotkeyToken: TOKENS.global.commandMenu,
-                  label: 'Open Command Menu'
+              <div style={{
+                'background-color': 'var(--color-edge-muted)',
+                'height': '38px',
+                'width': '1px',
+              }}/>
+
+              <div
+                style={{
+                  'grid-template-columns': 'min-content min-content',
+                  'box-sizing': 'border-box',
+                  'align-items': 'center',
+                  'padding': '0 4px',
+                  'display': 'grid',
+                  'height': '24px',
+                  'gap': '4px'
                 }}
-                class="[&_svg]:!w-auto [&_svg]:max-w-none"
-                onClick={() => {setKonsoleOpen(true)}}
-                icon={MacroCreateIcon}
-                theme="clear"
-              />
-
-                {/*<CreateMenu/>*/}
+                onClick={() => {setCreateMenuOpen(true)}}
+                class="dock-button-hover"
+              >
+                <MacroCreateIcon
+                  style={{
+                    'display': 'block',
+                    'height': '10px'
+                  }}
+                />
+              </div>
             </div>
 
             <div style={{
@@ -215,10 +253,13 @@ export function Dock(){
             </div>
 
             <div style={{
+              'border-left': '1px solid var(--color-edge-muted)',
               'grid-auto-columns': 'min-content',
               'grid-auto-flow': 'column',
               'align-items': 'center',
+              'padding-left': '7px',
               'display': 'grid',
+              'height': '38px',
               'gap': '4px'
             }}>
               <Show when={isSoupActive()}>
