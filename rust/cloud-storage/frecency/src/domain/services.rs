@@ -255,7 +255,7 @@ where
     ) -> Result<FrecencyPageResponse, FrecencyQueryErr> {
         let res = self
             .storage
-            .get_top_entities(query.user_id, query.limit)
+            .get_top_entities(query)
             .await
             .map_err(anyhow::Error::from)?;
         Ok(FrecencyPageResponse::new(res))

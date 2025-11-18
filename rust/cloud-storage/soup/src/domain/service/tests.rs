@@ -91,14 +91,14 @@ async fn it_should_query_frecency() {
     frecency_mock
         .expect_get_top_entities()
         .times(1)
-        .withf(|user_id, limit| {
-            assert_eq!(user_id.as_ref(), "macro|test@example.com");
-            assert_eq!(*limit, 500);
+        .withf(|req| {
+            assert_eq!(req.user_id.as_ref(), "macro|test@example.com");
+            assert_eq!(req.limit, 500);
             true
         })
-        .returning(|_user_id, limit| {
+        .returning(|req| {
             Box::pin(async move {
-                Ok((1..=limit)
+                Ok((1..=req.limit)
                     .map(|i| {
                         AggregateFrecency::new_mock(
                             EntityType::Document.with_entity_string(format!("my-document-{i}")),
@@ -159,14 +159,14 @@ async fn it_should_sort_frecency_descending() {
     frecency_mock
         .expect_get_top_entities()
         .times(1)
-        .withf(|user_id, limit| {
-            assert_eq!(user_id.as_ref(), "macro|test@example.com");
-            assert_eq!(*limit, 500);
+        .withf(|req| {
+            assert_eq!(req.user_id.as_ref(), "macro|test@example.com");
+            assert_eq!(req.limit, 500);
             true
         })
-        .returning(|_user_id, limit| {
+        .returning(|req| {
             Box::pin(async move {
-                Ok((1..=limit)
+                Ok((1..=req.limit)
                     .map(|v| {
                         AggregateFrecency::new_mock(
                             EntityType::Document.with_entity_string(format!("my-document-{v}")),

@@ -173,6 +173,22 @@ static SUFFIX: &str = r#"
     LIMIT $3
 "#;
 
+static SUFFIX_NO_FRECENCY: &str = r#"
+    SELECT Combined.* FROM Combined
+    LEFT JOIN frecency_aggregates fa
+        ON fa.entity_id = Combined."id"
+        AND fa.entity_type = Combined."item_type"
+        AND fa.user_id = $1
+    WHERE fa.id IS NULL
+        AND (
+            ($4::timestamptz IS NULL)
+            OR
+            (Combined."sort_ts", Combined."id") < ($4, $5)
+        )
+    ORDER BY Combined."sort_ts" DESC, Combined."updated_at" DESC
+    LIMIT $3
+"#;
+
 fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
     let Some(expr) = ast else {
         return String::new();
@@ -240,7 +256,7 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
     }
 }
 
-fn build_query(filter_ast: &EntityFilterAst) -> QueryBuilder<'_, Postgres> {
+fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBuilder<'_, Postgres> {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
     builder.push("Combined AS (");
 
@@ -265,7 +281,12 @@ fn build_query(filter_ast: &EntityFilterAst) -> QueryBuilder<'_, Postgres> {
     ));
 
     builder.push(") ");
-    builder.push(SUFFIX);
+
+    if exclude_frecency {
+        builder.push(SUFFIX_NO_FRECENCY);
+    } else {
+        builder.push(SUFFIX);
+    }
 
     builder
 }
@@ -406,18 +427,35 @@ impl SoupRow {
     }
 }
 
-#[tracing::instrument(skip(db, limit))]
-pub async fn expanded_dynamic_cursor_soup(
+#[derive(Debug)]
+pub(crate) struct ExpandedDynamicCursorArgs<'a> {
+    /// the user for which we are performing the query
+    pub user_id: MacroUserIdStr<'a>,
+    /// the limit of items we can return
+    pub limit: u16,
+    /// the Query that we are attempting to perform
+    pub cursor: Query<String, SimpleSortMethod, EntityFilterAst>,
+    /// whether or not the query should explicitly remove items that DO have
+    /// frecency records
+    pub exclude_frecency: bool,
+}
+
+#[tracing::instrument(skip(db), err)]
+pub(crate) async fn expanded_dynamic_cursor_soup(
     db: &PgPool,
-    user_id: MacroUserIdStr<'_>,
-    limit: u16,
-    cursor: Query<String, SimpleSortMethod, EntityFilterAst>,
+    args: ExpandedDynamicCursorArgs<'_>,
 ) -> Result<Vec<SoupItem>, sqlx::Error> {
+    let ExpandedDynamicCursorArgs {
+        user_id,
+        limit,
+        cursor,
+        exclude_frecency,
+    } = args;
     let query_limit = limit as i64;
     let sort_method_str = cursor.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = cursor.vals();
 
-    build_query(cursor.filter())
+    build_query(cursor.filter(), exclude_frecency)
         .build()
         .bind(user_id.as_ref())
         .bind(sort_method_str)
