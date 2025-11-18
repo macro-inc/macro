@@ -1,6 +1,6 @@
 import { matches } from '@core/util/match';
 import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
-import { useEmail } from '@service-gql/client';
+import { useEmail, useUserId } from '@service-gql/client';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
@@ -288,12 +288,7 @@ export function EntityWithEverything(
             </Show>
           </span>
 
-          <Show
-            when={
-              !props.showUnrollNotifications &&
-              !isDirectMessage()
-            }
-          >
+          <Show when={!props.showUnrollNotifications && !isDirectMessage()}>
             <div class="flex items-center gap-1">
               <ImportantBadge active={props.importantIndicatorActive} />
               <span class="font-medium shrink-0 truncate">
@@ -529,7 +524,7 @@ export function EntityWithEverything(
                   if (
                     notification.notificationEventType === 'document_mention' ||
                     notification.notificationEventType ===
-                      'channel_message_document'
+                    'channel_message_document'
                   ) {
                     return 'shared';
                   }
@@ -552,7 +547,7 @@ export function EntityWithEverything(
                   if (
                     notification.notificationEventType === 'document_mention' ||
                     notification.notificationEventType ===
-                      'channel_message_document'
+                    'channel_message_document'
                   ) {
                     return '';
                   }
@@ -588,12 +583,12 @@ export function EntityWithEverything(
                     onClick={
                       props.onClickNotification
                         ? [
-                            props.onClickNotification,
-                            {
-                              ...props.entity,
-                              notification,
-                            },
-                          ]
+                          props.onClickNotification,
+                          {
+                            ...props.entity,
+                            notification,
+                          },
+                        ]
                         : undefined
                     }
                   >
@@ -664,11 +659,11 @@ export function EntityWithEverything(
 }
 
 function DirectMessageIcon(props: { entity: EntityData }) {
-  const participantId = createMemo(() => {
-    if (props.entity.type !== 'channel') return null;
-    const senderId = props.entity.latestMessage?.senderId;
-    return senderId || null;
-  });
+  const userId = useUserId();
+  const participantId = () =>
+    props.entity.type === 'channel'
+      ? (props.entity.particpantIds ?? []).filter((id) => id !== userId()).at(0)
+      : undefined;
 
   const Fallback = () => (
     <Dynamic
@@ -677,12 +672,11 @@ function DirectMessageIcon(props: { entity: EntityData }) {
     />
   );
 
-  const id = participantId();
-  if (!id) return <Fallback />;
-
   return (
     <div class="bg-panel size-5 rounded-full p-[2px]">
-      <UserIcon id={id} isDeleted={false} size="fill" />
+      <Show when={participantId()} fallback={<Fallback />}>
+        {(id) => <UserIcon id={id()} isDeleted={false} size="fill" />}
+      </Show>
     </div>
   );
 }
