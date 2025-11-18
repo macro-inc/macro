@@ -1,4 +1,4 @@
-import { untilEvent } from '@websocket/utils/util-event';
+import { untilEvent } from '@websocket/utils/until-event';
 import {
   afterEach,
   beforeAll,
