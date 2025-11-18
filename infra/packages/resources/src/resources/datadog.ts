@@ -118,27 +118,29 @@ export const datadogAgentContainer = {
       name: 'DD_API_KEY',
       value: DATADOG_API_KEY,
     },
-    {
-      name: 'DD_APM_ENABLED',
-      value: 'true',
-    },
-    {
-      name: 'DD_LOGS_ENABLED',
-      value: 'true',
-    },
-    {
-      name: 'DD_OTLP_CONFIG_LOGS_ENABLED',
-      value: 'true',
-    },
-    {
-      name: 'DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_GRPC_ENDPOINT',
-      value: '0.0.0.0:4317',
-    },
+    // NOTE: this is purposfully commented out because we do not use OTLP and
+    // this was causing 1GB/s of data to be written to disk
+    // {
+    //   name: 'DD_APM_ENABLED',
+    //   value: 'true',
+    // },
+    // {
+    //   name: 'DD_LOGS_ENABLED',
+    //   value: 'true',
+    // },
+    // {
+    //   name: 'DD_OTLP_CONFIG_LOGS_ENABLED',
+    //   value: 'true',
+    // },
+    // {
+    //   name: 'DD_OTLP_CONFIG_RECEIVER_PROTOCOLS_GRPC_ENDPOINT',
+    //   value: '0.0.0.0:4317',
+    // },
   ],
-  portMappings: [
-    {
-      containerPort: 4317,
-    },
-  ],
+  // portMappings: [
+  //   {
+  //     containerPort: 4317,
+  //   },
+  // ],
   memoryReservation: 256,
 } satisfies ecs.TaskDefinitionContainerDefinitionArgs;
