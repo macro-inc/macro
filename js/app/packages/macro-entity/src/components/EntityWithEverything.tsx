@@ -578,7 +578,7 @@ export function EntityWithEverything(
 
                 return (
                   <div
-                    class="relative flex gap-1 items-center min-w-0 h-9 border border-[pink]"
+                    class="relative flex gap-1 items-center min-w-0 h-8"
                     classList={{
                       'hover:bg-hover/20 hover:opacity-70':
                         !!props.onClickNotification,
