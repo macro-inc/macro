@@ -1,0 +1,39 @@
+[package]
+edition = "2024"
+name = "email"
+publish = false
+version = "0.1.0"
+
+[features]
+ai_schema = ["dep:schemars"]
+axum = [
+  "dep:axum",
+  "dep:model-error-response",
+  "dep:model_user",
+  "dep:utoipa",
+  "model_user/axum",
+  "models_pagination/axum",
+]
+
+[dependencies]
+anyhow = { workspace = true }
+axum = { workspace = true, optional = true }
+frecency = { path = "../frecency" }
+macro_user_id = { path = "../macro_user_id" }
+model-entity = { path = "../model-entity" }
+model-error-response = { path = "../model-error-response", optional = true }
+model_user = { path = "../model_user", optional = true }
+models_pagination = { path = "../models_pagination" }
+schemars = { workspace = true, optional = true, features = ["uuid1"] }
+serde = { workspace = true }
+serde_with = { workspace = true }
+sqlx = { workspace = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros"] }
+tracing = { workspace = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+
+[dev-dependencies]
+serde_json = { workspace = true }
