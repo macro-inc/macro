@@ -55,7 +55,7 @@ pub async fn patch_settings_handler(
     State(ctx): State<ApiContext>,
     link: Extension<Link>,
     Json(api_settings): Json<PatchSettingsRequest>,
-) -> Result<Response, PatchSettingsError> {
+) -> Result<Json<PatchSettingsResponse>, PatchSettingsError> {
     let service_settings = service::settings::Settings::new(api_settings.settings, link.id);
 
     let updated_settings =
@@ -63,11 +63,7 @@ pub async fn patch_settings_handler(
 
     let response_settings = api::settings::Settings::from(updated_settings);
 
-    Ok((
-        StatusCode::OK,
-        Json(PatchSettingsResponse {
-            settings: response_settings,
-        }),
-    )
-        .into_response())
+    Ok(Json(PatchSettingsResponse {
+        settings: response_settings,
+    }))
 }

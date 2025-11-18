@@ -6,6 +6,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
+#[serde(rename_all = "UPPERCASE")]
 pub enum UserProvider {
     Gmail,
 }
@@ -15,6 +16,12 @@ impl UserProvider {
         match self {
             UserProvider::Gmail => "GMAIL",
         }
+    }
+}
+
+impl std::fmt::Display for UserProvider {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
     }
 }
 

@@ -3,7 +3,7 @@ use sqlx::PgPool;
 use sqlx::types::Uuid;
 
 /// Updates a user's settings.
-#[tracing::instrument(skip(pool), level = "info", err)]
+#[tracing::instrument(skip(pool), err)]
 pub async fn patch_settings(
     pool: &PgPool,
     service_settings: service::settings::Settings,
