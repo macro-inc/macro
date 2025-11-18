@@ -85,7 +85,7 @@ pub async fn list_links_handler(
                 .gmail_client
                 .get_email_signature(&access_token, &link.email_address)
                 .await
-                .unwrap_or_else(|_| None);
+                .unwrap_or(None);
 
             Ok(api::link::Link::new(
                 link,
