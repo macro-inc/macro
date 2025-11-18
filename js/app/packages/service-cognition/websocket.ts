@@ -1,4 +1,3 @@
-import { useIsAuthenticated } from '@core/auth';
 import { createBlockEffect, inBlock } from '@core/block';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
@@ -6,18 +5,23 @@ import { fetchToken } from '@core/util/fetchWithToken';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { createCallback } from '@solid-primitives/rootless';
 import {
-  authPlugin,
-  createDurableSocket,
-  createSocketEffect,
-  createWSState,
-  heartbeatPlugin,
-  jsonPlugin,
-} from '@websocket/index';
+  ConstantBackoff,
+  JsonSerializer,
+  type Websocket,
+  WebsocketBuilder,
+} from '@websocket';
+import { createSocketEffect } from '@websocket/solid/socket-effect';
+import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
 import type { Accessor } from 'solid-js';
 import { createRoot, createSignal } from 'solid-js';
 import type { StreamError } from './generated/schemas';
 import type { FromWebSocketMessage } from './generated/schemas/fromWebSocketMessage';
 import type { ToWebSocketMessage } from './generated/schemas/toWebSocketMessage';
+
+export type CognitionWebsocket = Websocket<
+  ToWebSocketMessage,
+  FromWebSocketMessage
+>;
 
 export type { StreamError, FromWebSocketMessage, ToWebSocketMessage };
 
@@ -37,35 +41,31 @@ export enum WebSocketState {
 
 const wsHost: string = SERVER_HOSTS['cognition-websocket-service'];
 
-export const ws = createDurableSocket<ToWebSocketMessage, FromWebSocketMessage>(
-  wsHost,
-  {
-    backoffStrategy: 'linear',
-    delay: 500,
-    reconnectUrlResolver: async () => {
-      if (ENABLE_BEARER_TOKEN_AUTH) {
-        const apiToken = await getMacroApiToken();
-        if (!apiToken) throw new Error('No Macro API token');
+async function resolveWsUrl() {
+  if (ENABLE_BEARER_TOKEN_AUTH) {
+    const apiToken = await getMacroApiToken();
+    if (!apiToken) throw new Error('No Macro API token');
+    return `${wsHost}/?macro-api-token=${apiToken}`;
+  }
+  await fetchToken();
+  return wsHost;
+}
 
-        return `${wsHost}/?macro-api-token=${apiToken}`;
-      }
-      await fetchToken();
-      return wsHost;
-    },
-  },
-  [
-    authPlugin({
-      isAuthenticated: () => {
-        const isAuth = useIsAuthenticated();
-        return isAuth() ?? false;
-      },
-    }),
-    heartbeatPlugin({ interval: 25_000 }),
-    jsonPlugin<ToWebSocketMessage, FromWebSocketMessage>(),
-  ]
-);
+export const ws: CognitionWebsocket = new WebsocketBuilder(resolveWsUrl)
+  .withSerializer(
+    new JsonSerializer<ToWebSocketMessage, FromWebSocketMessage>()
+  )
+  .withBackoff(new ConstantBackoff(500))
+  .withHeartbeat({
+    interval: 1_000,
+    timeout: 1_000,
+    pingMessage: 'ping',
+    pongMessage: 'pong',
+    maxMissedHeartbeats: 3,
+  })
+  .build();
 
-export const state = createWSState(ws);
+export const state = createWebsocketStateSignal(ws);
 
 export function createCognitionWebsocketBlockEffect<
   T extends FromWebSocketMessage['type'],

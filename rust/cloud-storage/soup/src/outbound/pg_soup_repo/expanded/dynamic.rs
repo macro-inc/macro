@@ -58,17 +58,17 @@ static PREFIX: &str = r#"
 
 static DOCUMENT_CLAUSE: &str = r#"
     SELECT
-        'document' as "item_type!",
-        d.id as "id!",
+        'document' as "item_type",
+        d.id as "id",
         CAST(COALESCE(di.id, db.id) as TEXT) as "document_version_id",
-        d.owner as "user_id!",
-        d.name as "name!",
+        d.owner as "user_id",
+        d.name as "name",
         d."branchedFromId" as "branched_from_id",
         d."branchedFromVersionId" as "branched_from_version_id",
         d."documentFamilyId" as "document_family_id",
         d."fileType" as "file_type",
-        d."createdAt"::timestamptz as "created_at!",
-        d."updatedAt"::timestamptz as "updated_at!",
+        d."createdAt"::timestamptz as "created_at",
+        d."updatedAt"::timestamptz as "updated_at",
         d."projectId" as "project_id",
         NULL as "is_persistent",
         di.sha as "sha",
@@ -78,23 +78,23 @@ static DOCUMENT_CLAUSE: &str = r#"
             WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
             WHEN 'created_at' THEN d."createdAt"
             ELSE d."updatedAt"
-        END::timestamptz as "sort_ts!"
+        END::timestamptz as "sort_ts"
     FROM "Document" d
     INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
     -- This MUST be a LEFT JOIN to support all three sort methods
     LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
     LEFT JOIN LATERAL (
-        SELECT b.id 
-        FROM "DocumentBom" b 
-        WHERE b."documentId" = d.id 
-        ORDER BY b."createdAt" DESC 
+        SELECT b.id
+        FROM "DocumentBom" b
+        WHERE b."documentId" = d.id
+        ORDER BY b."createdAt" DESC
         LIMIT 1
     ) db ON true
     LEFT JOIN LATERAL (
-        SELECT i.id, i.sha 
-        FROM "DocumentInstance" i 
-        WHERE i."documentId" = d.id 
-        ORDER BY i."updatedAt" DESC 
+        SELECT i.id, i.sha
+        FROM "DocumentInstance" i
+        WHERE i."documentId" = d.id
+        ORDER BY i."updatedAt" DESC
         LIMIT 1
     ) di ON true
     WHERE d."deletedAt" IS NULL
@@ -102,17 +102,17 @@ static DOCUMENT_CLAUSE: &str = r#"
 
 static CHAT_CLAUSE: &str = r#"
     SELECT
-        'chat' as "item_type!",
-        c.id as "id!",
+        'chat' as "item_type",
+        c.id as "id",
         NULL as "document_version_id",
-        c."userId" as "user_id!",
-        c.name as "name!",
+        c."userId" as "user_id",
+        c.name as "name",
         NULL as "branched_from_id",
         NULL as "branched_from_version_id",
         NULL as "document_family_id",
         NULL as "file_type",
-        c."createdAt"::timestamptz as "created_at!",
-        c."updatedAt"::timestamptz as "updated_at!",
+        c."createdAt"::timestamptz as "created_at",
+        c."updatedAt"::timestamptz as "updated_at",
         c."projectId" as "project_id",
         c."isPersistent" as "is_persistent",
         NULL as "sha",
@@ -122,7 +122,7 @@ static CHAT_CLAUSE: &str = r#"
             WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
             WHEN 'created_at' THEN c."createdAt"
             ELSE c."updatedAt"
-        END::timestamptz as "sort_ts!"
+        END::timestamptz as "sort_ts"
     FROM "Chat" c
     INNER JOIN UserAccessibleItems uai ON uai.item_id = c.id AND uai.item_type = 'chat'
     LEFT JOIN "UserHistory" uh ON uh."itemId" = c.id AND uh."itemType" = 'chat' AND uh."userId" = $1
@@ -131,17 +131,17 @@ static CHAT_CLAUSE: &str = r#"
 
 static PROJECT_CLAUSE: &str = r#"
     SELECT
-        'project' as "item_type!",
-        p.id as "id!",
+        'project' as "item_type",
+        p.id as "id",
         NULL as "document_version_id",
-        p."userId" as "user_id!",
-        p.name as "name!",
+        p."userId" as "user_id",
+        p.name as "name",
         NULL as "branched_from_id",
         NULL as "branched_from_version_id",
         NULL as "document_family_id",
         NULL as "file_type",
-        p."createdAt"::timestamptz as "created_at!",
-        p."updatedAt"::timestamptz as "updated_at!",
+        p."createdAt"::timestamptz as "created_at",
+        p."updatedAt"::timestamptz as "updated_at",
         p."parentId" as "project_id",
         NULL as "is_persistent",
         NULL as "sha",
@@ -151,7 +151,7 @@ static PROJECT_CLAUSE: &str = r#"
             WHEN 'viewed_at' THEN COALESCE(uh."updatedAt", '1970-01-01 00:00:00+00')
             WHEN 'created_at'  THEN p."createdAt"
             ELSE p."updatedAt"
-        END::timestamptz as "sort_ts!"
+        END::timestamptz as "sort_ts"
     FROM "Project" p
     INNER JOIN UserAccessibleItems uai
         ON uai.item_id = p.id
@@ -168,15 +168,30 @@ static SUFFIX: &str = r#"
     WHERE
         ($4::timestamptz IS NULL)
         OR
-        ("sort_ts!", "id!") < ($4, $5)
-    ORDER BY "sort_ts!" DESC, "updated_at!" DESC
+        ("sort_ts", "id") < ($4, $5)
+    ORDER BY "sort_ts" DESC, "updated_at" DESC
     LIMIT $3
 "#;
 
-fn build_document_clause(ast: Option<&Expr<DocumentLiteral>>) -> QueryBuilder<'static, Postgres> {
-    let mut res = sqlx::QueryBuilder::new(DOCUMENT_CLAUSE);
+static SUFFIX_NO_FRECENCY: &str = r#"
+    SELECT Combined.* FROM Combined
+    LEFT JOIN frecency_aggregates fa
+        ON fa.entity_id = Combined."id"
+        AND fa.entity_type = Combined."item_type"
+        AND fa.user_id = $1
+    WHERE fa.id IS NULL
+        AND (
+            ($4::timestamptz IS NULL)
+            OR
+            (Combined."sort_ts", Combined."id") < ($4, $5)
+        )
+    ORDER BY Combined."sort_ts" DESC, Combined."updated_at" DESC
+    LIMIT $3
+"#;
+
+fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
     let Some(expr) = ast else {
-        return res;
+        return String::new();
     };
     let formatting = expr.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
@@ -191,15 +206,16 @@ fn build_document_clause(ast: Option<&Expr<DocumentLiteral>>) -> QueryBuilder<'s
         }
         filter_ast::ExprFrame::Literal(DocumentLiteral::Owner(o)) => format!("d.owner = '{o}'"),
     });
-    res.push(formatting);
-
-    res
+    if formatting.is_empty() {
+        String::new()
+    } else {
+        format!(" AND {}", formatting)
+    }
 }
 
-fn build_chat_clause(ast: Option<&Expr<ChatLiteral>>) -> QueryBuilder<'static, Postgres> {
-    let mut res = sqlx::QueryBuilder::new(CHAT_CLAUSE);
+fn build_chat_filter(ast: Option<&Expr<ChatLiteral>>) -> String {
     let Some(expr) = ast else {
-        return res;
+        return String::new();
     };
     let formatting = expr.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
@@ -213,40 +229,64 @@ fn build_chat_clause(ast: Option<&Expr<ChatLiteral>>) -> QueryBuilder<'static, P
         filter_ast::ExprFrame::Literal(ChatLiteral::ChatId(i)) => format!("c.id = '{i}'"),
         filter_ast::ExprFrame::Literal(ChatLiteral::Owner(o)) => format!("c.owner = '{o}'"),
     });
-    res.push(formatting);
-
-    res
+    if formatting.is_empty() {
+        String::new()
+    } else {
+        format!(" AND {}", formatting)
+    }
 }
 
-fn build_project_clause(ast: Option<&Expr<ProjectLiteral>>) -> QueryBuilder<'static, Postgres> {
-    let mut res = sqlx::QueryBuilder::new(PROJECT_CLAUSE);
+fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
     let Some(expr) = ast else {
-        return res;
+        return String::new();
     };
     let formatting = expr.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
         filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
         filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
         filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectId(p)) => {
-            format!("c.id = '{p}'")
+            format!("p.id = '{p}'")
         }
-        filter_ast::ExprFrame::Literal(ProjectLiteral::Owner(o)) => format!("c.owner = '{o}'"),
+        filter_ast::ExprFrame::Literal(ProjectLiteral::Owner(o)) => format!("p.owner = '{o}'"),
     });
-    res.push(formatting);
-
-    res
+    if formatting.is_empty() {
+        String::new()
+    } else {
+        format!(" AND {}", formatting)
+    }
 }
 
-fn build_query(filter_ast: &EntityFilterAst) -> QueryBuilder<'_, Postgres> {
+fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBuilder<'_, Postgres> {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
-    builder
-        .push("Combined AS (")
-        .separated("UNION_ALL")
-        .push(build_document_clause(filter_ast.inner.document_filter.as_ref()).sql())
-        .push(build_chat_clause(filter_ast.inner.chat_filter.as_ref()).sql())
-        .push(build_project_clause(filter_ast.inner.project_filter.as_ref()).sql())
-        .push_unseparated(") ")
-        .push(SUFFIX);
+    builder.push("Combined AS (");
+
+    // Document clause
+    builder.push(DOCUMENT_CLAUSE);
+    builder.push(build_document_filter(
+        filter_ast.inner.document_filter.as_ref(),
+    ));
+
+    builder.push(" UNION ALL ");
+
+    // Chat clause
+    builder.push(CHAT_CLAUSE);
+    builder.push(build_chat_filter(filter_ast.inner.chat_filter.as_ref()));
+
+    builder.push(" UNION ALL ");
+
+    // Project clause
+    builder.push(PROJECT_CLAUSE);
+    builder.push(build_project_filter(
+        filter_ast.inner.project_filter.as_ref(),
+    ));
+
+    builder.push(") ");
+
+    if exclude_frecency {
+        builder.push(SUFFIX_NO_FRECENCY);
+    } else {
+        builder.push(SUFFIX);
+    }
 
     builder
 }
@@ -387,17 +427,35 @@ impl SoupRow {
     }
 }
 
-#[tracing::instrument(skip(db, limit))]
-pub async fn expanded_dynamic_cursor_soup(
+#[derive(Debug)]
+pub(crate) struct ExpandedDynamicCursorArgs<'a> {
+    /// the user for which we are performing the query
+    pub user_id: MacroUserIdStr<'a>,
+    /// the limit of items we can return
+    pub limit: u16,
+    /// the Query that we are attempting to perform
+    pub cursor: Query<String, SimpleSortMethod, EntityFilterAst>,
+    /// whether or not the query should explicitly remove items that DO have
+    /// frecency records
+    pub exclude_frecency: bool,
+}
+
+#[tracing::instrument(skip(db), err)]
+pub(crate) async fn expanded_dynamic_cursor_soup(
     db: &PgPool,
-    user_id: MacroUserIdStr<'_>,
-    limit: u16,
-    cursor: Query<String, SimpleSortMethod, EntityFilterAst>,
+    args: ExpandedDynamicCursorArgs<'_>,
 ) -> Result<Vec<SoupItem>, sqlx::Error> {
+    let ExpandedDynamicCursorArgs {
+        user_id,
+        limit,
+        cursor,
+        exclude_frecency,
+    } = args;
     let query_limit = limit as i64;
     let sort_method_str = cursor.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = cursor.vals();
-    build_query(cursor.filter())
+
+    build_query(cursor.filter(), exclude_frecency)
         .build()
         .bind(user_id.as_ref())
         .bind(sort_method_str)

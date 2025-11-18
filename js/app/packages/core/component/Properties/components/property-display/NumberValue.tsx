@@ -4,6 +4,7 @@ import { Show } from 'solid-js';
 import { useInlineEditor } from '../../hooks';
 import type { Property } from '../../types';
 import { formatNumber } from '../../utils';
+import { EmptyValue } from './PropertyValuePrimitives';
 
 type NumberValueProps = {
   property: Property;
@@ -62,7 +63,7 @@ export const NumberValue: Component<NumberValueProps> = (props) => {
               : 'bg-transparent text-ink-muted cursor-default'
           } block max-w-full break-words`}
         >
-          <Show when={hasValue()} fallback={<>—</>}>
+          <Show when={hasValue()} fallback={<EmptyValue />}>
             <span class="block truncate max-w-full">{displayValue}</span>
           </Show>
         </button>

@@ -39,9 +39,11 @@ uuid = { workspace = true }
 
 [dev-dependencies]
 cool_asserts = "2"
+filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency", features = ["mock"] }
 futures = { workspace = true }
 http-body-util = { workspace = true }
+item_filters = { path = "../item_filters", features = ["mock"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
 ordered-float = "5"

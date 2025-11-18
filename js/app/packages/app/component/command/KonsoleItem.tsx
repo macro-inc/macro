@@ -41,11 +41,13 @@ import {
   type Setter,
   Switch,
 } from 'solid-js';
+import { createStore } from 'solid-js/store';
 import { useGlobalBlockOrchestrator } from '../GlobalAppState';
 import { useSplitLayout } from '../split-layout/layout';
 import { EmailCommandItem } from './EmailKonsoleItem';
 import {
   cleanQuery,
+  currentKonsoleMode,
   resetKonsoleMode,
   resetQuery,
   setKonsoleOpen,
@@ -71,6 +73,10 @@ export function createChannelLookup(channelsContext: ChannelsContext) {
   });
 }
 
+// Context information for actions and stuff
+export const [konsoleContextInformation, setKonsoleContextInformation] =
+  createSignal<Record<string, unknown>>({});
+
 // TODO: better naming?
 export function hydrateChannel(
   item: CommandItemCard,
@@ -88,17 +94,107 @@ export function hydrateChannel(
   return item;
 }
 
-export const SEARCH_CATEGORY = [
-  'Everything',
-  'Channels',
-  'DMs',
-  'Notes',
-  'Documents',
-  'Chats',
-  'Folders',
-  'Emails',
-  ...(ENABLE_GMAIL_BASED_CONTACTS ? ['Contacts', 'Companies'] : []),
-];
+const DEFAULT_CATEGORIES = [
+  { name: 'Selection', visible: false },
+  { name: 'Everything', visible: true },
+  { name: 'Channels', visible: true },
+  { name: 'DMs', visible: true },
+  { name: 'Notes', visible: true },
+  { name: 'Documents', visible: true },
+  { name: 'Chats', visible: true },
+  { name: 'Folders', visible: true },
+  { name: 'Emails', visible: true },
+  { name: 'Contacts', visible: ENABLE_GMAIL_BASED_CONTACTS },
+  { name: 'Companies', visible: ENABLE_GMAIL_BASED_CONTACTS },
+] as const;
+
+type DefaultCategoryNames = (typeof DEFAULT_CATEGORIES)[number]['name'];
+
+type KonsoleCategory = {
+  name: string;
+  visible: boolean;
+};
+
+const [categories, setCategories] = createStore<KonsoleCategory[]>(
+  DEFAULT_CATEGORIES.slice()
+);
+
+export const searchCategories = {
+  getCateoryIndex(name: DefaultCategoryNames | (string & {})) {
+    const index = categories.findIndex((c) => c.name === name);
+
+    if (index === -1) return;
+
+    return index;
+  },
+  hideCategory(name: DefaultCategoryNames | (string & {})) {
+    setCategories((p) => p.name === name, 'visible', false);
+  },
+  showCategory(name: DefaultCategoryNames | (string & {})) {
+    setCategories((p) => p.name === name, 'visible', true);
+  },
+  toggleCategory(name: DefaultCategoryNames | (string & {})) {
+    setCategories(
+      (p) => p.name === name,
+      'visible',
+      (p) => !p
+    );
+  },
+  isCategoryActive(index: number) {
+    if (categories[index].name === 'Emails') {
+      // only use emails for the search bar
+      if (currentKonsoleMode() !== 'FULL_TEXT_SEARCH') return false;
+
+      // TODO only show emails if they are enabled
+      // NOTE: this also seems to trigger a "computations created outside a 'createRoot' will never be disposed error
+      //const emailActive = useEmailActive();
+      const emailEnabled = () => {
+        // TODO: this causes a loop
+        //if (emailActive()?.link_exists) return true;
+        return true;
+      };
+      return emailEnabled();
+    }
+    return true;
+  },
+  findNextCategoryIndex(category: number, backwards: boolean): number {
+    let candidateCategory = -1;
+    const length = categories.length;
+    for (let i = 1; i < length; i++) {
+      if (backwards) {
+        candidateCategory = category - i;
+      } else {
+        candidateCategory = category + i;
+      }
+
+      // Perform wrap-around
+      if (candidateCategory >= length) {
+        candidateCategory = 0;
+      } else if (candidateCategory < 0) {
+        candidateCategory = length + candidateCategory;
+      }
+
+      if (this.isCategoryActive(candidateCategory)) break;
+      candidateCategory = -1;
+    }
+    return candidateCategory;
+  },
+  listVisible() {
+    return [...categories.filter((c) => c.visible)];
+  },
+  listAll() {
+    return [...categories];
+  },
+};
+
+export const resetCommandCategoryIndex = () => {
+  const everything = DEFAULT_CATEGORIES[1].name;
+  const indexOfEverything = searchCategories
+    .listVisible()
+    .findIndex((c) => c.name === everything);
+
+  setCommandCategoryIndex(indexOfEverything === -1 ? 0 : indexOfEverything);
+};
 
 export type SearchSnippet = {
   content: string;
@@ -164,6 +260,7 @@ export type CommandPreview = {
   hotkeys: ValidHotkey[];
   handler: (e: KeyboardEvent) => boolean;
   activateCommandScopeId?: string;
+  tags?: string[];
 };
 
 export type ChannelPreview = {
@@ -264,7 +361,6 @@ export function useCommandItemAction(args: {
     const blockName = getCommandItemBlockName(item);
     const id = item.data.id;
     const split = action === 'new-split' ? insertSplit : replaceSplit;
-    console.log('GO TO LOCATION', id);
 
     if (blockName) {
       split({ type: blockName, id });
@@ -290,7 +386,6 @@ export function useCommandItemAction(args: {
                 limitToCurrentScope: true,
               }
             );
-            console.log(commandScopeCommands);
             resetQuery();
             setCommandScopeCommands(commandScopeCommands);
             break;
@@ -345,15 +440,30 @@ function getCommandItemName(item: CommandItemCard): string {
 }
 
 export function filterItemByCategory(item: CommandItemCard) {
+  const categories = searchCategories.listVisible();
+  const category = categories[commandCategoryIndex()].name;
+
   // This should appear at the bottom of every category, if there are more items that need to be loaded
   if (item.type === 'loadmore') {
     return true;
   }
+
+  if (category === 'Selection') {
+    if (
+      currentKonsoleMode() === 'SELECTION_MODIFICATION' &&
+      item.type === 'command'
+    ) {
+      return item.data.tags?.includes('selection-modification');
+    }
+    return false;
+  }
+
   // Action items should always appear in the "Everything" category
   if (item.type === 'command') {
-    return SEARCH_CATEGORY[commandCategoryIndex()] === 'Everything';
+    return category === 'Everything';
   }
-  switch (SEARCH_CATEGORY[commandCategoryIndex()]) {
+
+  switch (category) {
     case 'Channels':
       return (
         item.type === 'channel' &&
