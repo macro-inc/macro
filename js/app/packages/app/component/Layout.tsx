@@ -17,11 +17,11 @@ import { KommandMenu } from './command/Konsole';
 import { Dock } from './dock/Dock';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
+import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { Paywall } from './paywall/Paywall';
 import { QuickCreateMenu } from './QuickCreateMenu';
 import { RightbarWrapper } from './rightbar/Rightbar';
 import { Settings, setViewportOffset } from './settings/Settings';
-import { Launcher, setCreateMenuOpen, createMenuOpen } from './Launcher';
 
 export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();

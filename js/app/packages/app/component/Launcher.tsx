@@ -5,13 +5,13 @@ import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import type { HotkeyToken } from '@core/hotkey/tokens';
 import type { CommandDisplayPriority, ValidHotkey } from '@core/hotkey/types';
-import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import {
   createCanvasFileFromJsonString,
   createChat,
   createCodeFileFromText,
   createMarkdownFile,
 } from '@core/util/create';
+import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { isErr } from '@core/util/maybeResult';
 import { Dialog } from '@kobalte/core/dialog';
 import PixelChat from '@macro-icons/pixel/ai.svg';
