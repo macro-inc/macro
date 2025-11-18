@@ -1,5 +1,4 @@
 import type { EntityData } from '@macro-entity';
-import { createSignal, onMount, Show } from 'solid-js';
 import { createBulkDeleteDssItemsMutation } from '../../../macro-entity/src/queries/dss';
 import { konsoleContextInformation } from '../command/KonsoleItem';
 import {
@@ -13,23 +12,14 @@ export const BulkDeleteView = (props: {
   onCancel: () => void;
 }) => {
   const bulkDelete = createBulkDeleteDssItemsMutation();
-  const [showConfirmation, setShowConfirmation] = createSignal(false);
-
-  // Show confirmation dialog immediately when component mounts
-  onMount(() => {
-    setShowConfirmation(true);
-  });
 
   const handleDelete = async () => {
     try {
       await bulkDelete.mutateAsync(props.entities);
 
-      // Clear selection after successful deletion
       const context = konsoleContextInformation();
       const clearSelection = context.clearSelection as (() => void) | undefined;
       clearSelection?.();
-
-      setShowConfirmation(false);
       props.onFinish();
     } catch (error) {
       console.error('Failed to delete entities:', error);
@@ -37,7 +27,6 @@ export const BulkDeleteView = (props: {
   };
 
   const handleCancel = () => {
-    setShowConfirmation(false);
     props.onCancel();
   };
 

@@ -316,7 +316,8 @@ export function createNavigationEntityListShortcut({
     afterEntity: EntityData | null;
   }>(() => {
     const entityList = entities();
-    if (!entityList) return { entities: [], beforeEntity: '', afterId: '' };
+    if (!entityList)
+      return { entities: [], beforeEntity: null, afterEntity: null };
 
     const idToIndexMap = new Map(entityList.map(({ id }, i) => [id, i]));
     let selectedEntityIndices: Array<{ entity: EntityData; index: number }> =
@@ -342,7 +343,7 @@ export function createNavigationEntityListShortcut({
     }
 
     if (selectedEntityIndices.length === 0) {
-      return { entities: [], beforeEntity: '', afterId: '' };
+      return { entities: [], beforeEntity: null, afterEntity: null };
     }
 
     selectedEntityIndices.sort((a, b) => a.index - b.index);
