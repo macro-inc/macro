@@ -14,6 +14,7 @@ import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
 import { createEffect, onCleanup, onMount, Show, Suspense } from 'solid-js';
 import { updateCookie } from '../util/updateCookie';
 import Banner from './banner/Banner';
+import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { KommandMenu } from './command/Konsole';
 import { Dock } from './dock/Dock';
 import GlobalShortcuts from './GlobalHotkeys';
@@ -112,6 +113,7 @@ export function Layout(props: RouteSectionProps) {
           <KommandMenu />
         </Suspense>
         <QuickCreateMenu />
+        <GlobalBulkEditEntityModal />
       </Show>
       <Show
         when={

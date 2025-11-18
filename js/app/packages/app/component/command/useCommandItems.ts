@@ -51,6 +51,7 @@ export function useCommandItems() {
           hotkeys: command.hotkeys ?? [],
           handler: command.keyDownHandler ?? (() => false),
           activateCommandScopeId: command.activateCommandScopeId,
+          tags: command.tags ?? [],
         },
         updatedAt: 0,
       };

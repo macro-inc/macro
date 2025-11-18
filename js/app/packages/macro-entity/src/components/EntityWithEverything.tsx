@@ -20,7 +20,6 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { ITEM_WRAPPER } from '../constants/classStrings';
 import { createProfilePictureQuery } from '../queries/auth';
 import {
   createProjectQuery,
@@ -34,14 +33,16 @@ import type { EntityClickHandler } from './Entity';
 
 function UnreadIndicator(props: { active?: boolean }) {
   return (
-    <div class="flex min-w-5 items-center justify-center">
+    <div class="flex size-4 items-center justify-center">
       <svg
         xmlns="http://www.w3.org/2000/svg"
         classList={{
-          'flex size-[10px] fill-accent': true,
+          'fill-accent': true,
           'opacity-0': !props.active,
         }}
         viewBox="0 0 8 8"
+        width="75%"
+        height="75%"
         fill="none"
       >
         <path d="M3.39622 8C3.29136 8 3.23894 7.94953 3.23894 7.84858L3.33068 5.13565L0.932129 6.58675C0.836012 6.63722 0.76174 6.6204 0.709312 6.53628L0.0801831 5.56467C0.0190178 5.47213 0.0364936 5.40063 0.132611 5.35016L2.58359 4.07571L0.09329 2.88959C-0.00282696 2.83912 -0.0246717 2.77182 0.0277557 2.6877L0.59135 1.58991C0.643778 1.49737 0.71805 1.47634 0.814167 1.52681L3.31758 2.95268L3.21272 0.151421C3.21272 0.0504735 3.26515 0 3.37 0H4.57583C4.68069 0 4.73312 0.0504735 4.73312 0.151421L4.64137 2.94006L7.14478 1.40063C7.2409 1.34175 7.3108 1.35857 7.35449 1.4511L7.97051 2.46057C8.02294 2.5531 8.00546 2.6204 7.91808 2.66246L5.40157 4L7.82633 5.18612C7.91371 5.23659 7.93556 5.30389 7.89187 5.38801L7.36759 6.4858C7.32391 6.58675 7.25837 6.60778 7.17099 6.54889L4.6938 5.13565L4.78554 7.84858C4.79428 7.94953 4.74185 8 4.62826 8H3.39622Z" />
@@ -53,7 +54,7 @@ function UnreadIndicator(props: { active?: boolean }) {
 function ImportantBadge(props: { active?: boolean }) {
   return (
     <Show when={props.active}>
-      <div class="font-mono user-select-none uppercase flex items-center text-accent bg-accent/10 p-0.5 px-2 text-[0.625rem] rounded-full border border-accent/10">
+      <div class="font-mono font-medium user-select-none uppercase flex items-center text-accent bg-accent/10 p-0.5 px-2 text-[0.625rem] rounded-full border border-accent/10">
         <span class="@max-xl/split:hidden">Important</span>
         <span class="hidden @max-xl/split:block font-bold">!</span>
       </div>
@@ -84,12 +85,15 @@ interface EntityProps<T extends WithNotification<EntityData>>
   highlighted?: boolean;
   selected?: boolean;
   ref?: Ref<HTMLDivElement>;
+  onChecked?: (checked: boolean) => void;
+  checked?: boolean;
 }
 
 export function EntityWithEverything(
   props: EntityProps<WithNotification<EntityData | WithSearch<EntityData>>>
 ) {
   const [showActionList, setShowActionList] = createSignal(false);
+  const [entityHovered, setEntityHovered] = createSignal(false);
   const [actionButtonRef, setActionButtonRef] =
     createSignal<HTMLButtonElement | null>(null);
   const [showRestOfNotifications, setShowRestOfNotifications] =
@@ -132,10 +136,10 @@ export function EntityWithEverything(
   const hasNotifications = () =>
     !!props.entity.notifications && props.entity.notifications().length > 0;
 
-  const threadGap = 10;
+  const threadGap = 6;
   const ThreadBorder = () => (
     <div
-      class="absolute left-[9.5px] border-[0.5px] border-edge -top-1/2 "
+      class="absolute left-[calc(0.5rem+1px)] w-[1px] border-l border-edge-muted -top-0.75"
       style={{ height: `${threadGap}px` }}
     />
   );
@@ -204,7 +208,7 @@ export function EntityWithEverything(
       };
 
       return (
-        <div class="flex gap-2 items-center text-sm min-w-0 w-full truncate overflow-hidden">
+        <div class="flex gap-1 items-center text-sm min-w-0 w-full truncate overflow-hidden">
           {/* sometimes senderName and senderEmail are the same */}
           <div class="flex w-[20cqw] gap-2 font-semibold shrink-0">
             {/* Sender Name */}
@@ -270,7 +274,7 @@ export function EntityWithEverything(
 
     return (
       <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden">
-        <span class="flex gap-2 truncate font-medium text-sm shrink-0 items-center">
+        <span class="flex gap-1 truncate font-medium text-sm shrink-0 items-center">
           <span
             class="font-semibold truncate"
             classList={{
@@ -295,33 +299,36 @@ export function EntityWithEverything(
               !isDirectMessage()
             }
           >
-            <ImportantBadge active={props.importantIndicatorActive} />
-            <span class="inline-block">
-              <span class="text-ink">{userName()}</span>
-            </span>
+            <div class="flex items-center gap-1">
+              <ImportantBadge active={props.importantIndicatorActive} />
+              <span class="inline-block">
+                <span class="text-ink">{userName()}</span>
+              </span>
+            </div>
+          </Show>
+
+          <Show
+            when={
+              !props.showUnrollNotifications && notificationMessageContent()
+            }
+          >
+            {(messageContent) => (
+              <div class="text-sm truncate line-clamp-1 leading-none shrink text-ink-extra-muted py-1">
+                <StaticMarkdown
+                  markdown={messageContent()}
+                  theme={unifiedListMarkdownTheme}
+                  singleLine={false}
+                />
+              </div>
+            )}
           </Show>
         </span>
-
-        <Show
-          when={!props.showUnrollNotifications && notificationMessageContent()}
-        >
-          {(messageContent) => (
-            <div class="text-sm truncate line-clamp-1 leading-none shrink text-ink-extra-muted py-1">
-              <StaticMarkdown
-                markdown={messageContent()}
-                theme={unifiedListMarkdownTheme}
-                singleLine={false}
-              />
-            </div>
-          )}
-        </Show>
       </div>
     );
   };
 
   const draggable = createDraggable(props.entity.id, props.entity);
   false && draggable;
-
   const droppable = createDroppable(props.entity.id, props.entity);
   false && droppable;
 
@@ -339,22 +346,26 @@ export function EntityWithEverything(
     <div
       use:draggable
       use:droppable
-      class={`relative group py-[5px] px-2 ${ITEM_WRAPPER_CLASS()}`}
+      data-checked={props.checked}
+      class="everything-entity relative group/entity"
       classList={{
-        'bg-hover': props.highlighted,
-        bracket: props.selected,
-        'bg-hover ring-1 ring-inset ring-edge-muted': props.selected,
+        'bg-hover/30': props.highlighted && !props.checked,
+        'bg-accent/5': props.checked,
+        'bracket outline outline-accent/20 outline-offset-[-1px]':
+          props.selected,
       }}
       onMouseOver={(e) => {
         if (!didCursorMove(e)) {
           return;
         }
-
         setShowActionList(true);
-
         props.onMouseOver?.();
       }}
+      onMouseEnter={() => {
+        setEntityHovered(true);
+      }}
       onMouseLeave={() => {
+        setEntityHovered(false);
         setShowActionList(false);
       }}
       onFocusIn={() => {
@@ -374,12 +385,7 @@ export function EntityWithEverything(
       <div
         data-entity
         data-entity-id={props.entity.id}
-        // class="@md:flex grid w-full min-w-0 flex-1 grid-cols-2 @md:flex-row @md:items-center @md:gap-4"
-        class="min-h-[40px] grid w-full min-w-0 flex-1 gap-2 grid-rows-1 @md:items-center suppress-css-bracket"
-        classList={{
-          'grid-cols-[auto_1fr_auto]': props.showLeftColumnIndicator,
-          'grid-cols-[1fr_auto]': !props.showLeftColumnIndicator,
-        }}
+        class="w-full min-w-0 grid flex-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto] pr-2"
         {...navHandlers()}
         // Action List is also rendered based on focus, but when focused via Shift+Tab, parent is focused due to Action List dom not present. Here we check if current browser task has captured Shift+Tab focus on Action List
         onFocusIn={(e) => {
@@ -403,13 +409,36 @@ export function EntityWithEverything(
         tabIndex={0}
         ref={props.ref}
       >
+        <button
+          type="button"
+          class="col-1 size-full relative group/button flex items-center justify-center"
+          onClick={(e) => {
+            e.stopPropagation();
+            props.onChecked?.(!props.checked);
+          }}
+        >
+          <div
+            class="size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-accent group-hover/button:border"
+            classList={{
+              'ring ring-edge-muted': props.selected || entityHovered(),
+              'bg-panel': !props.checked && (props.selected || entityHovered()),
+              'bg-accent border border-accent': props.checked,
+            }}
+          >
+            <Show when={props.checked}>
+              <CheckIcon class="w-full h-full text-panel" />
+            </Show>
+          </div>
+          <Show when={props.showLeftColumnIndicator && !props.checked}>
+            <div class="absolute inset-0 flex items-center justify-center -z-1">
+              <UnreadIndicator active={props.unreadIndicatorActive} />
+            </div>
+          </Show>
+        </button>
         {/* Left Column Indicator(s) */}
-        <Show when={props.showLeftColumnIndicator}>
-          <UnreadIndicator active={props.unreadIndicatorActive} />
-        </Show>
         {/* Icon and name - top left on mobile, first item on desktop */}
         <div
-          class="min-h-[40px] min-w-[50px] flex flex-row items-center gap-2"
+          class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2"
           classList={{
             grow: props.contentPlacement === 'bottom-row',
             'opacity-70': props.fadeIfRead && !props.unreadIndicatorActive,
@@ -425,10 +454,8 @@ export function EntityWithEverything(
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
         <div
-          class="relative row-1 ml-2 @md:ml-4 self-center min-w-0"
+          class="relative row-1 ml-2 @md:ml-4 self-center min-w-0 col-3"
           classList={{
-            'col-3': props.showLeftColumnIndicator,
-            'col-2': !props.showLeftColumnIndicator,
             'opacity-50': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
@@ -466,13 +493,7 @@ export function EntityWithEverything(
         </div>
         {/* Content Highlights from Search */}
         <Show when={contentHighlights().length > 0}>
-          <div
-            class="relative row-2 grid gap-2"
-            classList={{
-              'col-[2/-1]': props.showLeftColumnIndicator,
-              'col-[1/-1]': !props.showLeftColumnIndicator,
-            }}
-          >
+          <div class="relative row-2 grid gap-2 col-2 col-end-4 pb-2">
             <For each={contentHighlights()}>
               {(highlight) => (
                 <div class="text-sm text-ink-muted truncate">
@@ -487,17 +508,14 @@ export function EntityWithEverything(
           </div>
         </Show>
         {/* Notifications */}
-        <Show when={props.showUnrollNotifications && hasNotifications()}>
-          <div
-            class="relative row-2 col-[2/-1] grid"
-            classList={{
-              'col-[2/-1]': props.showLeftColumnIndicator,
-              'col-[1/-1]': !props.showLeftColumnIndicator,
-            }}
-            style={{
-              gap: `${threadGap}px`,
-            }}
-          >
+        <Show
+          when={
+            props.showUnrollNotifications &&
+            hasNotifications() &&
+            contentHighlights().length === 0
+          }
+        >
+          <div class="relative col-2 col-end-4 200 pb-2 gap-2">
             <For each={notDoneNotifications()}>
               {(notification) => {
                 const [userName] = useDisplayName(notification.senderId);
@@ -560,7 +578,7 @@ export function EntityWithEverything(
 
                 return (
                   <div
-                    class="relative flex gap-1 items-center min-w-0 h-5"
+                    class="relative flex gap-1 items-center min-w-0 h-7"
                     classList={{
                       'hover:bg-hover/20 hover:opacity-70':
                         !!props.onClickNotification,
@@ -600,7 +618,7 @@ export function EntityWithEverything(
                         <MessageContent />
                       </div>
                     </div>
-                    <div class="shrink-0 font-mono text-sm uppercase text-ink-extra-muted ml-2 @md:ml-4">
+                    <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
                       {formattedDate()}
                     </div>
                   </div>
@@ -762,22 +780,6 @@ const createFormattedDate = (timestamp: number) =>
       year: '2-digit',
     });
   });
-
-const ITEM_WRAPPER_CLASS = () => {
-  let input = ITEM_WRAPPER;
-  const excludeclasses = [
-    'focus-bracket-within',
-    'suppress-css-brackets',
-    'focus-within:bg-hover',
-    'hover:bg-hover',
-  ];
-  excludeclasses.forEach((pattern) => {
-    input = input.replace(new RegExp(pattern, 'g'), '');
-  });
-
-  // Optional: clean up extra spaces
-  input = input.replace(/\s+/g, ' ').trim();
-};
 
 let lastMouseX: number | null = null;
 let lastMouseY: number | null = null;
