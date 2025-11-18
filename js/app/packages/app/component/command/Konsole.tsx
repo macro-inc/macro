@@ -2,15 +2,12 @@ import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { ENABLE_SEARCH_PAGINATION } from '@core/constant/featureFlags';
 import type { CommandWithInfo } from '@core/hotkey/getCommands';
+import { runCommand } from '@core/hotkey/utils';
 import { cornerClip } from '@core/util/clipPath';
 import { createFreshSearch } from '@core/util/freshSort';
 import { Popover } from '@kobalte/core';
 import { Command as CommandK, useCommandState } from 'cmdk-solid';
-import {
-  registerHotkey,
-  runCommand,
-  useHotkeyDOMScope,
-} from 'core/hotkey/hotkeys';
+import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   createEffect,

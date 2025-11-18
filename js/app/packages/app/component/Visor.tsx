@@ -1,10 +1,14 @@
 import { getClippedOverlayRect } from '@app/util/getClippedOverlayRect';
 import { getScrollElementParent } from '@app/util/getScrollElementParent';
 import { Hotkey } from '@core/component/Hotkey';
-import { useHotkeyCommandByToken } from '@core/hotkey/hotkeys';
+import { hotkeyScopeTree } from '@core/hotkey/state';
 import { tokenMap } from '@core/hotkey/tokens';
-import type { HotkeyCommand } from '@core/hotkey/types';
-import { isScopeInActiveBranch } from '@core/hotkey/utils';
+import type { HotkeyCommand, ValidHotkey } from '@core/hotkey/types';
+import {
+  getActiveCommandByToken,
+  isScopeInActiveBranch,
+  prettyPrintHotkeyString,
+} from '@core/hotkey/utils';
 import {
   isElementVisibleInScrollElViewport,
   isElementVisibleInViewport,
@@ -35,7 +39,7 @@ function isElementVisible(element: HTMLElement) {
 
 type VisorLabel = {
   id: string;
-  hotkey: string;
+  hotkey: ValidHotkey;
   command: HotkeyCommand;
   targetEl: HTMLElement;
   targetElScrollParent: HTMLElement | null;
@@ -60,14 +64,20 @@ const Visor: Component<{
     setVisorLabels([]);
   };
 
-  const [currentInput, setCurrentInput] = createSignal('');
-
-  const runMacroJump = () => {
+  const runVisor = () => {
+    console.log('Running Visor, current scope tree: ', hotkeyScopeTree);
+    console.log('current tokenMap: ', tokenMap);
     const root = props.parent?.() ?? document.getElementById('root')!;
 
     const hotkeyEls = Array.from(
       root.querySelectorAll<HTMLElement>('[data-hotkey-token]')
-    );
+    ).filter((el) => {
+      const scopeElement = el.closest('[data-hotkey-scope]') as HTMLElement;
+      if (!scopeElement) return false;
+
+      const scopeId = scopeElement.dataset.hotkeyScope;
+      return scopeId && isScopeInActiveBranch(scopeId);
+    });
 
     const newVisorLabels: VisorLabel[] = hotkeyEls
       .filter((el) => {
@@ -87,8 +97,10 @@ const Visor: Component<{
         const id = createUniqueId();
         const tokenString = hotkeyEl.dataset.hotkeyToken ?? '';
         const token = tokenMap.get(tokenString);
+        console.log('checking token: ', token);
         if (!token) return acc;
-        const command = useHotkeyCommandByToken(token)();
+        const command = getActiveCommandByToken(token);
+        console.log('active command: ', command);
         const primaryHotkey = command?.hotkeys?.[0];
         // We only want to show visor for hotkeys that are in the current active scope branch.
         if (
@@ -123,7 +135,6 @@ const Visor: Component<{
   };
 
   const runCleanup = () => {
-    setCurrentInput('');
     removeAllOverlays();
     window.removeEventListener('keydown', handleKeyDown, {
       capture: true,
@@ -131,7 +142,6 @@ const Visor: Component<{
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
-
     if (e.key === 'Escape') {
       e.stopImmediatePropagation();
       e.stopPropagation();
@@ -152,10 +162,9 @@ const Visor: Component<{
       () => {
         if (componentStack.at(-1) !== componentId) return;
 
-        setCurrentInput('');
         setVisorLabels([]);
 
-        runMacroJump();
+        runVisor();
       },
       { defer: true }
     )
@@ -269,7 +278,7 @@ const VisorLabelOverlay: Component<VisorLabel> = (props) => {
             'relative font-mono text-page font-bold w-fit bg-accent border-l-accent border-t-accent border-r-page border-b-page border p-[2px] text-xs z-[1]'
           }
         >
-          <Hotkey shortcut={props.hotkey} />
+          <Hotkey shortcut={prettyPrintHotkeyString(props.hotkey)} />
         </div>
         <div
           class="absolute inset-0 border-page border"

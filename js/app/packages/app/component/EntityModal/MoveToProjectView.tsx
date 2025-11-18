@@ -126,7 +126,7 @@ export const MoveToProjectView = (props: {
           const isExpanded = expandedProjects()[currentProject.id];
 
           if (hasChildren && !isExpanded) {
-            Expanded(currentProject.id);
+            toggleExpanded(currentProject.id);
             return true;
           } else if (hasChildren && isExpanded) {
             // If already expanded, try to jump to first child

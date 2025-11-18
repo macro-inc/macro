@@ -43,8 +43,8 @@ import {
 } from '@core/component/LexicalMarkdown/utils';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { shortcutBadgeStyles } from '@core/component/Themes';
-import { useTokenToHotkeyString } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { getPretyHotkeyStringByToken } from '@core/hotkey/utils';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import type { IOrganizationUser } from '@core/user';
 import { $isDocumentMentionNode } from '@lexical-core';
@@ -259,7 +259,7 @@ function MarkdownArea(
   //   });
   // });
 
-  const focusShortcut = useTokenToHotkeyString(TOKENS.chat.input.focus);
+  const focusShortcut = getPretyHotkeyStringByToken(TOKENS.chat.input.focus);
 
   createEffect(
     on(props.mountRef, (ref) => {
@@ -430,7 +430,7 @@ function MarkdownArea(
                 <span
                   class={`rounded-md px-1.5 py-0.5 space-x-1 ${shortcutBadgeStyles['muted']}`}
                 >
-                  {focusShortcut()}
+                  {focusShortcut}
                 </span>{' '}
                 to chat with AI
               </p>

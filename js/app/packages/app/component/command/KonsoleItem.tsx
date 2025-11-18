@@ -14,7 +14,7 @@ import {
   type CommandWithInfo,
   getActiveCommandsFromScope,
 } from '@core/hotkey/getCommands';
-import { runCommand } from '@core/hotkey/hotkeys';
+import { runCommand } from '@core/hotkey/utils';
 import { pressedKeys } from '@core/hotkey/state';
 import type { ValidHotkey } from '@core/hotkey/types';
 import type { BlockOrchestrator } from '@core/orchestrator';
