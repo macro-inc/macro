@@ -6,6 +6,8 @@ import {
   emailRefetchInterval,
   useEmailLinksStatus,
 } from '@app/signal/emailAuth';
+import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
+import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import { Button } from '@core/component/FormControls/Button';
 import DropdownMenu from '@core/component/FormControls/DropdownMenu';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
@@ -820,15 +822,37 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     setIsSearchLoading(loading);
   });
 
-  const documentEntityClickHandler: EntityClickHandler<DocumentEntity> = (
-    { id, fileType },
-    event
-  ) => {
+  const documentEntityClickHandler: EntityClickHandler<
+    DocumentEntity | WithSearch<DocumentEntity>
+  > = async (entity, event) => {
+    const { id, fileType } = entity;
     const blockName = fileTypeToBlockName(fileType);
     const handle = event.altKey
       ? insertSplit({ type: blockName, id })
       : replaceOrInsertSplit({ type: blockName, id });
-    handle?.activate();
+
+    const location =
+      'search' in entity && entity.search.contentHighlights?.at(0)?.location;
+    if (location) {
+      handle?.activate();
+      const blockHandle = await blockOrchestrator.getBlockHandle(id);
+      switch (location.type) {
+        case 'md':
+          await blockHandle?.goToLocationFromParams({
+            [MD_PARAMS.nodeId]: location.nodeId,
+          });
+          break;
+        case 'pdf':
+          // TODO: use search match
+          await blockHandle?.goToLocationFromParams({
+            [PDF_PARAMS.pageNumber]: location.pageNumber,
+            [PDF_PARAMS.yPos]: 0,
+          });
+          break;
+      }
+    } else {
+      handle?.activate();
+    }
   };
 
   const entityClickHandler: EntityClickHandler<EntityData> = (

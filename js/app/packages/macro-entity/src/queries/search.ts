@@ -15,7 +15,11 @@ import { useHistory } from '@service-storage/history';
 import { useInfiniteQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { EntityData } from '../types/entity';
-import type { WithSearch } from '../types/search';
+import type {
+  FileTypeWithLocation,
+  SearchLocation,
+  WithSearch,
+} from '../types/search';
 import type { EntityInfiniteQuery } from './entity';
 import { queryKeys } from './key';
 
@@ -28,10 +32,53 @@ type InnerSearchResult =
   | ChannelSearchResult
   | ProjectSearchResult;
 
-const getHighlights = (innerResults: InnerSearchResult[]) => {
+const getLocationHighlights = (
+  innerResults: DocumentSearchResult[],
+  fileType: FileTypeWithLocation
+) => {
+  const contentHighlights = innerResults.flatMap((r) => {
+    const contents = r.highlight.content ?? [];
+    let location: SearchLocation | undefined;
+    switch (fileType) {
+      case 'md':
+        location = { type: 'md' as const, nodeId: r.node_id };
+        break;
+      case 'pdf':
+        try {
+          location = { type: 'pdf' as const, pageNumber: parseInt(r.node_id) };
+        } catch (_e) {
+          console.error('Cannot parse pdf page number', r.node_id);
+          location = undefined;
+        }
+        break;
+    }
+
+    return contents.map((content) => ({
+      content,
+      location,
+    }));
+  });
+
   return {
     nameHighlight: innerResults.at(0)?.highlight.name ?? null,
-    contentHighlights: innerResults.flatMap((r) => r.highlight.content ?? []),
+    contentHighlights: contentHighlights.length > 0 ? contentHighlights : null,
+    source: 'service' as const,
+  };
+};
+
+const getHighlights = (innerResults: InnerSearchResult[]) => {
+  const contentHighlights = innerResults.flatMap((r) => {
+    const contents = r.highlight.content ?? [];
+
+    return contents.map((content) => ({
+      content,
+      location: undefined,
+    }));
+  });
+
+  return {
+    nameHighlight: innerResults.at(0)?.highlight.name ?? null,
+    contentHighlights: contentHighlights.length > 0 ? contentHighlights : null,
     source: 'service' as const,
   };
 };
@@ -46,7 +93,12 @@ const useMapSearchResponseItem = () => {
     switch (result.type) {
       case 'document': {
         if (!result.metadata || result.metadata.deleted_at) return;
-        const search = getHighlights(result.document_search_results);
+        const search = ['md', 'pdf'].includes(result.file_type)
+          ? getLocationHighlights(
+              result.document_search_results,
+              result.file_type as FileTypeWithLocation
+            )
+          : getHighlights(result.document_search_results);
         return {
           type: 'document',
           id: result.document_id,
