@@ -3,7 +3,7 @@ import {
   SplitHeaderBadge,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
-import { connectEmail } from '@app/signal/emailAuth';
+import { connectEmail } from '@app/signal/onboarding/email-link';
 import { useHasPaidAccess } from '@core/auth';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { TextButton } from '@core/component/TextButton';

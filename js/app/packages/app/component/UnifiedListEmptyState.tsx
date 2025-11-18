@@ -1,4 +1,4 @@
-import { useEmailLinksStatus } from '@app/signal/emailAuth';
+import { useEmailLinksStatus } from '@app/signal/onboarding/email-link';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 
 import { fileSelector } from '@core/directive/fileSelector';

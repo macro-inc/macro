@@ -1,5 +1,5 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
-import { useEmailLinksStatus } from '@app/signal/emailAuth';
+import { useEmailLinksStatus } from '@app/signal/onboarding/email-link';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { ChannelsContextProvider } from '@core/component/ChannelsProvider';

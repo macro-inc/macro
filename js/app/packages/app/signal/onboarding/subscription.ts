@@ -1,16 +1,12 @@
 import { toast } from '@core/component/Toast/Toast';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
-import { isErr} from '@core/util/maybeResult';
+import { isErr } from '@core/util/maybeResult';
 import { logger } from '@observability';
 import { updateUserInfo, useLicenseStatus } from '@service-gql/client';
 import { stripeServiceClient } from '@service-stripe/client';
 import { raceTimeout, until } from '@solid-primitives/promise';
 import { useSearchParams } from '@solidjs/router';
-import {
-    Accessor,
-  createSignal,
-} from 'solid-js';
-
+import { type Accessor, createSignal } from 'solid-js';
 
 type SubscriptionTimeoutError = 'subscription_timeout';
 const SUBSCRIPTION_SUCCESS_TIMEOUT = 60_000;
