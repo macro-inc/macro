@@ -13,7 +13,7 @@ import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { PresentModeGlitch } from './PresentModeGlitch';
 import { IconButton } from '@core/component/IconButton';
 import IconQuestion from '@icon/regular/question.svg';
-import { Hotkey } from '@core/component/Hotkey';
+import { Hotkey, BasicHotkey } from '@core/component/Hotkey';
 import { withAnalytics } from '@coparse/analytics';
 import IconAtom from '@macro-icons/macro-atom.svg';
 import IconGear from '@macro-icons/macro-gear.svg';
@@ -198,13 +198,16 @@ export function Dock(){
                   'height': '9px'
                 }}
               />
-              <div style={{
+              {/*<div style={{
                 'font-family': 'monospace',
                 'background-color': '#f00',
                 'font-size': '10px',
                 'padding': '0 4px',
               }}>
                 <Hotkey token={TOKENS.global.createCommand}/>
+              </div>*/}
+              <div class="**:border-none! flex size-full">
+                <BasicHotkey shortcut="cmd+k" />
               </div>
             </div>
 
@@ -233,13 +236,16 @@ export function Dock(){
                   'height': '9px'
                 }}
               />
-              <div style={{
+              {/*<div style={{
                 'background-color': '#f00',
                 'font-family': 'monospace',
                 'font-size': '10px',
                 'padding': '0 4px',
               }}>
                 <Hotkey token={TOKENS.global.commandMenu}/>
+              </div>*/}
+              <div class="**:border-none! flex size-full">
+                <BasicHotkey shortcut="c" />
               </div>
             </div>
           </div>
@@ -255,7 +261,6 @@ export function Dock(){
               'line-height': '1rem',
               'display': 'flex',
               'gap': '4px',
-              'flex': '1',
             }}>
               <Show when={!hasPaid()}>
                 <BasicTierLimit />
@@ -271,6 +276,7 @@ export function Dock(){
               </Show>
             </div>
           </Show>
+
           <Show when={isMobileWidth()}>
             <div></div>
           </Show>
