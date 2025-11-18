@@ -52,7 +52,6 @@ import {
   resetQuery,
   setKonsoleOpen,
 } from './state';
-import { isEntityActionItem } from './useEntityActionItems';
 
 //NOTE: used to help for virtualization
 export const COMMAND_ITEM_PADDING = 6;
@@ -261,6 +260,7 @@ export type CommandPreview = {
   hotkeys: ValidHotkey[];
   handler: (e: KeyboardEvent) => boolean;
   activateCommandScopeId?: string;
+  tags?: string[];
 };
 
 export type ChannelPreview = {
@@ -448,11 +448,14 @@ export function filterItemByCategory(item: CommandItemCard) {
     return true;
   }
 
-  if (
-    category === 'Selection' &&
-    currentKonsoleMode() === 'SELECTION_MODIFICATION'
-  ) {
-    return isEntityActionItem(item);
+  if (category === 'Selection') {
+    if (
+      currentKonsoleMode() === 'SELECTION_MODIFICATION' &&
+      item.type === 'command'
+    ) {
+      return item.data.tags?.includes('selection-modification');
+    }
+    return false;
   }
 
   // Action items should always appear in the "Everything" category

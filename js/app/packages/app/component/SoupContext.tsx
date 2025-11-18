@@ -1,4 +1,3 @@
-import { disableOverlayClickSignal } from '@block-pdf/signal/click';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
@@ -15,7 +14,7 @@ import type { EntityData } from '@macro-entity';
 import { useTutorialCompleted } from '@service-gql/client';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
-import { action } from '@solidjs/router';
+
 import { useQuery } from '@tanstack/solid-query';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
@@ -699,7 +698,7 @@ export function createNavigationEntityListShortcut({
       searchCategories.hideCategory('Selection');
       resetCommandCategoryIndex();
       resetKonsoleMode();
-      false;
+      return false;
     },
   });
 
@@ -888,6 +887,7 @@ export function createNavigationEntityListShortcut({
       return true;
     },
     displayPriority: 10,
+    tags: ['selection-modification'],
   });
   registerHotkey({
     hotkey: ['x'],
@@ -943,6 +943,7 @@ export function createNavigationEntityListShortcut({
         });
       return true;
     },
+    tags: ['selection-modification'],
   });
 
   createEffect(() => {

@@ -1,5 +1,4 @@
 import type { EntityData } from '@macro-entity';
-import { createSignal } from 'solid-js';
 
 export type EntityActionType =
   | 'mark_as_done'

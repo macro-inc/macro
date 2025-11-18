@@ -80,6 +80,8 @@ import {
  * hotkey display UI. 1 is the lowest priority, 10 is the highest.
  * @param args.hide - If true, hotkey command can be hidden from the UI. It
  * will still run, but may not be displayed.
+ * @param args.icon - Optional icon to display in the command palette.
+ * @param args.tags - Optional tags for categorizing in the command palette.
  * @returns An object with a dispose function to clean up the hotkey
  * registration. If `activateCommandScope` is true, it also includes the
  * `commandScopeId`.
@@ -117,6 +119,7 @@ export function registerHotkey(
     displayPriority,
     hide,
     icon,
+    tags,
   } = args;
   ``;
 
@@ -189,6 +192,7 @@ export function registerHotkey(
     displayPriority: displayPriority ?? 0,
     hide,
     icon,
+    tags,
   };
 
   // Check for existing hotkeys in the scope

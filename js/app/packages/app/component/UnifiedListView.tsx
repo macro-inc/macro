@@ -6,18 +6,13 @@ import {
   emailRefetchInterval,
   useEmailLinksStatus,
 } from '@app/signal/emailAuth';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { Button } from '@core/component/FormControls/Button';
 import DropdownMenu from '@core/component/FormControls/DropdownMenu';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ToggleButton } from '@core/component/FormControls/ToggleButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { IconButton } from '@core/component/IconButton';
-import {
-  ContextMenuContent,
-  MenuItem,
-  MenuSeparator,
-} from '@core/component/Menu';
+import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import {
   blockAcceptsFileExtension,
@@ -37,7 +32,6 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { supportedExtensions } from '@lexical-core/utils';
 import {
   createChannelsQuery,
-  createDeleteDssItemMutation,
   createDssInfiniteQuery,
   createEmailsInfiniteQuery,
   createFilterComposer,
@@ -62,7 +56,6 @@ import {
   type WithNotification,
   type WithSearch,
 } from '@macro-entity';
-import { setMacroModalState } from '@macros-prompts/macros';
 import {
   markNotificationsForEntityAsDone,
   useNotificationsForEntity,
@@ -105,7 +98,6 @@ import {
 } from 'solid-js';
 import { createStore, type SetStoreFunction, unwrap } from 'solid-js/store';
 import { EntityWithEverything } from '../../macro-entity/src/components/EntityWithEverything';
-import { createCopyDssEntityMutation } from '../../macro-entity/src/queries/dss';
 import type { FetchPaginatedEmailsParams } from '../../macro-entity/src/queries/email';
 import {
   resetCommandCategoryIndex,
@@ -187,21 +179,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     selectedEntity: undefined,
     prevSelectedEntity: undefined,
   });
-
-  const openEntityModal = (view: 'rename' | 'moveToProject') => {
-    // terrible will fix
-    // context menu upon closing steals focus from mounted menu
-    setTimeout(() => {
-      setTimeout(() => {
-        setContextAndModalState((prev) => ({
-          ...prev,
-          modalOpen: true,
-          modalView: view,
-          selectedEntity: prev.prevSelectedEntity,
-        }));
-      }, 100);
-    });
-  };
 
   const [localEntityListRef, setLocalEntityListRef] = createSignal<
     HTMLDivElement | undefined
@@ -874,9 +851,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     handle?.activate();
   };
 
-  const { mutate: deleteDssItem } = createDeleteDssItemMutation();
-  const { mutate: copyDssItem } = createCopyDssEntityMutation();
-
   const StyledTriggerLabel = (props: ParentProps) => {
     return <span class="text-[0.625rem]">{props.children}</span>;
   };
@@ -961,41 +935,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       setViewDataStore(selectedView(), 'initialConfig', stringifiedConfig);
     }
   });
-
-  const disabledActions = () => {
-    const entity = contextAndModalState.selectedEntity;
-    const type = entity?.type;
-
-    if (!type) {
-      return {
-        markAsDone: true,
-        delete: true,
-        rename: true,
-        moveToProject: true,
-        copy: true,
-        moveToSplit: true,
-      };
-    }
-
-    return {
-      markAsDone:
-        type === 'email'
-          ? entity.done
-          : // @ts-ignore TODO: fix this
-            entity
-              // @ts-ignore TODO: fix this
-              ?.notifications?.()
-              // @ts-ignore TODO: fix this
-              .every(({ done }) => done),
-
-      delete: type !== 'document' && type !== 'chat',
-      rename: type !== 'document' && type !== 'chat',
-      moveToProject:
-        type !== 'project' && type !== 'document' && type !== 'chat',
-      copy: type !== 'document' && type !== 'chat',
-      moveToSplit: false,
-    };
-  };
 
   return (
     <>
@@ -1393,65 +1332,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     entity={selectedEntity()}
                     onSelectAction={() => {}}
                   />
-                  {/*<Show when={markEntityAsDone}>
-                    {(fnAccessor) => {
-                      const entityDisabled = (
-                        entity: WithNotification<EntityData>
-                      ) => {
-                        return entity.type === 'email'
-                          ? entity.done
-                          : entity.notifications?.().every(({ done }) => done);
-                      };
-                      return (
-                        <MenuItem
-                          text="Mark as Done"
-                          onClick={() => fnAccessor()(selectedEntity())}
-                          disabled={entityDisabled(selectedEntity())}
-                        />
-                      );
-                    }}
-                  </Show>
-                  <MenuItem
-                    text="Delete"
-                    onClick={() => deleteDssItem(selectedEntity())}
-                    disabled={
-                      selectedEntity().type !== 'document' &&
-                      selectedEntity().type !== 'project' &&
-                      selectedEntity().type !== 'chat'
-                    }
-                  />
-                  <MenuItem
-                    text="Rename"
-                    onClick={() => openEntityModal('rename')}
-                    disabled={
-                      selectedEntity().type !== 'document' &&
-                      selectedEntity().type !== 'chat'
-                    }
-                  />
-                  <MenuItem
-                    text="Move to Project"
-                    onClick={() => {
-                      openEntityModal('moveToProject');
-                    }}
-                    disabled={
-                      selectedEntity().type !== 'document' &&
-                      selectedEntity().type !== 'project' &&
-                      selectedEntity().type !== 'chat'
-                    }
-                  />
-                  <MenuItem
-                    text="Copy"
-                    onClick={() => {
-                      copyDssItem({ entity: selectedEntity() });
-                    }}
-                    disabled={
-                      selectedEntity().type !== 'document' &&
-                      selectedEntity().type !== 'chat'
-                    }
-                  />
-                  <MenuItem
-                    text="Open in new split"
-                  />*/}
                 </ContextMenuContent>
               )}
             </Show>
