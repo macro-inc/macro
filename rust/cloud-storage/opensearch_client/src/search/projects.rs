@@ -9,7 +9,7 @@ use crate::{
 };
 
 use crate::SearchOn;
-use opensearch_query_builder::{HighlightField, SearchRequest, ToOpenSearchJson};
+use opensearch_query_builder::{BoolQueryBuilder, HighlightField, SearchRequest, ToOpenSearchJson};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 
@@ -37,7 +37,7 @@ impl SearchQueryConfig for ProjectSearchConfig {
 }
 
 #[derive(Default)]
-struct ProjectQueryBuilder {
+pub(crate) struct ProjectQueryBuilder {
     inner: SearchQueryBuilder<ProjectSearchConfig>,
 }
 
@@ -61,14 +61,17 @@ impl ProjectQueryBuilder {
         fn disable_recency(disable_recency: bool) -> Self;
     }
 
-    fn build_search_request(self) -> Result<SearchRequest> {
-        // Build the main bool query containing all terms and any other filters
-        let bool_query = self.inner.build_bool_query()?;
+    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder> {
+        self.inner.build_bool_query()
+    }
 
+    fn build_search_request(&self) -> Result<SearchRequest> {
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
         // SearchOn::NameContent is used
-        let search_request = self.inner.build_search_request(bool_query.build())?;
+        let search_request = self
+            .inner
+            .build_search_request(self.build_bool_query()?.build())?;
 
         Ok(search_request)
     }
@@ -98,20 +101,25 @@ pub struct ProjectSearchArgs {
     pub disable_recency: bool,
 }
 
+impl From<ProjectSearchArgs> for ProjectQueryBuilder {
+    fn from(args: ProjectSearchArgs) -> Self {
+        ProjectQueryBuilder::new(args.terms)
+            .match_type(&args.match_type)
+            .page_size(args.page_size)
+            .page(args.page)
+            .user_id(&args.user_id)
+            .search_on(args.search_on)
+            .collapse(args.collapse)
+            .ids(args.project_ids)
+            .ids_only(args.ids_only)
+            .disable_recency(args.disable_recency)
+    }
+}
+
 impl ProjectSearchArgs {
     pub fn build(self) -> Result<Value> {
-        Ok(ProjectQueryBuilder::new(self.terms)
-            .match_type(&self.match_type)
-            .page_size(self.page_size)
-            .page(self.page)
-            .user_id(&self.user_id)
-            .search_on(self.search_on)
-            .collapse(self.collapse)
-            .ids(self.project_ids)
-            .ids_only(self.ids_only)
-            .disable_recency(self.disable_recency)
-            .build_search_request()?
-            .to_json())
+        let builder: ProjectQueryBuilder = self.into();
+        Ok(builder.build_search_request()?.to_json())
     }
 }
 

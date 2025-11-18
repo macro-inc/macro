@@ -11,7 +11,8 @@ use crate::{
 
 use crate::SearchOn;
 use opensearch_query_builder::{
-    FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
+    BoolQueryBuilder, FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
+    ToOpenSearchJson,
 };
 use serde_json::Value;
 
@@ -53,7 +54,7 @@ impl SearchQueryConfig for ChatSearchConfig {
     }
 }
 
-struct ChatQueryBuilder {
+pub(crate) struct ChatQueryBuilder {
     inner: SearchQueryBuilder<ChatSearchConfig>,
     /// The role of the chat message
     role: Vec<String>,
@@ -85,8 +86,7 @@ impl ChatQueryBuilder {
         self
     }
 
-    fn build_search_request(self) -> Result<SearchRequest> {
-        // Build the main bool query containing all terms and any other filters
+    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder> {
         let mut bool_query = self.inner.build_bool_query()?;
 
         // CUSTOM ATTRIBUTES SECTION
@@ -98,6 +98,12 @@ impl ChatQueryBuilder {
         }
 
         // END CUSTOM ATTRIBUTES SECTION
+
+        Ok(bool_query)
+    }
+
+    fn build_search_request(&self) -> Result<SearchRequest> {
+        let bool_query = self.build_bool_query()?;
 
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
@@ -123,21 +129,26 @@ pub struct ChatSearchArgs {
     pub disable_recency: bool,
 }
 
+impl From<ChatSearchArgs> for ChatQueryBuilder {
+    fn from(args: ChatSearchArgs) -> Self {
+        ChatQueryBuilder::new(args.terms)
+            .match_type(&args.match_type)
+            .page_size(args.page_size)
+            .page(args.page)
+            .user_id(&args.user_id)
+            .ids(args.chat_ids)
+            .role(args.role)
+            .search_on(args.search_on)
+            .collapse(args.collapse)
+            .ids_only(args.ids_only)
+            .disable_recency(args.disable_recency)
+    }
+}
+
 impl ChatSearchArgs {
     pub fn build(self) -> Result<Value> {
-        Ok(ChatQueryBuilder::new(self.terms)
-            .match_type(&self.match_type)
-            .page_size(self.page_size)
-            .page(self.page)
-            .user_id(&self.user_id)
-            .ids(self.chat_ids)
-            .role(self.role)
-            .search_on(self.search_on)
-            .collapse(self.collapse)
-            .ids_only(self.ids_only)
-            .disable_recency(self.disable_recency)
-            .build_search_request()?
-            .to_json())
+        let builder: ChatQueryBuilder = self.into();
+        Ok(builder.build_search_request()?.to_json())
     }
 }
 

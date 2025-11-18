@@ -3,21 +3,33 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::SearchQueryConfig,
-        channels::{ChannelMessageIndex, ChannelMessageSearchConfig, ChannelMessageSearchResponse},
-        chats::{ChatIndex, ChatSearchConfig, ChatSearchResponse},
-        documents::{DocumentIndex, DocumentSearchConfig, DocumentSearchResponse},
-        emails::{EmailIndex, EmailSearchConfig, EmailSearchResponse},
-        model::{DefaultSearchResponse, Hit, parse_highlight_hit},
-        projects::{ProjectIndex, ProjectSearchConfig, ProjectSearchResponse},
-        query::{Keys, QueryKey, generate_name_content_unified_query, generate_terms_must_query},
-        utils::should_wildcard_field_query_builder,
+        channels::{
+            ChannelMessageIndex, ChannelMessageQueryBuilder, ChannelMessageSearchArgs,
+            ChannelMessageSearchConfig, ChannelMessageSearchResponse,
+        },
+        chats::{
+            ChatIndex, ChatQueryBuilder, ChatSearchArgs, ChatSearchConfig, ChatSearchResponse,
+        },
+        documents::{
+            DocumentIndex, DocumentQueryBuilder, DocumentSearchArgs, DocumentSearchConfig,
+            DocumentSearchResponse,
+        },
+        emails::{
+            EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig, EmailSearchResponse,
+        },
+        model::{DefaultSearchResponse, Hit, MacroEm, parse_highlight_hit},
+        projects::{
+            ProjectIndex, ProjectQueryBuilder, ProjectSearchArgs, ProjectSearchConfig,
+            ProjectSearchResponse,
+        },
+        query::Keys,
     },
 };
 
 use crate::SearchOn;
 use opensearch_query_builder::*;
 
-#[derive(Debug, Default)]
+#[derive(Debug, Default, Clone)]
 pub struct UnifiedSearchArgs {
     pub terms: Vec<String>,
     pub user_id: String,
@@ -28,26 +40,120 @@ pub struct UnifiedSearchArgs {
     pub collapse: bool,
     pub ids_only: bool,
     pub disable_recency: bool,
-    pub document_search_args: DocumentSearchArgs,
-    pub email_search_args: EmailSearchArgs,
-    pub channel_message_search_args: ChannelMessageSearchArgs,
-    pub chat_search_args: ChatSearchArgs,
-    pub project_search_args: ProjectSearchArgs,
+    pub document_search_args: UnifiedDocumentSearchArgs,
+    pub email_search_args: UnifiedEmailSearchArgs,
+    pub channel_message_search_args: UnifiedChannelMessageSearchArgs,
+    pub chat_search_args: UnifiedChatSearchArgs,
+    pub project_search_args: UnifiedProjectSearchArgs,
 }
 
-#[derive(Debug, Default)]
-pub struct ChatSearchArgs {
+impl From<UnifiedSearchArgs> for DocumentSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        DocumentSearchArgs {
+            terms: args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            search_on: args.search_on,
+            collapse: args.collapse,
+            ids_only: args.ids_only,
+            disable_recency: args.disable_recency,
+            document_ids: args.document_search_args.document_ids,
+        }
+    }
+}
+
+impl From<UnifiedSearchArgs> for EmailSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        EmailSearchArgs {
+            terms: args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            search_on: args.search_on,
+            collapse: args.collapse,
+            ids_only: args.ids_only,
+            disable_recency: args.disable_recency,
+            thread_ids: args.email_search_args.thread_ids,
+            link_ids: args.email_search_args.link_ids,
+            sender: args.email_search_args.sender,
+            cc: args.email_search_args.cc,
+            bcc: args.email_search_args.bcc,
+            recipients: args.email_search_args.recipients,
+        }
+    }
+}
+
+impl From<UnifiedSearchArgs> for ChannelMessageSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        ChannelMessageSearchArgs {
+            terms: args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            search_on: args.search_on,
+            collapse: args.collapse,
+            ids_only: args.ids_only,
+            disable_recency: args.disable_recency,
+            channel_ids: args.channel_message_search_args.channel_ids,
+            thread_ids: args.channel_message_search_args.thread_ids,
+            mentions: args.channel_message_search_args.mentions,
+            sender_ids: args.channel_message_search_args.sender_ids,
+        }
+    }
+}
+
+impl From<UnifiedSearchArgs> for ChatSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        ChatSearchArgs {
+            terms: args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            search_on: args.search_on,
+            collapse: args.collapse,
+            ids_only: args.ids_only,
+            disable_recency: args.disable_recency,
+            chat_ids: args.chat_search_args.chat_ids,
+            role: args.chat_search_args.role,
+        }
+    }
+}
+
+impl From<UnifiedSearchArgs> for ProjectSearchArgs {
+    fn from(args: UnifiedSearchArgs) -> Self {
+        ProjectSearchArgs {
+            terms: args.terms,
+            user_id: args.user_id,
+            page: args.page,
+            page_size: args.page_size,
+            match_type: args.match_type,
+            search_on: args.search_on,
+            collapse: args.collapse,
+            ids_only: args.ids_only,
+            disable_recency: args.disable_recency,
+            project_ids: args.project_search_args.project_ids,
+        }
+    }
+}
+
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedChatSearchArgs {
     pub chat_ids: Vec<String>,
     pub role: Vec<String>,
 }
 
-#[derive(Debug, Default)]
-pub struct DocumentSearchArgs {
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedDocumentSearchArgs {
     pub document_ids: Vec<String>,
 }
 
-#[derive(Debug, Default)]
-pub struct EmailSearchArgs {
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedEmailSearchArgs {
     pub thread_ids: Vec<String>,
     pub link_ids: Vec<String>,
     pub sender: Vec<String>,
@@ -56,13 +162,13 @@ pub struct EmailSearchArgs {
     pub recipients: Vec<String>,
 }
 
-#[derive(Debug, Default)]
-pub struct ProjectSearchArgs {
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedProjectSearchArgs {
     pub project_ids: Vec<String>,
 }
 
-#[derive(Debug, Default)]
-pub struct ChannelMessageSearchArgs {
+#[derive(Debug, Default, Clone)]
+pub struct UnifiedChannelMessageSearchArgs {
     pub channel_ids: Vec<String>,
     pub thread_ids: Vec<String>,
     pub mentions: Vec<String>,
@@ -210,42 +316,55 @@ impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
         }
     }
 }
-pub struct UnifiedSearchKeys<'a> {
-    pub document: Keys<'a>,
-    pub email: Keys<'a>,
-    pub channel_message: Keys<'a>,
-    pub chat: Keys<'a>,
-    pub project: Keys<'a>,
-}
 
-#[tracing::instrument(skip(client, args), err)]
-pub(crate) async fn search_unified(
-    client: &opensearch::OpenSearch,
-    args: UnifiedSearchArgs,
-) -> Result<Vec<UnifiedSearchResponse>> {
-    let keys = UnifiedSearchKeys {
-        document: Keys {
-            title_key: DocumentSearchConfig::TITLE_KEY,
-            content_key: DocumentSearchConfig::CONTENT_KEY,
-        },
-        email: Keys {
-            title_key: EmailSearchConfig::TITLE_KEY,
-            content_key: EmailSearchConfig::CONTENT_KEY,
-        },
-        channel_message: Keys {
-            title_key: ChannelMessageSearchConfig::TITLE_KEY,
-            content_key: ChannelMessageSearchConfig::CONTENT_KEY,
-        },
-        chat: Keys {
-            title_key: ChatSearchConfig::TITLE_KEY,
-            content_key: ChatSearchConfig::CONTENT_KEY,
-        },
-        project: Keys {
-            title_key: ProjectSearchConfig::TITLE_KEY,
-            content_key: ProjectSearchConfig::CONTENT_KEY,
-        },
-    };
+#[tracing::instrument(skip(args), err)]
+fn build_unified_search_request(args: UnifiedSearchArgs) -> Result<SearchRequest> {
+    let title_keys = [
+        ChannelMessageSearchConfig::TITLE_KEY,
+        ChatSearchConfig::TITLE_KEY,
+        DocumentSearchConfig::TITLE_KEY,
+        EmailSearchConfig::TITLE_KEY,
+        ProjectSearchConfig::TITLE_KEY,
+    ];
 
+    // Create search args for each index
+    let document_search_args: DocumentSearchArgs = args.clone().into();
+    let email_search_args: EmailSearchArgs = args.clone().into();
+    let channel_message_search_args: ChannelMessageSearchArgs = args.clone().into();
+    let chat_search_args: ChatSearchArgs = args.clone().into();
+    let project_search_args: ProjectSearchArgs = args.clone().into();
+
+    // Create the bool query
+    let document_query_builder: DocumentQueryBuilder = document_search_args.into();
+    let email_query_builder: EmailQueryBuilder = email_search_args.into();
+    let channel_message_query_builder: ChannelMessageQueryBuilder =
+        channel_message_search_args.into();
+    let chat_query_builder: ChatQueryBuilder = chat_search_args.into();
+    let project_query_builder: ProjectQueryBuilder = project_search_args.into();
+
+    let mut document_bool_query = document_query_builder.build_bool_query()?;
+    let mut email_bool_query = email_query_builder.build_bool_query()?;
+    let mut channel_message_bool_query = channel_message_query_builder.build_bool_query()?;
+    let mut chat_bool_query = chat_query_builder.build_bool_query()?;
+    let mut project_bool_query = project_query_builder.build_bool_query()?;
+
+    // Add must clauses to each bool query
+    document_bool_query.must(QueryType::term("_index", DOCUMENTS_INDEX));
+    email_bool_query.must(QueryType::term("_index", EMAIL_INDEX));
+    channel_message_bool_query.must(QueryType::term("_index", CHANNEL_INDEX));
+    chat_bool_query.must(QueryType::term("_index", CHAT_INDEX));
+    project_bool_query.must(QueryType::term("_index", PROJECT_INDEX));
+
+    let mut bool_query = BoolQueryBuilder::new();
+    bool_query.minimum_should_match(1);
+
+    bool_query.should(document_bool_query.build().into());
+    bool_query.should(email_bool_query.build().into());
+    bool_query.should(channel_message_bool_query.build().into());
+    bool_query.should(chat_bool_query.build().into());
+    bool_query.should(project_bool_query.build().into());
+
+    // create the search request
     let mut search_request_builder = SearchRequestBuilder::new();
 
     search_request_builder.from(args.page * args.page_size);
@@ -264,176 +383,76 @@ pub(crate) async fn search_unified(
         );
     }
 
-    let mut bool_query = BoolQueryBuilder::new();
-    // Currently, the minimum should match is always one.
-    // This should of the bool query contains the ids and potentially the user_id
-    bool_query.minimum_should_match(1);
+    // Build sort
+    let sort = vec![
+        SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
+        SortType::Field(FieldSort::new("entity_id", SortOrder::Asc)),
+    ];
 
-    if args.terms.is_empty() {
-        return Err(OpensearchClientError::NoTermsProvided);
+    for sort in sort {
+        search_request_builder.add_sort(sort);
     }
 
-    let query_key = QueryKey::from_match_type(&args.match_type)?;
-
-    let mut must_array = Vec::new();
-
-    match args.search_on {
+    // Build highlight
+    let highlight = match args.search_on {
+        SearchOn::Content => Highlight::new().require_field_match(true).field(
+            "content",
+            HighlightField::new()
+                .highlight_type("plain")
+                .pre_tags(vec![MacroEm::Open.to_string()])
+                .post_tags(vec![MacroEm::Close.to_string()])
+                .number_of_fragments(500),
+        ),
         SearchOn::Name => {
-            // map all terms over title key
-            must_array.push(generate_terms_must_query(
-                query_key,
-                &[
-                    keys.document.title_key,
-                    keys.email.title_key,
-                    keys.channel_message.title_key,
-                    keys.chat.title_key,
-                    keys.project.title_key,
-                ],
-                &args.terms,
-            ));
-        }
-        SearchOn::Content => {
-            // map all terms over content key
-            must_array.push(generate_terms_must_query(
-                query_key,
-                &["content"],
-                &args.terms,
-            ));
+            let mut highlight = Highlight::new();
+
+            highlight = highlight.require_field_match(true);
+
+            for field in title_keys {
+                highlight = highlight.field(
+                    field,
+                    HighlightField::new()
+                        .highlight_type("plain")
+                        .pre_tags(vec![MacroEm::Open.to_string()])
+                        .post_tags(vec![MacroEm::Close.to_string()])
+                        .number_of_fragments(1),
+                );
+            }
+            highlight
         }
         SearchOn::NameContent => {
-            must_array.push(generate_name_content_unified_query(
-                &[
-                    keys.document.title_key,
-                    keys.email.title_key,
-                    keys.channel_message.title_key,
-                    keys.chat.title_key,
-                    keys.project.title_key,
-                ],
-                &args.terms,
-            ));
+            let mut highlight = Highlight::new();
+
+            highlight = highlight.require_field_match(false);
+
+            for field in title_keys {
+                highlight = highlight.field(
+                    field,
+                    HighlightField::new()
+                        .highlight_type("plain")
+                        .pre_tags(vec![MacroEm::Open.to_string()])
+                        .post_tags(vec![MacroEm::Close.to_string()])
+                        .number_of_fragments(1),
+                );
+            }
+
+            highlight = highlight.field(
+                "content",
+                HighlightField::new()
+                    .highlight_type("plain")
+                    .pre_tags(vec![MacroEm::Open.to_string()])
+                    .post_tags(vec![MacroEm::Close.to_string()])
+                    .number_of_fragments(1),
+            );
+
+            highlight
         }
     };
 
-    tracing::trace!("term_must_array: {:?}", must_array);
-
-    // For each item in term must array, add to bool must query
-    for must in must_array {
-        bool_query.must(must);
-    }
-
-    // Create master list of ids to search over
-    let mut ids = args.document_search_args.document_ids.clone();
-    ids.extend(args.email_search_args.thread_ids.clone());
-    ids.extend(args.channel_message_search_args.channel_ids.clone());
-    ids.extend(args.chat_search_args.chat_ids.clone());
-    ids.extend(args.project_search_args.project_ids.clone());
-
-    if !ids.is_empty() {
-        bool_query.should(QueryType::terms("entity_id", ids));
-    }
-
-    // If we are not searching over the ids, we need to add the user_id to the should array
-    if !args.ids_only {
-        // document specific
-        bool_query.should(QueryType::term("owner_id", args.user_id.clone()));
-        // everything else
-        bool_query.should(QueryType::term("user_id", args.user_id.clone()));
-    }
-
-    // CUSTOM ATTRIBUTES SECTION
-
-    // Add channel_thread_ids to must clause if provided
-    let mut channel_args_query = BoolQueryBuilder::new();
-    let mut should_add_channel_query = false;
-    channel_args_query.minimum_should_match(1);
-
-    channel_args_query.must(QueryType::term("_index", CHANNEL_INDEX));
-
-    if !args.channel_message_search_args.thread_ids.is_empty() {
-        should_add_channel_query = true;
-        channel_args_query.must(QueryType::terms(
-            "thread_id",
-            args.channel_message_search_args.thread_ids,
-        ));
-    }
-
-    if !args.channel_message_search_args.mentions.is_empty() {
-        should_add_channel_query = true;
-        channel_args_query.must(QueryType::terms(
-            "mentions",
-            args.channel_message_search_args.mentions,
-        ));
-    }
-
-    if !args.channel_message_search_args.sender_ids.is_empty() {
-        should_add_channel_query = true;
-        channel_args_query.must(QueryType::terms(
-            "sender_id",
-            args.channel_message_search_args.sender_ids,
-        ));
-    }
-
-    let mut chat_args_query = BoolQueryBuilder::new();
-    let mut should_add_chat_query = false;
-    chat_args_query.minimum_should_match(1);
-
-    chat_args_query.must(QueryType::term("_index", CHAT_INDEX));
-
-    if !args.chat_search_args.role.is_empty() {
-        should_add_chat_query = true;
-        let should_query = should_wildcard_field_query_builder("role", &args.chat_search_args.role);
-        chat_args_query.must(should_query);
-    }
-
-    let mut emails_args_query = BoolQueryBuilder::new();
-    let mut should_add_emails_query = false;
-    emails_args_query.minimum_should_match(1);
-    emails_args_query.must(QueryType::term("_index", EMAIL_INDEX));
-
-    if !args.email_search_args.link_ids.is_empty() {
-        should_add_emails_query = true;
-        emails_args_query.must(QueryType::terms("link_id", args.email_search_args.link_ids));
-    }
-
-    if !args.email_search_args.sender.is_empty() {
-        should_add_emails_query = true;
-        let senders_query =
-            should_wildcard_field_query_builder("sender", &args.email_search_args.sender);
-        emails_args_query.must(senders_query);
-    }
-
-    if !args.email_search_args.cc.is_empty() {
-        should_add_emails_query = true;
-        let ccs_query = should_wildcard_field_query_builder("cc", &args.email_search_args.cc);
-        emails_args_query.must(ccs_query);
-    }
-    if !args.email_search_args.bcc.is_empty() {
-        should_add_emails_query = true;
-        let bccs_query = should_wildcard_field_query_builder("bcc", &args.email_search_args.bcc);
-        emails_args_query.must(bccs_query);
-    }
-    if !args.email_search_args.recipients.is_empty() {
-        should_add_emails_query = true;
-        let recipients_query =
-            should_wildcard_field_query_builder("recipients", &args.email_search_args.recipients);
-        emails_args_query.must(recipients_query);
-    }
-
-    // END CUSTOM ATTRIBUTES SECTION
-
-    if should_add_channel_query {
-        bool_query.must(channel_args_query.build().into());
-    }
-
-    if should_add_chat_query {
-        bool_query.must(chat_args_query.build().into());
-    }
-
-    if should_add_emails_query {
-        bool_query.must(emails_args_query.build().into());
-    }
+    search_request_builder.highlight(highlight);
 
     let query_object = bool_query.build();
+
     let built_query: QueryType = match args.search_on {
         SearchOn::Name | SearchOn::Content => query_object.into(),
         SearchOn::NameContent => {
@@ -466,7 +485,15 @@ pub(crate) async fn search_unified(
 
     search_request_builder.query(built_query);
 
-    let search_request = search_request_builder.build().to_json();
+    Ok(search_request_builder.build())
+}
+
+#[tracing::instrument(skip(client, args), err)]
+pub(crate) async fn search_unified(
+    client: &opensearch::OpenSearch,
+    args: UnifiedSearchArgs,
+) -> Result<Vec<UnifiedSearchResponse>> {
+    let search_request = build_unified_search_request(args)?.to_json();
 
     let response = client
         .search(opensearch::SearchParts::Index(&[
@@ -494,3 +521,6 @@ pub(crate) async fn search_unified(
 
     Ok(result.hits.hits.into_iter().map(|h| h.into()).collect())
 }
+
+#[cfg(test)]
+mod test;
