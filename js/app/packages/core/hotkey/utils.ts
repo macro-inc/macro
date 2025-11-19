@@ -1,5 +1,4 @@
 import { IS_MAC } from '@core/constant/isMac';
-import { createMemo } from 'solid-js';
 import {
   macOptionReverse,
   shiftPunctuationMap,
@@ -14,7 +13,7 @@ import {
   setActiveScope,
   setActiveScopeBranch,
 } from './state';
-import { HotkeyToken } from './tokens';
+import type { HotkeyToken } from './tokens';
 import type { HotkeyCommand, ScopeNode, ValidHotkey } from './types';
 
 let scopeCounter = 0;
@@ -170,7 +169,7 @@ export function updateActiveScopeBranch(activeScopeId: string | undefined) {
       currentScope = hotkeyScopeTree.get(currentScope.parentScopeId);
     }
   }
-  
+
   setActiveScopeBranch(branch);
 }
 
@@ -205,7 +204,7 @@ export function getHotkeyCommandByToken(token: HotkeyToken) {
 }
 
 // Helper function to get the primary hotkey string for a given token, pretty printed.
-export function getPretyHotkeyStringByToken(token: HotkeyToken) {
+export function getPrettyHotkeyStringByToken(token: HotkeyToken) {
   const hotkey = hotkeyTokenMap().get(token)?.at(0)?.hotkeys?.[0];
   if (!hotkey) return undefined;
   return prettyPrintHotkeyString(hotkey);

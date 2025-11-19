@@ -275,3 +275,29 @@ export type ValidHotkey =
   | `cmd+${BaseKeyboardValue}`
   | `ctrl+opt+shift+${BaseKeyboardValue}`
   | `opt+shift+cmd+${BaseKeyboardValue}`;
+
+/**
+ * Context object passed to keypress subscribers containing all relevant
+ * information about the current keypress event. Subscribers can use this
+ * information to implement their own filtering logic.
+ */
+export interface KeypressContext {
+  /** The normalized hotkey string (e.g., 'cmd+j', 'j') */
+  pressedKeysString: ValidHotkey;
+  /** Set of currently pressed keys */
+  pressedKeys: Set<string>;
+  /** The raw keyboard event */
+  event: KeyboardEvent;
+  /** The currently active scope ID, or null if none */
+  activeScopeId: string | null;
+  /** Whether an editable input element is currently focused */
+  isEditableFocused: boolean;
+  /** Whether a command scope was activated by this keypress */
+  commandScopeActivated: boolean;
+  /** Whether a command was found and executed */
+  commandFound: boolean;
+  /** The event type ('keydown' or 'keyup') */
+  eventType: 'keydown' | 'keyup';
+  /** Whether the keypress includes a non-modifier key */
+  isNonModifierKeypress: boolean;
+}

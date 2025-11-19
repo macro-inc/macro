@@ -44,7 +44,7 @@ import {
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { shortcutBadgeStyles } from '@core/component/Themes';
 import { TOKENS } from '@core/hotkey/tokens';
-import { getPretyHotkeyStringByToken } from '@core/hotkey/utils';
+import { getPrettyHotkeyStringByToken } from '@core/hotkey/utils';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import type { IOrganizationUser } from '@core/user';
 import { $isDocumentMentionNode } from '@lexical-core';
@@ -259,7 +259,7 @@ function MarkdownArea(
   //   });
   // });
 
-  const focusShortcut = getPretyHotkeyStringByToken(TOKENS.chat.input.focus);
+  const focusShortcut = getPrettyHotkeyStringByToken(TOKENS.chat.input.focus);
 
   createEffect(
     on(props.mountRef, (ref) => {

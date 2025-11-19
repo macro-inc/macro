@@ -1,8 +1,6 @@
 import { IS_MAC } from '@core/constant/isMac';
 import type { HotkeyToken } from '@core/hotkey/tokens';
-import {
-  getPretyHotkeyStringByToken,
-} from '@core/hotkey/utils';
+import { getPrettyHotkeyStringByToken } from '@core/hotkey/utils';
 import { createMemo, For, type JSX, Show, splitProps } from 'solid-js';
 import type { Theme } from './Themes';
 
@@ -125,7 +123,7 @@ export const Hotkey = (props: HotkeyProps) => {
     'lowercase',
   ]);
   const tokenShortcut = local.token
-    ? getPretyHotkeyStringByToken(local.token)
+    ? getPrettyHotkeyStringByToken(local.token)
     : undefined;
 
   const hotkey = createMemo(() => {

@@ -4,7 +4,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { logger } from '@observability';
-import { createMemo, onCleanup, onMount } from 'solid-js';
+import { onCleanup, onMount } from 'solid-js';
 import {
   EVENT_MODIFIER_KEYS,
   EVENT_MODIFIER_NAME_MAP,
@@ -24,11 +24,11 @@ import {
   setHotkeyTokenMap,
   setPressedKeys,
 } from './state';
-import type { HotkeyToken } from './tokens';
 import {
   type HotkeyCommand,
   type HotkeyRegistrationOptions,
   isBaseKeyboardValue,
+  type KeypressContext,
   type RegisterHotkeyReturn,
   type ScopeNode,
   type ValidHotkey,
@@ -40,7 +40,6 @@ import {
   getKeyString,
   getScopeId,
   normalizeEventKeyPress,
-  prettyPrintHotkeyString,
   registerScope,
   removeScope,
 } from './utils';
@@ -140,7 +139,7 @@ export function registerHotkey(
   // Convert single hotkey to array for consistent handling
   const hotkeys = hotkey && !Array.isArray(hotkey) ? [hotkey] : hotkey;
 
-  // Check for duplicate hotkeyToken for non-identical command
+  // Check for existing duplicate hotkeyToken for non-identical command
   const existingCommand = hotkeyToken
     ? hotkeyTokenMap().get(hotkeyToken)?.at(0)
     : undefined;
@@ -405,10 +404,16 @@ export function attachGlobalDOMScope(el: Element) {
   });
 }
 
+/**
+ * Attaches global hotkey handlers to the document element.
+ * @returns A function to subscribe to keypress events with full context information.
+ */
 export function useHotKeyRoot() {
   if (isNativeMobilePlatform() || (isMobileWidth() && isTouchDevice)) {
     return;
   }
+
+  let onKeypress: ((context: KeypressContext) => void)[] = [];
 
   const handleKeyDown = (e: KeyboardEvent) => {
     document.documentElement.dataset.modality = 'keyboard';
@@ -503,6 +508,7 @@ export function useHotKeyRoot() {
 
     let scopeNode = scopeTree.get(currentScopeId);
     let transitionOrCommandFound = false;
+    let commandScopeActivated = false;
 
     while (scopeNode) {
       const command = scopeNode.hotkeyCommands.get(pressedKeysString);
@@ -551,6 +557,7 @@ export function useHotKeyRoot() {
               );
             }
             transitionOrCommandFound = true;
+            commandScopeActivated = true;
             e.preventDefault();
             e.stopPropagation();
           }
@@ -589,6 +596,55 @@ export function useHotKeyRoot() {
         }
       });
     }
+
+    // Build context object with all relevant information
+    const context: KeypressContext = {
+      pressedKeysString,
+      pressedKeys: currentPressedKeys,
+      event: e,
+      activeScopeId: currentScopeId ?? null,
+      isEditableFocused: isEditableFocused ?? false,
+      commandScopeActivated,
+      commandFound: transitionOrCommandFound,
+      eventType: e.type as 'keydown' | 'keyup',
+      isNonModifierKeypress: ![...currentPressedKeys].every((key) =>
+        ['cmd', 'ctrl', 'opt', 'shift'].includes(key)
+      ),
+    };
+
+    // Notify all subscribers with the context
+    onKeypress.forEach((callback) => callback(context));
+  };
+
+  return {
+    /**
+     * Subscribe to keypress events with full context information.
+     * Subscribers receive a context object containing all relevant information.
+     *
+     * @param callback - Function called on every keypress.
+     * @returns A cleanup function to unsubscribe from the keypress events.
+     *
+     * @example
+     * ```ts
+     * subscribeToKeypress((context) => {
+     *   // Only handle non-modifier keys without scope activation
+     *   if (
+     *     !context.commandScopeActivated &&
+     *     ![...context.pressedKeys].every((key) =>
+     *       ['cmd', 'ctrl', 'opt', 'shift'].includes(key)
+     *     )
+     *   ) {
+     *     // Handle the keypress
+     *   }
+     * });
+     * ```
+     */
+    subscribeToKeypress: (callback: (context: KeypressContext) => void) => {
+      onKeypress.push(callback);
+      return () => {
+        onKeypress = onKeypress.filter((c) => c !== callback);
+      };
+    },
   };
 }
 
