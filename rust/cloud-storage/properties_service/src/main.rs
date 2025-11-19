@@ -66,12 +66,33 @@ async fn main() -> anyhow::Result<()> {
         "initialized comms service client"
     );
 
+    let comms_client = Arc::new(comms_service_client);
+
+    // ========== Hexagonal Architecture Setup ==========
+
+    // Create outbound adapters (storage and permission checker)
+    let properties_storage = properties_service::outbound::PropertiesPgStorage::new(db.clone());
+    let permission_checker =
+        properties_service::outbound::PgPermissionChecker::new(db.clone(), comms_client.clone());
+
+    // Compose unified domain service (handles definitions, options, and entity properties)
+    let property_service = Arc::new(
+        properties_service::domain::services::PropertyServiceImpl::new(
+            properties_storage,
+            permission_checker,
+        ),
+    );
+
+    tracing::info!("hexagonal architecture services initialized");
+    // ===================================================
+
     api::setup_and_serve(ApiContext {
         db,
         jwt_args,
         config: Arc::new(config),
         internal_auth_key,
-        comms_service_client: Arc::new(comms_service_client),
+        comms_service_client: comms_client,
+        property_service,
     })
     .await?;
     Ok(())
