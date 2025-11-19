@@ -153,4 +153,4 @@ export const ENABLE_PREVIEW = true;
 export const ENABLE_DOCK_NOTITIFCATIONS = DEV_MODE_ENV;
 export const ENABLE_TTFT = DEV_MODE_ENV;
 
-export const ENABLE_CUSTOM_CURSOR = true;
+export const ENABLE_CUSTOM_CURSOR = false;
