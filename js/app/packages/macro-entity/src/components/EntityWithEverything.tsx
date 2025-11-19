@@ -1,5 +1,7 @@
+import { UserHighlight } from '@block-pdf/component/UserHighlight';
+import { Tooltip } from '@core/component/Tooltip';
 import { matches } from '@core/util/match';
-import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
+import CheckIcon from '@icon/regular/check.svg';
 import { useEmail, useUserId } from '@service-gql/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
@@ -52,6 +54,15 @@ function UnreadIndicator(props: { active?: boolean }) {
   );
 }
 
+function SharedBadge(props: { ownerId: string }) {
+  return (
+    <div class="font-mono font-medium user-select-none uppercase flex items-center text-ink-extra-muted p-0.5 gap-1 text-[0.625rem] rounded-full border border-edge-muted pr-2">
+      <UserIcon id={props.ownerId} size="xs" />
+      shared
+    </div>
+  );
+}
+
 // function ImportantBadge(props: { active?: boolean }) {
 //   return (
 //     <Show when={props.active}>
@@ -93,7 +104,6 @@ interface EntityProps<T extends WithNotification<EntityData>>
 export function EntityWithEverything(
   props: EntityProps<WithNotification<EntityData | WithSearch<EntityData>>>
 ) {
-  const [showActionList, setShowActionList] = createSignal(false);
   const [actionButtonRef, setActionButtonRef] =
     createSignal<HTMLButtonElement | null>(null);
   const [entityDivRef, setEntityDivRef] = createSignal<HTMLDivElement | null>(
@@ -105,7 +115,6 @@ export function EntityWithEverything(
   const { keydownDataDuringTask } = trackKeydownDuringTask();
   const userEmail = useEmail();
 
-  let focusId = 0;
   const getIcon = createMemo(() => {
     switch (props.entity.type) {
       case 'channel':
@@ -324,6 +333,21 @@ export function EntityWithEverything(
     return false;
   }
 
+  const userId = useUserId();
+  const sharedData = () => {
+    if (props.entity.type === 'channel') {
+      return false;
+    }
+
+    if (props.entity.ownerId === userId()) {
+      return false;
+    }
+    return {
+      ownerDisplayName: useDisplayName(props.entity.ownerId)[0],
+      ownerId: props.entity.ownerId,
+    };
+  };
+
   return (
     <div
       use:draggable
@@ -340,21 +364,7 @@ export function EntityWithEverything(
         if (!didCursorMove(e)) {
           return;
         }
-        setShowActionList(true);
         props.onMouseOver?.();
-      }}
-      onMouseLeave={() => {
-        setShowActionList(false);
-      }}
-      onFocusIn={() => {
-        setShowActionList(true);
-        clearTimeout(focusId);
-        props.onFocusIn?.();
-      }}
-      onFocusOut={() => {
-        focusId = window.setTimeout(() => {
-          setShowActionList(false);
-        });
       }}
       onContextMenu={() => {
         props.onContextMenu?.();
@@ -383,7 +393,6 @@ export function EntityWithEverything(
             return;
           }
 
-          setShowActionList(true);
           actionButtonRef()?.focus();
         }}
         onKeyDown={onKeyDownClick((e) =>
@@ -449,40 +458,45 @@ export function EntityWithEverything(
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
         <div
-          class="relative row-1 ml-2 @md:ml-4 self-center min-w-0 col-3"
+          class="row-1 ml-2 @md:ml-4 self-center min-w-0 col-3"
           classList={{
             'opacity-50': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
-          <div class="flex flex-row items-center justify-end gap-4 min-w-0">
-            <Show when={!showActionList()}>
-              <Show when={matches(props.entity, isProjectContainedEntity)}>
-                {(entity) => <EntityProject entity={entity()} />}
-              </Show>
-              <Show when={props.timestamp ?? props.entity.updatedAt}>
-                {(date) => {
-                  const formattedDate = createFormattedDate(date());
-                  return (
-                    <span class="shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
-                      {formattedDate()}
-                    </span>
-                  );
-                }}
-              </Show>
-            </Show>
-            <Show when={showActionList()}>
-              <div class="flex gap-1 h-8">
-                <button
-                  class="flex items-center justify-center size-8 hover:bg-accent hover:text-panel"
-                  onClick={() => {
-                    props.onClickRowAction?.(props.entity, 'done');
-                  }}
-                  ref={setActionButtonRef}
-                  data-blocks-navigation
+          <div class="flex flex-row items-center justify-end gap-2 min-w-0">
+            <Show when={sharedData()}>
+              {(shared) => (
+                <Tooltip
+                  tooltip={`${shared().ownerDisplayName()} shared with you`}
                 >
-                  <CheckIcon class="w-4 h-4 pointer-events-none" />
-                </button>
-              </div>
+                  <SharedBadge ownerId={shared().ownerId} />
+                </Tooltip>
+              )}
+            </Show>
+            <Show when={matches(props.entity, isProjectContainedEntity)}>
+              {(entity) => <EntityProject entity={entity()} />}
+            </Show>
+            <Show when={props.timestamp ?? props.entity.updatedAt}>
+              {(date) => {
+                const formattedDate = createFormattedDate(date());
+                return (
+                  <span class="shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                    {formattedDate()}
+                  </span>
+                );
+              }}
+            </Show>
+            <Show when={props.selected}>
+              <button
+                class="absolute top-1 right-1 flex items-center justify-center size-8 bg-panel border border-edge-muted hover:bg-accent hover:text-panel"
+                onClick={() => {
+                  props.onClickRowAction?.(props.entity, 'done');
+                }}
+                ref={setActionButtonRef}
+                data-blocks-navigation
+              >
+                <CheckIcon class="w-4 h-4 pointer-events-none" />
+              </button>
             </Show>
           </div>
         </div>
