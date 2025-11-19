@@ -8,7 +8,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use macro_db_client::projects::get_project_history::ProjectHistoryInfo;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::project::{
     ProjectSearchMetadata, ProjectSearchRequest, ProjectSearchResponse, ProjectSearchResponseItem,
@@ -88,7 +87,10 @@ pub async fn handler(
 
 pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::projects::ProjectSearchResponse>,
-    project_histories: HashMap<String, ProjectHistoryInfo>,
+    project_histories: HashMap<
+        String,
+        macro_db_client::projects::get_project_history::ProjectHistoryInfo,
+    >,
 ) -> anyhow::Result<Vec<ProjectSearchResponseItemWithMetadata>> {
     let search_results = search_results
         .into_iter()
@@ -104,12 +106,18 @@ pub fn construct_search_result(
     let result: Vec<ProjectSearchResponseItemWithMetadata> = result
         .into_iter()
         .map(|item| {
-            let project_history_info = project_histories.get(&item.id).cloned().unwrap_or_default();
+            let metadata = project_histories.get(&item.id).map(|info| {
+                models_search::project::ProjectMetadata {
+                    created_at: info.created_at.timestamp(),
+                    updated_at: info.updated_at.timestamp(),
+                    viewed_at: info.viewed_at.map(|a| a.timestamp()),
+                    parent_project_id: info.parent_project_id.clone(),
+                    deleted_at: info.deleted_at.map(|a| a.timestamp()),
+                }
+            });
+
             ProjectSearchResponseItemWithMetadata {
-                created_at: project_history_info.created_at.timestamp(),
-                updated_at: project_history_info.updated_at.timestamp(),
-                viewed_at: project_history_info.viewed_at.map(|a| a.timestamp()),
-                parent_project_id: project_history_info.parent_project_id,
+                metadata,
                 extra: item,
             }
         })
