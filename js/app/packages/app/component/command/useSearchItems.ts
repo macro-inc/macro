@@ -153,7 +153,10 @@ function createProjectItems(
   const items: CommandItemCard[] = [];
   if (project.type !== 'project') return [];
 
-  if (project.project_search_results.length === 0 || project.metadata?.deleted_at)
+  if (
+    project.project_search_results.length === 0 ||
+    project.metadata?.deleted_at
+  )
     return [];
 
   for (const result of project.project_search_results) {
