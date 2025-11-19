@@ -13,6 +13,9 @@ import type { ProjectSearchRequestAllOfTwoTerms } from './projectSearchRequestAl
 export type ProjectSearchRequestAllOfTwo = {
   /** If true, returns only 1 result per entity. False by default. */
   collapse?: ProjectSearchRequestAllOfTwoCollapse;
+  /** If search_on is set to NameContent, you can disable the recency filter
+by setting to true. */
+  disable_recency?: boolean;
   /** The match type to use when searching */
   match_type: MatchType;
   /** The query to search for */
