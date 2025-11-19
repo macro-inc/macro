@@ -84,7 +84,7 @@ export const hotkeyStyles: Record<Theme, { label: string; hotkey: string }> = {
 };
 
 const getSymbol = (key: string) =>
-  key in symbolMap ? symbolMap[key as keyof typeof symbolMap] : key;
+  key.toUpperCase() in symbolMap ? symbolMap[key.toUpperCase() as keyof typeof symbolMap] : key;
 
 const modifierKeys = Object.keys(modifierMap);
 
