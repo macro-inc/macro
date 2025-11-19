@@ -8,8 +8,6 @@ use utoipa_swagger_ui::SwaggerUi;
 pub mod context;
 mod health;
 mod internal;
-mod permissions;
-pub mod properties;
 pub mod swagger;
 
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
@@ -40,10 +38,52 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 }
 
 fn api_router(app_state: ApiContext) -> Router {
+    use axum::routing::{delete, get, post, put};
+    use properties_service::inbound::http::{
+        create_property_definition, create_property_option, delete_entity_property,
+        delete_property_definition, delete_property_option, get_entity_properties,
+        get_property_definition, get_property_options, list_property_definitions,
+        set_entity_property,
+    };
+
+    // Replace old routes with hexagonal architecture routes (same paths, new handlers)
+    let properties_routes = Router::new()
+        // Property Definition Management
+        .route("/definitions", post(create_property_definition))
+        .route("/definitions", get(list_property_definitions))
+        .route("/definitions/:id", get(get_property_definition))
+        .route("/definitions/:id", delete(delete_property_definition))
+        // Property Options Management
+        .route(
+            "/definitions/:definition_id/options",
+            get(get_property_options),
+        )
+        .route(
+            "/definitions/:definition_id/options",
+            post(create_property_option),
+        )
+        .route(
+            "/definitions/:definition_id/options/:option_id",
+            delete(delete_property_option),
+        )
+        // Entity Property Operations
+        .route(
+            "/entities/:entity_type/:entity_id",
+            get(get_entity_properties),
+        )
+        .route(
+            "/entities/:entity_type/:entity_id/:property_id",
+            put(set_entity_property),
+        )
+        .route(
+            "/entity_properties/:entity_property_id",
+            delete(delete_entity_property),
+        );
+
     Router::new()
         .nest(
             "/properties",
-            properties::router().layer(axum::middleware::from_fn_with_state(
+            properties_routes.layer(axum::middleware::from_fn_with_state(
                 app_state.jwt_args.clone(),
                 macro_middleware::auth::decode_jwt::handler,
             )),

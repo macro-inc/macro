@@ -6,8 +6,8 @@
 
 use chrono::Utc;
 use models_properties::service::{
-    EntityPropertyWithDefinition, PropertyDefinition, PropertyDefinitionWithOptions, PropertyOption,
-    PropertyOptionValue,
+    EntityPropertyWithDefinition, PropertyDefinition, PropertyDefinitionWithOptions,
+    PropertyOption, PropertyOptionValue,
 };
 use models_properties::shared::{DataType, EntityType, PropertyOwner};
 use uuid::Uuid;
