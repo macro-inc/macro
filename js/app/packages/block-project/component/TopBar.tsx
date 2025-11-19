@@ -12,6 +12,7 @@ import {
   SplitToolbarRight,
 } from '@app/component/split-layout/components/SplitToolbar';
 import { getIsSpecialProject } from '@block-project/isSpecial';
+import { projectBlockDataSignal } from '@block-project/signal/projectBlockData';
 import { useIsAuthenticated } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { hasPermissions, Permissions } from '@core/component/SharePermissions';
@@ -20,20 +21,25 @@ import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { useCanEdit, useGetPermissions } from '@core/signal/permissions';
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { toast } from 'core/component/Toast/Toast';
-import { Show } from 'solid-js';
-import { projectSignal } from '../signal/project';
+import { createEffect, Show } from 'solid-js';
 import { ProjectCreateMenu } from './ProjectCreateMenu';
 
 // TODO (SEAMUS) : Revisit this file when we figure out what we wanna do
 //     with folder block.
 
 export function TopBar() {
-  const project = projectSignal.get;
+  const project = projectBlockDataSignal.get;
   const id = useBlockId();
   const isSpecialProject = getIsSpecialProject(id);
   const isAuth = useIsAuthenticated();
   const permissions = useGetPermissions();
   const canEdit = useCanEdit();
+  const name = () => projectBlockDataSignal()?.projectMetadata.name ?? '';
+  const owner = () => projectBlockDataSignal()?.projectMetadata.userId;
+
+  createEffect(() => {
+    console.log('project', project());
+  });
 
   function handleCopyLink() {
     navigator.clipboard.writeText(
@@ -62,19 +68,14 @@ export function TopBar() {
   return (
     <>
       <SplitHeaderLeft>
-        <BlockItemSplitLabel fallbackName={project()?.name} />
+        <BlockItemSplitLabel fallbackName={name()} />
       </SplitHeaderLeft>
       <SplitToolbarLeft class="flex-0">
         <div class="flex gap-2 p-1">
           <Show when={ops.length > 0}>
-            <SplitFileMenu
-              id={id}
-              itemType="project"
-              name={project()?.name ?? ''}
-              ops={ops}
-            />
+            <SplitFileMenu id={id} itemType="project" name={name()} ops={ops} />
             <Show when={canEdit()}>
-              <ProjectCreateMenu />
+              <ProjectCreateMenu id={id} />
             </Show>
           </Show>
         </div>
@@ -86,11 +87,11 @@ export function TopBar() {
             <Show when={ENABLE_PROJECT_SHARING && !isSpecialProject}>
               <ShareButton
                 id={id}
-                name={project()?.name ?? ''}
+                name={name()}
                 userPermissions={permissions()}
                 copyLink={handleCopyLink}
                 itemType="project"
-                owner={project()?.userId}
+                owner={owner()}
               />
             </Show>
           </div>
