@@ -7,6 +7,7 @@ use email_db_client::threads;
 use email_db_client::threads::get::get_outbound_threads_by_thread_ids;
 use futures::future::join_all;
 use insight_service_client::InsightContextProvider;
+use model::contacts::ConnectionsMessage;
 use model::insight_context::email_insights::{
     EMAIL_INSIGHT_PROVIDER_SOURCE_NAME, EmailInfo, GenerateEmailInsightContext, NewMessagePayload,
     NewMessagesPayload,
@@ -68,6 +69,18 @@ pub async fn upsert_message(
 
     // will always exist because we just fetched it
     let provider_thread_id = message.provider_thread_id.clone().unwrap();
+
+    let is_sent = message.is_sent;
+
+    // deduped list of all emails the message was sent to
+    let recipient_emails = message
+        .cc
+        .iter()
+        .map(|c| c.email.clone())
+        .chain(message.to.iter().map(|t| t.email.clone()))
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
 
     // determine if message's thread already exists in the database
     let thread_provider_to_db_map = threads::get::get_threads_by_link_id_and_provider_ids(
@@ -163,6 +176,49 @@ pub async fn upsert_message(
                 tracing::error!("Failed to upload attachment to Macro: {e}");
             }
         }
+    }
+
+    // if the user sent the message, upsert contacts for its recipients in contacts-service.
+    // testing with macro emails only for now.
+    if link.macro_id.ends_with("@macro.com") && !cfg!(feature = "disable_contacts_sync") && is_sent
+    {
+        tracing::info!(
+            "Upserting contacts {:?} for new sent message with id {}",
+            recipient_emails,
+            payload.provider_message_id
+        );
+
+        // Create users list starting with the sender, then all recipients
+        let mut users = vec![link.macro_id.clone()];
+        users.extend(
+            recipient_emails
+                .iter()
+                .map(|email| format!("macro|{}", email)),
+        );
+
+        // Create connections from sender (index 0) to each recipient
+        let connections = (1..users.len()).map(|i| (0, i)).collect::<Vec<_>>();
+
+        let connections_message = ConnectionsMessage { users, connections };
+
+        ctx.sqs_client
+            .enqueue_contacts_add_connection(connections_message)
+            .await
+            .map_err(|e| {
+                ProcessingError::NonRetryable(DetailedError {
+                    reason: FailureReason::SqsEnqueueFailed,
+                    source: e.context(format!(
+                        "Failed to enqueue contacts message for {}",
+                        link.macro_id
+                    )),
+                })
+            })?;
+
+        tracing::info!(
+            "Successfully upserted contacts {:c } for new sent message with id {}",
+            recipient_emails,
+            payload.provider_message_id
+        );
     }
 
     Ok(())

@@ -161,6 +161,23 @@ const insightContextQueueName: pulumi.Output<string> = insightServiceStack
   .getOutput('contextQueueName')
   .apply((name) => name as string);
 
+// Retrieve name of queue used Contacts Service
+const contactsServiceStack: pulumi.StackReference = new pulumi.StackReference(
+  'contacts-service-stack',
+  {
+    name: `macro-inc/contacts-service/${stack}`,
+  }
+);
+
+const contactsQueueName: pulumi.Output<string> = contactsServiceStack
+  .getOutput('contactsQueueName')
+  .apply((arn) => arn as string);
+
+// Get ARN to allow sending messages to contacts Queue
+const contactsQueueArn: pulumi.Output<string> = contactsServiceStack
+  .getOutput('contactsQueueArn')
+  .apply((arn) => arn as string);
+
 const MACRO_API_TOKENS = getMacroApiToken();
 
 const cfKeyPair = new tls.PrivateKey(`cf-dist-email-key-pair-${stack}`, {
@@ -191,6 +208,7 @@ const queueArns = [
   insightContextQueueArn,
   backfillQueueArn,
   sfsUploaderQueueArn,
+  contactsQueueArn
 ];
 
 const emailService = new EmailService('email-service', {
@@ -341,6 +359,10 @@ const emailService = new EmailService('email-service', {
     {
       name: 'CLOUDFRONT_SIGNER_PRIVATE_KEY',
       value: pulumi.interpolate`${CLOUDFRONT_PRIVATE_KEY}`,
+    },
+    {
+      name: 'CONTACTS_QUEUE',
+      value: pulumi.interpolate`${contactsQueueName}`,
     },
   ],
 });

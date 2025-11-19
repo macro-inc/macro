@@ -1,5 +1,6 @@
 use crate::pubsub::context::PubSubContext;
 use crate::util::backfill::backfill_insights::backfill_email_insights;
+use model::contacts::ConnectionsMessage;
 use model::insight_context::email_insights::BackfillEmailInsightsFilter;
 use models_email::service::attachment::AttachmentUploadMetadata;
 use models_email::service::backfill::{
@@ -131,6 +132,49 @@ async fn handle_job_completed(
         );
 
         send_attachment_backfill_messages(ctx, link.id, job_id, attachments).await?;
+    }
+
+    // temporarily only populate contacts for macro emails for testing
+    if link.macro_id.ends_with("@macro.com") && !cfg!(feature = "disable_contacts_sync") {
+        let email_addresses =
+            email_db_client::contacts::get::fetch_contacts_emails_by_link_id(&ctx.db, link.id)
+                .await
+                .map_err(|e| {
+                    ProcessingError::NonRetryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: e.context("Failed to fetch contact email addresses".to_string()),
+                    })
+                })?;
+
+        tracing::info!(
+            "Populating {} contacts for macro email {}",
+            email_addresses.len(),
+            link.macro_id
+        );
+
+        for email_address in email_addresses {
+            let connections_message = ConnectionsMessage {
+                users: vec![link.macro_id.clone(), format!("macro|{}", email_address)],
+                connections: vec![(0, 1)],
+            };
+            ctx.sqs_client
+                .enqueue_contacts_add_connection(connections_message)
+                .await
+                .map_err(|e| {
+                    ProcessingError::NonRetryable(DetailedError {
+                        reason: FailureReason::SqsEnqueueFailed,
+                        source: e.context(format!(
+                            "Failed to enqueue contacts message for {}",
+                            email_address
+                        )),
+                    })
+                })?;
+        }
+        tracing::info!(
+            "Successfully populated {} contacts for macro email {}",
+            email_addresses.len(),
+            link.macro_id
+        );
     }
 
     Ok(())

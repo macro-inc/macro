@@ -22,6 +22,7 @@ disable_attachment_upload = []
 disable_connection_gateway = []
 disable_gmail_webhook_auth = []
 disable_sfs_map = []
+disable_contacts_sync = []
 local_queue = []
 
 [dependencies]
@@ -78,7 +79,7 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
-
+  "contacts",
   "email",
   "gmail",
   "insight_context",
