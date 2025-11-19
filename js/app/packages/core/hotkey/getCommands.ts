@@ -79,12 +79,14 @@ export function getActiveCommandsFromScope(
 
 const filterCommands = (displayOptions: sortAndFilterOptions) => {
   return (command: HotkeyCommand) => {
+    const hideValue =
+      typeof command.hide === 'function' ? command.hide() : command.hide;
     return (
       (command.hotkeys || !displayOptions.hideCommandsWithoutHotkeys) &&
       (!command.condition || command.condition()) &&
       (!isEditableInput(activeElement() as HTMLElement) ||
         command.runWithInputFocused) &&
-      command.hide !== true
+      hideValue !== true
     );
   };
 };
