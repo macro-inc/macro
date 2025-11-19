@@ -37,6 +37,12 @@ export function useEntityProperties(
   const [isLoading, setIsLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
+  const handleFetchError = (errorMessage: string) => {
+    setError(errorMessage);
+    // Return error for component to handle UI feedback
+    return { success: false, error: errorMessage };
+  };
+
   const fetch = async () => {
     // Don't show loading spinner if we already have properties (background refresh)
     if (properties().length === 0) {
@@ -54,16 +60,10 @@ export function useEntityProperties(
       if (result.ok) {
         setProperties(result.value);
       } else {
-        const errorMessage = 'Failed to load properties';
-        setError(errorMessage);
-        // Return error for component to handle UI feedback
-        return { success: false, error: errorMessage };
+        return handleFetchError('Failed to load properties');
       }
     } catch (_err) {
-      const errorMessage = 'Failed to load properties';
-      setError(errorMessage);
-      // Return error for component to handle UI feedback
-      return { success: false, error: errorMessage };
+      return handleFetchError('Failed to load properties');
     } finally {
       setIsLoading(false);
     }

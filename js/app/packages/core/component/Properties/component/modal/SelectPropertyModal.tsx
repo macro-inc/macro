@@ -1,5 +1,6 @@
 import { useBlockId } from '@core/block';
 import { IconButton } from '@core/component/IconButton';
+import { toast } from '@core/component/Toast/Toast';
 import { MODAL_VIEWPORT_CLASSES } from '@core/util/modalUtils';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
@@ -7,7 +8,7 @@ import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
 import { createEffect, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { addEntityPropertyWithToast } from '../../api';
+import { addEntityProperty } from '../../api';
 import { MODAL_DIMENSIONS } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import { usePropertySelection } from '../../hooks/usePropertySelection';
@@ -17,6 +18,7 @@ import {
   getPropertyDefinitionTypeDisplay,
   useSearchInputFocus,
 } from '../../utils';
+import { ERROR_MESSAGES, ErrorHandler } from '../../utils/errorHandling';
 import { CreatePropertyModal } from './CreatePropertyModal';
 
 export function SelectPropertyModal(props: PropertySelectorProps) {
@@ -45,25 +47,41 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
     try {
       const addPromises = Array.from(selected).map(
         async (propertyDefinitionId) => {
-          return await addEntityPropertyWithToast(
+          const result = await addEntityProperty(
             blockId,
-            propertyDefinitionId,
-            entityType
+            entityType,
+            propertyDefinitionId
           );
+
+          if (!result.ok) {
+            ErrorHandler.handleApiError(
+              result.error,
+              'SelectPropertyModal.handleAddProperties',
+              ERROR_MESSAGES.ADD_PROPERTY
+            );
+            toast.failure(ERROR_MESSAGES.ADD_PROPERTY);
+          }
+
+          return result.ok;
         }
       );
 
       const results = await Promise.all(addPromises);
-      const failures = results.filter((success: boolean) => !success);
+      const failures = results.filter((success) => !success);
 
-      // Close modal regardless of success/failure (toast already shown by addEntityPropertyWithToast)
+      // Close modal regardless of success/failure (toasts already shown)
       props.onClose();
 
       if (failures.length === 0) {
         onPropertyAdded();
       }
-    } catch (_error) {
-      // Close modal (toast already shown by addEntityPropertyWithToast)
+    } catch (error) {
+      ErrorHandler.handleApiError(
+        error,
+        'SelectPropertyModal.handleAddProperties',
+        ERROR_MESSAGES.ADD_PROPERTY
+      );
+      toast.failure(ERROR_MESSAGES.ADD_PROPERTY);
       props.onClose();
     } finally {
       setIsAdding(false);

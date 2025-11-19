@@ -1,10 +1,12 @@
 import { useBlockId } from '@core/block';
 import { DatePicker } from '@core/component/DatePicker';
+import { toast } from '@core/component/Toast/Toast';
 import { type Component, createMemo } from 'solid-js';
 import { Portal, Show } from 'solid-js/web';
-import { saveEntityPropertyWithToast } from '../../api';
+import { saveEntityProperty } from '../../api';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
+import { ERROR_MESSAGES, ErrorHandler } from '../../utils/errorHandling';
 import { CreatePropertyModal } from './CreatePropertyModal';
 import { EditPropertyValueModal } from './EditPropertyValueModal';
 import { SelectPropertyModal } from './SelectPropertyModal';
@@ -36,15 +38,22 @@ export const Modals: Component = () => {
   };
 
   const handleDateSaved = async (newDate: Date, property: Property) => {
-    const success = await saveEntityPropertyWithToast(
-      blockId,
-      property,
-      { valueType: 'DATE', value: newDate.toISOString() },
-      entityType
-    );
-    if (success) {
-      onRefresh();
+    const result = await saveEntityProperty(blockId, entityType, property, {
+      valueType: 'DATE',
+      value: newDate.toISOString(),
+    });
+
+    if (!result.ok) {
+      ErrorHandler.handleApiError(
+        result.error,
+        'Modals.handleDateSaved',
+        ERROR_MESSAGES.SAVE_PROPERTY
+      );
+      toast.failure(ERROR_MESSAGES.SAVE_PROPERTY);
+      return;
     }
+
+    onRefresh();
     closeDatePicker();
   };
 
