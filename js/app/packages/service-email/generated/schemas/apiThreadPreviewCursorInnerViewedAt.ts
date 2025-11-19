@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ApiThreadPreviewCursorInnerViewedAt = string | null;
+export type ApiThreadPreviewCursorInnerViewedAt = number | null;

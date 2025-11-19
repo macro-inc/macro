@@ -11,10 +11,10 @@ import {
 } from '@core/util/maybeResult';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type {
+  ApiPaginatedThreadCursor,
   CreateDraftRequest,
   CreateDraftResponse,
   GetAttachmentResponse,
-  GetPreviewsCursorResponse,
   GetThreadResponse,
   ListContactsResponse,
   ListLabelsResponse,
@@ -91,7 +91,7 @@ export const emailClient = {
     const qp = p.length > 0 ? '?' + p : p;
 
     return mapOk(
-      await emailFetch<GetPreviewsCursorResponse>(
+      await emailFetch<ApiPaginatedThreadCursor>(
         `/email/threads/previews/cursor/${view}${qp}`,
         {
           method: 'GET',

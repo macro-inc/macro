@@ -13,20 +13,20 @@ import type { ApiThreadPreviewCursorInnerSnippet } from './apiThreadPreviewCurso
 import type { ApiThreadPreviewCursorInnerViewedAt } from './apiThreadPreviewCursorInnerViewedAt';
 
 export interface ApiThreadPreviewCursorInner {
-  created_at: string;
+  createdAt: number;
   id: string;
-  inbox_visible: boolean;
-  is_draft: boolean;
-  is_important: boolean;
-  is_read: boolean;
+  inboxVisible: boolean;
+  isDraft: boolean;
+  isImportant: boolean;
+  isRead: boolean;
   name?: ApiThreadPreviewCursorInnerName;
-  owner_id: string;
-  provider_id?: ApiThreadPreviewCursorInnerProviderId;
-  sender_email?: ApiThreadPreviewCursorInnerSenderEmail;
-  sender_name?: ApiThreadPreviewCursorInnerSenderName;
-  sender_photo_url?: ApiThreadPreviewCursorInnerSenderPhotoUrl;
+  ownerId: string;
+  providerId?: ApiThreadPreviewCursorInnerProviderId;
+  senderEmail?: ApiThreadPreviewCursorInnerSenderEmail;
+  senderName?: ApiThreadPreviewCursorInnerSenderName;
+  senderPhotoUrl?: ApiThreadPreviewCursorInnerSenderPhotoUrl;
   snippet?: ApiThreadPreviewCursorInnerSnippet;
-  sort_ts: string;
-  updated_at: string;
-  viewed_at?: ApiThreadPreviewCursorInnerViewedAt;
+  sortTs: number;
+  updatedAt: number;
+  viewedAt: ApiThreadPreviewCursorInnerViewedAt;
 }

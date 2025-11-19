@@ -6,8 +6,8 @@
  */
 
 export interface ApiAttachmentMacro {
-  db_id: string;
-  item_id: string;
-  item_type: string;
-  message_id: string;
+  dbId: string;
+  itemId: string;
+  itemType: string;
+  messageId: string;
 }

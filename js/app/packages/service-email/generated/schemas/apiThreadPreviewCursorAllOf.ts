@@ -12,6 +12,6 @@ import type { ApiAttachmentMacro } from './apiAttachmentMacro';
 export type ApiThreadPreviewCursorAllOf = {
   attachments: ApiAttachment[];
   contacts: ApiContact[];
-  frecency_score?: ApiThreadPreviewCursorAllOfFrecencyScore;
-  macro_attachments: ApiAttachmentMacro[];
+  frecencyScore?: ApiThreadPreviewCursorAllOfFrecencyScore;
+  macroAttachments: ApiAttachmentMacro[];
 };

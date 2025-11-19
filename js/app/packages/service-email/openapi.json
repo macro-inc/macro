@@ -1298,37 +1298,37 @@
       },
       "ApiAttachment": {
         "type": "object",
-        "required": ["id", "message_id", "created_at"],
+        "required": ["id", "messageId", "createdAt"],
         "properties": {
-          "content_id": { "type": ["string", "null"] },
-          "created_at": { "type": "string", "format": "date-time" },
+          "contentId": { "type": ["string", "null"] },
+          "createdAt": { "type": "integer", "format": "int64" },
           "filename": { "type": ["string", "null"] },
           "id": { "type": "string", "format": "uuid" },
-          "message_id": { "type": "string", "format": "uuid" },
-          "mime_type": { "type": ["string", "null"] },
-          "provider_attachment_id": { "type": ["string", "null"] },
-          "size_bytes": { "type": ["integer", "null"], "format": "int64" }
+          "messageId": { "type": "string", "format": "uuid" },
+          "mimeType": { "type": ["string", "null"] },
+          "providerAttachmentId": { "type": ["string", "null"] },
+          "sizeBytes": { "type": ["integer", "null"], "format": "int64" }
         }
       },
       "ApiAttachmentMacro": {
         "type": "object",
-        "required": ["db_id", "message_id", "item_id", "item_type"],
+        "required": ["dbId", "messageId", "itemId", "itemType"],
         "properties": {
-          "db_id": { "type": "string", "format": "uuid" },
-          "item_id": { "type": "string", "format": "uuid" },
-          "item_type": { "type": "string" },
-          "message_id": { "type": "string", "format": "uuid" }
+          "dbId": { "type": "string", "format": "uuid" },
+          "itemId": { "type": "string", "format": "uuid" },
+          "itemType": { "type": "string" },
+          "messageId": { "type": "string", "format": "uuid" }
         }
       },
       "ApiContact": {
         "type": "object",
-        "required": ["id", "link_id"],
+        "required": ["id", "linkId"],
         "properties": {
-          "email_address": { "type": ["string", "null"] },
+          "emailAddress": { "type": ["string", "null"] },
           "id": { "type": "string", "format": "uuid" },
-          "link_id": { "type": "string", "format": "uuid" },
+          "linkId": { "type": "string", "format": "uuid" },
           "name": { "type": ["string", "null"] },
-          "sfs_photo_url": { "type": ["string", "null"] }
+          "sfsPhotoUrl": { "type": ["string", "null"] }
         }
       },
       "ApiPaginatedThreadCursor": {
@@ -1352,7 +1352,7 @@
           { "$ref": "#/components/schemas/ApiThreadPreviewCursorInner" },
           {
             "type": "object",
-            "required": ["attachments", "macro_attachments", "contacts"],
+            "required": ["attachments", "macroAttachments", "contacts"],
             "properties": {
               "attachments": {
                 "type": "array",
@@ -1362,11 +1362,11 @@
                 "type": "array",
                 "items": { "$ref": "#/components/schemas/ApiContact" }
               },
-              "frecency_score": {
+              "frecencyScore": {
                 "type": ["number", "null"],
                 "format": "double"
               },
-              "macro_attachments": {
+              "macroAttachments": {
                 "type": "array",
                 "items": { "$ref": "#/components/schemas/ApiAttachmentMacro" }
               }
@@ -1378,32 +1378,33 @@
         "type": "object",
         "required": [
           "id",
-          "owner_id",
-          "inbox_visible",
-          "is_read",
-          "is_draft",
-          "is_important",
-          "sort_ts",
-          "created_at",
-          "updated_at"
+          "ownerId",
+          "inboxVisible",
+          "isRead",
+          "isDraft",
+          "isImportant",
+          "sortTs",
+          "createdAt",
+          "updatedAt",
+          "viewedAt"
         ],
         "properties": {
-          "created_at": { "type": "string", "format": "date-time" },
+          "createdAt": { "type": "integer", "format": "int64" },
           "id": { "type": "string", "format": "uuid" },
-          "inbox_visible": { "type": "boolean" },
-          "is_draft": { "type": "boolean" },
-          "is_important": { "type": "boolean" },
-          "is_read": { "type": "boolean" },
+          "inboxVisible": { "type": "boolean" },
+          "isDraft": { "type": "boolean" },
+          "isImportant": { "type": "boolean" },
+          "isRead": { "type": "boolean" },
           "name": { "type": ["string", "null"] },
-          "owner_id": { "type": "string" },
-          "provider_id": { "type": ["string", "null"] },
-          "sender_email": { "type": ["string", "null"] },
-          "sender_name": { "type": ["string", "null"] },
-          "sender_photo_url": { "type": ["string", "null"] },
+          "ownerId": { "type": "string" },
+          "providerId": { "type": ["string", "null"] },
+          "senderEmail": { "type": ["string", "null"] },
+          "senderName": { "type": ["string", "null"] },
+          "senderPhotoUrl": { "type": ["string", "null"] },
           "snippet": { "type": ["string", "null"] },
-          "sort_ts": { "type": "string", "format": "date-time" },
-          "updated_at": { "type": "string", "format": "date-time" },
-          "viewed_at": { "type": ["string", "null"], "format": "date-time" }
+          "sortTs": { "type": "integer", "format": "int64" },
+          "updatedAt": { "type": "integer", "format": "int64" },
+          "viewedAt": { "type": ["integer", "null"], "format": "int64" }
         }
       },
       "ArchiveThreadRequest": {

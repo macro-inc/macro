@@ -11,12 +11,12 @@ import type { ApiAttachmentProviderAttachmentId } from './apiAttachmentProviderA
 import type { ApiAttachmentSizeBytes } from './apiAttachmentSizeBytes';
 
 export interface ApiAttachment {
-  content_id?: ApiAttachmentContentId;
-  created_at: string;
+  contentId?: ApiAttachmentContentId;
+  createdAt: number;
   filename?: ApiAttachmentFilename;
   id: string;
-  message_id: string;
-  mime_type?: ApiAttachmentMimeType;
-  provider_attachment_id?: ApiAttachmentProviderAttachmentId;
-  size_bytes?: ApiAttachmentSizeBytes;
+  messageId: string;
+  mimeType?: ApiAttachmentMimeType;
+  providerAttachmentId?: ApiAttachmentProviderAttachmentId;
+  sizeBytes?: ApiAttachmentSizeBytes;
 }

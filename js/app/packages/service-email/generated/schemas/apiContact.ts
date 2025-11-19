@@ -9,9 +9,9 @@ import type { ApiContactName } from './apiContactName';
 import type { ApiContactSfsPhotoUrl } from './apiContactSfsPhotoUrl';
 
 export interface ApiContact {
-  email_address?: ApiContactEmailAddress;
+  emailAddress?: ApiContactEmailAddress;
   id: string;
-  link_id: string;
+  linkId: string;
   name?: ApiContactName;
-  sfs_photo_url?: ApiContactSfsPhotoUrl;
+  sfsPhotoUrl?: ApiContactSfsPhotoUrl;
 }
