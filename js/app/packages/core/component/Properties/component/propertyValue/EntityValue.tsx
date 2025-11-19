@@ -36,9 +36,9 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
     setIsSaving(true);
 
     try {
-      const entities = props.property.value ?? [];
+      const entities = (props.property.value as EntityReference[]) ?? [];
       const newValues = entities.filter(
-        (entity) =>
+        (entity: EntityReference) =>
           entity.entity_id !== entityToRemove.entity_id ||
           entity.entity_type !== entityToRemove.entity_type
       );

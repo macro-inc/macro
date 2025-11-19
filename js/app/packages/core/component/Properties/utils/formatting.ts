@@ -61,7 +61,7 @@ export function extractDomain(url: string): string {
  */
 export const formatPropertyValue = (
   property: Property,
-  value: PropertyValueUnion | string | undefined
+  value: PropertyValueUnion | string | null | undefined
 ): string => {
   // Handle undefined/null values
   if (value === undefined || value === null) {
