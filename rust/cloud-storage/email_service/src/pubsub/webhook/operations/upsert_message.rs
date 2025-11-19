@@ -215,7 +215,7 @@ pub async fn upsert_message(
             })?;
 
         tracing::info!(
-            "Successfully upserted contacts {:c } for new sent message with id {}",
+            "Successfully upserted contacts {:?} for new sent message with id {}",
             recipient_emails,
             payload.provider_message_id
         );

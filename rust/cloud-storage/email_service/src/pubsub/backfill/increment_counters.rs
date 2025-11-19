@@ -146,9 +146,11 @@ async fn handle_job_completed(
                     })
                 })?;
 
+        let length = email_addresses.len();
+
         tracing::info!(
             "Populating {} contacts for macro email {}",
-            email_addresses.len(),
+            length,
             link.macro_id
         );
 
@@ -172,7 +174,7 @@ async fn handle_job_completed(
         }
         tracing::info!(
             "Successfully populated {} contacts for macro email {}",
-            email_addresses.len(),
+            length,
             link.macro_id
         );
     }
