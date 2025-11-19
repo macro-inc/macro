@@ -3,7 +3,7 @@ import { propertiesServiceClient } from '@service-properties/client';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Property, PropertyApiValues, Result } from '../types';
 import { ErrorHandler } from '../utils/errorHandling';
-import { toApiFormat } from './converters';
+import { propertyValueToApi } from './converters';
 
 /**
  * Save a property value
@@ -20,7 +20,7 @@ export async function savePropertyValue(
   apiValues: PropertyApiValues
 ): Promise<Result<void>> {
   try {
-    const propertyValue = toApiFormat(apiValues, property.isMultiSelect);
+    const propertyValue = propertyValueToApi(apiValues, property.isMultiSelect);
 
     const result = await propertiesServiceClient.setEntityProperty({
       entity_type: entityType,

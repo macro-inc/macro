@@ -3,7 +3,7 @@ import { propertiesServiceClient } from '@service-properties/client';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Property, Result } from '../types';
 import { ErrorHandler } from '../utils/errorHandling';
-import { fromApiFormat } from './converters';
+import { entityPropertyFromApi } from './converters';
 
 /**
  * Fetch all properties for an entity
@@ -42,7 +42,7 @@ export async function fetchEntityProperties(
     }
 
     const [, data] = result;
-    const properties = data.properties.map(fromApiFormat);
+    const properties = data.properties.map(entityPropertyFromApi);
 
     return { ok: true, value: properties };
   } catch (error) {
