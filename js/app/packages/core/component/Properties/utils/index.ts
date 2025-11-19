@@ -6,4 +6,5 @@ export * from './entityConversion';
 export * from './errorHandling';
 export * from './focus';
 export * from './formatting';
+export * from './position';
 export * from './validation';

@@ -7,6 +7,7 @@ import { saveEntityProperty } from '../../api';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
 import { ERROR_MESSAGES } from '../../utils/errorHandling';
+import { useModalPosition } from '../../utils/position';
 import { CreatePropertyModal } from './CreatePropertyModal';
 import { EditPropertyValueModal } from './EditPropertyValueModal';
 import { SelectPropertyModal } from './SelectPropertyModal';
@@ -74,19 +75,14 @@ export const Modals: Component = () => {
 
       <Show when={propertyEditorModal()}>
         {(state) => {
-          const position = state().anchor
-            ? {
-                top: state().anchor!.getBoundingClientRect().top,
-                left: state().anchor!.getBoundingClientRect().left,
-              }
-            : undefined;
+          const position = useModalPosition(() => state().anchor);
 
           return (
             <EditPropertyValueModal
               property={state().property}
               onClose={closePropertyEditor}
               onSaved={handlePropertySaved}
-              position={position}
+              position={position()}
               entityType={entityType}
             />
           );
