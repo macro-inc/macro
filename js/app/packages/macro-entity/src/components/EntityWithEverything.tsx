@@ -94,7 +94,6 @@ export function EntityWithEverything(
   props: EntityProps<WithNotification<EntityData | WithSearch<EntityData>>>
 ) {
   const [showActionList, setShowActionList] = createSignal(false);
-  const [entityHovered, setEntityHovered] = createSignal(false);
   const [actionButtonRef, setActionButtonRef] =
     createSignal<HTMLButtonElement | null>(null);
   const [entityDivRef, setEntityDivRef] = createSignal<HTMLDivElement | null>(
@@ -344,11 +343,7 @@ export function EntityWithEverything(
         setShowActionList(true);
         props.onMouseOver?.();
       }}
-      onMouseEnter={() => {
-        setEntityHovered(true);
-      }}
       onMouseLeave={() => {
-        setEntityHovered(false);
         setShowActionList(false);
       }}
       onFocusIn={() => {
@@ -410,8 +405,8 @@ export function EntityWithEverything(
           <div
             class="size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-accent group-hover/button:border pointer-events-none"
             classList={{
-              'ring ring-edge-muted': props.selected || entityHovered(),
-              'bg-panel': !props.checked && (props.selected || entityHovered()),
+              'ring ring-edge-muted': props.selected,
+              'bg-panel': !props.checked && props.selected,
               'bg-accent border border-accent': props.checked,
             }}
           >
