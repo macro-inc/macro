@@ -9,9 +9,11 @@ pub struct ProjectHistoryInfo {
     pub updated_at: DateTime<Utc>,
     pub viewed_at: Option<DateTime<Utc>>,
     pub parent_project_id: Option<String>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 /// Gets project history information including when a user last viewed each project
+/// Returns only entries that exist in the database
 #[tracing::instrument(skip(db))]
 pub async fn get_project_history_info(
     db: &sqlx::Pool<sqlx::Postgres>,
@@ -28,6 +30,7 @@ pub async fn get_project_history_info(
             p."id" as "item_id!",
             p."createdAt" as "created_at!",
             p."updatedAt" as "updated_at!",
+            p."deletedAt" as "deleted_at?",
             p."parentId" as "parent_project_id?",
             uh."updatedAt" as "viewed_at?"
         FROM
@@ -38,7 +41,6 @@ pub async fn get_project_history_info(
                 AND uh."itemType" = 'project'
         WHERE
             p."id" = ANY($2)
-            AND p."deletedAt" IS NULL
         ORDER BY
             p."updatedAt" DESC
         "#,
@@ -48,7 +50,7 @@ pub async fn get_project_history_info(
     .fetch_all(db)
     .await?;
 
-    let project_history_map = results
+    let project_history_map: HashMap<String, ProjectHistoryInfo> = results
         .into_iter()
         .map(|row| {
             let info = ProjectHistoryInfo {
@@ -59,8 +61,11 @@ pub async fn get_project_history_info(
                     .viewed_at
                     .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
                 parent_project_id: row.parent_project_id,
+                deleted_at: row
+                    .deleted_at
+                    .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
             };
-            (row.item_id.clone(), info)
+            (row.item_id, info)
         })
         .collect();
 

@@ -8,7 +8,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use macro_db_client::document::get_document_history::DocumentHistoryInfo;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::document::{
     DocumentSearchMetadata, DocumentSearchRequest, DocumentSearchResponse,
@@ -87,7 +86,10 @@ pub async fn handler(
 
 pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::documents::DocumentSearchResponse>,
-    document_histories: HashMap<String, DocumentHistoryInfo>,
+    document_histories: HashMap<
+        String,
+        macro_db_client::document::get_document_history::DocumentHistoryInfo,
+    >,
 ) -> anyhow::Result<Vec<DocumentSearchResponseItemWithMetadata>> {
     let search_results = search_results
         .into_iter()
@@ -105,15 +107,18 @@ pub fn construct_search_result(
     let result: Vec<DocumentSearchResponseItemWithMetadata> = result
         .into_iter()
         .map(|item| {
-            let document_history_info = document_histories
-                .get(&item.document_id)
-                .cloned()
-                .unwrap_or_default();
+            let metadata = document_histories.get(&item.document_id).map(|info| {
+                models_search::document::DocumentMetadata {
+                    created_at: info.created_at.timestamp(),
+                    updated_at: info.updated_at.timestamp(),
+                    viewed_at: info.viewed_at.map(|a| a.timestamp()),
+                    project_id: info.project_id.clone(),
+                    deleted_at: info.deleted_at.map(|a| a.timestamp()),
+                }
+            });
+
             DocumentSearchResponseItemWithMetadata {
-                created_at: document_history_info.created_at.timestamp(),
-                updated_at: document_history_info.updated_at.timestamp(),
-                viewed_at: document_history_info.viewed_at.map(|a| a.timestamp()),
-                project_id: document_history_info.project_id,
+                metadata,
                 extra: item,
             }
         })
