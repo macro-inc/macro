@@ -23,7 +23,7 @@ export interface HotkeyCommand {
   // The priority of the command for ordering hotkey display lists. Note: registerHotkey only accepts number 1-10, but here we allow any number, so that we can sort as needed.
   displayPriority?: number;
   // If true, hotkey command can be hidden from the UI. It will still run, but will not be displayed.
-  hide?: boolean;
+  hide?: boolean | (() => boolean);
   // Optional icon to display in the command palette.
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
 }
@@ -95,8 +95,9 @@ export interface HotkeyRegistrationOptions {
   displayPriority?: CommandDisplayPriority;
   /**
    * If true, hotkey command can be hidden from the UI. It will still run, but may not be displayed.
+   * Can be either a boolean or a function that returns a boolean for reactive behavior.
    */
-  hide?: boolean;
+  hide?: boolean | (() => boolean);
   /**
    * Optional icon to display in the command palette.
    */

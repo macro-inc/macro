@@ -64,7 +64,7 @@ import {
  * that displays based on this condition will be reactively updated.
  * @param args.scopeId - The scopeId where this hotkey is active.
  * @param args.description - Human readable description of what the hotkey
- * does. Keep it short (around three words).
+ * does. Keep it short (around three words). Can be either a string or a callback that returns a string.
  * @param args.keyDownHandler - Function called when the hotkey is pressed. If
  * it returns true, the event will prevent default and stop propagation.
  * @param args.keyUpHandler - Optional function called when the hotkey is
@@ -78,7 +78,8 @@ import {
  * @param args.displayPriority - The priority of the command for ordering
  * hotkey display UI. 1 is the lowest priority, 10 is the highest.
  * @param args.hide - If true, hotkey command can be hidden from the UI. It
- * will still run, but may not be displayed.
+ * will still run, but may not be displayed. Can be either a boolean or a
+ * function that returns a boolean for reactive behavior.
  * @returns An object with a dispose function to clean up the hotkey
  * registration. If `activateCommandScope` is true, it also includes the
  * `commandScopeId`.
@@ -547,9 +548,11 @@ export function useHotKeyRoot() {
         }
 
         if (command.activateCommandScopeId) {
-          const commandScope = hotkeyScopeTree.get(command.activateCommandScopeId);
+          const commandScope = hotkeyScopeTree.get(
+            command.activateCommandScopeId
+          );
           if (commandScope) {
-             // When the command scope is activated, we set its parent scope to the active scope when it was called, so that when the command scope is deactivated, scope will return to the correct scope. The commmand scope will still get cleaned up correctly when it's original parent scope is removed.
+            // When the command scope is activated, we set its parent scope to the active scope when it was called, so that when the command scope is deactivated, scope will return to the correct scope. The commmand scope will still get cleaned up correctly when it's original parent scope is removed.
             commandScope.parentScopeId = currentScopeId;
             setPressedKeys(new Set<string>());
             setActiveScope(commandScope.scopeId);

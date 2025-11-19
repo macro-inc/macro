@@ -92,7 +92,7 @@ export default function GlobalShortcuts() {
       return true;
     },
     displayPriority: 10,
-    hide: true,
+    hide: konsoleOpen,
     runWithInputFocused: true,
   });
 
