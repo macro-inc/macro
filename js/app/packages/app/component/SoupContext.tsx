@@ -15,6 +15,7 @@ import type { EntityData } from '@macro-entity';
 import { useTutorialCompleted } from '@service-gql/client';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
+import { action } from '@solidjs/router';
 import { useQuery } from '@tanstack/solid-query';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
@@ -399,6 +400,12 @@ export function createNavigationEntityListShortcut({
       beforeEntity: before,
       afterEntity: after,
     };
+  });
+
+  // the full info with indices and neighbors is great but we also need to
+  // flatten back to the plain entities a lot - so just memoize.
+  const plainSelectedEntities = createLazyMemo(() => {
+    return getEntitiesForAction().entities.map(({ entity }) => entity);
   });
 
   const isEntityLastItem = createLazyMemo(() => {
@@ -810,7 +817,6 @@ export function createNavigationEntityListShortcut({
     description: 'Top',
     keyDownHandler: () => {
       navigateThroughList({ axis: 'start', mode: 'jump' });
-
       return true;
     },
   });
@@ -891,7 +897,9 @@ export function createNavigationEntityListShortcut({
     hotkey: ['e'],
     scopeId: entityHotkeyScope,
     description: 'Mark done',
-    condition: isViewingList,
+    condition: () =>
+      isViewingList() &&
+      !actionRegistry.isActionDisabled('mark_as_done', plainSelectedEntities()),
     keyDownHandler: () => {
       const entitiesForAction = getEntitiesForAction();
       if (entitiesForAction.entities.length === 0) {
@@ -944,7 +952,9 @@ export function createNavigationEntityListShortcut({
     scopeId: splitHotkeyScope,
     description: () =>
       viewData().selectedEntities.length > 1 ? 'Delete items' : 'Delete item',
-    condition: isViewingList,
+    condition: () =>
+      isViewingList() &&
+      !actionRegistry.isActionDisabled('delete', plainSelectedEntities()),
     keyDownHandler: () => {
       const entitiesForAction = getEntitiesForAction();
       if (entitiesForAction.entities.length === 0) {
@@ -957,6 +967,7 @@ export function createNavigationEntityListShortcut({
       return true;
     },
     tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
   });
 
   createEffect(() => {
