@@ -1,5 +1,5 @@
 import { useChannelName } from '@core/component/ChannelsProvider';
-import { EntityIcon } from '@core/component/EntityIcon';
+import { EntityIcon as CoreEntityIcon } from '@core/component/EntityIcon';
 import { IconButton } from '@core/component/IconButton';
 import { BlockLink } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { UserIcon } from '@core/component/UserIcon';
@@ -20,7 +20,7 @@ import {
   type ParentProps,
   Show,
 } from 'solid-js';
-import type { Property } from './types';
+import type { Property } from '../../types';
 
 type EntityValueDisplayProps = ParentProps<{
   property: Property;
@@ -33,9 +33,7 @@ type EntityValueDisplayProps = ParentProps<{
 
 const ICON_CLASSES = 'size-4 text-ink-muted';
 
-export const EntityValueDisplay: Component<EntityValueDisplayProps> = (
-  props
-) => {
+export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
   const [isHovered, setIsHovered] = createSignal(false);
 
   // Get preview for items that need it (document, project, chat, channel for icon)
@@ -120,24 +118,24 @@ export const EntityValueDisplay: Component<EntityValueDisplayProps> = (
           previewItem.loading ||
           !isAccessiblePreviewItem(previewItem)
         ) {
-          return <EntityIcon targetType="unknown" size="xs" />;
+          return <CoreEntityIcon targetType="unknown" size="xs" />;
         }
 
         const fileType = previewItem.fileType;
         const blockName = fileType
           ? fileTypeToBlockName(fileType, true)
           : 'unknown';
-        return <EntityIcon targetType={blockName} size="xs" />;
+        return <CoreEntityIcon targetType={blockName} size="xs" />;
       }
 
       case 'PROJECT':
-        return <EntityIcon targetType="project" size="xs" />;
+        return <CoreEntityIcon targetType="project" size="xs" />;
 
       case 'CHAT':
-        return <EntityIcon targetType="chat" size="xs" />;
+        return <CoreEntityIcon targetType="chat" size="xs" />;
 
       default:
-        return <EntityIcon targetType="unknown" size="xs" />;
+        return <CoreEntityIcon targetType="unknown" size="xs" />;
     }
   });
 

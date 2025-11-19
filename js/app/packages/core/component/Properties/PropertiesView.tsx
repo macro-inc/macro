@@ -1,14 +1,14 @@
 import { useBlockId } from '@core/block';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import { type Accessor, createMemo, Show } from 'solid-js';
-import { AddPropertyButton } from './components/AddPropertyButton';
-import { PropertiesContent } from './components/PropertiesContent';
-import { PropertiesModals } from './components/PropertiesModals';
+import { Modals } from './component/modal/Modals';
+import { AddPropertyButton } from './component/panel/AddPropertyButton';
+import { PanelContainer } from './component/panel/PanelContainer';
 import {
   PropertiesProvider,
   usePropertiesContext,
 } from './context/PropertiesContext';
-import { useProperties } from './hooks';
+import { useEntityProperties } from './hooks';
 import type { PropertiesPanelProps, Property } from './types';
 
 const CONTAINER_CLASSES =
@@ -19,7 +19,7 @@ const SPINNER_CLASSES = 'w-5 h-5 animate-spin';
 export function PropertiesView(props: PropertiesPanelProps) {
   const blockId = useBlockId();
 
-  const { properties, isLoading, error, refetch } = useProperties(
+  const { properties, isLoading, error, refetch } = useEntityProperties(
     blockId,
     props.entityType,
     true // includeMetadata
@@ -89,7 +89,7 @@ function PropertiesViewContent(props: {
         <div class="text-failure-ink text-center py-4">{props.error()}</div>
       </Show>
 
-      <PropertiesContent
+      <PanelContainer
         properties={props.properties}
         isLoading={props.isLoading}
         error={props.error}
@@ -101,7 +101,7 @@ function PropertiesViewContent(props: {
         </div>
       </Show>
 
-      <PropertiesModals />
+      <Modals />
     </div>
   );
 }
