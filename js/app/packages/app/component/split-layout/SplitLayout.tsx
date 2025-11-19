@@ -2,6 +2,11 @@ import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { activeElement } from '@app/signal/focus';
 import { Resize } from '@core/component/Resize';
 import { TOKENS } from '@core/hotkey/tokens';
+import {
+  isRightPanelOpen,
+  useBigChat,
+  useToggleRightPanel,
+} from '@core/signal/layout';
 import { tabTitleSignal } from '@core/signal/tabTitle';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { useNavigate } from '@solidjs/router';
@@ -18,12 +23,14 @@ import {
   type Setter,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { fireMacroJump } from '../MacroJump';
 import {
   createNavigationEntityListShortcut,
   createSoupContext,
 } from '../SoupContext';
 import { SplitContainer } from './components/SplitContainer';
 import { SplitLayoutContext, SplitPanelContext } from './context';
+import { useSplitLayout } from './layout';
 import {
   createSplitLayout,
   type SplitContent,
@@ -34,8 +41,7 @@ import {
   type SplitManager,
   type SplitState,
 } from './layoutManager';
-import { decodePairs } from './layoutUtils';
-import { useSplitLayout } from './layout';
+import { decodePairs, focusAdjacentSplit } from './layoutUtils';
 
 type SplitLayoutContainerProps = {
   pairs: string[];
@@ -398,7 +404,6 @@ function SplitPanel(props: SplitPanelProps) {
       props.handle.goBack();
       return true;
     },
-
   });
 
   registerHotkey({
@@ -412,7 +417,7 @@ function SplitPanel(props: SplitPanelProps) {
       return true;
     },
   });
-  
+
   const goScope = registerHotkey({
     scopeId: splitHotkeyScope,
     hotkey: 'g',
@@ -423,20 +428,97 @@ function SplitPanel(props: SplitPanelProps) {
     activateCommandScope: true,
     hotkeyToken: TOKENS.split.goCommand,
   });
-  
+
   const { replaceSplit } = useSplitLayout();
 
+  const goScopeId = goScope.commandScopeId;
+
   registerHotkey({
-    scopeId: goScope.commandScopeId,
+    scopeId: goScopeId,
     hotkey: 'h',
     description: 'Go home',
     keyDownHandler: () => {
-      replaceSplit({type: 'component', id: 'unified-list'})
+      replaceSplit({ type: 'component', id: 'unified-list' });
       return true;
     },
     hotkeyToken: TOKENS.split.go.home,
   });
 
+  registerHotkey({
+    scopeId: goScopeId,
+    hotkey: 'e',
+    description: 'Go to email',
+    keyDownHandler: () => {
+      replaceSplit({ type: 'component', id: 'unified-list' });
+      unifiedListContext.setSelectedView('emails');
+      return true;
+    },
+    hotkeyToken: TOKENS.split.go.email,
+  });
+
+  registerHotkey({
+    scopeId: goScopeId,
+    hotkey: 'i',
+    description: 'Go to inbox',
+    keyDownHandler: () => {
+      replaceSplit({ type: 'component', id: 'unified-list' });
+      unifiedListContext.setSelectedView('inbox');
+      return true;
+    },
+    hotkeyToken: TOKENS.split.go.inbox,
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.split.go.focusSplitRight,
+    hotkey: ['arrowright', 'tab'],
+    scopeId: goScopeId,
+    description: 'Focus split right',
+    keyDownHandler: () => {
+      focusAdjacentSplit('right');
+      return true;
+    },
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.split.go.focusSplitLeft,
+    hotkey: ['arrowleft', 'shift+tab'],
+    scopeId: goScopeId,
+    description: 'Focus split left',
+    keyDownHandler: () => {
+      focusAdjacentSplit('left');
+      return true;
+    },
+  });
+
+  const [bigChatOpen, _] = useBigChat();
+  const toggleRightPanel = useToggleRightPanel();
+
+  registerHotkey({
+    hotkeyToken: TOKENS.split.go.toggleRightPanel,
+    hotkey: 'r',
+    scopeId: goScopeId,
+    description: () => {
+      return isRightPanelOpen() ? 'Close AI panel' : 'Go AI panel';
+    },
+    keyDownHandler: () => {
+      toggleRightPanel();
+      return true;
+    },
+    condition: () => {
+      return !bigChatOpen();
+    },
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.split.go.macroJump,
+    hotkey: 'j',
+    scopeId: goScopeId,
+    description: 'Macro Jump',
+    keyDownHandler: () => {
+      fireMacroJump();
+      return true;
+    },
+  });
 
   const unifiedListContext = createSoupContext();
   createNavigationEntityListShortcut({
@@ -444,7 +526,7 @@ function SplitPanel(props: SplitPanelProps) {
     splitHandle: props.handle,
     splitHotkeyScope,
     unifiedListContext,
-    goScopeId: goScope.commandScopeId
+    goScopeId: goScope.commandScopeId,
   });
 
   // Create ephemeral preview state for unified-list component

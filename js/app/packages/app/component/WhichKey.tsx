@@ -110,6 +110,7 @@ export function WhichKey() {
     return getActiveCommandsFromScope(currentScopeId, {
       hideCommandsWithoutHotkeys: true,
       limitToCurrentScope: isInCommandScope(),
+      hideShadowedCommands: true,
     });
   });
 
