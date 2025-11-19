@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ChannelSearchResponseItemWithMetadataAllOfViewedAt = number | null;
+export type DocumentMetadataDeletedAt = number | null;

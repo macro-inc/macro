@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type DocumentSearchResponseItemWithMetadataAllOfProjectId = string | null;
+export type EmailSearchResponseItemWithMetadataAllOfSnippet = string | null;
