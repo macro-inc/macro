@@ -168,6 +168,7 @@ export function registerHotkey(
   let commandScopeId: string | undefined;
   if (activateCommandScope) {
     commandScopeId = getScopeId('command-scope-' + scopeId);
+    // When a command scope is registered, its parent scope is set as the scopeId of the registered hotkey. It will be registered as a child of that scope. When the command scope is activated, its parent scope will get set to whatever scope is active where it was called, so that when the command scope is deactivated, it willl return to the correct scope.
     registerScope({
       parentScopeId: scopeId,
       scopeId: commandScopeId,
@@ -507,7 +508,7 @@ export function useHotKeyRoot() {
     const pressedKeysString = getKeyString(currentPressedKeys);
 
     let scopeNode = scopeTree.get(currentScopeId);
-    let transitionOrCommandFound = false;
+    let commandCaptured = false;
     let commandScopeActivated = false;
 
     while (scopeNode) {
@@ -520,7 +521,7 @@ export function useHotKeyRoot() {
         const captured = command.keyDownHandler?.(e);
         if (captured) {
           setPressedKeys(new Set<string>());
-          transitionOrCommandFound = true;
+          commandCaptured = true;
           setExecutedTokens((prev) =>
             prev.includes(command.hotkeyToken ?? '')
               ? prev
@@ -544,19 +545,21 @@ export function useHotKeyRoot() {
             command: () => command.keyUpHandler?.(e),
           });
         }
+
         if (command.activateCommandScopeId) {
-          const newScope = hotkeyScopeTree.get(command.activateCommandScopeId);
-          if (newScope) {
+          const commandScope = hotkeyScopeTree.get(command.activateCommandScopeId);
+          if (commandScope) {
+             // When the command scope is activated, we set its parent scope to the active scope when it was called, so that when the command scope is deactivated, scope will return to the correct scope. The commmand scope will still get cleaned up correctly when it's original parent scope is removed.
+            commandScope.parentScopeId = currentScopeId;
             setPressedKeys(new Set<string>());
-            setActiveScope(newScope.scopeId);
-            if (!transitionOrCommandFound) {
+            setActiveScope(commandScope.scopeId);
+            if (!commandCaptured) {
               setExecutedTokens((prev) =>
                 prev.includes(command.hotkeyToken ?? '')
                   ? prev
                   : [...prev, command.hotkeyToken ?? '']
               );
             }
-            transitionOrCommandFound = true;
             commandScopeActivated = true;
             e.preventDefault();
             e.stopPropagation();
@@ -574,7 +577,7 @@ export function useHotKeyRoot() {
         activateClosestDOMScope();
       }
 
-      if (transitionOrCommandFound) {
+      if (commandCaptured || commandScopeActivated) {
         break;
       }
 
@@ -605,7 +608,7 @@ export function useHotKeyRoot() {
       activeScopeId: currentScopeId ?? null,
       isEditableFocused: isEditableFocused ?? false,
       commandScopeActivated,
-      commandFound: transitionOrCommandFound,
+      commandFound: commandCaptured,
       eventType: e.type as 'keydown' | 'keyup',
       isNonModifierKeypress: ![...currentPressedKeys].every((key) =>
         ['cmd', 'ctrl', 'opt', 'shift'].includes(key)

@@ -44,13 +44,13 @@ type RegisterScopeArgs = RegisterDOMScopeArgs | RegisterCommandScopeArgs;
 
 export function registerScope(args: RegisterScopeArgs) {
   const { parentScopeId, type, scopeId, description } = args;
+  const parentScope = hotkeyScopeTree.get(parentScopeId ?? '');
 
   const baseScope = {
     scopeId: scopeId,
     description: description ?? undefined,
     parentScopeId: parentScopeId,
     childScopeIds: [],
-    transitions: new Map(),
     hotkeyCommands: new Map(),
     unkeyedCommands: [],
     detached: args.detached ?? false,
@@ -69,6 +69,9 @@ export function registerScope(args: RegisterScopeArgs) {
         };
 
   hotkeyScopeTree.set(scopeId, newScope);
+  if (parentScope) {
+    parentScope.childScopeIds.push(scopeId);
+  }
 }
 
 export function removeScope(scopeId: string) {
