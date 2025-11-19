@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ChatSearchResponseItemWithMetadataAllOfViewedAt = number | null;
+export type ChatMetadataProjectId = string | null;

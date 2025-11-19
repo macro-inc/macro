@@ -4,6 +4,7 @@ pub mod error;
 pub mod get_document;
 pub mod search;
 pub mod search_on;
+pub mod unified;
 pub mod upsert;
 
 pub use search_on::SearchOn;

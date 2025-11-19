@@ -1,3 +1,4 @@
+use macro_db_client::document::get_document_history::DocumentHistoryInfo;
 use opensearch_client::search::model::Highlight;
 
 use super::*;
@@ -27,7 +28,21 @@ fn test_construct_search_result_single_document() {
         },
     ];
 
-    let result = construct_search_result(search_results, HashMap::new()).unwrap();
+    let mut document_histories = HashMap::new();
+    let now = chrono::Utc::now();
+    document_histories.insert(
+        "doc1".to_string(),
+        DocumentHistoryInfo {
+            item_id: "doc1".to_string(),
+            created_at: now,
+            updated_at: now,
+            viewed_at: None,
+            project_id: None,
+            ..Default::default()
+        },
+    );
+
+    let result = construct_search_result(search_results, document_histories).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.document_id, "doc1");
@@ -75,7 +90,21 @@ fn test_construct_search_result_multiple_nodes_same_document() {
         },
     ];
 
-    let result = construct_search_result(search_results, HashMap::new()).unwrap();
+    let mut document_histories = HashMap::new();
+    let now = chrono::Utc::now();
+    document_histories.insert(
+        "doc1".to_string(),
+        DocumentHistoryInfo {
+            item_id: "doc1".to_string(),
+            created_at: now,
+            updated_at: now,
+            viewed_at: None,
+            project_id: None,
+            ..Default::default()
+        },
+    );
+
+    let result = construct_search_result(search_results, document_histories).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.document_id, "doc1");
@@ -135,6 +164,7 @@ fn test_document_history_timestamps() {
         updated_at: now,
         viewed_at: Some(now),
         project_id: Some("project_1".to_string()),
+        ..Default::default()
     };
 
     document_histories.insert("doc_1".to_string(), history);
@@ -144,9 +174,18 @@ fn test_document_history_timestamps() {
 
     // Verify that timestamps were copied from the document history
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].created_at, now.timestamp());
-    assert_eq!(result[0].updated_at, now.timestamp());
-    assert_eq!(result[0].viewed_at, Some(now.timestamp()));
+    assert_eq!(
+        result[0].metadata.as_ref().unwrap().created_at,
+        now.timestamp()
+    );
+    assert_eq!(
+        result[0].metadata.as_ref().unwrap().updated_at,
+        now.timestamp()
+    );
+    assert_eq!(
+        result[0].metadata.as_ref().unwrap().viewed_at,
+        Some(now.timestamp())
+    );
 }
 
 #[test]
@@ -169,6 +208,7 @@ fn test_document_history_missing_entry() {
         updated_at: now,
         viewed_at: None,
         project_id: Some("project_1".to_string()),
+        ..Default::default()
     };
 
     document_histories.insert("different_doc".to_string(), history);
@@ -176,14 +216,9 @@ fn test_document_history_missing_entry() {
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
 
-    // Verify that default timestamps were used
+    // Documents without history info should have metadata=None
     assert_eq!(result.len(), 1);
-
-    // Default values from DocumentHistoryInfo::default()
-    let default_time = chrono::DateTime::<chrono::Utc>::default().timestamp();
-    assert_eq!(result[0].created_at, default_time);
-    assert_eq!(result[0].updated_at, default_time);
-    assert_eq!(result[0].viewed_at, None);
+    assert!(result[0].metadata.is_none());
 }
 
 #[test]
@@ -206,6 +241,7 @@ fn test_document_history_null_viewed_at() {
         updated_at: now,
         viewed_at: None, // This user has never viewed this document
         project_id: Some("project_1".to_string()),
+        ..Default::default()
     };
 
     document_histories.insert("doc_1".to_string(), history);
@@ -215,9 +251,15 @@ fn test_document_history_null_viewed_at() {
 
     // Verify that timestamps were copied correctly and viewed_at is None
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].created_at, now.timestamp());
-    assert_eq!(result[0].updated_at, now.timestamp());
-    assert_eq!(result[0].viewed_at, None);
+    assert_eq!(
+        result[0].metadata.as_ref().unwrap().created_at,
+        now.timestamp()
+    );
+    assert_eq!(
+        result[0].metadata.as_ref().unwrap().updated_at,
+        now.timestamp()
+    );
+    assert_eq!(result[0].metadata.as_ref().unwrap().viewed_at, None);
 }
 
 #[test]
@@ -249,6 +291,7 @@ fn test_document_history_multiple_documents() {
         updated_at: now,
         viewed_at: Some(now),
         project_id: Some("project_1".to_string()),
+        ..Default::default()
     };
 
     let history2 = DocumentHistoryInfo {
@@ -257,6 +300,7 @@ fn test_document_history_multiple_documents() {
         updated_at: earlier,
         viewed_at: None,
         project_id: Some("project_2".to_string()),
+        ..Default::default()
     };
 
     document_histories.insert("doc_1".to_string(), history1);
@@ -278,13 +322,15 @@ fn test_document_history_multiple_documents() {
         .find(|r| r.extra.document_id == "doc_2")
         .unwrap();
 
-    assert_eq!(doc1_result.created_at, now.timestamp());
-    assert_eq!(doc1_result.updated_at, now.timestamp());
-    assert_eq!(doc1_result.viewed_at, Some(now.timestamp()));
+    let doc1_metadata = doc1_result.metadata.as_ref().unwrap();
+    assert_eq!(doc1_metadata.created_at, now.timestamp());
+    assert_eq!(doc1_metadata.updated_at, now.timestamp());
+    assert_eq!(doc1_metadata.viewed_at, Some(now.timestamp()));
 
-    assert_eq!(doc2_result.created_at, earlier.timestamp());
-    assert_eq!(doc2_result.updated_at, earlier.timestamp());
-    assert_eq!(doc2_result.viewed_at, None);
+    let doc2_metadata = doc2_result.metadata.as_ref().unwrap();
+    assert_eq!(doc2_metadata.created_at, earlier.timestamp());
+    assert_eq!(doc2_metadata.updated_at, earlier.timestamp());
+    assert_eq!(doc2_metadata.viewed_at, None);
 }
 
 #[test]
@@ -315,6 +361,7 @@ fn test_document_history_partial_missing_entries() {
         updated_at: now,
         viewed_at: Some(now),
         project_id: Some("project_1".to_string()),
+        ..Default::default()
     };
 
     document_histories.insert("doc_exists".to_string(), history);
@@ -322,27 +369,76 @@ fn test_document_history_partial_missing_entries() {
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
 
-    // Verify results
+    // We should have 2 results - one with real data, one with defaults
     assert_eq!(result.len(), 2);
 
-    // Find each document in results
+    // The existing document should have real timestamps in metadata
     let existing_doc = result
         .iter()
         .find(|r| r.extra.document_id == "doc_exists")
         .unwrap();
+    assert!(existing_doc.metadata.is_some());
+    let metadata = existing_doc.metadata.as_ref().unwrap();
+    assert_eq!(metadata.created_at, now.timestamp());
+    assert_eq!(metadata.updated_at, now.timestamp());
+    assert_eq!(metadata.viewed_at, Some(now.timestamp()));
+
+    // The missing document should have no metadata
     let missing_doc = result
         .iter()
         .find(|r| r.extra.document_id == "doc_missing")
         .unwrap();
+    assert!(missing_doc.metadata.is_none());
+}
 
-    // Existing document should have real timestamps
-    assert_eq!(existing_doc.created_at, now.timestamp());
-    assert_eq!(existing_doc.updated_at, now.timestamp());
-    assert_eq!(existing_doc.viewed_at, Some(now.timestamp()));
+#[test]
+fn test_document_history_deleted() {
+    let now = chrono::Utc::now();
 
-    // Missing document should have default timestamps
-    let default_time = chrono::DateTime::<chrono::Utc>::default().timestamp();
-    assert_eq!(missing_doc.created_at, default_time);
-    assert_eq!(missing_doc.updated_at, default_time);
-    assert_eq!(missing_doc.viewed_at, None);
+    // Test 1: Document that exists but is soft-deleted
+    let input_deleted = vec![create_test_document_response(
+        "doc_deleted",
+        "node_1",
+        "user_1",
+        Some(vec!["hello world".to_string()]),
+    )];
+
+    let mut document_histories = HashMap::new();
+    document_histories.insert(
+        "doc_deleted".to_string(),
+        macro_db_client::document::get_document_history::DocumentHistoryInfo {
+            item_id: "doc_deleted".to_string(),
+            created_at: now,
+            updated_at: now,
+            viewed_at: Some(now),
+            project_id: Some("project_1".to_string()),
+            deleted_at: Some(now), // Soft deleted
+        },
+    );
+
+    let result = construct_search_result(input_deleted, document_histories).unwrap();
+
+    // Deleted document should be returned with metadata including deleted_at
+    assert_eq!(result.len(), 1);
+    assert!(result[0].metadata.is_some());
+    let metadata = result[0].metadata.as_ref().unwrap();
+    assert_eq!(metadata.deleted_at, Some(now.timestamp()));
+    assert_eq!(metadata.project_id, Some("project_1".to_string()));
+
+    // Test 2: Document that doesn't exist in DB (OpenSearch has stale data)
+    let input_not_found = vec![create_test_document_response(
+        "doc_not_found",
+        "node_2",
+        "user_1",
+        Some(vec!["stale data".to_string()]),
+    )];
+
+    let document_histories_not_found = HashMap::new(); // No entry = not found
+
+    let result_not_found =
+        construct_search_result(input_not_found, document_histories_not_found).unwrap();
+
+    // Document not in DB should be returned with metadata=None
+    assert_eq!(result_not_found.len(), 1);
+    assert!(result_not_found[0].metadata.is_none());
 }

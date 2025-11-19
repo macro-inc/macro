@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ChannelSearchResponseItemWithMetadataAllOfInteractedAt = number | null;
+export type ProjectMetadataViewedAt = number | null;

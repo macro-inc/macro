@@ -5,6 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use item_filters::DocumentFilters;
 use model::{
     item::{ShareableItem, ShareableItemType},
     response::ErrorResponse,
@@ -52,45 +53,16 @@ pub async fn handler(
         .into_response())
 }
 
-/// Performs a search through your documents and returns the raw opensearch results
-pub(in crate::api::search) async fn search_documents(
+pub(in crate::api::search) struct FilterDocumentResponse {
+    pub document_ids: Vec<String>,
+    pub ids_only: bool,
+}
+
+pub(in crate::api::search) async fn filter_documents(
     ctx: &ApiContext,
     user_id: &str,
-    query_params: &SearchPaginationParams,
-    req: DocumentSearchRequest,
-) -> Result<Vec<opensearch_client::search::documents::DocumentSearchResponse>, SearchError> {
-    if user_id.is_empty() {
-        return Err(SearchError::NoUserId);
-    }
-
-    let page = query_params.page.unwrap_or(0);
-
-    let page_size = if let Some(page_size) = query_params.page_size {
-        if !(0..=100).contains(&page_size) {
-            return Err(SearchError::InvalidPageSize);
-        }
-        page_size
-    } else {
-        10
-    };
-
-    let terms: Vec<String> = if let Some(terms) = req.terms.as_ref() {
-        terms
-            .iter()
-            .filter_map(|t| if t.len() < 3 { None } else { Some(t.clone()) })
-            .collect()
-    } else if let Some(query) = req.query.as_ref() {
-        if query.len() < 3 {
-            return Err(SearchError::InvalidQuerySize);
-        }
-
-        vec![query.clone()]
-    } else {
-        return Err(SearchError::NoQueryOrTermsProvided);
-    };
-
-    let filters = req.filters.unwrap_or_default();
-
+    filters: &DocumentFilters,
+) -> Result<FilterDocumentResponse, SearchError> {
     let document_ids_response = if !filters.document_ids.is_empty() {
         // Item ids are provided, we want to get the list of those that are accessible to the user
         ctx.dss_client
@@ -154,7 +126,10 @@ pub(in crate::api::search) async fn search_documents(
     };
 
     if document_ids.is_empty() && ids_only {
-        return Ok(Vec::new());
+        return Ok(FilterDocumentResponse {
+            document_ids: vec![],
+            ids_only,
+        });
     }
 
     let document_ids = if !filters.owners.is_empty() {
@@ -171,7 +146,10 @@ pub(in crate::api::search) async fn search_documents(
     };
 
     if document_ids.is_empty() && ids_only {
-        return Ok(Vec::new());
+        return Ok(FilterDocumentResponse {
+            document_ids: vec![],
+            ids_only,
+        });
     }
 
     let document_ids = if !filters.file_types.is_empty() {
@@ -186,7 +164,53 @@ pub(in crate::api::search) async fn search_documents(
         document_ids
     };
 
-    if document_ids.is_empty() && ids_only {
+    Ok(FilterDocumentResponse {
+        document_ids,
+        ids_only,
+    })
+}
+
+/// Performs a search through your documents and returns the raw opensearch results
+pub(in crate::api::search) async fn search_documents(
+    ctx: &ApiContext,
+    user_id: &str,
+    query_params: &SearchPaginationParams,
+    req: DocumentSearchRequest,
+) -> Result<Vec<opensearch_client::search::documents::DocumentSearchResponse>, SearchError> {
+    if user_id.is_empty() {
+        return Err(SearchError::NoUserId);
+    }
+
+    let page = query_params.page.unwrap_or(0);
+
+    let page_size = if let Some(page_size) = query_params.page_size {
+        if !(0..=100).contains(&page_size) {
+            return Err(SearchError::InvalidPageSize);
+        }
+        page_size
+    } else {
+        10
+    };
+
+    let terms: Vec<String> = if let Some(terms) = req.terms.as_ref() {
+        terms
+            .iter()
+            .filter_map(|t| if t.len() < 3 { None } else { Some(t.clone()) })
+            .collect()
+    } else if let Some(query) = req.query.as_ref() {
+        if query.len() < 3 {
+            return Err(SearchError::InvalidQuerySize);
+        }
+
+        vec![query.clone()]
+    } else {
+        return Err(SearchError::NoQueryOrTermsProvided);
+    };
+
+    let filter_document_response =
+        filter_documents(ctx, user_id, &req.filters.unwrap_or_default()).await?;
+
+    if filter_document_response.document_ids.is_empty() && filter_document_response.ids_only {
         return Ok(Vec::new());
     }
 
@@ -195,13 +219,13 @@ pub(in crate::api::search) async fn search_documents(
         .search_documents(DocumentSearchArgs {
             terms,
             user_id: user_id.to_string(),
-            document_ids,
+            document_ids: filter_document_response.document_ids,
             page,
             page_size,
             match_type: req.match_type.to_string(),
             search_on: req.search_on.into(),
             collapse: req.collapse.unwrap_or(false),
-            ids_only,
+            ids_only: filter_document_response.ids_only,
             disable_recency: req.disable_recency,
         })
         .await

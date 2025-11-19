@@ -4,12 +4,8 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChatSearchResponseItemWithMetadataAllOfProjectId } from './chatSearchResponseItemWithMetadataAllOfProjectId';
-import type { ChatSearchResponseItemWithMetadataAllOfViewedAt } from './chatSearchResponseItemWithMetadataAllOfViewedAt';
+import type { ChatSearchResponseItemWithMetadataAllOfMetadata } from './chatSearchResponseItemWithMetadataAllOfMetadata';
 
 export type ChatSearchResponseItemWithMetadataAllOf = {
-  created_at: number;
-  project_id?: ChatSearchResponseItemWithMetadataAllOfProjectId;
-  updated_at: number;
-  viewed_at?: ChatSearchResponseItemWithMetadataAllOfViewedAt;
+  metadata?: ChatSearchResponseItemWithMetadataAllOfMetadata;
 };
