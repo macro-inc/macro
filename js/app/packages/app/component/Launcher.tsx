@@ -74,7 +74,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
   return (
     <button
-      class={`create-menu-${props.label.toLowerCase()} size-32 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge transition-transform ease-click duration-200`}
+      class={`create-menu-${props.label.toLowerCase()} size-32 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200`}
       classList={{
         '-translate-y-2 text-ink bracket-offset-1': props.focused,
         'text-ink-extra-muted': !props.focused,
@@ -117,7 +117,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
         }}
       ></div>
 
-      <div class="absolute top-1.5 left-2 font-mono z-1 bg-panel text-accent font-bold">
+      <div class="absolute top-1.5 left-2 z-1 p-1 px-1.5 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
         <Hotkey shortcut={props.hotkeyLetter} />
       </div>
 
@@ -360,9 +360,9 @@ const LauncherInner = (props: LauncherInnerProps) => {
     {
       label: 'Code',
       blockName: 'code',
-      hotkeyLetter: 'c',
+      hotkeyLetter: 'o',
       hotkeyToken: 'global.create.code',
-      hotkey: 'c',
+      hotkey: 'o',
       onClick: (e) => handleNewCode(e?.altKey ? 'new' : 'current'),
       Icon: () => <PixelCode class="w-full h-full" />,
       displayPriority: 0,
@@ -447,6 +447,16 @@ const LauncherInner = (props: LauncherInnerProps) => {
   });
 
   registerHotkey({
+    hotkey: 'c',
+    scopeId: launcherScope,
+    description: 'Close Launcher',
+    condition: createMenuOpen,
+    keyDownHandler: () => {
+      toggleCreateMenu();
+      return true;
+    },
+  });
+  registerHotkey({
     hotkey: 'arrowleft',
     scopeId: launcherScope,
     description: 'Navigate Left',
@@ -511,10 +521,10 @@ const LauncherInner = (props: LauncherInnerProps) => {
   return (
     <div>
       <div
-        class="relative grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 p-6 isolate bg-menu pattern-edge pattern-dot-3 border border-edge/50 suppress-css-brackets"
+        class="relative grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 p-6 isolate bg-menu border border-edge-muted suppress-css-brackets"
         ref={ref}
       >
-        <div class="absolute pointer-events-none size-full inset-0 pulse-corners"></div>
+        <div class="absolute pointer-events-none size-full inset-0"></div>
 
         <For each={launcherMenuItems}>
           {(item, index) => (
@@ -527,7 +537,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
           )}
         </For>
       </div>
-      <div class="col-span-full font-mono text-sm text-ink-muted text-center pt-4">
+      <div class="col-span-full text-sm text-ink-muted text-center pt-4">
         Hold option to open in a new split view
       </div>
     </div>
@@ -546,7 +556,7 @@ export const Launcher = (props: LauncherProps) => {
     <Dialog open={props.open} onOpenChange={props.onOpenChange} modal={true}>
       <Dialog.Portal>
         <Dialog.Overlay
-          class="fixed inset-0 z-modal bg-modal-overlay"
+          class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
           classList={{
             'backdrop-filter-[blur(0.5px)]': useJuicedScrim,
           }}

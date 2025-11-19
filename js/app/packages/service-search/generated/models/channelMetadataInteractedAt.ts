@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ProjectSearchResponseItemWithMetadataAllOfParentProjectId = string | null;
+export type ChannelMetadataInteractedAt = number | null;

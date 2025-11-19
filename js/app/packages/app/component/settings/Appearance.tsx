@@ -1,11 +1,11 @@
 // import { ComputeTokens } from '../../../block-theme/ComputeTokens';
-import { getSoundEffectsEnabled, getSoundEffectsVolume, setSoundEffectsEnabled, setSoundEffectsVolume} from '../../util/soundSettings';
-import { setCustomCursorEnabled, customCursorEnabled } from '../custom-cursor/custom-cursor';
 import { ThemeEditorAdvanced } from '../../../block-theme/components/ThemeEditorAdvanced';
 import { ThemeEditorBasic } from '../../../block-theme/components/ThemeEditorBasic';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import ThemeTools from '../../../block-theme/components/ThemeTools';
+import { ENABLE_CUSTOM_CURSOR } from '@core/constant/featureFlags';
 import ThemeList from '../../../block-theme/components/ThemeList';
+import { createEffect, createSignal, Show } from 'solid-js';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { TabContent } from '@core/component/TabContent';
 import { createEffect, createSignal } from 'solid-js';
@@ -59,24 +59,26 @@ export function Appearance() {
           <ThemeEditorAdvanced />
           <ThemeList />
         </div>
-        <div
-          style={{
-            'justify-content': 'space-between',
-            'font-family': 'var(--font-mono)',
-            'border': '1px solid var(--b4)',
-            'box-sizing': 'border-box',
-            'align-items': 'center',
-            'padding': '12px 20px',
-            'font-size': '14px',
-            'display': 'flex',
-          }}
-        >
-          <span>Themed cursor</span>
-          <ToggleSwitch
-            checked={cursorEnabled()}
-            onChange={(enabled) => setCursorEnabled(enabled)}
-          />
-        </div>
+        <Show when={ENABLE_CUSTOM_CURSOR}>
+          <div
+            style={{
+              'font-family': 'var(--font-mono)',
+              border: '1px solid var(--b4)',
+              'box-sizing': 'border-box',
+              padding: '12px 20px',
+              display: 'flex',
+              'align-items': 'center',
+              'justify-content': 'space-between',
+              'font-size': '14px',
+            }}
+          >
+            <span>Themed cursor</span>
+            <ToggleSwitch
+              checked={cursorEnabled()}
+              onChange={(enabled) => setCursorEnabled(enabled)}
+            />
+          </div>
+        </Show>
         <div
           style={{
             'font-family': 'var(--font-mono)',
