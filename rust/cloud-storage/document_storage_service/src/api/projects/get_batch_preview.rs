@@ -57,6 +57,7 @@ pub async fn get_batch_preview_handler(
                 id: data.id.clone(),
                 name: data.name.clone(),
                 owner: data.owner.clone(),
+                path: data.path.clone(),
                 updated_at: data.updated_at,
             }),
             ProjectPreviewV2::DoesNotExist(data) => ProjectPreview::DoesNotExist(WithProjectId {
