@@ -16,6 +16,32 @@ use std::collections::HashMap;
 
 use super::SearchPaginationParams;
 
+/// Enriches chat search results with metadata
+#[tracing::instrument(skip(ctx, results), err)]
+pub(in crate::api::search) async fn enrich_chats(
+    ctx: &ApiContext,
+    user_id: &str,
+    results: Vec<opensearch_client::search::chats::ChatSearchResponse>,
+) -> Result<Vec<ChatSearchResponseItemWithMetadata>, SearchError> {
+    if results.is_empty() {
+        return Ok(vec![]);
+    }
+    // Extract chat IDs from results
+    let chat_ids: Vec<String> = results.iter().map(|r| r.chat_id.clone()).collect();
+
+    // Fetch chat metadata from database
+    let chat_histories =
+        macro_db_client::chat::get::get_chat_history_info(&ctx.db, user_id, &chat_ids)
+            .await
+            .map_err(SearchError::InternalError)?;
+
+    // Construct enriched results
+    let enriched_results =
+        construct_search_result(results, chat_histories).map_err(SearchError::InternalError)?;
+
+    Ok(enriched_results)
+}
+
 /// Performs a search through chats and enriches the results with metadata
 pub async fn search_chats_enriched(
     ctx: &ApiContext,
@@ -26,23 +52,7 @@ pub async fn search_chats_enriched(
     // Use the simple search to get raw OpenSearch results
     let opensearch_results = search_chats(ctx, user_id, query_params, req).await?;
 
-    // Extract chat IDs from results
-    let chat_ids: Vec<String> = opensearch_results
-        .iter()
-        .map(|r| r.chat_id.clone())
-        .collect();
-
-    // Fetch chat metadata from database
-    let chat_histories =
-        macro_db_client::chat::get::get_chat_history_info(&ctx.db, user_id, &chat_ids)
-            .await
-            .map_err(SearchError::InternalError)?;
-
-    // Construct enriched results
-    let enriched_results = construct_search_result(opensearch_results, chat_histories)
-        .map_err(SearchError::InternalError)?;
-
-    Ok(enriched_results)
+    enrich_chats(ctx, user_id, opensearch_results).await
 }
 
 /// Perform a search through your chats

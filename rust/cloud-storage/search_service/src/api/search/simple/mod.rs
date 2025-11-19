@@ -8,6 +8,7 @@ use axum::{
 use model::response::ErrorResponse;
 use opensearch_client::error::OpensearchClientError;
 
+pub(in crate::api::search::simple) mod filter;
 pub(in crate::api) mod simple_channel;
 pub(in crate::api) mod simple_chat;
 pub(in crate::api) mod simple_document;
