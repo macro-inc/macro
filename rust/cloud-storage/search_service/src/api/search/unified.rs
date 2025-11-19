@@ -86,11 +86,7 @@ pub async fn handler(
     results.extend(enriched_email_results);
 
     // Sort the results by their average score
-    results.sort_by(|a, b| {
-        b.average_score()
-            .partial_cmp(&a.average_score())
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    results.sort_by(|a, b| b.average_score().total_cmp(&a.average_score()));
 
     Ok((StatusCode::OK, Json(UnifiedSearchResponse { results })).into_response())
 }
