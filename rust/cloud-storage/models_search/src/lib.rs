@@ -3,6 +3,7 @@ use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
 use utoipa::ToSchema;
 
+pub mod score;
 pub mod channel;
 pub mod chat;
 pub mod document;
