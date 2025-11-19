@@ -81,15 +81,34 @@ export function Settings() {
     }
   });
 
+  /*
+  very verbose way to choose which tabs should be shown
+  this will be replaced with <Show when={}>
+  */
   const settingsTabs = createMemo(() => {
     const tabs: {value: string; label: string }[] = [];
+
     tabs.push({value: 'Appearance', label: 'Appearance'});
+
     tabs.push({value: 'Account', label: 'Account'});
-    if(!orgName() && !isNativeMobilePlatform()){tabs.push({value: 'Subscription', label: 'Subscription'})}
-    if(orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)){tabs.push({value: 'Organization', label: 'Organization'})}
+
+    if(!orgName() && !isNativeMobilePlatform()){
+      tabs.push({value: 'Subscription', label: 'Subscription'})
+    }
+
+    if(orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)){
+      tabs.push({value: 'Organization', label: 'Organization'})
+    }
+
     tabs.push({value: 'Notification', label: 'Notification'});
-    if(isNativeMobilePlatform() && DEV_MODE_ENV){tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' })}
-    if(ENABLE_AI_MEMORY){tabs.push({ value: 'AI Memory', label: 'AI Memory' })}
+
+    if(isNativeMobilePlatform() && DEV_MODE_ENV){
+      tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' })
+    }
+    if(ENABLE_AI_MEMORY){
+      tabs.push({ value: 'AI Memory', label: 'AI Memory' })
+    }
+
     return tabs;
   });
 

@@ -22,10 +22,8 @@ import IconLogo from '@macro-icons/macro-logo.svg';
 import { BasicTierLimit } from './BasicTierLimit';
 import { setKonsoleOpen } from '../command/state';
 import { runCommand } from '@core/hotkey/hotkeys';
-import { cornerClip } from '@core/util/clipPath';
 import { setCreateMenuOpen } from '../Launcher';
 import { useHasPaidAccess } from '@core/auth';
-
 import { TOKENS } from '@core/hotkey/tokens';
 import { playSound } from '@app/util/sound';
 import { QuickAccess } from './QuickAccess';
@@ -160,7 +158,7 @@ export function Dock(){
           'width': '100vw'
         }}
       >
-        <ClippedPanel br bl active>
+        <ClippedPanel br bl>
           <div style={{
             'grid-template-columns':'min-content 1fr min-content',
             'box-sizing': 'border-box',
