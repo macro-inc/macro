@@ -1,7 +1,12 @@
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
-import { serviceLoadBalancer } from '@resources';
+import {
+  DATADOG_API_KEY,
+  datadogAgentContainer,
+  fargateLogRouterSidecarContainer,
+  serviceLoadBalancer,
+} from '@resources';
 import { EcrImage } from '@service';
 import {
   awsRegion,
@@ -9,11 +14,6 @@ import {
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   stack,
 } from '@shared';
-import {
-  DATADOG_API_KEY,
-  datadogAgentContainer,
-  fargateLogRouterSidecarContainer,
-} from './datadog';
 
 const BASE_NAME = 'organization-service';
 const BASE_PATH = '../../../rust/cloud-storage';

@@ -7,10 +7,11 @@ export const createControlledOpenSignal = (value?: boolean) => {
   const [createMenuOpen, setCreateMenuOpen] = createSignal(value ?? false);
 
   const customSetter: Setter<boolean> = (prev) => {
+    const activeElement = document.activeElement;
     const isOpenResult = setCreateMenuOpen(prev);
 
     if (isOpenResult) {
-      previouslyFocusedElement = document.activeElement;
+      previouslyFocusedElement = activeElement;
 
       if (DEV_MODE_ENV)
         console.info('Borrowing focus from', previouslyFocusedElement);

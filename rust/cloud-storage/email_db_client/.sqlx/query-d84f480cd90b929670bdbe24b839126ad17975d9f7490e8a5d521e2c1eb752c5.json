@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_settings (link_id, signature_on_replies_forwards)\n        VALUES ($1, $2)\n        ON CONFLICT (link_id)\n        DO UPDATE SET\n            signature_on_replies_forwards = EXCLUDED.signature_on_replies_forwards,\n            updated_at = NOW()\n        RETURNING link_id, signature_on_replies_forwards\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "signature_on_replies_forwards",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "d84f480cd90b929670bdbe24b839126ad17975d9f7490e8a5d521e2c1eb752c5"
+}

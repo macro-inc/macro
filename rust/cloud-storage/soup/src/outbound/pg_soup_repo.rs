@@ -1,6 +1,9 @@
-use crate::domain::{
-    models::{AdvancedSortParams, SimpleSortQuery, SimpleSortRequest},
-    ports::SoupRepo,
+use crate::{
+    domain::{
+        models::{AdvancedSortParams, SimpleSortQuery, SimpleSortRequest},
+        ports::SoupRepo,
+    },
+    outbound::pg_soup_repo::expanded::dynamic::ExpandedDynamicCursorArgs,
 };
 use either::Either;
 use models_soup::item::SoupItem;
@@ -27,15 +30,29 @@ impl SoupRepo for PgSoupRepo {
         req: SimpleSortRequest<'a>,
     ) -> impl Future<Output = Result<Vec<SoupItem>, Self::Err>> + Send {
         match req.cursor {
-            SimpleSortQuery::ItemsAndFrecencyFilter(_) => {
-                Either::Left(Either::Left(not_implemented(req)))
+            SimpleSortQuery::ItemsAndFrecencyFilter(query) => {
+                // Extract the EntityFilterAst from the tuple (Frecency, EntityFilterAst)
+                Either::Left(Either::Left(
+                    expanded::dynamic::expanded_dynamic_cursor_soup(
+                        &self.inner,
+                        ExpandedDynamicCursorArgs {
+                            user_id: req.user_id,
+                            limit: req.limit,
+                            cursor: query.map_filter(|(_, ast)| ast),
+                            exclude_frecency: true,
+                        },
+                    ),
+                ))
             }
             SimpleSortQuery::ItemsFilter(ast) => Either::Left(Either::Right(
                 expanded::dynamic::expanded_dynamic_cursor_soup(
                     &self.inner,
-                    req.user_id,
-                    req.limit,
-                    ast,
+                    ExpandedDynamicCursorArgs {
+                        user_id: req.user_id,
+                        limit: req.limit,
+                        cursor: ast,
+                        exclude_frecency: false,
+                    },
                 ),
             )),
             SimpleSortQuery::FilterFrecency(f) => Either::Right(Either::Left(
