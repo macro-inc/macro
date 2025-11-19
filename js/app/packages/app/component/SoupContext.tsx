@@ -1,4 +1,5 @@
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { HotkeyTags } from '@core/hotkey/constants';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import {
@@ -14,7 +15,6 @@ import type { EntityData } from '@macro-entity';
 import { useTutorialCompleted } from '@service-gql/client';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
-
 import { useQuery } from '@tanstack/solid-query';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
@@ -266,6 +266,13 @@ export function createNavigationEntityListShortcut({
             if (next !== null) {
               setViewDataStore(selectedView(), 'selectedEntity', next);
               setViewDataStore(selectedView(), 'highlightedId', next.id);
+              const nextIndex = entities()?.findIndex(
+                ({ id }) => id === next.id
+              );
+              if (nextIndex !== undefined && nextIndex > -1) {
+                const elem = getEntityElAtIndex(nextIndex);
+                if (elem instanceof HTMLElement) elem.focus();
+              }
             }
           },
         });
@@ -906,7 +913,7 @@ export function createNavigationEntityListShortcut({
       return true;
     },
     displayPriority: 10,
-    tags: ['selection-modification'],
+    tags: [HotkeyTags.SelectionModification],
   });
   registerHotkey({
     hotkey: ['x'],
@@ -949,7 +956,7 @@ export function createNavigationEntityListShortcut({
       );
       return true;
     },
-    tags: ['selection-modification'],
+    tags: [HotkeyTags.SelectionModification],
   });
 
   createEffect(() => {
