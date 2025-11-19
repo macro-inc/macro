@@ -186,6 +186,7 @@ async fn cursor_handler<T: EmailService>(
 
 #[derive(Debug, ToSchema, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
 struct ApiThreadPreviewCursor {
     #[serde(flatten)]
     thread: ApiThreadPreviewCursorInner,
@@ -221,6 +222,7 @@ impl ApiThreadPreviewCursor {
 
 #[derive(Debug, ToSchema, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
 pub struct ApiThreadPreviewCursorInner {
     id: Uuid,
     provider_id: Option<String>,
@@ -234,9 +236,22 @@ pub struct ApiThreadPreviewCursorInner {
     sender_email: Option<String>,
     sender_name: Option<String>,
     sender_photo_url: Option<String>,
+
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    #[schema(value_type = i64)]
+    #[cfg_attr(feature = "ai_schema", schemars(with = "i64"))]
     sort_ts: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    #[schema(value_type = i64)]
+    #[cfg_attr(feature = "ai_schema", schemars(with = "i64"))]
     created_at: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    #[schema(value_type = i64)]
+    #[cfg_attr(feature = "ai_schema", schemars(with = "i64"))]
     updated_at: DateTime<Utc>,
+    #[serde(with = "chrono::serde::ts_milliseconds_option")]
+    #[schema(value_type = i64, nullable = true)]
+    #[cfg_attr(feature = "ai_schema", schemars(with = "Option<i64>"))]
     viewed_at: Option<DateTime<Utc>>,
 }
 
@@ -285,6 +300,7 @@ impl ApiThreadPreviewCursorInner {
 
 #[derive(Debug, ToSchema, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
 pub struct ApiAttachment {
     id: Uuid,
     message_id: Uuid,
@@ -295,6 +311,10 @@ pub struct ApiAttachment {
     mime_type: Option<String>,
     size_bytes: Option<i64>,
     content_id: Option<String>,
+
+    #[serde(with = "chrono::serde::ts_milliseconds")]
+    #[schema(value_type = i64)]
+    #[cfg_attr(feature = "ai_schema", schemars(with = "i64"))]
     created_at: DateTime<Utc>,
 }
 
@@ -328,6 +348,7 @@ impl ApiAttachment {
 
 #[derive(Debug, ToSchema, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
 pub struct ApiAttachmentMacro {
     db_id: Uuid,
     message_id: Uuid,
@@ -356,6 +377,7 @@ impl ApiAttachmentMacro {
 
 #[derive(Debug, ToSchema, Serialize, Deserialize)]
 #[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
 pub struct ApiContact {
     id: Uuid,
     link_id: Uuid,
