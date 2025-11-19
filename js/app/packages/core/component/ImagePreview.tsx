@@ -133,11 +133,16 @@ export function ImagePreview(props: ImagePreviewProps) {
     }
   };
 
+  const showDeleteMediaButton = () => {
+    return (
+      props.channelId &&
+      props.messageId &&
+      props.attachmentId &&
+      props.isCurrentUser
+    );
+  };
+
   const handleDeleteMedia = async () => {
-    if (!props.isDss) {
-      console.error('delete not implemented for dss');
-      return;
-    }
     if (!props.channelId || !props.messageId || !props.attachmentId) return;
     await commsServiceClient.patchMessage({
       channel_id: props.channelId,
@@ -291,7 +296,7 @@ export function ImagePreview(props: ImagePreviewProps) {
                     icon={DownloadIcon}
                     onClick={downloadImage}
                   />
-                  <Show when={props.isCurrentUser}>
+                  <Show when={showDeleteMediaButton()}>
                     <MenuSeparator />
                     <MenuItem
                       text="Delete image"
