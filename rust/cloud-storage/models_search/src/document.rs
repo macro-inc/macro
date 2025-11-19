@@ -18,6 +18,9 @@ pub struct DocumentSearchResult {
     pub raw_content: Option<String>,
     /// When the search document was last updated
     pub updated_at: i64,
+    /// The score of the result
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<f64>,
 }
 
 /// A single response item, part of the DocumentSearchResponse object

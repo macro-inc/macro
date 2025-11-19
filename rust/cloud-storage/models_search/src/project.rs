@@ -7,6 +7,9 @@ use utoipa::ToSchema;
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ProjectSearchResult {
     pub highlight: SearchHighlight,
+    /// The score of the result
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<f64>,
 }
 
 /// Metadata associated with Project Search, to be used with SearchResponseItem
