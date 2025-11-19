@@ -4,9 +4,9 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 import { savePropertyValue } from '../../api/propertyValues';
-import { EntityValueDisplay } from '../../EntityValueDisplay';
 import type { Property } from '../../types';
-import { AddPropertyValueButton, EmptyValue } from './PropertyValuePrimitives';
+import { EntityIcon } from './EntityIcon';
+import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
 
 type EntityValueProps = {
   property: Property;
@@ -67,7 +67,7 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
     <div class="flex flex-wrap gap-1 justify-start items-start w-full min-w-0">
       <For each={entities}>
         {(entityRef) => (
-          <EntityValueDisplay
+          <EntityIcon
             property={props.property}
             entityId={entityRef.entity_id}
             entityType={entityRef.entity_type}

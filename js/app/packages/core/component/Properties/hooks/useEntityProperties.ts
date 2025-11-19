@@ -17,7 +17,7 @@ import type { Property } from '../types';
  * @param entityType - The type of entity (e.g., 'document', 'channel', 'project')
  * @param includeMetadata - Whether to include metadata properties
  */
-export function useProperties(
+export function useEntityProperties(
   entityId: string,
   entityType: EntityType,
   includeMetadata: boolean

@@ -5,10 +5,10 @@ import LoadingSpinner from '@icon/regular/spinner.svg';
 import type * as schemas from '@service-properties/generated/zod';
 import { createMemo, createSignal, For, Show } from 'solid-js';
 import type { z } from 'zod';
-import { PROPERTY_STYLES } from './styles/propertyStyles';
-import type { Property } from './types';
-import { formatOptionValue, useSearchInputFocus } from './utils';
-import { ErrorHandler } from './utils/errorHandling';
+import { PROPERTY_STYLES } from '../../../styles/styles';
+import type { Property } from '../../../types';
+import { formatOptionValue, useSearchInputFocus } from '../../../utils';
+import { ErrorHandler } from '../../../utils/errorHandling';
 
 type PropertyOption = z.infer<typeof schemas.getPropertyOptionsResponseItem>;
 
@@ -26,7 +26,7 @@ type SelectOptionsProps = {
 const ADD_OPTION_BASE_CLASSES =
   'flex flex-row w-full justify-between items-center gap-4 cursor-pointer p-2 border border-dashed border-accent/50 hover:border-accent hover:bg-accent/5 text-accent';
 
-export const PropertyOptionsList = (props: SelectOptionsProps) => {
+export const PropertyOptionSelector = (props: SelectOptionsProps) => {
   const [searchQuery, setSearchQuery] = createSignal('');
   const [isAddingOption, setIsAddingOption] = createSignal(false);
 

@@ -4,10 +4,10 @@ import {
   ADD_PINNED_PROPERTY_COMMAND,
   REMOVE_PINNED_PROPERTY_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
-import { PropertiesContent } from '@core/component/Properties/components/PropertiesContent';
-import { PropertiesModals } from '@core/component/Properties/components/PropertiesModals';
+import { Modals } from '@core/component/Properties/component/modal';
+import { PanelContainer } from '@core/component/Properties/component/panel';
 import { PropertiesProvider } from '@core/component/Properties/context/PropertiesContext';
-import { useProperties } from '@core/component/Properties/hooks';
+import { useEntityProperties } from '@core/component/Properties/hooks';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
 import CaretRight from '@icon/bold/caret-right-bold.svg';
 import EyeSlash from '@icon/bold/eye-slash-bold.svg';
@@ -37,7 +37,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
   const blockId = useBlockId();
   const mdData = mdStore.get; // Access block store at component level
 
-  const { properties, isLoading, error, refetch } = useProperties(
+  const { properties, isLoading, error, refetch } = useEntityProperties(
     blockId,
     'DOCUMENT' as EntityType,
     true // includeMetadata
@@ -172,7 +172,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
                 <div class="text-failure-ink text-center py-4">{error()}</div>
               </Show>
 
-              <PropertiesContent
+              <PanelContainer
                 properties={filteredPinnedProperties}
                 isLoading={isLoading}
                 error={error}
@@ -191,7 +191,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
                 </button>
               </div>
 
-              <PropertiesModals />
+              <Modals />
             </div>
             <div class="border-t-2 border-edge pt-2" />
           </Show>

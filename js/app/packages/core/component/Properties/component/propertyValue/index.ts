@@ -1,7 +1,10 @@
 export { BooleanValue } from './BooleanValue';
 export { DateValue } from './DateValue';
+export { EntityIcon } from './EntityIcon';
 export { EntityValue } from './EntityValue';
+export { LinkValue } from './LinkValue';
 export { NumberValue } from './NumberValue';
 export { PropertyValue } from './PropertyValue';
 export { SelectValue } from './SelectValue';
 export { TextValue } from './TextValue';
+export * from './ValueComponents';

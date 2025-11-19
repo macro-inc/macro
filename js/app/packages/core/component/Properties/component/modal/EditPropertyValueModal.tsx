@@ -14,18 +14,18 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { savePropertyValue } from './api/propertyValues';
-import { MODAL_DIMENSIONS } from './constants';
-import { EntityInput } from './EntityInput';
-import { usePropertyEditor } from './hooks/usePropertyManagement';
-import { PropertyOptionsList } from './PropertyOptionsList';
-import type { PropertyApiValues, PropertyEditorProps } from './types';
-import { getValueTypeDisplay } from './utils';
+import { savePropertyValue } from '../../api/propertyValues';
+import { MODAL_DIMENSIONS } from '../../constants';
+import { usePropertyEditor } from '../../hooks/usePropertyModals';
+import type { PropertyApiValues, PropertyEditorProps } from '../../types';
+import { getValueTypeDisplay } from '../../utils';
 import {
   entityReferencesToIdSet,
   updateEntityReferences,
-} from './utils/entityConversion';
-import { ErrorHandler } from './utils/errorHandling';
+} from '../../utils/entityConversion';
+import { ErrorHandler } from '../../utils/errorHandling';
+import { PropertyEntitySelector } from './shared/PropertyEntitySelector';
+import { PropertyOptionSelector } from './shared/PropertyOptionSelector';
 
 // Common CSS classes
 const MODAL_BASE =
@@ -33,7 +33,7 @@ const MODAL_BASE =
 const HEADER_CLASSES = 'flex items-center justify-between pt-3 pb-2 px-4';
 const CONTENT_CLASSES = 'flex-1 max-h-64 pt-2 px-4 pb-4';
 
-export function PropertyEditor(props: PropertyEditorProps) {
+export function EditPropertyValueModal(props: PropertyEditorProps) {
   const blockId = useBlockId();
 
   const [selectedEntityRefs, setSelectedEntityRefs] = createSignal<
@@ -223,7 +223,7 @@ export function PropertyEditor(props: PropertyEditorProps) {
                 }
                 fallback={
                   <Show when={props.property.valueType === 'ENTITY'}>
-                    <EntityInput
+                    <PropertyEntitySelector
                       property={props.property}
                       selectedOptions={() => {
                         const refs = selectedEntityRefs();
@@ -243,7 +243,7 @@ export function PropertyEditor(props: PropertyEditorProps) {
                   </Show>
                 }
               >
-                <PropertyOptionsList
+                <PropertyOptionSelector
                   property={props.property}
                   options={editorState().options}
                   isLoading={editorState().isLoading}

@@ -45,8 +45,8 @@ let hexColor: string = '';
 let cursorCache: Record<string, string> = {};
 let currentCursorType: string | null = 'auto';
 const shadowRoots = new Set<ShadowRoot>();
-let overridedCursorTargetEl: HTMLElement | null = null;
-const overrideCursorAttr = 'data-override-cursor';
+let _overridedCursorTargetEl: HTMLElement | null = null;
+const _overrideCursorAttr = 'data-override-cursor';
 // const overrideCursorSelector = `[${overrideCursorAttr}]`
 const overrideCursorSelector = `*`;
 
@@ -399,7 +399,7 @@ function initCursor() {
   }
 
   // Add mousemove listener to handle cursor states and text glyph detection
-  const onMouseMove = (e: MouseEvent) => {
+  const _onMouseMove = (e: MouseEvent) => {
     if (!getCustomCursorEnabled()) {
       clearCursorOverrideStyle();
       return;
@@ -410,7 +410,7 @@ function initCursor() {
     if (target.shadowRoot) {
       shadowRoots.add(target.shadowRoot);
       [...target.shadowRoot.children].forEach((child) => {
-        child.addEventListener('mousemove', onMouseMove);
+        child.addEventListener('mousemove', _onMouseMove);
       });
       return;
     }

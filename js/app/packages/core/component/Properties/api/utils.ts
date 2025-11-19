@@ -1,12 +1,12 @@
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { Property, PropertyApiValues } from '../types';
+import { ErrorHandler } from '../utils/errorHandling';
 import {
   addPropertyToEntity as apiAddPropertyToEntity,
   deleteEntityProperty as apiDeleteEntityProperty,
   savePropertyValue as apiSavePropertyValue,
-} from './api';
-import type { Property, PropertyApiValues } from './types';
-import { ErrorHandler } from './utils/errorHandling';
+} from './index';
 
 /**
  * Shared utility for saving property values with consistent error handling
