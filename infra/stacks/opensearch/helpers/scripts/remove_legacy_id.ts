@@ -11,35 +11,31 @@ import {
 } from '../constants';
 import { removeField } from '../utils/remove_field';
 
-interface FieldToRemove {
-  fieldName: string;
-}
-
 interface IndexCleanup {
   indexName: string;
-  fieldsToRemove: FieldToRemove[];
+  legacyIdField: string;
 }
 
 const CLEANUPS: IndexCleanup[] = [
   {
     indexName: CHANNEL_INDEX,
-    fieldsToRemove: [{ fieldName: 'created_at' }, { fieldName: 'updated_at' }],
+    legacyIdField: 'channel_id',
   },
   {
     indexName: CHAT_INDEX,
-    fieldsToRemove: [{ fieldName: 'updated_at' }],
+    legacyIdField: 'chat_id',
   },
   {
     indexName: DOCUMENT_INDEX,
-    fieldsToRemove: [{ fieldName: 'updated_at' }],
+    legacyIdField: 'document_id',
   },
   {
     indexName: EMAIL_INDEX,
-    fieldsToRemove: [{ fieldName: 'updated_at' }, { fieldName: 'sent_at' }],
+    legacyIdField: 'thread_id',
   },
   {
     indexName: PROJECT_INDEX,
-    fieldsToRemove: [{ fieldName: 'created_at' }, { fieldName: 'updated_at' }],
+    legacyIdField: 'project_id',
   },
 ];
 
@@ -65,13 +61,11 @@ async function run(dryRun: boolean = true) {
 
   try {
     for (const cleanup of CLEANUPS) {
-      for (const field of cleanup.fieldsToRemove) {
-        await removeField(opensearchClient, dryRun, {
-          indexName: cleanup.indexName,
-          fieldNameToRemove: field.fieldName,
-          replacementFieldName: `${field.fieldName}_seconds`,
-        });
-      }
+      await removeField(opensearchClient, dryRun, {
+        indexName: cleanup.indexName,
+        fieldNameToRemove: cleanup.legacyIdField,
+        replacementFieldName: 'entity_id',
+      });
     }
 
     console.log('\n' + '='.repeat(60));
