@@ -36,8 +36,8 @@ export type ValueType =
 /**
  * UI layer property with discriminated union for type-safe values
  *
- * Note: Single-value types use `value?: T`, multi-value types use `value?: T[]`
- * This reflects the semantic difference between logically single vs multiple values.
+ * Note: All value types use `value: T | null` or `value: T[] | null` (not optional properties)
+ * This reflects that unset values are explicitly `null` rather than `undefined`.
  *
  * @see EntityPropertyWithDefinition - Backend structured type
  * @see PropertyValue - Backend discriminated union for values
