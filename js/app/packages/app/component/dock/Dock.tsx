@@ -3,7 +3,7 @@ import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
 import { ENABLE_DOCK_NOTITIFCATIONS } from '@core/constant/featureFlags';
-import { /* Hotkey, */ BasicHotkey } from '@core/component/Hotkey';
+import {  Hotkey  } from '@core/component/Hotkey';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import SplitIcon from '@icon/regular/square-split-horizontal.svg';
 import { useGlobalNotificationSource } from '../GlobalAppState';
@@ -206,8 +206,8 @@ export function Dock(){
               }}>
                 <Hotkey token={TOKENS.global.createCommand}/>
               </div>*/}
-              <div class="**:border-none! flex size-full">
-                <BasicHotkey shortcut="cmd+k" />
+              <div class="**:border-none! flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25">
+                <Hotkey shortcut="cmd+k" class="flex gap-1" />
               </div>
             </div>
 
@@ -244,8 +244,8 @@ export function Dock(){
               }}>
                 <Hotkey token={TOKENS.global.commandMenu}/>
               </div>*/}
-              <div class="**:border-none! flex size-full">
-                <BasicHotkey shortcut="c" />
+              <div class="**:border-none! flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25">
+                <Hotkey shortcut="c" />
               </div>
             </div>
           </div>
