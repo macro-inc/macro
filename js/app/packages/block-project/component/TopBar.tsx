@@ -83,13 +83,7 @@ export function TopBar() {
         <div class="flex items-center p-1">
           <div class="flex items-center">
             <SplitPermissionsBadge />
-            <Show
-              when={
-                ENABLE_PROJECT_SHARING &&
-                project()?.id !== 'trash' &&
-                project()?.id !== 'root'
-              }
-            >
+            <Show when={ENABLE_PROJECT_SHARING && !isSpecialProject}>
               <ShareButton
                 id={id}
                 name={project()?.name ?? ''}
