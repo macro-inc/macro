@@ -5,6 +5,7 @@ import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 import { saveEntityProperty } from '../../api';
 import type { Property } from '../../types';
+import { getEntityValues } from '../../utils';
 import { EntityIcon } from './EntityIcon';
 import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
 
@@ -36,7 +37,7 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
     setIsSaving(true);
 
     try {
-      const entities = (props.property.value as EntityReference[]) ?? [];
+      const entities = getEntityValues(props.property);
       const newValues = entities.filter(
         (entity: EntityReference) =>
           entity.entity_id !== entityToRemove.entity_id ||
@@ -62,7 +63,7 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
   };
 
   const isReadOnly = () => props.property.isMetadata || !props.canEdit;
-  const entities = (props.property.value as EntityReference[]) ?? [];
+  const entities = getEntityValues(props.property);
   return (
     <div class="flex flex-wrap gap-1 justify-start items-start w-full min-w-0">
       <For each={entities}>

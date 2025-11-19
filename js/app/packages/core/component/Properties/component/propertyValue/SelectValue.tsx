@@ -7,7 +7,7 @@ import { createSignal, For, Show } from 'solid-js';
 import { saveEntityProperty } from '../../api';
 import { PROPERTY_STYLES } from '../../styles/styles';
 import type { Property } from '../../types';
-import { formatPropertyValue } from '../../utils';
+import { formatPropertyValue, getSelectValues } from '../../utils';
 import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
 
 type SelectValueProps = {
@@ -66,7 +66,7 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
   };
 
   const isReadOnly = () => props.property.isMetadata || !props.canEdit;
-  const displayValues = (props.property.value ?? []) as string[];
+  const displayValues = getSelectValues(props.property);
 
   return (
     <div
