@@ -219,12 +219,7 @@ export function Settings() {
                   <Subscription />
                 </Tabs.Content>
               </Show>
-              <Show
-                when={
-                  orgName() &&
-                  permissions()?.includes(MacroPermissions.WriteItPanel)
-                }
-              >
+              <Show when={ orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)}>
                 <Tabs.Content value="Organization" class="h-full">
                   <Organization />
                 </Tabs.Content>

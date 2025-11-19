@@ -21,11 +21,13 @@ import IconLogo from '@macro-icons/macro-logo.svg';
 import { BasicTierLimit } from './BasicTierLimit';
 import { setKonsoleOpen } from '../command/state';
 import { runCommand } from '@core/hotkey/hotkeys';
+import { cornerClip } from '@core/util/clipPath';
 import { setCreateMenuOpen } from '../Launcher';
 import { useHasPaidAccess } from '@core/auth';
 import { TOKENS } from '@core/hotkey/tokens';
 import { playSound } from '@app/util/sound';
 import { QuickAccess } from './QuickAccess';
+
 // import { Debug } from './Debug';
 import Hints from './Hints';
 
@@ -154,6 +156,12 @@ export function Dock(){
         }}
       >
         <div style={{
+          'clip-path': cornerClip(0, 0, '0.5rem', '0.5rem'),
+          'background-color': 'var(--color-edge-muted)',
+          'height': '40px',
+        }}>
+        <div style={{
+          'clip-path': cornerClip(0, 0, 'calc(0.5rem + 1.5px)', 'calc(0.5rem + 1.5px)'),
           'grid-template-columns':'min-content 1fr min-content',
           'border': '1px solid var(--color-edge-muted)',
           'background-color': 'var(--color-panel)',
@@ -343,9 +351,7 @@ export function Dock(){
             />
 
             <IconButton
-              tooltip={{
-                label: isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'
-              }}
+              tooltip={{label: isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'}}
               theme={isPresentMode() ? 'accent' : 'clear'}
               onClick={togglePresentMode}
               icon={IconPower}
@@ -364,6 +370,7 @@ export function Dock(){
             />
           </div>
 
+        </div>
         </div>
       </div>
 
