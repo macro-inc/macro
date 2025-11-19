@@ -1,7 +1,7 @@
 //! Domain response models for property operations
 
 use super::{
-    EntityPropertyWithDefinition, PropertyDefinition, PropertyOption, PropertyWithOptions,
+    EntityPropertyWithDefinition, PropertyDefinition, PropertyDefinitionWithOptions, PropertyOption,
 };
 use std::collections::HashMap;
 
@@ -15,7 +15,7 @@ pub struct CreatePropertyWithOptionsResponse {}
 
 #[derive(Debug, Clone)]
 pub struct ListPropertiesResponse {
-    pub properties: Vec<PropertyWithOptions>,
+    pub properties: Vec<PropertyDefinitionWithOptions>,
 }
 
 #[derive(Debug, Clone)]
