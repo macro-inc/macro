@@ -15,7 +15,6 @@ import type { EntityData } from '@macro-entity';
 import { useTutorialCompleted } from '@service-gql/client';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
-import { action } from '@solidjs/router';
 import { useQuery } from '@tanstack/solid-query';
 import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
