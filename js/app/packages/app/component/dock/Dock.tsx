@@ -243,7 +243,7 @@ export function Dock(){
                 'gap': '4px',
               }}>
                 <Hotkey token={TOKENS.global.commandMenu}/>
-              </div>*/}
+              </div>
               <div class="**:border-none! flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25">
                 <Hotkey shortcut="c" />
               </div>
