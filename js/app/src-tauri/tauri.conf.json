@@ -7,7 +7,7 @@
     "frontendDist": "../packages/app/dist",
     "devUrl": "http://localhost:3000",
     "beforeDevCommand": "bun dev",
-    "beforeBuildCommand": "bun run build"
+    "beforeBuildCommand": "bun run build:tauri"
   },
   "app": {
     "windows": [
