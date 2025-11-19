@@ -1,6 +1,6 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { useEmailLinksStatus } from '@app/signal/emailAuth';
-import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
+import { setHotkeyRoot, useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { ChannelsContextProvider } from '@core/component/ChannelsProvider';
@@ -63,7 +63,7 @@ import Onboarding from './Onboarding';
 import { useMobileEffect, useMobileNavigate } from './settings/Mobile';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 import Visor from './Visor';
-import { WhichKey } from './WhichKey';
+import { setOpenWhichKey, WhichKey } from './WhichKey';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -276,6 +276,12 @@ const clearBodyInlineStyleColor = () => {
 export function Root() {
   const isAuthenticated = useIsAuthenticated();
   setHotkeyRoot(useHotKeyRoot());
+
+  useSubscribeToKeypress((context) => {
+    if (context.commandScopeActivated) {
+      setOpenWhichKey(true);
+    }
+  });
 
   useMobileEffect();
 
