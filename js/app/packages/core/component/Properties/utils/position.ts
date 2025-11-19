@@ -1,4 +1,4 @@
-import { createMemo, type Accessor } from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 
 /**
  * Calculate modal position from an anchor element
@@ -23,4 +23,3 @@ export function useModalPosition(
     };
   });
 }
-

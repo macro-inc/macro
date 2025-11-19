@@ -1,4 +1,4 @@
-import { createSignal, type Accessor, type Setter } from 'solid-js';
+import { type Accessor, createSignal, type Setter } from 'solid-js';
 
 /**
  * Generic hook for managing modal state
@@ -9,7 +9,7 @@ import { createSignal, type Accessor, type Setter } from 'solid-js';
 export function useModalState<T>(): [
   Accessor<T | null>,
   (data: T) => void,
-  () => void
+  () => void,
 ] {
   const [state, setState] = createSignal<T | null>(null);
 
@@ -25,4 +25,3 @@ export function useModalState<T>(): [
 
   return [state, open, close];
 }
-

@@ -83,8 +83,11 @@ const PropertiesContext = createContext<PropertiesContextValue>();
 
 export function PropertiesProvider(props: PropertiesProviderProps) {
   // Modal states using generic hook
-  const [propertySelectorModal, openPropertySelectorState, closePropertySelector] =
-    useModalState<PropertySelectorModalState>();
+  const [
+    propertySelectorModal,
+    openPropertySelectorState,
+    closePropertySelector,
+  ] = useModalState<PropertySelectorModalState>();
   const [propertyEditorModal, openPropertyEditorState, closePropertyEditor] =
     useModalState<PropertyEditorModalState>();
   const [datePickerModal, openDatePickerState, closeDatePicker] =
