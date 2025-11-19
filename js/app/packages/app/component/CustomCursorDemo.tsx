@@ -1,4 +1,4 @@
-import { For, onMount } from 'solid-js';
+import { createSignal, For, onMount } from 'solid-js';
 
 const ShadowDOMDemo = () => {
   let shadowHost: HTMLDivElement | undefined;
@@ -75,53 +75,60 @@ const ShadowDOMDemo = () => {
 };
 
 const CustomCursorDemo = () => {
+  const [useClass, setUseClass] = createSignal(true);
+  const [useStyle, setUseStyle] = createSignal(false);
+
   const cursorTypes = [
     // general cursors
-    { name: 'auto', cursor: 'auto' },
-    { name: 'default', cursor: 'default' },
-    { name: 'none', cursor: 'none' },
+    { name: 'auto', cursor: 'auto', tw: 'cursor-auto' },
+    { name: 'default', cursor: 'default', tw: 'cursor-default' },
+    { name: 'none', cursor: 'none', tw: 'cursor-none' },
 
     // link and status cursors
-    { name: 'context-menu', cursor: 'context-menu' },
-    { name: 'help', cursor: 'help' },
-    { name: 'pointer', cursor: 'pointer' },
-    { name: 'progress', cursor: 'progress' },
-    { name: 'wait', cursor: 'wait' },
+    { name: 'context-menu', cursor: 'context-menu', tw: 'cursor-context-menu' },
+    { name: 'help', cursor: 'help', tw: 'cursor-help' },
+    { name: 'pointer', cursor: 'pointer', tw: 'cursor-pointer' },
+    { name: 'progress', cursor: 'progress', tw: 'cursor-progress' },
+    { name: 'wait', cursor: 'wait', tw: 'cursor-wait' },
 
     // selection cursors
-    { name: 'cell', cursor: 'cell' },
-    { name: 'crosshair', cursor: 'crosshair' },
-    { name: 'text', cursor: 'text' },
-    { name: 'vertical-text', cursor: 'vertical-text' },
+    { name: 'cell', cursor: 'cell', tw: 'cursor-cell' },
+    { name: 'crosshair', cursor: 'crosshair', tw: 'cursor-crosshair' },
+    { name: 'text', cursor: 'text', tw: 'cursor-text' },
+    {
+      name: 'vertical-text',
+      cursor: 'vertical-text',
+      tw: 'cursor-vertical-text',
+    },
 
     // drag-and-drop cursors
-    { name: 'alias', cursor: 'alias' },
-    { name: 'copy', cursor: 'copy' },
-    { name: 'move', cursor: 'move' },
-    { name: 'no-drop', cursor: 'no-drop' },
-    { name: 'not-allowed', cursor: 'not-allowed' },
-    { name: 'grab', cursor: 'grab' },
-    { name: 'grabbing', cursor: 'grabbing' },
+    { name: 'alias', cursor: 'alias', tw: 'cursor-alias' },
+    { name: 'copy', cursor: 'copy', tw: 'cursor-copy' },
+    { name: 'move', cursor: 'move', tw: 'cursor-move' },
+    { name: 'no-drop', cursor: 'no-drop', tw: 'cursor-no-drop' },
+    { name: 'not-allowed', cursor: 'not-allowed', tw: 'cursor-not-allowed' },
+    { name: 'grab', cursor: 'grab', tw: 'cursor-grab' },
+    { name: 'grabbing', cursor: 'grabbing', tw: 'cursor-grabbing' },
 
     // resizing and scrolling cursors
-    { name: 'all-scroll', cursor: 'all-scroll' },
-    { name: 'col-resize', cursor: 'col-resize' },
-    { name: 'row-resize', cursor: 'row-resize' },
-    { name: 'n-resize', cursor: 'n-resize' },
-    { name: 's-resize', cursor: 's-resize' },
-    { name: 'e-resize', cursor: 'e-resize' },
-    { name: 'w-resize', cursor: 'w-resize' },
-    { name: 'ns-resize', cursor: 'ns-resize' },
-    { name: 'ew-resize', cursor: 'ew-resize' },
-    { name: 'ne-resize', cursor: 'ne-resize' },
-    { name: 'nw-resize', cursor: 'nw-resize' },
-    { name: 'se-resize', cursor: 'se-resize' },
-    { name: 'sw-resize', cursor: 'sw-resize' },
-    { name: 'nesw-resize', cursor: 'nesw-resize' },
+    { name: 'all-scroll', cursor: 'all-scroll', tw: 'cursor-all-scroll' },
+    { name: 'col-resize', cursor: 'col-resize', tw: 'cursor-col-resize' },
+    { name: 'row-resize', cursor: 'row-resize', tw: 'cursor-row-resize' },
+    { name: 'n-resize', cursor: 'n-resize', tw: 'cursor-n-resize' },
+    { name: 's-resize', cursor: 's-resize', tw: 'cursor-s-resize' },
+    { name: 'e-resize', cursor: 'e-resize', tw: 'cursor-e-resize' },
+    { name: 'w-resize', cursor: 'w-resize', tw: 'cursor-w-resize' },
+    { name: 'ns-resize', cursor: 'ns-resize', tw: 'cursor-ns-resize' },
+    { name: 'ew-resize', cursor: 'ew-resize', tw: 'cursor-ew-resize' },
+    { name: 'ne-resize', cursor: 'ne-resize', tw: 'cursor-ne-resize' },
+    { name: 'nw-resize', cursor: 'nw-resize', tw: 'cursor-nw-resize' },
+    { name: 'se-resize', cursor: 'se-resize', tw: 'cursor-se-resize' },
+    { name: 'sw-resize', cursor: 'sw-resize', tw: 'cursor-sw-resize' },
+    { name: 'nesw-resize', cursor: 'nesw-resize', tw: 'cursor-nesw-resize' },
 
     // zooming cursors
-    { name: 'zoom-in', cursor: 'zoom-in' },
-    { name: 'zoom-out', cursor: 'zoom-out' },
+    { name: 'zoom-in', cursor: 'zoom-in', tw: 'cursor-zoom-in' },
+    { name: 'zoom-out', cursor: 'zoom-out', tw: 'cursor-zoom-out' },
   ];
 
   return (
@@ -129,7 +136,7 @@ const CustomCursorDemo = () => {
       class="p-8"
       ref={(el) => {
         onMount(() => {
-          el.style.overflow = 'auto';
+          el.parentElement!.style.overflow = 'auto';
         });
       }}
     >
@@ -145,12 +152,56 @@ const CustomCursorDemo = () => {
         `}
       </style>
       <h1 class="text-2xl font-bold mb-6">Custom Cursor Types Demo</h1>
+      <div class="mb-6 flex gap-2 flex-wrap">
+        <button
+          class={`px-4 py-2 rounded border transition-colors ${
+            useClass() && !useStyle()
+              ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)]'
+              : 'bg-transparent border-[var(--color-edge)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
+          }`}
+          onClick={() => {
+            setUseClass(true);
+            setUseStyle(false);
+          }}
+        >
+          Class Only
+        </button>
+        <button
+          class={`px-4 py-2 rounded border transition-colors ${
+            !useClass() && useStyle()
+              ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)]'
+              : 'bg-transparent border-[var(--color-edge)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
+          }`}
+          onClick={() => {
+            setUseClass(false);
+            setUseStyle(true);
+          }}
+        >
+          Style Only
+        </button>
+        <button
+          class={`px-4 py-2 rounded border transition-colors ${
+            useClass() && useStyle()
+              ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)]'
+              : 'bg-transparent border-[var(--color-edge)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
+          }`}
+          onClick={() => {
+            setUseClass(true);
+            setUseStyle(true);
+          }}
+        >
+          Both (Class + Style)
+        </button>
+      </div>
       <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
         <For each={cursorTypes}>
-          {({ name, cursor }) => (
+          {({ name, cursor, tw }) => (
             <div
               class="border border-[var(--color-edge)] p-4 rounded hover:bg-[var(--color-surface-hover)] transition-colors"
-              style={{ cursor }}
+              classList={{ [`${tw}`]: !!tw && useClass() }}
+              style={{
+                cursor: useStyle() ? cursor : undefined,
+              }}
             >
               {name}
             </div>
@@ -158,6 +209,13 @@ const CustomCursorDemo = () => {
         </For>
       </div>
       <div class="pt-16">
+        <div class="border border-slate-500 p-2" contenteditable>
+          contenteditable
+          <ul class="p-2">
+            <li class="list-disc mb-6">some text</li>
+            <li class="list-disc">some text 2</li>
+          </ul>
+        </div>
         <p>
           By creating a{' '}
           <a
