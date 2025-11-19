@@ -2,7 +2,6 @@ import { mountGlobalFocusListener } from '@app/signal/focus';
 import { useIsAuthenticated } from '@core/auth';
 import { Resize } from '@core/component/Resize';
 import { useABTest } from '@core/constant/ABTest';
-import { ENABLE_RIGHTHAND_SIDEBAR } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
@@ -19,6 +18,7 @@ import { KommandMenu } from './command/Konsole';
 import { Dock } from './dock/Dock';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
+import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { Paywall } from './paywall/Paywall';
 import { QuickCreateMenu } from './QuickCreateMenu';
 import { RightbarWrapper } from './rightbar/Rightbar';
@@ -141,14 +141,13 @@ export function Layout(props: RouteSectionProps) {
             <Resize.Panel id={LAYOUT_CONTEXT_ID} minSize={250}>
               {props.children}
             </Resize.Panel>
-            <Show when={ENABLE_RIGHTHAND_SIDEBAR}>
-              <RightbarWrapper />
-            </Show>
+            <RightbarWrapper />
           </ItemDndProvider>
         </Resize.Zone>
       </div>
       <Show when={isAuthenticated() && '/app/onboarding' !== location.pathname}>
         <Dock />
+        <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
       </Show>
     </div>
   );

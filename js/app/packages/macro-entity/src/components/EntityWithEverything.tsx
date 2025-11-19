@@ -1,13 +1,14 @@
 import { matches } from '@core/util/match';
 import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
-import { useEmail } from '@service-gql/client';
+import { useEmail, useUserId } from '@service-gql/client';
+import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
+import { UserIcon } from 'core/component/UserIcon';
 import { emailToId, useDisplayName } from 'core/user';
 import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
-import { useSplitNavigationHandler } from 'core/util/useSplitNavigationHandler';
 import { notificationWithMetadata } from 'notifications/notificationMetadata';
 import type { ParentProps, Ref } from 'solid-js';
 import {
@@ -51,16 +52,16 @@ function UnreadIndicator(props: { active?: boolean }) {
   );
 }
 
-function ImportantBadge(props: { active?: boolean }) {
-  return (
-    <Show when={props.active}>
-      <div class="font-mono font-medium user-select-none uppercase flex items-center text-accent bg-accent/10 p-0.5 px-2 text-[0.625rem] rounded-full border border-accent/10">
-        <span class="@max-xl/split:hidden">Important</span>
-        <span class="hidden @max-xl/split:block font-bold">!</span>
-      </div>
-    </Show>
-  );
-}
+// function ImportantBadge(props: { active?: boolean }) {
+//   return (
+//     <Show when={props.active}>
+//       <div class="font-mono font-medium user-select-none uppercase flex items-center text-accent bg-accent/10 p-0.5 px-2 text-[0.625rem] rounded-full border border-accent/10">
+//         <span class="@max-xl/split:hidden">Important</span>
+//         <span class="hidden @max-xl/split:block font-bold">!</span>
+//       </div>
+//     </Show>
+//   );
+// }
 
 interface EntityProps<T extends WithNotification<EntityData>>
   extends ParentProps {
@@ -93,22 +94,16 @@ export function EntityWithEverything(
   props: EntityProps<WithNotification<EntityData | WithSearch<EntityData>>>
 ) {
   const [showActionList, setShowActionList] = createSignal(false);
-  const [entityHovered, setEntityHovered] = createSignal(false);
   const [actionButtonRef, setActionButtonRef] =
     createSignal<HTMLButtonElement | null>(null);
+  const [entityDivRef, setEntityDivRef] = createSignal<HTMLDivElement | null>(
+    null
+  );
   const [showRestOfNotifications, setShowRestOfNotifications] =
     createSignal(false);
 
   const { keydownDataDuringTask } = trackKeydownDuringTask();
   const userEmail = useEmail();
-
-  // onMount(() => {
-  //   if (document.activeElement === document.body) {
-  //     if (props.selected && props.highlighted) {
-  //       tabbableEl.focus();
-  //     }
-  //   }
-  // });
 
   let focusId = 0;
   const getIcon = createMemo(() => {
@@ -227,7 +222,7 @@ export function EntityWithEverything(
             </Show> */}
           </div>
           {/* Subject */}
-          <ImportantBadge active={props.importantIndicatorActive} />
+          {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
           <div class="flex items-center w-full gap-4 flex-1 min-w-0">
             <div class="font-medium shrink-0 truncate">
               <Show when={searchHighlightName()} fallback={props.entity.name}>
@@ -248,27 +243,19 @@ export function EntityWithEverything(
         </div>
       );
     }
-    const isDirectMessage = () =>
-      props.entity.type === 'channel' &&
-      props.entity.channelType === 'direct_message';
-    const notification = createMemo(() => {
-      const maybeNotification = props.entity.notifications?.().at(0);
-      if (!maybeNotification) return;
 
-      const withMetadata = notificationWithMetadata(maybeNotification);
-      if (!withMetadata) return;
+    const channelEntity = createMemo(() =>
+      props.entity.type === 'channel' ? props.entity : null
+    );
 
-      return withMetadata;
-    });
-    const notificationMessageContent = createMemo(() => {
-      const metadata = notification()?.notificationMetadata;
-      if (!metadata || !('messageContent' in metadata)) return;
+    const lastMessageContent = createMemo(
+      () => channelEntity()?.latestMessage?.content
+    );
 
-      return metadata.messageContent;
-    });
-
-    const userName = createMemo(() => {
-      const [userName] = useDisplayName(notification()?.senderId);
+    const userNameFromSender = createMemo(() => {
+      const senderId = channelEntity()?.latestMessage?.senderId;
+      if (!senderId) return;
+      const [userName] = useDisplayName(senderId);
       return userName();
     });
 
@@ -278,7 +265,7 @@ export function EntityWithEverything(
           <span
             class="font-semibold truncate"
             classList={{
-              'w-[20cqw]': hasNotifications() && !props.showUnrollNotifications,
+              'w-[20cqw]': !props.showUnrollNotifications,
             }}
           >
             <Show when={searchHighlightName()} fallback={props.entity.name}>
@@ -292,32 +279,22 @@ export function EntityWithEverything(
             </Show>
           </span>
 
-          <Show
-            when={
-              hasNotifications() &&
-              !props.showUnrollNotifications &&
-              !isDirectMessage()
-            }
-          >
+          <Show when={!props.showUnrollNotifications}>
             <div class="flex items-center gap-1">
-              <ImportantBadge active={props.importantIndicatorActive} />
-              <span class="inline-block">
-                <span class="text-ink">{userName()}</span>
+              {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
+              <span class="font-medium shrink-0 truncate">
+                {userNameFromSender()}
               </span>
             </div>
           </Show>
 
-          <Show
-            when={
-              !props.showUnrollNotifications && notificationMessageContent()
-            }
-          >
-            {(messageContent) => (
-              <div class="text-sm truncate line-clamp-1 leading-none shrink text-ink-extra-muted py-1">
+          <Show when={!props.showUnrollNotifications && lastMessageContent()}>
+            {(lastMessageContent) => (
+              <div class="truncate shrink grow opacity-60 flex items-center">
                 <StaticMarkdown
-                  markdown={messageContent()}
+                  markdown={lastMessageContent()}
                   theme={unifiedListMarkdownTheme}
-                  singleLine={false}
+                  singleLine={true}
                 />
               </div>
             )}
@@ -334,13 +311,18 @@ export function EntityWithEverything(
 
   const { didCursorMove } = useCursorMove();
 
-  const navHandlers = createMemo(() => {
-    const onClick = props.onClick;
-    if (!onClick) return;
-    return useSplitNavigationHandler<HTMLDivElement>((e) =>
-      onClick(props.entity, e)
-    );
-  });
+  // The main click handler for the entity row should navigate to an entity
+  // without forcing focus back to the source split until after navigation.
+  // Certain buttons in the entity need to NOT Navigate AND return focus to
+  // the split. Those buttons should have a 'data-blocks-navigation'
+  function blocksNavigation(e: PointerEvent | MouseEvent): boolean {
+    const { target } = e;
+    if (target instanceof HTMLElement) {
+      const closest = target.closest('[data-blocks-navigation]');
+      if (closest && entityDivRef()?.contains(closest)) return true;
+    }
+    return false;
+  }
 
   return (
     <div
@@ -361,11 +343,7 @@ export function EntityWithEverything(
         setShowActionList(true);
         props.onMouseOver?.();
       }}
-      onMouseEnter={() => {
-        setEntityHovered(true);
-      }}
       onMouseLeave={() => {
-        setEntityHovered(false);
         setShowActionList(false);
       }}
       onFocusIn={() => {
@@ -386,7 +364,14 @@ export function EntityWithEverything(
         data-entity
         data-entity-id={props.entity.id}
         class="w-full min-w-0 grid flex-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto] pr-2"
-        {...navHandlers()}
+        onClick={(e) => {
+          if (blocksNavigation(e)) return;
+          props.onClick?.(props.entity, e);
+        }}
+        onMouseDown={(e) => {
+          if (blocksNavigation(e)) return;
+          e.preventDefault();
+        }}
         // Action List is also rendered based on focus, but when focused via Shift+Tab, parent is focused due to Action List dom not present. Here we check if current browser task has captured Shift+Tab focus on Action List
         onFocusIn={(e) => {
           if (
@@ -407,21 +392,21 @@ export function EntityWithEverything(
         onKeyUp={onKeyUpClick((e) => props.onClick?.(props.entity, e as any))}
         role="button"
         tabIndex={0}
-        ref={props.ref}
+        ref={mergeRefs(setEntityDivRef, props.ref)}
       >
         <button
           type="button"
           class="col-1 size-full relative group/button flex items-center justify-center"
-          onClick={(e) => {
-            e.stopPropagation();
+          onClick={() => {
             props.onChecked?.(!props.checked);
           }}
+          data-blocks-navigation
         >
           <div
-            class="size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-accent group-hover/button:border"
+            class="size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-accent group-hover/button:border pointer-events-none"
             classList={{
-              'ring ring-edge-muted': props.selected || entityHovered(),
-              'bg-panel': !props.checked && (props.selected || entityHovered()),
+              'ring ring-edge-muted': props.selected,
+              'bg-panel': !props.checked && props.selected,
               'bg-accent border border-accent': props.checked,
             }}
           >
@@ -445,10 +430,20 @@ export function EntityWithEverything(
           }}
         >
           <div class="flex size-5 shrink-0 items-center justify-center">
-            <Dynamic
-              component={getIcon().icon}
-              class={`flex size-full ${getIcon().foreground}`}
-            />
+            <Show
+              when={
+                props.entity.type === 'channel' &&
+                props.entity.channelType === 'direct_message'
+              }
+              fallback={
+                <Dynamic
+                  component={getIcon().icon}
+                  class={`flex size-full ${getIcon().foreground}`}
+                />
+              }
+            >
+              <DirectMessageIcon entity={props.entity} />
+            </Show>
           </div>
           <EntityTitle />
         </div>
@@ -479,13 +474,13 @@ export function EntityWithEverything(
               <div class="flex gap-1 h-8">
                 <button
                   class="flex items-center justify-center size-8 hover:bg-accent hover:text-panel"
-                  onClick={(e) => {
-                    e.stopPropagation();
+                  onClick={() => {
                     props.onClickRowAction?.(props.entity, 'done');
                   }}
                   ref={setActionButtonRef}
+                  data-blocks-navigation
                 >
-                  <CheckIcon class="w-4 h-4" />
+                  <CheckIcon class="w-4 h-4 pointer-events-none" />
                 </button>
               </div>
             </Show>
@@ -496,7 +491,7 @@ export function EntityWithEverything(
           <div class="relative row-2 grid gap-2 col-2 col-end-4 pb-2">
             <For each={contentHighlights()}>
               {(highlight) => (
-                <div class="text-sm text-ink-muted truncate">
+                <div class="text-sm text-ink-muted truncate flex items-center">
                   <StaticMarkdown
                     markdown={highlight}
                     theme={unifiedListMarkdownTheme}
@@ -578,7 +573,7 @@ export function EntityWithEverything(
 
                 return (
                   <div
-                    class="relative flex gap-1 items-center min-w-0 h-7"
+                    class="relative flex gap-1 items-center min-w-0 h-8"
                     classList={{
                       'hover:bg-hover/20 hover:opacity-70':
                         !!props.onClickNotification,
@@ -607,16 +602,13 @@ export function EntityWithEverything(
                           {ActionContent()}
                         </span>
                       </div>
-
-                      <ImportantBadge
+                      {/*<ImportantBadge
                         active={
                           notification.viewedAt === null &&
                           notification.isImportantV0
                         }
-                      />
-                      <div class="text-sm shrink truncate min-w-0 max-h-5 opacity-70 overflow-clip">
-                        <MessageContent />
-                      </div>
+                      />*/}
+                      <MessageContent />
                     </div>
                     <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
                       {formattedDate()}
@@ -639,6 +631,7 @@ export function EntityWithEverything(
                     e.stopPropagation();
                     setShowRestOfNotifications((prev) => !prev);
                   }}
+                  data-blocks-navigation
                 >
                   <Show
                     when={!showRestOfNotifications()}
@@ -658,6 +651,29 @@ export function EntityWithEverything(
           </div>
         </Show>
       </div>
+    </div>
+  );
+}
+
+function DirectMessageIcon(props: { entity: EntityData }) {
+  const userId = useUserId();
+  const participantId = () =>
+    props.entity.type === 'channel'
+      ? (props.entity.particpantIds ?? []).filter((id) => id !== userId()).at(0)
+      : undefined;
+
+  const Fallback = () => (
+    <Dynamic
+      component={getIconConfig('directMessage').icon}
+      class={`flex size-full ${getIconConfig('directMessage').foreground}`}
+    />
+  );
+
+  return (
+    <div class="bg-panel size-5 rounded-full p-[2px]">
+      <Show when={participantId()} fallback={<Fallback />}>
+        {(id) => <UserIcon id={id()} isDeleted={false} size="fill" />}
+      </Show>
     </div>
   );
 }

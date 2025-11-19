@@ -43,6 +43,7 @@
         "@solid-primitives/event-listener": "^2.4.3",
         "@solid-primitives/lifecycle": "^0.1.2",
         "@solid-primitives/mutation-observer": "^1.2.2",
+        "@solid-primitives/platform": "^0.2.1",
         "@solid-primitives/promise": "^1.1.2",
         "@solid-primitives/resize-observer": "^2.1.3",
         "@solid-primitives/rootless": "^1.5.2",
@@ -450,10 +451,6 @@
     },
     "packages/websocket": {
       "name": "websocket",
-      "dependencies": {
-        "vitest": "^3.2.3",
-        "zod": "^3.24.1",
-      },
       "devDependencies": {
         "vite-tsconfig-paths": "^5.1.4",
       },
@@ -1383,6 +1380,8 @@
     "@solid-primitives/memo": ["@solid-primitives/memo@1.4.3", "", { "dependencies": { "@solid-primitives/scheduled": "^1.5.2", "@solid-primitives/utils": "^6.3.2" }, "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-CA+n9yaoqbYm+My5tY2RWb6EE16tVyehM4GzwQF4vCwvjYPAYk1JSRIVuMC0Xuj5ExD2XQJE5E2yAaKY2HTUsg=="],
 
     "@solid-primitives/mutation-observer": ["@solid-primitives/mutation-observer@1.2.2", "", { "dependencies": { "@solid-primitives/utils": "^6.3.2" }, "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-liLPjizzwJTTp6BjRgkVhX21DeJn+A+5TMxidy7iXhfsxwDOlH7jFoDmy5pyFMz8zXdQEUo/CTGpuWQJGOxeVg=="],
+
+    "@solid-primitives/platform": ["@solid-primitives/platform@0.2.1", "", { "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-902jki7Q88/JNl4PIAg9h3lWFC3W/9y4OrpK9cmaYRobD3V5qyXAWTlM4aAKPfwpABhTFu9Ky07FPcfF9hWp+Q=="],
 
     "@solid-primitives/promise": ["@solid-primitives/promise@1.1.2", "", { "dependencies": { "@solid-primitives/utils": "^6.3.2" }, "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-DsrmWG5EJdhIdVohwDERIxKS/k+2C6BfwQDEwHE06S2fZH/By0AA1DNTSQOdK87oU6jEPQEjfDUywOtlC/GCRw=="],
 

@@ -1,6 +1,7 @@
 #[cfg(feature = "channel")]
 pub mod channel;
 
+mod compress_image;
 #[cfg(feature = "dcs")]
 pub mod dcs;
 #[cfg(feature = "document")]

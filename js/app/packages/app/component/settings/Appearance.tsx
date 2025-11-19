@@ -8,21 +8,23 @@ import { ThemeEditorAdvanced } from '../../../block-theme/components/ThemeEditor
 import { ThemeEditorBasic } from '../../../block-theme/components/ThemeEditorBasic';
 import ThemeList from '../../../block-theme/components/ThemeList';
 import ThemeTools from '../../../block-theme/components/ThemeTools';
-import {
-  getCustomCursorEnabled,
-  setCustomCursorEnabled,
-} from '../../util/cursor';
+// import {
+//   getCustomCursorEnabled,
+//   setCustomCursorEnabled,
+// } from '../../util/cursor';
 import {
   getSoundEffectsEnabled,
   getSoundEffectsVolume,
   setSoundEffectsEnabled,
   setSoundEffectsVolume,
 } from '../../util/soundSettings';
+import {
+  customCursorEnabled,
+  setCustomCursorEnabled,
+} from '../custom-cursor/custom-cursor';
 
 export function Appearance() {
-  const [cursorEnabled, setCursorEnabled] = createSignal(
-    getCustomCursorEnabled()
-  );
+  const [cursorEnabled, setCursorEnabled] = createSignal(customCursorEnabled());
   const [soundEnabled, setSoundEnabled] = createSignal(
     getSoundEffectsEnabled()
   );

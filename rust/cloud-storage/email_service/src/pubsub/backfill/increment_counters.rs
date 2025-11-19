@@ -109,7 +109,8 @@ async fn handle_job_completed(
         })
     })?;
 
-    if link.macro_id.ends_with("@macro.com") {
+    // temporarily only enabling for macro emails for testing
+    if link.macro_id.ends_with("@macro.com") && !cfg!(feature = "disable_attachment_upload") {
         let attachments =
             email_db_client::attachments::provider::upload::fetch_job_attachments_for_backfill(
                 &ctx.db, link.id,
@@ -164,7 +165,8 @@ async fn handle_thread_completed(
             })
         })?;
 
-    if link.macro_id.ends_with("@macro.com") {
+    // temporarily only for macro emails, for testing
+    if link.macro_id.ends_with("@macro.com") && !cfg!(feature = "disable_attachment_upload") {
         let attachments =
             email_db_client::attachments::provider::upload::fetch_thread_attachments_for_backfill(
                 &ctx.db,
