@@ -83,32 +83,32 @@ pub(in crate::api::search) async fn perform_unified_search(
     // Await all tasks in parallel
     let (doc_result, channel_result, chat_result, project_result, email_result) = tokio::try_join!(
         doc_filters.filter_to_search_args(
-            &ctx,
-            &user_id,
+            ctx,
+            user_id,
             user_organization_id,
             should_include_documents,
         ),
         channel_filters.filter_to_search_args(
-            &ctx,
-            &user_id,
+            ctx,
+            user_id,
             user_organization_id,
             should_include_channels,
         ),
         chat_filters.filter_to_search_args(
-            &ctx,
-            &user_id,
+            ctx,
+            user_id,
             user_organization_id,
             should_include_chats,
         ),
         project_filters.filter_to_search_args(
-            &ctx,
-            &user_id,
+            ctx,
+            user_id,
             user_organization_id,
             should_include_projects,
         ),
         email_filters.filter_to_search_args(
-            &ctx,
-            &user_id,
+            ctx,
+            user_id,
             user_organization_id,
             should_include_emails,
         ),

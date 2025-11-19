@@ -36,7 +36,7 @@ where
         let response = enrich_documents(ctx, user_id, self.collect()).await?;
         Ok(response
             .into_iter()
-            .map(|a| UnifiedSearchResponseItem::Document(a))
+            .map(UnifiedSearchResponseItem::Document)
             .collect())
     }
 }
@@ -53,7 +53,7 @@ where
         let response = enrich_emails(ctx, user_id, self.collect()).await?;
         Ok(response
             .into_iter()
-            .map(|a| UnifiedSearchResponseItem::Email(a))
+            .map(UnifiedSearchResponseItem::Email)
             .collect())
     }
 }
@@ -70,7 +70,7 @@ where
         let response = enrich_channels(ctx, user_id, self.collect()).await?;
         Ok(response
             .into_iter()
-            .map(|a| UnifiedSearchResponseItem::Channel(a))
+            .map(UnifiedSearchResponseItem::Channel)
             .collect())
     }
 }
@@ -87,7 +87,7 @@ where
         let response = enrich_chats(ctx, user_id, self.collect()).await?;
         Ok(response
             .into_iter()
-            .map(|a| UnifiedSearchResponseItem::Chat(a))
+            .map(UnifiedSearchResponseItem::Chat)
             .collect())
     }
 }
@@ -104,7 +104,7 @@ where
         let response = enrich_projects(ctx, user_id, self.collect()).await?;
         Ok(response
             .into_iter()
-            .map(|a| UnifiedSearchResponseItem::Project(a))
+            .map(UnifiedSearchResponseItem::Project)
             .collect())
     }
 }

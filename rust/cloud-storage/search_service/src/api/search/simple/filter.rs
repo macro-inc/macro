@@ -73,7 +73,7 @@ impl FilterVariantToSearchArgs for item_filters::ChannelFilters {
             ))
         } else {
             let filter_channel_response =
-                filter_channels(ctx, user_id, user_organization_id, &self).await?;
+                filter_channels(ctx, user_id, user_organization_id, self).await?;
 
             Ok(UnifiedSearchArgsVariant::Channel(
                 UnifiedChannelMessageSearchArgs {
