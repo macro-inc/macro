@@ -1,18 +1,34 @@
 // import { ComputeTokens } from '../../../block-theme/ComputeTokens';
+
+import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
+import { TabContent } from '@core/component/TabContent';
+import { ENABLE_CUSTOM_CURSOR } from '@core/constant/featureFlags';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { createEffect, createSignal, Show } from 'solid-js';
 import { ThemeEditorAdvanced } from '../../../block-theme/components/ThemeEditorAdvanced';
 import { ThemeEditorBasic } from '../../../block-theme/components/ThemeEditorBasic';
-import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
-import ThemeTools from '../../../block-theme/components/ThemeTools';
-import { ENABLE_CUSTOM_CURSOR } from '@core/constant/featureFlags';
 import ThemeList from '../../../block-theme/components/ThemeList';
-import { createEffect, createSignal, Show } from 'solid-js';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
-import { TabContent } from '@core/component/TabContent';
-import { createEffect, createSignal } from 'solid-js';
+import ThemeTools from '../../../block-theme/components/ThemeTools';
+// import {
+//   getCustomCursorEnabled,
+//   setCustomCursorEnabled,
+// } from '../../util/cursor';
+import {
+  getSoundEffectsEnabled,
+  getSoundEffectsVolume,
+  setSoundEffectsEnabled,
+  setSoundEffectsVolume,
+} from '../../util/soundSettings';
+import {
+  customCursorEnabled,
+  setCustomCursorEnabled,
+} from '../custom-cursor/custom-cursor';
 
 export function Appearance() {
   const [cursorEnabled, setCursorEnabled] = createSignal(customCursorEnabled());
-  const [soundEnabled, setSoundEnabled] = createSignal(getSoundEffectsEnabled());
+  const [soundEnabled, setSoundEnabled] = createSignal(
+    getSoundEffectsEnabled()
+  );
   const [soundVolume, setSoundVolume] = createSignal(getSoundEffectsVolume());
 
   createEffect(() => {
@@ -32,8 +48,8 @@ export function Appearance() {
       <div
         style={{
           'grid-template-rows': `min-content min-content ${isMobileWidth() ? '205px' : '269px'}`,
-          'display': 'grid',
-          'gap': '8px',
+          display: 'grid',
+          gap: '8px',
         }}
       >
         <ThemeTools />
@@ -41,8 +57,8 @@ export function Appearance() {
         <div
           style={{
             'grid-template-columns': '1fr',
-            'display': 'grid',
-            'gap': '8px',
+            display: 'grid',
+            gap: '8px',
           }}
         >
           {/*<ComputeTokens />*/}
@@ -52,8 +68,8 @@ export function Appearance() {
         <div
           style={{
             'grid-template-columns': `${isMobileWidth() ? '1fr' : '1fr 1fr'}`,
-            'display': 'grid',
-            'gap': '8px',
+            display: 'grid',
+            gap: '8px',
           }}
         >
           <ThemeEditorAdvanced />
@@ -82,21 +98,20 @@ export function Appearance() {
         <div
           style={{
             'font-family': 'var(--font-mono)',
-            'border': '1px solid var(--b4)',
+            border: '1px solid var(--b4)',
             'box-sizing': 'border-box',
+            padding: '12px 20px',
+            display: 'flex',
             'flex-direction': 'column',
-            'padding': '12px 20px',
+            gap: '12px',
             'font-size': '14px',
-            'display': 'flex',
-            'gap': '12px',
-
           }}
         >
           <div
             style={{
-              'justify-content': 'space-between',
+              display: 'flex',
               'align-items': 'center',
-              'display': 'flex',
+              'justify-content': 'space-between',
             }}
           >
             <span>Sound effects</span>
@@ -107,19 +122,19 @@ export function Appearance() {
           </div>
           <div
             style={{
+              display: 'flex',
               'align-items': 'center',
-              'display': 'flex',
-              'gap': '12px',
+              gap: '12px',
             }}
           >
             <span style={{ 'min-width': '60px' }}>Volume</span>
             <div
               style={{
+                position: 'relative',
+                flex: 1,
+                height: '18px',
+                display: 'flex',
                 'align-items': 'center',
-                'position': 'relative',
-                'display': 'flex',
-                'height': '18px',
-                'flex': '1',
               }}
             >
               <input
@@ -136,17 +151,17 @@ export function Appearance() {
                 }}
                 style={{
                   '-webkit-appearance': 'none',
-                  'background': 'transparent',
+                  width: '100%',
                   'box-sizing': 'border-box',
                   'border-radius': '0px',
-                  'position': 'absolute',
-                  'appearance': 'none',
-                  'cursor': 'pointer',
-                  'outline': 'none',
-                  'height': '100%',
-                  'width': '100%',
-                  'padding': '0',
-                  'margin': '0',
+                  position: 'absolute',
+                  background: 'transparent',
+                  appearance: 'none',
+                  cursor: 'pointer',
+                  outline: 'none',
+                  height: '100%',
+                  margin: 0,
+                  padding: 0,
                 }}
                 class="sound-volume-slider"
               />
@@ -156,33 +171,33 @@ export function Appearance() {
             </span>
           </div>
           <style>{`
-            .sound-volume-slider::-webkit-slider-thumb{
-              background-color: var(--b0);
-              border: 1px solid var(--b4);
+            .sound-volume-slider::-webkit-slider-thumb {
               -webkit-appearance: none;
-              border-radius: 0px;
               appearance: none;
-              cursor: pointer;
-              height: 18px;
               width: 18px;
-            }
-            .sound-volume-slider::-moz-range-thumb{
+              height: 18px;
               background-color: var(--b0);
               border: 1px solid var(--b4);
               border-radius: 0px;
               cursor: pointer;
-              height: 18px;
-              width: 18px;
             }
-            .sound-volume-slider::-webkit-slider-runnable-track{
-              background: var(--b4);
-              height: 1px;
+            .sound-volume-slider::-moz-range-thumb {
+              width: 18px;
+              height: 18px;
+              background-color: var(--b0);
+              border: 1px solid var(--b4);
+              border-radius: 0px;
+              cursor: pointer;
+            }
+            .sound-volume-slider::-webkit-slider-runnable-track {
               width: 100%;
+              height: 1px;
+              background: var(--b4);
             }
             .sound-volume-slider::-moz-range-track {
-              background: var(--b4);
-              height: 1px;
               width: 100%;
+              height: 1px;
+              background: var(--b4);
             }
           `}</style>
         </div>

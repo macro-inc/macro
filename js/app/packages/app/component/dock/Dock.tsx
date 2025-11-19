@@ -3,6 +3,7 @@ import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
 import { ENABLE_DOCK_NOTITIFCATIONS } from '@core/constant/featureFlags';
+
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import SplitIcon from '@icon/regular/square-split-horizontal.svg';
 import { useGlobalNotificationSource } from '../GlobalAppState';
@@ -158,17 +159,15 @@ export function Dock(){
           'width': '100vw'
         }}
       >
-        <ClippedPanel br bl>
+        <ClippedPanel bl br>
           <div style={{
             'grid-template-columns':'min-content 1fr min-content',
-            'box-sizing': 'border-box',
             'scrollbar-width': 'none',
             'align-content': 'center',
             'overflow-y': 'hidden',
             'padding': '0 7px',
             'display': 'grid',
             'height': '40px',
-            'z-index': '1',
             'gap': '7px',
           }}>
 
@@ -193,9 +192,26 @@ export function Dock(){
                   'height': '24px',
                   'gap': '7px'
                 }}
-              />
-              <div class="**:border-none! flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25">
-                <Hotkey shortcut="cmd+k" class="flex gap-1" />
+                onClick={() => {setKonsoleOpen(true)}}
+                class="dock-button-hover"
+              >
+                <IconLogo
+                  style={{
+                    'display': 'block',
+                    'height': '9px'
+                  }}
+                />
+                {/*<div style={{
+                  'font-family': 'monospace',
+                  'background-color': '#f00',
+                  'font-size': '10px',
+                  'padding': '0 4px',
+                }}>
+                  <Hotkey token={TOKENS.global.createCommand}/>
+                </div>*/}
+                <div class="**:border-none! flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25">
+                  <Hotkey shortcut="cmd+k" class="flex gap-1" />
+                </div>
               </div>
 
               <div style={{
@@ -223,9 +239,16 @@ export function Dock(){
                     'height': '9px'
                   }}
                 />
-
+                {/*<div style={{
+                  'background-color': '#f00',
+                  'font-family': 'monospace',
+                  'font-size': '10px',
+                  'padding': '0 4px',
+                }}>
+                  <Hotkey token={TOKENS.global.commandMenu}/>
+                </div>*/}
                 <div class="**:border-none! flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25">
-                  <Hotkey shortcut="c" class="flex gap-1" />
+                  <Hotkey shortcut="c" />
                 </div>
               </div>
             </div>
@@ -242,10 +265,18 @@ export function Dock(){
                 'display': 'flex',
                 'gap': '4px',
               }}>
-                <Hotkey token={TOKENS.global.commandMenu}/>
-              </div>
-              <div class="**:border-none! flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25">
-                <Hotkey shortcut="c" />
+                <Show when={!hasPaid()}>
+                  <BasicTierLimit />
+                </Show>
+
+                <Show when={hasPaid()}>
+                  <Hints />
+                </Show>
+
+                <Show when={ENABLE_DOCK_NOTITIFCATIONS}>
+                  <QuickAccess />
+                  <GlobalNotificationBell notificationSource={notificationSource} />
+                </Show>
               </div>
             </Show>
 
@@ -315,7 +346,9 @@ export function Dock(){
               />
 
               <IconButton
-                tooltip={{label: isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'}}
+                tooltip={{
+                  label: isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'
+                }}
                 theme={isPresentMode() ? 'accent' : 'clear'}
                 onClick={togglePresentMode}
                 icon={IconPower}
