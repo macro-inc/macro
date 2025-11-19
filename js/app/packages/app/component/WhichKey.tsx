@@ -31,21 +31,23 @@ const WhichKeyContent: Component<WhichKeyContentProps> = (props) => {
   return (
     <Portal>
       <div class="absolute z-9999 right-2 bottom-[49px]">
-        <div class="absolute -z-1 top-2 right-2 pattern-edge pattern-diagonal-4 opacity-100 w-full h-full mask-l-from-[calc(100%_-_1rem)] mask-b-from-[calc(100%_-_1rem)]" />
-        <div class="px-8 py-4 w-full h-full bg-dialog border-2 border-accent text-sm">
+        {/* <dfiv class="absolute -z-1 top-2 right-2 pattern-edge pattern-diagonal-4 opacity-100 w-full h-full mask-l-from-[calc(100%_-_1rem)] mask-b-from-[calc(100%_-_1rem)]" /> */}
+        <div class="px-8 py-4 w-full h-full bg-dialog/70 backdrop-blur-sm border-2 border-accent text-sm">
           <Show when={props.commandsWithActivateScope().length > 0}>
             <div class="mb-4">
               <For each={props.commandsWithActivateScope()}>
                 {(command) => (
-                  <div class="grid grid-cols-[8ch_1fr] gap-2">
-                    <Hotkey
-                      class="font-mono font-medium"
-                      token={command.hotkeyToken}
-                      shortcut={prettyPrintHotkeyString(
-                        // Asserting this, because useActiveCommands only returns commands with hotkeys.
-                        command.hotkeys!.at(0)!
-                      )}
-                    />
+                  <div class="grid grid-cols-[8ch_1fr] gap-x-2 mb-1">
+                    <div class="justify-self-start bg-panel border border-edge px-1.5 py-0.25 rounded-xs">
+                      <Hotkey
+                        class="font-medium"
+                        token={command.hotkeyToken}
+                        shortcut={prettyPrintHotkeyString(
+                          // Asserting this, because useActiveCommands only returns commands with hotkeys.
+                          command.hotkeys!.at(0)!
+                        )}
+                      />
+                    </div>
                     <div>
                       {typeof command.description === 'function'
                         ? command.description()
@@ -59,15 +61,17 @@ const WhichKeyContent: Component<WhichKeyContentProps> = (props) => {
 
           <For each={props.commandsWithoutActivateScope()}>
             {(command) => (
-              <div class="grid grid-cols-[8ch_1fr] gap-2">
-                <Hotkey
-                  class="font-mono font-medium"
-                  token={command.hotkeyToken}
-                  shortcut={prettyPrintHotkeyString(
-                    // Asserting this, because useActiveCommands only returns commands with hotkeys.
-                    command.hotkeys!.at(0)!
-                  )}
-                />
+              <div class="grid grid-cols-[8ch_1fr] gap-2 mb-1">
+                <div class="justify-self-start bg-panel border border-edge px-1.5 py-0.25 rounded-xs">
+                  <Hotkey
+                    class="font-medium"
+                    token={command.hotkeyToken}
+                    shortcut={prettyPrintHotkeyString(
+                      // Asserting this, because useActiveCommands only returns commands with hotkeys.
+                      command.hotkeys!.at(0)!
+                    )}
+                  />
+                </div>
                 <div>
                   {typeof command.description === 'function'
                     ? command.description()
