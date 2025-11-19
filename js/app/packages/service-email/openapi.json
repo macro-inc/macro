@@ -120,6 +120,49 @@
         }
       }
     },
+    "/email/backfill/gmail/active": {
+      "get": {
+        "tags": ["Init"],
+        "summary": "Get any active backfill job for the user.",
+        "operationId": "get_backfill_gmail_active",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetActiveBackfillJobResponse"
+                }
+              }
+            }
+          },
+          "204": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/backfill/gmail/{id}": {
       "get": {
         "tags": ["Init"],
@@ -135,7 +178,7 @@
           }
         ],
         "responses": {
-          "201": {
+          "200": {
             "description": "",
             "content": {
               "application/json": {
@@ -145,7 +188,7 @@
               }
             }
           },
-          "404": {
+          "401": {
             "description": "",
             "content": {
               "application/json": {
@@ -153,7 +196,7 @@
               }
             }
           },
-          "429": {
+          "404": {
             "description": "",
             "content": {
               "application/json": {
@@ -908,7 +951,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/GetPreviewsFrecencyResponse"
+                  "$ref": "#/components/schemas/ApiPaginatedThreadCursor"
                 }
               }
             }
@@ -1253,10 +1296,115 @@
           "updated_at": { "type": "string", "format": "date-time" }
         }
       },
+      "ApiAttachment": {
+        "type": "object",
+        "required": ["id", "message_id", "created_at"],
+        "properties": {
+          "content_id": { "type": ["string", "null"] },
+          "created_at": { "type": "string", "format": "date-time" },
+          "filename": { "type": ["string", "null"] },
+          "id": { "type": "string", "format": "uuid" },
+          "message_id": { "type": "string", "format": "uuid" },
+          "mime_type": { "type": ["string", "null"] },
+          "provider_attachment_id": { "type": ["string", "null"] },
+          "size_bytes": { "type": ["integer", "null"], "format": "int64" }
+        }
+      },
+      "ApiAttachmentMacro": {
+        "type": "object",
+        "required": ["db_id", "message_id", "item_id", "item_type"],
+        "properties": {
+          "db_id": { "type": "string", "format": "uuid" },
+          "item_id": { "type": "string", "format": "uuid" },
+          "item_type": { "type": "string" },
+          "message_id": { "type": "string", "format": "uuid" }
+        }
+      },
+      "ApiContact": {
+        "type": "object",
+        "required": ["id", "link_id"],
+        "properties": {
+          "email_address": { "type": ["string", "null"] },
+          "id": { "type": "string", "format": "uuid" },
+          "link_id": { "type": "string", "format": "uuid" },
+          "name": { "type": ["string", "null"] },
+          "sfs_photo_url": { "type": ["string", "null"] }
+        }
+      },
+      "ApiPaginatedThreadCursor": {
+        "type": "object",
+        "required": ["items"],
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/ApiThreadPreviewCursor" }
+          },
+          "next_cursor": { "type": ["string", "null"] }
+        }
+      },
       "ApiSortMethod": {
         "type": "string",
         "description": "common types of sorts based on timestamps",
         "enum": ["viewed_at", "updated_at", "created_at", "viewed_updated"]
+      },
+      "ApiThreadPreviewCursor": {
+        "allOf": [
+          { "$ref": "#/components/schemas/ApiThreadPreviewCursorInner" },
+          {
+            "type": "object",
+            "required": ["attachments", "macro_attachments", "contacts"],
+            "properties": {
+              "attachments": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/ApiAttachment" }
+              },
+              "contacts": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/ApiContact" }
+              },
+              "frecency_score": {
+                "type": ["number", "null"],
+                "format": "double"
+              },
+              "macro_attachments": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/ApiAttachmentMacro" }
+              }
+            }
+          }
+        ]
+      },
+      "ApiThreadPreviewCursorInner": {
+        "type": "object",
+        "required": [
+          "id",
+          "owner_id",
+          "inbox_visible",
+          "is_read",
+          "is_draft",
+          "is_important",
+          "sort_ts",
+          "created_at",
+          "updated_at"
+        ],
+        "properties": {
+          "created_at": { "type": "string", "format": "date-time" },
+          "id": { "type": "string", "format": "uuid" },
+          "inbox_visible": { "type": "boolean" },
+          "is_draft": { "type": "boolean" },
+          "is_important": { "type": "boolean" },
+          "is_read": { "type": "boolean" },
+          "name": { "type": ["string", "null"] },
+          "owner_id": { "type": "string" },
+          "provider_id": { "type": ["string", "null"] },
+          "sender_email": { "type": ["string", "null"] },
+          "sender_name": { "type": ["string", "null"] },
+          "sender_photo_url": { "type": ["string", "null"] },
+          "snippet": { "type": ["string", "null"] },
+          "sort_ts": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" },
+          "viewed_at": { "type": ["string", "null"], "format": "date-time" }
+        }
       },
       "ArchiveThreadRequest": {
         "type": "object",
@@ -1295,14 +1443,6 @@
           "total_threads",
           "status",
           "threads_retrieved_count",
-          "threads_processed_count",
-          "messages_retrieved_count",
-          "messages_processed_count",
-          "threads_succeeded_count",
-          "threads_skipped_count",
-          "threads_failed_count",
-          "messages_succeeded_count",
-          "messages_failed_count",
           "created_at",
           "updated_at"
         ],
@@ -1311,20 +1451,12 @@
           "fusionauth_user_id": { "type": "string" },
           "id": { "type": "string", "format": "uuid" },
           "link_id": { "type": ["string", "null"], "format": "uuid" },
-          "messages_failed_count": { "type": "integer", "format": "int32" },
-          "messages_processed_count": { "type": "integer", "format": "int32" },
-          "messages_retrieved_count": { "type": "integer", "format": "int32" },
-          "messages_succeeded_count": { "type": "integer", "format": "int32" },
           "status": { "$ref": "#/components/schemas/BackfillJobStatus" },
-          "threads_failed_count": { "type": "integer", "format": "int32" },
-          "threads_processed_count": { "type": "integer", "format": "int32" },
           "threads_requested_limit": {
             "type": ["integer", "null"],
             "format": "int32"
           },
           "threads_retrieved_count": { "type": "integer", "format": "int32" },
-          "threads_skipped_count": { "type": "integer", "format": "int32" },
-          "threads_succeeded_count": { "type": "integer", "format": "int32" },
           "total_threads": { "type": "integer", "format": "int32" },
           "updated_at": { "type": "string", "format": "date-time" }
         }
@@ -1427,6 +1559,12 @@
           }
         }
       },
+      "GetActiveBackfillJobResponse": {
+        "type": "object",
+        "description": "The response returned from the get backfill job endpoint",
+        "required": ["job"],
+        "properties": { "job": { "$ref": "#/components/schemas/BackfillJob" } }
+      },
       "GetAttachmentResponse": {
         "type": "object",
         "description": "The response returned from the get attachment endpoint",
@@ -1441,23 +1579,24 @@
         "required": ["job"],
         "properties": { "job": { "$ref": "#/components/schemas/BackfillJob" } }
       },
-      "GetPreviewsCursorResponse": {
+      "GetPreviewsCursorParams": {
         "type": "object",
-        "required": ["previews"],
+        "description": "Parameters for getting thread previews with cursor-based pagination.",
         "properties": {
-          "previews": {
-            "$ref": "#/components/schemas/PaginatedThreadCursor",
-            "description": "the thread, with messages inside"
-          }
-        }
-      },
-      "GetPreviewsFrecencyResponse": {
-        "type": "object",
-        "required": ["previews"],
-        "properties": {
-          "previews": {
-            "$ref": "#/components/schemas/ThreadPreviewPagination",
-            "description": "the thread, with messages inside"
+          "limit": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Limit for pagination. Default is 20. Max is 500.",
+            "minimum": 0
+          },
+          "sort_method": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/ApiSortMethod",
+                "description": "Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_updated."
+              }
+            ]
           }
         }
       },
@@ -1470,6 +1609,14 @@
             "$ref": "#/components/schemas/APIThread",
             "description": "the thread, with messages inside"
           }
+        }
+      },
+      "InitResponse": {
+        "type": "object",
+        "required": ["link_id", "backfill_job_id"],
+        "properties": {
+          "backfill_job_id": { "type": "string", "format": "uuid" },
+          "link_id": { "type": "string", "format": "uuid" }
         }
       },
       "Label": {
@@ -1719,17 +1866,6 @@
           }
         ]
       },
-      "PaginatedThreadCursor": {
-        "type": "object",
-        "required": ["items"],
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/ThreadPreviewCursor" }
-          },
-          "next_cursor": { "type": ["string", "null"] }
-        }
-      },
       "ParsedMessage": {
         "type": "object",
         "required": [
@@ -1914,29 +2050,6 @@
           "sortTs": { "type": "integer", "format": "int64" },
           "updatedAt": { "type": "integer", "format": "int64" },
           "viewedAt": { "type": ["integer", "null"], "format": "int64" }
-        }
-      },
-      "ThreadPreviewFrecency": {
-        "allOf": [
-          { "$ref": "#/components/schemas/ThreadPreviewCursor" },
-          {
-            "type": "object",
-            "required": ["frecency_score"],
-            "properties": {
-              "frecency_score": { "type": "number", "format": "double" }
-            }
-          }
-        ]
-      },
-      "ThreadPreviewPagination": {
-        "type": "object",
-        "required": ["items"],
-        "properties": {
-          "items": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/ThreadPreviewFrecency" }
-          },
-          "next_cursor": { "type": ["string", "null"] }
         }
       },
       "ThreadSummary": {

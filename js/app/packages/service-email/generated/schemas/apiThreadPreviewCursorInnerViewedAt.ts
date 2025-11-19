@@ -5,6 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ThreadPreviewFrecencyAllOf = {
-  frecency_score: number;
-};
+export type ApiThreadPreviewCursorInnerViewedAt = string | null;
