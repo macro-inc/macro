@@ -16,11 +16,7 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import {
-  BUTTON_BASE_CLASSES,
-  PRIMARY_BUTTON_CLASSES,
-  SECONDARY_BUTTON_CLASSES,
-} from '../../constants';
+import { PROPERTY_STYLES } from '../../styles';
 import {
   getPropertyDataTypeDropdownOptions,
   usePropertyNameFocus,
@@ -567,7 +563,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
             <div class="flex gap-2">
               <button
                 type="button"
-                class={`${BUTTON_BASE_CLASSES} ${SECONDARY_BUTTON_CLASSES}`}
+                class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.secondary}`}
                 onClick={() => {
                   resetCreateForm();
                   props.onClose();
@@ -579,7 +575,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
             </div>
             <button
               type="button"
-              class={`${BUTTON_BASE_CLASSES} ${newPropertyName().trim() && !isCreatingProperty() ? PRIMARY_BUTTON_CLASSES : 'bg-ink-muted text-ink cursor-not-allowed'}`}
+              class={`${PROPERTY_STYLES.button.base} ${newPropertyName().trim() && !isCreatingProperty() ? PROPERTY_STYLES.button.primary : 'bg-ink-muted text-ink cursor-not-allowed'}`}
               onClick={handleCreateProperty}
               disabled={!newPropertyName().trim() || isCreatingProperty()}
             >

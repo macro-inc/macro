@@ -8,17 +8,10 @@ import XIcon from '@icon/regular/x.svg';
 import { createEffect, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { addEntityProperty } from '../../api/utils';
-import {
-  ACCENT_BUTTON_CLASSES,
-  BUTTON_BASE_CLASSES,
-  CHECKBOX_BASE_CLASSES,
-  MODAL_DIMENSIONS,
-  PRIMARY_BUTTON_CLASSES,
-  SECONDARY_BUTTON_CLASSES,
-} from '../../constants';
+import { MODAL_DIMENSIONS } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
-import { usePropertyModals } from '../../hooks/usePropertyModals';
-import { PROPERTY_STYLES } from '../../styles/styles';
+import { usePropertySelection } from '../../hooks/usePropertySelection';
+import { PROPERTY_STYLES } from '../../styles';
 import type { PropertySelectorProps } from '../../types';
 import {
   getPropertyDefinitionTypeDisplay,
@@ -41,7 +34,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
     filteredProperties,
     fetchAvailableProperties,
     togglePropertySelection,
-  } = usePropertyModals(props.existingPropertyIds, () => searchQuery());
+  } = usePropertySelection(props.existingPropertyIds, () => searchQuery());
 
   const handleAddProperties = async () => {
     const selected = state().selectedPropertyIds;
@@ -270,7 +263,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                                     </div>
                                   </div>
                                   <div
-                                    class={`${CHECKBOX_BASE_CLASSES} border-edge bg-transparent`}
+                                    class={`${PROPERTY_STYLES.checkbox.base} border-edge bg-transparent`}
                                   >
                                     <Show when={isSelected()}>
                                       <CheckIcon class="w-3 h-3 text-accent" />
@@ -291,7 +284,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
             <div class="flex items-center justify-between p-4 pt-2">
               <button
                 type="button"
-                class={`${BUTTON_BASE_CLASSES} ${SECONDARY_BUTTON_CLASSES}`}
+                class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.secondary}`}
                 onClick={() => props.onClose()}
                 disabled={isAdding()}
               >
@@ -300,7 +293,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
               <Show when={state().selectedPropertyIds.size > 0}>
                 <button
                   type="button"
-                  class={`${BUTTON_BASE_CLASSES} ${state().selectedPropertyIds.size > 0 && !isAdding() ? PRIMARY_BUTTON_CLASSES : 'bg-ink-muted text-ink cursor-not-allowed'}`}
+                  class={`${PROPERTY_STYLES.button.base} ${state().selectedPropertyIds.size > 0 && !isAdding() ? PROPERTY_STYLES.button.primary : 'bg-ink-muted text-ink cursor-not-allowed'}`}
                   onClick={handleAddProperties}
                   disabled={
                     state().selectedPropertyIds.size === 0 || isAdding()
@@ -329,7 +322,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                   <button
                     type="button"
                     onClick={() => setIsCreating(true)}
-                    class={`${BUTTON_BASE_CLASSES} ${ACCENT_BUTTON_CLASSES}`}
+                    class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.accent}`}
                     disabled={state().isLoading}
                   >
                     Create New Property
