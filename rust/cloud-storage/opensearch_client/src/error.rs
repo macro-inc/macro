@@ -28,6 +28,9 @@ pub enum OpensearchClientError {
     #[error("no terms provided")]
     NoTermsProvided,
 
+    #[error("empty search indices provided")]
+    EmptySearchIndices,
+
     #[error("an unknown error occurred. method: {method:?} details: {details}")]
     Unknown {
         details: String,

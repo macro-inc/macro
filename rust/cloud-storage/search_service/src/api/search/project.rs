@@ -19,21 +19,18 @@ use crate::{api::ApiContext, util};
 
 use super::SearchPaginationParams;
 
-/// Performs a search through projects and enriches the results with metadata
-pub async fn search_projects_enriched(
+/// Enriches project search results with metadata
+#[tracing::instrument(skip(ctx, results), err)]
+pub(in crate::api::search) async fn enrich_projects(
     ctx: &ApiContext,
     user_id: &str,
-    query_params: &SearchPaginationParams,
-    req: ProjectSearchRequest,
+    results: Vec<opensearch_client::search::projects::ProjectSearchResponse>,
 ) -> Result<Vec<ProjectSearchResponseItemWithMetadata>, SearchError> {
-    // Use the simple search to get raw OpenSearch results
-    let opensearch_results = search_projects(ctx, user_id, query_params, req).await?;
-
+    if results.is_empty() {
+        return Ok(vec![]);
+    }
     // Extract project IDs from results
-    let project_ids: Vec<String> = opensearch_results
-        .iter()
-        .map(|r| r.project_id.clone())
-        .collect();
+    let project_ids: Vec<String> = results.iter().map(|r| r.project_id.clone()).collect();
 
     // Fetch project metadata from database
     let project_histories =
@@ -46,10 +43,24 @@ pub async fn search_projects_enriched(
         .map_err(SearchError::InternalError)?;
 
     // Construct enriched results
-    let enriched_results = construct_search_result(opensearch_results, project_histories)
-        .map_err(SearchError::InternalError)?;
+    let enriched_results =
+        construct_search_result(results, project_histories).map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
+}
+
+/// Performs a search through projects and enriches the results with metadata
+#[tracing::instrument(skip(ctx, query_params, req), err)]
+pub async fn search_projects_enriched(
+    ctx: &ApiContext,
+    user_id: &str,
+    query_params: &SearchPaginationParams,
+    req: ProjectSearchRequest,
+) -> Result<Vec<ProjectSearchResponseItemWithMetadata>, SearchError> {
+    // Use the simple search to get raw OpenSearch results
+    let opensearch_results = search_projects(ctx, user_id, query_params, req).await?;
+
+    enrich_projects(ctx, user_id, opensearch_results).await
 }
 
 /// Perform a search through your projects
