@@ -1,4 +1,3 @@
-import { UserHighlight } from '@block-pdf/component/UserHighlight';
 import { Tooltip } from '@core/component/Tooltip';
 import { matches } from '@core/util/match';
 import CheckIcon from '@icon/regular/check.svg';
