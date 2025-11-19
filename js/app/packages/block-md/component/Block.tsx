@@ -1,5 +1,4 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { Keyboard } from '@capacitor/keyboard';
 import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
@@ -28,11 +27,12 @@ export default function BlockMarkdown() {
     track(TrackingEvents.BLOCKMARKDOWN.OPEN);
   });
 
-  if (isNativeMobilePlatform()) {
-    // temporary fix for mobile
-    onMount(() => Keyboard.setAccessoryBarVisible({ isVisible: true }));
-    onCleanup(() => Keyboard.setAccessoryBarVisible({ isVisible: false }));
-  }
+  onMount(async () => {
+    if (isNativeMobilePlatform()) {
+      const { Keyboard } = await import('@capacitor/keyboard');
+      onCleanup(() => Keyboard.setAccessoryBarVisible({ isVisible: false }));
+    }
+  });
 
   createEffect(() => {
     const el = scrollRef();

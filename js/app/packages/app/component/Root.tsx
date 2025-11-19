@@ -277,7 +277,7 @@ export function Root() {
   useHotKeyRoot();
   useSoundHover();
 
-  useMobileEffect();
+  // useMobileEffect();
 
   clearBodyInlineStyleColor();
 

@@ -1,5 +1,4 @@
 import { App } from '@capacitor/app';
-import { Capacitor } from '@capacitor/core';
 import { Dialog } from '@capacitor/dialog';
 import { Filesystem } from '@capacitor/filesystem';
 import { Keyboard, KeyboardStyle } from '@capacitor/keyboard';
@@ -41,25 +40,25 @@ import {
 } from 'solid-js';
 import { themeReactive } from '../../../block-theme/signals/themeReactive';
 
-const hasPushNotifications = Capacitor.isPluginAvailable('PushNotifications');
-const hasStatusBar = Capacitor.isPluginAvailable('StatusBar');
-const hasKeyboard = Capacitor.isPluginAvailable('Keyboard');
-const hasSplashScreen = Capacitor.isPluginAvailable('SplashScreen');
-const hasPreferences = Capacitor.isPluginAvailable('Preferences');
+const hasPushNotifications = false;
+const hasStatusBar = false;
+const hasKeyboard = false;
+const hasSplashScreen = false;
+const hasPreferences = false;
 
 const preferencesStorage: AsyncStorage = {
-  getItem: async function (key: string) {
+  getItem: async function(key: string) {
     if (!hasPreferences) return null;
 
     const { value } = await Preferences.get({ key });
     return value;
   },
-  setItem: async function (key: string, value: string) {
+  setItem: async function(key: string, value: string) {
     if (!hasPreferences) return null;
 
     return Preferences.set({ key, value });
   },
-  removeItem: async function (key: string) {
+  removeItem: async function(key: string) {
     if (!hasPreferences) return;
 
     return Preferences.remove({ key });
@@ -152,7 +151,10 @@ export async function unregisterFromPushNotifications() {
 }
 
 export function useMobileNavigate() {
-  if (!isNativeMobilePlatform()) return;
+  if (!isNativeMobilePlatform()) {
+    console.log('not mobile');
+    return;
+  }
 
   const navigate = useNavigate();
   const isAuthenticated = useIsAuthenticated();
@@ -226,7 +228,10 @@ export function useMobileNavigate() {
 }
 
 export function useMobileEffect() {
-  if (!isNativeMobilePlatform()) return;
+  if (!isNativeMobilePlatform()) {
+    console.log('not mobile');
+    return;
+  }
 
   const isAuthenticated = useIsAuthenticated();
 

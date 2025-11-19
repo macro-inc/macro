@@ -1,6 +1,4 @@
-import { Capacitor } from '@capacitor/core';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import { createSingletonRoot } from '@solid-primitives/rootless';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 
 const KEYBOARD_HEIGHT_THRESHOLD = 0.15;
@@ -78,17 +76,8 @@ function createKeyboardDetection() {
   return isVirtualKeyboardVisible;
 }
 
-const keyboardDetectionResource = createSingletonRoot(createKeyboardDetection);
+// const keyboardDetectionResource = createSingletonRoot(createKeyboardDetection);
 
 export function useIsVirtualKeyboardVisible(): Accessor<boolean | undefined> {
-  if (
-    (Capacitor.getPlatform() === 'ios' ||
-      Capacitor.getPlatform() === 'android') &&
-    Capacitor.isPluginAvailable('Keyboard')
-  ) {
-    return keyboardVisible;
-  }
-
-  const isVirtualKeyboardVisible = keyboardDetectionResource();
-  return isVirtualKeyboardVisible;
+  return () => undefined;
 }

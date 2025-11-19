@@ -1,4 +1,3 @@
-import { App } from '@capacitor/app';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import {
   createEffect,
@@ -21,7 +20,11 @@ createEffect(() => {
     window.removeEventListener('visibilitychange', maybeSetFocus);
   });
 });
-if (isNativeMobilePlatform()) App.addListener('appStateChange', maybeSetFocus);
+
+if (isNativeMobilePlatform()) {
+  const { App } = await import('@capacitor/app');
+  App.addListener('appStateChange', maybeSetFocus);
+}
 
 /** Whether the tab is currently focused */
 export const isTabFocused = createMemo(() => isTabFocused_(), {
