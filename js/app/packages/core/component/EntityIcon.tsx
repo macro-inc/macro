@@ -1,6 +1,8 @@
-import { supportedExtensionSet } from '@block-code/util/languageSupport';
 import type { BlockName } from '@core/block';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import {
+  blockAcceptedFileExtensionSet,
+  fileTypeToBlockName,
+} from '@core/constant/allBlocks';
 import { USE_PIXEL_BLOCK_ICONS } from '@core/constant/featureFlags';
 import Building from '@icon/duotone/building-duotone.svg';
 import Chat from '@icon/duotone/chat-duotone.svg';
@@ -198,7 +200,7 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
 };
 
 function isFileType(entity: string): boolean {
-  return supportedExtensionSet.has(entity);
+  return blockAcceptedFileExtensionSet.has(entity);
 }
 
 function validateEntity(entity: string): EntityWithValidIcon {
