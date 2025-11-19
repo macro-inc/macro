@@ -16,7 +16,7 @@ import {
 import { Portal } from 'solid-js/web';
 import { savePropertyValue } from '../../api/propertyValues';
 import { MODAL_DIMENSIONS } from '../../constants';
-import { usePropertyEditor } from '../../hooks/usePropertyModals';
+import { usePropertyEditor } from '../../hooks/usePropertyEditor';
 import type { PropertyApiValues, PropertyEditorProps } from '../../types';
 import { getValueTypeDisplay } from '../../utils';
 import {
