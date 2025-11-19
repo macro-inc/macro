@@ -1279,17 +1279,70 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     isPanelActive() && focusedSelector(innerProps.entity.id)
                   }
                   checked={selectedSelector(innerProps.entity.id)}
-                  onChecked={(next) => {
-                    unifiedListContext.setViewDataStore(
-                      selectedView(),
-                      'selectedEntities',
-                      (p) => {
-                        if (!next) {
-                          return p.filter((e) => e.id !== innerProps.entity.id);
+                  onChecked={(next, shiftKey) => {
+                    const toggleSingle = () =>
+                      unifiedListContext.setViewDataStore(
+                        selectedView(),
+                        'selectedEntities',
+                        (p) => {
+                          if (!next) {
+                            return p.filter(
+                              (e) => e.id !== innerProps.entity.id
+                            );
+                          }
+                          return p.concat(innerProps.entity);
                         }
-                        return p.concat(innerProps.entity);
+                      );
+
+                    if (shiftKey) {
+                      const entityList = unifiedListContext.entitiesSignal[0]();
+                      if (!entityList) return;
+
+                      const selectedEntitySet = new Set(
+                        unifiedListContext.viewsDataStore[
+                          unifiedListContext.selectedView()
+                        ].selectedEntities
+                      );
+                      const newEnititiesForSeleciton: EntityData[] = [];
+
+                      let anchorIndex = -1;
+                      for (let i = 0; i < entityList.length; i++) {
+                        if (selectedEntitySet.has(entityList[i])) {
+                          anchorIndex = i;
+                        }
                       }
-                    );
+
+                      if (anchorIndex === -1) {
+                        toggleSingle();
+                        return;
+                      }
+
+                      const targetIndex = innerProps.index;
+
+                      const sign = Math.sign(targetIndex - anchorIndex);
+                      if (anchorIndex === targetIndex) {
+                      } else {
+                        for (
+                          let i = anchorIndex;
+                          sign > 0 ? i <= targetIndex : i >= targetIndex;
+                          i += sign
+                        ) {
+                          const entity = entityList[i];
+                          if (!selectedEntitySet.has(entity)) {
+                            newEnititiesForSeleciton.push(entity);
+                          }
+                        }
+                      }
+                      unifiedListContext.setViewDataStore(
+                        selectedView(),
+                        'selectedEntities',
+                        (p) => {
+                          return p.concat(newEnititiesForSeleciton);
+                        }
+                      );
+                    } else {
+                      toggleSingle();
+                    }
                   }}
                 />
               );
