@@ -1,8 +1,8 @@
 import { useSplitLayout } from '@app/component/split-layout/layout';
-import { projectSignal } from '@block-project/signal/project';
 import type { BlockName } from '@core/block';
 import { EntityIcon, getIconConfig } from '@core/component/EntityIcon';
 import { Button } from '@core/component/FormControls/Button';
+import { toast } from '@core/component/Toast/Toast';
 import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
 import {
@@ -10,7 +10,6 @@ import {
   createChat,
   createMarkdownFile,
 } from '@core/util/create';
-import { err, ok } from '@core/util/maybeResult';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { useCreateProject } from '@service-storage/projects';
 import { type Component, createSignal, For } from 'solid-js';
@@ -42,21 +41,32 @@ function MenuItem(props: MenuItemProps) {
   );
 }
 
-function MenuContent(props: { projectId: () => string }) {
+function MenuContent(props: { projectId: string }) {
   const { replaceSplit, insertSplit } = useSplitLayout();
   let ref!: HTMLDivElement;
 
   const createBlock = async (spec: {
     blockName: BlockName;
-    createFn: () => Promise<any>;
+    createFn: () => Promise<string>;
     loading?: boolean;
   }) => {
     const { blockName, createFn, loading } = spec;
 
     const shouldInsert = pressedKeys().has('opt');
 
+    const tryCreate = async () => {
+      try {
+        const id = await createFn();
+        return id;
+      } catch (e) {
+        toast.failure(e.message);
+        return null;
+      }
+    };
+
     if (!loading) {
-      const id = await createFn();
+      const id = await tryCreate();
+      if (!id) return;
 
       const block = { type: blockName, id };
 
@@ -66,7 +76,11 @@ function MenuContent(props: { projectId: () => string }) {
         ? insertSplit({ type: 'component', id: 'loading' })
         : replaceSplit({ type: 'component', id: 'loading' });
 
-      const id = await createFn();
+      const id = await tryCreate();
+      if (!id) {
+        split?.goBack();
+        return;
+      }
 
       if (split) split.replace({ type: blockName, id }, true);
     }
@@ -84,12 +98,15 @@ function MenuContent(props: { projectId: () => string }) {
         createBlock({
           blockName: 'md',
           loading: true,
-          createFn: () =>
-            createMarkdownFile({
+          createFn: async () => {
+            const result = await createMarkdownFile({
               title: '',
               content: '',
-              projectId: props.projectId(),
-            }),
+              projectId: props.projectId,
+            });
+            if (!result) throw new Error('Failed to create markdown file');
+            return result;
+          },
         }),
     },
     {
@@ -103,10 +120,12 @@ function MenuContent(props: { projectId: () => string }) {
         createBlock({
           blockName: 'chat',
           createFn: async () => {
-            const result = await createChat({ projectId: props.projectId() });
-            if ('error' in result) return err('SERVER', result.error!);
-            const [_, id] = ok(result.chatId);
-            return id;
+            const result = await createChat({ projectId: props.projectId });
+            if ('error' in result) {
+              console.error(result.error);
+              throw new Error('Failed to create chat');
+            }
+            return result.chatId;
           },
         }),
     },
@@ -125,11 +144,13 @@ function MenuContent(props: { projectId: () => string }) {
             const result = await createCanvasFileFromJsonString({
               json: JSON.stringify({ nodes: [], edges: [] }),
               title: 'New Canvas',
-              projectId: props.projectId(),
+              projectId: props.projectId,
             });
-            if ('error' in result) return err('SERVER', result.error!);
-            const [_, id] = ok(result.documentId);
-            return id;
+            if ('error' in result) {
+              console.error(result.error);
+              throw new Error('Failed to create canvas');
+            }
+            return result.documentId;
           },
         }),
     },
@@ -143,12 +164,14 @@ function MenuContent(props: { projectId: () => string }) {
       action: () =>
         createBlock({
           blockName: 'project',
-          createFn: () => {
+          createFn: async () => {
             const createProject = useCreateProject();
-            return createProject({
+            const result = await createProject({
               name: 'New Project',
-              parentId: props.projectId(),
+              parentId: props.projectId,
             });
+            if (!result) throw new Error('Failed to create project');
+            return result;
           },
         }),
     },
@@ -166,8 +189,7 @@ function MenuContent(props: { projectId: () => string }) {
   );
 }
 
-export function ProjectCreateMenu() {
-  const project = projectSignal.get;
+export function ProjectCreateMenu(props: { id: string }) {
   const [open, setOpen] = createSignal(false);
   return (
     <DropdownMenu open={open()} onOpenChange={setOpen}>
@@ -179,7 +201,7 @@ export function ProjectCreateMenu() {
         </DropdownMenu.Trigger>
       </div>
       <DropdownMenu.Portal>
-        <MenuContent projectId={() => project()!.id} />
+        <MenuContent projectId={props.id} />
       </DropdownMenu.Portal>
     </DropdownMenu>
   );
