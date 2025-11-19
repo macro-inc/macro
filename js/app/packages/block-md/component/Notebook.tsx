@@ -13,6 +13,7 @@ import {
   ENABLE_PROPERTIES_METADATA,
 } from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -158,6 +159,7 @@ export function Notebook() {
       registerHotkey({
         hotkey: 'enter',
         scopeId: scopeId(),
+        hotkeyToken: TOKENS.block.focus,
         description: 'Focus Title or Markdown Editor',
         keyDownHandler: () => {
           const titleEditor = md.titleEditor;

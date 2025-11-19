@@ -417,16 +417,15 @@ function SplitPanel(props: SplitPanelProps) {
 
   const unifiedListContext = createSoupContext();
 
+  const [previewState, setPreviewState] = createSignal(false);
+
   createNavigationEntityListShortcut({
     splitName,
     splitHandle: props.handle,
     splitHotkeyScope,
     unifiedListContext,
+    previewState: [previewState, setPreviewState],
   });
-
-  // Create ephemeral preview state for unified-list component
-  const isUnifiedList = createMemo(() => splitName() === 'unified-list');
-  const [previewState, setPreviewState] = createSignal(false);
 
   return (
     <SplitPanelContext.Provider
@@ -440,9 +439,7 @@ function SplitPanel(props: SplitPanelProps) {
         layoutRefs: {},
         contentOffsetTop,
         setContentOffsetTop,
-        previewState: isUnifiedList()
-          ? [previewState, setPreviewState]
-          : undefined,
+        previewState: [previewState, setPreviewState],
       }}
     >
       <SplitContainer
