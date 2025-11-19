@@ -389,5 +389,5 @@ fn test_chat_history_null_viewed_at() {
         result[0].metadata.as_ref().unwrap().updated_at,
         now.timestamp()
     );
-    assert_eq!(result[0].metadata.as_ref().unwrap().viewed_at, None);
+    assert!(result[0].metadata.as_ref().unwrap().viewed_at.is_none());
 }
