@@ -1,38 +1,23 @@
-import { withAnalytics } from '@coparse/analytics';
-import {
-  DEV_MODE_ENV,
-  ENABLE_AI_MEMORY,
-  EXPERIMENTAL_DARK_MODE,
-} from '@core/constant/featureFlags';
-import {
-  type SettingsTab,
-  setSettingsOpen,
-  useSettingsState,
-} from '@core/constant/SettingsState';
-import { TOKENS } from '@core/hotkey/tokens';
+import { type SettingsTab, setSettingsOpen, useSettingsState } from '@core/constant/SettingsState';
+import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
+import { DEV_MODE_ENV, ENABLE_AI_MEMORY } from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
-import { useOrganizationName } from '@core/user';
-import Dialog from '@corvu/dialog';
-import { Tabs } from '@kobalte/core/tabs';
 import { MacroPermissions, usePermissions } from '@service-gql/client';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
+import Organization from './Organization/Organization';
 import { registerHotkey } from 'core/hotkey/hotkeys';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  onCleanup,
-  Show,
-} from 'solid-js';
+import { withAnalytics } from '@coparse/analytics';
+import { useOrganizationName } from '@core/user';
+import { AiMemory } from './AiMemory/AiMemory';
+import { Notification } from './Notification';
+import { Subscription } from './Subscription';
+import { TOKENS } from '@core/hotkey/tokens';
+import { Appearance } from './Appearance';
+import { Tabs } from '@kobalte/core/tabs';
 import MacroJump from '../MacroJump';
 import { Account } from './Account';
-import { AiMemory } from './AiMemory/AiMemory';
-import { Appearance } from './Appearance';
+import Dialog from '@corvu/dialog';
 import { Mobile } from './Mobile';
-import { Notification } from './Notification';
-import Organization from './Organization/Organization';
-import { Subscription } from './Subscription';
 
 export const [viewportOffset, setViewportOffset] = createSignal(0);
 
@@ -40,13 +25,7 @@ const SCROLL_THRESHOLD = 10;
 
 const { track, TrackingEvents } = withAnalytics();
 export function Settings() {
-  const {
-    settingsOpen,
-    closeSettings,
-    activeTabId,
-    setActiveTabId,
-    toggleSettings,
-  } = useSettingsState();
+  const { settingsOpen, closeSettings, activeTabId, setActiveTabId, toggleSettings } = useSettingsState();
   const permissions = usePermissions();
   const orgName = useOrganizationName();
 
@@ -54,10 +33,7 @@ export function Settings() {
   let scrollCleanup: (() => void) | undefined;
   const [leftOpacity, setLeftOpacity] = createSignal(0);
   const [rightOpacity, setRightOpacity] = createSignal(0);
-  const [indicatorStyle, setIndicatorStyle] = createSignal({
-    left: 0,
-    width: 0,
-  });
+  const [indicatorStyle, setIndicatorStyle] = createSignal({left: 0, width: 0 });
 
   const updateClipIndicators = () => {
     if (!scrollRef) return;
@@ -82,59 +58,38 @@ export function Settings() {
     });
   };
 
-  const setupScrollListeners = (element: HTMLDivElement) => {
-    const listener = (e: WheelEvent) => {
+  function setupScrollListeners(element: HTMLDivElement){
+    function listener(e: WheelEvent){
       e.preventDefault();
       const { deltaX, deltaY } = e;
       const delta = Math.abs(deltaX) > Math.abs(deltaY) ? deltaX : deltaY;
       element.scrollLeft += delta;
       updateClipIndicators();
     };
-    const scrollListener = () => {
-      updateClipIndicators();
-    };
     element.addEventListener('wheel', listener);
-    element.addEventListener('scroll', scrollListener);
+    element.addEventListener('scroll', updateClipIndicators);
     updateClipIndicators();
     return () => {
       element.removeEventListener('wheel', listener);
-      element.removeEventListener('scroll', scrollListener);
+      element.removeEventListener('scroll', updateClipIndicators);
     };
   };
 
   onCleanup(() => {
-    if (scrollCleanup) {
+    if(scrollCleanup){
       scrollCleanup();
     }
   });
 
   const settingsTabs = createMemo(() => {
-    const tabs: { value: string; label: string }[] = [];
-
-    if (EXPERIMENTAL_DARK_MODE) {
-      tabs.push({ value: 'Appearance', label: 'Appearance' });
-    }
-
-    tabs.push({ value: 'Account', label: 'Account' });
-
-    if (!orgName() && !isNativeMobilePlatform()) {
-      tabs.push({ value: 'Subscription', label: 'Subscription' });
-    }
-
-    if (orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)) {
-      tabs.push({ value: 'Organization', label: 'Organization' });
-    }
-
-    tabs.push({ value: 'Notification', label: 'Notification' });
-
-    if (isNativeMobilePlatform() && DEV_MODE_ENV) {
-      tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' });
-    }
-
-    if (ENABLE_AI_MEMORY) {
-      tabs.push({ value: 'AI Memory', label: 'AI Memory' });
-    }
-
+    const tabs: {value: string; label: string }[] = [];
+    tabs.push({value: 'Appearance', label: 'Appearance'});
+    tabs.push({value: 'Account', label: 'Account'});
+    if(!orgName() && !isNativeMobilePlatform()){tabs.push({value: 'Subscription', label: 'Subscription'})}
+    if(orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)){tabs.push({value: 'Organization', label: 'Organization'})}
+    tabs.push({value: 'Notification', label: 'Notification'});
+    if(isNativeMobilePlatform() && DEV_MODE_ENV){tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' })}
+    if(ENABLE_AI_MEMORY){tabs.push({ value: 'AI Memory', label: 'AI Memory' })}
     return tabs;
   });
 
@@ -176,16 +131,7 @@ export function Settings() {
           <Tabs
             value={activeTabId()}
             onChange={(value: string | undefined) => {
-              if (
-                value &&
-                (value === 'Account' ||
-                  value === 'Subscription' ||
-                  value === 'Organization' ||
-                  value === 'Appearance' ||
-                  value === 'Notification' ||
-                  value === 'Mobile' ||
-                  value === 'AI Memory')
-              ) {
+              if(value && (value === 'Account' || value === 'Subscription' || value === 'Organization' || value === 'Appearance' || value === 'Notification' || value === 'Mobile' || value === 'AI Memory')){
                 setActiveTabId(value as SettingsTab);
                 track(TrackingEvents.SETTINGS.CHANGETAB, { tab: value });
               }
@@ -283,11 +229,9 @@ export function Settings() {
                   <Organization />
                 </Tabs.Content>
               </Show>
-              <Show when={EXPERIMENTAL_DARK_MODE}>
-                <Tabs.Content value="Appearance" class="h-full">
-                  <Appearance />
-                </Tabs.Content>
-              </Show>
+              <Tabs.Content value="Appearance" class="h-full">
+                <Appearance />
+              </Tabs.Content>
               <Tabs.Content value="Notification" class="h-full">
                 <Notification />
               </Tabs.Content>

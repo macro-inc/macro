@@ -81,8 +81,6 @@ export const ENABLE_NAME_IN_LOGIN = false;
 
 export const ENABLE_LIVE_INDICATORS = true;
 
-export const EXPERIMENTAL_DARK_MODE = true;
-
 export const ENABLE_MINDMAP = true;
 
 export const ENABLE_CONTACTS = true;
