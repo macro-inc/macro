@@ -44,7 +44,6 @@ mockall = { workspace = true, optional = true }
 model = { path = "../model" }
 models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
-properties_db_client = { path = "../properties_db_client" }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
