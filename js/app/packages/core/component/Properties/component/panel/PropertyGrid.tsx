@@ -1,13 +1,13 @@
 import { type Component, createMemo, For, Show } from 'solid-js';
-import { usePropertiesContext } from '../context/PropertiesContext';
-import type { Property } from '../types';
+import { usePropertiesContext } from '../../context/PropertiesContext';
+import type { Property } from '../../types';
 import { PropertyRow } from './PropertyRow';
 
 interface PropertiesListProps {
   properties: Property[];
 }
 
-export const PropertiesList: Component<PropertiesListProps> = (props) => {
+export const PropertyGrid: Component<PropertiesListProps> = (props) => {
   const { openPropertyEditor, openDatePicker } = usePropertiesContext();
 
   const metadataProperties = createMemo(() =>

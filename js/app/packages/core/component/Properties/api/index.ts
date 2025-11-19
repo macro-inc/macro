@@ -1,5 +1,5 @@
 export { fromApiFormat, toApiFormat } from './converters';
-export { fetchEntityProperties } from './properties';
+export { fetchEntityProperties } from './fetchProperties';
 export {
   addPropertyToEntity,
   deleteEntityProperty,

@@ -5,9 +5,9 @@ import UnpinIcon from '@icon/regular/push-pin-slash.svg';
 import XIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { type Component, createMemo, createSignal, Show } from 'solid-js';
-import { deleteEntityProperty } from '../api';
-import { usePropertiesContext } from '../context/PropertiesContext';
-import type { Property } from '../types';
+import { deleteEntityProperty } from '../../api';
+import { usePropertiesContext } from '../../context/PropertiesContext';
+import type { Property } from '../../types';
 
 type PropertyLabelProps = {
   property: Property;

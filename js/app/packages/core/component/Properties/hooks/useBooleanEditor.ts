@@ -5,13 +5,13 @@ import { savePropertyValue } from '../api';
 import type { Property } from '../types';
 
 /**
- * Hook for toggling boolean properties
+ * Hook for editing boolean properties
  *
  * @param property - The property to toggle
  * @param entityType - The type of entity
  * @param onSaved - Callback when save succeeds
  */
-export function useBooleanToggle(
+export function useBooleanEditor(
   property: Property & { valueType: 'BOOLEAN' },
   entityType: EntityType,
   onSaved?: () => void

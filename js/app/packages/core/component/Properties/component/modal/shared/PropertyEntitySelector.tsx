@@ -21,9 +21,9 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import type { Item } from '@service-storage/generated/schemas/item';
 import { useHistory } from '@service-storage/history';
 import { createMemo, createSignal, For, on, Show } from 'solid-js';
-import { PROPERTY_STYLES } from './styles/propertyStyles';
-import type { Property } from './types';
-import { useSearchInputFocus } from './utils';
+import { PROPERTY_STYLES } from '../../../styles/styles';
+import type { Property } from '../../../types';
+import { useSearchInputFocus } from '../../../utils';
 
 type EntityInputProps = {
   property: Property;
@@ -186,7 +186,7 @@ function useEntityData(specificEntityType: EntityType | null | undefined) {
   return { entities };
 }
 
-export function EntityInput(props: EntityInputProps) {
+export function PropertyEntitySelector(props: EntityInputProps) {
   const [searchTerm, setSearchTerm] = createSignal('');
   const [lastSearchTerm, setLastSearchTerm] = createSignal('');
 

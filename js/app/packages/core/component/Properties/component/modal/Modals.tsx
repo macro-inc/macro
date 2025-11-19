@@ -2,14 +2,14 @@ import { useBlockId } from '@core/block';
 import { DatePicker } from '@core/component/DatePicker';
 import { type Component, createMemo } from 'solid-js';
 import { Portal, Show } from 'solid-js/web';
-import { savePropertyValue } from '../apiUtils';
-import { usePropertiesContext } from '../context/PropertiesContext';
-import { PropertyEditor } from '../PropertyEditor';
-import { PropertySelector } from '../PropertySelector';
-import type { Property } from '../types';
+import { savePropertyValue } from '../../api/utils';
+import { usePropertiesContext } from '../../context/PropertiesContext';
+import type { Property } from '../../types';
 import { CreatePropertyModal } from './CreatePropertyModal';
+import { EditPropertyValueModal } from './EditPropertyValueModal';
+import { SelectPropertyModal } from './SelectPropertyModal';
 
-export const PropertiesModals: Component = () => {
+export const Modals: Component = () => {
   const blockId = useBlockId();
   const {
     entityType,
@@ -56,7 +56,7 @@ export const PropertiesModals: Component = () => {
   return (
     <>
       <Show when={propertySelectorModal()}>
-        <PropertySelector
+        <SelectPropertyModal
           isOpen={true}
           onClose={closePropertySelector}
           existingPropertyIds={existingPropertyIds()}
@@ -73,7 +73,7 @@ export const PropertiesModals: Component = () => {
             : undefined;
 
           return (
-            <PropertyEditor
+            <EditPropertyValueModal
               property={state().property}
               onClose={closePropertyEditor}
               onSaved={handlePropertySaved}
