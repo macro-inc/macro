@@ -38,13 +38,11 @@ export function getActiveCommandsFromScope(
   scopeId: string,
   displayOptions: sortAndFilterOptions = {}
 ) {
-  console.log('hotkeyScopeTree: ', hotkeyScopeTree);
   let currentScopeNode = hotkeyScopeTree.get(scopeId);
   const hotkeySet: Set<ValidHotkey> = new Set();
   const commands: CommandWithInfo[] = [];
   let scopeLevel = 0;
   while (currentScopeNode) {
-    console.log('currentScopeNode', currentScopeNode);
     const scopeCommands = Array.from([
       ...(currentScopeNode?.hotkeyCommands.values() ?? []),
       ...(currentScopeNode?.unkeyedCommands ?? []),
