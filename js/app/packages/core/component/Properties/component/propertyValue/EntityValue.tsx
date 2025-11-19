@@ -3,7 +3,7 @@ import type { EntityReference } from '@service-properties/generated/schemas/enti
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
-import { savePropertyValue } from '../../api/propertyValues';
+import { savePropertyValue } from '../../api';
 import type { Property } from '../../types';
 import { EntityIcon } from './EntityIcon';
 import { AddPropertyValueButton, EmptyValue } from './ValueComponents';

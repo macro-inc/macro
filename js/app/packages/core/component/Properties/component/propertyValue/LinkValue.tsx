@@ -8,7 +8,7 @@ import { proxyResource } from '@service-unfurl/client';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { savePropertyValue } from '../../api/propertyValues';
+import { savePropertyValue } from '../../api';
 import type { Property } from '../../types';
 import { extractDomain, isValidUrl, normalizeUrl } from '../../utils';
 import { AddPropertyValueButton, EmptyValue } from './ValueComponents';

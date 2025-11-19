@@ -4,7 +4,7 @@ import DeleteIcon from '@icon/bold/x-bold.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
-import { savePropertyValue } from '../../api/propertyValues';
+import { savePropertyValue } from '../../api';
 import { PROPERTY_STYLES } from '../../styles/styles';
 import type { Property } from '../../types';
 import { formatPropertyValue } from '../../utils';
