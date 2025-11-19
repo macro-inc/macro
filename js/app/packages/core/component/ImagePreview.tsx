@@ -142,7 +142,7 @@ export function ImagePreview(props: ImagePreviewProps) {
     );
   };
 
-  const handleDeleteMedia = async () => {
+  const handleDeleteChannelMedia = async () => {
     if (!props.channelId || !props.messageId || !props.attachmentId) return;
     await commsServiceClient.patchMessage({
       channel_id: props.channelId,
@@ -301,7 +301,7 @@ export function ImagePreview(props: ImagePreviewProps) {
                     <MenuItem
                       text="Delete image"
                       icon={TrashIcon}
-                      onClick={handleDeleteMedia}
+                      onClick={handleDeleteChannelMedia}
                     />
                   </Show>
                 </DropdownMenuContent>
