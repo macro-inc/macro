@@ -1,25 +1,26 @@
 //! Domain models - core business entities
+//!
+//! This module re-exports models_properties types as the single source of truth,
+//! and adds domain behavior (validation, constructors, business logic) via impl blocks.
 
+// Domain extensions (adds methods to models_properties types)
+pub mod extensions;
+
+// Common domain models (wrappers/composites)
 pub mod common;
-pub mod data_type;
-pub mod entity_property;
-pub mod entity_reference;
-pub mod entity_type;
-pub mod property_definition;
-pub mod property_option;
-pub mod property_owner;
-pub mod property_value;
+
+// Request/response models (domain-specific, not in models_properties)
 pub mod requests;
 pub mod responses;
 
-pub use data_type::DataType;
-pub use entity_property::EntityProperty;
-pub use entity_reference::EntityReference;
-pub use entity_type::EntityType;
-pub use property_definition::PropertyDefinition;
-pub use property_option::{PropertyOption, PropertyOptionValue};
-pub use property_owner::PropertyOwner;
-pub use property_value::PropertyValue;
+// Re-export models_properties types as domain models (single source of truth)
+pub use models_properties::service::{
+    EntityProperty, PropertyDefinition, PropertyOption, PropertyOptionValue, PropertyValue,
+};
+pub use models_properties::shared::{DataType, EntityReference, EntityType, PropertyOwner};
+
+// Re-export domain extensions (impl blocks for models_properties types)
+pub use extensions::*;
 
 // Re-export common domain models
 pub use common::*;
@@ -27,3 +28,14 @@ pub use common::*;
 // Re-export request/response types
 pub use requests::*;
 pub use responses::*;
+
+// ===== OLD DOMAIN MODEL FILES (TO BE DELETED AFTER REFACTOR) =====
+// These files are kept temporarily but should not be imported:
+// - data_type.rs
+// - entity_property.rs
+// - entity_reference.rs
+// - entity_type.rs
+// - property_definition.rs
+// - property_option.rs
+// - property_owner.rs
+// - property_value.rs
