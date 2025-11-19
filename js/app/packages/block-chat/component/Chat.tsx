@@ -19,6 +19,7 @@ import {
 } from '@core/component/AI/util/storage';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { createMethodRegistration } from '@core/orchestrator';
 import {
   blockElementSignal,
@@ -161,6 +162,7 @@ export function Chat(props: { data: ChatData }) {
           }
           return false;
         },
+        hotkeyToken: TOKENS.block.focus,
         hide: true,
       });
     }
