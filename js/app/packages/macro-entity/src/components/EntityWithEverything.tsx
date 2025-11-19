@@ -1,4 +1,3 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { Tooltip } from '@core/component/Tooltip';
 import { matches } from '@core/util/match';
 import CheckIcon from '@icon/regular/check.svg';
@@ -31,10 +30,10 @@ import {
   isProjectContainedEntity,
   type ProjectContainedEntity,
 } from '../queries/project';
-import type { EntityData } from '../types/entity';
+import type { EntityData, ProjectEntity } from '../types/entity';
 import type { Notification, WithNotification } from '../types/notification';
 import type { WithSearch } from '../types/search';
-import type { EntityClickHandler } from './Entity';
+import type { EntityClickEvent, EntityClickHandler } from './Entity';
 
 function UnreadIndicator(props: { active?: boolean }) {
   return (
@@ -476,7 +475,9 @@ export function EntityWithEverything(
               )}
             </Show>
             <Show when={matches(props.entity, isProjectContainedEntity)}>
-              {(entity) => <EntityProject entity={entity()} />}
+              {(entity) => (
+                <EntityProject entity={entity()} onClick={props.onClick} />
+              )}
             </Show>
             <Show when={props.timestamp ?? props.entity.updatedAt}>
               {(date) => {
@@ -773,25 +774,25 @@ function EntityProjectPathDisplay(props: { name: string; path: string[] }) {
   );
 }
 
-function EntityProject(props: { entity: ProjectContainedEntity }) {
+function EntityProject(props: {
+  entity: ProjectContainedEntity;
+  onClick?: EntityClickHandler<ProjectEntity>;
+}) {
   const projectQuery = createProjectQuery(props.entity);
   let projectIconRef!: HTMLDivElement;
 
   createEffect(() => {
+    const click = props.onClick;
+    if (!click) return;
     if (!projectQuery.isSuccess) return;
 
     const id = projectQuery.data.id;
-    const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
-    const handleClick = (e: MouseEvent) => {
-      e.stopPropagation();
-
-      const handle = e.altKey
-        ? insertSplit({ type: 'project', id })
-        : replaceOrInsertSplit({ type: 'project', id });
-      handle?.activate();
+    const handleClick = (e: EntityClickEvent) => {
+      click({ id, type: 'project' } as ProjectEntity, e);
     };
 
     projectIconRef.classList.add('hover:text-accent');
+    projectIconRef.dataset.blocksNavigation = 'true';
     projectIconRef.addEventListener('click', handleClick);
     onCleanup(() => {
       projectIconRef.removeEventListener('click', handleClick);
