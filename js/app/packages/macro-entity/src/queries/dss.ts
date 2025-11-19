@@ -266,7 +266,7 @@ export function createDeleteDssItemMutation() {
 export function createBulkDeleteDssItemsMutation() {
   const isUnsupportedEntity = (entity: EntityData) => {
     const type = entity.type;
-    return type !== 'chat' && type !== 'document';
+    return type !== 'chat' && type !== 'document' && type !== 'project';
   };
   return useMutation(() => ({
     mutationFn: async (entities: EntityData[]) => {
