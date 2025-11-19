@@ -47,18 +47,18 @@ const hasSplashScreen = false;
 const hasPreferences = false;
 
 const preferencesStorage: AsyncStorage = {
-  getItem: async function(key: string) {
+  getItem: async function (key: string) {
     if (!hasPreferences) return null;
 
     const { value } = await Preferences.get({ key });
     return value;
   },
-  setItem: async function(key: string, value: string) {
+  setItem: async function (key: string, value: string) {
     if (!hasPreferences) return null;
 
     return Preferences.set({ key, value });
   },
-  removeItem: async function(key: string) {
+  removeItem: async function (key: string) {
     if (!hasPreferences) return;
 
     return Preferences.remove({ key });
