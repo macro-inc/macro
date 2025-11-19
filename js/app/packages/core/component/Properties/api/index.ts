@@ -1,13 +1,13 @@
 export { entityPropertyFromApi, propertyValueToApi } from './converters';
 export { fetchEntityProperties } from './fetchProperties';
 export {
-  addPropertyToEntity,
+  addEntityProperty,
   deleteEntityProperty,
-  savePropertyValue,
+  saveEntityProperty,
 } from './propertyValues';
 // Re-export utils functions (wrapped with toast notifications)
 export {
-  addEntityProperty,
-  removeEntityProperty,
-  savePropertyValue as savePropertyValueWithToast,
+  addEntityPropertyWithToast,
+  deleteEntityPropertyWithToast,
+  saveEntityPropertyWithToast,
 } from './utils';

@@ -14,7 +14,7 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { savePropertyValue } from '../../api';
+import { saveEntityProperty } from '../../api';
 import { MODAL_DIMENSIONS } from '../../constants';
 import { usePropertyEditor } from '../../hooks/usePropertyEditor';
 import type { PropertyApiValues, PropertyEditorProps } from '../../types';
@@ -90,8 +90,8 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
         return;
     }
 
-    // savePropertyValue already handles error logging and user feedback
-    const result = await savePropertyValue(
+    // saveEntityProperty already handles error logging and user feedback
+    const result = await saveEntityProperty(
       blockId,
       props.entityType,
       props.property,

@@ -6,14 +6,14 @@ import { ErrorHandler } from '../utils/errorHandling';
 import { propertyValueToApi } from './converters';
 
 /**
- * Save a property value
+ * Save an entity property value
  *
  * @param entityId - The ID of the entity
  * @param entityType - The type of entity (e.g., 'document', 'channel', 'project')
  * @param property - The property to save
  * @param apiValues - The values to save
  */
-export async function savePropertyValue(
+export async function saveEntityProperty(
   entityId: string,
   entityType: EntityType,
   property: Property,
@@ -34,7 +34,7 @@ export async function savePropertyValue(
     if (isErr(result)) {
       ErrorHandler.handleApiError(
         result,
-        'api.propertyValues.savePropertyValue',
+        'api.propertyValues.saveEntityProperty',
         'Failed to save property value'
       );
       return {
@@ -50,7 +50,7 @@ export async function savePropertyValue(
   } catch (error) {
     ErrorHandler.handleApiError(
       error,
-      'api.propertyValues.savePropertyValue',
+      'api.propertyValues.saveEntityProperty',
       'Failed to save property value'
     );
     return {
@@ -107,7 +107,7 @@ export async function deleteEntityProperty(
 }
 
 /**
- * Add a property to an entity without an initial value
+ * Add an entity property without an initial value
  *
  * The backend supports attaching properties without values. Users can set the value later.
  * This is simpler and works for all property types (string, number, select, entity, etc.)
@@ -116,7 +116,7 @@ export async function deleteEntityProperty(
  * @param entityType - The type of entity (e.g., 'document', 'channel', 'project')
  * @param propertyDefinitionId - The ID of the property definition to add
  */
-export async function addPropertyToEntity(
+export async function addEntityProperty(
   entityId: string,
   entityType: EntityType,
   propertyDefinitionId: string
@@ -134,7 +134,7 @@ export async function addPropertyToEntity(
     if (isErr(result)) {
       ErrorHandler.handleApiError(
         result,
-        'api.propertyValues.addPropertyToEntity',
+        'api.propertyValues.addEntityProperty',
         'Failed to add property'
       );
       return {
@@ -150,7 +150,7 @@ export async function addPropertyToEntity(
   } catch (error) {
     ErrorHandler.handleApiError(
       error,
-      'api.propertyValues.addPropertyToEntity',
+      'api.propertyValues.addEntityProperty',
       'Failed to add property'
     );
     return {

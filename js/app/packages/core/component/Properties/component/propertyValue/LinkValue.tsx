@@ -8,7 +8,7 @@ import { proxyResource } from '@service-unfurl/client';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { savePropertyValue } from '../../api';
+import { saveEntityProperty } from '../../api';
 import type { Property } from '../../types';
 import { extractDomain, isValidUrl, normalizeUrl } from '../../utils';
 import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
@@ -74,7 +74,7 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
         newValues = [normalized];
       }
 
-      const result = await savePropertyValue(
+      const result = await saveEntityProperty(
         blockId,
         props.entityType,
         props.property,
@@ -105,7 +105,7 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
     try {
       const newValues = linkValues.filter((link) => link !== url);
 
-      const result = await savePropertyValue(
+      const result = await saveEntityProperty(
         blockId,
         props.entityType,
         props.property,

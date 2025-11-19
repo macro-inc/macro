@@ -1,7 +1,7 @@
 import { useBlockId } from '@core/block';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createSignal, type Setter } from 'solid-js';
-import { savePropertyValue } from '../api';
+import { saveEntityProperty } from '../api';
 import { NUMBER_DECIMAL_PLACES } from '../constants';
 import type { Property, PropertyApiValues } from '../types';
 import { formatPropertyValue } from '../utils';
@@ -85,7 +85,7 @@ export function useInlineEditor(
         throw new Error(`Unsupported property type: ${property.valueType}`);
       }
 
-      const result = await savePropertyValue(
+      const result = await saveEntityProperty(
         blockId,
         entityType,
         property,

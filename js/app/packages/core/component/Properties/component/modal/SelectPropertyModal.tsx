@@ -7,7 +7,7 @@ import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
 import { createEffect, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { addEntityProperty } from '../../api';
+import { addEntityPropertyWithToast } from '../../api';
 import { MODAL_DIMENSIONS } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import { usePropertySelection } from '../../hooks/usePropertySelection';
@@ -45,7 +45,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
     try {
       const addPromises = Array.from(selected).map(
         async (propertyDefinitionId) => {
-          return await addEntityProperty(
+          return await addEntityPropertyWithToast(
             blockId,
             propertyDefinitionId,
             entityType
@@ -56,14 +56,14 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
       const results = await Promise.all(addPromises);
       const failures = results.filter((success: boolean) => !success);
 
-      // Close modal regardless of success/failure (toast already shown by addEntityProperty)
+      // Close modal regardless of success/failure (toast already shown by addEntityPropertyWithToast)
       props.onClose();
 
       if (failures.length === 0) {
         onPropertyAdded();
       }
     } catch (_error) {
-      // Close modal (toast already shown by addEntityProperty)
+      // Close modal (toast already shown by addEntityPropertyWithToast)
       props.onClose();
     } finally {
       setIsAdding(false);

@@ -1,7 +1,7 @@
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createSignal, onMount } from 'solid-js';
 import {
-  addPropertyToEntity,
+  addEntityProperty,
   deleteEntityProperty,
   fetchEntityProperties,
 } from '../api';
@@ -74,7 +74,7 @@ export function useEntityProperties(
   const addProperty = async (
     propertyDefinitionId: string
   ): Promise<{ success: boolean; error?: string }> => {
-    const result = await addPropertyToEntity(
+    const result = await addEntityProperty(
       entityId,
       entityType,
       propertyDefinitionId

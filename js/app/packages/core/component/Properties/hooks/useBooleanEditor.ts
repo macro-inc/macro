@@ -1,7 +1,7 @@
 import { useBlockId } from '@core/block';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
-import { savePropertyValue } from '../api';
+import { saveEntityProperty } from '../api';
 import type { Property } from '../types';
 
 /**
@@ -39,7 +39,7 @@ export function useBooleanEditor(
       // Otherwise toggle between true and false
       const newValue = actualValue === null ? true : !actualValue;
 
-      const result = await savePropertyValue(blockId, entityType, property, {
+      const result = await saveEntityProperty(blockId, entityType, property, {
         valueType: 'BOOLEAN',
         value: newValue,
       });

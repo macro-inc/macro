@@ -2,7 +2,7 @@ import { useBlockId } from '@core/block';
 import { DatePicker } from '@core/component/DatePicker';
 import { type Component, createMemo } from 'solid-js';
 import { Portal, Show } from 'solid-js/web';
-import { savePropertyValueWithToast } from '../../api';
+import { saveEntityPropertyWithToast } from '../../api';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
 import { CreatePropertyModal } from './CreatePropertyModal';
@@ -36,7 +36,7 @@ export const Modals: Component = () => {
   };
 
   const handleDateSaved = async (newDate: Date, property: Property) => {
-    const success = await savePropertyValueWithToast(
+    const success = await saveEntityPropertyWithToast(
       blockId,
       property,
       { valueType: 'DATE', value: newDate.toISOString() },
