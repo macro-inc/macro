@@ -1,7 +1,8 @@
 //! Consolidated service implementation for all property operations
 
 use crate::domain::{
-    error::Result,
+    error::{PropertyError, Result},
+    models::{CreatePropertyRequest, CreatePropertyResponse, PropertyDefinition},
     ports::{PermissionChecker, PropertiesStorage, PropertyService},
 };
 
@@ -31,5 +32,34 @@ where
     P: PermissionChecker,
     anyhow::Error: From<S::Error>,
 {
-    // TODO: Implement all PropertyService trait methods
+    // ===== Property Definition Operations =====
+
+    async fn create_property(
+        &self,
+        request: CreatePropertyRequest,
+    ) -> Result<CreatePropertyResponse> {
+        // Build the property definition
+        let definition = PropertyDefinition::new(
+            request.display_name,
+            request.data_type,
+            request.owner,
+            request.is_multi_select,
+            request.specific_entity_type,
+        );
+
+        // Validate the definition
+        definition
+            .validate()
+            .map_err(|e| PropertyError::ValidationError(e))?;
+
+        // Create via storage
+        self.storage
+            .create_property_definition(definition)
+            .await
+            .map_err(|e| PropertyError::Internal(e.into()))?;
+
+        Ok(CreatePropertyResponse {})
+    }
+
+    // TODO: Implement remaining PropertyService trait methods
 }
