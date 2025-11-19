@@ -14,7 +14,9 @@ use axum::{
 };
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::unified::{UnifiedSearchRequest, UnifiedSearchResponse};
-use opensearch_client::search::unified::SplitUnifiedSearchResponse;
+use opensearch_client::search::unified::{
+    SplitUnifiedSearchResponse, SplitUnifiedSearchResponseValues,
+};
 
 /// Perform a search through all items
 #[utoipa::path(
@@ -43,8 +45,13 @@ pub async fn handler(
 
     let results = perform_unified_search(&ctx, &user_context, query_params, req).await?;
 
-    let (channel_results, chat_results, document_results, email_results, project_results) =
-        results.into_iter().split_search_response();
+    let SplitUnifiedSearchResponseValues {
+        channel_message,
+        chat,
+        document,
+        email,
+        project,
+    } = results.into_iter().split_search_response();
 
     let (
         enriched_document_results,
@@ -53,19 +60,18 @@ pub async fn handler(
         enriched_project_results,
         enriched_email_results,
     ) = tokio::try_join!(
-        document_results
+        document
             .into_iter()
             .enrich_search_response(&ctx, &user_context.user_id),
-        chat_results
+        chat.into_iter()
+            .enrich_search_response(&ctx, &user_context.user_id),
+        channel_message
             .into_iter()
             .enrich_search_response(&ctx, &user_context.user_id),
-        channel_results
+        project
             .into_iter()
             .enrich_search_response(&ctx, &user_context.user_id),
-        project_results
-            .into_iter()
-            .enrich_search_response(&ctx, &user_context.user_id),
-        email_results
+        email
             .into_iter()
             .enrich_search_response(&ctx, &user_context.user_id)
     )

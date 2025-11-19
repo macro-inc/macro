@@ -206,31 +206,23 @@ pub enum UnifiedSearchResponse {
     Project(ProjectSearchResponse),
 }
 
+pub struct SplitUnifiedSearchResponseValues {
+    pub channel_message: Vec<ChannelMessageSearchResponse>,
+    pub chat: Vec<ChatSearchResponse>,
+    pub document: Vec<DocumentSearchResponse>,
+    pub email: Vec<EmailSearchResponse>,
+    pub project: Vec<ProjectSearchResponse>,
+}
+
 pub trait SplitUnifiedSearchResponse: Iterator<Item = UnifiedSearchResponse> {
-    fn split_search_response(
-        self,
-    ) -> (
-        Vec<ChannelMessageSearchResponse>,
-        Vec<ChatSearchResponse>,
-        Vec<DocumentSearchResponse>,
-        Vec<EmailSearchResponse>,
-        Vec<ProjectSearchResponse>,
-    );
+    fn split_search_response(self) -> SplitUnifiedSearchResponseValues;
 }
 
 impl<T> SplitUnifiedSearchResponse for T
 where
     T: Iterator<Item = UnifiedSearchResponse>,
 {
-    fn split_search_response(
-        self,
-    ) -> (
-        Vec<ChannelMessageSearchResponse>,
-        Vec<ChatSearchResponse>,
-        Vec<DocumentSearchResponse>,
-        Vec<EmailSearchResponse>,
-        Vec<ProjectSearchResponse>,
-    ) {
+    fn split_search_response(self) -> SplitUnifiedSearchResponseValues {
         let (channel_message, chat, document, email, project) = self.into_iter().fold(
             (vec![], vec![], vec![], vec![], vec![]),
             |(mut channel_message, mut chat, mut document, mut email, mut project), item| {
@@ -254,7 +246,14 @@ where
                 (channel_message, chat, document, email, project)
             },
         );
-        (channel_message, chat, document, email, project)
+
+        SplitUnifiedSearchResponseValues {
+            channel_message,
+            chat,
+            document,
+            email,
+            project,
+        }
     }
 }
 
