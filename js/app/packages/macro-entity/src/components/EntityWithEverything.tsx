@@ -13,6 +13,7 @@ import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
 import { notificationWithMetadata } from 'notifications/notificationMetadata';
 import type { ParentProps, Ref } from 'solid-js';
 import {
+  createDeferred,
   createMemo,
   createSignal,
   For,
@@ -716,8 +717,63 @@ function NotificationUserIcon(props: { id: string; name?: string }) {
   );
 }
 
+function EntityProjectPathDisplay(props: { name: string; path: string[] }) {
+  const [displayPath, setDisplayPath] = createSignal<string | undefined>(
+    props.name
+  );
+  const [truncated, setTruncated] = createSignal(false);
+
+  const fullPath = createMemo(() => props.path.join(' / '));
+
+  const getDisplayPath = (): { name: string; truncated: boolean } => {
+    const fullPathString = fullPath();
+    const maxLength = 30;
+
+    if (fullPathString.length <= maxLength) {
+      return { name: fullPathString, truncated: false };
+    }
+
+    if (props.path.length === 1) {
+      return {
+        name: props.path[0].slice(0, maxLength - 3) + '...',
+        truncated: true,
+      };
+    }
+
+    if (props.path.length === 2) {
+      const first = props.path[0];
+      const last = props.path[props.path.length - 1];
+      const combined = `${first} / ... / ${last}`;
+      if (combined.length <= maxLength) {
+        return { name: combined, truncated: true };
+      }
+      return {
+        name: `${first.slice(0, 10)}... / ${last.slice(0, 10)}...`,
+        truncated: true,
+      };
+    }
+
+    const first = props.path[0];
+    const last = props.path[props.path.length - 1];
+    return { name: `${first} / ... / ${last}`, truncated: true };
+  };
+
+  createDeferred(() => {
+    const { name, truncated } = getDisplayPath();
+    setDisplayPath(name);
+    setTruncated(truncated);
+  });
+
+  return (
+    <Tooltip tooltip={fullPath()} hide={!truncated()}>
+      <div class="truncate">{displayPath()}</div>
+    </Tooltip>
+  );
+}
+
 function EntityProject(props: { entity: ProjectContainedEntity }) {
   const projectQuery = createProjectQuery(props.entity);
+
   return (
     <div class="flex gap-1 items-center text-xs text-ink-extra-muted min-w-0">
       <svg
@@ -736,8 +792,10 @@ function EntityProject(props: { entity: ProjectContainedEntity }) {
       <Suspense
         fallback={<div class="h-3 w-10 bg-ink-placeholder animate-pulse" />}
       >
-        <Show when={projectQuery.data?.name}>
-          {(name) => <div class="truncate">{name()}</div>}
+        <Show when={projectQuery.data}>
+          {(data) => (
+            <EntityProjectPathDisplay name={data().name} path={data().path} />
+          )}
         </Show>
       </Suspense>
     </div>
