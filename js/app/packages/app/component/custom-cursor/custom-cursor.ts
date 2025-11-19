@@ -1,3 +1,4 @@
+import { ENABLE_CUSTOM_CURSOR } from '@core/constant/featureFlags';
 import { isMobile } from '@solid-primitives/platform';
 import {
   createEffect,
@@ -42,18 +43,13 @@ import textcursorSvgRaw from './cursor-svg/textcursor.svg?raw';
 import textcursorverticalSvgRaw from './cursor-svg/textcursorvertical.svg?raw';
 import zoominSvgRaw from './cursor-svg/zoomin.svg?raw';
 import zoomoutSvgRaw from './cursor-svg/zoomout.svg?raw';
-
 import customCursorCSSFileRaw from './custom-cursor.css?raw';
 
-const ENABLE_CUSTOM_CURSOR = true;
-
-let cursorStyleEl: HTMLStyleElement | null = null;
 let defaultCursor: string = '';
 let hexColor: string = '';
 let cursorCache: Record<string, string> = {};
 let currentCursorType: string | null = 'auto';
 const styleElements = new Set<HTMLStyleElement>();
-let overridedCursorTargetEl: HTMLElement | null = null;
 
 export const [customCursorEnabled, setCustomCursorEnabled] = createSignal(true);
 
@@ -394,6 +390,7 @@ function updateCustomCursor() {
 // Initialize cursor
 function initCursor() {
   if (!ENABLE_CUSTOM_CURSOR) return;
+
   if (isMobile) return;
   updateCustomCursor();
   createCustomCursorStylesheetEl(document.head);
