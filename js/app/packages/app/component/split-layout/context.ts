@@ -27,7 +27,7 @@ export type SplitPanelContextType = {
   contentOffsetTop: Accessor<number>;
   setContentOffsetTop: Setter<number>;
   halfSplitState?: Accessor<HalfSplitState | undefined>;
-  previewState?: Signal<boolean>;
+  previewState: Signal<boolean>;
   layoutRefs: {
     headerLeft?: HTMLDivElement;
     headerRight?: HTMLDivElement;
