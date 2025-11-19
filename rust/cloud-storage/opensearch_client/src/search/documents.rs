@@ -10,12 +10,13 @@ use crate::{
 
 use crate::SearchOn;
 use opensearch_query_builder::{
-    FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
+    BoolQueryBuilder, FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
+    ToOpenSearchJson,
 };
 use serde_json::Value;
 
 #[derive(Clone)]
-struct DocumentSearchConfig;
+pub(crate) struct DocumentSearchConfig;
 
 impl SearchQueryConfig for DocumentSearchConfig {
     const INDEX: &'static str = DOCUMENTS_INDEX;
@@ -31,7 +32,7 @@ impl SearchQueryConfig for DocumentSearchConfig {
     }
 }
 
-struct DocumentQueryBuilder {
+pub(crate) struct DocumentQueryBuilder {
     inner: SearchQueryBuilder<DocumentSearchConfig>,
 }
 
@@ -55,20 +56,24 @@ impl DocumentQueryBuilder {
         fn disable_recency(disable_recency: bool) -> Self;
     }
 
+    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder> {
+        self.inner.build_bool_query()
+    }
+
     fn build_search_request(self) -> Result<SearchRequest> {
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
         // SearchOn::NameContent is used
         let search_request = self
             .inner
-            .build_search_request(self.inner.build_bool_query()?.build())?;
+            .build_search_request(self.build_bool_query()?.build())?;
 
         Ok(search_request)
     }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct DocumentIndex {
+pub(crate) struct DocumentIndex {
     pub entity_id: String,
     pub document_name: String,
     pub node_id: String,
@@ -79,7 +84,7 @@ pub struct DocumentIndex {
     pub updated_at_seconds: i64,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct DocumentSearchResponse {
     pub document_id: String,
     pub document_name: String,
@@ -106,20 +111,25 @@ pub struct DocumentSearchArgs {
     pub disable_recency: bool,
 }
 
+impl From<DocumentSearchArgs> for DocumentQueryBuilder {
+    fn from(args: DocumentSearchArgs) -> Self {
+        DocumentQueryBuilder::new(args.terms)
+            .match_type(&args.match_type)
+            .page_size(args.page_size)
+            .page(args.page)
+            .user_id(&args.user_id)
+            .ids(args.document_ids)
+            .search_on(args.search_on)
+            .collapse(args.collapse)
+            .ids_only(args.ids_only)
+            .disable_recency(args.disable_recency)
+    }
+}
+
 impl DocumentSearchArgs {
     pub fn build(self) -> Result<Value> {
-        Ok(DocumentQueryBuilder::new(self.terms)
-            .match_type(&self.match_type)
-            .page_size(self.page_size)
-            .page(self.page)
-            .user_id(&self.user_id)
-            .ids(self.document_ids)
-            .search_on(self.search_on)
-            .collapse(self.collapse)
-            .ids_only(self.ids_only)
-            .disable_recency(self.disable_recency)
-            .build_search_request()?
-            .to_json())
+        let builder: DocumentQueryBuilder = self.into();
+        Ok(builder.build_search_request()?.to_json())
     }
 }
 
