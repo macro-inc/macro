@@ -5,7 +5,10 @@
 //! come from models_properties::service and models_properties::shared.
 
 use chrono::Utc;
-use models_properties::service::{PropertyDefinition, PropertyOption, PropertyOptionValue};
+use models_properties::service::{
+    EntityPropertyWithDefinition, PropertyDefinition, PropertyDefinitionWithOptions, PropertyOption,
+    PropertyOptionValue,
+};
 use models_properties::shared::{DataType, EntityType, PropertyOwner};
 use uuid::Uuid;
 
@@ -324,5 +327,73 @@ mod tests {
         let mut invalid_option = valid_option.clone();
         invalid_option.value = PropertyOptionValue::String(String::new());
         assert!(invalid_option.validate().is_err());
+    }
+}
+
+// ===== PropertyDefinitionWithOptions Behavior =====
+
+impl PropertyDefinitionWithOptions {
+    /// Validate the property definition and options
+    pub fn validate(&self) -> Result<(), String> {
+        // Validate the definition
+        self.definition.validate()?;
+
+        // Validate each option
+        for option in &self.property_options {
+            option.validate().map_err(|e| e.to_string())?;
+
+            // Ensure option belongs to this property
+            if option.property_definition_id != self.definition.id {
+                return Err(format!(
+                    "Option {} does not belong to property definition {}",
+                    option.id, self.definition.id
+                ));
+            }
+        }
+
+        Ok(())
+    }
+}
+
+// ===== EntityPropertyWithDefinition Behavior =====
+
+impl EntityPropertyWithDefinition {
+    /// Validate the entity property, definition, value, and options
+    pub fn validate(&self) -> Result<(), String> {
+        // Validate the property definition
+        self.definition.validate()?;
+
+        // Validate the entity property
+        self.property.validate()?;
+
+        // Ensure property definition ID matches
+        if self.property.property_definition_id != self.definition.id {
+            return Err(format!(
+                "Entity property definition ID {} does not match definition ID {}",
+                self.property.property_definition_id, self.definition.id
+            ));
+        }
+
+        // If value is provided, validate it
+        if let Some(value) = &self.value {
+            value.validate().map_err(|e| e.to_string())?;
+        }
+
+        // If options are provided, validate them
+        if let Some(options) = &self.options {
+            for option in options {
+                option.validate().map_err(|e| e.to_string())?;
+
+                // Ensure option belongs to this property definition
+                if option.property_definition_id != self.definition.id {
+                    return Err(format!(
+                        "Option {} does not belong to property definition {}",
+                        option.id, self.definition.id
+                    ));
+                }
+            }
+        }
+
+        Ok(())
     }
 }
