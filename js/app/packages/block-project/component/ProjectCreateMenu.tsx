@@ -60,12 +60,13 @@ function MenuContent(props: { projectId: string }) {
         return id;
       } catch (e) {
         toast.failure(e.message);
-        throw e;
+        return null;
       }
     };
 
     if (!loading) {
       const id = await tryCreate();
+      if (!id) return;
 
       const block = { type: blockName, id };
 
@@ -76,6 +77,10 @@ function MenuContent(props: { projectId: string }) {
         : replaceSplit({ type: 'component', id: 'loading' });
 
       const id = await tryCreate();
+      if (!id) {
+        split?.goBack();
+        return;
+      }
 
       if (split) split.replace({ type: blockName, id }, true);
     }
