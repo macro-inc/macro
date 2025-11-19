@@ -1,6 +1,6 @@
 import { createSignal, For, onMount } from 'solid-js';
 
-const ShadowDOMDemo = () => {
+const ShadowDOMTest = () => {
   let shadowHost: HTMLDivElement | undefined;
 
   onMount(() => {
@@ -74,7 +74,7 @@ const ShadowDOMDemo = () => {
   return <div ref={shadowHost} />;
 };
 
-const CustomCursorDemo = () => {
+const CustomCursorTest = () => {
   const [useClass, setUseClass] = createSignal(true);
   const [useStyle, setUseStyle] = createSignal(false);
 
@@ -151,7 +151,8 @@ const CustomCursorDemo = () => {
           }
         `}
       </style>
-      <h1 class="text-2xl font-bold mb-6">Custom Cursor Types Demo</h1>
+      <h1 class="text-2xl font-bold mb-6">Custom Cursor Types Test</h1>
+
       <div class="mb-6 flex gap-2 flex-wrap">
         <button
           class={`px-4 py-2 rounded border transition-colors ${
@@ -209,6 +210,13 @@ const CustomCursorDemo = () => {
         </For>
       </div>
       <div class="pt-16">
+        <div
+          class="flex items-center text-accent p-2 border-accent border my-4"
+          style={{ cursor: 'pointer' }}
+        >
+          <div>div wrapper with inline style cursor pointer and hr child</div>
+          <hr style="border:none;transition:border-color var(--transition);border-top:10px dashed var(--b4);box-sizing:border-box;width:100%;" />
+        </div>
         <div class="border border-slate-500 p-2" contenteditable>
           contenteditable
           <ul class="p-2">
@@ -265,9 +273,9 @@ const CustomCursorDemo = () => {
       </div>
 
       <h2 class="pt-16 text-2xl font-bold">Shadow DOM Demo</h2>
-      <ShadowDOMDemo />
+      <ShadowDOMTest />
     </div>
   );
 };
 
-export default CustomCursorDemo;
+export default CustomCursorTest;

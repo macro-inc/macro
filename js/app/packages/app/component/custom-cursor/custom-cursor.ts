@@ -323,10 +323,13 @@ function generateCustomCursorStyleTextContent() {
   let styleTextContent = customCursorCSSFileRaw;
   styleTextContent += `${'*'} { cursor: ${getCursor('default')} !important; }`;
   styleTextContent += Object.keys(cursorSvgMap)
-    .map(
-      (key) =>
-        `.${getCursorClassFromKey(key)} { cursor: ${getCursor(key)} !important; }`
-    )
+    .map((key) => {
+      return `
+      .${getCursorClassFromKey(key)} { 
+      cursor: ${getCursor(key)} !important;
+      --custom-cursor: ${key};
+       }`;
+    })
     .join('');
   return styleTextContent;
 }
@@ -413,21 +416,27 @@ function initCursor() {
       return;
     }
 
-    // clearCursorOverrideStyle();
-
     target.classList.remove(...allCustomCursorClasses);
-    // target.classList.remove(getCursorClassFromKey(currentCursorType!));
-    const targetComputedStyle = getComputedStyle(target);
-    const customCursorCSSVariableValue =
-      targetComputedStyle.getPropertyValue('--custom-cursor');
 
-    const computedCursor =
-      (customCursorCSSVariableValue
-        ? customCursorCSSVariableValue
-        : target instanceof HTMLElement
-          ? target.style.cursor
-          : null) || targetComputedStyle.cursor;
-    const computedUserSelect = targetComputedStyle.userSelect;
+    const getCursorValueFromTargetEl = (target: Element) => {
+      const run = () => {
+        if (target instanceof HTMLElement && target.style.cursor) {
+          return target.style.cursor;
+        }
+        const targetComputedStyle = getComputedStyle(target);
+        const customCursorCSSVariableValue =
+          targetComputedStyle.getPropertyValue('--custom-cursor');
+        if (customCursorCSSVariableValue) {
+          return customCursorCSSVariableValue;
+        }
+
+        return targetComputedStyle.cursor;
+      };
+      return run().replace('!important', '');
+    };
+
+    const computedCursor = getCursorValueFromTargetEl(target);
+    const computedUserSelect = getComputedStyle(target).userSelect;
     // target.classList.add(getCursorClassFromKey(currentCursorType!));
 
     // Extract fallback cursor if computed cursor is a custom cursor string
@@ -478,8 +487,3 @@ createRoot(() => {
     updateCursor();
   });
 });
-
-function extractCursorValueFromProperty(value: string) {
-  // removes !important from value
-  return value.split(' ')[0];
-}
