@@ -7,7 +7,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use macro_db_client::chat::get::ChatHistoryInfo;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::chat::{
     ChatMessageSearchResult, ChatSearchMetadata, ChatSearchRequest, ChatSearchResponse,
@@ -81,7 +80,7 @@ pub async fn handler(
 
 pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::chats::ChatSearchResponse>,
-    chat_histories: HashMap<String, ChatHistoryInfo>,
+    chat_histories: HashMap<String, macro_db_client::chat::get::ChatHistoryInfo>,
 ) -> anyhow::Result<Vec<ChatSearchResponseItemWithMetadata>> {
     let search_results = search_results
         .into_iter()
@@ -99,15 +98,19 @@ pub fn construct_search_result(
     let result: Vec<ChatSearchResponseItemWithMetadata> = result
         .into_iter()
         .map(|item| {
-            let chat_history_info = chat_histories
-                .get(&item.chat_id)
-                .cloned()
-                .unwrap_or_default();
+            let metadata =
+                chat_histories
+                    .get(&item.chat_id)
+                    .map(|info| models_search::chat::ChatMetadata {
+                        created_at: info.created_at.timestamp(),
+                        updated_at: info.updated_at.timestamp(),
+                        viewed_at: info.viewed_at.map(|a| a.timestamp()),
+                        project_id: info.project_id.clone(),
+                        deleted_at: info.deleted_at.map(|a| a.timestamp()),
+                    });
+
             ChatSearchResponseItemWithMetadata {
-                created_at: chat_history_info.created_at.timestamp(),
-                updated_at: chat_history_info.updated_at.timestamp(),
-                viewed_at: chat_history_info.viewed_at.map(|a| a.timestamp()),
-                project_id: chat_history_info.project_id,
+                metadata,
                 extra: item,
             }
         })

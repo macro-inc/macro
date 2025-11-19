@@ -11,9 +11,10 @@ fn test_construct_search_result_empty_input() {
 
 #[test]
 fn test_construct_search_result_single_channel() {
+    let channel_uuid = "550e8400-e29b-41d4-a716-446655440000";
     let search_results = vec![
         opensearch_client::search::channels::ChannelMessageSearchResponse {
-            channel_id: "channel1".to_string(),
+            channel_id: channel_uuid.to_string(),
             channel_name: Some("Test Channel".to_string()),
             channel_type: "public".to_string(),
             org_id: Some(123),
@@ -30,11 +31,17 @@ fn test_construct_search_result_single_channel() {
         },
     ];
 
-    let result = construct_search_result(search_results, HashMap::new()).unwrap();
+    let mut channel_histories = HashMap::new();
+    channel_histories.insert(
+        Uuid::parse_str(channel_uuid).unwrap(),
+        create_channel_history(channel_uuid),
+    );
+
+    let result = construct_search_result(search_results, channel_histories).unwrap();
 
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].extra.channel_id, "channel1");
-    assert_eq!(result[0].extra.id, "channel1");
+    assert_eq!(result[0].extra.channel_id, channel_uuid);
+    assert_eq!(result[0].extra.id, channel_uuid);
     assert_eq!(
         result[0].extra.channel_name,
         Some("Test Channel".to_string())
@@ -57,9 +64,10 @@ fn test_construct_search_result_single_channel() {
 
 #[test]
 fn test_construct_search_result_multiple_messages_same_channel() {
+    let channel_uuid = "550e8400-e29b-41d4-a716-446655440001";
     let search_results = vec![
         opensearch_client::search::channels::ChannelMessageSearchResponse {
-            channel_id: "channel1".to_string(),
+            channel_id: channel_uuid.to_string(),
             channel_name: Some("Test Channel".to_string()),
             channel_type: "public".to_string(),
             org_id: Some(123),
@@ -75,7 +83,7 @@ fn test_construct_search_result_multiple_messages_same_channel() {
             },
         },
         opensearch_client::search::channels::ChannelMessageSearchResponse {
-            channel_id: "channel1".to_string(),
+            channel_id: channel_uuid.to_string(),
             channel_name: Some("Test Channel".to_string()),
             channel_type: "public".to_string(),
             org_id: Some(123),
@@ -92,11 +100,17 @@ fn test_construct_search_result_multiple_messages_same_channel() {
         },
     ];
 
-    let result = construct_search_result(search_results, HashMap::new()).unwrap();
+    let mut channel_histories = HashMap::new();
+    channel_histories.insert(
+        Uuid::parse_str(channel_uuid).unwrap(),
+        create_channel_history(channel_uuid),
+    );
+
+    let result = construct_search_result(search_results, channel_histories).unwrap();
 
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].extra.channel_id, "channel1");
-    assert_eq!(result[0].extra.id, "channel1");
+    assert_eq!(result[0].extra.channel_id, channel_uuid);
+    assert_eq!(result[0].extra.id, channel_uuid);
     assert_eq!(result[0].extra.name, Some("Test Channel".to_string()));
     assert_eq!(result[0].extra.channel_message_search_results.len(), 2);
 
@@ -121,9 +135,10 @@ fn test_construct_search_result_multiple_messages_same_channel() {
 
 #[test]
 fn test_construct_search_result_filters_messages_without_content() {
+    let channel_uuid = "550e8400-e29b-41d4-a716-446655440002";
     let search_results = vec![
         opensearch_client::search::channels::ChannelMessageSearchResponse {
-            channel_id: "channel1".to_string(),
+            channel_id: channel_uuid.to_string(),
             channel_name: Some("Test Channel".to_string()),
             channel_type: "public".to_string(),
             org_id: Some(123),
@@ -139,7 +154,7 @@ fn test_construct_search_result_filters_messages_without_content() {
             },
         },
         opensearch_client::search::channels::ChannelMessageSearchResponse {
-            channel_id: "channel1".to_string(),
+            channel_id: channel_uuid.to_string(),
             channel_name: Some("Test Channel".to_string()),
             channel_type: "public".to_string(),
             org_id: Some(123),
@@ -153,7 +168,13 @@ fn test_construct_search_result_filters_messages_without_content() {
         },
     ];
 
-    let result = construct_search_result(search_results, HashMap::new()).unwrap();
+    let mut channel_histories = HashMap::new();
+    channel_histories.insert(
+        Uuid::parse_str(channel_uuid).unwrap(),
+        create_channel_history(channel_uuid),
+    );
+
+    let result = construct_search_result(search_results, channel_histories).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.channel_message_search_results.len(), 2);
@@ -187,6 +208,18 @@ fn create_test_channel_response(
     }
 }
 
+fn create_channel_history(channel_id: &str) -> ChannelHistoryInfo {
+    let now = chrono::Utc::now();
+    let channel_uuid = Uuid::parse_str(channel_id).unwrap_or_else(|_| Uuid::new_v4());
+    ChannelHistoryInfo {
+        item_id: channel_uuid,
+        created_at: now,
+        updated_at: now,
+        viewed_at: None,
+        interacted_at: None,
+    }
+}
+
 #[test]
 fn test_channel_history_timestamps() {
     // Create a mock channel history with known timestamps
@@ -217,10 +250,12 @@ fn test_channel_history_timestamps() {
 
     // Verify that timestamps were copied from the channel history
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].created_at, now.timestamp());
-    assert_eq!(result[0].updated_at, now.timestamp());
-    assert_eq!(result[0].viewed_at, Some(now.timestamp()));
-    assert_eq!(result[0].interacted_at, Some(now.timestamp()));
+    assert!(result[0].metadata.is_some());
+    let metadata = result[0].metadata.as_ref().unwrap();
+    assert_eq!(metadata.created_at, now.timestamp());
+    assert_eq!(metadata.updated_at, now.timestamp());
+    assert_eq!(metadata.viewed_at, Some(now.timestamp()));
+    assert_eq!(metadata.interacted_at, Some(now.timestamp()));
 }
 
 #[test]
@@ -252,15 +287,9 @@ fn test_channel_history_missing_entry() {
     // Call the function under test
     let result = construct_search_result(input, channel_histories).unwrap();
 
-    // Verify that default timestamps were used
+    // Channels without history info should still be returned but with None metadata
     assert_eq!(result.len(), 1);
-
-    // Default values from ChannelHistoryInfo::default()
-    let default_time = chrono::DateTime::<chrono::Utc>::default().timestamp();
-    assert_eq!(result[0].created_at, default_time);
-    assert_eq!(result[0].updated_at, default_time);
-    assert_eq!(result[0].viewed_at, None);
-    assert_eq!(result[0].interacted_at, None);
+    assert!(result[0].metadata.is_none());
 }
 
 #[test]
@@ -293,10 +322,12 @@ fn test_channel_history_null_viewed_at() {
 
     // Verify that timestamps were copied correctly and viewed_at is None
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].created_at, now.timestamp());
-    assert_eq!(result[0].updated_at, now.timestamp());
-    assert_eq!(result[0].viewed_at, None);
-    assert_eq!(result[0].interacted_at, None);
+    assert!(result[0].metadata.is_some());
+    let metadata = result[0].metadata.as_ref().unwrap();
+    assert_eq!(metadata.created_at, now.timestamp());
+    assert_eq!(metadata.updated_at, now.timestamp());
+    assert!(metadata.viewed_at.is_none());
+    assert!(metadata.interacted_at.is_none());
 }
 
 #[test]
@@ -315,11 +346,7 @@ fn test_channel_history_invalid_uuid() {
     // Call the function under test
     let result = construct_search_result(input, channel_histories).unwrap();
 
-    // Verify that default timestamps were used since UUID parsing failed
+    // Channels with invalid UUIDs should still be returned but with None metadata
     assert_eq!(result.len(), 1);
-    let default_time = chrono::DateTime::<chrono::Utc>::default().timestamp();
-    assert_eq!(result[0].created_at, default_time);
-    assert_eq!(result[0].updated_at, default_time);
-    assert_eq!(result[0].viewed_at, None);
-    assert_eq!(result[0].interacted_at, None);
+    assert!(result[0].metadata.is_none());
 }
