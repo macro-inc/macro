@@ -8,14 +8,10 @@ use std::collections::HashMap;
 // ===== Property Definition Responses =====
 
 #[derive(Debug, Clone)]
-pub struct CreatePropertyResponse {
-    pub property: PropertyDefinition,
-}
+pub struct CreatePropertyResponse {}
 
 #[derive(Debug, Clone)]
-pub struct CreatePropertyWithOptionsResponse {
-    pub property_with_options: PropertyWithOptions,
-}
+pub struct CreatePropertyWithOptionsResponse {}
 
 #[derive(Debug, Clone)]
 pub struct ListPropertiesResponse {
@@ -28,9 +24,7 @@ pub struct DeletePropertyResponse {}
 // ===== Property Option Responses =====
 
 #[derive(Debug, Clone)]
-pub struct CreateOptionResponse {
-    pub option: PropertyOption,
-}
+pub struct CreateOptionResponse {}
 
 #[derive(Debug, Clone)]
 pub struct GetOptionsResponse {
