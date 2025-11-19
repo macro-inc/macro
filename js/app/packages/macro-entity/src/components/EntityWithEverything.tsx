@@ -1,3 +1,4 @@
+import { useSplitLayout } from '@app/component/split-layout/layout';
 import { Tooltip } from '@core/component/Tooltip';
 import { matches } from '@core/util/match';
 import CheckIcon from '@icon/regular/check.svg';
@@ -14,6 +15,7 @@ import { notificationWithMetadata } from 'notifications/notificationMetadata';
 import type { ParentProps, Ref } from 'solid-js';
 import {
   createDeferred,
+  createEffect,
   createMemo,
   createSignal,
   For,
@@ -773,9 +775,34 @@ function EntityProjectPathDisplay(props: { name: string; path: string[] }) {
 
 function EntityProject(props: { entity: ProjectContainedEntity }) {
   const projectQuery = createProjectQuery(props.entity);
+  let projectIconRef!: HTMLDivElement;
+
+  createEffect(() => {
+    if (!projectQuery.isSuccess) return;
+
+    const id = projectQuery.data.id;
+    const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
+    const handleClick = (e: MouseEvent) => {
+      e.stopPropagation();
+
+      const handle = e.altKey
+        ? insertSplit({ type: 'project', id })
+        : replaceOrInsertSplit({ type: 'project', id });
+      handle?.activate();
+    };
+
+    projectIconRef.classList.add('hover:text-accent');
+    projectIconRef.addEventListener('click', handleClick);
+    onCleanup(() => {
+      projectIconRef.removeEventListener('click', handleClick);
+    });
+  });
 
   return (
-    <div class="flex gap-1 items-center text-xs text-ink-extra-muted min-w-0">
+    <div
+      ref={projectIconRef}
+      class="flex gap-1 items-center text-xs text-ink-extra-muted min-w-0"
+    >
       <svg
         class="shrink-0"
         xmlns="http://www.w3.org/2000/svg"
