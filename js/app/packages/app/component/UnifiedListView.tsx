@@ -835,9 +835,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const entityClickHandler: EntityClickHandler<EntityData> = (
     entity,
-    event
+    event,
+    options
   ) => {
-    if (preview()) {
+    if (preview() && !options?.ignorePreview) {
       setViewDataStore(selectedView(), 'selectedEntity', entity);
       return;
     }

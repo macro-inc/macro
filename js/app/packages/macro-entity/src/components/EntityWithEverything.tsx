@@ -795,7 +795,7 @@ function EntityProject(props: {
         ownerId: data.owner,
         updatedAt: data.updatedAt,
       };
-      click(projectEntity, e);
+      click(projectEntity, e, { ignorePreview: true });
     };
 
     projectIconRef.classList.add('hover:text-accent');
