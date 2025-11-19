@@ -421,4 +421,36 @@ impl DocumentStorageServiceClient {
         let response_data = res.json::<CreateDocumentResponse>().await?;
         Ok(response_data)
     }
+
+    /// Permanently delete a document
+    #[tracing::instrument(skip(self))]
+    pub async fn delete_document_permanent_internal(
+        &self,
+        document_id: &str,
+        user_id: &str,
+    ) -> Result<()> {
+        let url = format!("{}/internal/documents/{}/permanent", self.url, document_id);
+
+        let res = self
+            .client
+            .delete(&url)
+            .header(MACRO_INTERNAL_USER_ID_HEADER_KEY, user_id)
+            .send()
+            .await?;
+
+        let status_code = res.status();
+
+        if !status_code.is_success() {
+            let body = res.text().await.unwrap_or("no body".to_string());
+            tracing::error!(
+                body=%body,
+                status=%status_code,
+                document_id=%document_id,
+                "external API error when deleting document"
+            );
+            anyhow::bail!("HTTP {}: {}", status_code, body);
+        }
+
+        Ok(())
+    }
 }

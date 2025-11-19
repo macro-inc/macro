@@ -17,6 +17,10 @@ path = "src/bin/backfill_gmail_attachments/backfill_gmail_attachments.rs"
 name = "backfill_search"
 path = "src/bin/backfill_search/backfill_search.rs"
 
+[[bin]]
+name = "delete_gmail_attachments"
+path = "src/bin/delete_gmail_attachments/delete_gmail_attachments.rs"
+
 [features]
 disable_attachment_upload = []
 disable_connection_gateway = []

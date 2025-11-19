@@ -18,6 +18,7 @@ use super::{
     },
     user::populate_items,
 };
+use crate::api::documents::delete_document;
 use crate::api::items::get_item_ids;
 use crate::api::threads::get_thread_access_level;
 use crate::api::{documents::get_documents_metadata, items::validate_item_ids};
@@ -115,6 +116,11 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .route(
             "/documents/:document_id/update",
             put(put_document_update::handler),
+        )
+        .route(
+            "/documents/:document_id/permanent",
+            delete(delete_document::permanently_delete_document_handler)
+                .layer(ensure_document_exists_middleware.clone()),
         )
         .route("/documents/metadata", post(get_documents_metadata::handler))
         // History routes
