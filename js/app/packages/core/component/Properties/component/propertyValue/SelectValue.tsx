@@ -66,7 +66,7 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
   };
 
   const isReadOnly = () => props.property.isMetadata || !props.canEdit;
-  const displayValues = (props.property.value || []) as string[];
+  const displayValues = (props.property.value ?? []) as string[];
 
   return (
     <div

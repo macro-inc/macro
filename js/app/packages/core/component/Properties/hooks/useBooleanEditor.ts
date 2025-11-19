@@ -16,7 +16,7 @@ export function useBooleanEditor(
   entityType: EntityType,
   onSaved?: () => void
 ): {
-  value: Accessor<boolean | undefined>;
+  value: Accessor<boolean | null>;
   isSaving: Accessor<boolean>;
   toggle: () => Promise<void>;
 } {
@@ -24,7 +24,7 @@ export function useBooleanEditor(
   const [isSaving, setIsSaving] = createSignal(false);
 
   const currentValue = createMemo(() => {
-    return property.value as boolean | undefined;
+    return property.value as boolean | null;
   });
 
   const toggle = async () => {
@@ -33,11 +33,11 @@ export function useBooleanEditor(
     setIsSaving(true);
 
     try {
-      const actualValue = property.value as boolean | undefined;
+      const actualValue = property.value as boolean | null;
 
-      // If currently unset (undefined), set to true
+      // If currently unset (null), set to true
       // Otherwise toggle between true and false
-      const newValue = actualValue === undefined ? true : !actualValue;
+      const newValue = actualValue === null ? true : !actualValue;
 
       const result = await savePropertyValue(blockId, entityType, property, {
         valueType: 'BOOLEAN',

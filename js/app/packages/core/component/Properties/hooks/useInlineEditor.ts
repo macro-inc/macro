@@ -34,7 +34,7 @@ export function useInlineEditor(
 
   const getCurrentRawValue = () => {
     const val = property.value;
-    if (val === undefined) return '';
+    if (val === null) return '';
 
     // This hook works with string and number properties
     // For these types, val is a single value, not an array

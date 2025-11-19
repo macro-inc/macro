@@ -60,7 +60,7 @@ export function usePropertyEditor(property: Property) {
   const initializeSelectedOptions = () => {
     const selected = new Set<string>();
 
-    // For select types, property.value is already an array (or undefined)
+    // For select types, property.value is already an array (or null)
     if (
       (property.valueType === 'SELECT_STRING' ||
         property.valueType === 'SELECT_NUMBER') &&

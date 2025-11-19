@@ -54,15 +54,15 @@ export type Property = {
   createdAt: string;
   updatedAt: string;
 } & ( // Single-value types
-  | { valueType: 'STRING'; value?: string }
-  | { valueType: 'NUMBER'; value?: number }
-  | { valueType: 'BOOLEAN'; value?: boolean }
-  | { valueType: 'DATE'; value?: Date }
+  | { valueType: 'STRING'; value: string | null }
+  | { valueType: 'NUMBER'; value: number | null }
+  | { valueType: 'BOOLEAN'; value: boolean | null }
+  | { valueType: 'DATE'; value: Date | null }
   // Multi-value types (select values are option IDs, not display values)
-  | { valueType: 'SELECT_STRING'; value?: string[] }
-  | { valueType: 'SELECT_NUMBER'; value?: string[] }
-  | { valueType: 'ENTITY'; value?: EntityReference[] }
-  | { valueType: 'LINK'; value?: string[] }
+  | { valueType: 'SELECT_STRING'; value: string[] | null }
+  | { valueType: 'SELECT_NUMBER'; value: string[] | null }
+  | { valueType: 'ENTITY'; value: EntityReference[] | null }
+  | { valueType: 'LINK'; value: string[] | null }
 );
 
 /**

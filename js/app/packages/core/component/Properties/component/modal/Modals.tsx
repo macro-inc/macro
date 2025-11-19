@@ -87,9 +87,8 @@ export const Modals: Component = () => {
       <Show when={datePickerModal()}>
         {(state) => {
           const property = state().property;
-          const dateValue = property.value
-            ? new Date(property.value)
-            : new Date();
+          const dateValue =
+            property.value !== null ? new Date(property.value) : new Date();
           const anchor = state().anchor;
 
           return anchor ? (

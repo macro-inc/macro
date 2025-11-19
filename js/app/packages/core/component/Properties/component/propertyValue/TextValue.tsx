@@ -45,7 +45,7 @@ export const TextValue: Component<TextValueProps> = (props) => {
   };
 
   const hasValue = () =>
-    props.property.value &&
+    props.property.value !== null &&
     typeof props.property.value === 'string' &&
     props.property.value.length > 0;
 

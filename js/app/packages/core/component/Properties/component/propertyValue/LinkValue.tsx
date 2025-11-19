@@ -30,7 +30,7 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
   const [badLinks, setBadLinks] = createStore<Record<string, true>>({});
 
   const isReadOnly = () => props.property.isMetadata || !props.canEdit;
-  const linkValues = (props.property.value || []) as string[];
+  const linkValues = (props.property.value ?? []) as string[];
 
   const startAdding = () => {
     if (isReadOnly()) return;
