@@ -2,7 +2,7 @@ import { isErr } from '@core/util/maybeResult';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Property, Result } from '../types';
-import { ErrorHandler } from '../utils/errorHandling';
+import { ERROR_MESSAGES } from '../utils/errorHandling';
 import { entityPropertyFromApi } from './converters';
 
 /**
@@ -27,16 +27,16 @@ export async function fetchEntityProperties(
     });
 
     if (isErr(result)) {
-      ErrorHandler.handleApiError(
+      console.error(
+        'api.properties.fetchEntityProperties:',
         result,
-        'api.properties.fetchEntityProperties',
-        'Failed to load properties'
+        ERROR_MESSAGES.PROPERTY_FETCH
       );
       return {
         ok: false,
         error: {
           code: 'API_ERROR',
-          message: 'Failed to load properties',
+          message: ERROR_MESSAGES.PROPERTY_FETCH,
         },
       };
     }
@@ -46,10 +46,10 @@ export async function fetchEntityProperties(
 
     return { ok: true, value: properties };
   } catch (error) {
-    ErrorHandler.handleApiError(
+    console.error(
+      'api.properties.fetchEntityProperties:',
       error,
-      'api.properties.fetchEntityProperties',
-      'Failed to load properties'
+      ERROR_MESSAGES.PROPERTY_FETCH
     );
     return {
       ok: false,

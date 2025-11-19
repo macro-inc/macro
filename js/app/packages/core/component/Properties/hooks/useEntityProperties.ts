@@ -6,6 +6,7 @@ import {
   fetchEntityProperties,
 } from '../api';
 import type { Property } from '../types';
+import { ERROR_MESSAGES } from '../utils/errorHandling';
 
 /**
  * Main hook for fetching and managing properties for an entity
@@ -60,10 +61,10 @@ export function useEntityProperties(
       if (result.ok) {
         setProperties(result.value);
       } else {
-        return handleFetchError('Failed to load properties');
+        return handleFetchError(ERROR_MESSAGES.PROPERTY_FETCH);
       }
     } catch (_err) {
-      return handleFetchError('Failed to load properties');
+      return handleFetchError(ERROR_MESSAGES.PROPERTY_FETCH);
     } finally {
       setIsLoading(false);
     }
@@ -84,7 +85,7 @@ export function useEntityProperties(
       await fetch(); // Refetch to get updated list
       return { success: true };
     } else {
-      return { success: false, error: 'Failed to add property' };
+      return { success: false, error: ERROR_MESSAGES.PROPERTY_ADD };
     }
   };
 
@@ -97,7 +98,7 @@ export function useEntityProperties(
       await fetch(); // Refetch to get updated list
       return { success: true };
     } else {
-      return { success: false, error: 'Failed to delete property' };
+      return { success: false, error: ERROR_MESSAGES.PROPERTY_DELETE };
     }
   };
 

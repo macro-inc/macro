@@ -2,7 +2,7 @@ import { isErr } from '@core/util/maybeResult';
 import { propertiesServiceClient } from '@service-properties/client';
 import { createSignal } from 'solid-js';
 import type { Property, PropertyOption } from '../types';
-import { ERROR_MESSAGES, ErrorHandler } from '../utils/errorHandling';
+import { ERROR_MESSAGES } from '../utils/errorHandling';
 
 export interface PropertyEditorState {
   options: PropertyOption[];
@@ -36,7 +36,7 @@ export function usePropertyEditor(property: Property) {
       if (isErr(result)) {
         setState((prev) => ({
           ...prev,
-          error: ERROR_MESSAGES.FETCH_OPTIONS,
+          error: ERROR_MESSAGES.OPTION_FETCH,
           isLoading: false,
         }));
         return;
@@ -51,7 +51,7 @@ export function usePropertyEditor(property: Property) {
     } catch (_apiError) {
       setState((prev) => ({
         ...prev,
-        error: ERROR_MESSAGES.FETCH_OPTIONS,
+        error: ERROR_MESSAGES.OPTION_FETCH,
         isLoading: false,
       }));
     }
@@ -154,7 +154,7 @@ export function usePropertyEditor(property: Property) {
       });
 
       if (isErr(result)) {
-        throw new Error('Failed to create option');
+        throw new Error(ERROR_MESSAGES.OPTION_CREATE);
       }
 
       const [, newOption] = result;
@@ -188,10 +188,10 @@ export function usePropertyEditor(property: Property) {
         hasChanges: true,
       }));
     } catch (error) {
-      ErrorHandler.handleApiError(
+      console.error(
+        'usePropertyEditor.addOption:',
         error,
-        'usePropertyEditor.addOption',
-        'Failed to add option'
+        ERROR_MESSAGES.OPTION_ADD
       );
       throw error;
     }

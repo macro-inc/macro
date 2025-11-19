@@ -11,6 +11,7 @@ import { createStore } from 'solid-js/store';
 import { saveEntityProperty } from '../../api';
 import type { Property } from '../../types';
 import { extractDomain, isValidUrl, normalizeUrl } from '../../utils';
+import { ERROR_MESSAGES } from '../../utils/errorHandling';
 import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
 
 type LinkValueProps = {
@@ -88,10 +89,10 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
         cancelAdding();
         props.onRefresh?.();
       } else {
-        setError('Failed to save link');
+        setError(ERROR_MESSAGES.PROPERTY_SAVE);
       }
     } catch (_err) {
-      setError('Failed to save link');
+      setError(ERROR_MESSAGES.PROPERTY_SAVE);
     } finally {
       setIsSaving(false);
     }

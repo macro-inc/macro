@@ -6,7 +6,7 @@ import { Portal, Show } from 'solid-js/web';
 import { saveEntityProperty } from '../../api';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
-import { ERROR_MESSAGES, ErrorHandler } from '../../utils/errorHandling';
+import { ERROR_MESSAGES } from '../../utils/errorHandling';
 import { CreatePropertyModal } from './CreatePropertyModal';
 import { EditPropertyValueModal } from './EditPropertyValueModal';
 import { SelectPropertyModal } from './SelectPropertyModal';
@@ -44,12 +44,12 @@ export const Modals: Component = () => {
     });
 
     if (!result.ok) {
-      ErrorHandler.handleApiError(
+      console.error(
+        'Modals.handleDateSaved:',
         result.error,
-        'Modals.handleDateSaved',
-        ERROR_MESSAGES.SAVE_PROPERTY
+        ERROR_MESSAGES.PROPERTY_SAVE
       );
-      toast.failure(ERROR_MESSAGES.SAVE_PROPERTY);
+      toast.failure(ERROR_MESSAGES.PROPERTY_SAVE);
       return;
     }
 

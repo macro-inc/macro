@@ -23,7 +23,6 @@ import {
   entityReferencesToIdSet,
   updateEntityReferences,
 } from '../../utils/entityConversion';
-import { ErrorHandler } from '../../utils/errorHandling';
 import { PropertyEntitySelector } from './shared/PropertyEntitySelector';
 import { PropertyOptionSelector } from './shared/PropertyOptionSelector';
 
@@ -80,12 +79,11 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
       }
       default:
         // Should not reach here as modal only handles select and entity types
-        ErrorHandler.handleApiError(
+        console.error(
+          'PropertyEditor.saveChanges:',
           new Error(
             `Invalid property type for modal editor: ${props.property.valueType}`
-          ),
-          'PropertyEditor.saveChanges',
-          'Invalid property type'
+          )
         );
         return;
     }

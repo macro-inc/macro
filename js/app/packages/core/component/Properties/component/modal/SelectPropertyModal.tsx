@@ -18,7 +18,7 @@ import {
   getPropertyDefinitionTypeDisplay,
   useSearchInputFocus,
 } from '../../utils';
-import { ERROR_MESSAGES, ErrorHandler } from '../../utils/errorHandling';
+import { ERROR_MESSAGES } from '../../utils/errorHandling';
 import { CreatePropertyModal } from './CreatePropertyModal';
 
 export function SelectPropertyModal(props: PropertySelectorProps) {
@@ -54,12 +54,12 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
           );
 
           if (!result.ok) {
-            ErrorHandler.handleApiError(
+            console.error(
+              'SelectPropertyModal.handleAddProperties:',
               result.error,
-              'SelectPropertyModal.handleAddProperties',
-              ERROR_MESSAGES.ADD_PROPERTY
+              ERROR_MESSAGES.PROPERTY_ADD
             );
-            toast.failure(ERROR_MESSAGES.ADD_PROPERTY);
+            toast.failure(ERROR_MESSAGES.PROPERTY_ADD);
           }
 
           return result.ok;
@@ -76,12 +76,12 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
         onPropertyAdded();
       }
     } catch (error) {
-      ErrorHandler.handleApiError(
+      console.error(
+        'SelectPropertyModal.handleAddProperties:',
         error,
-        'SelectPropertyModal.handleAddProperties',
-        ERROR_MESSAGES.ADD_PROPERTY
+        ERROR_MESSAGES.PROPERTY_ADD
       );
-      toast.failure(ERROR_MESSAGES.ADD_PROPERTY);
+      toast.failure(ERROR_MESSAGES.PROPERTY_ADD);
       props.onClose();
     } finally {
       setIsAdding(false);

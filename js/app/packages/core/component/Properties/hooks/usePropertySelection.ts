@@ -67,7 +67,7 @@ export function usePropertySelection(
       if (isErr(result)) {
         setState((prev) => ({
           ...prev,
-          error: ERROR_MESSAGES.FETCH_PROPERTIES,
+          error: ERROR_MESSAGES.PROPERTY_FETCH,
           isLoading: false,
         }));
         return;
@@ -90,7 +90,7 @@ export function usePropertySelection(
     } catch (_apiError) {
       setState((prev) => ({
         ...prev,
-        error: ERROR_MESSAGES.FETCH_PROPERTIES,
+        error: ERROR_MESSAGES.PROPERTY_FETCH,
         isLoading: false,
       }));
     }

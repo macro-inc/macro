@@ -8,7 +8,7 @@ import type { z } from 'zod';
 import { PROPERTY_STYLES } from '../../../styles/styles';
 import type { Property } from '../../../types';
 import { formatOptionValue, useSearchInputFocus } from '../../../utils';
-import { ErrorHandler } from '../../../utils/errorHandling';
+import { ERROR_MESSAGES } from '../../../utils/errorHandling';
 
 type PropertyOption = z.infer<typeof schemas.getPropertyOptionsResponseItem>;
 
@@ -72,10 +72,10 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
       await props.onAddOption(searchQuery().trim());
       setSearchQuery('');
     } catch (error) {
-      ErrorHandler.handleApiError(
+      console.error(
+        'PropertyOptionsList.handleAddOption:',
         error,
-        'PropertyOptionsList.handleAddOption',
-        'Failed to add option'
+        ERROR_MESSAGES.OPTION_ADD
       );
     } finally {
       setIsAddingOption(false);

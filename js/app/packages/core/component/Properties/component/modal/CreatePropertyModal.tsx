@@ -183,7 +183,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
 
     // Validate that we have a user ID for user-scoped properties
     if (!orgId && !currentUserId) {
-      setError('Unable to create property: user information not available');
+      setError(ERROR_MESSAGES.PROPERTY_CREATE);
       return;
     }
 
@@ -211,7 +211,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
       });
 
       if (isErr(result)) {
-        setError(ERROR_MESSAGES.CREATE_PROPERTY);
+        setError(ERROR_MESSAGES.PROPERTY_CREATE);
         return;
       }
 
@@ -219,7 +219,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
       props.onPropertyCreated?.();
       props.onClose();
     } catch (_error) {
-      setError(ERROR_MESSAGES.CREATE_PROPERTY);
+      setError(ERROR_MESSAGES.PROPERTY_CREATE);
     } finally {
       setIsCreatingProperty(false);
     }

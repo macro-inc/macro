@@ -2,7 +2,7 @@ import { isErr } from '@core/util/maybeResult';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Property, PropertyApiValues, Result } from '../types';
-import { ErrorHandler } from '../utils/errorHandling';
+import { ERROR_MESSAGES } from '../utils/errorHandling';
 import { propertyValueToApi } from './converters';
 
 /**
@@ -32,26 +32,26 @@ export async function saveEntityProperty(
     });
 
     if (isErr(result)) {
-      ErrorHandler.handleApiError(
+      console.error(
+        'api.propertyValues.saveEntityProperty:',
         result,
-        'api.propertyValues.saveEntityProperty',
-        'Failed to save property value'
+        ERROR_MESSAGES.PROPERTY_SAVE
       );
       return {
         ok: false,
         error: {
           code: 'API_ERROR',
-          message: 'Failed to save property value',
+          message: ERROR_MESSAGES.PROPERTY_SAVE,
         },
       };
     }
 
     return { ok: true, value: undefined };
   } catch (error) {
-    ErrorHandler.handleApiError(
+    console.error(
+      'api.propertyValues.saveEntityProperty:',
       error,
-      'api.propertyValues.saveEntityProperty',
-      'Failed to save property value'
+      ERROR_MESSAGES.PROPERTY_SAVE
     );
     return {
       ok: false,
@@ -75,26 +75,26 @@ export async function deleteEntityProperty(
     });
 
     if (isErr(result)) {
-      ErrorHandler.handleApiError(
+      console.error(
+        'api.propertyValues.deleteEntityProperty:',
         result,
-        'api.propertyValues.deleteEntityProperty',
-        'Failed to delete property'
+        ERROR_MESSAGES.PROPERTY_DELETE
       );
       return {
         ok: false,
         error: {
           code: 'API_ERROR',
-          message: 'Failed to delete property',
+          message: ERROR_MESSAGES.PROPERTY_DELETE,
         },
       };
     }
 
     return { ok: true, value: undefined };
   } catch (error) {
-    ErrorHandler.handleApiError(
+    console.error(
+      'api.propertyValues.deleteEntityProperty:',
       error,
-      'api.propertyValues.deleteEntityProperty',
-      'Failed to delete property'
+      ERROR_MESSAGES.PROPERTY_DELETE
     );
     return {
       ok: false,
@@ -132,26 +132,26 @@ export async function addEntityProperty(
     });
 
     if (isErr(result)) {
-      ErrorHandler.handleApiError(
+      console.error(
+        'api.propertyValues.addEntityProperty:',
         result,
-        'api.propertyValues.addEntityProperty',
-        'Failed to add property'
+        ERROR_MESSAGES.PROPERTY_ADD
       );
       return {
         ok: false,
         error: {
           code: 'API_ERROR',
-          message: 'Failed to add property',
+          message: ERROR_MESSAGES.PROPERTY_ADD,
         },
       };
     }
 
     return { ok: true, value: undefined };
   } catch (error) {
-    ErrorHandler.handleApiError(
+    console.error(
+      'api.propertyValues.addEntityProperty:',
       error,
-      'api.propertyValues.addEntityProperty',
-      'Failed to add property'
+      ERROR_MESSAGES.PROPERTY_ADD
     );
     return {
       ok: false,
