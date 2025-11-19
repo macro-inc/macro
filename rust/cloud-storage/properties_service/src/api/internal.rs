@@ -1,6 +1,9 @@
 use crate::api::context::ApiContext;
-use crate::api::properties::entities;
-use axum::{Router, routing::delete};
+use axum::{
+    Router,
+    routing::{delete, post},
+};
+use properties_service::inbound::http::{delete_all_entity_properties, get_bulk_entity_properties};
 
 /// Internal routes. All routes are authenticated via the internal_access middleware.
 /// These routes are not part of the public Swagger documentation.
@@ -9,11 +12,11 @@ pub fn router() -> Router<ApiContext> {
         // Internal-only: Delete all properties for an entity
         .route(
             "/properties/entities/:entity_type/:entity_id",
-            delete(entities::delete_entity::delete_entity),
+            delete(delete_all_entity_properties),
         )
         // Bulk operations (POST with body)
         .route(
             "/properties/entities/bulk",
-            axum::routing::post(entities::get_bulk::get_bulk_entity_properties),
+            post(get_bulk_entity_properties),
         )
 }
