@@ -786,9 +786,16 @@ function EntityProject(props: {
     if (!click) return;
     if (!projectQuery.isSuccess) return;
 
-    const id = projectQuery.data.id;
+    const data = projectQuery.data;
     const handleClick = (e: EntityClickEvent) => {
-      click({ id, type: 'project' } as ProjectEntity, e);
+      const projectEntity: ProjectEntity = {
+        type: 'project',
+        id: data.id,
+        name: data.name,
+        ownerId: data.owner,
+        updatedAt: data.updatedAt,
+      };
+      click(projectEntity, e);
     };
 
     projectIconRef.classList.add('hover:text-accent');
