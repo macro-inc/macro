@@ -4,10 +4,12 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { EmailSearchResponseItemWithMetadataAllOfSnippet } from './emailSearchResponseItemWithMetadataAllOfSnippet';
 import type { EmailSearchResponseItemWithMetadataAllOfViewedAt } from './emailSearchResponseItemWithMetadataAllOfViewedAt';
 
 export type EmailSearchResponseItemWithMetadataAllOf = {
   created_at: number;
+  snippet?: EmailSearchResponseItemWithMetadataAllOfSnippet;
   updated_at: number;
   viewed_at?: EmailSearchResponseItemWithMetadataAllOfViewedAt;
 };

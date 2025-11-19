@@ -45,16 +45,17 @@ const useMapSearchResponseItem = () => {
   return (result: UnifiedSearchResponseItem): Entity | undefined => {
     switch (result.type) {
       case 'document': {
+        if (result.metadata?.deleted_at) return;
         const search = getHighlights(result.document_search_results);
         return {
           type: 'document',
           id: result.document_id,
           name: result.document_name,
           ownerId: result.owner_id,
-          createdAt: result.created_at,
-          updatedAt: result.updated_at,
+          createdAt: result.metadata?.created_at,
+          updatedAt: result.metadata?.updated_at,
           fileType: result.file_type || undefined,
-          projectId: result.project_id ?? undefined,
+          projectId: result.metadata?.project_id ?? undefined,
           search,
         };
       }
@@ -82,6 +83,7 @@ const useMapSearchResponseItem = () => {
         };
       }
       case 'chat': {
+        if (result.metadata?.deleted_at) return;
         const search = getHighlights(result.chat_search_results);
         let name = result.name;
         if (!name || name === 'New Chat') {
@@ -95,9 +97,9 @@ const useMapSearchResponseItem = () => {
           id: result.chat_id,
           name,
           ownerId: result.user_id,
-          createdAt: result.created_at,
-          updatedAt: result.updated_at,
-          projectId: result.project_id ?? undefined,
+          createdAt: result.metadata?.created_at,
+          updatedAt: result.metadata?.updated_at,
+          projectId: result.metadata?.project_id ?? undefined,
           search,
         };
       }
@@ -126,16 +128,17 @@ const useMapSearchResponseItem = () => {
           id: result.channel_id,
           name: result.name ?? channelWithLatest?.name ?? '',
           ownerId: result.owner_id ?? '',
-          createdAt: result.created_at,
-          updatedAt: result.updated_at,
+          createdAt: result.metadata?.created_at,
+          updatedAt: result.metadata?.updated_at,
           channelType: result.channel_type as ChannelType,
-          interactedAt: result.interacted_at ?? undefined,
+          interactedAt: result.metadata?.interacted_at ?? undefined,
           latestMessage,
           search,
         };
       }
 
       case 'project': {
+        if (result.metadata?.deleted_at) return;
         const search = getHighlights(result.project_search_results);
         return {
           type: 'project',
@@ -144,7 +147,7 @@ const useMapSearchResponseItem = () => {
           ownerId: result.owner_id,
           createdAt: result.created_at,
           updatedAt: result.updated_at,
-          parentId: result.parent_project_id ?? undefined,
+          parentId: result.metadata?.parent_project_id ?? undefined,
           search,
         };
       }
