@@ -11,7 +11,9 @@ import {
   SplitToolbarLeft,
   SplitToolbarRight,
 } from '@app/component/split-layout/components/SplitToolbar';
+import { getIsSpecialProject } from '@block-project/isSpecial';
 import { useIsAuthenticated } from '@core/auth';
+import { useBlockId } from '@core/block';
 import { hasPermissions, Permissions } from '@core/component/SharePermissions';
 import { ShareButton } from '@core/component/TopBar/ShareButton';
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
@@ -27,6 +29,8 @@ import { ProjectCreateMenu } from './ProjectCreateMenu';
 
 export function TopBar() {
   const project = projectSignal.get;
+  const id = useBlockId();
+  const isSpecialProject = getIsSpecialProject(id);
   const isAuth = useIsAuthenticated();
   const permissions = useGetPermissions();
   const canEdit = useCanEdit();
@@ -36,7 +40,7 @@ export function TopBar() {
       buildSimpleEntityUrl(
         {
           type: 'project',
-          id: project()?.id ?? '',
+          id,
         },
         {}
       )
@@ -45,12 +49,8 @@ export function TopBar() {
   }
 
   const ops: FileOperation[] = [
-    ...(isAuth() && project()?.id !== 'root' && project()?.id !== 'trash'
-      ? [{ op: 'pin' as const }]
-      : []),
-    ...(hasPermissions(permissions(), Permissions.OWNER) &&
-    project()?.id !== 'root' &&
-    project()?.id !== 'trash'
+    ...(isAuth() && !isSpecialProject ? [{ op: 'pin' as const }] : []),
+    ...(hasPermissions(permissions(), Permissions.OWNER) && !isSpecialProject
       ? [
           { op: 'rename' as const },
           { op: 'moveToProject' as const },
@@ -68,7 +68,7 @@ export function TopBar() {
         <div class="flex gap-2 p-1">
           <Show when={ops.length > 0}>
             <SplitFileMenu
-              id={project()?.id ?? ''}
+              id={id}
               itemType="project"
               name={project()?.name ?? ''}
               ops={ops}
@@ -91,7 +91,7 @@ export function TopBar() {
               }
             >
               <ShareButton
-                id={project()?.id ?? ''}
+                id={id}
                 name={project()?.name ?? ''}
                 userPermissions={permissions()}
                 copyLink={handleCopyLink}
