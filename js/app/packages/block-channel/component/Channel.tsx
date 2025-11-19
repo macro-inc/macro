@@ -214,7 +214,7 @@ export function Channel(props: { data: Required<ChannelData> }) {
       }
       return false;
     },
-    hotkeyToken: TOKENS.channel.focusInput,
+    hotkeyToken: TOKENS.block.focus,
     hide: true,
   });
 

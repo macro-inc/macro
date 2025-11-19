@@ -1,4 +1,5 @@
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import {
@@ -14,9 +15,12 @@ import type { EntityData } from '@macro-entity';
 import { useTutorialCompleted } from '@service-gql/client';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
-
 import { useQuery } from '@tanstack/solid-query';
-import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
+import {
+  registerHotkey,
+  runCommand,
+  useHotkeyDOMScope,
+} from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   batch,
@@ -196,11 +200,13 @@ export function createNavigationEntityListShortcut({
   splitHandle,
   splitHotkeyScope,
   unifiedListContext,
+  previewState,
 }: {
   splitName: Accessor<string>;
   splitHandle: SplitHandle;
   splitHotkeyScope: string;
   unifiedListContext: UnifiedListContext;
+  previewState: Signal<boolean>;
 }) {
   const {
     viewsDataStore: viewsData,
@@ -872,8 +878,62 @@ export function createNavigationEntityListShortcut({
     scopeId: entityHotkeyScope,
     description: 'Open',
     keyDownHandler: () => {
+      const [preview] = previewState;
+      if (!preview()) return false;
+
       const entity = getHighlightedEntity()?.entity;
       if (!entity) return false;
+
+      openEntity(entity);
+      return true;
+    },
+    displayPriority: 4,
+  });
+  registerHotkey({
+    hotkey: ['cmd+enter'],
+    scopeId: entityHotkeyScope,
+    description: 'Focus Preview',
+    keyDownHandler: () => {
+      const [preview] = previewState;
+
+      const entity = getHighlightedEntity()?.entity;
+      if (!entity) return false;
+
+      if (preview()) {
+        // focus inside preview block
+        const blockEl = document.getElementById(`block-${entity.id}`);
+        if (blockEl) {
+          // TODO: use state instead to determine when preview block can recieve focus
+          blockEl.setAttribute('data-allow-focus-in-preview', '');
+
+          blockEl.focus();
+          const getEnterCommand = () => {
+            const currentActiveScope = activeScope();
+            if (!currentActiveScope) return undefined;
+            let activeScopeNode = hotkeyScopeTree.get(currentActiveScope);
+            if (!activeScopeNode) return undefined;
+            if (activeScopeNode?.type !== 'dom') return;
+            const dom = activeScopeNode.element;
+            const closestBlockScope = dom.closest(`[id="block-${entity.id}"]`);
+            if (
+              !closestBlockScope ||
+              !(closestBlockScope instanceof HTMLElement)
+            )
+              return;
+            const scopeId = closestBlockScope.dataset.hotkeyScope;
+            if (!scopeId) return undefined;
+            const splitNode = hotkeyScopeTree.get(scopeId);
+            if (!splitNode) return undefined;
+            return splitNode.hotkeyCommands.get('enter');
+          };
+          // runCommandByToken(TOKENS.block.focus);
+          const command = getEnterCommand();
+          if (command) {
+            runCommand(command);
+          }
+        }
+        return true;
+      }
 
       openEntity(entity);
       return true;

@@ -1,5 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -560,6 +561,7 @@ export function Email(props: EmailProps) {
           }
           return false;
         },
+        hotkeyToken: TOKENS.block.focus,
         hide: true,
       });
     }
