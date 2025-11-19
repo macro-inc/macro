@@ -5,7 +5,9 @@ type MarkdownHighlightLocation = {
 
 type PdfHighlightLocation = {
   type: 'pdf';
-  pageNumber: number;
+  searchPage: number;
+  searchMatchNumOnPage: number;
+  searchTerm: string;
 };
 
 export type FileTypeWithLocation = 'md' | 'pdf';

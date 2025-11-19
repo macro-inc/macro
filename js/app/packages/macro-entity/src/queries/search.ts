@@ -32,31 +32,65 @@ type InnerSearchResult =
   | ChannelSearchResult
   | ProjectSearchResult;
 
+const MAX_SEARCH_TERM_LENGTH = 1000;
+
+/**
+ * Extracts the search term from highlighted content by finding text from the first
+ * to last <macro_em> tag, removing all macro_em tags to create plain text.
+ * Truncates to MAX_SEARCH_TERM_LENGTH characters.
+ */
+function extractSearchTermFromHighlight(highlightedContent: string): string {
+  const firstMatch = highlightedContent.indexOf('<macro_em>');
+  const lastMatch = highlightedContent.lastIndexOf('</macro_em>');
+
+  if (firstMatch === -1 || lastMatch === -1) {
+    return '';
+  }
+
+  const substring = highlightedContent.substring(
+    firstMatch,
+    lastMatch + '</macro_em>'.length
+  );
+  const plainText = substring.replace(/<\/?macro_em>/g, '');
+
+  return plainText.substring(0, MAX_SEARCH_TERM_LENGTH);
+}
+
 const getLocationHighlights = (
   innerResults: DocumentSearchResult[],
   fileType: FileTypeWithLocation
 ) => {
-  const contentHighlights = innerResults.flatMap((r) => {
+  const contentHighlights = innerResults.flatMap((r, resultIndex) => {
     const contents = r.highlight.content ?? [];
-    let location: SearchLocation | undefined;
-    switch (fileType) {
-      case 'md':
-        location = { type: 'md' as const, nodeId: r.node_id };
-        break;
-      case 'pdf':
-        try {
-          location = { type: 'pdf' as const, pageNumber: parseInt(r.node_id) };
-        } catch (_e) {
-          console.error('Cannot parse pdf page number', r.node_id);
-          location = undefined;
-        }
-        break;
-    }
 
-    return contents.map((content) => ({
-      content,
-      location,
-    }));
+    return contents.map((content, contentIndex) => {
+      let location: SearchLocation | undefined;
+      switch (fileType) {
+        case 'md':
+          location = { type: 'md' as const, nodeId: r.node_id };
+          break;
+        case 'pdf':
+          try {
+            const searchPage = parseInt(r.node_id);
+            const searchTerm = extractSearchTermFromHighlight(content);
+            location = {
+              type: 'pdf' as const,
+              searchPage,
+              searchMatchNumOnPage: contentIndex,
+              searchTerm,
+            };
+          } catch (_e) {
+            console.error('Cannot parse pdf page number', r.node_id);
+            location = undefined;
+          }
+          break;
+      }
+
+      return {
+        content,
+        location,
+      };
+    });
   });
 
   return {

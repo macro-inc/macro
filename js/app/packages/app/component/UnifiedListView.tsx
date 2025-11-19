@@ -843,10 +843,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           });
           break;
         case 'pdf':
-          // TODO: use search match
+          console.log('go to pdf location', location);
           await blockHandle?.goToLocationFromParams({
-            [PDF_PARAMS.pageNumber]: location.pageNumber,
-            [PDF_PARAMS.yPos]: 0,
+            [PDF_PARAMS.searchPage]: location.searchPage.toString(),
+            [PDF_PARAMS.searchMatchNumOnPage]:
+              location.searchMatchNumOnPage.toString(),
+            [PDF_PARAMS.searchTerm]: location.searchTerm,
           });
           break;
       }
