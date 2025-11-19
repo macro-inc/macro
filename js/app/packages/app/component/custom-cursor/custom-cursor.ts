@@ -1,6 +1,11 @@
-import { getCustomCursorEnabled } from '@app/util/cursor';
+import { ENABLE_CUSTOM_CURSOR } from '@core/constant/featureFlags';
 import { isMobile } from '@solid-primitives/platform';
-import { createEffect, createRoot } from 'solid-js';
+import {
+  createEffect,
+  createRoot,
+  createSignal,
+  createUniqueId,
+} from 'solid-js';
 import { themeReactive } from '../../../block-theme/signals/themeReactive';
 import busySvgRaw from './cursor-svg/busy.svg?raw';
 import cellSvgRaw from './cursor-svg/cell.svg?raw';
@@ -38,33 +43,15 @@ import textcursorSvgRaw from './cursor-svg/textcursor.svg?raw';
 import textcursorverticalSvgRaw from './cursor-svg/textcursorvertical.svg?raw';
 import zoominSvgRaw from './cursor-svg/zoomin.svg?raw';
 import zoomoutSvgRaw from './cursor-svg/zoomout.svg?raw';
+import customCursorCSSFileRaw from './custom-cursor.css?raw';
 
-let cursorStyleEl: HTMLStyleElement | null = null;
 let defaultCursor: string = '';
 let hexColor: string = '';
 let cursorCache: Record<string, string> = {};
 let currentCursorType: string | null = 'auto';
-const shadowRoots = new Set<ShadowRoot>();
-let _overridedCursorTargetEl: HTMLElement | null = null;
-const _overrideCursorAttr = 'data-override-cursor';
-// const overrideCursorSelector = `[${overrideCursorAttr}]`
-const overrideCursorSelector = `*`;
+const styleElements = new Set<HTMLStyleElement>();
 
-// Get or create style elements in all matching shadow roots
-function getShadowRootStyleEls(): HTMLStyleElement[] {
-  const styleElements: HTMLStyleElement[] = [];
-
-  for (const shadowRoot of shadowRoots) {
-    let styleEl = shadowRoot.querySelector('style');
-    if (!styleEl) {
-      styleEl = document.createElement('style');
-      shadowRoot.appendChild(styleEl);
-    }
-    styleElements.push(styleEl);
-  }
-
-  return styleElements;
-}
+export const [customCursorEnabled, setCustomCursorEnabled] = createSignal(true);
 
 // Extract fallback cursor from custom cursor string (e.g., 'url(...) 11 9, auto' -> 'auto')
 function extractFallbackCursor(cursor: string): string {
@@ -294,7 +281,7 @@ function getCursor(cursorType: string): string {
   if (!cursorDef.svg) {
     // For auto, none, all-scroll - return empty or fallback
     if (cursorType === 'auto') return cursorMap.default || '';
-    if (cursorType === 'none') return '';
+    if (cursorType === 'none') return 'none';
     return '';
   }
 
@@ -320,32 +307,54 @@ function getCursor(cursorType: string): string {
   return cursorCss;
 }
 
-function updateCursorStyle() {
-  if (!currentCursorType) return;
-  const cursor = getCursor(currentCursorType);
+const cursorClassPrefix = createUniqueId();
+const getCursorClassFromKey = (key: string) => {
+  return `${cursorClassPrefix}-${key}`;
+};
+const allCustomCursorClasses = Object.keys(cursorSvgMap).map((key) =>
+  getCursorClassFromKey(key)
+);
 
-  const cursorStyle = cursor
-    ? `${overrideCursorSelector} { cursor: ${cursor} !important; }`
-    : '';
-
-  if (cursor) {
-    cursorStyleEl!.textContent = cursorStyle;
-    const shadowStyleEls = getShadowRootStyleEls();
-    for (const shadowStyleEl of shadowStyleEls) {
-      shadowStyleEl.textContent = cursorStyle;
-    }
-  } else {
-    cursorStyleEl!.textContent = '';
-    const shadowStyleEls = getShadowRootStyleEls();
-    for (const shadowStyleEl of shadowStyleEls) {
-      shadowStyleEl.textContent = '';
-    }
-  }
+function generateCustomCursorStyleTextContent() {
+  let styleTextContent = customCursorCSSFileRaw;
+  styleTextContent += `${'*'} { cursor: ${getCursor('default')} !important; }`;
+  styleTextContent += Object.keys(cursorSvgMap)
+    .map((key) => {
+      return `
+      .${getCursorClassFromKey(key)} { 
+      cursor: ${getCursor(key)} !important;
+      --custom-cursor: ${key};
+       }`;
+    })
+    .join('');
+  return styleTextContent;
 }
+function createCustomCursorStylesheetEl(element: HTMLElement | ShadowRoot) {
+  const styleEl = document.createElement('style');
+  styleElements.add(styleEl);
+  styleEl.textContent = generateCustomCursorStyleTextContent();
+  element.appendChild(styleEl);
+}
+
+function updateAllCustomCursorStylesheetEls() {
+  styleElements.forEach((styleEl) => {
+    if (!styleEl.isConnected) {
+      styleElements.delete(styleEl);
+      return;
+    }
+    styleEl.textContent = generateCustomCursorStyleTextContent();
+  });
+}
+
+const clearAllCustomCursorStylesheetEls = () => {
+  styleElements.forEach((styleEl) => {
+    styleEl.textContent = '';
+  });
+};
 
 function updateCursor() {
   updateCustomCursor();
-  updateCursorStyle();
+  updateAllCustomCursorStylesheetEls();
 }
 
 function updateCustomCursor() {
@@ -378,54 +387,54 @@ function updateCustomCursor() {
   cursorMap.default = defaultCursor;
 }
 
-const clearCursorOverrideStyle = () => {
-  cursorStyleEl!.textContent = '';
-  const shadowStyleEls = getShadowRootStyleEls();
-  for (const shadowStyleEl of shadowStyleEls) {
-    shadowStyleEl.textContent = '';
-  }
-};
-
 // Initialize cursor
 function initCursor() {
+  if (!ENABLE_CUSTOM_CURSOR) return;
+
   if (isMobile) return;
   updateCustomCursor();
-
-  // Initialize cursor style element
-  if (!cursorStyleEl) {
-    cursorStyleEl = document.createElement('style');
-    cursorStyleEl.id = 'custom-cursor-style';
-    document.head.appendChild(cursorStyleEl);
-  }
+  createCustomCursorStylesheetEl(document.head);
 
   // Add mousemove listener to handle cursor states and text glyph detection
-  const _onMouseMove = (e: MouseEvent) => {
-    if (!getCustomCursorEnabled()) {
-      clearCursorOverrideStyle();
+  const onMouseMove = (e: MouseEvent) => {
+    if (!customCursorEnabled()) {
+      clearAllCustomCursorStylesheetEls();
       return;
     }
 
     const target = e.target as Element;
 
     if (target.shadowRoot) {
-      shadowRoots.add(target.shadowRoot);
+      createCustomCursorStylesheetEl(target.shadowRoot);
+
       [...target.shadowRoot.children].forEach((child) => {
-        child.addEventListener('mousemove', _onMouseMove);
+        child.addEventListener('mousemove', onMouseMove);
       });
       return;
     }
 
-    clearCursorOverrideStyle();
+    target.classList.remove(...allCustomCursorClasses);
 
-    const targetComputedStyle = getComputedStyle(target);
-    const computedCursor = targetComputedStyle.cursor;
-    const computedUserSelect = targetComputedStyle.userSelect;
-    // TODO: maybe use attribute selector instead of wild card selector to improve perf
-    // target.setAttribute(overrideCursorAttr, '')
-    // if (target !== overridedCursorTargetEl) {
-    //   overridedCursorTargetEl?.removeAttribute(overrideCursorAttr)
-    // }
-    // overridedCursorTargetEl = target as HTMLElement
+    const getCursorValueFromTargetEl = (target: Element) => {
+      const run = () => {
+        if (target instanceof HTMLElement && target.style.cursor) {
+          return target.style.cursor;
+        }
+        const targetComputedStyle = getComputedStyle(target);
+        const customCursorCSSVariableValue =
+          targetComputedStyle.getPropertyValue('--custom-cursor');
+        if (customCursorCSSVariableValue) {
+          return customCursorCSSVariableValue;
+        }
+
+        return targetComputedStyle.cursor;
+      };
+      return run().replace('!important', '');
+    };
+
+    const computedCursor = getCursorValueFromTargetEl(target);
+    const computedUserSelect = getComputedStyle(target).userSelect;
+    // target.classList.add(getCursorClassFromKey(currentCursorType!));
 
     // Extract fallback cursor if computed cursor is a custom cursor string
     const baseCursor = extractFallbackCursor(computedCursor);
@@ -435,28 +444,25 @@ function initCursor() {
     // Use inferred cursor type if available, otherwise use extracted fallback cursor
     let cs = inferredCursorType || baseCursor;
 
-    // Only use text glyph detection when cursor is 'auto'
-    if (cs === 'auto' && isOverTextGlyph(e.clientX, e.clientY)) {
-      if (computedUserSelect === 'none') {
-        cs = 'default';
-      } else {
-        cs = 'text';
-      }
-      if (target.tagName === 'BUTTON' || target.closest('button')) {
-        cs = 'default';
+    // Only use text glyph detection when cursor is 'auto' and not 'text'
+    if (cs !== 'text') {
+      if (cs === 'auto' && isOverTextGlyph(e.clientX, e.clientY)) {
+        if (computedUserSelect === 'none') {
+          cs = 'default';
+        } else {
+          cs = 'text';
+        }
+        if (target.tagName === 'BUTTON' || target.closest('button')) {
+          cs = 'default';
+        }
       }
     }
     currentCursorType = cs;
 
-    // TODO: Only update if cursor type changed
-    // if (cs === currentCursorType) {
-    //   return;
-    // }
-
-    updateCursorStyle();
+    target.classList.add(getCursorClassFromKey(currentCursorType));
   };
 
-  // document.addEventListener('mousemove', onMouseMove);
+  document.addEventListener('mousemove', onMouseMove);
 }
 
 if (document.readyState === 'loading') {
@@ -465,32 +471,16 @@ if (document.readyState === 'loading') {
   initCursor();
 }
 
-// Watch for theme changes and preference changes
-let lastAccentColor = '';
-let lastCursorEnabled = getCustomCursorEnabled();
-
 createRoot(() => {
+  if (!ENABLE_CUSTOM_CURSOR) return;
+
   createEffect(() => {
     const { l, c, h } = themeReactive.a0;
     const col = `oklch(${l[0]()} ${c[0]()} ${h[0]()}deg)`;
-
-    const currentAccentColor = col;
-    const currentCursorEnabled = getCustomCursorEnabled();
-
-    if (
-      (currentAccentColor && currentAccentColor !== lastAccentColor) ||
-      currentCursorEnabled !== lastCursorEnabled
-    ) {
-      lastAccentColor = currentAccentColor;
-      lastCursorEnabled = currentCursorEnabled;
-
-      updateCursor();
+    if (!customCursorEnabled()) {
+      clearAllCustomCursorStylesheetEls();
+      return;
     }
+    updateCursor();
   });
-});
-
-// Listen for immediate preference changes
-window.addEventListener('cursor-preference-changed', () => {
-  lastCursorEnabled = getCustomCursorEnabled();
-  updateCustomCursor();
 });
