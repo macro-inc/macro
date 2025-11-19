@@ -4,12 +4,8 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ChannelSearchResponseItemWithMetadataAllOfInteractedAt } from './channelSearchResponseItemWithMetadataAllOfInteractedAt';
-import type { ChannelSearchResponseItemWithMetadataAllOfViewedAt } from './channelSearchResponseItemWithMetadataAllOfViewedAt';
+import type { ChannelSearchResponseItemWithMetadataAllOfMetadata } from './channelSearchResponseItemWithMetadataAllOfMetadata';
 
 export type ChannelSearchResponseItemWithMetadataAllOf = {
-  created_at: number;
-  interacted_at?: ChannelSearchResponseItemWithMetadataAllOfInteractedAt;
-  updated_at: number;
-  viewed_at?: ChannelSearchResponseItemWithMetadataAllOfViewedAt;
+  metadata?: ChannelSearchResponseItemWithMetadataAllOfMetadata;
 };

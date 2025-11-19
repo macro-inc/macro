@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ProjectSearchResponseItemWithMetadataAllOfViewedAt = number | null;
+export type ProjectMetadataParentProjectId = string | null;

@@ -14,10 +14,17 @@ import type { UnifiedSearchRequestTerms } from './unifiedSearchRequestTerms';
 
 export interface UnifiedSearchRequest {
   collapse?: UnifiedSearchRequestCollapse;
+  /** If search_on is set to NameContent, you can disable the recency filter
+by setting to true. */
+  disable_recency?: boolean;
   filters?: UnifiedSearchRequestFilters;
+  /** Include specific entity types from search. If empty, all entity types will be searched over. If you are unsure which types to search, use an empty array to search all. */
   include?: UnifiedSearchIndex[];
+  /** How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field. */
   match_type: MatchType;
   query?: UnifiedSearchRequestQuery;
+  /** Fields to search on (Name, Content, NameContent). Defaults to Content */
   search_on?: SearchOn;
+  /** Multiple distinct search terms as separate strings. Use this for keyword-based searches where you want to find content containing any of these terms. Each term must be at least 3 characters (shorter terms are automatically filtered out). Examples: ['machine', 'learning', 'algorithms'], ['project', 'status', 'update']. `null` this field if searching without text terms to search all. This field matches query string against both name and content. */
   terms?: UnifiedSearchRequestTerms;
 }
