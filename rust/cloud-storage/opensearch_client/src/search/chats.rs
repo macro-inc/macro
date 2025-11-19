@@ -35,6 +35,7 @@ pub struct ChatSearchResponse {
     pub role: String,
     pub updated_at: i64,
     pub title: String,
+    pub score: Option<f64>,
     pub highlight: Highlight,
 }
 
@@ -180,11 +181,12 @@ pub(crate) async fn search_chats(
         .hits
         .into_iter()
         .map(|hit| ChatSearchResponse {
-            chat_id: hit._source.entity_id,
-            chat_message_id: hit._source.chat_message_id,
-            user_id: hit._source.user_id,
-            role: hit._source.role,
-            title: hit._source.title,
+            chat_id: hit.source.entity_id,
+            chat_message_id: hit.source.chat_message_id,
+            user_id: hit.source.user_id,
+            role: hit.source.role,
+            title: hit.source.title,
+            score: hit.score,
             highlight: hit
                 .highlight
                 .map(|h| {
@@ -197,7 +199,7 @@ pub(crate) async fn search_chats(
                     )
                 })
                 .unwrap_or_default(),
-            updated_at: hit._source.updated_at_seconds,
+            updated_at: hit.source.updated_at_seconds,
         })
         .collect())
 }
