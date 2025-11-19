@@ -3,9 +3,7 @@ import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import {
-  isRightPanelOpen,
   useBigChat,
-  useToggleRightPanel,
 } from '@core/signal/layout';
 import { AiInstructionsIcon } from '@service-storage/instructionsMd';
 import { registerHotkey } from 'core/hotkey/hotkeys';
@@ -29,14 +27,11 @@ import {
   toggleKonsoleVisibility,
 } from './command/state';
 import { CREATABLE_BLOCKS, toggleCreateMenu } from './dock/CreateMenu';
-import { fireMacroJump } from './MacroJump';
-import { focusAdjacentSplit } from './split-layout/layoutUtils';
 import { fireVisor, resetVisor } from './Visor';
 import { openWhichKey, setOpenWhichKey } from './WhichKey';
 
 export default function GlobalShortcuts() {
-  const [bigChatOpen, setBigChatOpen] = useBigChat();
-  const toggleRightPanel = useToggleRightPanel();
+  const [_, setBigChatOpen] = useBigChat();
 
   const handleCommandMenu = () => {
     resetKonsoleMode();
@@ -84,66 +79,6 @@ export default function GlobalShortcuts() {
     });
   });
 
-  const moveScope = registerHotkey({
-    hotkeyToken: TOKENS.global.moveCommand,
-    hotkey: 'm',
-    scopeId: 'global',
-    description: 'Move',
-    keyDownHandler: () => {
-      return true;
-    },
-    activateCommandScope: true,
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.move.macroJump,
-    hotkey: 'm',
-    scopeId: moveScope.commandScopeId,
-    description: 'Macro Jump',
-    keyDownHandler: () => {
-      fireMacroJump();
-      return true;
-    },
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.move.focusSplitRight,
-    hotkey: 'arrowright',
-    scopeId: moveScope.commandScopeId,
-    description: 'Focus split right',
-    keyDownHandler: () => {
-      focusAdjacentSplit('right');
-      return true;
-    },
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.move.focusSplitLeft,
-    hotkey: 'arrowleft',
-    scopeId: moveScope.commandScopeId,
-    description: 'Focus split left',
-    keyDownHandler: () => {
-      focusAdjacentSplit('left');
-      return true;
-    },
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.toggleRightPanel,
-    hotkey: 'r',
-    scopeId: 'global',
-    description: () => {
-      return isRightPanelOpen() ? 'Close AI panel' : 'Open AI panel';
-    },
-    keyDownHandler: () => {
-      toggleRightPanel();
-      return true;
-    },
-    condition: () => {
-      return !bigChatOpen();
-    },
-  });
-
   registerHotkey({
     hotkeyToken: TOKENS.global.commandMenu,
     hotkey: 'cmd+k',
@@ -156,7 +91,7 @@ export default function GlobalShortcuts() {
       handleCommandMenu();
       return true;
     },
-    displayPriority: 1,
+    displayPriority: 10,
     hide: true,
     runWithInputFocused: true,
   });

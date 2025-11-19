@@ -3,17 +3,17 @@ export const TOKENS = {
   soup: {
     openSearch: 'soup.openSearch',
     tabs: {
-      '0' : 'soup.tabs.0',
-      '1' : 'soup.tabs.1',
-      '2' : 'soup.tabs.2',
-      '3' : 'soup.tabs.3',
-      '4' : 'soup.tabs.4',
-      '5' : 'soup.tabs.5',
-      '6' : 'soup.tabs.6',
-      '7' : 'soup.tabs.7',
-      '8' : 'soup.tabs.8',
-      '9' : 'soup.tabs.9',
-    }
+      '0': 'soup.tabs.0',
+      '1': 'soup.tabs.1',
+      '2': 'soup.tabs.2',
+      '3': 'soup.tabs.3',
+      '4': 'soup.tabs.4',
+      '5': 'soup.tabs.5',
+      '6': 'soup.tabs.6',
+      '7': 'soup.tabs.7',
+      '8': 'soup.tabs.8',
+      '9': 'soup.tabs.9',
+    },
   },
 
   // unified list
@@ -58,8 +58,6 @@ export const TOKENS = {
     moveCommand: 'global.jumpCommand',
     move: {
       macroJump: 'global.jump.macroJump',
-      focusSplitRight: 'global.jump.focusSplitRight',
-      focusSplitLeft: 'global.jump.focusSplitLeft',
     },
     toggleRightPanel: 'global.toggleRightPanel',
     commandMenu: 'global.commandMenu',
@@ -91,7 +89,13 @@ export const TOKENS = {
     goCommand: 'split.goCommand',
     go: {
       home: 'split.go.home',
-      
+      email: 'split.go.email',
+      inbox: 'split.go.inbox',
+      docs: 'split.go.docs',
+      focusSplitRight: 'split.go.focusSplitRight',
+      focusSplitLeft: 'split.go.focusSplitLeft',
+      toggleRightPanel: 'split.go.toggleRightPanel',
+      macroJump: 'split.go.macroJump',
     },
     spotlight: {
       toggle: 'split.spotlight.toggle',
@@ -229,4 +233,3 @@ export function buildTokenMap(tokens: typeof TOKENS): Map<string, HotkeyToken> {
 }
 
 export const tokenMap = buildTokenMap(TOKENS);
-

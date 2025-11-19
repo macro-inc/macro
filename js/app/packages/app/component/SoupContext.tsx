@@ -502,6 +502,17 @@ export function createNavigationEntityListShortcut({
     },
   });
 
+  registerHotkey({
+    hotkey: ['shift+g', 'end'],
+    scopeId: goScopeId,
+    hotkeyToken: TOKENS.entity.jump.end,
+    description: 'Go to bottom of list',
+    keyDownHandler: () => {
+      navigateThroughList({ axis: 'end', mode: 'jump' });
+      return true;
+    },
+  });
+
   const navigateThroughViews = ({
     axis,
   }: {
