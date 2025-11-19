@@ -326,8 +326,8 @@ fn test_channel_history_null_viewed_at() {
     let metadata = result[0].metadata.as_ref().unwrap();
     assert_eq!(metadata.created_at, now.timestamp());
     assert_eq!(metadata.updated_at, now.timestamp());
-    assert_eq!(metadata.viewed_at, None);
-    assert_eq!(metadata.interacted_at, None);
+    assert!(metadata.viewed_at.is_none());
+    assert!(metadata.interacted_at.is_none());
 }
 
 #[test]
