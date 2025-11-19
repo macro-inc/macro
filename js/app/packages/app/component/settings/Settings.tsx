@@ -29,7 +29,6 @@ import MacroJump from '../MacroJump';
 import { Account } from './Account';
 import { AiMemory } from './AiMemory/AiMemory';
 import { Appearance } from './Appearance';
-import { Mobile } from './Mobile';
 import { Notification } from './Notification';
 import Organization from './Organization/Organization';
 import { Subscription } from './Subscription';
@@ -291,11 +290,6 @@ export function Settings() {
               <Tabs.Content value="Notification" class="h-full">
                 <Notification />
               </Tabs.Content>
-              <Show when={!!isNativeMobilePlatform() && DEV_MODE_ENV}>
-                <Tabs.Content value="Mobile" class="h-full">
-                  <Mobile />
-                </Tabs.Content>
-              </Show>
               <Show when={ENABLE_AI_MEMORY}>
                 <Tabs.Content value="AI Memory" class="h-full">
                   <AiMemory />
