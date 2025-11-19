@@ -3,9 +3,6 @@
 a[href] {
   --custom-cursor: pointer;
 }
-button {
-  --custom-cursor: pointer;
-}
 summary {
   --custom-cursor: pointer;
 } /* collapsible <details> */
