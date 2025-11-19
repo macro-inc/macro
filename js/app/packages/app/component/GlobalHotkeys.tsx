@@ -31,7 +31,8 @@ import {
 import { CREATABLE_BLOCKS, toggleCreateMenu } from './dock/CreateMenu';
 import { fireMacroJump } from './MacroJump';
 import { focusAdjacentSplit } from './split-layout/layoutUtils';
-import { fireVisor } from './Visor';
+import { fireVisor, resetVisor } from './Visor';
+import { openWhichKey, setOpenWhichKey } from './WhichKey';
 
 export default function GlobalShortcuts() {
   const [bigChatOpen, setBigChatOpen] = useBigChat();
@@ -291,12 +292,20 @@ export default function GlobalShortcuts() {
   });
 
   registerHotkey({
+    hotkeyToken: TOKENS.global.toggleVisor,
     scopeId: 'global',
     hotkey: ['escape'],
     description: 'Toggle visor',
     keyDownHandler: () => {
-      fireVisor();
-      return false;
+      if (!openWhichKey()) {
+        fireVisor();
+        setOpenWhichKey(true);
+        return false;
+      } else {
+        resetVisor();
+        setOpenWhichKey(false);
+        return false;
+      }
     },
     runWithInputFocused: true,
   });

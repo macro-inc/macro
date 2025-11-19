@@ -402,7 +402,6 @@ export function Soup() {
             class="@container/soup flex flex-col gap-1 size-full overflow-x-clip"
             classList={{
               'border-r border-edge-muted': preview(),
-              'pt-2 pb-0': showHelpDrawer().has(selectedView()),
             }}
             value={selectedView()}
             onChange={setSelectedView}

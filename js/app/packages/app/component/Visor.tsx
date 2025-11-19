@@ -1,12 +1,12 @@
+import { useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { getClippedOverlayRect } from '@app/util/getClippedOverlayRect';
 import { getScrollElementParent } from '@app/util/getScrollElementParent';
 import { Hotkey } from '@core/component/Hotkey';
-import { CommandWithInfo, useActiveCommands } from '@core/hotkey/getCommands';
-import { hotkeyScopeTree } from '@core/hotkey/state';
-import { tokenMap } from '@core/hotkey/tokens';
+import { TOKENS, tokenMap } from '@core/hotkey/tokens';
 import type { HotkeyCommand, ValidHotkey } from '@core/hotkey/types';
 import {
   getActiveCommandByToken,
+  getHotkeyCommandByToken,
   isScopeInActiveBranch,
   prettyPrintHotkeyString,
 } from '@core/hotkey/utils';
@@ -18,14 +18,12 @@ import { autoUpdate } from '@floating-ui/dom';
 import {
   type Accessor,
   type Component,
-  createEffect,
-  createMemo,
   createSignal,
   createUniqueId,
   For,
-  on,
   onCleanup,
   onMount,
+  Show,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 
@@ -47,204 +45,114 @@ type VisorLabel = {
   targetElScrollParent: HTMLElement | null;
 };
 
-const componentStack: string[] = [];
-const [triggerVisor, setTriggerVisor] = createSignal<undefined>(undefined, {
-  equals: () => false,
-});
+const [isVisorOpen, setIsVisorOpen] = createSignal(false);
 export const fireVisor = () => {
-  setTriggerVisor();
+  setIsVisorOpen(true);
+};
+export const resetVisor = () => {
+  setIsVisorOpen(false);
+};
+
+const VisorInner: Component<{
+  parent?: Accessor<Element | undefined>;
+}> = (props) => {
+  const [visorLabels, setVisorLabels] = createStore<VisorLabel[]>([]);
+
+  useSubscribeToKeypress((context) => {
+    if (
+      !context.isEditableFocused &&
+      !getHotkeyCommandByToken(TOKENS.global.toggleVisor)?.hotkeys?.some(
+        (hotkey) => context.pressedKeysString === hotkey
+      ) &&
+      context.isNonModifierKeypress &&
+      context.eventType === 'keydown'
+    ) {
+      resetVisor();
+    }
+  });
+
+  const root = props.parent?.() ?? document.getElementById('root')!;
+
+  const hotkeyEls = Array.from(
+    root.querySelectorAll<HTMLElement>('[data-hotkey-token]')
+  ).filter((el) => {
+    const scopeElement = el.closest('[data-hotkey-scope]') as HTMLElement;
+    if (!scopeElement) return false;
+
+    const scopeId = scopeElement.dataset.hotkeyScope;
+    return scopeId && isScopeInActiveBranch(scopeId);
+  });
+
+  const newVisorLabels: VisorLabel[] = hotkeyEls
+    .filter((el) => {
+      return (
+        isElementVisible(el) &&
+        isElementVisibleInViewport(el, {
+          padding: {
+            // include bottom navbar height to reduce viewport bottom
+            // bottom: 32,
+          },
+        }) &&
+        isElementVisibleInScrollElViewport(el).isVisible
+      );
+    })
+    .reduce<VisorLabel[]>((acc, hotkeyEl) => {
+      const targetElScrollParent = getScrollElementParent(hotkeyEl);
+      const id = createUniqueId();
+      const tokenString = hotkeyEl.dataset.hotkeyToken ?? '';
+      const token = tokenMap.get(tokenString);
+      if (!token) return acc;
+      const command = getActiveCommandByToken(token);
+      const primaryHotkey = command?.hotkeys?.[0];
+      // We only want to show visor for hotkeys that are in the current active scope branch.
+      if (
+        !command ||
+        !isScopeInActiveBranch(command.scopeId) ||
+        !primaryHotkey
+      ) {
+        return acc;
+      }
+
+      acc.push({
+        id,
+        hotkey: primaryHotkey,
+        command: command,
+        targetEl: hotkeyEl,
+        targetElScrollParent,
+      } satisfies VisorLabel);
+      return acc;
+    }, []);
+
+  setVisorLabels(newVisorLabels);
+
+  // If user clicks anywhere, exit
+  const handleMousedown = () => {
+    setIsVisorOpen(false);
+  };
+  document.addEventListener('mousedown', handleMousedown);
+
+  onCleanup(() => {
+    document.removeEventListener('mousedown', handleMousedown);
+  });
+
+  return (
+    <div>
+      <For each={visorLabels}>
+        {(jumpLabel) => <VisorLabelOverlay {...jumpLabel} />}
+      </For>
+    </div>
+  );
 };
 
 const Visor: Component<{
   parent?: Accessor<Element | undefined>;
 }> = (props) => {
-  const componentId = createUniqueId();
-  componentStack.push(componentId);
-  const [visorLabels, setVisorLabels] = createStore<VisorLabel[]>([]);
-
-  const removeAllOverlays = () => {
-    setVisorLabels([]);
-  };
-
-  const runVisor = () => {
-    const root = props.parent?.() ?? document.getElementById('root')!;
-
-    const hotkeyEls = Array.from(
-      root.querySelectorAll<HTMLElement>('[data-hotkey-token]')
-    ).filter((el) => {
-      const scopeElement = el.closest('[data-hotkey-scope]') as HTMLElement;
-      if (!scopeElement) return false;
-
-      const scopeId = scopeElement.dataset.hotkeyScope;
-      return scopeId && isScopeInActiveBranch(scopeId);
-    });
-
-    const newVisorLabels: VisorLabel[] = hotkeyEls
-      .filter((el) => {
-        return (
-          isElementVisible(el) &&
-          isElementVisibleInViewport(el, {
-            padding: {
-              // include bottom navbar height to reduce viewport bottom
-              // bottom: 32,
-            },
-          }) &&
-          isElementVisibleInScrollElViewport(el).isVisible
-        );
-      })
-      .reduce<VisorLabel[]>((acc, hotkeyEl) => {
-        const targetElScrollParent = getScrollElementParent(hotkeyEl);
-        const id = createUniqueId();
-        const tokenString = hotkeyEl.dataset.hotkeyToken ?? '';
-        const token = tokenMap.get(tokenString);
-        if (!token) return acc;
-        const command = getActiveCommandByToken(token);
-        const primaryHotkey = command?.hotkeys?.[0];
-        // We only want to show visor for hotkeys that are in the current active scope branch.
-        if (
-          !command ||
-          !isScopeInActiveBranch(command.scopeId) ||
-          !primaryHotkey
-        ) {
-          return acc;
-        }
-
-        acc.push({
-          id,
-          hotkey: primaryHotkey,
-          command: command,
-          targetEl: hotkeyEl,
-          targetElScrollParent,
-        } satisfies VisorLabel);
-        return acc;
-      }, []);
-
-    setVisorLabels(newVisorLabels);
-
-    window.addEventListener('keydown', handleKeyDown, { capture: true });
-    // If user clicks anywhere, exit
-    document.addEventListener(
-      'mousedown',
-      () => {
-        runCleanup();
-      },
-      { once: true }
-    );
-  };
-
-  const runCleanup = () => {
-    removeAllOverlays();
-    window.removeEventListener('keydown', handleKeyDown, {
-      capture: true,
-    });
-  };
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Escape') {
-      e.stopImmediatePropagation();
-      e.stopPropagation();
-      e.preventDefault();
-      removeAllOverlays();
-      window.removeEventListener('keydown', handleKeyDown, {
-        capture: true,
-      });
-      return;
-    }
-
-    runCleanup();
-  };
-
-  createEffect(
-    on(
-      triggerVisor,
-      () => {
-        if (componentStack.at(-1) !== componentId) return;
-
-        setVisorLabels([]);
-
-        runVisor();
-      },
-      { defer: true }
-    )
-  );
-  onCleanup(() => {
-    componentStack.pop();
-  });
-
   return (
-    <>
-      <WhichKey />
-      <div>
-        <For each={visorLabels}>
-          {(jumpLabel) => <VisorLabelOverlay {...jumpLabel} />}
-        </For>
-      </div>
-    </>
+    <Show when={isVisorOpen()}>
+      <VisorInner {...props} />
+    </Show>
   );
 };
-
-function WhichKey() {
-  const activeCommands = useActiveCommands({ hideCommandsWithoutHotkeys: true});
-
-  const commandsWithActivateScope = createMemo(() => {
-    return activeCommands().filter(
-      (command) => command.activateCommandScopeId
-    );
-  });
-
-  const commandsWithoutActivateScope = createMemo(() => {
-    return activeCommands().filter(
-      (command) => !command.activateCommandScopeId
-    );
-  });
-
-  return (
-    <div class="absolute z-9999 left-1/2 top-1/2 translate-x-[-50%] translate-y-[-50%] max-w-80ch w-1/2">
-      <div class="absolute -z-1 top-4 left-4 pattern-edge pattern-diagonal-4 opacity-100 w-full h-full mask-r-from-[calc(100%_-_1rem)] mask-b-from-[calc(100%_-_1rem)]" />
-      <div class="p-2 w-full h-full bg-dialog border-2 border-accent text-sm">
-        <div class="mb-4">
-          <h3 class="font-medium mb-2">Modes</h3>
-          <For each={commandsWithActivateScope()}>
-            {(command) => (
-              <div class="grid grid-cols-[8ch_1fr] gap-2">
-                <Hotkey
-                  class="font-mono"
-                  token={command.hotkeyToken}
-                  shortcut={prettyPrintHotkeyString(command.hotkeys.at(0))}
-                />
-                <div>
-                  {typeof command.description === 'function'
-                    ? command.description()
-                    : command.description}{' '}
-                </div>
-              </div>
-            )}
-          </For>
-        </div>
-
-        <div>
-          <h3 class="font-medium mb-2">Commands</h3>
-          <For each={commandsWithoutActivateScope()}>
-            {(command) => (
-              <div class="grid grid-cols-[8ch_1fr] gap-2">
-                <Hotkey
-                  class="font-mono"
-                  token={command.hotkeyToken}
-                  shortcut={prettyPrintHotkeyString(command.hotkeys.at(0))}
-                />
-                <div>
-                  {typeof command.description === 'function'
-                    ? command.description()
-                    : command.description}{' '}
-                </div>
-              </div>
-            )}
-          </For>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 const VisorLabelOverlay: Component<VisorLabel> = (props) => {
   const [targetData, setTargetData] = createStore({

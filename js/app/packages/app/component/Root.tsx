@@ -1,5 +1,6 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
 import { useEmailLinksStatus } from '@app/signal/emailAuth';
+import { setHotkeyRoot } from '@app/signal/hotkeyRoot';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { ChannelsContextProvider } from '@core/component/ChannelsProvider';
@@ -58,10 +59,11 @@ import { LOGIN_COOKIE_AGE, setCookie } from './auth/Shared';
 import { GlobalAppStateProvider } from './GlobalAppState';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
-import Visor from './Visor';
 import Onboarding from './Onboarding';
 import { useMobileEffect, useMobileNavigate } from './settings/Mobile';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
+import Visor from './Visor';
+import { WhichKey } from './WhichKey';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -273,7 +275,7 @@ const clearBodyInlineStyleColor = () => {
 
 export function Root() {
   const isAuthenticated = useIsAuthenticated();
-  useHotKeyRoot();
+  setHotkeyRoot(useHotKeyRoot());
 
   useMobileEffect();
 
@@ -335,6 +337,7 @@ export function Root() {
               <Title>{tabTitle()}</Title>
               <MacroJump />
               <Visor />
+              <WhichKey />
               <Suspense fallback={''}>
                 <IsomorphicRouter
                   transformUrl={transformShortIdInUrlPathname}

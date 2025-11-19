@@ -45,10 +45,6 @@ export function getActiveCommandsFromScope(
   let scopeLevel = 0;
   while (currentScopeNode) {
     console.log('currentScopeNode', currentScopeNode);
-    console.log('unfiltered commands: ', Array.from([
-      ...(currentScopeNode?.hotkeyCommands.values() ?? []),
-      ...(currentScopeNode?.unkeyedCommands ?? []),
-    ]))
     const scopeCommands = Array.from([
       ...(currentScopeNode?.hotkeyCommands.values() ?? []),
       ...(currentScopeNode?.unkeyedCommands ?? []),
