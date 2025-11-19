@@ -20,13 +20,13 @@ import {
   BUTTON_BASE_CLASSES,
   PRIMARY_BUTTON_CLASSES,
   SECONDARY_BUTTON_CLASSES,
-} from '../constants';
+} from '../../constants';
 import {
   getPropertyDataTypeDropdownOptions,
   usePropertyNameFocus,
-} from '../utils';
-import { ERROR_MESSAGES } from '../utils/errorHandling';
-import { Dropdown, type DropdownOption } from './Dropdown';
+} from '../../utils';
+import { ERROR_MESSAGES } from '../../utils/errorHandling';
+import { Dropdown, type DropdownOption } from './shared/Dropdown';
 
 // Derive DataTypeValue from the dropdown options
 type DataTypeValue = ReturnType<

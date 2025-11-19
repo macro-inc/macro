@@ -3,10 +3,10 @@ import type { Component } from 'solid-js';
 import { Show } from 'solid-js';
 import { useInlineEditor } from '../../hooks';
 import type { Property } from '../../types';
-import { formatPropertyValue } from '../../utils';
-import { EmptyValue } from './PropertyValuePrimitives';
+import { formatNumber } from '../../utils';
+import { EmptyValue } from './ValueComponents';
 
-type TextValueProps = {
+type NumberValueProps = {
   property: Property;
   canEdit: boolean;
   entityType: EntityType;
@@ -14,9 +14,10 @@ type TextValueProps = {
 };
 
 /**
- * Display component for string properties with inline editing
+ * Display component for number properties with inline editing
+ * Numbers are formatted to 4 decimal places
  */
-export const TextValue: Component<TextValueProps> = (props) => {
+export const NumberValue: Component<NumberValueProps> = (props) => {
   const editor = useInlineEditor(
     props.property,
     props.entityType,
@@ -26,7 +27,7 @@ export const TextValue: Component<TextValueProps> = (props) => {
   const supportsInline = () =>
     props.canEdit &&
     !props.property.isMetadata &&
-    props.property.valueType === 'STRING';
+    props.property.valueType === 'NUMBER';
 
   const handleClick = () => {
     if (supportsInline()) {
@@ -45,9 +46,10 @@ export const TextValue: Component<TextValueProps> = (props) => {
   };
 
   const hasValue = () =>
-    props.property.value &&
-    typeof props.property.value === 'string' &&
-    props.property.value.length > 0;
+    !(props.property.value === undefined || props.property.value === null);
+  const displayValue = hasValue()
+    ? formatNumber(props.property.value as number)
+    : '';
 
   return (
     <Show
@@ -62,29 +64,26 @@ export const TextValue: Component<TextValueProps> = (props) => {
           } block max-w-full break-words`}
         >
           <Show when={hasValue()} fallback={<EmptyValue />}>
-            <span class="block max-w-full">
-              {formatPropertyValue(
-                props.property,
-                props.property.value as string
-              )}
-            </span>
+            <span class="block truncate max-w-full">{displayValue}</span>
           </Show>
         </button>
       }
     >
-      <textarea
+      <input
         ref={(el) => {
           setTimeout(() => {
             el.focus();
-            el.setSelectionRange(el.value.length, el.value.length);
           }, 0);
         }}
+        type="number"
+        step="0.0001"
         value={editor.inputValue()}
         onInput={(e) => editor.setInputValue(e.currentTarget.value)}
         onBlur={editor.save}
         onKeyDown={handleKeyDown}
         disabled={editor.isSaving()}
-        class="w-full field-sizing-content resize-none text-left text-ink text-xs px-2 py-1 border border-edge bg-transparent focus:outline-none focus:border-accent"
+        placeholder="Enter number..."
+        class="w-full text-left text-ink text-xs px-2 py-1 border border-edge bg-transparent focus:outline-none focus:border-accent"
       />
     </Show>
   );

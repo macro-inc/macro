@@ -1,7 +1,7 @@
 import type { Accessor, Component } from 'solid-js';
 import { createMemo, Show } from 'solid-js';
-import type { Property } from '../types';
-import { PropertiesList } from './PropertiesList';
+import type { Property } from '../../types';
+import { PropertyGrid } from './PropertyGrid';
 
 interface PropertiesContentProps {
   properties: Accessor<Property[]>;
@@ -10,7 +10,7 @@ interface PropertiesContentProps {
   emptyMessage?: string;
 }
 
-export const PropertiesContent: Component<PropertiesContentProps> = (props) => {
+export const PanelContainer: Component<PropertiesContentProps> = (props) => {
   const hasProperties = createMemo(() => props.properties().length > 0);
   const showContent = createMemo(
     () => hasProperties() || (!props.isLoading() && !props.error())
@@ -26,7 +26,7 @@ export const PropertiesContent: Component<PropertiesContentProps> = (props) => {
 
       <Show when={hasProperties()}>
         <div class="flex-1 overflow-y-auto overflow-x-auto px-2 pb-2">
-          <PropertiesList properties={props.properties()} />
+          <PropertyGrid properties={props.properties()} />
         </div>
       </Show>
     </Show>

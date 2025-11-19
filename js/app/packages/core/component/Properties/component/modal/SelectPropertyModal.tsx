@@ -7,8 +7,7 @@ import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
 import { createEffect, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { addEntityProperty } from './apiUtils';
-import { CreatePropertyModal } from './components/CreatePropertyModal';
+import { addEntityProperty } from '../../api/utils';
 import {
   ACCENT_BUTTON_CLASSES,
   BUTTON_BASE_CLASSES,
@@ -16,14 +15,18 @@ import {
   MODAL_DIMENSIONS,
   PRIMARY_BUTTON_CLASSES,
   SECONDARY_BUTTON_CLASSES,
-} from './constants';
-import { usePropertiesContext } from './context/PropertiesContext';
-import { usePropertyManagement } from './hooks/usePropertyManagement';
-import { PROPERTY_STYLES } from './styles/propertyStyles';
-import type { PropertySelectorProps } from './types';
-import { getPropertyDefinitionTypeDisplay, useSearchInputFocus } from './utils';
+} from '../../constants';
+import { usePropertiesContext } from '../../context/PropertiesContext';
+import { usePropertyModals } from '../../hooks/usePropertyModals';
+import { PROPERTY_STYLES } from '../../styles/styles';
+import type { PropertySelectorProps } from '../../types';
+import {
+  getPropertyDefinitionTypeDisplay,
+  useSearchInputFocus,
+} from '../../utils';
+import { CreatePropertyModal } from './CreatePropertyModal';
 
-export function PropertySelector(props: PropertySelectorProps) {
+export function SelectPropertyModal(props: PropertySelectorProps) {
   const blockId = useBlockId();
   const { entityType, onPropertyAdded } = usePropertiesContext();
   const [isAdding, setIsAdding] = createSignal(false);
@@ -38,7 +41,7 @@ export function PropertySelector(props: PropertySelectorProps) {
     filteredProperties,
     fetchAvailableProperties,
     togglePropertySelection,
-  } = usePropertyManagement(props.existingPropertyIds, () => searchQuery());
+  } = usePropertyModals(props.existingPropertyIds, () => searchQuery());
 
   const handleAddProperties = async () => {
     const selected = state().selectedPropertyIds;
