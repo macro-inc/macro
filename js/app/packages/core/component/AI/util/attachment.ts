@@ -2,11 +2,14 @@ import { SUPPORTED_IMAGE_ATTACHMENT_EXTENSIONS } from '@core/component/AI/consta
 import { FileType as FileTypeMap } from '@service-cognition/generated/schemas/fileType';
 import type { AttachmentMetadata, AttachmentPreview, FileType } from '../types';
 
+const FILE_TYPE_SET = new Set(Object.keys(FileTypeMap));
+
 // maps file type string to FileType enum if it exists
 export const asFileType = (
   fileType: string | null | undefined
 ): FileType | undefined => {
-  return Object.entries(FileTypeMap).find(([key, _]) => key === fileType)?.[1];
+  if (!fileType || !FILE_TYPE_SET.has(fileType)) return undefined;
+  return fileType as FileType;
 };
 
 export const isImageAttachment = (attachment: AttachmentPreview) => {
