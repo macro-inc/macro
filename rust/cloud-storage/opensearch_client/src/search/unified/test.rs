@@ -401,6 +401,15 @@ fn test_deserialization() -> anyhow::Result<()> {
 #[test]
 fn test_build_unified_search_request_content() -> anyhow::Result<()> {
     let unified_search_args = UnifiedSearchArgs {
+        search_indices: vec![
+            SearchIndex::Documents,
+            SearchIndex::Emails,
+            SearchIndex::Projects,
+            SearchIndex::Channels,
+            SearchIndex::Chats,
+        ]
+        .into_iter()
+        .collect(),
         terms: vec!["test".to_string()],
         user_id: "user".to_string(),
         page: 1,
@@ -438,7 +447,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
         },
     };
 
-    let result = build_unified_search_request(unified_search_args)?;
+    let result = build_unified_search_request(&unified_search_args)?;
 
     let expected = serde_json::json!({
       "collapse": {
@@ -788,6 +797,15 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
 #[test]
 fn test_build_unified_search_request_name() -> anyhow::Result<()> {
     let unified_search_args = UnifiedSearchArgs {
+        search_indices: vec![
+            SearchIndex::Documents,
+            SearchIndex::Emails,
+            SearchIndex::Projects,
+            SearchIndex::Channels,
+            SearchIndex::Chats,
+        ]
+        .into_iter()
+        .collect(),
         terms: vec!["test".to_string()],
         user_id: "user".to_string(),
         page: 1,
@@ -825,7 +843,7 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
         },
     };
 
-    let result = build_unified_search_request(unified_search_args)?;
+    let result = build_unified_search_request(&unified_search_args)?;
 
     let expected = serde_json::json!({
       "collapse": {
@@ -1215,6 +1233,15 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
 #[test]
 fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
     let unified_search_args = UnifiedSearchArgs {
+        search_indices: vec![
+            SearchIndex::Documents,
+            SearchIndex::Emails,
+            SearchIndex::Projects,
+            SearchIndex::Channels,
+            SearchIndex::Chats,
+        ]
+        .into_iter()
+        .collect(),
         terms: vec!["test".to_string()],
         user_id: "user".to_string(),
         page: 1,
@@ -1252,7 +1279,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
         },
     };
 
-    let result = build_unified_search_request(unified_search_args)?;
+    let result = build_unified_search_request(&unified_search_args)?;
 
     let expected = serde_json::json!(
     {
@@ -1853,6 +1880,115 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
     });
 
     assert_eq!(result.to_json(), expected);
+
+    Ok(())
+}
+
+#[test]
+fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
+    let unified_search_args = UnifiedSearchArgs {
+        search_indices: vec![SearchIndex::Documents].into_iter().collect(),
+        terms: vec!["test".to_string()],
+        user_id: "user".to_string(),
+        page: 1,
+        page_size: 20,
+        match_type: "exact".to_string(),
+        search_on: SearchOn::Content,
+        collapse: true,
+        disable_recency: false,
+        document_search_args: UnifiedDocumentSearchArgs {
+            document_ids: vec!["id1".to_string(), "id2".to_string()],
+            ids_only: false,
+        },
+        ..Default::default()
+    };
+
+    let result = build_unified_search_request(&unified_search_args)?;
+    let expected = serde_json::json!({
+      "collapse": {
+        "field": "entity_id"
+      },
+      "from": 20,
+      "highlight": {
+        "fields": {
+          "content": {
+            "number_of_fragments": 500,
+            "post_tags": [
+              "</macro_em>"
+            ],
+            "pre_tags": [
+              "<macro_em>"
+            ],
+            "type": "plain"
+          }
+        },
+        "require_field_match": true
+      },
+      "query": {
+        "bool": {
+          "minimum_should_match": 1,
+          "should": [
+            {
+              "bool": {
+                "minimum_should_match": 1,
+                "must": [
+                  {
+                    "match_phrase": {
+                      "content": "test"
+                    }
+                  },
+                  {
+                    "term": {
+                      "_index": "documents"
+                    }
+                  }
+                ],
+                "should": [
+                  {
+                    "terms": {
+                      "entity_id": [
+                        "id1",
+                        "id2"
+                      ]
+                    }
+                  },
+                  {
+                    "term": {
+                      "owner_id": "user"
+                    }
+                  }
+                ]
+              }
+            },
+          ]
+        }
+      },
+      "size": 20,
+      "sort": [
+        {
+          "_score": "desc"
+        },
+        {
+          "entity_id": "asc"
+        }
+      ]
+    });
+
+    assert_eq!(result.to_json(), expected);
+
+    Ok(())
+}
+
+#[test]
+fn test_build_unified_search_request_empty_indices() -> anyhow::Result<()> {
+    let unified_search_args = UnifiedSearchArgs {
+        search_indices: vec![].into_iter().collect(),
+        ..Default::default()
+    };
+
+    let err = build_unified_search_request(&unified_search_args).unwrap_err();
+
+    assert_eq!(err, OpensearchClientError::EmptySearchIndices);
 
     Ok(())
 }

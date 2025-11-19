@@ -2,11 +2,7 @@ use super::SearchPaginationParams;
 use crate::api::{
     ApiContext,
     search::{
-        channel::enrich_channels,
-        chat::enrich_chats,
-        document::enrich_documents,
-        email::enrich_emails,
-        project::enrich_projects,
+        enrich::EnrichSearchResponse,
         simple::{SearchError, simple_unified::perform_unified_search},
     },
 };
@@ -17,9 +13,8 @@ use axum::{
     response::{IntoResponse, Json, Response},
 };
 use model::{response::ErrorResponse, user::UserContext};
-use models_search::unified::{
-    UnifiedSearchRequest, UnifiedSearchResponse, UnifiedSearchResponseItem,
-};
+use models_search::unified::{UnifiedSearchRequest, UnifiedSearchResponse};
+use opensearch_client::search::unified::SplitUnifiedSearchResponse;
 
 /// Perform a search through all items
 #[utoipa::path(
@@ -48,136 +43,41 @@ pub async fn handler(
 
     let results = perform_unified_search(&ctx, &user_context, query_params, req).await?;
 
-    let document_results: Vec<opensearch_client::search::documents::DocumentSearchResponse> =
-        results
-            .iter()
-            .filter_map(|r| match r {
-                opensearch_client::search::unified::UnifiedSearchResponse::Document(a) => {
-                    Some(a.clone())
-                }
-                _ => None,
-            })
-            .collect();
+    let (channel_results, chat_results, document_results, email_results, project_results) =
+        results.into_iter().split_search_response();
 
-    let channel_results: Vec<opensearch_client::search::channels::ChannelMessageSearchResponse> =
-        results
-            .iter()
-            .filter_map(|r| match r {
-                opensearch_client::search::unified::UnifiedSearchResponse::ChannelMessage(a) => {
-                    Some(a.clone())
-                }
-                _ => None,
-            })
-            .collect();
+    let (
+        enriched_document_results,
+        enriched_chat_results,
+        enriched_channel_results,
+        enriched_project_results,
+        enriched_email_results,
+    ) = tokio::try_join!(
+        document_results
+            .into_iter()
+            .enrich_search_response(&ctx, &user_context.user_id),
+        chat_results
+            .into_iter()
+            .enrich_search_response(&ctx, &user_context.user_id),
+        channel_results
+            .into_iter()
+            .enrich_search_response(&ctx, &user_context.user_id),
+        project_results
+            .into_iter()
+            .enrich_search_response(&ctx, &user_context.user_id),
+        email_results
+            .into_iter()
+            .enrich_search_response(&ctx, &user_context.user_id)
+    )
+    .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
 
-    let chat_results: Vec<opensearch_client::search::chats::ChatSearchResponse> = results
-        .iter()
-        .filter_map(|r| match r {
-            opensearch_client::search::unified::UnifiedSearchResponse::Chat(a) => Some(a.clone()),
-            _ => None,
-        })
-        .collect();
+    let mut results = vec![];
 
-    let project_results: Vec<opensearch_client::search::projects::ProjectSearchResponse> = results
-        .iter()
-        .filter_map(|r| match r {
-            opensearch_client::search::unified::UnifiedSearchResponse::Project(a) => {
-                Some(a.clone())
-            }
-            _ => None,
-        })
-        .collect();
-
-    let email_results: Vec<opensearch_client::search::emails::EmailSearchResponse> = results
-        .iter()
-        .filter_map(|r| match r {
-            opensearch_client::search::unified::UnifiedSearchResponse::Email(a) => Some(a.clone()),
-            _ => None,
-        })
-        .collect();
-
-    let ctx_clone = ctx.clone();
-    let user_id_clone = user_context.user_id.clone();
-    let document_results_clone = document_results.clone();
-    let enriched_documents = tokio::spawn(async move {
-        enrich_documents(&ctx_clone, &user_id_clone, document_results_clone)
-            .await
-            .map(|v| {
-                v.into_iter()
-                    .map(UnifiedSearchResponseItem::Document)
-                    .collect::<Vec<UnifiedSearchResponseItem>>()
-            })
-    });
-
-    let ctx_clone = ctx.clone();
-    let user_id_clone = user_context.user_id.clone();
-    let chat_results_clone = chat_results.clone();
-    let enriched_chats = tokio::spawn(async move {
-        enrich_chats(&ctx_clone, &user_id_clone, chat_results_clone)
-            .await
-            .map(|v| {
-                v.into_iter()
-                    .map(UnifiedSearchResponseItem::Chat)
-                    .collect::<Vec<UnifiedSearchResponseItem>>()
-            })
-    });
-
-    let ctx_clone = ctx.clone();
-    let user_id_clone = user_context.user_id.clone();
-    let channel_results_clone = channel_results.clone();
-    let enriched_channels = tokio::spawn(async move {
-        enrich_channels(&ctx_clone, &user_id_clone, channel_results_clone)
-            .await
-            .map(|v| {
-                v.into_iter()
-                    .map(UnifiedSearchResponseItem::Channel)
-                    .collect::<Vec<UnifiedSearchResponseItem>>()
-            })
-    });
-
-    let ctx_clone = ctx.clone();
-    let user_id_clone = user_context.user_id.clone();
-    let project_results_clone = project_results.clone();
-    let enriched_projects = tokio::spawn(async move {
-        enrich_projects(&ctx_clone, &user_id_clone, project_results_clone)
-            .await
-            .map(|v| {
-                v.into_iter()
-                    .map(UnifiedSearchResponseItem::Project)
-                    .collect::<Vec<UnifiedSearchResponseItem>>()
-            })
-    });
-
-    let ctx_clone = ctx.clone();
-    let user_id_clone = user_context.user_id.clone();
-    let email_results_clone = email_results.clone();
-    let enriched_emails = tokio::spawn(async move {
-        enrich_emails(&ctx_clone, &user_id_clone, email_results_clone)
-            .await
-            .map(|v| {
-                v.into_iter()
-                    .map(UnifiedSearchResponseItem::Email)
-                    .collect::<Vec<UnifiedSearchResponseItem>>()
-            })
-    });
-
-    let (enriched_documents, enriched_chats, enriched_channels, enriched_projects, enriched_emails) =
-        tokio::try_join!(
-            enriched_documents,
-            enriched_chats,
-            enriched_channels,
-            enriched_projects,
-            enriched_emails
-        )
-        .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
-
-    let mut results: Vec<UnifiedSearchResponseItem> = vec![];
-
-    results.extend(enriched_documents?);
-    results.extend(enriched_chats?);
-    results.extend(enriched_channels?);
-    results.extend(enriched_projects?);
-    results.extend(enriched_emails?);
+    results.extend(enriched_document_results);
+    results.extend(enriched_chat_results);
+    results.extend(enriched_channel_results);
+    results.extend(enriched_project_results);
+    results.extend(enriched_email_results);
 
     // TODO: sort at the end. need to expose hit score first
 

@@ -21,3 +21,4 @@ serde_json = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 unicode-segmentation = "1.9.0"
+strum = { workspace = true }

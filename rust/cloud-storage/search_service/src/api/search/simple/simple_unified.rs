@@ -4,10 +4,7 @@ use crate::api::{
         SearchPaginationParams,
         simple::{
             SearchError,
-            simple_channel::{FilterChannelResponse, filter_channels},
-            simple_chat::{FilterChatResponse, filter_chats},
-            simple_document::{FilterDocumentResponse, filter_documents},
-            simple_project::{FilterProjectResponse, filter_projects},
+            filter::{FilterVariantToSearchArgs, UnifiedSearchArgsVariant},
         },
     },
 };
@@ -17,18 +14,11 @@ use axum::{
     response::Json,
 };
 use model::{response::ErrorResponse, user::UserContext};
-use models_search::unified::{SimpleUnifiedSearchResponse, UnifiedSearchRequest};
-use opensearch_client::search::unified::{
-    UnifiedChannelMessageSearchArgs, UnifiedChatSearchArgs, UnifiedDocumentSearchArgs,
-    UnifiedEmailSearchArgs, UnifiedProjectSearchArgs, UnifiedSearchArgs,
+use models_search::unified::{
+    SimpleUnifiedSearchResponse, UnifiedSearchIndex, UnifiedSearchRequest,
+    generate_unified_search_indices,
 };
-
-pub(in crate::api::search) enum UnifiedFilterVariant {
-    Document(FilterDocumentResponse),
-    Channel(FilterChannelResponse),
-    Chat(FilterChatResponse),
-    Project(FilterProjectResponse),
-}
+use opensearch_client::search::unified::UnifiedSearchArgs;
 
 /// Creates a unified search request and performs the search
 /// Returning the opensearch results
@@ -64,80 +54,89 @@ pub(in crate::api::search) async fn perform_unified_search(
         _ => vec![],
     };
 
-    let filters = req.filters.unwrap_or_default();
     let match_type = req.match_type;
     let disable_recency = req.disable_recency;
 
+    let include = req.include;
+
+    // Create default filters
+    let filters = req.filters.unwrap_or_default();
     let channel_filters = filters.channel.unwrap_or_default();
     let email_filters = filters.email.unwrap_or_default();
     let chat_filters = filters.chat.unwrap_or_default();
     let project_filters = filters.project.unwrap_or_default();
-
-    // Parallelize filter calls using tokio tasks
-    let ctx_doc = ctx.clone();
-    let user_id_doc = user_id.to_string();
     let doc_filters = filters.document.unwrap_or_default();
-    let doc_task = tokio::spawn(async move {
-        filter_documents(&ctx_doc, &user_id_doc, &doc_filters)
-            .await
-            .map(UnifiedFilterVariant::Document)
-    });
 
-    let ctx_channel = ctx.clone();
-    let user_id_channel = user_id.to_string();
-    let channel_filters_clone = channel_filters.clone();
-    let channel_task = tokio::spawn(async move {
-        filter_channels(
-            &ctx_channel,
-            &user_id_channel,
-            user_organization_id,
-            &channel_filters_clone,
-        )
-        .await
-        .map(UnifiedFilterVariant::Channel)
-    });
+    let should_include_documents =
+        include.is_empty() || include.contains(&UnifiedSearchIndex::Documents);
 
-    let ctx_chat = ctx.clone();
-    let user_id_chat = user_id.to_string();
-    let chat_filters_clone = chat_filters.clone();
-    let chat_task = tokio::spawn(async move {
-        filter_chats(&ctx_chat, &user_id_chat, &chat_filters_clone)
-            .await
-            .map(UnifiedFilterVariant::Chat)
-    });
+    let should_include_channels =
+        include.is_empty() || include.contains(&UnifiedSearchIndex::Channels);
 
-    let ctx_project = ctx.clone();
-    let user_id_project = user_id.to_string();
-    let project_filters_clone = project_filters.clone();
-    let project_task = tokio::spawn(async move {
-        filter_projects(&ctx_project, &user_id_project, &project_filters_clone)
-            .await
-            .map(UnifiedFilterVariant::Project)
-    });
+    let should_include_chats = include.is_empty() || include.contains(&UnifiedSearchIndex::Chats);
+
+    let should_include_projects =
+        include.is_empty() || include.contains(&UnifiedSearchIndex::Projects);
+
+    let should_include_emails = include.is_empty() || include.contains(&UnifiedSearchIndex::Emails);
 
     // Await all tasks in parallel
-    let (doc_result, channel_result, chat_result, project_result) =
-        tokio::try_join!(doc_task, channel_task, chat_task, project_task)
-            .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
+    let (doc_result, channel_result, chat_result, project_result, email_result) = tokio::try_join!(
+        doc_filters.filter_to_search_args(
+            &ctx,
+            &user_id,
+            user_organization_id,
+            should_include_documents,
+        ),
+        channel_filters.filter_to_search_args(
+            &ctx,
+            &user_id,
+            user_organization_id,
+            should_include_channels,
+        ),
+        chat_filters.filter_to_search_args(
+            &ctx,
+            &user_id,
+            user_organization_id,
+            should_include_chats,
+        ),
+        project_filters.filter_to_search_args(
+            &ctx,
+            &user_id,
+            user_organization_id,
+            should_include_projects,
+        ),
+        email_filters.filter_to_search_args(
+            &ctx,
+            &user_id,
+            user_organization_id,
+            should_include_emails,
+        ),
+    )
+    .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
 
-    // Extract results from FilterVariant enum
-    let filter_document_response = match doc_result? {
-        UnifiedFilterVariant::Document(response) => response,
+    let filter_document_response = match doc_result {
+        UnifiedSearchArgsVariant::Document(response) => response,
         _ => unreachable!(),
     };
 
-    let filter_channel_response = match channel_result? {
-        UnifiedFilterVariant::Channel(response) => response,
+    let filter_channel_response = match channel_result {
+        UnifiedSearchArgsVariant::Channel(response) => response,
         _ => unreachable!(),
     };
 
-    let filter_chat_response = match chat_result? {
-        UnifiedFilterVariant::Chat(response) => response,
+    let filter_chat_response = match chat_result {
+        UnifiedSearchArgsVariant::Chat(response) => response,
         _ => unreachable!(),
     };
 
-    let filter_project_response = match project_result? {
-        UnifiedFilterVariant::Project(response) => response,
+    let filter_project_response = match project_result {
+        UnifiedSearchArgsVariant::Project(response) => response,
+        _ => unreachable!(),
+    };
+
+    let filter_email_response = match email_result {
+        UnifiedSearchArgsVariant::Email(response) => response,
         _ => unreachable!(),
     };
 
@@ -150,37 +149,12 @@ pub(in crate::api::search) async fn perform_unified_search(
         search_on: search_on.into(),
         collapse,
         disable_recency,
-        document_search_args: UnifiedDocumentSearchArgs {
-            document_ids: filter_document_response.document_ids,
-            ids_only: filter_document_response.ids_only,
-        },
-        email_search_args: UnifiedEmailSearchArgs {
-            thread_ids: vec![],
-            link_ids: vec![],
-            sender: email_filters.senders,
-            cc: email_filters.cc,
-            bcc: email_filters.bcc,
-            recipients: email_filters.recipients,
-        },
-        channel_message_search_args: UnifiedChannelMessageSearchArgs {
-            channel_ids: filter_channel_response
-                .channel_ids
-                .iter()
-                .map(|c| c.to_string())
-                .collect(),
-            thread_ids: channel_filters.thread_ids,
-            mentions: channel_filters.mentions,
-            sender_ids: channel_filters.sender_ids,
-        },
-        chat_search_args: UnifiedChatSearchArgs {
-            chat_ids: filter_chat_response.chat_ids,
-            role: chat_filters.role,
-            ids_only: filter_chat_response.ids_only,
-        },
-        project_search_args: UnifiedProjectSearchArgs {
-            project_ids: filter_project_response.project_ids,
-            ids_only: filter_project_response.ids_only,
-        },
+        search_indices: generate_unified_search_indices(include),
+        document_search_args: filter_document_response,
+        email_search_args: filter_email_response,
+        channel_message_search_args: filter_channel_response,
+        chat_search_args: filter_chat_response,
+        project_search_args: filter_project_response,
     };
 
     let results = ctx

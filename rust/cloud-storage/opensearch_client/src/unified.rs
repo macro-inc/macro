@@ -8,7 +8,7 @@ use crate::{
 
 impl OpensearchClient {
     /// Performs a unified search
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument(skip(self, args))]
     pub async fn search_unified(
         &self,
         args: UnifiedSearchArgs,

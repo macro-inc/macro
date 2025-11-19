@@ -1,3 +1,5 @@
+use std::collections::HashSet;
+
 use crate::channel::ChannelSearchResponseItemWithMetadata;
 use crate::chat::ChatSearchResponseItemWithMetadata;
 use crate::document::DocumentSearchResponseItemWithMetadata;
@@ -54,6 +56,40 @@ pub struct UnifiedSearchRequest {
     /// Include specific entity types from search. If empty, all entity types will be searched over. If you are unsure which types to search, use an empty array to search all.
     #[serde(default)]
     pub include: Vec<UnifiedSearchIndex>,
+}
+
+impl From<UnifiedSearchIndex> for opensearch_client::search::model::SearchIndex {
+    fn from(index: UnifiedSearchIndex) -> Self {
+        match index {
+            UnifiedSearchIndex::Channels => Self::Channels,
+            UnifiedSearchIndex::Chats => Self::Chats,
+            UnifiedSearchIndex::Documents => Self::Documents,
+            UnifiedSearchIndex::Emails => Self::Emails,
+            UnifiedSearchIndex::Projects => Self::Projects,
+        }
+    }
+}
+
+/// Generates the search indices to search over for unified search
+pub fn generate_unified_search_indices(
+    include: Vec<UnifiedSearchIndex>,
+) -> HashSet<opensearch_client::search::model::SearchIndex> {
+    if include.is_empty() {
+        let include: Vec<opensearch_client::search::model::SearchIndex> = [
+            UnifiedSearchIndex::Channels,
+            UnifiedSearchIndex::Chats,
+            UnifiedSearchIndex::Documents,
+            UnifiedSearchIndex::Emails,
+            UnifiedSearchIndex::Projects,
+        ]
+        .into_iter()
+        .map(|i| i.into())
+        .collect();
+
+        include.into_iter().collect()
+    } else {
+        include.into_iter().map(|i| i.into()).collect()
+    }
 }
 
 // TODO: there's a data correlation between Filters and Response Item. Can this be consolidated?
