@@ -8,7 +8,7 @@ import { useSplitLayout } from '../../app/component/split-layout/layout';
 import { ProfilePicture } from './ProfilePicture';
 
 export type UserIconProps = {
-  isDeleted: boolean;
+  isDeleted?: boolean;
   size?: 'xs' | 'sm' | 'md' | 'lg' | 'xl' | 'fill';
   suppressClick?: boolean;
   // TODO: remove imageUrl. not actively used.

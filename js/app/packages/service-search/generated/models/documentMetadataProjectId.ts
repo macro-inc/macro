@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ChatSearchResponseItemWithMetadataAllOfProjectId = string | null;
+export type DocumentMetadataProjectId = string | null;
