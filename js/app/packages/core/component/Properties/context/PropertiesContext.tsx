@@ -3,10 +3,10 @@ import {
   type Accessor,
   createContext,
   createEffect,
+  createSignal,
   type ParentProps,
   useContext,
 } from 'solid-js';
-import { useModalState } from '../hooks/useModalState';
 import type { Property } from '../types';
 
 // Specific modal state types with proper typing
@@ -82,27 +82,32 @@ export interface PropertiesProviderProps extends ParentProps {
 const PropertiesContext = createContext<PropertiesContextValue>();
 
 export function PropertiesProvider(props: PropertiesProviderProps) {
-  // Modal states using generic hook
-  const [
-    propertySelectorModal,
-    openPropertySelectorState,
-    closePropertySelector,
-  ] = useModalState<PropertySelectorModalState>();
-  const [propertyEditorModal, openPropertyEditorState, closePropertyEditor] =
-    useModalState<PropertyEditorModalState>();
-  const [datePickerModal, openDatePickerState, closeDatePicker] =
-    useModalState<DatePickerModalState>();
-  const [createPropertyModal, openCreatePropertyState, closeCreateProperty] =
-    useModalState<CreatePropertyModalState>();
+  // Modal state signals
+  const [propertySelectorModal, setPropertySelectorModal] =
+    createSignal<PropertySelectorModalState | null>(null);
+  const [propertyEditorModal, setPropertyEditorModal] =
+    createSignal<PropertyEditorModalState | null>(null);
+  const [datePickerModal, setDatePickerModal] =
+    createSignal<DatePickerModalState | null>(null);
+  const [createPropertyModal, setCreatePropertyModal] =
+    createSignal<CreatePropertyModalState | null>(null);
 
   // Property Selector actions
   const openPropertySelector = () => {
-    openPropertySelectorState({ isOpen: true });
+    setPropertySelectorModal({ isOpen: true });
+  };
+
+  const closePropertySelector = () => {
+    setPropertySelectorModal(null);
   };
 
   // Property Editor actions
   const openPropertyEditor = (property: Property, anchor?: HTMLElement) => {
-    openPropertyEditorState({ property, anchor });
+    setPropertyEditorModal({ property, anchor });
+  };
+
+  const closePropertyEditor = () => {
+    setPropertyEditorModal(null);
   };
 
   // Date Picker actions
@@ -110,20 +115,28 @@ export function PropertiesProvider(props: PropertiesProviderProps) {
     property: Property & { valueType: 'DATE' },
     anchor?: HTMLElement
   ) => {
-    openDatePickerState({ property, anchor });
+    setDatePickerModal({ property, anchor });
+  };
+
+  const closeDatePicker = () => {
+    setDatePickerModal(null);
   };
 
   // Create Property actions
   const openCreateProperty = () => {
-    openCreatePropertyState({ isOpen: true });
+    setCreatePropertyModal({ isOpen: true });
+  };
+
+  const closeCreateProperty = () => {
+    setCreatePropertyModal(null);
   };
 
   // Convenience function to close all modals
   const closeAllModals = () => {
-    closePropertySelector();
-    closePropertyEditor();
-    closeDatePicker();
-    closeCreateProperty();
+    setPropertySelectorModal(null);
+    setPropertyEditorModal(null);
+    setDatePickerModal(null);
+    setCreatePropertyModal(null);
   };
 
   // Handle ESC key to close modals
