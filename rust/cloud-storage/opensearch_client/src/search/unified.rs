@@ -409,10 +409,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         let document_search_args: DocumentSearchArgs = args.clone().into();
         let document_query_builder: DocumentQueryBuilder = document_search_args.into();
         let mut document_bool_query = document_query_builder.build_bool_query()?;
-        document_bool_query.must(QueryType::term(
-            "_index".to_string(),
-            DOCUMENTS_INDEX.to_string(),
-        ));
+        document_bool_query.must(QueryType::term("_index", DOCUMENTS_INDEX));
         bool_query.should(document_bool_query.build().into());
     }
 
@@ -420,10 +417,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         let email_search_args: EmailSearchArgs = args.clone().into();
         let email_query_builder: EmailQueryBuilder = email_search_args.into();
         let mut email_bool_query = email_query_builder.build_bool_query()?;
-        email_bool_query.must(QueryType::term(
-            "_index".to_string(),
-            EMAIL_INDEX.to_string(),
-        ));
+        email_bool_query.must(QueryType::term("_index", EMAIL_INDEX));
         bool_query.should(email_bool_query.build().into());
     }
 
@@ -432,10 +426,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         let channel_message_query_builder: ChannelMessageQueryBuilder =
             channel_message_search_args.into();
         let mut channel_message_bool_query = channel_message_query_builder.build_bool_query()?;
-        channel_message_bool_query.must(QueryType::term(
-            "_index".to_string(),
-            CHANNEL_INDEX.to_string(),
-        ));
+        channel_message_bool_query.must(QueryType::term("_index", CHANNEL_INDEX));
         bool_query.should(channel_message_bool_query.build().into());
     }
 
@@ -443,10 +434,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         let chat_search_args: ChatSearchArgs = args.clone().into();
         let chat_query_builder: ChatQueryBuilder = chat_search_args.into();
         let mut chat_bool_query = chat_query_builder.build_bool_query()?;
-        chat_bool_query.must(QueryType::term(
-            "_index".to_string(),
-            CHAT_INDEX.to_string(),
-        ));
+        chat_bool_query.must(QueryType::term("_index", CHAT_INDEX));
         bool_query.should(chat_bool_query.build().into());
     }
 
@@ -454,10 +442,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         let project_search_args: ProjectSearchArgs = args.clone().into();
         let project_query_builder: ProjectQueryBuilder = project_search_args.into();
         let mut project_bool_query = project_query_builder.build_bool_query()?;
-        project_bool_query.must(QueryType::term(
-            "_index".to_string(),
-            PROJECT_INDEX.to_string(),
-        ));
+        project_bool_query.must(QueryType::term("_index", PROJECT_INDEX));
         bool_query.should(project_bool_query.build().into());
     }
 
@@ -475,7 +460,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     if args.search_on == SearchOn::NameContent {
         search_request_builder.track_total_hits(true);
         search_request_builder.add_agg(
-            "total_uniques".to_string(),
+            "total_uniques",
             AggregationType::Cardinality(CardinalityAggregation::new("entity_id")),
         );
     }
