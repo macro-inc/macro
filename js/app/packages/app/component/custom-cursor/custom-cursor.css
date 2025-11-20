@@ -1,0 +1,154 @@
+/* This sheet is injected into style element appended into document.head and shadowRoots  */
+
+a[href] {
+  --custom-cursor: pointer;
+}
+summary {
+  --custom-cursor: pointer;
+} /* collapsible <details> */
+label {
+  --custom-cursor: pointer;
+} /* when linked to a control */
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+  --custom-cursor: pointer;
+}
+select {
+  --custom-cursor: pointer;
+}
+option {
+  --custom-cursor: pointer;
+} /* some browsers */
+optgroup {
+  --custom-cursor: pointer;
+}
+
+input[type=text],
+input:not([type]),     /* default type="text" */
+input[type=password],
+input[type=search],
+input[type=email],
+input[type=tel],
+input[type=url],
+input[type=number],    /* on the text area, not the spin box */
+textarea,
+[contenteditable] {
+  --custom-cursor: text;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  --custom-cursor: not-allowed;
+}
+
+.cursor-auto {
+  --custom-cursor: auto;
+}
+.cursor-default {
+  --custom-cursor: default;
+}
+.cursor-pointer {
+  --custom-cursor: pointer;
+}
+.cursor-wait {
+  --custom-cursor: wait;
+}
+.cursor-text {
+  --custom-cursor: text;
+}
+.cursor-move {
+  --custom-cursor: move;
+}
+.cursor-help {
+  --custom-cursor: help;
+}
+.cursor-not-allowed {
+  --custom-cursor: not-allowed;
+}
+.cursor-none {
+  --custom-cursor: none;
+}
+.cursor-grab {
+  --custom-cursor: grab;
+}
+.cursor-grabbing {
+  --custom-cursor: grabbing;
+}
+.cursor-zoom-in {
+  --custom-cursor: zoom-in;
+}
+.cursor-zoom-out {
+  --custom-cursor: zoom-out;
+}
+.cursor-progress {
+  --custom-cursor: progress;
+}
+.cursor-alias {
+  --custom-cursor: alias;
+}
+.cursor-context-menu {
+  --custom-cursor: context-menu;
+}
+.cursor-cell {
+  --custom-cursor: cell;
+}
+.cursor-crosshair {
+  --custom-cursor: crosshair;
+}
+.cursor-copy {
+  --custom-cursor: copy;
+}
+.cursor-no-drop {
+  --custom-cursor: no-drop;
+}
+.cursor-all-scroll {
+  --custom-cursor: all-scroll;
+}
+.cursor-vertical-text {
+  --custom-cursor: vertical-text;
+}
+.cursor-col-resize {
+  --custom-cursor: col-resize;
+}
+.cursor-row-resize {
+  --custom-cursor: row-resize;
+}
+.cursor-ew-resize {
+  --custom-cursor: ew-resize;
+}
+.cursor-nesw-resize {
+  --custom-cursor: nesw-resize;
+}
+.cursor-ns-resize {
+  --custom-cursor: ns-resize;
+}
+.cursor-nwse-resize {
+  --custom-cursor: nwse-resize;
+}
+.cursor-e-resize {
+  --custom-cursor: e-resize;
+}
+.cursor-n-resize {
+  --custom-cursor: n-resize;
+}
+.cursor-ne-resize {
+  --custom-cursor: ne-resize;
+}
+.cursor-nw-resize {
+  --custom-cursor: nw-resize;
+}
+.cursor-s-resize {
+  --custom-cursor: s-resize;
+}
+.cursor-se-resize {
+  --custom-cursor: se-resize;
+}
+.cursor-sw-resize {
+  --custom-cursor: sw-resize;
+}
+.cursor-w-resize {
+  --custom-cursor: w-resize;
+}

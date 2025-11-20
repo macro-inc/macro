@@ -1,5 +1,6 @@
+import { Tooltip } from '@core/component/Tooltip';
 import { matches } from '@core/util/match';
-import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
+import CheckIcon from '@icon/regular/check.svg';
 import { useEmail, useUserId } from '@service-gql/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
@@ -52,6 +53,15 @@ function UnreadIndicator(props: { active?: boolean }) {
   );
 }
 
+function SharedBadge(props: { ownerId: string }) {
+  return (
+    <div class="font-mono font-medium user-select-none uppercase flex items-center text-ink-extra-muted p-0.5 gap-1 text-[0.625rem] rounded-full border border-edge-muted pr-2">
+      <UserIcon id={props.ownerId} size="xs" />
+      shared
+    </div>
+  );
+}
+
 // function ImportantBadge(props: { active?: boolean }) {
 //   return (
 //     <Show when={props.active}>
@@ -93,8 +103,6 @@ interface EntityProps<T extends WithNotification<EntityData>>
 export function EntityWithEverything(
   props: EntityProps<WithNotification<EntityData | WithSearch<EntityData>>>
 ) {
-  const [showActionList, setShowActionList] = createSignal(false);
-  const [entityHovered, setEntityHovered] = createSignal(false);
   const [actionButtonRef, setActionButtonRef] =
     createSignal<HTMLButtonElement | null>(null);
   const [entityDivRef, setEntityDivRef] = createSignal<HTMLDivElement | null>(
@@ -106,7 +114,6 @@ export function EntityWithEverything(
   const { keydownDataDuringTask } = trackKeydownDuringTask();
   const userEmail = useEmail();
 
-  let focusId = 0;
   const getIcon = createMemo(() => {
     switch (props.entity.type) {
       case 'channel':
@@ -291,11 +298,11 @@ export function EntityWithEverything(
 
           <Show when={!props.showUnrollNotifications && lastMessageContent()}>
             {(lastMessageContent) => (
-              <div class="truncate shrink grow opacity-60">
+              <div class="truncate shrink grow opacity-60 flex items-center">
                 <StaticMarkdown
                   markdown={lastMessageContent()}
                   theme={unifiedListMarkdownTheme}
-                  singleLine={false}
+                  singleLine={true}
                 />
               </div>
             )}
@@ -325,6 +332,21 @@ export function EntityWithEverything(
     return false;
   }
 
+  const userId = useUserId();
+  const sharedData = () => {
+    if (props.entity.type === 'channel') {
+      return false;
+    }
+
+    if (props.entity.ownerId === userId()) {
+      return false;
+    }
+    return {
+      ownerDisplayName: useDisplayName(props.entity.ownerId)[0],
+      ownerId: props.entity.ownerId,
+    };
+  };
+
   return (
     <div
       use:draggable
@@ -341,25 +363,7 @@ export function EntityWithEverything(
         if (!didCursorMove(e)) {
           return;
         }
-        setShowActionList(true);
         props.onMouseOver?.();
-      }}
-      onMouseEnter={() => {
-        setEntityHovered(true);
-      }}
-      onMouseLeave={() => {
-        setEntityHovered(false);
-        setShowActionList(false);
-      }}
-      onFocusIn={() => {
-        setShowActionList(true);
-        clearTimeout(focusId);
-        props.onFocusIn?.();
-      }}
-      onFocusOut={() => {
-        focusId = window.setTimeout(() => {
-          setShowActionList(false);
-        });
       }}
       onContextMenu={() => {
         props.onContextMenu?.();
@@ -388,7 +392,6 @@ export function EntityWithEverything(
             return;
           }
 
-          setShowActionList(true);
           actionButtonRef()?.focus();
         }}
         onKeyDown={onKeyDownClick((e) =>
@@ -410,8 +413,8 @@ export function EntityWithEverything(
           <div
             class="size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-accent group-hover/button:border pointer-events-none"
             classList={{
-              'ring ring-edge-muted': props.selected || entityHovered(),
-              'bg-panel': !props.checked && (props.selected || entityHovered()),
+              'ring ring-edge-muted': props.selected,
+              'bg-panel': !props.checked && props.selected,
               'bg-accent border border-accent': props.checked,
             }}
           >
@@ -454,40 +457,45 @@ export function EntityWithEverything(
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
         <div
-          class="relative row-1 ml-2 @md:ml-4 self-center min-w-0 col-3"
+          class="row-1 ml-2 @md:ml-4 self-center min-w-0 col-3"
           classList={{
             'opacity-50': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
-          <div class="flex flex-row items-center justify-end gap-4 min-w-0">
-            <Show when={!showActionList()}>
-              <Show when={matches(props.entity, isProjectContainedEntity)}>
-                {(entity) => <EntityProject entity={entity()} />}
-              </Show>
-              <Show when={props.timestamp ?? props.entity.updatedAt}>
-                {(date) => {
-                  const formattedDate = createFormattedDate(date());
-                  return (
-                    <span class="shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
-                      {formattedDate()}
-                    </span>
-                  );
-                }}
-              </Show>
-            </Show>
-            <Show when={showActionList()}>
-              <div class="flex gap-1 h-8">
-                <button
-                  class="flex items-center justify-center size-8 hover:bg-accent hover:text-panel"
-                  onClick={() => {
-                    props.onClickRowAction?.(props.entity, 'done');
-                  }}
-                  ref={setActionButtonRef}
-                  data-blocks-navigation
+          <div class="flex flex-row items-center justify-end gap-2 min-w-0">
+            <Show when={sharedData()}>
+              {(shared) => (
+                <Tooltip
+                  tooltip={`${shared().ownerDisplayName()} shared with you`}
                 >
-                  <CheckIcon class="w-4 h-4 pointer-events-none" />
-                </button>
-              </div>
+                  <SharedBadge ownerId={shared().ownerId} />
+                </Tooltip>
+              )}
+            </Show>
+            <Show when={matches(props.entity, isProjectContainedEntity)}>
+              {(entity) => <EntityProject entity={entity()} />}
+            </Show>
+            <Show when={props.timestamp ?? props.entity.updatedAt}>
+              {(date) => {
+                const formattedDate = createFormattedDate(date());
+                return (
+                  <span class="shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                    {formattedDate()}
+                  </span>
+                );
+              }}
+            </Show>
+            <Show when={props.selected}>
+              <button
+                class="absolute top-1 right-1 flex items-center justify-center size-8 bg-panel border border-edge-muted hover:bg-accent hover:text-panel"
+                onClick={() => {
+                  props.onClickRowAction?.(props.entity, 'done');
+                }}
+                ref={setActionButtonRef}
+                data-blocks-navigation
+              >
+                <CheckIcon class="w-4 h-4 pointer-events-none" />
+              </button>
             </Show>
           </div>
         </div>
@@ -496,7 +504,7 @@ export function EntityWithEverything(
           <div class="relative row-2 grid gap-2 col-2 col-end-4 pb-2">
             <For each={contentHighlights()}>
               {(highlight) => (
-                <div class="text-sm text-ink-muted truncate">
+                <div class="text-sm text-ink-muted truncate flex items-center">
                   <StaticMarkdown
                     markdown={highlight}
                     theme={unifiedListMarkdownTheme}
@@ -578,7 +586,7 @@ export function EntityWithEverything(
 
                 return (
                   <div
-                    class="relative flex gap-1 items-center min-w-0 h-7"
+                    class="relative flex gap-1 items-center min-w-0 h-8"
                     classList={{
                       'hover:bg-hover/20 hover:opacity-70':
                         !!props.onClickNotification,
@@ -607,16 +615,13 @@ export function EntityWithEverything(
                           {ActionContent()}
                         </span>
                       </div>
-
                       {/*<ImportantBadge
                         active={
                           notification.viewedAt === null &&
                           notification.isImportantV0
                         }
                       />*/}
-                      <div class="text-sm shrink truncate min-w-0 max-h-5 opacity-70 overflow-clip">
-                        <MessageContent />
-                      </div>
+                      <MessageContent />
                     </div>
                     <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
                       {formattedDate()}

@@ -1,6 +1,7 @@
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { UnifiedListView } from '@app/component/UnifiedListView';
 import { PROJECT_VIEWCONFIG_BASE } from '@app/component/ViewConfig';
+import { getIsSpecialProject } from '@block-project/isSpecial';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { ENABLE_FOLDER_UPLOAD } from '@core/constant/featureFlags';
@@ -29,12 +30,10 @@ import { TopBar } from './TopBar';
 false && fileFolderDrop;
 false && fileSelector;
 
-const SPECIAL_PROJECTS = ['root', 'trash'];
-
 const Block: Component = () => {
   const [isDragging, setIsDragging] = createSignal(false);
   const projectId = useBlockId();
-  const isSpecialProject = SPECIAL_PROJECTS.includes(projectId);
+  const isSpecialProject = getIsSpecialProject(projectId);
   const name = () => projectBlockDataSignal()?.projectMetadata.name;
 
   const handleFileUpload = async (files: UploadInput[]) => {
@@ -87,6 +86,7 @@ const Block: Component = () => {
       ...PROJECT_VIEWCONFIG_BASE,
       id: projectId,
       view: name() ?? 'folder',
+      selectedEntities: [],
       filters: {
         ...PROJECT_VIEWCONFIG_BASE.filters,
         projectFilter: projectId,

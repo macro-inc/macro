@@ -5,7 +5,7 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use futures::future::join_all;
-use model::response::{EmptyResponse, ErrorResponse};
+use model::response::ErrorResponse;
 use model::user::UserContext;
 use models_email::api;
 use utoipa::ToSchema;
@@ -48,7 +48,7 @@ pub struct ListLinksResponse {
     path = "/email/links",
     operation_id = "list_links",
     responses(
-            (status = 200, body=EmptyResponse),
+            (status = 200, body=ListLinksResponse),
             (status = 401, body=ErrorResponse),
             (status = 404, body=ErrorResponse),
             (status = 500, body=ErrorResponse),

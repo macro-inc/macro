@@ -2,27 +2,30 @@
 
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { TabContent } from '@core/component/TabContent';
+import { ENABLE_CUSTOM_CURSOR } from '@core/constant/featureFlags';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import { createEffect, createSignal } from 'solid-js';
+import { createEffect, createSignal, Show } from 'solid-js';
 import { ThemeEditorAdvanced } from '../../../block-theme/components/ThemeEditorAdvanced';
 import { ThemeEditorBasic } from '../../../block-theme/components/ThemeEditorBasic';
 import ThemeList from '../../../block-theme/components/ThemeList';
 import ThemeTools from '../../../block-theme/components/ThemeTools';
-import {
-  getCustomCursorEnabled,
-  setCustomCursorEnabled,
-} from '../../util/cursor';
+// import {
+//   getCustomCursorEnabled,
+//   setCustomCursorEnabled,
+// } from '../../util/cursor';
 import {
   getSoundEffectsEnabled,
   getSoundEffectsVolume,
   setSoundEffectsEnabled,
   setSoundEffectsVolume,
 } from '../../util/soundSettings';
+import {
+  customCursorEnabled,
+  setCustomCursorEnabled,
+} from '../custom-cursor/custom-cursor';
 
 export function Appearance() {
-  const [cursorEnabled, setCursorEnabled] = createSignal(
-    getCustomCursorEnabled()
-  );
+  const [cursorEnabled, setCursorEnabled] = createSignal(customCursorEnabled());
   const [soundEnabled, setSoundEnabled] = createSignal(
     getSoundEffectsEnabled()
   );
@@ -72,24 +75,26 @@ export function Appearance() {
           <ThemeEditorAdvanced />
           <ThemeList />
         </div>
-        <div
-          style={{
-            'font-family': 'var(--font-mono)',
-            border: '1px solid var(--b4)',
-            'box-sizing': 'border-box',
-            padding: '12px 20px',
-            display: 'flex',
-            'align-items': 'center',
-            'justify-content': 'space-between',
-            'font-size': '14px',
-          }}
-        >
-          <span>Themed cursor</span>
-          <ToggleSwitch
-            checked={cursorEnabled()}
-            onChange={(enabled) => setCursorEnabled(enabled)}
-          />
-        </div>
+        <Show when={ENABLE_CUSTOM_CURSOR}>
+          <div
+            style={{
+              'font-family': 'var(--font-mono)',
+              border: '1px solid var(--b4)',
+              'box-sizing': 'border-box',
+              padding: '12px 20px',
+              display: 'flex',
+              'align-items': 'center',
+              'justify-content': 'space-between',
+              'font-size': '14px',
+            }}
+          >
+            <span>Themed cursor</span>
+            <ToggleSwitch
+              checked={cursorEnabled()}
+              onChange={(enabled) => setCursorEnabled(enabled)}
+            />
+          </div>
+        </Show>
         <div
           style={{
             'font-family': 'var(--font-mono)',

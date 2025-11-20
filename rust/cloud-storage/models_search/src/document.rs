@@ -41,15 +41,23 @@ pub struct DocumentSearchResponseItem {
     pub document_search_results: Vec<DocumentSearchResult>,
 }
 
+/// Metadata for a document fetched from the database
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct DocumentMetadata {
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub viewed_at: Option<i64>,
+    pub project_id: Option<String>,
+    pub deleted_at: Option<i64>,
+}
+
 /// DocumentSearchResponseItem object with document metadata we fetch from macrodb. we don't store these
 /// timestamps in opensearch as they would require us to update document page record
 /// every time the document updates (specifically for updated_at and viewed_at)
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct DocumentSearchResponseItemWithMetadata {
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub viewed_at: Option<i64>,
-    pub project_id: Option<String>,
+    /// Metadata from the database. None if the document doesn't exist in the database.
+    pub metadata: Option<DocumentMetadata>,
     #[serde(flatten)]
     pub extra: DocumentSearchResponseItem,
 }
