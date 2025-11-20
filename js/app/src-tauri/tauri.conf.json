@@ -6,7 +6,7 @@
   "build": {
     "frontendDist": "../packages/app/dist",
     "devUrl": "http://localhost:3000",
-    "beforeDevCommand": "bun dev",
+    "beforeDevCommand": "bun run dev:tauri",
     "beforeBuildCommand": "bun run build:tauri"
   },
   "app": {
