@@ -30,9 +30,9 @@ type WhichKeyContentProps = {
 const WhichKeyContent: Component<WhichKeyContentProps> = (props) => {
   return (
     <Portal>
-      <div class="absolute z-9999 right-2 bottom-[49px]">
+      <div class="absolute z-9999 right-2 bottom-14">
         {/* <dfiv class="absolute -z-1 top-2 right-2 pattern-edge pattern-diagonal-4 opacity-100 w-full h-full mask-l-from-[calc(100%_-_1rem)] mask-b-from-[calc(100%_-_1rem)]" /> */}
-        <div class="px-8 py-4 w-full h-full bg-dialog/75 backdrop-blur-sm border-2 border-accent text-sm shadow-[0_0_2px_0_var(--color-accent)]">
+        <div class="px-6 py-3 w-full h-full bg-dialog/75 backdrop-blur-sm border-2 border-accent text-sm shadow-[0_0_2px_0_var(--color-accent)]">
           <Show when={props.commandsWithActivateScope().length > 0}>
             <div class="mb-6">
               <For each={props.commandsWithActivateScope()}>
