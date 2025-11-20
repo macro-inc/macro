@@ -32,7 +32,7 @@ import {
 import { blockHandleSignal } from '@core/signal/load';
 import { createTabFocusEffect } from '@core/signal/tabFocus';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
-import { ChannelDebouncedNotificationReadMarker } from '@notifications/components/DebouncedNotificationReadMarker';
+import { ChannelDebouncedNotificationReadMarker } from '@notifications';
 import type { Message } from '@service-comms/generated/models';
 import { connectionGatewayClient } from '@service-connection/client';
 import { createCallback } from '@solid-primitives/rootless';

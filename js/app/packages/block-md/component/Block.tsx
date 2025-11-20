@@ -2,7 +2,7 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { DocumentDebouncedNotificationReadMarker } from '@notifications/components/DebouncedNotificationReadMarker';
+import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@service-storage/instructionsMd';
 import { createEffect, createSignal, onMount, Show } from 'solid-js';
 import { mdStore } from '../signal/markdownBlockData';

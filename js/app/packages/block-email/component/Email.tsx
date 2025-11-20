@@ -13,8 +13,10 @@ import {
   useEmailContacts,
   useOrganizationUsers,
 } from '@core/user';
-import { createEffectOnEntityTypeNotification } from '@notifications/notificationHelpers';
-import { isNotificationWithMetadata } from '@notifications/notificationMetadata';
+import {
+  createEffectOnEntityTypeNotification,
+  isNotificationWithMetadata,
+} from '@notifications';
 import { emailClient } from '@service-email/client';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 import type { Thread } from '@service-email/generated/schemas/thread';

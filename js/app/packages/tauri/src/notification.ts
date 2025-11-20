@@ -1,7 +1,7 @@
 import type {
   AppNotification,
-  AppNotificationInterface,
-} from '@macro/notification-provider';
+  PlatformNotificationInterface,
+} from '@notifications';
 import {
   isPermissionGranted,
   requestPermission,
@@ -10,7 +10,7 @@ import {
 
 export function createTauriNotificationInterface(
   setDisabled: () => Promise<void>
-): AppNotificationInterface {
+): PlatformNotificationInterface {
   async function getCur() {
     return (await isPermissionGranted()) ? 'granted' : 'denied';
   }
