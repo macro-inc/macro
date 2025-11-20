@@ -14,6 +14,7 @@ export {
   PlatformNotificationProvider,
   usePlatformNotificationState,
 } from './components/PlatformNotificationProvider';
+export { NotificationsPlayground } from './components/Playground';
 export { createTabLeaderSignal } from './notification-election';
 export {
   createEffectOnEntityTypeNotification,
@@ -80,6 +81,3 @@ export type {
   UnifiedNotification,
 } from './types';
 export { compositeEntity, notificationEntity } from './types';
-export { NotificationsPlayground } from './playground';
-export { createMockWebsocket } from './mock-websocket';
-export type { MockWebsocketEmitter } from './mock-websocket';

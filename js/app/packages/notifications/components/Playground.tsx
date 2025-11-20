@@ -1,27 +1,33 @@
+import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import { TextButton } from '@core/component/TextButton';
 import { formatDate } from '@core/util/date';
-import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
-import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
 import {
-  PlatformNotificationProvider,
-  usePlatformNotificationState,
-} from './components/PlatformNotificationProvider';
-import { BrowserNotificationPreview } from './components/BrowserNotificationPreview';
-import { createMockWebsocket } from './mock-websocket';
-import { notificationWithMetadata } from './notification-metadata';
+  type Component,
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  Show,
+} from 'solid-js';
+import { notificationWithMetadata } from '../notification-metadata';
 import {
   extractNotificationData,
   NOTIFICATION_LABEL_BY_TYPE,
   type NotificationData,
   toBrowserNotification,
-} from './notification-preview';
+} from '../notification-preview';
 import {
   DefaultDocumentNameResolver,
   DefaultUserNameResolver,
-} from './notification-resolvers';
-import { createNotificationSource } from './notification-source';
-import type { UnifiedNotification } from './types';
+} from '../notification-resolvers';
+import { createNotificationSource } from '../notification-source';
+import type { UnifiedNotification } from '../types';
+import { createMockWebsocket } from '../utils/mock-websocket';
+import {
+  PlatformNotificationProvider,
+  usePlatformNotificationState,
+} from './PlatformNotificationProvider';
 
 type NotificationsByType = Map<string, UnifiedNotification[]>;
 
@@ -57,33 +63,37 @@ function TypeButton(props: {
 }) {
   const label =
     NOTIFICATION_LABEL_BY_TYPE[
-    props.type as keyof typeof NOTIFICATION_LABEL_BY_TYPE
+      props.type as keyof typeof NOTIFICATION_LABEL_BY_TYPE
     ] || props.type;
 
   return (
     <button
-      class={`w-full p-4 text-left border-b border-edge-muted transition-all ${props.isSelected ? 'bg-accent text-ink' : 'bg-menu hover:bg-hover'
-        }`}
+      class={`w-full p-4 text-left border-b border-edge-muted transition-all ${
+        props.isSelected ? 'bg-accent text-ink' : 'bg-menu hover:bg-hover'
+      }`}
       onClick={props.onSelect}
     >
       <div class="flex items-center justify-between gap-3">
         <div class="flex flex-col gap-1 flex-1 min-w-0">
           <span
-            class={`text-xs font-mono uppercase font-medium ${props.isSelected ? 'text-black' : 'text-accent'
-              }`}
+            class={`text-xs font-mono uppercase font-medium ${
+              props.isSelected ? 'text-black' : 'text-accent'
+            }`}
           >
             {label}
           </span>
           <span
-            class={`text-xs font-mono truncate ${props.isSelected ? 'text-black/70' : 'text-ink-muted'
-              }`}
+            class={`text-xs font-mono truncate ${
+              props.isSelected ? 'text-black/70' : 'text-ink-muted'
+            }`}
           >
             {props.type}
           </span>
         </div>
         <span
-          class={`text-sm font-medium shrink-0 ${props.isSelected ? 'text-black' : 'text-ink-muted'
-            }`}
+          class={`text-sm font-medium shrink-0 ${
+            props.isSelected ? 'text-black' : 'text-ink-muted'
+          }`}
         >
           {props.count}
         </span>
@@ -102,16 +112,18 @@ function NotificationItem(props: {
 
   return (
     <button
-      class={`w-full p-4 text-left border-b border-edge-muted transition-all ${props.isSelected
+      class={`w-full p-4 text-left border-b border-edge-muted transition-all ${
+        props.isSelected
           ? 'bg-accent/10 border-l-2 border-l-accent'
           : 'bg-menu hover:bg-hover'
-        }`}
+      }`}
       onClick={props.onSelect}
     >
       <div class="flex items-start gap-3">
         <div
-          class={`size-2 mt-1 shrink-0 rounded-full ${isUnread() ? 'bg-accent' : 'bg-ink-extra-muted'
-            }`}
+          class={`size-2 mt-1 shrink-0 rounded-full ${
+            isUnread() ? 'bg-accent' : 'bg-ink-extra-muted'
+          }`}
         />
         <div class="flex-1 min-w-0">
           <Show when={data()}>
@@ -197,7 +209,9 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
                 Icon
               </div>
               <div class="bg-menu p-4 rounded-lg border border-edge-muted">
-                <code class="text-xs text-ink-muted">{browserNotif()!.icon}</code>
+                <code class="text-xs text-ink-muted">
+                  {browserNotif()!.icon}
+                </code>
               </div>
             </div>
           </div>
@@ -362,10 +376,11 @@ function NotificationDetail(props: {
         <div class="p-4 bg-menu rounded-xl border border-edge-muted">
           <div class="flex items-start gap-3">
             <div
-              class={`size-2 mt-1 shrink-0 rounded-full ${!props.notification.viewedAt
+              class={`size-2 mt-1 shrink-0 rounded-full ${
+                !props.notification.viewedAt
                   ? 'bg-accent'
                   : 'bg-ink-extra-muted'
-                }`}
+              }`}
             />
             <div class="flex-1 min-w-0">
               <NotificationRenderer
@@ -380,21 +395,23 @@ function NotificationDetail(props: {
       <section class="mb-10">
         <h3 class="text-lg font-semibold text-ink mb-4">Full Mode</h3>
         <div
-          class={`p-6 rounded-xl border border-edge-muted ${!props.notification.viewedAt ? 'bg-menu-hover' : 'bg-menu'
-            }`}
+          class={`p-6 rounded-xl border border-edge-muted ${
+            !props.notification.viewedAt ? 'bg-menu-hover' : 'bg-menu'
+          }`}
         >
           <div class="flex justify-start items-center gap-3 mb-4 font-mono text-ink-muted text-xs uppercase">
             <div
-              class={`size-2 rounded-full ${!props.notification.viewedAt
+              class={`size-2 rounded-full ${
+                !props.notification.viewedAt
                   ? 'bg-accent'
                   : 'bg-ink-extra-muted'
-                }`}
+              }`}
             />
             <div class="font-medium">
               {
                 NOTIFICATION_LABEL_BY_TYPE[
-                props.notification
-                  .notificationEventType as keyof typeof NOTIFICATION_LABEL_BY_TYPE
+                  props.notification
+                    .notificationEventType as keyof typeof NOTIFICATION_LABEL_BY_TYPE
                 ]
               }
             </div>
@@ -431,10 +448,7 @@ function NotificationDetail(props: {
   );
 }
 
-function EmptyState(props: {
-  title: string;
-  description: string;
-}) {
+function EmptyState(props: { title: string; description: string }) {
   return (
     <div class="h-full flex items-center justify-center text-center p-8">
       <div>
@@ -471,35 +485,24 @@ function PlaygroundContent() {
     () => notificationsByType().get(selectedType() || '') || []
   );
 
-  const customNotification = createMemo(() => {
-    const baseNotification = allNotifications()[0];
-    if (!baseNotification) {
-      return {
-        id: `custom-${Date.now()}`,
-        createdAt: Math.floor(Date.now() / 1000),
-        eventItemId: 'channel-custom',
-        eventItemType: 'channel',
-        senderId: 'user-custom',
-        notificationEventType: 'channel_message_send',
-        notificationMetadata: {
-          sender: 'user-custom',
-          messageContent: markdownArea.state(),
-          messageId: 'msg-custom',
-        },
-        viewedAt: null,
-        done: false,
-      } as unknown as UnifiedNotification;
-    }
-
+  const customNotification = createMemo((): UnifiedNotification => {
+    /** @ts-ignore */
     return {
-      ...baseNotification,
       id: `custom-${Date.now()}`,
+      createdAt: Math.floor(Date.now() / 1000),
+      eventItemId: 'channel-custom',
+      eventItemType: 'channel',
+      senderId: 'user-custom',
       notificationEventType: 'channel_message_send',
       notificationMetadata: {
-        sender: baseNotification.senderId,
+        sender: 'user-custom',
         messageContent: markdownArea.state(),
-        messageId: `msg-custom-${Date.now()}`,
+        messageId: 'msg-custom',
+        channelType: 'direct_message',
+        channelName: 'test-channel',
       },
+      viewedAt: null,
+      done: false,
     } as UnifiedNotification;
   });
 
@@ -583,8 +586,9 @@ function PlaygroundContent() {
 
           <div class="border-b border-edge-muted">
             <button
-              class={`w-full p-4 text-left transition-all ${customMode() ? 'bg-accent text-ink' : 'bg-menu hover:bg-hover'
-                }`}
+              class={`w-full p-4 text-left transition-all ${
+                customMode() ? 'bg-accent text-ink' : 'bg-menu hover:bg-hover'
+              }`}
               onClick={() => {
                 setCustomMode(true);
                 setSelectedType(null);
@@ -680,3 +684,60 @@ export function NotificationsPlayground() {
     </PlatformNotificationProvider>
   );
 }
+
+interface NotificationProps {
+  icon?: string;
+  title: string;
+  body: string;
+  badge?: string;
+  onClose?: () => void;
+}
+
+export const BrowserNotificationPreview: Component<NotificationProps> = (
+  props
+) => {
+  return (
+    <div class="w-full bg-[#1a1a1a] rounded-lg shadow-2xl overflow-hidden">
+      <div class="flex items-start gap-3 p-4">
+        {/* Icon with optional badge */}
+        <div class="relative flex-shrink-0">
+          <div class="w-10 h-10 rounded-lg overflow-hidden bg-gray-800 flex items-center justify-center">
+            <Show
+              when={props.icon}
+              fallback={<div class="w-6 h-6 bg-gray-600 rounded" />}
+            >
+              <img src={props.icon} alt="" class="w-full h-full object-cover" />
+            </Show>
+          </div>
+          <Show when={props.badge}>
+            <div class="absolute -top-1 -left-1 w-5 h-5 bg-red-500 rounded-full flex items-center justify-center">
+              <img src={props.badge} alt="" class="w-3 h-3" />
+            </div>
+          </Show>
+        </div>
+
+        {/* Content */}
+        <div class="flex-1 min-w-0">
+          <div class="text-white font-medium text-sm mb-1 truncate">
+            {props.title}
+          </div>
+          <div class="text-gray-400 text-sm line-clamp-2">{props.body}</div>
+        </div>
+
+        {/* Close button */}
+        <button
+          onClick={props.onClose}
+          class="flex-shrink-0 text-gray-500 hover:text-gray-300 transition-colors"
+        >
+          <svg class="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+            <path
+              fill-rule="evenodd"
+              d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z"
+              clip-rule="evenodd"
+            />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+};

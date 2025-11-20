@@ -87,7 +87,7 @@ if (LOCAL_ONLY) {
   registerComponent(
     'notifications-playground',
     lazy(() =>
-      import('@notifications/playground').then((m) => ({
+      import('@notifications/components/Playground').then((m) => ({
         default: m.NotificationsPlayground,
       }))
     )

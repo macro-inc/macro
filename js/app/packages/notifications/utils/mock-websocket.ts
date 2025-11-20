@@ -14,7 +14,10 @@ export function createMockWebsocket(): {
 
   const ws: ConnectionGatewayWebsocket = {
     send: () => {},
-    addEventListener: (event: string, callback: (ws: any, e: MessageEvent) => void) => {
+    addEventListener: (
+      event: string,
+      callback: (ws: any, e: MessageEvent) => void
+    ) => {
       if (event === 'message') {
         setListeners((prev) => [...prev, callback]);
       }
