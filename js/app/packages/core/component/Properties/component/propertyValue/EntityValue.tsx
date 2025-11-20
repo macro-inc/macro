@@ -3,7 +3,7 @@ import type { EntityReference } from '@service-properties/generated/schemas/enti
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
-import { savePropertyValue } from '../../api/propertyValues';
+import { saveEntityProperty } from '../../api';
 import type { Property } from '../../types';
 import { EntityIcon } from './EntityIcon';
 import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
@@ -38,12 +38,12 @@ export const EntityValue: Component<EntityValueProps> = (props) => {
     try {
       const entities = (props.property.value as EntityReference[]) ?? [];
       const newValues = entities.filter(
-        (entity) =>
+        (entity: EntityReference) =>
           entity.entity_id !== entityToRemove.entity_id ||
           entity.entity_type !== entityToRemove.entity_type
       );
 
-      const result = await savePropertyValue(
+      const result = await saveEntityProperty(
         blockId,
         props.entityType,
         props.property,

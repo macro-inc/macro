@@ -14,19 +14,19 @@ type BooleanValueProps = {
 
 /**
  * Display component for boolean properties with instant toggle
- * Treats undefined as false (unchecked)
+ * Treats null as false (unchecked)
  */
 export const BooleanValue: Component<BooleanValueProps> = (props) => {
   const { value, isSaving, toggle } = useBooleanEditor(
-    props.property as Property & { valueType: 'boolean' },
+    props.property as Property & { valueType: 'BOOLEAN' },
     props.entityType,
     props.onRefresh
   );
 
   const isReadOnly = () => props.property.isMetadata || !props.canEdit;
 
-  // Treat undefined/null as false
-  const isChecked = () => value() === true;
+  // Treat null as false - use !! to convert any truthy value to boolean
+  const isChecked = () => !!value();
 
   const handleClick = () => {
     if (!isReadOnly() && !isSaving()) {
