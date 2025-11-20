@@ -154,30 +154,28 @@ export function Notebook() {
     }
   });
 
-  createEffect(() => {
-    if (scopeId()) {
-      registerHotkey({
-        hotkey: 'enter',
-        scopeId: scopeId(),
-        hotkeyToken: TOKENS.block.focus,
-        description: 'Focus Title or Markdown Editor',
-        keyDownHandler: () => {
-          const titleEditor = md.titleEditor;
-          const markdownEditor = md.editor;
-          const docName = untrack(documentName);
+  onMount(() => {
+    registerHotkey({
+      hotkey: 'enter',
+      scopeId: scopeId(),
+      hotkeyToken: TOKENS.block.focus,
+      description: 'Focus Title or Markdown Editor',
+      keyDownHandler: () => {
+        const titleEditor = md.titleEditor;
+        const markdownEditor = md.editor;
+        const docName = untrack(documentName);
 
-          if (titleEditor && docName === '') {
-            titleEditor.focus();
-            return true;
-          } else if (markdownEditor) {
-            markdownEditor.focus(undefined, { defaultSelection: 'rootStart' });
-            return true;
-          }
-          return false;
-        },
-        hide: true,
-      });
-    }
+        if (titleEditor && docName === '') {
+          titleEditor.focus();
+          return true;
+        } else if (markdownEditor) {
+          markdownEditor.focus(undefined, { defaultSelection: 'rootStart' });
+          return true;
+        }
+        return false;
+      },
+      hide: true,
+    });
   });
 
   createEffect(() => {

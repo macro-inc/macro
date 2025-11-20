@@ -22,6 +22,7 @@ import {
   setActiveScope,
   setExecutedTokens,
   setHotkeyTokenMap,
+  setLastExecutedCommand,
   setPressedKeys,
 } from './state';
 import {
@@ -548,6 +549,7 @@ export function useHotKeyRoot() {
         const captured = command.keyDownHandler?.(e);
         if (captured) {
           setPressedKeys(new Set<string>());
+          setLastExecutedCommand(command);
           commandCaptured = command;
           setExecutedTokens((prev) =>
             prev.includes(command.hotkeyToken ?? '')
