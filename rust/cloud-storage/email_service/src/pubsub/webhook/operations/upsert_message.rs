@@ -7,6 +7,7 @@ use email_db_client::threads;
 use email_db_client::threads::get::get_outbound_threads_by_thread_ids;
 use futures::future::join_all;
 use insight_service_client::InsightContextProvider;
+use model::contacts::ConnectionsMessage;
 use model::insight_context::email_insights::{
     EMAIL_INSIGHT_PROVIDER_SOURCE_NAME, EmailInfo, GenerateEmailInsightContext, NewMessagePayload,
     NewMessagesPayload,
@@ -69,6 +70,19 @@ pub async fn upsert_message(
     // will always exist because we just fetched it
     let provider_thread_id = message.provider_thread_id.clone().unwrap();
 
+    let is_sent = message.is_sent;
+
+    // deduped list of all non-generic emails the message was sent to
+    let recipient_emails = message
+        .cc
+        .iter()
+        .map(|c| c.email.clone())
+        .chain(message.to.iter().map(|t| t.email.clone()))
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .filter(|e| !email_utils::is_generic_email(e))
+        .collect::<Vec<_>>();
+
     // determine if message's thread already exists in the database
     let thread_provider_to_db_map = threads::get::get_threads_by_link_id_and_provider_ids(
         &ctx.db,
@@ -130,40 +144,127 @@ pub async fn upsert_message(
     // notify downstream services of new messages
     notify_for_new_messages(ctx, link, new_message_provider_ids).await?;
 
+    handle_attachment_upload(
+        ctx,
+        &gmail_access_token,
+        link,
+        payload,
+        message_attachment_count,
+    )
+    .await?;
+
+    handle_contacts_sync(
+        ctx,
+        link,
+        &recipient_emails,
+        is_sent,
+        &payload.provider_message_id,
+    )
+    .await?;
+
+    Ok(())
+}
+
+#[tracing::instrument(skip(ctx, gmail_access_token))]
+async fn handle_attachment_upload(
+    ctx: &PubSubContext,
+    gmail_access_token: &str,
+    link: &link::Link,
+    payload: &UpsertMessagePayload,
+    message_attachment_count: usize,
+) -> result::Result<(), ProcessingError> {
     // temporarily only for macro emails, for testing purposes
-    if link.macro_id.ends_with("@macro.com")
-        && !cfg!(feature = "disable_attachment_upload")
-        && message_attachment_count > 0
+    if !link.macro_id.ends_with("@macro.com")
+        || cfg!(feature = "disable_attachment_upload")
+        || message_attachment_count == 0
     {
-        // upload attachments to Macro
-        let attachments = email_db_client::attachments::provider::upload::fetch_insertable_attachments_for_new_email(
+        return Ok(());
+    }
+
+    // upload attachments to Macro
+    let attachments =
+        email_db_client::attachments::provider::upload::fetch_insertable_attachments_for_new_email(
             &ctx.db,
-            &payload.provider_message_id
-        ).await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to fetch attachments to insert".to_string()),
-                })
-            })?;
+            &payload.provider_message_id,
+        )
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e.context("Failed to fetch attachments to insert".to_string()),
+            })
+        })?;
 
-        if !attachments.is_empty() {
-            tracing::info!(
-                "Uploading attachments ({:?}) to Macro for new email",
-                attachments
-                    .iter()
-                    .map(|a| a.attachment_db_id)
-                    .collect::<Vec<_>>()
-            );
-        }
+    if !attachments.is_empty() {
+        tracing::info!(
+            "Uploading attachments ({:?}) to Macro for new email",
+            attachments
+                .iter()
+                .map(|a| a.attachment_db_id)
+                .collect::<Vec<_>>()
+        );
+    }
 
-        for attachment in attachments {
-            // keep processing if it fails, best effort
-            if let Err(e) = upload_attachment(ctx, &gmail_access_token, link, &attachment).await {
-                tracing::error!("Failed to upload attachment to Macro: {e}");
-            }
+    for attachment in attachments {
+        // keep processing if it fails, best effort
+        if let Err(e) = upload_attachment(ctx, gmail_access_token, link, &attachment).await {
+            tracing::error!("Failed to upload attachment to Macro: {e}");
         }
     }
+
+    Ok(())
+}
+
+#[tracing::instrument(skip(ctx, link, recipient_emails))]
+async fn handle_contacts_sync(
+    ctx: &PubSubContext,
+    link: &link::Link,
+    recipient_emails: &[String],
+    is_sent: bool,
+    provider_message_id: &str,
+) -> result::Result<(), ProcessingError> {
+    // if the user sent the message, upsert contacts for its recipients in contacts-service.
+    if !cfg!(feature = "disable_contacts_sync") || !is_sent || recipient_emails.is_empty() {
+        return Ok(());
+    }
+
+    tracing::info!(
+        "Upserting contacts {:?} for new sent message with id {}",
+        recipient_emails,
+        provider_message_id
+    );
+
+    // Create users list starting with the sender, then all recipients
+    let mut users = vec![link.macro_id.clone()];
+    users.extend(
+        recipient_emails
+            .iter()
+            .map(|email| format!("macro|{}", email)),
+    );
+
+    // Create connections from sender (index 0) to each recipient
+    let connections = (1..users.len()).map(|i| (0, i)).collect::<Vec<_>>();
+
+    let connections_message = ConnectionsMessage { users, connections };
+
+    ctx.sqs_client
+        .enqueue_contacts_add_connection(connections_message)
+        .await
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::SqsEnqueueFailed,
+                source: e.context(format!(
+                    "Failed to enqueue contacts message for {}",
+                    link.macro_id
+                )),
+            })
+        })?;
+
+    tracing::info!(
+        "Successfully upserted contacts {:?} for new sent message with id {}",
+        recipient_emails,
+        provider_message_id
+    );
 
     Ok(())
 }
