@@ -150,8 +150,12 @@ export type SplitManager = {
 } & UrlCapabilities;
 
 export type SplitHandle = {
-  unregisterContentChangeListener: (cb: (payload: SplitEventPayload[SplitEvent.ContentChange]) => void) => void;
-  registerContentChangeListener: (cb: (payload: SplitEventPayload[SplitEvent.ContentChange]) => void) => void;
+  unregisterContentChangeListener: (
+    cb: (payload: SplitEventPayload[SplitEvent.ContentChange]) => void
+  ) => void;
+  registerContentChangeListener: (
+    cb: (payload: SplitEventPayload[SplitEvent.ContentChange]) => void
+  ) => void;
   replace: (next: SplitContent, mergeHistory?: boolean) => void;
   toggleSpotlight: (force?: boolean) => void;
   setDisplayName: (name: string) => void;

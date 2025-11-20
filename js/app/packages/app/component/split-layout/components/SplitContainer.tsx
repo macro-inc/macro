@@ -1,14 +1,23 @@
-import { type Accessor, createEffect, createMemo, createSignal, on, type ParentProps, type Setter, Show} from 'solid-js';
-import { createElementSize } from '@solid-primitives/resize-observer';
+import MacroJump from '@app/component/MacroJump';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ClippedPanel } from '@core/component/ClippedPanel';
-import { SplitModalProvider } from './SplitModalContext';
-import { SplitDrawerGroup } from './SplitDrawerContext';
 import { isRightPanelOpen } from '@core/signal/layout';
+import { createElementSize } from '@solid-primitives/resize-observer';
+import {
+  type Accessor,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  type ParentProps,
+  type Setter,
+  Show,
+} from 'solid-js';
 import { useSplitPanelOrThrow } from '../layoutUtils';
-import MacroJump from '@app/component/MacroJump';
-import { SplitToolbar } from './SplitToolbar';
+import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
+import { SplitModalProvider } from './SplitModalContext';
+import { SplitToolbar } from './SplitToolbar';
 
 export function SplitContainer(
   props: ParentProps<{
@@ -22,7 +31,9 @@ export function SplitContainer(
   }>
 ) {
   const panel = useSplitPanelOrThrow();
-  if(!panel){throw new Error('<SplitContainer /> must be used within a <SplitLayout />')};
+  if (!panel) {
+    throw new Error('<SplitContainer /> must be used within a <SplitLayout />');
+  }
 
   const [ref, setRef] = createSignal<HTMLDivElement>();
   createEffect(
@@ -42,10 +53,10 @@ export function SplitContainer(
     return offset;
   });
 
-  function multipleSplits(){
+  function multipleSplits() {
     const splits = globalSplitManager()?.splits?.();
     return Boolean(splits && splits.length > 1);
-  };
+  }
 
   return (
     <SplitModalProvider>
@@ -63,22 +74,36 @@ export function SplitContainer(
 
         <div
           classList={{
-            'fixed inset-[4rem] z-modal-overlay isolate opacity-50': panel.handle.isSpotLight(),
-            'opacity-100': panel.handle.isActive() || panel.handle.isSpotLight(),
+            'fixed inset-[4rem] z-modal-overlay isolate opacity-50':
+              panel.handle.isSpotLight(),
+            'opacity-100':
+              panel.handle.isActive() || panel.handle.isSpotLight(),
             'size-full': !panel.handle.isSpotLight(),
             'opacity-85': !panel.handle.isActive(),
           }}
-          ref={(ref) => { setRef(ref); props.ref(ref)}}
+          ref={(ref) => {
+            setRef(ref);
+            props.ref(ref);
+          }}
           data-split-id={props.id}
+          class="bracket-never"
           data-split-container
           tabindex={-1}
         >
           <ClippedPanel
-            active={panel.handle.isActive() && multipleSplits() && !panel.handle.isSpotLight()}
-            tr={panel.handle.isLast() && !isRightPanelOpen() && ! panel.handle.isSpotLight()}
+            active={
+              panel.handle.isActive() &&
+              multipleSplits() &&
+              !panel.handle.isSpotLight()
+            }
+            tr={
+              panel.handle.isLast() &&
+              !isRightPanelOpen() &&
+              !panel.handle.isSpotLight()
+            }
             tl={panel.handle.isFirst() && !panel.handle.isSpotLight()}
           >
-            <div class="@container/split flex flex-col min-h-0 bracket-never size-full">
+            <div class="flex flex-col min-h-0 size-full">
               <SplitHeader ref={setHeaderRef} />
               <SplitToolbar ref={setToolbarRef} />
               <div class="size-full overflow-hidden">{props.children}</div>

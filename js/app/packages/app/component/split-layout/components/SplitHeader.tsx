@@ -2,7 +2,6 @@ import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator'
 import { IconButton } from '@core/component/IconButton';
 import { ENABLE_PREVIEW } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
-import { cornerClip } from '@core/util/clipPath';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import CaretLeft from '@icon/regular/caret-left.svg';
@@ -140,9 +139,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
       data-split-header
       ref={props.ref}
     >
-      <div
-        class="absolute inset-0 flex justify-start items-center bg-panel border-b border-b-edge-muted"
-      >
+      <div class="absolute inset-0 flex justify-start items-center bg-panel border-b border-b-edge-muted">
         <SplitControlButtons />
         <div
           class="relative w-fit min-w-0 h-full shrink"
@@ -152,11 +149,13 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
         />
 
         {/* space filler */}
-        <div class="h-full grow-1"/>
+        <div class="h-full grow-1" />
 
         <div
           class="min-w-4 h-full shrink-0"
-          ref={(ref) => {ctx.layoutRefs.headerRight = ref}}
+          ref={(ref) => {
+            ctx.layoutRefs.headerRight = ref;
+          }}
         />
         <div class="z-2 relative flex items-center bg-panel pr-2 h-full">
           <EntityNavigationIndicator />

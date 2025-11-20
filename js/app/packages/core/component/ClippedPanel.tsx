@@ -14,7 +14,8 @@ export function ClippedPanel(props: PanelProps) {
   return (
     <div
       style={{
-        'background-image': `linear-gradient(${props.active ? 'var(--color-accent)' : 'var(--color-edge-muted)'}, var(--color-edge-muted))`,
+        'background-image': `linear-gradient(var(--color-accent), var(--color-edge-muted) ${props.active ? '80%' : '0%'})`,
+        transition: 'background-image var(--transition)',
         'box-sizing': 'border-box',
         'clip-path': cornerClip(
           props.tl ? '0.5rem' : 0,
