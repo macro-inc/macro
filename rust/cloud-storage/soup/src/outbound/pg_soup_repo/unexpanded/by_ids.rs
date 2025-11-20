@@ -1,9 +1,12 @@
-use macro_user_id::user_id::MacroUserIdStr;
+use std::str::FromStr;
+
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::{Entity, EntityType};
-use models_soup::{
-    chat::map_soup_chat, document::map_soup_document, item::SoupItem, project::map_soup_project,
-};
+use models_soup::{chat::SoupChat, document::SoupDocument, item::SoupItem, project::SoupProject};
 use sqlx::PgPool;
+use uuid::Uuid;
+
+use crate::outbound::pg_soup_repo::type_err;
 
 /// Returns objects that a user has EXPLICIT access to by their IDs, including project items.
 ///
@@ -161,46 +164,69 @@ pub async fn unexpanded_soup_by_ids<'a>(
         project_ids.as_slice(),  // $4
     )
     .try_map(|r| match r.item_type.as_ref() {
-        "document" => {
-            let document = map_soup_document(
-                r.id,
-                r.user_id,
-                r.document_version_id,
-                r.name,
-                r.sha,
-                r.file_type,
-                r.document_family_id,
-                r.branched_from_id,
-                r.branched_from_version_id,
-                r.project_id,
-                r.created_at,
-                r.updated_at,
-                r.viewed_at,
-            )
-            .map_err(|e| sqlx::Error::TypeNotFound {
-                type_name: e.to_string(),
-            })?;
-            Ok(SoupItem::Document(document))
-        }
-        "chat" => Ok(SoupItem::Chat(map_soup_chat(
-            r.id,
-            r.user_id,
-            r.name,
-            r.project_id,
-            r.is_persistent,
-            r.created_at,
-            r.updated_at,
-            r.viewed_at,
-        ))),
-        "project" => Ok(SoupItem::Project(map_soup_project(
-            r.id,
-            r.user_id,
-            r.name,
-            r.project_id,
-            r.created_at,
-            r.updated_at,
-            r.viewed_at,
-        ))),
+        "document" => Ok(SoupItem::Document(SoupDocument {
+            id: Uuid::parse_str(&r.id).map_err(type_err)?,
+            document_version_id: r
+                .document_version_id
+                .ok_or_else(|| type_err("document version id must exist"))
+                .and_then(|s| FromStr::from_str(&s).map_err(type_err))?,
+            owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
+                .map_err(type_err)?
+                .into_owned(),
+            name: r.name,
+            file_type: r.file_type,
+            sha: r.sha,
+            project_id: r
+                .project_id
+                .as_deref()
+                .map(Uuid::parse_str)
+                .transpose()
+                .map_err(type_err)?,
+            branched_from_id: r
+                .branched_from_id
+                .as_deref()
+                .map(Uuid::parse_str)
+                .transpose()
+                .map_err(type_err)?,
+            branched_from_version_id: r.branched_from_version_id,
+            document_family_id: r.document_family_id,
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+            viewed_at: r.viewed_at,
+        })),
+        "chat" => Ok(SoupItem::Chat(SoupChat {
+            id: Uuid::parse_str(&r.id).map_err(type_err)?,
+            name: r.name,
+            owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
+                .map_err(type_err)?
+                .into_owned(),
+            project_id: r
+                .project_id
+                .as_deref()
+                .map(Uuid::parse_str)
+                .transpose()
+                .map_err(type_err)?,
+            is_persistent: r.is_persistent.unwrap_or_default(),
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+            viewed_at: r.viewed_at,
+        })),
+        "project" => Ok(SoupItem::Project(SoupProject {
+            id: Uuid::parse_str(&r.id).map_err(type_err)?,
+            name: r.name,
+            owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
+                .map_err(type_err)?
+                .into_owned(),
+            parent_id: r
+                .project_id
+                .as_deref()
+                .map(Uuid::parse_str)
+                .transpose()
+                .map_err(type_err)?,
+            created_at: r.created_at,
+            updated_at: r.updated_at,
+            viewed_at: r.viewed_at,
+        })),
         _ => Err(sqlx::Error::TypeNotFound {
             type_name: r.item_type,
         }),

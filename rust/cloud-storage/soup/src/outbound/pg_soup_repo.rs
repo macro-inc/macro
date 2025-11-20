@@ -123,3 +123,10 @@ async fn not_implemented<Ok>(_req: SimpleSortRequest<'_>) -> Result<Ok, sqlx::Er
         "Unexpanded soup ast filters are not yet supported".to_string(),
     ))
 }
+
+/// utility fn for queries to create a sqlx err
+fn type_err<E: std::fmt::Display>(e: E) -> sqlx::Error {
+    sqlx::Error::TypeNotFound {
+        type_name: e.to_string(),
+    }
+}

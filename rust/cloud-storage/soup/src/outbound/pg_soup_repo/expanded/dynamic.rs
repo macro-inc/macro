@@ -1,16 +1,21 @@
 //! This module exposes a expanded dynamic query builder which is able to build specific soup queries
 //! which filter out content basd on some input ast
 
+use std::str::FromStr;
+
 use chrono::{DateTime, Utc};
 use filter_ast::Expr;
 use item_filters::ast::{
     EntityFilterAst, chat::ChatLiteral, document::DocumentLiteral, project::ProjectLiteral,
 };
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{chat::SoupChat, document::SoupDocument, item::SoupItem, project::SoupProject};
 use recursion::CollapsibleExt;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRow};
+use uuid::Uuid;
+
+use crate::outbound::pg_soup_repo::type_err;
 
 static PREFIX: &str = r#"
     WITH RECURSIVE ProjectHierarchy AS (
@@ -371,16 +376,26 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
             }) => SoupItem::Document(SoupDocument {
-                id,
+                id: Uuid::parse_str(&id).map_err(type_err)?,
                 document_version_id: document_version_id
                     .parse()
                     .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-                owner_id: user_id,
+                owner_id: MacroUserIdStr::parse_from_str(&user_id)
+                    .map_err(type_err)?
+                    .into_owned(),
                 name,
                 file_type,
                 sha,
-                project_id,
-                branched_from_id,
+                project_id: project_id
+                    .as_deref()
+                    .map(Uuid::from_str)
+                    .transpose()
+                    .map_err(type_err)?,
+                branched_from_id: branched_from_id
+                    .as_deref()
+                    .map(Uuid::from_str)
+                    .transpose()
+                    .map_err(type_err)?,
                 branched_from_version_id,
                 document_family_id,
                 created_at,
@@ -397,10 +412,16 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
             }) => SoupItem::Chat(SoupChat {
-                id,
+                id: Uuid::parse_str(&id).map_err(type_err)?,
                 name,
-                owner_id: user_id,
-                project_id,
+                owner_id: MacroUserIdStr::parse_from_str(&user_id)
+                    .map_err(type_err)?
+                    .into_owned(),
+                project_id: project_id
+                    .as_deref()
+                    .map(Uuid::parse_str)
+                    .transpose()
+                    .map_err(type_err)?,
                 is_persistent,
                 created_at,
                 updated_at,
@@ -415,10 +436,16 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
             }) => SoupItem::Project(SoupProject {
-                id,
+                id: Uuid::parse_str(&id).map_err(type_err)?,
                 name,
-                owner_id: user_id,
-                parent_id: project_id,
+                owner_id: MacroUserIdStr::parse_from_str(&user_id)
+                    .map_err(type_err)?
+                    .into_owned(),
+                parent_id: project_id
+                    .as_deref()
+                    .map(Uuid::from_str)
+                    .transpose()
+                    .map_err(type_err)?,
                 created_at,
                 updated_at,
                 viewed_at,

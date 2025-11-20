@@ -20,7 +20,7 @@ pub struct SoupChat {
 
     /// The project id of the chat
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub project_id: Option<String>,
+    pub project_id: Option<Uuid>,
 
     /// Whether the chat is persistent or not
     pub is_persistent: bool,
