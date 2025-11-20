@@ -14,14 +14,17 @@ import CaretRight from '@icon/bold/caret-right-bold.svg';
 import EyeSlash from '@icon/bold/eye-slash-bold.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
   createMemo,
   createSignal,
   type JSX,
+  on,
   onCleanup,
   Show,
 } from 'solid-js';
+import { contain } from 'three/src/extras/TextureUtils.js';
 import {
   frontMatterPreference,
   setFrontMatterPreferenceForDoc,
@@ -56,7 +59,6 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
     if (shouldRefresh) {
       propertiesRefreshSignal.set(false);
       refetch();
-      layoutShift();
     }
   });
 
@@ -120,7 +122,6 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
     const editor = mdData.editor;
     if (editor) {
       editor.dispatchCommand(ADD_PINNED_PROPERTY_COMMAND, propertyId);
-      layoutShift();
     }
   };
 
@@ -128,13 +129,17 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
     const editor = mdData.editor;
     if (editor) {
       editor.dispatchCommand(REMOVE_PINNED_PROPERTY_COMMAND, propertyId);
-      layoutShift();
     }
   };
 
+  const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
+  const containerSize = createElementSize(containerRef);
+  const height = () => containerSize.height;
+  createEffect(on(height, layoutShift));
+
   return (
     <Show when={!error()} fallback={props.fallback}>
-      <div class="mt-6 mb-6">
+      <div class="mt-6 mb-6" ref={setContainerRef}>
         <PropertiesProvider
           entityType={'DOCUMENT' as EntityType}
           canEdit={props.canEdit}
