@@ -18,7 +18,7 @@ import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isErr } from '@core/util/maybeResult';
 import { transformShortIdInUrlPathname } from '@core/util/url';
-import { isTauri, MaybeTauriProvider } from '@macro/tauri';
+import { isTauri, isTauriPlatform, MaybeTauriProvider } from '@macro/tauri';
 import { createEmailSource, Provider as EntityProvider } from '@macro-entity';
 import {
   createNotificationSource,
@@ -352,6 +352,7 @@ export function Root() {
 
   const [tabInfo] = tabTitleSignal;
   const tabTitle = () => formatTabTitle(tabInfo());
+  const routerBase = isTauriPlatform() ? '/' : '/app';
 
   return (
     <MaybeTauriProvider>
@@ -366,7 +367,7 @@ export function Root() {
                   transformUrl={transformShortIdInUrlPathname}
                   root={Layout}
                   rootPreload={rootPreload}
-                  base="/app"
+                  base={routerBase}
                 >
                   {{
                     path: '/',
