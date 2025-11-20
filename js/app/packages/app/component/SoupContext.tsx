@@ -283,8 +283,18 @@ export function createNavigationEntityListShortcut({
                 });
                 waitForFrames(2).then(() => {
                   const elem = getEntityElAtIndex(nextIndex);
-                  if (elem instanceof HTMLElement) elem.focus();
+                  if (elem instanceof HTMLElement) {
+                    elem.focus();
+                    return;
+                    // cooked state (no focus returned)
+                  }
                 });
+              } else {
+                const firstIndex = virtualizerHandle()?.findStartIndex();
+                if (!firstIndex) return;
+                const elem = getEntityElAtIndex(firstIndex);
+                if (elem instanceof HTMLElement) elem.focus();
+                // cooked state (no focus returned)
               }
             }
           },
