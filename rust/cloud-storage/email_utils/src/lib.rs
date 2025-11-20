@@ -91,11 +91,11 @@ pub fn is_generic_email(email: &str) -> bool {
     for prefix in automated_prefixes {
         if email_lower.starts_with(prefix)
             && (email_lower.contains(&format!("{}@", prefix))
-                || email_lower.contains(&format!("{}-@", prefix))
-                || email_lower.contains(&format!("{}.@", prefix))
-                || email_lower.contains(&format!("{}+@", prefix))
-                || email_lower.contains(&format!("{}=@", prefix))
-                || email_lower.contains(&format!("{}_@", prefix)))
+                || email_lower.contains(&format!("{}-", prefix))
+                || email_lower.contains(&format!("{}.", prefix))
+                || email_lower.contains(&format!("{}+", prefix))
+                || email_lower.contains(&format!("{}=", prefix))
+                || email_lower.contains(&format!("{}_", prefix)))
         {
             return true;
         }
@@ -112,6 +112,7 @@ pub fn is_generic_email(email: &str) -> bool {
             || email_lower.contains("system")
             || email_lower.contains("notification")
             || email_lower.contains("automated")
+            || email_lower.contains("unsubscribe")
             || email_lower.contains("do_not_reply"))
     {
         return true;
@@ -178,6 +179,12 @@ mod tests {
         assert!(is_generic_email("noreply@company.org"));
         assert!(is_generic_email("no-reply@service.com"));
         assert!(is_generic_email("do-not-reply@example.net"));
+        assert!(is_generic_email(
+            "32.mrtvirzriftueqkpj53gqqkinfzdiukcifng4s3bfvlvo4krnfpxqzdpinjxo2keonat2pi=@unsubscribe2.customer.io"
+        ));
+        assert!(is_generic_email(
+            "reply-107199600-1441644_html-1962870046-524000040-59174@e.atlassian.com"
+        ));
 
         // Test additional common system email prefixes
         assert!(is_generic_email("support@company.com"));
