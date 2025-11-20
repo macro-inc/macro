@@ -155,8 +155,8 @@ const useMapSearchResponseItem = () => {
   };
 };
 
-const fetchPaginatedSearchResults = async (args: PaginatedSearchArgs) => {
-  const res = await searchClient.search(args);
+const fetchPaginatedSearchResults = async (args: PaginatedSearchArgs, signal?: AbortSignal) => {
+  const res = await searchClient.search(args, { signal });
   if (isErr(res)) throw res[0];
   const [, data] = res;
   return data;
@@ -213,7 +213,7 @@ export function createUnifiedSearchInfiniteQuery(
       fetchPaginatedSearchResults({
         params: ctx.pageParam,
         request: request(),
-      }),
+      }, ctx.signal),
     initialPageParam: pageParams(),
     getNextPageParam: (lastPage, _allPages, lastPageParam, _allPageParams) => {
       if (lastPage.results.length === 0) return;

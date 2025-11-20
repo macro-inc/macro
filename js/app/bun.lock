@@ -46,6 +46,7 @@
         "@solid-primitives/platform": "^0.2.1",
         "@solid-primitives/promise": "^1.1.2",
         "@solid-primitives/resize-observer": "^2.1.3",
+        "@solid-primitives/resource": "^0.4.3",
         "@solid-primitives/rootless": "^1.5.2",
         "@solid-primitives/scheduled": "^1.5.2",
         "@solid-primitives/storage": "^4.3.3",
@@ -1390,6 +1391,8 @@
     "@solid-primitives/refs": ["@solid-primitives/refs@1.0.8", "", { "dependencies": { "@solid-primitives/utils": "^6.2.3" }, "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-+jIsWG8/nYvhaCoG2Vg6CJOLgTmPKFbaCrNQKWfChalgUf9WrVxWw0CdJb3yX15n5lUcQ0jBo6qYtuVVmBLpBw=="],
 
     "@solid-primitives/resize-observer": ["@solid-primitives/resize-observer@2.1.3", "", { "dependencies": { "@solid-primitives/event-listener": "^2.4.3", "@solid-primitives/rootless": "^1.5.2", "@solid-primitives/static-store": "^0.1.2", "@solid-primitives/utils": "^6.3.2" }, "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-zBLje5E06TgOg93S7rGPldmhDnouNGhvfZVKOp+oG2XU8snA+GoCSSCz1M+jpNAg5Ek2EakU5UVQqL152WmdXQ=="],
+
+    "@solid-primitives/resource": ["@solid-primitives/resource@0.4.3", "", { "peerDependencies": { "solid-js": "^1.6.0" } }, "sha512-bu9z9yORJLZPJzrPSuL+yfhq/8WFWNI4EPTz2j9NeMym1WlZFGH0j0hGULRJY3/1PeQeWayEc0bM+X/8ICHVBQ=="],
 
     "@solid-primitives/rootless": ["@solid-primitives/rootless@1.5.2", "", { "dependencies": { "@solid-primitives/utils": "^6.3.2" }, "peerDependencies": { "solid-js": "^1.6.12" } }, "sha512-9HULb0QAzL2r47CCad0M+NKFtQ+LrGGNHZfteX/ThdGvKIg2o2GYhBooZubTCd/RTu2l2+Nw4s+dEfiDGvdrrQ=="],
 
