@@ -2,12 +2,8 @@ import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import {
-  type ChannelWithParticipants,
-  type IUser,
-  useContacts,
-  useOrganizationUsers,
-} from '@core/user';
+import type { ChannelWithParticipants, IUser } from '@core/user';
+import { useContacts, useOrganizationUsers } from '@core/user';
 import { mergeByKey } from '@core/util/compareUtils';
 import { createFreshSearch } from '@core/util/freshSort';
 import CheckIcon from '@icon/bold/check-bold.svg';
@@ -35,78 +31,63 @@ type EntityInputProps = {
   setHasChanges: (hasChanges: boolean) => void;
 };
 
-type EntityMap = {
-  item: Item;
-  user: IUser;
-  channel: ChannelWithParticipants;
-};
-
-type Entity<T extends keyof EntityMap> = {
-  kind: T;
-  id: EntityMap[T]['id'];
-  data: EntityMap[T];
-};
-
-type PickEntity<K extends keyof EntityMap> = {
-  [P in K]: Entity<P>;
-}[K];
-
-type CombinedEntity<K extends keyof EntityMap = keyof EntityMap> =
-  PickEntity<K>;
-
-type EntityMapper<K extends keyof EntityMap> = (
-  data: EntityMap[K]
-) => PickEntity<K>;
-
-function entityMapper<K extends keyof EntityMap>(kind: K): EntityMapper<K> {
-  return (data: EntityMap[K]) => ({ kind, data, id: data.id });
-}
-
-const ICON_CLASSES = 'size-4 text-ink-muted';
 const INPUT_CLASSES = PROPERTY_STYLES.input.search;
 const ENTITY_ITEM_BASE =
   'flex items-center justify-between gap-2 py-1.5 px-2 border border-edge cursor-pointer min-w-0';
 const CHECKBOX_BASE = 'w-4 h-4 border flex items-center justify-center';
+const ICON_CLASSES = 'size-4 text-ink-muted';
 
-const getEntityName = (entity: CombinedEntity): string => {
+type CombinedEntity =
+  | { kind: 'item'; id: string; data: Item }
+  | { kind: 'user'; id: string; data: IUser }
+  | { kind: 'channel'; id: string; data: ChannelWithParticipants };
+
+function entityMapper(kind: 'item' | 'user' | 'channel') {
+  return (data: Item | IUser | ChannelWithParticipants): CombinedEntity => {
+    return { kind, data, id: (data as { id: string }).id } as CombinedEntity;
+  };
+}
+
+function getEntityName(entity: CombinedEntity): string {
   switch (entity.kind) {
     case 'item':
       return entity.data.name;
-    case 'user':
+    case 'user': {
       const { name, email } = entity.data;
       if (name === email) return email;
       return `${name} | ${email}`;
+    }
     case 'channel':
       return entity.data.name ?? '';
   }
-};
+}
 
-const getEntitySearchText = (entity: CombinedEntity): string => {
+function getEntitySearchText(entity: CombinedEntity): string {
   switch (entity.kind) {
     case 'item':
       return entity.data.name;
-    case 'user':
+    case 'user': {
       const { name, email } = entity.data;
       if (name === email) return `${email} | ${email}`;
       return `${name} | ${email}`;
+    }
     case 'channel':
       return entity.data.name ?? '';
   }
-};
+}
 
-const getEntityType = (entity: CombinedEntity): string => {
+function getEntityType(entity: CombinedEntity): string {
   switch (entity.kind) {
     case 'user':
       return 'USER';
     case 'channel':
       return 'CHANNEL';
     case 'item':
-      // Entity types from backend are already uppercase
       return entity.data.type.toUpperCase();
   }
-};
+}
 
-const getEntityIcon = (entity: CombinedEntity) => {
+function getEntityIcon(entity: CombinedEntity) {
   switch (entity.kind) {
     case 'user':
       return (
@@ -130,7 +111,7 @@ const getEntityIcon = (entity: CombinedEntity) => {
         default:
           return <ChannelIcon class={ICON_CLASSES} />;
       }
-    case 'item':
+    case 'item': {
       const blockName =
         entity.data.type === 'document'
           ? fileTypeToBlockName(entity.data.fileType, true)
@@ -140,10 +121,16 @@ const getEntityIcon = (entity: CombinedEntity) => {
               ? 'project'
               : 'unknown';
       return <EntityIcon targetType={blockName} size="xs" />;
+    }
   }
-};
+}
 
-function useEntityData(specificEntityType: EntityType | null | undefined) {
+export function PropertyEntitySelector(props: EntityInputProps) {
+  const [searchTerm, setSearchTerm] = createSignal('');
+  const [lastSearchTerm, setLastSearchTerm] = createSignal('');
+
+  let searchInputRef!: HTMLInputElement;
+
   const history = useHistory();
   const organizationUsers = useOrganizationUsers();
   const contacts = useContacts();
@@ -151,16 +138,15 @@ function useEntityData(specificEntityType: EntityType | null | undefined) {
   const channels = () => channelsContext.channels();
 
   const entities = createMemo((): CombinedEntity[] => {
-    // Only fetch what we need based on specific type
+    const { specificEntityType } = props.property;
+
     if (!specificEntityType) {
-      // All entities - combine everything
       const allUsers = mergeByKey('id', contacts(), organizationUsers());
-      const mapped = [
+      return [
         ...allUsers.map(entityMapper('user')),
         ...history().map(entityMapper('item')),
         ...channels().map(entityMapper('channel')),
       ];
-      return mapped;
     }
 
     if (specificEntityType === ('USER' as EntityType)) {
@@ -172,7 +158,6 @@ function useEntityData(specificEntityType: EntityType | null | undefined) {
       return channels().map(entityMapper('channel'));
     }
 
-    // include all except thread type
     const itemTypes: EntityType[] = ['DOCUMENT', 'PROJECT', 'CHAT'];
     if (itemTypes.includes(specificEntityType)) {
       return history()
@@ -182,17 +167,6 @@ function useEntityData(specificEntityType: EntityType | null | undefined) {
 
     return [];
   });
-
-  return { entities };
-}
-
-export function PropertyEntitySelector(props: EntityInputProps) {
-  const [searchTerm, setSearchTerm] = createSignal('');
-  const [lastSearchTerm, setLastSearchTerm] = createSignal('');
-
-  let searchInputRef!: HTMLInputElement;
-
-  const { entities } = useEntityData(props.property.specificEntityType);
 
   const entitySearch = createFreshSearch<CombinedEntity>(
     { timeWeight: 0.1, brevityWeight: 0.3 },
