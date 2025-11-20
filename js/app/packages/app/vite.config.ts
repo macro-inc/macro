@@ -19,7 +19,8 @@ export default defineConfig(({ command, mode }) => {
   console.log('building minified bundle:', !NO_MINIFY);
 
   return {
-    base: command === 'serve' || process.env.VITE_TAURI === 'true' ? '/' : '/app',
+    base:
+      command === 'serve' || process.env.VITE_TAURI === 'true' ? '/' : '/app',
     assetsInclude: ['**/*.glb'],
     css: {
       preprocessorMaxWorkers: true,
