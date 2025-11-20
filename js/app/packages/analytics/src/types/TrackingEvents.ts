@@ -26,9 +26,6 @@ export const TrackingEvents = {
     UPGRADE: 'WEBAPP_Start-Upgrade',
     REFERRAL: 'WEBAPP_Start-Referral',
   },
-  AFFILIATE: {
-    ASSIGN: 'WEBAPP_Affiliate-Assign',
-  },
   ONBOARDING: {
     START: 'WEBAPP_Onboarding-Start',
     COMPLETE: 'WEBAPP_Onboarding-Complete',

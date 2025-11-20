@@ -3,7 +3,8 @@ use crate::config::CloudfrontSignerPrivateKey;
 use anyhow::Context;
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
-use frecency::outbound::postgres::FrecencyPgStorage;
+use email::{domain::service::EmailServiceImpl, inbound::EmailPreviewState, outbound::EmailPgRepo};
+use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -328,7 +329,10 @@ async fn main() -> anyhow::Result<()> {
         dss_client: Arc::new(dss_client),
         jwt_args,
         internal_auth_key: LocalOrRemoteSecret::Local(internal_auth_key),
-        frecency_storage: FrecencyPgStorage::new(db.clone()),
+        email_cursor_service: EmailPreviewState::new(EmailServiceImpl::new(
+            EmailPgRepo::new(db.clone()),
+            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db)),
+        )),
     })
     .await?;
     Ok(())

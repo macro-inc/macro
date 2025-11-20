@@ -6,25 +6,26 @@ use model_entity::{Entity, EntityType};
 use models_pagination::{Identify, SimpleSortMethod, SortOn};
 use serde::{Deserialize, Serialize, Serializer};
 use strum::EnumString;
-use utoipa::ToSchema;
+use uuid::Uuid;
 
-#[derive(Debug, Clone, Eq, PartialEq, ToSchema, EnumString, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, EnumString, Deserialize, Serialize)]
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum SoupItemType {
     Document,
     Chat,
     Project,
 }
 
-#[derive(Deserialize, Clone, ToSchema, Debug)]
+#[derive(Deserialize, Clone, Debug)]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[serde(untagged)]
-#[schema(discriminator(property_name = "type", mapping(
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema), schema(discriminator(property_name = "type", mapping(
      ("document" = "#/components/schemas/SoupDocument"),
      ("chat" = "#/components/schemas/SoupChat"),
      ("project" = "#/components/schemas/SoupProject"),
-)))]
+))))]
 pub enum SoupItem {
     Document(SoupDocument),
     Chat(SoupChat),
@@ -33,14 +34,16 @@ pub enum SoupItem {
 
 impl SoupItem {
     /// return the [Entity] for this soup item
-    pub fn entity(&self) -> Entity<'_> {
+    pub fn entity(&self) -> Entity<'static> {
         match self {
             SoupItem::Document(soup_document) => {
-                EntityType::Document.with_entity_str(&soup_document.id)
+                EntityType::Document.with_entity_string(soup_document.id.to_string())
             }
-            SoupItem::Chat(soup_chat) => EntityType::Chat.with_entity_str(&soup_chat.id),
+            SoupItem::Chat(soup_chat) => {
+                EntityType::Chat.with_entity_string(soup_chat.id.to_string())
+            }
             SoupItem::Project(soup_project) => {
-                EntityType::Project.with_entity_str(&soup_project.id)
+                EntityType::Project.with_entity_string(soup_project.id.to_string())
             }
         }
     }
@@ -90,24 +93,6 @@ impl Serialize for SoupItem {
     }
 }
 
-impl From<SoupProject> for SoupItem {
-    fn from(val: SoupProject) -> Self {
-        SoupItem::Project(val)
-    }
-}
-
-impl From<SoupDocument> for SoupItem {
-    fn from(val: SoupDocument) -> Self {
-        SoupItem::Document(val)
-    }
-}
-
-impl From<SoupChat> for SoupItem {
-    fn from(val: SoupChat) -> Self {
-        SoupItem::Chat(val)
-    }
-}
-
 impl SoupItem {
     fn cursor_timestamp(&self, sort: SimpleSortMethod) -> DateTime<Utc> {
         match (self, sort) {
@@ -148,13 +133,13 @@ impl SoupItem {
 }
 
 impl Identify for SoupItem {
-    type Id = String;
+    type Id = Uuid;
 
     fn id(&self) -> Self::Id {
         match self {
-            SoupItem::Document(soup_document) => soup_document.id.clone(),
-            SoupItem::Chat(soup_chat) => soup_chat.id.clone(),
-            SoupItem::Project(soup_project) => soup_project.id.clone(),
+            SoupItem::Document(soup_document) => soup_document.id,
+            SoupItem::Chat(soup_chat) => soup_chat.id,
+            SoupItem::Project(soup_project) => soup_project.id,
         }
     }
 }

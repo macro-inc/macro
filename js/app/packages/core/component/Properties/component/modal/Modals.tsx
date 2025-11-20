@@ -1,12 +1,12 @@
 import { useBlockId } from '@core/block';
 import { DatePicker } from '@core/component/DatePicker';
-import { toast } from '@core/component/Toast/Toast';
 import { type Component, createMemo } from 'solid-js';
 import { Portal, Show } from 'solid-js/web';
 import { saveEntityProperty } from '../../api';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
-import { ERROR_MESSAGES } from '../../utils/errorHandling';
+import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
+import { useModalPosition } from '../../utils/position';
 import { CreatePropertyModal } from './CreatePropertyModal';
 import { EditPropertyValueModal } from './EditPropertyValueModal';
 import { SelectPropertyModal } from './SelectPropertyModal';
@@ -43,13 +43,13 @@ export const Modals: Component = () => {
       value: newDate.toISOString(),
     });
 
-    if (!result.ok) {
-      console.error(
-        'Modals.handleDateSaved:',
-        result.error,
-        ERROR_MESSAGES.PROPERTY_SAVE
-      );
-      toast.failure(ERROR_MESSAGES.PROPERTY_SAVE);
+    if (
+      !handlePropertyError(
+        result,
+        ERROR_MESSAGES.PROPERTY_SAVE,
+        'Modals.handleDateSaved'
+      )
+    ) {
       return;
     }
 
@@ -74,19 +74,14 @@ export const Modals: Component = () => {
 
       <Show when={propertyEditorModal()}>
         {(state) => {
-          const position = state().anchor
-            ? {
-                top: state().anchor!.getBoundingClientRect().top,
-                left: state().anchor!.getBoundingClientRect().left,
-              }
-            : undefined;
+          const position = useModalPosition(() => state().anchor);
 
           return (
             <EditPropertyValueModal
               property={state().property}
               onClose={closePropertyEditor}
               onSaved={handlePropertySaved}
-              position={position}
+              position={position()}
               entityType={entityType}
             />
           );

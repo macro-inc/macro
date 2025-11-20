@@ -10,7 +10,12 @@ import { createSignal, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { saveEntityProperty } from '../../api';
 import type { Property } from '../../types';
-import { extractDomain, isValidUrl, normalizeUrl } from '../../utils';
+import {
+  extractDomain,
+  getLinkValues,
+  isValidUrl,
+  normalizeUrl,
+} from '../../utils';
 import { ERROR_MESSAGES } from '../../utils/errorHandling';
 import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
 
@@ -31,7 +36,7 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
   const [badLinks, setBadLinks] = createStore<Record<string, true>>({});
 
   const isReadOnly = () => props.property.isMetadata || !props.canEdit;
-  const linkValues = (props.property.value ?? []) as string[];
+  const linkValues = getLinkValues(props.property);
 
   const startAdding = () => {
     if (isReadOnly()) return;
@@ -104,7 +109,7 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
     setIsSaving(true);
 
     try {
-      const newValues = linkValues.filter((link) => link !== url);
+      const newValues = linkValues.filter((link: string) => link !== url);
 
       const result = await saveEntityProperty(
         blockId,
