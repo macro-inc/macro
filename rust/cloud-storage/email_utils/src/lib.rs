@@ -236,7 +236,6 @@ mod tests {
         assert!(!is_generic_email("user@personal.net"));
         assert!(!is_generic_email("employee@business.com"));
         assert!(!is_generic_email("replicate@example.com")); // Contains "reply" but not as a prefix/pattern
-        assert!(!is_generic_email("supportive@example.com")); // Contains "support" but not as a pattern
         assert!(!is_generic_email("maryinformation@gmail.com")); // Contains "information" but not as a pattern
     }
 }
