@@ -59,13 +59,13 @@ import {
 import {
   markNotificationsForEntityAsDone,
   useNotificationsForEntity,
-} from '@notifications/notificationHelpers';
+} from '@notifications/notification-helpers';
 import {
   isChannelMention,
   isChannelMessageReply,
   isChannelMessageSend,
   notificationWithMetadata,
-} from '@notifications/notificationMetadata';
+} from '@notifications/notification-metadata';
 import type { UnifiedNotification } from '@notifications/types';
 import type { PaginatedSearchArgs } from '@service-search/client';
 import type {

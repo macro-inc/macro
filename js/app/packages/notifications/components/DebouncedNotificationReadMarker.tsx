@@ -2,8 +2,8 @@ import type { Entity } from '@core/types';
 import {
   markNotificationForEntityIdAsRead,
   markNotificationsForEntityAsRead,
-} from '@notifications/notificationHelpers';
-import type { NotificationSource } from '@notifications/notificationSource';
+} from '@notifications/notification-helpers';
+import type { NotificationSource } from '@notifications/notification-source';
 import { emailClient } from '@service-email/client';
 import { onCleanup, onMount } from 'solid-js';
 

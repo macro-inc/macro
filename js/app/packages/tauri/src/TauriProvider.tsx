@@ -1,4 +1,4 @@
-import { PlatformNotificationProvider } from '@macro/notification-provider';
+import { PlatformNotificationProvider } from '@notifications/components/PlatformNotificationProvider';
 import type { RouteSectionProps } from '@solidjs/router';
 import { type OsType, type as osType } from '@tauri-apps/plugin-os';
 import { isTauri } from 'core/util/platformFetch';

@@ -31,7 +31,7 @@ import {
   queryKeys,
   useQueryClient as useEntityQueryClient,
 } from '@macro-entity';
-import { createEffectOnEntityTypeNotification } from '@notifications/notificationHelpers';
+import { createEffectOnEntityTypeNotification } from '@notifications/notification-helpers';
 import { storageServiceClient } from '@service-storage/client';
 import { Navigate } from '@solidjs/router';
 import { useMutation, useQueryClient } from '@tanstack/solid-query';

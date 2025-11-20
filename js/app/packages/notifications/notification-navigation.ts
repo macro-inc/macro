@@ -1,6 +1,6 @@
 import type { BlockName } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import type { NotificationData } from './notificationPreview';
+import type { NotificationData } from './notification-preview';
 
 export type NavigationActions = {
   insertSplit: (item: { type: BlockName; id: string }) => void;

@@ -6,11 +6,11 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { Tooltip } from '@core/component/Tooltip';
 import { UserIcon } from '@core/component/UserIcon';
-import { notificationIsRead } from '@notifications/notificationHelpers';
+import { notificationIsRead } from '@notifications/notification-helpers';
 import {
   isChannelMention,
   isChannelMessageReply,
-} from '@notifications/notificationMetadata';
+} from '@notifications/notification-metadata';
 import type { UnifiedNotification } from '@notifications/types';
 import type { ChannelWithLatest } from '@service-comms/generated/models';
 import { useUserId } from '@service-gql/client';

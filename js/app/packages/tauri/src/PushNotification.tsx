@@ -8,9 +8,9 @@ import {
   watchNotifications,
 } from '@inkibra/tauri-plugins/packages/tauri-plugin-notifications';
 import {
-  type AppNotificationInterface,
+  type PlatformNotificationInterface,
   PlatformNotificationProvider,
-} from '@macro/notification-provider';
+} from '@notifications/components/PlatformNotificationProvider';
 import { notificationServiceClient } from '@service-notification/client';
 import { makePersisted } from '@solid-primitives/storage';
 import {
@@ -132,7 +132,7 @@ export function MaybePushNotificationRegistration(props: {
   // now we compose the standard tauri notif plugin with the push notification plugin
   function curriedTauriPushNotification(
     setDisabled: () => Promise<void>
-  ): AppNotificationInterface {
+  ): PlatformNotificationInterface {
     const {
       requestPermission,
       unregisterNotifications,

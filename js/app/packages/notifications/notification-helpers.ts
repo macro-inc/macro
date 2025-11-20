@@ -1,7 +1,7 @@
 import type { Entity, EntityType } from '@core/types';
 import type { UnifiedNotification } from '@service-notification/client';
 import { type Accessor, createEffect, createMemo, on } from 'solid-js';
-import type { NotificationSource } from './notificationSource';
+import type { NotificationSource } from './notification-source';
 import { compositeEntity } from './types';
 
 /**
