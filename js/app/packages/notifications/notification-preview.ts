@@ -264,7 +264,6 @@ export async function toBrowserNotification(
     (data.actor ? await resolveUserName(data.actor.id) : undefined) ??
     USER_NAME_FALLBACK;
 
-
   const showTarget = data.target?.show ?? false;
 
   const targetName =
