@@ -3,6 +3,7 @@ import type { EntityType } from '@service-properties/generated/schemas/entityTyp
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { saveEntityProperty } from '../api';
 import type { Property } from '../types';
+import { ERROR_MESSAGES, handlePropertyError } from '../utils/errorHandling';
 
 /**
  * Hook for editing boolean properties
@@ -44,7 +45,13 @@ export function useBooleanEditor(
         value: newValue,
       });
 
-      if (result.ok) {
+      if (
+        handlePropertyError(
+          result,
+          ERROR_MESSAGES.PROPERTY_SAVE,
+          'useBooleanEditor.toggle'
+        )
+      ) {
         onSaved?.();
       }
     } finally {
