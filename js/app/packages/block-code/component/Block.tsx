@@ -8,12 +8,6 @@ import { TopBar } from './TopBar';
 export default function BlockCode() {
   const isNestedBlock = useIsNestedBlock();
 
-  // if (isNativeMobilePlatform()) {
-  //   // temporary fix for mobile
-  //   onMount(() => Keyboard.setAccessoryBarVisible({ isVisible: true }));
-  //   onCleanup(() => Keyboard.setAccessoryBarVisible({ isVisible: false }));
-  // }
-
   return (
     <DocumentBlockContainer usesCenterBar>
       <Show when={!isNestedBlock} fallback={<CodeMarkdown />}>
