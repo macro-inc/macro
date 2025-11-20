@@ -27,6 +27,10 @@ export const TOKENS = {
       end: 'entity.step.end',
       start: 'entity.step.start',
     },
+    select: {
+      end: 'entity.select.end',
+      start: 'entity.select.start',
+    },
     jump: {
       home: 'entity.jump.home',
       end: 'entity.jump.end',
@@ -54,10 +58,6 @@ export const TOKENS = {
       email: 'global.quickCreate.email',
       message: 'global.quickCreate.message',
       menuFormat: 'global.quickCreate.menuFormat',
-    },
-    moveCommand: 'global.jumpCommand',
-    move: {
-      macroJump: 'global.jump.macroJump',
     },
     commandMenu: 'global.commandMenu',
     toggleBigChat: 'global.toggleBigChat',

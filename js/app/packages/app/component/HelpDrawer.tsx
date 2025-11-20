@@ -73,7 +73,7 @@ export function HelpDrawer(props: { viewId?: ViewId }) {
               ],
             },
             {
-              hotkeyTokenSequence: [TOKENS.global.toggleRightPanel],
+              hotkeyTokenSequence: [TOKENS.split.go.toggleRightPanel],
             },
           ]}
         />
@@ -205,7 +205,7 @@ export function HelpDrawer(props: { viewId?: ViewId }) {
               hotkeyTokenSequence: [TOKENS.global.createNewSplit],
             },
             {
-              hotkeyTokenSequence: [TOKENS.global.toggleRightPanel],
+              hotkeyTokenSequence: [TOKENS.split.go.toggleRightPanel],
             },
             {
               hotkeyTokenSequence: [TOKENS.global.createCommand],
