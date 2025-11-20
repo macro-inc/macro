@@ -42,6 +42,9 @@ export const [executedTokens, setExecutedTokens] = makePersisted(
   }
 );
 
+export const [lastExecutedCommand, setLastExecutedCommand] =
+  createSignal<HotkeyCommand>();
+
 // Tracks hotkeys that need their keyUp handlers called
 export const hotkeysAwaitingKeyUp: {
   hotkey: ValidHotkey;

@@ -231,7 +231,6 @@ export function createNavigationEntityListShortcut({
   const isViewingList = createMemo(() => {
     return splitHandle.content().id === 'unified-list';
   });
-  createEffect(() => console.log('IS VIEWING LIST', isViewingList()));
 
   actionRegistry.register('mark_as_done', async (entities) => {
     const handler =
