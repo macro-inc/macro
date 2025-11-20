@@ -62,10 +62,13 @@ export const searchClient = {
       (result) => result
     );
   },
-  async searchEmails(args: {
-    request: EmailSearchRequest;
-    params: EmailSearchParams;
-  }, init?: SafeFetchInit) {
+  async searchEmails(
+    args: {
+      request: EmailSearchRequest;
+      params: EmailSearchParams;
+    },
+    init?: SafeFetchInit
+  ) {
     return mapOk(
       await searchServiceFetch<EmailSearchResponse>(
         `/search/email?page=${args.params.page ?? 0}&page_size=${args.params.page_size ?? 10}`,
