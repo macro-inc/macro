@@ -6,7 +6,7 @@ export const [hotkeyRoot, setHotkeyRoot] =
   createSignal<ReturnType<typeof useHotKeyRoot>>();
 
 /**
- * Hook to subscribe to keypress events. Automatically cleans up on unmount.
+ * Subscribe to keypress events. Automatically cleans up on unmount.
  */
 export function useSubscribeToKeypress(
   callback: (context: KeypressContext) => void
