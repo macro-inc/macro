@@ -62,28 +62,32 @@ export function SplitContainer(
           <div class="fixed inset-[4rem] bg-panel shadow-xl rounded-tl-[1.5rem]" />
         </Show>
 
-        <div
-          classList={{
-            'fixed inset-[4rem] z-modal-overlay isolate opacity-50': isSpotLight(),
-            'opacity-100': panel.handle.isActive() || isSpotLight(),
-            'opacity-85': !panel.handle.isActive(),
-            'size-full': !isSpotLight(),
-          }}
-          class="@container/split flex flex-col min-h-0 bracket-never"
-          ref={(ref) => { setRef(ref); props.ref(ref)}}
-          data-split-id={props.id}
-          data-split-container
-          tabindex={-1}
+        <ClippedPanel
+          active={true}
+          tr={true}
+          tl={true}
         >
-          {/*<ClippedPanel>*/}
+          <div
+            classList={{
+              'fixed inset-[4rem] z-modal-overlay isolate opacity-50': isSpotLight(),
+              'opacity-100': panel.handle.isActive() || isSpotLight(),
+              'opacity-85': !panel.handle.isActive(),
+              'size-full': !isSpotLight(),
+            }}
+            class="@container/split flex flex-col min-h-0 bracket-never"
+            ref={(ref) => { setRef(ref); props.ref(ref)}}
+            data-split-id={props.id}
+            data-split-container
+            tabindex={-1}
+          >
             <SplitHeader ref={setHeaderRef} />
             <SplitToolbar ref={setToolbarRef} />
             <div class="size-full overflow-hidden">{props.children}</div>
             <Show when={isSpotLight()}>
               <MacroJump tabbableParent={ref} />
             </Show>
-          {/*</ClippedPanel>*/}
-        </div>
+          </div>
+        </ClippedPanel>
       </SplitDrawerGroup>
     </SplitModalProvider>
   );
