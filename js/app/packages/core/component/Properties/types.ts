@@ -135,7 +135,7 @@ export type PropertyEditorProps = {
 export type PropertySelectorProps = {
   isOpen: boolean;
   onClose: () => void;
-  existingPropertyIds: string[];
+  existingPropertyIds: () => string[];
 };
 
 // Re-export generated API types from service-properties

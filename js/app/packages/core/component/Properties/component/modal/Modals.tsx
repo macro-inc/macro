@@ -68,7 +68,7 @@ export const Modals: Component = () => {
         <SelectPropertyModal
           isOpen={true}
           onClose={closePropertySelector}
-          existingPropertyIds={existingPropertyIds()}
+          existingPropertyIds={existingPropertyIds}
         />
       </Show>
 

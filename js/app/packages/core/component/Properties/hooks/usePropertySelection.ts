@@ -16,7 +16,7 @@ export interface PropertySelectionState {
  * Handles fetching available properties, filtering, and tracking selections
  */
 export function usePropertySelection(
-  existingPropertyIds: string[],
+  existingPropertyIds: () => string[],
   searchQuery?: () => string
 ) {
   const [state, setState] = createSignal<PropertySelectionState>({
@@ -27,7 +27,10 @@ export function usePropertySelection(
   });
 
   // Memoize Set creation to avoid recreation on every search keystroke
-  const existingPropertyIdsSet = createMemo(() => new Set(existingPropertyIds));
+  // Reactive to existingPropertyIds changes
+  const existingPropertyIdsSet = createMemo(
+    () => new Set(existingPropertyIds())
+  );
 
   const filteredProperties = createMemo(() => {
     const currentState = state();
