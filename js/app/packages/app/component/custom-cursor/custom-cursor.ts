@@ -476,7 +476,7 @@ createRoot(() => {
 
   createEffect(() => {
     const { l, c, h } = themeReactive.a0;
-    const col = `oklch(${l[0]()} ${c[0]()} ${h[0]()}deg)`;
+    const _col = `oklch(${l[0]()} ${c[0]()} ${h[0]()}deg)`;
     if (!customCursorEnabled()) {
       clearAllCustomCursorStylesheetEls();
       return;
