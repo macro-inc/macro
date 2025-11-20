@@ -47,19 +47,16 @@ export const BlockRegistry = [
   'chat',
   'write',
   'pdf',
-  'html',
   'md',
   'code',
   'image',
   'canvas',
   'channel',
   'project',
-  'start',
   'unknown',
   'video',
   'email',
   'contact',
-  'color',
 ] as const;
 
 type BlockNameKeys = keyof typeof BlockRegistry & number;
@@ -79,7 +76,6 @@ export const NonDocumentBlockTypes = [
   'project',
   'email',
   'contact',
-  'color',
 ] as BlockName[];
 
 /**

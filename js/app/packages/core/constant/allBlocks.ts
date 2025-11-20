@@ -124,6 +124,7 @@ export function fileTypeToBlockName(
   if (BlockRegistry.includes(blockOrFiletype as any)) {
     return blockOrFiletype as BlockName;
   }
+
   return fileTypeToBlockName_[blockOrFiletype] ?? 'unknown';
 }
 
