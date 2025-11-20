@@ -722,7 +722,9 @@ export function createNavigationEntityListShortcut({
 
   registerHotkey({
     scopeId: splitHotkeyScope,
-    description: 'Root Modify selection',
+    description: () => {
+      return konsoleOpen() ? 'Close command menu' : 'Open command menu';
+    },
     hotkey: 'cmd+k',
     condition: () => !konsoleOpen() && isViewingList(),
     keyDownHandler: (e) => {
@@ -753,6 +755,9 @@ export function createNavigationEntityListShortcut({
       resetKonsoleMode();
       return false;
     },
+    displayPriority: 10,
+    hide: konsoleOpen,
+    runWithInputFocused: true,
   });
 
   registerHotkey({
