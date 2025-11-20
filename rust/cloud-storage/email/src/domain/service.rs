@@ -69,7 +69,7 @@ where
 
         let ids: Vec<_> = thread_ids
             .iter()
-            .map(|id| EntityType::Email.with_entity_string(id.to_string()))
+            .map(|id| EntityType::EmailThread.with_entity_string(id.to_string()))
             .collect();
 
         let frecency_request = FrecencyByIdsRequest {
