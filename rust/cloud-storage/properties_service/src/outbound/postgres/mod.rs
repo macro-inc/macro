@@ -130,20 +130,20 @@ impl PropertiesStorage for PropertiesPgStorage {
 
     async fn create_property_option(
         &self,
-        _option: crate::domain::models::PropertyOption,
+        option: crate::domain::models::PropertyOption,
     ) -> Result<crate::domain::models::PropertyOption, Self::Error> {
-        todo!("Will be implemented in subsequent commit")
+        options::create_property_option(&self.pool, option).await
     }
 
     async fn get_property_options(
         &self,
-        _property_definition_id: uuid::Uuid,
+        property_definition_id: uuid::Uuid,
     ) -> Result<Vec<crate::domain::models::PropertyOption>, Self::Error> {
-        todo!("Will be implemented in subsequent commit")
+        options::get_property_options(&self.pool, property_definition_id).await
     }
 
-    async fn delete_property_option(&self, _option_id: uuid::Uuid) -> Result<bool, Self::Error> {
-        todo!("Will be implemented in subsequent commit")
+    async fn delete_property_option(&self, option_id: uuid::Uuid) -> Result<bool, Self::Error> {
+        options::delete_property_option(&self.pool, option_id).await
     }
 
     async fn get_entity_properties(
