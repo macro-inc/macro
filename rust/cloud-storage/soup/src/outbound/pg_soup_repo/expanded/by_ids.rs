@@ -192,7 +192,12 @@ pub async fn expanded_soup_by_ids<'a>(
             owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
                 .map_err(type_err)?
                 .into_owned(),
-            project_id: r.project_id,
+            project_id: r
+                .project_id
+                .as_deref()
+                .map(Uuid::parse_str)
+                .transpose()
+                .map_err(type_err)?,
             is_persistent: r.is_persistent.unwrap_or_default(),
             created_at: r.created_at,
             updated_at: r.updated_at,
