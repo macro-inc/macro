@@ -85,6 +85,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "cool_asserts",
+ "email",
  "email_service_client",
  "insight_service_client",
  "lazy_static",
@@ -2786,6 +2787,32 @@ dependencies = [
 ]
 
 [[package]]
+name = "email"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "frecency",
+ "macro_user_id",
+ "model-entity",
+ "model-error-response",
+ "model_user",
+ "models_pagination",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sqlx",
+ "strum",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "email_db_client"
 version = "0.1.0"
 dependencies = [
@@ -2858,6 +2885,7 @@ dependencies = [
  "connection_gateway",
  "document_storage_service_client",
  "ego-tree",
+ "email",
  "email_db_client",
  "frecency",
  "futures",
@@ -2914,6 +2942,7 @@ name = "email_service_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "email",
  "model",
  "models_email",
  "reqwest",
@@ -7150,6 +7179,7 @@ dependencies = [
  "schemars_derive",
  "serde",
  "serde_json",
+ "uuid",
 ]
 
 [[package]]

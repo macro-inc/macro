@@ -173,6 +173,10 @@ where
 }
 
 /// Type alias for a [Paginated] where we still know the underlying type information of the encoded cursor
+/// T: The item type that is listed in each page
+/// I: The identity type that is associated with this T. e.g. Uuid
+/// C: The sort type of this cursor
+/// F: The filter type of this cursor
 pub type PaginatedCursor<T, I, C, F> = Paginated<T, Base64Str<CursorWithValAndFilter<I, C, F>>>;
 
 /// Type alias for a [Paginated] where the type information of the cursor has been erased. This is identical in memory layout and serialization shape as [PaginatedTypedCursor]

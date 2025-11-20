@@ -2,7 +2,7 @@ import type { PreviewViewStandardLabel } from '@service-email/generated/schemas'
 import { useInfiniteQuery } from '@tanstack/solid-query';
 import { SERVER_HOSTS } from 'core/constant/servers';
 import { platformFetch } from 'core/util/platformFetch';
-import type { GetPreviewsCursorResponse } from 'service-email/generated/schemas/getPreviewsCursorResponse';
+import type { ApiPaginatedThreadCursor } from 'service-email/generated/schemas/apiPaginatedThreadCursor';
 import type { PreviewsInboxCursorParams } from 'service-email/generated/schemas/previewsInboxCursorParams';
 import { type Accessor, createMemo } from 'solid-js';
 import type { EmailEntity } from '../types/entity';
@@ -37,7 +37,7 @@ const fetchPaginatedEmails = async ({
   if (!response.ok)
     throw new Error('Failed to fetch email', { cause: response });
 
-  const { previews }: GetPreviewsCursorResponse = await response.json();
+  const previews: ApiPaginatedThreadCursor = await response.json();
   return previews;
 };
 
@@ -77,19 +77,16 @@ export function createEmailsInfiniteQuery(
       select: (data) =>
         data.pages.flatMap(({ items }) =>
           items.map((email): EmailEntity => {
-            const participantEmails = email.participants.map(
-              (p) => p.email_address ?? ''
+            const participantEmails = email.contacts.map(
+              (p) => p.emailAddress ?? ''
             );
-            const participantNames = email.participants.map(
-              (p) => p.name ?? ''
-            );
+            const participantNames = email.contacts.map((p) => p.name ?? '');
 
             return {
               ...email,
               type: 'email',
               name: email.name || 'No Subject',
-              // @ts-expect-error - frecency_score is not typed in the response
-              frecencyScore: email.frecency_score,
+              frecencyScore: email.frecencyScore ?? undefined,
               viewedAt: email.viewedAt ?? undefined,
               snippet: email.snippet ?? undefined,
               isImportant: email.isImportant ?? false,
