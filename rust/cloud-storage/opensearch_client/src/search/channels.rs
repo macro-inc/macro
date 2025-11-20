@@ -42,6 +42,8 @@ pub struct ChannelMessageSearchResponse {
     pub mentions: Vec<String>,
     pub created_at: i64,
     pub updated_at: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<f64>,
     /// Contains the highlight matches for the channel name and content
     pub highlight: Highlight,
 }
@@ -216,16 +218,17 @@ pub(crate) async fn search_channel_messages(
         .hits
         .into_iter()
         .map(|hit| ChannelMessageSearchResponse {
-            channel_id: hit._source.entity_id,
-            channel_name: hit._source.channel_name,
-            channel_type: hit._source.channel_type,
-            org_id: hit._source.org_id,
-            message_id: hit._source.message_id,
-            thread_id: hit._source.thread_id,
-            sender_id: hit._source.sender_id,
-            mentions: hit._source.mentions,
-            created_at: hit._source.created_at_seconds,
-            updated_at: hit._source.updated_at_seconds,
+            channel_id: hit.source.entity_id,
+            channel_name: hit.source.channel_name,
+            channel_type: hit.source.channel_type,
+            org_id: hit.source.org_id,
+            message_id: hit.source.message_id,
+            thread_id: hit.source.thread_id,
+            sender_id: hit.source.sender_id,
+            mentions: hit.source.mentions,
+            created_at: hit.source.created_at_seconds,
+            updated_at: hit.source.updated_at_seconds,
+            score: hit.score,
             highlight: hit
                 .highlight
                 .map(|h| {

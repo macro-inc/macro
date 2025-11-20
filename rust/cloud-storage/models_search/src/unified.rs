@@ -5,6 +5,7 @@ use crate::chat::ChatSearchResponseItemWithMetadata;
 use crate::document::DocumentSearchResponseItemWithMetadata;
 use crate::email::EmailSearchResponseItemWithMetadata;
 use crate::project::ProjectSearchResponseItemWithMetadata;
+use crate::score::calculate_average;
 use crate::{
     MatchType, SearchOn, channel::SimpleChannelSearchReponseBaseItem,
     chat::SimpleChatSearchResponseBaseItem, document::SimpleDocumentSearchResponseBaseItem,
@@ -128,6 +129,19 @@ pub enum UnifiedSearchResponseItem {
     Email(EmailSearchResponseItemWithMetadata),
     Channel(ChannelSearchResponseItemWithMetadata),
     Project(ProjectSearchResponseItemWithMetadata),
+}
+
+impl UnifiedSearchResponseItem {
+    /// Calculate the average score from search_results
+    pub fn average_score(&self) -> f64 {
+        match self {
+            Self::Document(item) => calculate_average(&item.extra.document_search_results),
+            Self::Chat(item) => calculate_average(&item.extra.chat_search_results),
+            Self::Email(item) => calculate_average(&item.extra.email_message_search_results),
+            Self::Channel(item) => calculate_average(&item.extra.channel_message_search_results),
+            Self::Project(item) => calculate_average(&item.extra.project_search_results),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, Default)]

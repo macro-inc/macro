@@ -192,6 +192,7 @@ pub struct EmailSearchResponse {
     pub updated_at: i64,
     pub sent_at: Option<i64>,
     pub subject: Option<String>,
+    pub score: Option<f64>,
     pub highlight: Highlight,
 }
 
@@ -268,18 +269,19 @@ pub(crate) async fn search_emails(
         .hits
         .into_iter()
         .map(|hit| EmailSearchResponse {
-            thread_id: hit._source.entity_id,
-            message_id: hit._source.message_id,
-            subject: hit._source.subject,
-            sender: hit._source.sender,
-            recipients: hit._source.recipients,
-            cc: hit._source.cc,
-            bcc: hit._source.bcc,
-            labels: hit._source.labels,
-            link_id: hit._source.link_id,
-            user_id: hit._source.user_id,
-            updated_at: hit._source.updated_at_seconds,
-            sent_at: hit._source.sent_at_seconds,
+            thread_id: hit.source.entity_id,
+            message_id: hit.source.message_id,
+            subject: hit.source.subject,
+            sender: hit.source.sender,
+            recipients: hit.source.recipients,
+            cc: hit.source.cc,
+            bcc: hit.source.bcc,
+            labels: hit.source.labels,
+            link_id: hit.source.link_id,
+            user_id: hit.source.user_id,
+            updated_at: hit.source.updated_at_seconds,
+            sent_at: hit.source.sent_at_seconds,
+            score: hit.score,
             highlight: hit
                 .highlight
                 .map(|h| {
