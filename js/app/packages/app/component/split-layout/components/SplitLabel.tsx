@@ -13,7 +13,6 @@ import {
   useIsDocumentOwner,
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import { matches } from '@core/util/match';
 import { blockNameToItemType, type ItemType } from '@service-storage/client';
 import { createEffect, type JSX, Show } from 'solid-js';
 import { useSplitPanelOrThrow } from '../layoutUtils';
