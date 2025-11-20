@@ -2,6 +2,7 @@ import { useBlockId } from '@core/block';
 import {
   $getPinnedProperties,
   ADD_PINNED_PROPERTY_COMMAND,
+  dispatchInternalLayoutShift,
   REMOVE_PINNED_PROPERTY_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
 import { Modals } from '@core/component/Properties/component/modal';
@@ -13,11 +14,14 @@ import CaretRight from '@icon/bold/caret-right-bold.svg';
 import EyeSlash from '@icon/bold/eye-slash-bold.svg';
 import LoadingSpinner from '@icon/regular/spinner.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   createEffect,
   createMemo,
   createSignal,
   type JSX,
+  on,
+  onCleanup,
   Show,
 } from 'solid-js';
 import {
@@ -36,6 +40,11 @@ interface FrontMatterPropertiesProps {
 export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
   const blockId = useBlockId();
   const mdData = mdStore.get; // Access block store at component level
+  const layoutShift = () => {
+    if (mdData.editor) {
+      dispatchInternalLayoutShift(mdData.editor);
+    }
+  };
 
   const { properties, isLoading, error, refetch } = useEntityProperties(
     blockId,
@@ -60,6 +69,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
 
   const toggleExpanded = () => {
     setFrontMatterPreferenceForDoc(blockId, !isExpanded());
+    layoutShift();
   };
 
   // Track pinned property IDs from Lexical - reactively updates on editor state changes
@@ -84,10 +94,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
         });
       }
     );
-
-    return () => {
-      unregister();
-    };
+    onCleanup(unregister);
   });
 
   // Filter properties to show metadata/system properties and pinned ones
@@ -124,9 +131,14 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
     }
   };
 
+  const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
+  const containerSize = createElementSize(containerRef);
+  const height = () => containerSize.height;
+  createEffect(on(height, layoutShift));
+
   return (
     <Show when={!error()} fallback={props.fallback}>
-      <div class="mt-6 mb-6">
+      <div class="mt-6 mb-6" ref={setContainerRef}>
         <PropertiesProvider
           entityType={'DOCUMENT' as EntityType}
           canEdit={props.canEdit}
