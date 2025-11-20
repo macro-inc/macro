@@ -1,6 +1,8 @@
 //! Outbound adapters - implementations of domain ports
 
 #[cfg(feature = "postgres")]
+pub mod metadata;
+#[cfg(feature = "postgres")]
 pub mod permission_checker;
 #[cfg(feature = "postgres")]
 pub mod postgres;

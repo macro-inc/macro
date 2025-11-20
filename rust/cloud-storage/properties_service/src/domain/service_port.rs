@@ -3,14 +3,13 @@
 use crate::domain::{
     error::Result,
     models::{
-        CreateOptionRequest, CreateOptionResponse, CreatePropertyRequest, CreatePropertyResponse,
-        CreatePropertyWithOptionsRequest, CreatePropertyWithOptionsResponse,
-        DeleteAllEntityPropertiesRequest, DeleteAllEntityPropertiesResponse,
-        DeleteEntityPropertyRequest, DeleteEntityPropertyResponse, DeleteOptionRequest,
-        DeleteOptionResponse, DeletePropertyRequest, DeletePropertyResponse, EntityType,
-        GetBulkEntityPropertiesRequest, GetBulkEntityPropertiesResponse,
-        GetEntityPropertiesRequest, GetEntityPropertiesResponse, GetOptionsRequest,
-        GetOptionsResponse, ListPropertiesRequest, ListPropertiesResponse,
+        CreateOptionRequest, CreateOptionResponse, CreatePropertyRequest,
+        CreatePropertyWithOptionsRequest, DeleteAllEntityPropertiesRequest,
+        DeleteAllEntityPropertiesResponse, DeleteEntityPropertyRequest,
+        DeleteEntityPropertyResponse, DeleteOptionRequest, DeleteOptionResponse,
+        DeletePropertyRequest, DeletePropertyResponse, EntityType, GetBulkEntityPropertiesRequest,
+        GetBulkEntityPropertiesResponse, GetEntityPropertiesRequest, GetEntityPropertiesResponse,
+        GetOptionsRequest, GetOptionsResponse, ListPropertiesRequest, ListPropertiesResponse,
         SetEntityPropertyRequest, SetEntityPropertyResponse,
     },
 };
@@ -44,13 +43,13 @@ pub trait PropertyService: Send + Sync + 'static {
     fn create_property(
         &self,
         request: CreatePropertyRequest,
-    ) -> impl std::future::Future<Output = Result<CreatePropertyResponse>> + Send;
+    ) -> impl std::future::Future<Output = Result<crate::domain::models::PropertyDefinition>> + Send;
 
     /// Create a property definition with options in a single transaction
     fn create_property_with_options(
         &self,
         request: CreatePropertyWithOptionsRequest,
-    ) -> impl std::future::Future<Output = Result<CreatePropertyWithOptionsResponse>> + Send;
+    ) -> impl std::future::Future<Output = Result<crate::domain::models::PropertyDefinition>> + Send;
 
     /// List property definitions with optional filtering
     fn list_properties(

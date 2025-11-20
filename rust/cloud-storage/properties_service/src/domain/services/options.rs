@@ -55,14 +55,16 @@ where
     // Validate the option
     validate_property_option(&option).map_err(|e| PropertyError::ValidationError(e))?;
 
-    // Create via storage
-    service
+    // Create via storage (returns the created option)
+    let created_option = service
         .storage
         .create_property_option(option)
         .await
         .map_err(|e| PropertyError::Internal(e.into()))?;
 
-    Ok(CreateOptionResponse {})
+    Ok(CreateOptionResponse {
+        option: created_option,
+    })
 }
 
 pub(super) async fn get_options<S, P>(

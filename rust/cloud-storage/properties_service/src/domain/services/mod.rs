@@ -8,7 +8,7 @@ use crate::domain::ports::{PermissionChecker, PropertiesStorage, PropertyService
 use crate::domain::{
     error::Result,
     models::{
-        CreateOptionRequest, CreateOptionResponse, CreatePropertyRequest, CreatePropertyResponse,
+        CreateOptionRequest, CreateOptionResponse, CreatePropertyRequest,
         DeleteAllEntityPropertiesRequest, DeleteAllEntityPropertiesResponse,
         DeleteEntityPropertyRequest, DeleteEntityPropertyResponse, DeleteOptionRequest,
         DeleteOptionResponse, DeletePropertyRequest, DeletePropertyResponse,
@@ -38,6 +38,11 @@ where
             permission_checker,
         }
     }
+
+    /// Get a reference to the storage layer (for read operations)
+    pub fn storage(&self) -> &S {
+        &self.storage
+    }
 }
 
 // Single impl block for PropertyService - delegates to module functions
@@ -51,14 +56,14 @@ where
     async fn create_property(
         &self,
         request: CreatePropertyRequest,
-    ) -> Result<CreatePropertyResponse> {
+    ) -> Result<crate::domain::models::PropertyDefinition> {
         definitions::create_property(self, request).await
     }
 
     async fn create_property_with_options(
         &self,
         request: crate::domain::models::CreatePropertyWithOptionsRequest,
-    ) -> Result<crate::domain::models::CreatePropertyWithOptionsResponse> {
+    ) -> Result<crate::domain::models::PropertyDefinition> {
         definitions::create_property_with_options(self, request).await
     }
 

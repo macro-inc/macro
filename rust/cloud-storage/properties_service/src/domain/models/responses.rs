@@ -22,7 +22,9 @@ pub struct DeletePropertyResponse {}
 // ===== Property Option Responses =====
 
 #[derive(Debug, Clone)]
-pub struct CreateOptionResponse {}
+pub struct CreateOptionResponse {
+    pub option: PropertyOption,
+}
 
 #[derive(Debug, Clone)]
 pub struct GetOptionsResponse {

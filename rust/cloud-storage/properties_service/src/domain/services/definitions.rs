@@ -4,7 +4,7 @@ use super::PropertyServiceImpl;
 use crate::domain::{
     error::{PropertyError, Result},
     models::{
-        CreatePropertyRequest, CreatePropertyResponse,
+        CreatePropertyRequest,
         extensions::{
             new_property_definition, new_property_option, validate_property_definition,
             validate_property_option,
@@ -16,7 +16,7 @@ use crate::domain::{
 pub(super) async fn create_property<S, P>(
     service: &PropertyServiceImpl<S, P>,
     request: CreatePropertyRequest,
-) -> Result<CreatePropertyResponse>
+) -> Result<crate::domain::models::PropertyDefinition>
 where
     S: PropertiesStorage,
     P: PermissionChecker,
@@ -34,20 +34,18 @@ where
     // Validate the definition
     validate_property_definition(&definition).map_err(|e| PropertyError::ValidationError(e))?;
 
-    // Create via storage
+    // Create via storage and return the created definition
     service
         .storage
         .create_property_definition(definition)
         .await
-        .map_err(|e| PropertyError::Internal(e.into()))?;
-
-    Ok(CreatePropertyResponse {})
+        .map_err(|e| PropertyError::Internal(e.into()))
 }
 
 pub(super) async fn create_property_with_options<S, P>(
     service: &PropertyServiceImpl<S, P>,
     request: crate::domain::models::CreatePropertyWithOptionsRequest,
-) -> Result<crate::domain::models::CreatePropertyWithOptionsResponse>
+) -> Result<crate::domain::models::PropertyDefinition>
 where
     S: PropertiesStorage,
     P: PermissionChecker,
@@ -77,14 +75,12 @@ where
         validate_property_option(option).map_err(|e| PropertyError::ValidationError(e))?;
     }
 
-    // Create via storage (in transaction)
+    // Create via storage (in transaction) and return the created definition
     service
         .storage
         .create_property_definition_with_options(definition, options)
         .await
-        .map_err(|e| PropertyError::Internal(e.into()))?;
-
-    Ok(crate::domain::models::CreatePropertyWithOptionsResponse {})
+        .map_err(|e| PropertyError::Internal(e.into()))
 }
 
 pub(super) async fn list_properties<S, P>(
