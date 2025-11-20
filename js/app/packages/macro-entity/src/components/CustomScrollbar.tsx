@@ -3,9 +3,21 @@ import { createEffect, createSignal, onCleanup, Show } from 'solid-js';
 interface CustomScrollbarProps {
   scrollContainer: () => HTMLElement | undefined;
   class?: string;
+  label?: string;
+  showLabel?: boolean;
+  labelClass?: string;
+  enabled?: boolean;
 }
 
 export function CustomScrollbar(props: CustomScrollbarProps) {
+  return (
+    <Show when={props.enabled ?? true} fallback={null}>
+      <InnerCustomScrollbar {...props} />
+    </Show>
+  );
+}
+
+function InnerCustomScrollbar(props: CustomScrollbarProps) {
   const [scrollTop, setScrollTop] = createSignal(0);
   const [scrollHeight, setScrollHeight] = createSignal(0);
   const [clientHeight, setClientHeight] = createSignal(0);
@@ -159,7 +171,7 @@ export function CustomScrollbar(props: CustomScrollbarProps) {
   return (
     <Show when={isVisible()}>
       <div
-        class={`absolute right-0 top-0 bottom-0 w-[2px] pointer-events-auto ${props.class || ''}`}
+        class={`absolute right-0 top-0 bottom-0 w-[2px] pointer-events-auto overflow-visible ${props.class || ''}`}
         style={{
           'background-color': 'transparent',
         }}
@@ -182,6 +194,7 @@ export function CustomScrollbar(props: CustomScrollbarProps) {
             height: `${thumbHeight()}px`,
             width: '2px',
             'background-color': 'var(--color-accent)',
+            'transform-origin': 'right center',
             opacity: (() => {
               if (isDragging()) return 1;
               if (isHovering()) return 0.8;
@@ -214,6 +227,17 @@ export function CustomScrollbar(props: CustomScrollbarProps) {
           }}
           onMouseDown={handleMouseDown}
         />
+        <Show when={props.label}>
+          <div
+            class={`absolute right-[calc(100%+8px)] -translate-y-1/2 whitespace-nowrap font-mono text-sm text-accent pointer-events-none select-none drop-shadow transition-opacity duration-200 ease-out ${props.labelClass || ''}`}
+            style={{
+              top: `${thumbTop() + thumbHeight() / 2}px`,
+              opacity: props.showLabel ? 1 : 0,
+            }}
+          >
+            {props.label}
+          </div>
+        </Show>
       </div>
     </Show>
   );

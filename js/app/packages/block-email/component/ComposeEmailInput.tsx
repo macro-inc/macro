@@ -2,6 +2,7 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
+import { BrightJoins } from '@core/component/BrightJoins';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
@@ -9,11 +10,11 @@ import { toast } from '@core/component/Toast/Toast';
 import { fileDrop } from '@core/directive/fileDrop';
 import type { WithCustomUserInput } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
-import PaperPlaneRight from '@icon/regular/paper-plane-right.svg';
 import Plus from '@icon/regular/plus.svg';
 import TextAa from '@icon/regular/text-aa.svg';
 import type { DocumentMentionInfo } from '@lexical-core';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
   ContactInfo,
@@ -252,14 +253,15 @@ export function ComposeEmailInput(props: {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="w-full h-full relative flex-1 flex flex-col py-2"
+      class="relative flex flex-col flex-1 items-center justify-between bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px]"
     >
+      <BrightJoins dots={[false, false, true, true]} />
       <Show when={error()}>
         <div class="text-failure-ink text-sm mt-1">{errorMsg()}</div>
       </Show>
       <div class="w-full h-full flex flex-col">
         <div
-          class="min-h-20 grow w-full h-full flex flex-col cursor-text"
+          class="min-h-20 grow w-full h-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 px-3 pt-2 sm:pb-4"
           ref={bodyDiv}
           onclick={() => {
             editor()?.focus();
@@ -316,46 +318,55 @@ export function ComposeEmailInput(props: {
             }}
           />
         </Show>
-        <div class="flex flex-row items-center space-x-2 p-1 border-edge-muted border-t">
-          <div class="relative" ref={attachButtonRef}>
-            <IconButton
-              theme="clear"
-              icon={Plus}
-              tooltip={{ label: 'Attach' }}
-              onClick={() => setAttachMenuOpen(true)}
-            />
-            <AttachMenu
-              open={attachMenuOpen()}
-              close={() => setAttachMenuOpen(false)}
-              anchorRef={attachButtonRef}
-              containerRef={bodyDiv}
-              onAttach={onAttach}
-              onAttachDocuments={onAttachDocuments}
-              setIsPending={setIsPendingUpload}
-            />
-          </div>
-          <IconButton
-            theme="clear"
-            icon={TextAa}
-            onclick={() => {
-              setShowFormatRibbon(!showFormatRibbon());
-            }}
-          />
-          <div class="ml-auto flex flex-row">
-            <Show
-              when={!isPendingUpload() && !sending()}
-              fallback={
-                <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
-              }
-            >
+        <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2 allow-css-brackets">
+          <div class="flex flex-row items-center gap-2">
+            <div class="relative" ref={attachButtonRef}>
               <IconButton
-                theme="clear"
-                icon={PaperPlaneRight}
-                tooltip={{ label: 'Send' }}
-                onClick={handleSend}
+                theme="base"
+                icon={Plus}
+                tooltip={{ label: 'Attach' }}
+                onClick={() => setAttachMenuOpen(true)}
               />
-            </Show>
+              <AttachMenu
+                open={attachMenuOpen()}
+                close={() => setAttachMenuOpen(false)}
+                anchorRef={attachButtonRef}
+                containerRef={bodyDiv}
+                onAttach={onAttach}
+                onAttachDocuments={onAttachDocuments}
+                setIsPending={setIsPendingUpload}
+              />
+            </div>
+            <IconButton
+              theme="base"
+              icon={TextAa}
+              onclick={() => {
+                setShowFormatRibbon(!showFormatRibbon());
+              }}
+            />
           </div>
+          <button
+            disabled={isPendingUpload() || sending()}
+            onClick={() => {
+              handleSend();
+            }}
+            class="text-ink-muted bg-transparent rounded-full hover:scale-110! transition ease-in-out delay-150 flex flex-col justify-center items-center"
+          >
+            <div class="bg-transparent rounded-full size-8 flex flex-row justify-center items-center">
+              <Show
+                when={!isPendingUpload() && !sending()}
+                fallback={
+                  <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
+                }
+              >
+                <ArrowFatLineUp
+                  width={20}
+                  height={20}
+                  class="!text-accent-ink !fill-accent"
+                />
+              </Show>
+            </div>
+          </button>
         </div>
       </div>
     </div>

@@ -342,6 +342,9 @@ function SplitPanel(props: SplitPanelProps) {
   });
 
   const unifiedListContext = createSoupContext();
+
+  const [previewState, setPreviewState] = createSignal(false);
+
   const splitLayoutHelpers = useSplitLayout();
   const { goScope } = registerSplitHotkeys({
     splitHotkeyScope,
@@ -363,15 +366,8 @@ function SplitPanel(props: SplitPanelProps) {
     splitHotkeyScope,
     unifiedListContext,
     goScopeId: goScope.commandScopeId,
+    previewState: [previewState, setPreviewState],
   });
-
-  // Create ephemeral preview state for unified-list component
-  const isUnifiedList = createMemo(() => splitName() === 'unified-list');
-  const [previewState, setPreviewState] = createSignal(false);
-  const previewStateSignal: [typeof previewState, typeof setPreviewState] = [
-    previewState,
-    setPreviewState,
-  ];
 
   return (
     <SplitPanelContext.Provider
@@ -385,7 +381,7 @@ function SplitPanel(props: SplitPanelProps) {
         layoutRefs: {},
         contentOffsetTop,
         setContentOffsetTop,
-        previewState: isUnifiedList() ? previewStateSignal : undefined,
+        previewState: [previewState, setPreviewState],
       }}
     >
       <SplitContainer

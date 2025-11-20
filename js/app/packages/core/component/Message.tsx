@@ -248,7 +248,7 @@ const Root: Component<MessageRootProps> = (props) => {
             <div
               class={`relative z-0 flex-1 flex flex-col justify-start w-[calc(100%-28px)] min-w-0 pl-[var(--left-of-connector)]
                 ${props.hideConnectors ? '' : 'border-l'}
-                ${props.isNewMessage ? 'border-accent' : 'border-edge'}
+                ${props.isNewMessage ? 'border-accent' : 'border-edge-muted'}
                 ${props.isConsecutive || props.isFirstMessage || props.isFirstInThread ? '' : 'pt-4'}
                 ${props.isLastMessage && !props.isLastInThread ? 'pb-2' : ''}
                 ${props.hasThreadChildren ? 'pb-4' : ''}
@@ -263,7 +263,7 @@ const Root: Component<MessageRootProps> = (props) => {
                   <div class="relative">
                     <Show when={props.isFirstInThread}>
                       <div
-                        class="absolute border-b border-l border-edge"
+                        class="absolute border-b border-l border-edge-muted"
                         style={{
                           left: `calc((var(--thread-shift) - var(--left-of-connector) + var(--left-of-user-icon) + 0.5px) * -1)`,
                           top: '.5px',

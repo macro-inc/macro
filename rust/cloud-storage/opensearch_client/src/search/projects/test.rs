@@ -18,7 +18,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
         "from": 20,
         "size": 20,
         "collapse": {
-            "field": "project_id"
+            "field": "entity_id"
         },
         "sort": ProjectSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
         "highlight": ProjectSearchConfig::default_highlight().to_json(),
@@ -34,7 +34,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
                 "should": [
                     {
                         "terms": {
-                            "project_id": ["proj1", "proj2"]
+                            "entity_id": ["proj1", "proj2"]
                         }
                     },
                     {

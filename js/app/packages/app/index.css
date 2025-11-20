@@ -4,9 +4,9 @@
 @source '../../packages/core/component/LexicalMarkdown/theme.ts';
 @config '../../tailwind.config.ts';
 
-@property --a0l { syntax: "<number>"; inherits: false; initial-value:   0.8854; }
-@property --a0c { syntax: "<number>"; inherits: false; initial-value:   0.2003; }
-@property --a0h { syntax: "<angle>";  inherits: false; initial-value:  145.5deg; }
+@property --a0l { syntax: "<number>"; inherits: false; initial-value:   0.88; }
+@property --a0c { syntax: "<number>"; inherits: false; initial-value:   0.20; }
+@property --a0h { syntax: "<angle>";  inherits: false; initial-value: 145deg; }
 @property --a1l { syntax: "<number>"; inherits: false; initial-value:   0.61; }
 @property --a1c { syntax: "<number>"; inherits: false; initial-value:   0.37; }
 @property --a1h { syntax: "<angle>";  inherits: false; initial-value:  54deg; }
@@ -545,6 +545,8 @@
         overscroll-behavior: none;
     }
 
+    /* Custom cursor is set via JavaScript in index.tsx to match theme accent color */
+
     body {
         @apply overflow-clip overscroll-none relative m-0 p-0 font-sans optical-auto;
 
@@ -690,6 +692,11 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 @utility bg-modal-overlay {
     background-color: var(--color-overlay);
     --pattern-color: color-mix(in srgb, var(--color-overlay), var(--color-ink) 2%);
+}
+
+@utility bg-modal-overlay-konsole {
+  background-color: var(--color-overlay);
+  background-image: linear-gradient(rgba(from var(--color-accent) r g b / 0.1) 0%, transparent 25%);
 }
 
 @utility portal-scope {

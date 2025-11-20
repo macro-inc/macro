@@ -1,4 +1,3 @@
-import { useIsAuthenticated } from '@core/auth';
 import { createBlockEffect, inBlock } from '@core/block';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
@@ -6,50 +5,53 @@ import { fetchToken } from '@core/util/fetchWithToken';
 import { getMacroApiToken } from '@service-auth/fetch';
 import { createCallback } from '@solid-primitives/rootless';
 import {
-  authPlugin,
-  createDurableSocket,
   createSocketEffect,
-  createWSState,
-  heartbeatPlugin,
-  jsonPlugin,
-} from '@websocket/index';
+  JsonSerializer,
+  LinearBackoff,
+  type Websocket,
+  WebsocketBuilder,
+} from '@websocket';
+import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
 import type { ToWebsocketMessage } from './generated/schemas/toWebsocketMessage';
 
 const wsHost: string = SERVER_HOSTS['connection-gateway'];
 
-const isAuthenticated = useIsAuthenticated();
+export type ConnectionGatewayWebsocket = Websocket<
+  ToWebsocketMessage,
+  FromWebsocketMessage
+>;
 
 export type FromWebsocketMessage = {
   type: string;
   data: any;
 };
 
-export const ws = createDurableSocket<ToWebsocketMessage, FromWebsocketMessage>(
-  wsHost,
-  {
-    backoffStrategy: 'linear',
-    delay: 500,
-    reconnectUrlResolver: async () => {
-      if (ENABLE_BEARER_TOKEN_AUTH) {
-        const apiToken = await getMacroApiToken();
-        if (!apiToken) throw new Error('No Macro API token');
+async function resolveWsUrl() {
+  if (ENABLE_BEARER_TOKEN_AUTH) {
+    const apiToken = await getMacroApiToken();
+    if (!apiToken) throw new Error('No Macro API token');
 
-        return `${wsHost}/?macro-api-token=${apiToken}`;
-      }
-      await fetchToken();
-      return wsHost;
-    },
-  },
-  [
-    authPlugin({
-      isAuthenticated: () => isAuthenticated() ?? false,
-    }),
-    heartbeatPlugin({ interval: 25_000 }),
-    jsonPlugin<ToWebsocketMessage, FromWebsocketMessage>(),
-  ]
-);
+    return `${wsHost}/?macro-api-token=${apiToken}`;
+  }
+  await fetchToken();
+  return wsHost;
+}
 
-export const state = createWSState(ws);
+export const ws = new WebsocketBuilder(resolveWsUrl)
+  .withSerializer(
+    new JsonSerializer<ToWebsocketMessage, FromWebsocketMessage>()
+  )
+  .withBackoff(new LinearBackoff(500, 500))
+  .withHeartbeat({
+    interval: 1_000,
+    timeout: 1_000,
+    pingMessage: 'ping',
+    pongMessage: 'pong',
+    maxMissedHeartbeats: 3,
+  })
+  .build();
+
+export const state = createWebsocketStateSignal(ws);
 
 // TODO: add type mapping on the websocket event
 export function createConnectionBlockWebsocketEffect(

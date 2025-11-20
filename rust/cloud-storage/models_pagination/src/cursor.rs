@@ -32,7 +32,7 @@ impl<T, U> Paginated<T, U> {
 
 /// Top level cursor information encodes all the required information for paginating by [Cursor]
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct Cursor<Id, C> {
+pub struct Cursor<Id, C, F> {
     /// the unique id (e.g. i64, uuid, stc) that identifies the last entity
     /// on the previous page
     pub id: Id,
@@ -41,25 +41,25 @@ pub struct Cursor<Id, C> {
     /// the value of the cursor
     /// this is usually a [CursorVal]
     pub val: C,
+
+    /// the value we are filtering on
+    pub filter: F,
 }
 
 /// Type alias for a [Cursor] with a [CursorVal] which is [Sortable]
-pub type CursorWithVal<Id, V> = Cursor<Id, CursorVal<V, ()>>;
+pub type CursorWithVal<Id, V> = Cursor<Id, CursorVal<V>, ()>;
 
 /// Type alias for a [Cursor] with a [CursorVal] which is [Sortable] and some filter value F
-pub type CursorWithValAndFilter<Id, V, F> = Cursor<Id, CursorVal<V, F>>;
+pub type CursorWithValAndFilter<Id, V, F> = Cursor<Id, CursorVal<V>, F>;
 
 /// The value of the [Cursor]. That is, the type of sort we are performing
 /// as well as the value of that sort on the last item of the page.
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct CursorVal<C: Sortable, F> {
+pub struct CursorVal<C: Sortable> {
     /// the type that we are sorting on, must implement [Sortable]
     pub sort_type: C,
     /// the last value of the [Sortable] from the previous page
     pub last_val: C::Value,
-    /// the value that we are filtering on
-    #[serde(default)]
-    pub filter: F,
 }
 
 /// defines type to be sortable, sortable types must have an associated [Sortable::Value]
@@ -75,41 +75,48 @@ pub struct Paginator<Iter, Cb, S, F> {
     limit: usize,
     cb: Cb,
     sort_on: PhantomData<S>,
-    filter_on: PhantomData<F>,
+    filter_on: F,
+}
+
+impl<Iter, Cb, S> Paginator<Iter, Cb, S, ()> {
+    /// define the filter that the cursor is using
+    pub fn filter_on<F>(self, filter: F) -> Paginator<Iter, Cb, S, F> {
+        let Paginator {
+            iter,
+            limit,
+            cb,
+            sort_on,
+            filter_on: (),
+        } = self;
+        Paginator {
+            iter,
+            limit,
+            cb,
+            sort_on,
+            filter_on: filter,
+        }
+    }
 }
 
 /// The base trait which extends [Iterator] to create a [Paginator] if the trait bounds are met
 pub trait Paginate: Iterator + Sized {
     /// turn the iterator into a [Paginator]
-    fn paginate<Cb, S, F>(self, limit: usize, cb: Cb) -> Paginator<Self, Cb, S, F>
+    fn paginate<Cb, S>(self, limit: usize, cb: Cb) -> Paginator<Self, Cb, S, ()>
     where
-        Cb: FnOnce(&<Self as Iterator>::Item) -> CursorVal<S, F>,
+        Cb: FnOnce(&<Self as Iterator>::Item) -> CursorVal<S>,
         S: Sortable;
 }
 
 /// extension to [Paginate] with the further requirement that the iterator item implements [SortOn] for this sort value T
 pub trait PaginateOn<T: Sortable>: Paginate {
     /// wrapper over [Paginate::paginate]
-    fn paginate_filter_on<F>(
-        self,
-        limit: usize,
-        sort: T,
-        filter: F,
-    ) -> Paginator<Self, impl FnOnce(&<Self as Iterator>::Item) -> CursorVal<T, F>, T, F>
-    where
-        <Self as Iterator>::Item: SortOn<T>;
-
-    /// wrapper over [PaginateOn::paginate_filter_on] to create cursor without a filter
     fn paginate_on(
         self,
         limit: usize,
         sort: T,
-    ) -> Paginator<Self, impl FnOnce(&<Self as Iterator>::Item) -> CursorVal<T, ()>, T, ()>
+    ) -> Paginator<Self, impl FnOnce(&<Self as Iterator>::Item) -> CursorVal<T>, T, ()>
     where
-        <Self as Iterator>::Item: SortOn<T>,
-    {
-        PaginateOn::paginate_filter_on(self, limit, sort, ())
-    }
+        <Self as Iterator>::Item: SortOn<T>;
 }
 
 /// the trait used to uniquely identify a record
@@ -125,7 +132,7 @@ pub trait Identify {
 /// This should be implemented on the item that we iterate over, for the sortable method T that we are trying to paginate on
 pub trait SortOn<T: Sortable> {
     /// Given the input sort method T, return a function which produces the [CursorVal] for that T, from an input Self
-    fn sort_on<F>(sort: T, filter: F) -> impl FnOnce(&Self) -> CursorVal<T, F>;
+    fn sort_on(sort: T) -> impl FnOnce(&Self) -> CursorVal<T>;
 }
 
 impl<T> Paginate for T
@@ -133,9 +140,9 @@ where
     T: Iterator,
     T::Item: Identify,
 {
-    fn paginate<Cb, S, F>(self, limit: usize, cb: Cb) -> Paginator<Self, Cb, S, F>
+    fn paginate<Cb, S>(self, limit: usize, cb: Cb) -> Paginator<Self, Cb, S, ()>
     where
-        Cb: FnOnce(&<Self as Iterator>::Item) -> CursorVal<S, F>,
+        Cb: FnOnce(&<Self as Iterator>::Item) -> CursorVal<S>,
         S: Sortable,
     {
         Paginator {
@@ -143,7 +150,7 @@ where
             limit,
             cb,
             sort_on: PhantomData,
-            filter_on: PhantomData,
+            filter_on: (),
         }
     }
 }
@@ -152,16 +159,15 @@ impl<Iter, T: Sortable> PaginateOn<T> for Iter
 where
     Iter: Paginate,
 {
-    fn paginate_filter_on<F>(
+    fn paginate_on(
         self,
         limit: usize,
         sort: T,
-        filter: F,
-    ) -> Paginator<Self, impl FnOnce(&<Self as Iterator>::Item) -> CursorVal<T, F>, T, F>
+    ) -> Paginator<Self, impl FnOnce(&<Self as Iterator>::Item) -> CursorVal<T>, T, ()>
     where
         <Self as Iterator>::Item: SortOn<T>,
     {
-        let cb = <<Self as Iterator>::Item as SortOn<T>>::sort_on(sort, filter);
+        let cb = <<Self as Iterator>::Item as SortOn<T>>::sort_on(sort);
         self.paginate(limit, cb)
     }
 }
@@ -176,7 +182,7 @@ impl<Iter, Cb, S, F> Paginator<Iter, Cb, S, F>
 where
     Iter: Iterator,
     Iter::Item: Identify,
-    Cb: FnOnce(&Iter::Item) -> CursorVal<S, F>,
+    Cb: FnOnce(&Iter::Item) -> CursorVal<S>,
     S: Sortable + Serialize,
     S::Value: Serialize,
     F: Serialize,
@@ -186,7 +192,11 @@ where
     /// This ensures that the page has the correct number of items and encodes the last element of the page into a base64 json encoded representation of the cursor.
     pub fn into_page(self) -> PaginatedCursor<Iter::Item, <Iter::Item as Identify>::Id, S, F> {
         let Paginator {
-            iter, limit, cb, ..
+            iter,
+            limit,
+            cb,
+            filter_on,
+            ..
         } = self;
 
         let res: Vec<_> = iter.take(limit).collect();
@@ -203,6 +213,7 @@ where
                         id: last.id(),
                         limit,
                         val: cb(last),
+                        filter: filter_on,
                     })
                     .map(Base64Str::encode_json),
                 items: res,
@@ -325,7 +336,7 @@ where
 #[derive(Debug)]
 pub enum Query<I, T: Sortable, F> {
     /// a Sort method T
-    Sort(T),
+    Sort(T, F),
     /// a [CursorWithVal]
     Cursor(CursorWithValAndFilter<I, T, F>),
 }
@@ -339,7 +350,7 @@ where
 {
     fn clone(&self) -> Self {
         match self {
-            Query::Sort(s) => Query::Sort(s.clone()),
+            Query::Sort(s, f) => Query::Sort(s.clone(), f.clone()),
             Query::Cursor(cursor) => Query::Cursor(cursor.clone()),
         }
     }
@@ -347,25 +358,55 @@ where
 
 impl<I, T: Sortable, F> Query<I, T, F> {
     /// create an instance of [Query] from optionally a [CursorWithVal], fallling back to T if it does not exist
-    pub fn new(maybe_cursor: Option<CursorWithValAndFilter<I, T, F>>, fallback: T) -> Self {
+    pub fn new(maybe_cursor: Option<CursorWithValAndFilter<I, T, F>>, sort: T, filter: F) -> Self {
         match maybe_cursor {
             Some(c) => Self::Cursor(c),
-            None => Self::Sort(fallback),
+            None => Self::Sort(sort, filter),
         }
     }
 
     /// returns the inner sort method [Sortable] for this query
     pub fn sort_method(&self) -> &T {
         match self {
-            Query::Sort(s) => s,
+            Query::Sort(s, _) => s,
             Query::Cursor(cursor) => &cursor.val.sort_type,
+        }
+    }
+
+    /// returns a reference to the inner filter type
+    pub fn filter(&self) -> &F {
+        match self {
+            Query::Sort(_, f) => f,
+            Query::Cursor(cursor) => &cursor.filter,
+        }
+    }
+
+    /// maps this filter type into another one via a callback fn.
+    /// This is analagous to [Option::map] over just the filter generic type
+    pub fn map_filter<Cb, F2>(self, cb: Cb) -> Query<I, T, F2>
+    where
+        Cb: FnOnce(F) -> F2,
+    {
+        match self {
+            Query::Sort(a, b) => Query::Sort(a, cb(b)),
+            Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter,
+            }) => Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter: cb(filter),
+            }),
         }
     }
 
     /// returns the entity [Uuid] and [Sortable::Value] if they exist
     pub fn vals(&self) -> (Option<&I>, Option<&T::Value>) {
         match self {
-            Query::Sort(_) => (None, None),
+            Query::Sort(_, _) => (None, None),
             Query::Cursor(cursor) => (Some(&cursor.id), Some(&cursor.val.last_val)),
         }
     }

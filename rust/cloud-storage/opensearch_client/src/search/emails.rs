@@ -11,33 +11,30 @@ use crate::{
 
 use crate::SearchOn;
 use opensearch_query_builder::{
-    FieldSort, QueryType, ScoreWithOrderSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
+    BoolQueryBuilder, FieldSort, QueryType, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
+    ToOpenSearchJson,
 };
 
 use crate::search::model::DefaultSearchResponse;
 use serde_json::Value;
 
-struct EmailSearchConfig;
+pub(crate) struct EmailSearchConfig;
 
 impl SearchQueryConfig for EmailSearchConfig {
-    const ID_KEY: &'static str = "message_id";
     const INDEX: &'static str = EMAIL_INDEX;
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "subject";
 
-    fn default_sort_types() -> Vec<SortType> {
+    fn default_sort_types() -> Vec<SortType<'static>> {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
-            SortType::Field(FieldSort::new("thread_id", SortOrder::Asc)),
         ]
     }
 }
 
-struct EmailQueryBuilder {
+pub(crate) struct EmailQueryBuilder {
     inner: SearchQueryBuilder<EmailSearchConfig>,
-    /// thread ids to query over
-    thread_ids: Vec<String>,
     /// link ids to query over
     link_ids: Vec<String>,
     /// The sender of the email message
@@ -54,7 +51,6 @@ impl EmailQueryBuilder {
     pub fn new(terms: Vec<String>) -> Self {
         Self {
             inner: SearchQueryBuilder::new(terms),
-            thread_ids: Vec::new(),
             link_ids: Vec::new(),
             sender: Vec::new(),
             cc: Vec::new(),
@@ -74,11 +70,6 @@ impl EmailQueryBuilder {
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
         fn disable_recency(disable_recency: bool) -> Self;
-    }
-
-    pub fn thread_ids(mut self, thread_ids: Vec<String>) -> Self {
-        self.thread_ids = thread_ids;
-        self
     }
 
     pub fn link_ids(mut self, link_ids: Vec<String>) -> Self {
@@ -106,20 +97,15 @@ impl EmailQueryBuilder {
         self
     }
 
-    fn build_search_request(self) -> Result<SearchRequest> {
+    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
         // Build the main bool query containing all terms and any other filters
         let mut bool_query = self.inner.build_bool_query()?;
 
         // CUSTOM ATTRIBUTES SECTION
 
-        // If thread_ids are provided, add them to the query
-        if !self.thread_ids.is_empty() {
-            bool_query.must(QueryType::terms("thread_id", self.thread_ids));
-        }
-
         // If link_ids are provided, add them to the query
         if !self.link_ids.is_empty() {
-            bool_query.must(QueryType::terms("link_id", self.link_ids));
+            bool_query.must(QueryType::terms("link_id", self.link_ids.clone()));
         }
 
         if !self.sender.is_empty() {
@@ -147,20 +133,25 @@ impl EmailQueryBuilder {
         }
 
         // END CUSTOM ATTRIBUTES SECTION
+        Ok(bool_query)
+    }
 
+    fn build_search_request(&self) -> Result<SearchRequest<'static>> {
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
         // SearchOn::NameContent is used
-        let search_request = self.inner.build_search_request(bool_query.build())?;
+        let search_request = self
+            .inner
+            .build_search_request(self.build_bool_query()?.build())?;
 
         Ok(search_request)
     }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-struct EmailIndex {
+pub(crate) struct EmailIndex {
     /// The id of the email thread
-    pub thread_id: String,
+    pub entity_id: String,
     /// The id of the email message
     pub message_id: String,
     /// The sender of the email message
@@ -187,7 +178,7 @@ struct EmailIndex {
     pub content: String,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct EmailSearchResponse {
     pub thread_id: String,
     pub message_id: String,
@@ -201,13 +192,13 @@ pub struct EmailSearchResponse {
     pub updated_at: i64,
     pub sent_at: Option<i64>,
     pub subject: Option<String>,
+    pub score: Option<f64>,
     pub highlight: Highlight,
 }
 
 pub struct EmailSearchArgs {
     pub terms: Vec<String>,
     pub user_id: String,
-    pub message_ids: Vec<String>,
     pub thread_ids: Vec<String>,
     pub link_ids: Vec<String>,
     pub sender: Vec<String>,
@@ -223,26 +214,30 @@ pub struct EmailSearchArgs {
     pub disable_recency: bool,
 }
 
+impl From<EmailSearchArgs> for EmailQueryBuilder {
+    fn from(args: EmailSearchArgs) -> Self {
+        EmailQueryBuilder::new(args.terms)
+            .match_type(&args.match_type)
+            .page_size(args.page_size)
+            .page(args.page)
+            .user_id(&args.user_id)
+            .ids(args.thread_ids)
+            .link_ids(args.link_ids)
+            .sender(args.sender)
+            .cc(args.cc)
+            .bcc(args.bcc)
+            .search_on(args.search_on)
+            .recipients(args.recipients)
+            .collapse(args.collapse)
+            .ids_only(args.ids_only)
+            .disable_recency(args.disable_recency)
+    }
+}
+
 impl EmailSearchArgs {
     pub fn build(self) -> Result<Value> {
-        Ok(EmailQueryBuilder::new(self.terms)
-            .match_type(&self.match_type)
-            .page_size(self.page_size)
-            .page(self.page)
-            .user_id(&self.user_id)
-            .ids(self.message_ids)
-            .thread_ids(self.thread_ids) // Now using the thread_ids parameter
-            .link_ids(self.link_ids)
-            .sender(self.sender)
-            .cc(self.cc)
-            .bcc(self.bcc)
-            .search_on(self.search_on)
-            .recipients(self.recipients)
-            .collapse(self.collapse)
-            .ids_only(self.ids_only)
-            .disable_recency(self.disable_recency)
-            .build_search_request()?
-            .to_json())
+        let builder: EmailQueryBuilder = self.into();
+        Ok(builder.build_search_request()?.to_json())
     }
 }
 
@@ -261,12 +256,19 @@ pub(crate) async fn search_emails(
         .map_client_error()
         .await?;
 
-    let result = response
-        .json::<DefaultSearchResponse<EmailIndex>>()
+    let bytes = response
+        .bytes()
         .await
-        .map_err(|e| OpensearchClientError::DeserializationFailed {
+        .map_err(|e| OpensearchClientError::HttpBytesError {
             details: e.to_string(),
-            method: Some("search_emails".to_string()),
+        })?;
+
+    let result: DefaultSearchResponse<EmailIndex> =
+        serde_json::from_slice(&bytes).map_err(|e| {
+            OpensearchClientError::SearchDeserializationFailed {
+                details: e.to_string(),
+                raw_body: String::from_utf8_lossy(&bytes).to_string(),
+            }
         })?;
 
     Ok(result
@@ -274,18 +276,19 @@ pub(crate) async fn search_emails(
         .hits
         .into_iter()
         .map(|hit| EmailSearchResponse {
-            thread_id: hit._source.thread_id,
-            message_id: hit._source.message_id,
-            subject: hit._source.subject,
-            sender: hit._source.sender,
-            recipients: hit._source.recipients,
-            cc: hit._source.cc,
-            bcc: hit._source.bcc,
-            labels: hit._source.labels,
-            link_id: hit._source.link_id,
-            user_id: hit._source.user_id,
-            updated_at: hit._source.updated_at_seconds,
-            sent_at: hit._source.sent_at_seconds,
+            thread_id: hit.source.entity_id,
+            message_id: hit.source.message_id,
+            subject: hit.source.subject,
+            sender: hit.source.sender,
+            recipients: hit.source.recipients,
+            cc: hit.source.cc,
+            bcc: hit.source.bcc,
+            labels: hit.source.labels,
+            link_id: hit.source.link_id,
+            user_id: hit.source.user_id,
+            updated_at: hit.source.updated_at_seconds,
+            sent_at: hit.source.sent_at_seconds,
+            score: hit.score,
             highlight: hit
                 .highlight
                 .map(|h| {

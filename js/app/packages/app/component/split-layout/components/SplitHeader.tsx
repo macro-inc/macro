@@ -11,6 +11,7 @@ import SplitIcon from '@icon/regular/square-split-horizontal.svg';
 import CloseIcon from '@icon/regular/x.svg';
 import {
   createEffect,
+  createMemo,
   createSignal,
   type ParentProps,
   type Setter,
@@ -22,7 +23,7 @@ import { SplitLayoutContext, SplitPanelContext } from '../context';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
-  if (!context) return '';
+  if (!context) return null;
   return (
     <IconButton
       size="sm"
@@ -77,7 +78,7 @@ function SplitSpotlightButton() {
 
 function SplitCloseButton() {
   const context = useContext(SplitPanelContext);
-  if (!context) return '';
+  if (!context) return null;
   return (
     <IconButton
       size="sm"
@@ -92,27 +93,29 @@ function SplitCloseButton() {
 
 function SplitPreviewToggle() {
   const context = useContext(SplitPanelContext);
-  if (!context || !context.previewState || !ENABLE_PREVIEW) return '';
+  if (!ENABLE_PREVIEW || !context || !context.previewState) return null;
 
   // Only show toggle for unified-list component, not for blocks
-  const content = () => context.handle.content();
-  const isUnifiedList = () =>
-    content().type === 'component' && content().id === 'unified-list';
-  if (!isUnifiedList()) return '';
+  const isUnifiedList = createMemo(() => {
+    const content = context.handle.content();
+    return content.type === 'component' && content.id === 'unified-list';
+  });
 
   const [preview, setPreview] = context.previewState;
 
   return (
-    <IconButton
-      size="sm"
-      icon={SplitIcon}
-      theme={preview() ? 'accent' : 'current'}
-      tooltip={{
-        label: preview() ? 'Split View' : 'Full View',
-        hotkeyToken: TOKENS.unifiedList.togglePreview,
-      }}
-      onClick={() => setPreview((prev) => !prev)}
-    />
+    <Show when={isUnifiedList()}>
+      <IconButton
+        size="sm"
+        icon={SplitIcon}
+        theme={preview() ? 'accent' : 'current'}
+        tooltip={{
+          label: preview() ? 'Split View' : 'Full View',
+          hotkeyToken: TOKENS.unifiedList.togglePreview,
+        }}
+        onClick={() => setPreview((prev) => !prev)}
+      />
+    </Show>
   );
 }
 

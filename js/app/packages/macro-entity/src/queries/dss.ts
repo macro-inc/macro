@@ -263,6 +263,54 @@ export function createDeleteDssItemMutation() {
   }));
 }
 
+export function createBulkDeleteDssItemsMutation() {
+  const isUnsupportedEntity = (entity: EntityData) => {
+    const type = entity.type;
+    return type !== 'chat' && type !== 'document' && type !== 'project';
+  };
+  return useMutation(() => ({
+    mutationFn: async (entities: EntityData[]) => {
+      if (entities.some(isUnsupportedEntity)) {
+        throw new Error(`Unsupported entity types`);
+      }
+
+      return await Promise.all(
+        entities.map((e) => {
+          return deleteItem({ id: e.id, itemType: e.type });
+        })
+      );
+    },
+    onMutate: async (entities: EntityData[]) => {
+      const deletedIDs = entities.map((e) => e.id);
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.dss({ infinite: true }),
+      });
+
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.dss({ infinite: true }) },
+        (prev: { pages: { items: EntityData[] }[] }) => {
+          const pages = prev.pages.map((page) => ({
+            ...page,
+            items: page.items.filter((item) => !deletedIDs.includes(item.id)),
+          }));
+          return {
+            ...prev,
+            pages,
+          };
+        }
+      );
+    },
+    onSettled: (data, error, entities) => {
+      if (error)
+        console.error(`Failed to delete dss items`, entities, data, error);
+
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dss({ infinite: true }),
+      });
+    },
+  }));
+}
+
 export function createRenameDssEntityMutation() {
   const itemOperations = useItemOperations();
   return useMutation(() => ({
@@ -311,6 +359,78 @@ export function createRenameDssEntityMutation() {
     onSettled: (data, error, { entity: { id } }) => {
       if (data?.success === false || error)
         console.error(`Failed to rename dss item ${id}`, data, error);
+
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dss({ infinite: true }),
+      });
+    },
+  }));
+}
+
+export function createBulkRenameDssEntityMutation() {
+  // const itemOperations = useItemOperations();
+
+  const isUnsupportedEntity = (entity: EntityData) => {
+    const type = entity.type;
+    return type === 'channel' || type === 'email';
+  };
+
+  return useMutation(() => ({
+    mutationFn: async ({
+      entities,
+      newName,
+    }: {
+      entities: EntityData[];
+      newName: string;
+    }) => {
+      if (entities.some(isUnsupportedEntity)) {
+        throw new Error(`Unsupported entity type provided`);
+      }
+
+      // const success = await itemOperations.bulkRename(
+      //   entities.map((entity) => ({}))
+      // );
+      //
+      const success = false;
+
+      if (!success) {
+        throw new Error(`TODO (SEAMUS): bulk rename! – ${newName}`);
+      }
+
+      return { success: true };
+    },
+    onMutate: async ({
+      entities,
+      newName,
+    }: {
+      entities: EntityData[];
+      newName: string;
+    }) => {
+      await queryClient.cancelQueries({
+        queryKey: queryKeys.dss({ infinite: true }),
+      });
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.dss({ infinite: true }) },
+        (prev: { pages: { items: EntityData[] }[] }) => {
+          const pages = prev.pages.map((page) => ({
+            ...page,
+            items: page.items.map((item) => {
+              const found = entities.find((e) => e.id === item.id);
+              if (!found) return item;
+
+              return { ...item, name: newName };
+            }),
+          }));
+          return {
+            ...prev,
+            pages,
+          };
+        }
+      );
+    },
+    onSettled: (data, error, { entities }) => {
+      if (error)
+        console.error(`Failed to rename dss items`, entities, data, error);
 
       queryClient.invalidateQueries({
         queryKey: queryKeys.dss({ infinite: true }),

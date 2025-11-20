@@ -15,11 +15,16 @@ use serde::{Deserialize, Serialize};
 use std::{marker::PhantomData, sync::Arc};
 use thiserror::Error;
 
-mod channel;
-mod chat;
-mod document;
-mod email;
-mod project;
+/// contains the ast literal value for channels
+pub mod channel;
+/// contains the ast literal value for chat
+pub mod chat;
+/// contains the ast literal value for documents
+pub mod document;
+/// contains the ast literal value for emails
+pub mod email;
+/// contains the ast literal value for projects
+pub mod project;
 
 #[cfg(test)]
 mod tests;
@@ -51,7 +56,8 @@ pub enum ExpandErr {
 }
 
 /// Describes a bundle of filters that should be applied across different entity types
-#[derive(Default, Debug, Serialize, Deserialize)]
+#[derive(Debug, Serialize, Deserialize)]
+#[non_exhaustive]
 pub struct EntityFilterInner {
     /// the filters that should be applied to the document entity
     #[serde(default)]
@@ -65,7 +71,8 @@ pub struct EntityFilterInner {
 }
 
 /// wrapper over [EntityFilterInner] which gives us cheaper clones
-#[derive(Default, Debug, Serialize, Deserialize, Clone)]
+#[derive(Debug, Serialize, Deserialize, Clone)]
+#[non_exhaustive]
 pub struct EntityFilterAst {
     /// we wrap the inner type in an arc to avoid large allocations when cloning boxed values
     pub inner: Arc<EntityFilterInner>,
@@ -73,17 +80,29 @@ pub struct EntityFilterAst {
 
 impl EntityFilterAst {
     /// expand the input [EntityFilters] into an ast representation
-    pub fn new_from_filters(entity_filter: EntityFilters) -> Result<Self, ExpandErr> {
+    pub fn new_from_filters(entity_filter: EntityFilters) -> Result<Option<Self>, ExpandErr> {
         if entity_filter.is_empty() {
-            return Ok(Self::default());
+            return Ok(None);
         }
-        Ok(Self {
+        Ok(Some(Self {
             inner: Arc::new(EntityFilterInner {
                 document_filter: DocumentFilters::expand_ast(entity_filter.document_filters)?,
                 project_filter: ProjectFilters::expand_ast(entity_filter.project_filters)?,
                 chat_filter: ChatFilters::expand_ast(entity_filter.chat_filters)?,
             }),
-        })
+        }))
+    }
+
+    /// mock function to create the an empty ast
+    #[cfg(feature = "mock")]
+    pub fn mock_empty() -> Self {
+        Self {
+            inner: Arc::new(EntityFilterInner {
+                document_filter: None,
+                project_filter: None,
+                chat_filter: None,
+            }),
+        }
     }
 }
 

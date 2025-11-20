@@ -169,6 +169,7 @@ export const TOKENS = {
   // sharing
   block: {
     share: 'block.share',
+    focus: 'block.focus',
   },
 
   // channel

@@ -1,0 +1,11 @@
+diff a/js/app/packages/app/component/command/useCommandItems.ts b/js/app/packages/app/component/command/useCommandItems.ts	(rejected hunks)
+@@ -31,6 +32,9 @@ export function useCommandItems() {
+   const channelsContext = useChannelsContext();
+   const channels = () => channelsContext.channels();
+   const contactItems = useEmailContacts();
++
++  const entityActionItems = useEntityActionItems();
++
+   const activeScope = activeScopeStack().at(-1) ?? 'global';
+   const activeCommands = getActiveCommandsFromScope(activeScope, {
+     sortByScopeLevel: false,

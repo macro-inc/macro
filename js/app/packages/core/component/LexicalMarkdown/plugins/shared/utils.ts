@@ -1,6 +1,8 @@
 import { mergeRegister } from '@lexical/utils';
 import {
+  COMMAND_PRIORITY_NORMAL,
   type CommandListenerPriority,
+  createCommand,
   DELETE_CHARACTER_COMMAND,
   DELETE_LINE_COMMAND,
   DELETE_WORD_COMMAND,
@@ -132,6 +134,8 @@ export function autoRegister(...fns: Array<() => void>) {
   onCleanup(cleanup);
 }
 
+const LAYOUT_SHFIT_COMMAND = createCommand<void>('LAYOUT_SHIFT_COMMAND');
+
 /**
  * Register a callback to run whenever a non-mutating layout shift occurs – like when
  * a decorator changes size without writing to the lexical state.
@@ -143,14 +147,14 @@ export function registerInternalLayoutShiftListener(
   editor: LexicalEditor,
   listener: () => void
 ) {
-  return editor.registerRootListener((root, prevRoot) => {
-    if (prevRoot) {
-      prevRoot.removeEventListener('internal-layout-shift', listener);
-    }
-    if (root) {
-      root.addEventListener('internal-layout-shift', listener);
-    }
-  });
+  return editor.registerCommand(
+    LAYOUT_SHFIT_COMMAND,
+    () => {
+      listener();
+      return false;
+    },
+    COMMAND_PRIORITY_NORMAL
+  );
 }
 
 /**
@@ -158,9 +162,7 @@ export function registerInternalLayoutShiftListener(
  * @param editor
  */
 export function dispatchInternalLayoutShift(editor: LexicalEditor) {
-  editor
-    .getRootElement()
-    ?.dispatchEvent(new CustomEvent('internal-layout-shift'));
+  editor.dispatchCommand(LAYOUT_SHFIT_COMMAND, undefined);
 }
 
 /**

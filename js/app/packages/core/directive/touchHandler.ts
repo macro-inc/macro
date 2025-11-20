@@ -1,8 +1,6 @@
-import { Capacitor } from '@capacitor/core';
-import { Haptics, ImpactStyle } from '@capacitor/haptics';
 import { type Accessor, createSignal, type JSX, onCleanup } from 'solid-js';
 
-export const hasHaptics = Capacitor.isPluginAvailable('Haptics');
+export const hasHaptics = false;
 
 export interface TouchHandlerOptions {
   onLongPress?: JSX.EventHandler<HTMLElement, TouchEvent>;
@@ -69,9 +67,6 @@ export function touchHandler(
     startPosition = { x: touch.clientX, y: touch.clientY };
 
     timer = window.setTimeout(() => {
-      if (hasHaptics) {
-        Haptics.impact({ style: ImpactStyle.Heavy });
-      }
       longPressTriggered = true;
       setLongPressActivated(true);
       props().onLongPress?.(

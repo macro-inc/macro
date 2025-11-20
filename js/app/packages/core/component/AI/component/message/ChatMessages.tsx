@@ -299,7 +299,7 @@ export function ChatMessages(props: ChatMessagesProps) {
 
   return (
     <StaticMarkdownContext theme={aiChatTheme}>
-      <div class="flex flex-col w-full px-2 gap-y-2" ref={messagesRef}>
+      <div class="relative flex flex-col w-full px-2 gap-y-2" ref={messagesRef}>
         <For each={allButLastMessagePair()}>
           {(msg) => (
             <div

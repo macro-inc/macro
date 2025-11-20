@@ -113,14 +113,14 @@ mod tests {
     use super::*;
     use chrono::DateTime;
     use models_pagination::{
-        Base64Str, Cursor, CursorVal, CursorWithVal, Paginate, PaginateOn, TypeEraseCursor,
+        Base64Str, Cursor, CursorVal, CursorWithVal, PaginateOn, TypeEraseCursor,
     };
     use sqlx::{Pool, Postgres};
 
     #[sqlx::test(fixtures(path = "../../../fixtures", scripts("user_notifications")))]
     async fn test_get_user_notifications(pool: Pool<Postgres>) -> anyhow::Result<()> {
         let paginated_result =
-            get_all_user_notifications(&pool, "macro|user@user.com", 1, Query::Sort(CreatedAt))
+            get_all_user_notifications(&pool, "macro|user@user.com", 1, Query::Sort(CreatedAt, ()))
                 .await?;
 
         assert_eq!(paginated_result.len(), 1);
@@ -131,9 +131,10 @@ mod tests {
             .type_erase();
         assert_eq!(
             paginated.next_cursor.unwrap(),
-            Base64Str::encode_json(CursorWithVal {
+            Base64Str::encode_json(Cursor {
                 id: paginated.items.first().unwrap().notification_id,
                 limit: 1,
+                filter: (),
                 val: CursorVal {
                     sort_type: CreatedAt,
                     last_val: paginated
@@ -142,7 +143,6 @@ mod tests {
                         .unwrap()
                         .created_at
                         .unwrap_or(DateTime::UNIX_EPOCH),
-                    filter: ()
                 }
             })
             .type_erase()
@@ -160,7 +160,7 @@ mod tests {
             "macro|user@user.com",
             &["test"],
             1,
-            Query::Sort(CreatedAt),
+            Query::Sort(CreatedAt, ()),
         )
         .await?
         .into_iter()
@@ -174,6 +174,7 @@ mod tests {
             Base64Str::encode_json(Cursor {
                 id: paginated_result.items.last().unwrap().notification_id,
                 limit: 1,
+                filter: (),
                 val: CursorVal {
                     sort_type: CreatedAt,
                     last_val: paginated_result
@@ -182,8 +183,7 @@ mod tests {
                         .unwrap()
                         .created_at
                         .unwrap_or(DateTime::UNIX_EPOCH),
-                    filter: ()
-                }
+                },
             })
             .type_erase()
         );

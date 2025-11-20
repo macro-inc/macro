@@ -1,5 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { useIsAuthenticated } from '@core/auth';
+import { AiChatEmptyState } from '@core/component/AI/component/AIChatEmptyState';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { useChatInput } from '@core/component/AI/component/input/useChatInput';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
@@ -31,7 +32,6 @@ import {
   useToggleRightPanel,
 } from '@core/signal/layout';
 import { rightbarChatId, setRightbarChatId } from '@core/signal/rightbar';
-import { useDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import ContractIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
@@ -47,7 +47,6 @@ import {
   cognitionWebsocketServiceClient,
 } from '@service-cognition/client';
 import { createCognitionWebsocketEffect } from '@service-cognition/websocket';
-import { useUserId } from '@service-gql/client';
 import { refetchHistory, useHistory } from '@service-storage/history';
 import { useOpenInstructionsMd } from 'core/component/AI/util/instructions';
 import type { LexicalEditor } from 'lexical';
@@ -322,27 +321,28 @@ export function Rightbar(props: {
     props.setState.setModel(model_);
   });
 
-  const timeString = () => {
-    const now = new Date().getHours();
-    if (now < 12) {
-      return 'morning';
-    } else if (now < 18) {
-      return 'afternoon';
-    } else {
-      return 'evening';
-    }
-  };
-  const userId = useUserId();
-  const [name] = useDisplayName(userId());
+  // gone for now may want in future - ehayes 11/17/2025
+  // const timeString = () => {
+  //   const now = new Date().getHours();
+  //   if (now < 12) {
+  //     return 'morning';
+  //   } else if (now < 18) {
+  //     return 'afternoon';
+  //   } else {
+  //     return 'evening';
+  //   }
+  // };
+  // const userId = useUserId();
+  // const [name] = useDisplayName(userId());
 
-  let greeting = () => {
-    const firstName = name().split(' ').at(0);
-    if (!firstName || firstName.length === 0 || firstName.includes('@')) {
-      return ``;
-    } else {
-      return `Good ${timeString()} ${firstName}, what can I assist you with?`;
-    }
-  };
+  // let greeting = () => {
+  //   const firstName = name().split(' ').at(0);
+  //   if (!firstName || firstName.length === 0 || firstName.includes('@')) {
+  //     return ``;
+  //   } else {
+  //     return `Good ${timeString()} ${firstName}, what can I assist you with?`;
+  //   }
+  // };
 
   const [editor, setEditor] = createSignal<LexicalEditor>();
   let borrowedFocus: Element | null = null;
@@ -392,10 +392,10 @@ export function Rightbar(props: {
           chatName={props.chatName}
         />
         <div class="flex flex-col flex-1 min-h-0 p-2 w-full items-center">
-          <Show when={props.isBig && props.messages().length === 0}>
-            <h1 class="text-ink-extra-muted/40 text-2xl flex-1 flex flex-col items-center justify-center">
-              {greeting()}
-            </h1>
+          <Show when={props.messages().length === 0}>
+            <div class="h-full flex flex-col items-center justify-center">
+              <AiChatEmptyState />
+            </div>
           </Show>
           <Show when={props.messages().length > 0 || !props.isBig}>
             <div
@@ -661,6 +661,7 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
           <SplitlikeContainer
             spotlight={bigChatOpen}
             setSpotlight={setBigChatOpen}
+            tr={!bigChatOpen()}
           >
             <Rightbar
               chatId={chatId()}

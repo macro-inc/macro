@@ -19,6 +19,9 @@ pub struct ChannelSearchResult {
     pub created_at: i64,
     /// When the channel message was last updated
     pub updated_at: i64,
+    /// The score of the result
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<f64>,
 }
 
 /// A single response item, part of the ChannelSearchResponse object
@@ -43,15 +46,22 @@ pub struct ChannelSearchResponseItem {
     pub channel_message_search_results: Vec<ChannelSearchResult>,
 }
 
+/// Metadata for a channel fetched from the database
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ChannelMetadata {
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub viewed_at: Option<i64>,
+    pub interacted_at: Option<i64>,
+}
+
 /// ChannelSearchResponseItem object with channel metadata we fetch from macrodb. we don't store these
 /// timestamps in opensearch as they would require us to update each chat message record for the chat
 /// every time the chat updates (specifically for updated_at and viewed_at and interacted_at)
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ChannelSearchResponseItemWithMetadata {
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub viewed_at: Option<i64>,
-    pub interacted_at: Option<i64>,
+    /// Metadata from the database. None if the channel doesn't exist in the database.
+    pub metadata: Option<ChannelMetadata>,
     #[serde(flatten)]
     pub extra: ChannelSearchResponseItem,
 }

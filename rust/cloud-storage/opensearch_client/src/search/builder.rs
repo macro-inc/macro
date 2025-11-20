@@ -45,7 +45,7 @@ macro_rules! delegate_methods {
 
 pub trait SearchQueryConfig {
     /// Key for item id
-    const ID_KEY: &'static str;
+    const ID_KEY: &'static str = "entity_id";
     /// Index name
     #[allow(dead_code)]
     const INDEX: &'static str;
@@ -58,7 +58,7 @@ pub trait SearchQueryConfig {
 
     /// Returns the default sort types that are used on the search query.
     /// Override this method if you need custom sort logic
-    fn default_sort_types() -> Vec<SortType> {
+    fn default_sort_types() -> Vec<SortType<'static>> {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
@@ -66,11 +66,11 @@ pub trait SearchQueryConfig {
     }
 
     /// Override this method if you need custom highlight logic
-    fn default_highlight() -> Highlight {
+    fn default_highlight() -> Highlight<'static> {
         Highlight::new().require_field_match(true).field(
             "content",
             HighlightField::new()
-                .highlight_type("unified")
+                .highlight_type("plain")
                 .pre_tags(vec![MacroEm::Open.to_string()])
                 .post_tags(vec![MacroEm::Close.to_string()])
                 .number_of_fragments(500),
@@ -173,14 +173,14 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
     }
 
     /// Builds the core bool query which contains all core "should" and "must" clauses
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder> {
+    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
         let mut bool_query = BoolQueryBuilder::new();
 
         // Currently, the minimum should match is always one.
         // This should of the bool query contains the ids and potentially the user_id
         bool_query.minimum_should_match(1);
 
-        let term_must_array: Vec<QueryType> = self.build_must_term_query()?;
+        let term_must_array: Vec<QueryType<'static>> = self.build_must_term_query()?;
 
         tracing::trace!("term_must_array: {:?}", term_must_array);
 
@@ -191,12 +191,15 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
         // Add any ids to the should array if provided
         if !self.ids.is_empty() {
-            bool_query.should(QueryType::terms(T::ID_KEY, self.ids.to_vec()));
+            bool_query.should(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()));
         }
 
         // If we are not searching over the ids, we need to add the user_id to the should array
         if !self.ids_only {
-            bool_query.should(QueryType::term(T::USER_ID_KEY, self.user_id.clone()));
+            bool_query.should(QueryType::term(
+                T::USER_ID_KEY.to_string(),
+                self.user_id.clone(),
+            ));
         }
 
         Ok(bool_query)
@@ -205,7 +208,10 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
     /// Builds the search request with the provided main bool query
     /// This will automatically wrap the bool query in a function score if
     /// SearchOn::NameContent is used
-    pub fn build_search_request(&self, query_object: BoolQuery) -> Result<SearchRequest> {
+    pub fn build_search_request(
+        &self,
+        query_object: BoolQuery<'static>,
+    ) -> Result<SearchRequest<'static>> {
         let mut search_request = SearchRequestBuilder::new();
 
         // Collapse on the ID_KEY if collapse is true
@@ -222,7 +228,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             SearchOn::Name => Highlight::new().require_field_match(true).field(
                 T::TITLE_KEY,
                 HighlightField::new()
-                    .highlight_type("unified")
+                    .highlight_type("plain")
                     .pre_tags(vec![MacroEm::Open.to_string()])
                     .post_tags(vec![MacroEm::Close.to_string()])
                     .number_of_fragments(1),
@@ -232,7 +238,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                 .field(
                     T::TITLE_KEY,
                     HighlightField::new()
-                        .highlight_type("unified")
+                        .highlight_type("plain")
                         .pre_tags(vec![MacroEm::Open.to_string()])
                         .post_tags(vec![MacroEm::Close.to_string()])
                         .number_of_fragments(1),
@@ -240,7 +246,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                 .field(
                     T::CONTENT_KEY,
                     HighlightField::new()
-                        .highlight_type("unified")
+                        .highlight_type("plain")
                         .pre_tags(vec![MacroEm::Open.to_string()])
                         .post_tags(vec![MacroEm::Close.to_string()])
                         .number_of_fragments(1),
@@ -248,7 +254,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         };
 
         search_request.highlight(highlight);
-        search_request.set_sorts(T::default_sort_types());
+        search_request.set_sorts(T::default_sort_types().into());
 
         search_request.from(self.page * self.page_size);
         search_request.size(self.page_size);
@@ -265,10 +271,10 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
                     function_score_query.function(ScoreFunction {
                         function: ScoreFunctionType::Gauss(DecayFunction {
-                            field: "updated_at_seconds".to_string(),
+                            field: "updated_at_seconds".into(),
                             origin: Some("now".into()),
-                            scale: "21d".to_string(),
-                            offset: Some("3d".to_string()),
+                            scale: "21d".into(),
+                            offset: Some("3d".into()),
                             decay: Some(0.5),
                         }),
                         filter: None,
@@ -298,7 +304,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
     }
 
     /// Generates a vec of term queries to be put inside of the bool must query
-    pub fn build_must_term_query(&self) -> Result<Vec<QueryType>> {
+    pub fn build_must_term_query(&self) -> Result<Vec<QueryType<'static>>> {
         let keys = Keys {
             title_key: T::TITLE_KEY,
             content_key: T::CONTENT_KEY,

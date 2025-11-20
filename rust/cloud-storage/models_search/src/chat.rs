@@ -18,6 +18,9 @@ pub struct ChatMessageSearchResult {
     pub updated_at: i64,
     /// The title of the chat
     pub title: String,
+    /// The score of the result
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<f64>,
 }
 
 /// A single response item, part of the ChatSearchResponse object
@@ -39,15 +42,23 @@ pub struct ChatSearchResponseItem {
     pub chat_search_results: Vec<ChatMessageSearchResult>,
 }
 
+/// Metadata for a chat fetched from the database
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ChatMetadata {
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub viewed_at: Option<i64>,
+    pub project_id: Option<String>,
+    pub deleted_at: Option<i64>,
+}
+
 /// ChatSearchResponse object with channel metadata we fetch from macrodb. we don't store these
 /// timestamps in opensearch as they would require us to update each chat message record for the chat
 /// every time the chat updates (specifically for updated_at and viewed_at)
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ChatSearchResponseItemWithMetadata {
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub viewed_at: Option<i64>,
-    pub project_id: Option<String>,
+    /// Metadata from the database. None if the chat doesn't exist in the database.
+    pub metadata: Option<ChatMetadata>,
     #[serde(flatten)]
     pub extra: ChatSearchResponseItem,
 }
