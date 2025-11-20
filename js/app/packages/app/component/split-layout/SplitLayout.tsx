@@ -1,16 +1,10 @@
 import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
 import { activeElement } from '@app/signal/focus';
 import { Resize } from '@core/component/Resize';
-import { TOKENS } from '@core/hotkey/tokens';
-import {
-  isRightPanelOpen,
-  useBigChat,
-  useToggleRightPanel,
-} from '@core/signal/layout';
 import { tabTitleSignal } from '@core/signal/tabTitle';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { useNavigate } from '@solidjs/router';
-import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
+import { useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   createEffect,
@@ -23,7 +17,6 @@ import {
   type Setter,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { fireMacroJump } from '../MacroJump';
 import {
   createNavigationEntityListShortcut,
   createSoupContext,
@@ -41,7 +34,8 @@ import {
   type SplitManager,
   type SplitState,
 } from './layoutManager';
-import { decodePairs, focusAdjacentSplit } from './layoutUtils';
+import { decodePairs } from './layoutUtils';
+import { registerSplitHotkeys } from './registerSplitHotkeys';
 
 type SplitLayoutContainerProps = {
   pairs: string[];
@@ -333,7 +327,6 @@ type SplitPanelProps = {
 
 function SplitPanel(props: SplitPanelProps) {
   const [panelRef, setPanelRef] = createSignal<HTMLDivElement | null>(null);
-  const splitManager = useSplitLayout;
   const [attachHotKeys, splitHotkeyScope] = useHotkeyDOMScope(
     `split=${props.split.id}`
   );
@@ -348,191 +341,22 @@ function SplitPanel(props: SplitPanelProps) {
     return type;
   });
 
-  const windowScope = registerHotkey({
-    scopeId: splitHotkeyScope,
-    hotkey: 'w',
-    description: 'Window',
-    keyDownHandler: () => {
-      return true;
-    },
-    activateCommandScope: true,
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.createNewSplit,
-    hotkey: '\\',
-    scopeId: windowScope.commandScopeId,
-    description: 'Create new split',
-    keyDownHandler: () => {
-      splitManager().insertSplit({ type: 'component', id: 'unified-list' });
-      return true;
-    },
-  });
-
-  registerHotkey({
-    scopeId: windowScope.commandScopeId,
-    hotkey: 'w',
-    description: `Close split`,
-    keyDownHandler: () => {
-      props.handle.close();
-      return true;
-    },
-    hotkeyToken: TOKENS.split.close,
-  });
-
-  registerHotkey({
-    scopeId: windowScope.commandScopeId,
-    hotkey: 'shift+escape',
-    hotkeyToken: TOKENS.split.spotlight.toggle,
-    description: `Spotlight ${splitName()}`,
-    keyDownHandler: () => {
-      props.handle.toggleSpotlight();
-      return true;
-    },
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    scopeId: splitHotkeyScope,
-    hotkey: 'escape',
-    hotkeyToken: TOKENS.split.spotlight.close,
-    condition: () => props.handle.isSpotLight(),
-    description: `Spotlight ${splitName()}`,
-    keyDownHandler: () => {
-      props.handle.toggleSpotlight();
-      return true;
-    },
-    runWithInputFocused: true,
-  });
-
-  const goScope = registerHotkey({
-    scopeId: splitHotkeyScope,
-    hotkey: 'g',
-    description: 'Go',
-    keyDownHandler: () => {
-      return true;
-    },
-    activateCommandScope: true,
-    hotkeyToken: TOKENS.split.goCommand,
-    displayPriority: 10,
-  });
-
-  const goScopeId = goScope.commandScopeId;
-
-  registerHotkey({
-    scopeId: goScopeId,
-    hotkey: '[',
-    hotkeyToken: TOKENS.split.go.back,
-    condition: () => props.handle.canGoBack(),
-    description: `Go back`,
-    keyDownHandler: () => {
-      props.handle.goBack();
-      return true;
-    },
-  });
-
-  registerHotkey({
-    scopeId: goScopeId,
-    hotkey: ']',
-    hotkeyToken: TOKENS.split.go.forward,
-    condition: () => props.handle.canGoForward(),
-    description: `Go forward`,
-    keyDownHandler: () => {
-      props.handle.goForward();
-      return true;
-    },
-  });
-
-  const { replaceSplit } = useSplitLayout();
-
-  registerHotkey({
-    scopeId: goScopeId,
-    hotkey: 'h',
-    description: 'Go home',
-    keyDownHandler: () => {
-      replaceSplit({ type: 'component', id: 'unified-list' });
-      return true;
-    },
-    hotkeyToken: TOKENS.split.go.home,
-  });
-
-  registerHotkey({
-    scopeId: goScopeId,
-    hotkey: 'e',
-    description: 'Go to email',
-    keyDownHandler: () => {
-      replaceSplit({ type: 'component', id: 'unified-list' });
-      unifiedListContext.setSelectedView('emails');
-      return true;
-    },
-    hotkeyToken: TOKENS.split.go.email,
-  });
-
-  registerHotkey({
-    scopeId: goScopeId,
-    hotkey: 'i',
-    description: 'Go to inbox',
-    keyDownHandler: () => {
-      replaceSplit({ type: 'component', id: 'unified-list' });
-      unifiedListContext.setSelectedView('inbox');
-      return true;
-    },
-    hotkeyToken: TOKENS.split.go.inbox,
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.split.go.focusSplitRight,
-    hotkey: ['arrowright', 'tab'],
-    scopeId: goScopeId,
-    description: 'Focus split right',
-    keyDownHandler: () => {
-      focusAdjacentSplit('right');
-      return true;
-    },
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.split.go.focusSplitLeft,
-    hotkey: ['arrowleft', 'shift+tab'],
-    scopeId: goScopeId,
-    description: 'Focus split left',
-    keyDownHandler: () => {
-      focusAdjacentSplit('left');
-      return true;
-    },
-  });
-
-  const [bigChatOpen, _] = useBigChat();
-  const toggleRightPanel = useToggleRightPanel();
-
-  registerHotkey({
-    hotkeyToken: TOKENS.split.go.toggleRightPanel,
-    hotkey: 'r',
-    scopeId: goScopeId,
-    description: () => {
-      return isRightPanelOpen() ? 'Close AI panel' : 'Go AI panel';
-    },
-    keyDownHandler: () => {
-      toggleRightPanel();
-      return true;
-    },
-    condition: () => {
-      return !bigChatOpen();
-    },
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.split.go.macroJump,
-    hotkey: 'j',
-    scopeId: goScopeId,
-    description: 'Macro Jump',
-    keyDownHandler: () => {
-      fireMacroJump();
-      return true;
-    },
-  });
-
   const unifiedListContext = createSoupContext();
+  const splitLayoutHelpers = useSplitLayout();
+  const { goScope } = registerSplitHotkeys({
+    splitHotkeyScope,
+    splitName,
+    insertSplit: splitLayoutHelpers.insertSplit,
+    closeSplit: () => props.handle.close(),
+    toggleSpotlight: () => props.handle.toggleSpotlight(),
+    isSpotLight: () => props.handle.isSpotLight(),
+    canGoBack: () => props.handle.canGoBack(),
+    goBack: () => props.handle.goBack(),
+    canGoForward: () => props.handle.canGoForward(),
+    goForward: () => props.handle.goForward(),
+    setSelectedView: (view) => unifiedListContext.setSelectedView(view),
+    replaceSplit: splitLayoutHelpers.replaceSplit,
+  });
   createNavigationEntityListShortcut({
     splitName,
     splitHandle: props.handle,
