@@ -97,13 +97,9 @@ impl From<ChatMessage> for Vec<ChatCompletionRequestMessage> {
                     if pending_text.is_some() || !pending_tool_calls.is_empty() {
                         messages.push(ChatCompletionRequestMessage::Assistant(
                             ChatCompletionRequestAssistantMessage {
-                                content: if let Some(text) = pending_text {
-                                    Some(ChatCompletionRequestAssistantMessageContent::Text(
-                                        text.clone(),
-                                    ))
-                                } else {
-                                    None
-                                },
+                                content: pending_text.as_ref().map(|v| {
+                                    ChatCompletionRequestAssistantMessageContent::Text(v.to_owned())
+                                }),
                                 refusal: None,
                                 name: None,
                                 audio: None,
