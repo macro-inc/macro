@@ -174,6 +174,7 @@ export function registerHotkey(
       parentScopeId: scopeId,
       scopeId: commandScopeId,
       type: 'command',
+      activationKeys: hotkeys,
     });
   }
 

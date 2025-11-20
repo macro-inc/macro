@@ -59,7 +59,6 @@ export const TOKENS = {
     move: {
       macroJump: 'global.jump.macroJump',
     },
-    toggleRightPanel: 'global.toggleRightPanel',
     commandMenu: 'global.commandMenu',
     toggleBigChat: 'global.toggleBigChat',
     instructions: 'global.instructions',

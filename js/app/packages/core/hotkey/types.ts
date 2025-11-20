@@ -129,6 +129,9 @@ export type DOMScopeNode = {
 
 export type CommandScopeNode = {
   type: 'command';
+  // The keys that activate this command scope, from the original parent scope.
+  activationKeys?: ValidHotkey[];
+  originalParentScopeId: string;
 };
 
 export type ScopeNode = ScopeNodeBase & (DOMScopeNode | CommandScopeNode);
