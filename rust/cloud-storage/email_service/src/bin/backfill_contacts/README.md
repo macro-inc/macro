@@ -1,16 +1,16 @@
-# Delete Gmail Attachment Utility
+# Backfill Contacts Script
 
-This binary is used to delete any gmail attachments we uploaded for the user(s) from Macro.
+This binary is used to backfill a user's email contacts into contacts_service.
+
+Specifically, it creates contacts for any email the user has previously sent an email to.
 
 ## Required Environment Variables
 
-| Variable             | Description                                                     | Required |
-|----------------------|-----------------------------------------------------------------|----------|
-| `DATABASE_URL`       | The connection string for the PostgreSQL database               | Yes      |
-| `DSS_URL`            | The URL for the Document Storage Service                        | Yes      |
-| `INTERNAL_AUTH_KEY`  | An access token for authenticating with internal Macro services | Yes      |
-| `MACRO_IDS`          | The Macro IDs of the user accounts to delete attachments for    | Yes      |
-| `DELETE_CONCURRENCY` | Number of concurrent uploads to process (defaults to 10)        | No       |
+| Variable         | Description                                                 | Required |
+|------------------|-------------------------------------------------------------|----------|
+| `DATABASE_URL`   | The connection string for the PostgreSQL database           | Yes      |
+| `MACRO_IDS`      | The Macro IDs of the user accounts to backfill contacts for | Yes      |
+| `CONTACTS_QUEUE` | URL of queue to put messages on for contacts_service        | Yes      |
 
 ## Setup
 
