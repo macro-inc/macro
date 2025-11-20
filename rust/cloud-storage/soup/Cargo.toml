@@ -13,6 +13,9 @@ axum = [
   "models_pagination/axum",
   "models_soup/schema",
 ]
+inbound = ["ports"]
+outbound = ["ports"]
+ports = ["frecency/ports"]
 
 
 [dependencies]

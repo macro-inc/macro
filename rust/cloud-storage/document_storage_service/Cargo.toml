@@ -88,7 +88,7 @@ schemars = { workspace = true }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
-soup = { path = "../soup", features = ["axum"] }
+soup = { path = "../soup", features = ["axum", "inbound", "outbound"] }
 sqlx = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
   "document",

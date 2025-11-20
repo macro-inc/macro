@@ -14,9 +14,9 @@ axum = [
   "model_user/axum",
   "models_pagination/axum",
 ]
-inbound = ["axum", "ports"]
+inbound = ["ports"]
 outbound = ["dep:sqlx", "ports"]
-ports = ["dep:tokio"]
+ports = ["dep:tokio", "frecency/ports"]
 
 [dependencies]
 anyhow = { workspace = true }
