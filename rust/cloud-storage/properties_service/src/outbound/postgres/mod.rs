@@ -150,52 +150,65 @@ impl PropertiesStorage for PropertiesPgStorage {
         &self,
         _entity_id: &str,
         _entity_type: crate::domain::models::EntityType,
-    ) -> Result<
-        Vec<(
-            crate::domain::models::EntityProperty,
-            Option<crate::domain::models::PropertyValue>,
-        )>,
-        Self::Error,
-    > {
+    ) -> Result<Vec<crate::domain::models::EntityProperty>, Self::Error> {
         todo!("Will be implemented in subsequent commit")
+    }
+
+    async fn get_entity_properties_with_values(
+        &self,
+        entity_id: &str,
+        entity_type: crate::domain::models::EntityType,
+        organization_id: Option<i32>,
+        user_id: &str,
+        include_metadata: bool,
+    ) -> Result<Vec<crate::domain::models::EntityPropertyWithDefinition>, Self::Error> {
+        entity_properties::get_entity_properties_with_values(
+            &self.pool,
+            entity_id,
+            entity_type,
+            organization_id,
+            user_id.to_string(),
+            include_metadata,
+        )
+        .await
     }
 
     async fn set_entity_property(
         &self,
-        _entity_property: crate::domain::models::EntityProperty,
-        _value: Option<crate::domain::models::PropertyValue>,
+        entity_property: crate::domain::models::EntityProperty,
+        value: Option<crate::domain::models::PropertyValue>,
     ) -> Result<crate::domain::models::EntityProperty, Self::Error> {
-        todo!("Will be implemented in subsequent commit")
+        let (result, _) = entity_properties::set_entity_property(&self.pool, entity_property, value).await?;
+        Ok(result)
     }
 
     async fn delete_entity_property(
         &self,
         _entity_property_id: uuid::Uuid,
     ) -> Result<bool, Self::Error> {
-        todo!("Will be implemented in subsequent commit")
+        todo!("Will be implemented in subsequent commit - need entity_id, entity_type, property_definition_id")
     }
 
     async fn delete_all_entity_properties(
         &self,
-        _entity_id: &str,
-        _entity_type: crate::domain::models::EntityType,
+        entity_id: &str,
+        entity_type: crate::domain::models::EntityType,
     ) -> Result<(), Self::Error> {
-        todo!("Will be implemented in subsequent commit")
+        entity_properties::delete_all_entity_properties(&self.pool, entity_id.to_string(), entity_type).await?;
+        Ok(())
     }
 
     async fn get_bulk_entity_properties(
         &self,
-        _entity_refs: &[(String, crate::domain::models::EntityType)],
+        entity_refs: &[(String, crate::domain::models::EntityType)],
     ) -> Result<
-        Vec<(
-            String,
-            Vec<(
-                crate::domain::models::EntityProperty,
-                Option<crate::domain::models::PropertyValue>,
-            )>,
-        )>,
+        std::collections::HashMap<String, Vec<crate::domain::models::EntityPropertyWithDefinition>>,
         Self::Error,
     > {
-        todo!("Will be implemented in subsequent commit")
+        entity_properties::get_bulk_entity_properties(
+            &self.pool,
+            entity_refs.iter().map(|(id, et)| (id.clone(), *et)).collect(),
+        )
+        .await
     }
 }

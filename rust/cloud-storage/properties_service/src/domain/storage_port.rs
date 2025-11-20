@@ -68,9 +68,22 @@ pub trait PropertiesStorage: Send + Sync + 'static {
         entity_type: EntityType,
     ) -> impl std::future::Future<Output = Result<Vec<EntityProperty>, Self::Error>> + Send;
 
+    /// Get entity properties with their values
+    fn get_entity_properties_with_values(
+        &self,
+        entity_id: &str,
+        entity_type: EntityType,
+        organization_id: Option<i32>,
+        user_id: &str,
+        include_metadata: bool,
+    ) -> impl std::future::Future<
+        Output = Result<Vec<crate::domain::models::EntityPropertyWithDefinition>, Self::Error>,
+    > + Send;
+
     fn set_entity_property(
         &self,
         entity_property: EntityProperty,
+        value: Option<crate::domain::models::PropertyValue>,
     ) -> impl std::future::Future<Output = Result<EntityProperty, Self::Error>> + Send;
 
     fn delete_entity_property(
@@ -87,5 +100,10 @@ pub trait PropertiesStorage: Send + Sync + 'static {
     fn get_bulk_entity_properties(
         &self,
         entity_refs: &[(String, EntityType)],
-    ) -> impl std::future::Future<Output = Result<Vec<(String, Vec<EntityProperty>)>, Self::Error>> + Send;
+    ) -> impl std::future::Future<
+        Output = Result<
+            std::collections::HashMap<String, Vec<crate::domain::models::EntityPropertyWithDefinition>>,
+            Self::Error,
+        >,
+    > + Send;
 }
