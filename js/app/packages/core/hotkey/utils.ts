@@ -1,5 +1,6 @@
 import { IS_MAC } from '@core/constant/isMac';
 import { logger } from '@observability/logger';
+import { createMemo } from 'solid-js';
 import {
   macOptionReverse,
   shiftPunctuationMap,
@@ -396,3 +397,12 @@ export function findClosestParentScopeId(element: Element) {
 export function findClosestParentScopeElement(element: Element) {
   return element.parentElement?.closest('[data-hotkey-scope]');
 }
+
+export const useIsInCommandScope = () => {
+  return createMemo(() => {
+    const currentScopeId = activeScope();
+    if (!currentScopeId) return false;
+    const scopeNode = hotkeyScopeTree.get(currentScopeId);
+    return scopeNode?.type === 'command';
+  });
+};
