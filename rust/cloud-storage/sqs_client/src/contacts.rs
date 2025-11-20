@@ -1,5 +1,7 @@
 use crate::SQS;
-use model::contacts::{AddParticipantsMessageBody, CreateGroupMessageBody, Message};
+use model::contacts::{
+    AddParticipantsMessageBody, ConnectionsMessage, CreateGroupMessageBody, Message,
+};
 
 impl SQS {
     pub fn contacts_queue(mut self, contacts_queue: &str) -> Self {
@@ -45,6 +47,22 @@ impl SQS {
 
         Err(anyhow::anyhow!("contacts_queue is not configured"))
     }
+
+    #[tracing::instrument(skip(self))]
+    pub async fn enqueue_contacts_add_connection(
+        &self,
+        connections_message: ConnectionsMessage,
+    ) -> anyhow::Result<()> {
+        if let Some(contacts_queue) = &self.contacts_queue {
+            return enqueue_contacts_add_connection(
+                &self.inner,
+                contacts_queue,
+                connections_message,
+            )
+            .await;
+        }
+        Err(anyhow::anyhow!("contacts_queue is not configured"))
+    }
 }
 
 #[tracing::instrument(skip(sqs_client, participants))]
@@ -83,6 +101,23 @@ pub async fn enqueue_contacts_add_participants(
         group_id: Some(channel_id.to_string()),
     };
     let message = Message::AddParticipants(body);
+    let message_str = serde_json::to_string(&message)?;
+    sqs_client
+        .send_message()
+        .queue_url(queue_url)
+        .message_body(message_str)
+        .send()
+        .await?;
+    Ok(())
+}
+
+#[tracing::instrument(skip(sqs_client, queue_url))]
+pub async fn enqueue_contacts_add_connection(
+    sqs_client: &aws_sdk_sqs::Client,
+    queue_url: &str,
+    connections_message: ConnectionsMessage,
+) -> anyhow::Result<()> {
+    let message = Message::AddConnection(connections_message);
     let message_str = serde_json::to_string(&message)?;
     sqs_client
         .send_message()
