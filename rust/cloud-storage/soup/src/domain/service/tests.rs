@@ -10,18 +10,45 @@ use models_pagination::{Cursor, CursorVal, FrecencyValue, SimpleSortMethod, Type
 use models_soup::document::SoupDocument;
 use ordered_float::OrderedFloat;
 use sqlx::types::chrono::{DateTime, Utc};
+use uuid::Uuid;
 
 use super::*;
 
-fn soup_document(id: String) -> SoupDocument {
-    soup_document_with_updated(id, Default::default())
+fn soup_document(id: &str) -> SoupDocument {
+    // Create a deterministic UUID from the string ID
+    let uuid = Uuid::parse_str(id).unwrap_or_else(|_| {
+        // For simple IDs like "doc-1", create a zero UUID with the number embedded
+        let num: u128 = id
+            .chars()
+            .filter(|c| c.is_numeric())
+            .collect::<String>()
+            .parse()
+            .unwrap_or(0);
+        Uuid::from_u128(num)
+    });
+    soup_document_uuid_with_updated(uuid, Default::default())
 }
 
-fn soup_document_with_updated(id: String, updated_at: DateTime<Utc>) -> SoupDocument {
+fn soup_document_with_updated(id: &str, updated_at: DateTime<Utc>) -> SoupDocument {
+    // Create a deterministic UUID from the string ID
+    let uuid = Uuid::parse_str(id).unwrap_or_else(|_| {
+        // For simple IDs like "doc-1", create a zero UUID with the number embedded
+        let num: u128 = id
+            .chars()
+            .filter(|c| c.is_numeric())
+            .collect::<String>()
+            .parse()
+            .unwrap_or(0);
+        Uuid::from_u128(num)
+    });
+    soup_document_uuid_with_updated(uuid, updated_at)
+}
+
+fn soup_document_uuid_with_updated(id: Uuid, updated_at: DateTime<Utc>) -> SoupDocument {
     SoupDocument {
         id,
         document_version_id: 1,
-        owner_id: "macro|test@example.com".to_string(),
+        owner_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
         name: Default::default(),
         file_type: None,
         sha: None,
@@ -57,7 +84,7 @@ async fn it_should_not_query_frecency() {
         .times(1)
         .returning(|_params| {
             Box::pin(async move {
-                Ok(Some(soup_document("my-document".to_string()))
+                Ok(Some(soup_document("my-document"))
                     .into_iter()
                     .cycle()
                     .take(10)
@@ -101,7 +128,8 @@ async fn it_should_query_frecency() {
                 Ok((1..=req.limit)
                     .map(|i| {
                         AggregateFrecency::new_mock(
-                            EntityType::Document.with_entity_string(format!("my-document-{i}")),
+                            EntityType::Document
+                                .with_entity_string(uuid::Uuid::from_u128(i as u128).to_string()),
                             420.0,
                         )
                     })
@@ -131,7 +159,7 @@ async fn it_should_query_frecency() {
             let res = Ok(params
                 .entities
                 .iter()
-                .map(|v| soup_document(v.entity_id.to_string()))
+                .map(|v| soup_document(&v.entity_id))
                 .map(SoupItem::Document)
                 .collect());
             Box::pin(async move { res })
@@ -169,7 +197,8 @@ async fn it_should_sort_frecency_descending() {
                 Ok((1..=req.limit)
                     .map(|v| {
                         AggregateFrecency::new_mock(
-                            EntityType::Document.with_entity_string(format!("my-document-{v}")),
+                            EntityType::Document
+                                .with_entity_string(uuid::Uuid::from_u128(v as u128).to_string()),
                             f64::from(v),
                         )
                     })
@@ -198,7 +227,7 @@ async fn it_should_sort_frecency_descending() {
             let res = Ok(params
                 .entities
                 .iter()
-                .map(|v| soup_document(v.entity_id.to_string()))
+                .map(|v| soup_document(&v.entity_id))
                 .map(SoupItem::Document)
                 .collect());
 
@@ -239,7 +268,8 @@ async fn frecency_should_fallback() {
         .returning(|_params| {
             let iter = (1..=25).map(|v| {
                 AggregateFrecency::new_mock(
-                    EntityType::Document.with_entity_string(format!("doc-{v}")),
+                    EntityType::Document
+                        .with_entity_string(uuid::Uuid::from_u128(v as u128).to_string()),
                     v.into(),
                 )
             });
@@ -254,7 +284,7 @@ async fn frecency_should_fallback() {
             let vec = params
                 .entities
                 .iter()
-                .map(|id| soup_document(id.entity_id.to_string()))
+                .map(|id| soup_document(&id.entity_id))
                 .map(SoupItem::Document)
                 .collect();
             Box::pin(async move { Ok(vec) })
@@ -277,7 +307,7 @@ async fn frecency_should_fallback() {
             let iter = (26..=200)
                 .map(|v| {
                     soup_document_with_updated(
-                        format!("doc-{v}"),
+                        &uuid::Uuid::from_u128(v as u128).to_string(),
                         DateTime::default() + Days::new(v),
                     )
                 })
@@ -313,7 +343,8 @@ async fn frecency_should_fallback() {
     assert_matches!(
         typed_cursor,
         Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated) }, filter: None } => {
-        assert_eq!(id, "doc-100");
+        let expected_uuid_str = Uuid::from_u128(100).to_string();
+        assert_eq!(id, expected_uuid_str);
         assert_eq!(updated, <DateTime<Utc>>::default() + Days::new(100));
 
     });
@@ -331,7 +362,8 @@ async fn frecency_should_paginate() {
         .returning(|params| {
             let iter = (1..=params.limit).map(|v| {
                 AggregateFrecency::new_mock(
-                    EntityType::Document.with_entity_string(format!("doc-{v}")),
+                    EntityType::Document
+                        .with_entity_string(uuid::Uuid::from_u128(v as u128).to_string()),
                     v.into(),
                 )
             });
@@ -345,7 +377,7 @@ async fn frecency_should_paginate() {
             let vec = params
                 .entities
                 .iter()
-                .map(|id| soup_document(id.entity_id.to_string()))
+                .map(|id| soup_document(&id.entity_id))
                 .map(SoupItem::Document)
                 .collect();
             Box::pin(async move { Ok(vec) })
@@ -379,7 +411,8 @@ async fn frecency_should_paginate() {
     assert_matches!(
         typed_cursor,
         Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score) }, filter: None} => {
-        assert_eq!(id, "doc-1");
+        let expected_uuid_str = Uuid::from_u128(1).to_string();
+        assert_eq!(id, expected_uuid_str);
         // last item should be the lowest score because we sort desc
         assert_eq!(score as u32, 1u32);
     });
@@ -397,7 +430,8 @@ async fn frecency_should_resume_cursor() {
         .returning(|params| {
             let iter = (1..=params.limit).map(|v| {
                 AggregateFrecency::new_mock(
-                    EntityType::Document.with_entity_string(format!("doc-next-{v}")),
+                    EntityType::Document
+                        .with_entity_string(uuid::Uuid::from_u128(v as u128).to_string()),
                     5.0 - (f64::from(v) / params.limit as f64),
                 )
             });
@@ -411,7 +445,7 @@ async fn frecency_should_resume_cursor() {
             let vec = params
                 .entities
                 .iter()
-                .map(|id| soup_document(id.entity_id.to_string()))
+                .map(|id| soup_document(&id.entity_id))
                 .map(SoupItem::Document)
                 .collect();
             Box::pin(async move { Ok(vec) })
@@ -422,7 +456,7 @@ async fn frecency_should_resume_cursor() {
             soup_type: SoupType::UnExpanded,
             limit: 100,
             cursor: SoupQuery::Frecency(Query::Cursor(Cursor {
-                id: "doc-5".to_string(),
+                id: Uuid::from_u128(5).to_string(),
                 limit: 100,
                 val: CursorVal {
                     sort_type: Frecency,
@@ -450,7 +484,8 @@ async fn frecency_should_resume_cursor() {
     assert_matches!(
         typed_cursor,
         Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(score) }, filter: None} => {
-        assert_eq!(id, "doc-next-100");
+        let expected_uuid_str = Uuid::from_u128(100).to_string();  // "next-100" -> 100
+        assert_eq!(id, expected_uuid_str);
         // last item should be the lowest score because we sort desc
         assert_eq!(score as u32, 4u32);
     });
@@ -480,7 +515,8 @@ async fn frecency_fallback_cursor_should_resume() {
                 } => {
                 let expected_time = <DateTime<Utc>>::default() + Days::new(5);
                 assert_eq!(last_val, &expected_time);
-                assert_eq!(id, "doc-100");
+                let expected_uuid_str = Uuid::from_u128(100).to_string();
+                assert_eq!(id, &expected_uuid_str);
                 true
             })
         })
@@ -489,7 +525,7 @@ async fn frecency_fallback_cursor_should_resume() {
             let iter = (1..=params.limit * 2)
                 .map(|v| {
                     soup_document_with_updated(
-                        format!("doc-next-{v}"),
+                        &uuid::Uuid::from_u128(v as u128).to_string(),
                         DateTime::default() + Days::new(v.into()),
                     )
                 })
@@ -504,7 +540,7 @@ async fn frecency_fallback_cursor_should_resume() {
             soup_type: SoupType::UnExpanded,
             limit: 100,
             cursor: SoupQuery::Frecency(Query::Cursor(Cursor {
-                id: "doc-100".to_string(),
+                id: Uuid::from_u128(100).to_string(),
                 limit: 100,
                 val: CursorVal {
                     sort_type: Frecency,
@@ -521,7 +557,8 @@ async fn frecency_fallback_cursor_should_resume() {
     assert!(res.items.iter().all(|v| v.frecency_score.is_none()));
     let cursor = res.next_cursor.unwrap().decode_json().unwrap();
     assert_matches!(cursor, Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::UpdatedAt(updated) }, filter: None } => {
-        assert_eq!(id, "doc-next-100");
+        let expected_uuid_str = Uuid::from_u128(100).to_string();  // "next-100" -> 100
+        assert_eq!(id, expected_uuid_str);
         let expected_date = <DateTime<Utc>>::default() + Days::new(100);
         assert_eq!(updated, expected_date);
     })
@@ -549,7 +586,7 @@ async fn cursor_should_return_simple_sort() {
         .times(1)
         .returning(|_params| {
             let res = (0..100)
-                .map(|i| soup_document(format!("my-document-{i}")))
+                .map(|i| soup_document(&format!("my-document-{i}")))
                 .map(SoupItem::Document)
                 .collect();
             Box::pin(async move { Ok(res) })
@@ -571,7 +608,8 @@ async fn cursor_should_return_simple_sort() {
     let simple_cursor = res.unwrap_left();
     let cursor_decoded = simple_cursor.next_cursor.unwrap().decode_json().unwrap();
     assert_matches!(cursor_decoded, Cursor { id, limit: 20, val: CursorVal { sort_type: SimpleSortMethod::ViewedUpdated, last_val }, filter } => {
-        assert_eq!(id, "my-document-19");
+        let expected_uuid_str = Uuid::from_u128(19).to_string();  // "my-document-19" -> 19
+        assert_eq!(id, expected_uuid_str);
         let date: DateTime<Utc> = Default::default();
         assert_eq!(last_val, date);
         assert!(filter.is_none());
@@ -590,7 +628,8 @@ async fn cursor_should_return_frecency() {
         .returning(|params| {
             let iter = (1..=params.limit).map(|v| {
                 AggregateFrecency::new_mock(
-                    EntityType::Document.with_entity_string(format!("doc-{v}")),
+                    EntityType::Document
+                        .with_entity_string(uuid::Uuid::from_u128(v as u128).to_string()),
                     v.into(),
                 )
             });
@@ -604,7 +643,7 @@ async fn cursor_should_return_frecency() {
             let vec = params
                 .entities
                 .iter()
-                .map(|id| soup_document(id.entity_id.to_string()))
+                .map(|id| soup_document(&id.entity_id))
                 .map(SoupItem::Document)
                 .collect();
             Box::pin(async move { Ok(vec) })
@@ -624,7 +663,8 @@ async fn cursor_should_return_frecency() {
     let cursor_decoded = simple_cursor.next_cursor.unwrap().decode_json().unwrap();
     assert_matches!(cursor_decoded, Cursor { id, limit: 100, val: CursorVal { sort_type: Frecency, last_val: FrecencyValue::FrecencyScore(1.0) }, filter } => {
         // frecency sort is descending so the last item is id 1
-        assert_eq!(id, "doc-1");
+        let expected_uuid_str = Uuid::from_u128(1).to_string();
+        assert_eq!(id, expected_uuid_str);
         assert!(filter.is_none());
     })
 }
