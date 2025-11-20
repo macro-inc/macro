@@ -61,14 +61,12 @@ import { GlobalAppStateProvider } from './GlobalAppState';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
-import { useMobileEffect, useMobileNavigate } from './settings/Mobile';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
 const rootPreload: RoutePreloadFunc = async (args) => {
   useObserveRouting();
-  useMobileNavigate();
 
   // even though we are using the transformUrl prop, we may still need to replace the url in the history
   const url = new URL(window.location.href);
@@ -276,8 +274,6 @@ export function Root() {
   const isAuthenticated = useIsAuthenticated();
   useHotKeyRoot();
   useSoundHover();
-
-  useMobileEffect();
 
   clearBodyInlineStyleColor();
 
