@@ -18,6 +18,7 @@ import { SplitModalProvider } from './SplitModalContext';
 import { SplitToolbar } from './SplitToolbar';
 import './splitContainer.css';
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { ClippedPanel } from '@core/component/ClippedPanel';
 
 function EdgeDecor(props: { isActive: boolean }) {
   return (
@@ -123,8 +124,13 @@ export function SplitContainer(
 
 export function SplitlikeContainer(
   props: ParentProps<{
-    spotlight: Accessor<boolean>;
     setSpotlight: Setter<boolean>;
+    spotlight: Accessor<boolean>;
+    active?: boolean;
+    tl?: boolean;
+    tr?: boolean;
+    br?: boolean;
+    bl?: boolean;
   }>
 ) {
   const [panel, setPanel] = createSignal<HTMLDivElement | null>(null);
@@ -141,18 +147,27 @@ export function SplitlikeContainer(
           />
           <div class="fixed inset-[4rem] bg-panel shadow-xl" />
         </Show>
-        <div
-          data-split-container
-          tabindex={-1}
-          ref={setPanel}
-          class="@container/split flex flex-col border-edge-muted border min-h-0 bg-panel bracket-never"
-          classList={{
-            'size-full': !props.spotlight(),
-            'fixed inset-[4rem] z-modal isolate': props.spotlight(),
-          }}
-        >
-          <div class="size-full overflow-hidden">{props.children}</div>
-        </div>
+
+          <div
+            data-split-container
+            tabindex={-1}
+            ref={setPanel}
+            class="@container/split flex flex-col min-h-0 bracket-never"
+            classList={{
+              'size-full': !props.spotlight(),
+              'fixed inset-[4rem] z-modal isolate': props.spotlight(),
+            }}
+          >
+            <ClippedPanel
+              active={props.active}
+              tl={props.tl}
+              tr={props.tr}
+              bl={props.bl}
+              br={props.br}
+            >
+              <div class="size-full overflow-hidden">{props.children}</div>
+            </ClippedPanel>
+          </div>
       </SplitDrawerGroup>
     </SplitModalProvider>
   );
