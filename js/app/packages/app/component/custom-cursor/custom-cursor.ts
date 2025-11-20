@@ -321,7 +321,7 @@ function generateCustomCursorStyleTextContent() {
   styleTextContent += Object.keys(cursorSvgMap)
     .map((key) => {
       return `
-      .${getCursorClassFromKey(key)} { 
+      .${getCursorClassFromKey(key)} {
       cursor: ${getCursor(key)} !important;
       --custom-cursor: ${key};
        }`;
