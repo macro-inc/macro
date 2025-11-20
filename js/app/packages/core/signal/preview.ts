@@ -46,14 +46,6 @@ export type PreviewProjectAccess = {
   channelType?: never;
 } & BasePreviewItem<'project'>;
 
-export type PreviewColorAccess = {
-  access: Extract<AccessType, 'access'>;
-  loading: false;
-  name: string;
-  fileType?: never;
-  channelType?: never;
-} & BasePreviewItem<'color'>;
-
 export type PreviewDocumentAccess = {
   access: Extract<AccessType, 'access'>;
   loading: false;
@@ -76,8 +68,7 @@ export type PreviewItem =
   | PreviewItemAccess
   | PreviewProjectAccess
   | PreviewDocumentAccess
-  | PreviewChannelAccess
-  | PreviewColorAccess;
+  | PreviewChannelAccess;
 
 export interface ItemEntity {
   id: string;
@@ -125,28 +116,6 @@ function defaultNameTransform(item: PreviewItem): PreviewItem {
   return item;
 }
 
-/** TODO YANK THIS when we move color doc to backend. */
-function getLocalColorNameById(id: string): string | undefined {
-  try {
-    if (typeof window === 'undefined') return undefined;
-    const raw = window.localStorage?.getItem('block-color.store');
-    if (!raw) return undefined;
-    const parsed = JSON.parse(raw) as unknown;
-    if (
-      parsed &&
-      typeof parsed === 'object' &&
-      id in (parsed as Record<string, unknown>)
-    ) {
-      const entry = (parsed as Record<string, any>)[id];
-      const name = entry?.data?.name;
-      if (typeof name === 'string' && name.length > 0) return name;
-    }
-  } catch (_err) {
-    // ignore and fall back to empty name
-  }
-  return undefined;
-}
-
 const processFetchQueue = debounce(async () => {
   const items = previewFetchQueue();
   if (items.length === 0) return;
@@ -176,9 +145,6 @@ async function batchFetchPreviews(items: ItemEntity[]) {
     .filter((i) => i.type === 'email' || !i.type)
     .map((i) => i.id);
 
-  // TODO YANK THIS when we move color doc to backend.
-  const colorItems = items.filter((i) => i.type === 'color').map((i) => i.id);
-
   const [
     chatResults,
     documentResults,
@@ -201,16 +167,6 @@ async function batchFetchPreviews(items: ItemEntity[]) {
       : Promise.resolve([]),
   ]);
 
-  // TODO YANK THIS when we move color doc to backend.
-  const colorResults = colorItems.map((id) => ({
-    _createdAt: new Date(),
-    id,
-    type: 'color' as const,
-    access: 'access' as const,
-    loading: false as const,
-    name: getLocalColorNameById(id) ?? '',
-  }));
-
   const updates: ItemPreviewStore = {};
 
   [
@@ -219,7 +175,6 @@ async function batchFetchPreviews(items: ItemEntity[]) {
     ...channelResults,
     ...projectResults,
     ...emailResults,
-    ...colorResults,
   ].forEach((result) => {
     updates[result.id] = result;
   });

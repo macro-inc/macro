@@ -22,11 +22,10 @@ mock! {
 
         fn set_aggregate(&self, frecency: crate::domain::models::AggregateFrecency) -> impl Future<Output = Result<(), Infallible>> + Send;
 
-        #[mockall::concretize]
-        fn get_aggregate_for_user_entities<T: Iterator<Item = Entity<'static>>>(
+        fn get_aggregate_for_user_entities<'a>(
             &self,
-            user_id: MacroUserIdStr<'static>,
-            entities: T,
+            user_id: MacroUserIdStr<'a>,
+            entities: &'a [Entity<'a>],
         ) -> impl Future<Output = Result<Vec<crate::domain::models::AggregateFrecency>, Infallible>> + Send;
     }
 

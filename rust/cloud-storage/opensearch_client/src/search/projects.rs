@@ -149,19 +149,17 @@ pub(crate) async fn search_projects(
         .map_client_error()
         .await?;
 
-    let json_value: serde_json::Value =
-        response
-            .json()
-            .await
-            .map_err(|e| OpensearchClientError::DeserializationFailed {
-                details: e.to_string(),
-                method: Some("search_projects".to_string()),
-            })?;
-
-    let result: SearchResponse<ProjectIndex> = serde_json::from_value(json_value).map_err(|e| {
-        OpensearchClientError::DeserializationFailed {
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| OpensearchClientError::HttpBytesError {
             details: e.to_string(),
-            method: Some("search_projects".to_string()),
+        })?;
+
+    let result: SearchResponse<ProjectIndex> = serde_json::from_slice(&bytes).map_err(|e| {
+        OpensearchClientError::SearchDeserializationFailed {
+            details: e.to_string(),
+            raw_body: String::from_utf8_lossy(&bytes).to_string(),
         }
     })?;
 

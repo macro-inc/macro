@@ -22,7 +22,7 @@ import {
 import { updateCookie } from '../../util/updateCookie';
 import { EmailForm } from './EmailForm';
 import { LoginOptions } from './LoginOptions';
-import { checkAffiliate, Input, identifyUser, Stage } from './Shared';
+import { Input, identifyUser, Stage } from './Shared';
 import ThreeWireframe from './ThreeWireframe';
 import { VerifyForm } from './VerifyForm';
 
@@ -36,7 +36,6 @@ export function Login() {
   createEffect(() => {
     if (authenticated()) {
       identifyUser();
-      checkAffiliate();
     }
   });
 

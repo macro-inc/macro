@@ -8,9 +8,10 @@ import { proxyResource } from '@service-unfurl/client';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { savePropertyValue } from '../../api/propertyValues';
+import { saveEntityProperty } from '../../api';
 import type { Property } from '../../types';
 import { extractDomain, isValidUrl, normalizeUrl } from '../../utils';
+import { ERROR_MESSAGES } from '../../utils/errorHandling';
 import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
 
 type LinkValueProps = {
@@ -30,7 +31,7 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
   const [badLinks, setBadLinks] = createStore<Record<string, true>>({});
 
   const isReadOnly = () => props.property.isMetadata || !props.canEdit;
-  const linkValues = (props.property.value || []) as string[];
+  const linkValues = (props.property.value ?? []) as string[];
 
   const startAdding = () => {
     if (isReadOnly()) return;
@@ -74,7 +75,7 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
         newValues = [normalized];
       }
 
-      const result = await savePropertyValue(
+      const result = await saveEntityProperty(
         blockId,
         props.entityType,
         props.property,
@@ -88,10 +89,10 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
         cancelAdding();
         props.onRefresh?.();
       } else {
-        setError('Failed to save link');
+        setError(ERROR_MESSAGES.PROPERTY_SAVE);
       }
     } catch (_err) {
-      setError('Failed to save link');
+      setError(ERROR_MESSAGES.PROPERTY_SAVE);
     } finally {
       setIsSaving(false);
     }
@@ -105,7 +106,7 @@ export const LinkValue: Component<LinkValueProps> = (props) => {
     try {
       const newValues = linkValues.filter((link) => link !== url);
 
-      const result = await savePropertyValue(
+      const result = await saveEntityProperty(
         blockId,
         props.entityType,
         props.property,

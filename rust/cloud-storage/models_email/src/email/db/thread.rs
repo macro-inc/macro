@@ -35,7 +35,7 @@ pub struct ThreadPreview {
     pub sender_name: Option<String>,
 }
 /// thread summary returned in preview cursor endpoint
-#[derive(FromRow, Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ThreadPreviewCursor {
     pub id: Uuid,
     pub provider_id: Option<String>,

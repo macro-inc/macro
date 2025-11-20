@@ -16,7 +16,6 @@ import { canNestBlock } from '@core/orchestrator';
 import {
   isAccessiblePreviewItem,
   type PreviewChannelAccess,
-  type PreviewColorAccess,
   type PreviewDocumentAccess,
   type PreviewItem,
   type PreviewItemAccess,
@@ -98,6 +97,16 @@ function Loading(props: { collapsed?: boolean }) {
   );
 }
 
+type AccessiblePreviewItem =
+  | PreviewItemAccess
+  | PreviewProjectAccess
+  | PreviewDocumentAccess
+  | PreviewChannelAccess;
+
+function isAccessible(item: PreviewItem): item is AccessiblePreviewItem {
+  return isAccessiblePreviewItem(item);
+}
+
 function InlinePreview(props: {
   item: () => PreviewItem;
   blockName: BlockName;
@@ -105,16 +114,6 @@ function InlinePreview(props: {
   theme?: EditorThemeClasses;
   collapsed?: boolean;
 }) {
-  type AccessiblePreviewItem =
-    | PreviewItemAccess
-    | PreviewProjectAccess
-    | PreviewDocumentAccess
-    | PreviewChannelAccess
-    | PreviewColorAccess;
-
-  function isAccessible(item: PreviewItem): item is AccessiblePreviewItem {
-    return isAccessiblePreviewItem(item);
-  }
   return (
     <Switch>
       <Match when={props.item().loading}>

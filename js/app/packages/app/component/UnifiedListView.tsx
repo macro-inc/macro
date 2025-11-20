@@ -1505,7 +1505,7 @@ function SearchBar(props: {
     setViewDataStore(selectedView(), 'searchText', text);
   };
 
-  const debouncedSetSearch = debounce(setSearchText, 200);
+  const debouncedSetSearch = debounce(setSearchText, 300);
 
   const isElementInViewport = (element: Element): Promise<boolean> => {
     return new Promise((resolve) => {

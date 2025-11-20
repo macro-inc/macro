@@ -248,7 +248,10 @@ export function PropertyEntitySelector(props: EntityInputProps) {
       }
 
       // Add missing selected entities from property value (handles pagination)
-      if (props.property.valueType === 'ENTITY' && props.property.value) {
+      if (
+        props.property.valueType === 'ENTITY' &&
+        props.property.value != null
+      ) {
         const allAvailableEntities = entities();
 
         for (const ref of props.property.value) {
