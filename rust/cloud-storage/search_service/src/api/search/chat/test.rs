@@ -16,6 +16,7 @@ fn create_test_response(
         role: "user".to_string(),
         updated_at: 1234567890,
         title: "Test Chat".to_string(),
+        score: None,
         highlight: Highlight {
             name: None,
             content: content.unwrap_or_default(),

@@ -21,6 +21,9 @@ pub struct EmailSearchResult {
     pub updated_at: i64,
     /// When the email message was sent
     pub sent_at: Option<i64>,
+    /// The score of the result
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<f64>,
 }
 
 /// A single response item, part of the EmailSearchResponse object

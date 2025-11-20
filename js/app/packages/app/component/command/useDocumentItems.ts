@@ -12,7 +12,8 @@ export function useDocumentItems(fullTextSearchTerm: () => string) {
 
     const items: CommandItemCard[] = [];
     for (const doc of docResults.results) {
-      if (doc.document_search_results.length === 0) continue;
+      if (doc.document_search_results.length === 0 || doc.metadata?.deleted_at)
+        continue;
 
       for (const result of doc.document_search_results) {
         const contents = result.highlight.content ?? [];

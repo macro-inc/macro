@@ -1,4 +1,6 @@
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { HotkeyTags } from '@core/hotkey/constants';
+import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import {
@@ -10,13 +12,17 @@ import {
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
 import { getScrollParent } from '@core/util/scrollParent';
+import { waitForFrames } from '@core/util/sleep';
 import type { EntityData } from '@macro-entity';
 import { useTutorialCompleted } from '@service-gql/client';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
-
 import { useQuery } from '@tanstack/solid-query';
-import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
+import {
+  registerHotkey,
+  runCommand,
+  useHotkeyDOMScope,
+} from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   batch,
@@ -196,11 +202,13 @@ export function createNavigationEntityListShortcut({
   splitHandle,
   splitHotkeyScope,
   unifiedListContext,
+  previewState,
 }: {
   splitName: Accessor<string>;
   splitHandle: SplitHandle;
   splitHotkeyScope: string;
   unifiedListContext: UnifiedListContext;
+  previewState: Signal<boolean>;
 }) {
   const {
     viewsDataStore: viewsData,
@@ -266,6 +274,28 @@ export function createNavigationEntityListShortcut({
             if (next !== null) {
               setViewDataStore(selectedView(), 'selectedEntity', next);
               setViewDataStore(selectedView(), 'highlightedId', next.id);
+              const nextIndex = entities()?.findIndex(
+                ({ id }) => id === next.id
+              );
+              if (nextIndex !== undefined && nextIndex > -1) {
+                virtualizerHandle()?.scrollToIndex(nextIndex, {
+                  align: 'nearest',
+                });
+                waitForFrames(2).then(() => {
+                  const elem = getEntityElAtIndex(nextIndex);
+                  if (elem instanceof HTMLElement) {
+                    elem.focus();
+                    return;
+                    // cooked state (no focus returned)
+                  }
+                });
+              } else {
+                const firstIndex = virtualizerHandle()?.findStartIndex();
+                if (!firstIndex) return;
+                const elem = getEntityElAtIndex(firstIndex);
+                if (elem instanceof HTMLElement) elem.focus();
+                // cooked state (no focus returned)
+              }
             }
           },
         });
@@ -392,6 +422,12 @@ export function createNavigationEntityListShortcut({
       beforeEntity: before,
       afterEntity: after,
     };
+  });
+
+  // the full info with indices and neighbors is great but we also need to
+  // flatten back to the plain entities a lot - so just memoize.
+  const plainSelectedEntities = createLazyMemo(() => {
+    return getEntitiesForAction().entities.map(({ entity }) => entity);
   });
 
   const isEntityLastItem = createLazyMemo(() => {
@@ -803,7 +839,6 @@ export function createNavigationEntityListShortcut({
     description: 'Top',
     keyDownHandler: () => {
       navigateThroughList({ axis: 'start', mode: 'jump' });
-
       return true;
     },
   });
@@ -872,8 +907,62 @@ export function createNavigationEntityListShortcut({
     scopeId: entityHotkeyScope,
     description: 'Open',
     keyDownHandler: () => {
+      const [preview] = previewState;
+      if (!preview()) return false;
+
       const entity = getHighlightedEntity()?.entity;
       if (!entity) return false;
+
+      openEntity(entity);
+      return true;
+    },
+    displayPriority: 4,
+  });
+  registerHotkey({
+    hotkey: ['cmd+enter'],
+    scopeId: entityHotkeyScope,
+    description: 'Focus Preview',
+    keyDownHandler: () => {
+      const [preview] = previewState;
+
+      const entity = getHighlightedEntity()?.entity;
+      if (!entity) return false;
+
+      if (preview()) {
+        // focus inside preview block
+        const blockEl = document.getElementById(`block-${entity.id}`);
+        if (blockEl) {
+          // TODO: use state instead to determine when preview block can recieve focus
+          blockEl.setAttribute('data-allow-focus-in-preview', '');
+
+          blockEl.focus();
+          const getEnterCommand = () => {
+            const currentActiveScope = activeScope();
+            if (!currentActiveScope) return undefined;
+            let activeScopeNode = hotkeyScopeTree.get(currentActiveScope);
+            if (!activeScopeNode) return undefined;
+            if (activeScopeNode?.type !== 'dom') return;
+            const dom = activeScopeNode.element;
+            const closestBlockScope = dom.closest(`[id="block-${entity.id}"]`);
+            if (
+              !closestBlockScope ||
+              !(closestBlockScope instanceof HTMLElement)
+            )
+              return;
+            const scopeId = closestBlockScope.dataset.hotkeyScope;
+            if (!scopeId) return undefined;
+            const splitNode = hotkeyScopeTree.get(scopeId);
+            if (!splitNode) return undefined;
+            return splitNode.hotkeyCommands.get('enter');
+          };
+          // runCommandByToken(TOKENS.block.focus);
+          const command = getEnterCommand();
+          if (command) {
+            runCommand(command);
+          }
+        }
+        return true;
+      }
 
       openEntity(entity);
       return true;
@@ -884,7 +973,9 @@ export function createNavigationEntityListShortcut({
     hotkey: ['e'],
     scopeId: entityHotkeyScope,
     description: 'Mark done',
-    condition: isViewingList,
+    condition: () =>
+      isViewingList() &&
+      !actionRegistry.isActionDisabled('mark_as_done', plainSelectedEntities()),
     keyDownHandler: () => {
       const entitiesForAction = getEntitiesForAction();
       if (entitiesForAction.entities.length === 0) {
@@ -906,7 +997,7 @@ export function createNavigationEntityListShortcut({
       return true;
     },
     displayPriority: 10,
-    tags: ['selection-modification'],
+    tags: [HotkeyTags.SelectionModification],
   });
   registerHotkey({
     hotkey: ['x'],
@@ -937,7 +1028,9 @@ export function createNavigationEntityListShortcut({
     scopeId: splitHotkeyScope,
     description: () =>
       viewData().selectedEntities.length > 1 ? 'Delete items' : 'Delete item',
-    condition: isViewingList,
+    condition: () =>
+      isViewingList() &&
+      !actionRegistry.isActionDisabled('delete', plainSelectedEntities()),
     keyDownHandler: () => {
       const entitiesForAction = getEntitiesForAction();
       if (entitiesForAction.entities.length === 0) {
@@ -949,7 +1042,8 @@ export function createNavigationEntityListShortcut({
       );
       return true;
     },
-    tags: ['selection-modification'],
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
   });
 
   createEffect(() => {

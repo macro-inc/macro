@@ -6,7 +6,6 @@ import IconGoogle from '@macro-icons/macro-google.svg';
 import IconMail from '@macro-icons/macro-mail.svg';
 import { useLocation } from '@solidjs/router';
 import { type Setter, Show } from 'solid-js';
-import { nativeAppleLogin } from '../settings/Mobile';
 import { Stage } from './Shared';
 
 export function LoginOptions(props: { setStage: Setter<Stage> }) {
@@ -33,10 +32,7 @@ export function LoginOptions(props: { setStage: Setter<Stage> }) {
     <div class="grid select-none">
       <Show when={isNativeMobilePlatform() === 'ios'}>
         <div class="grid items-center justify-center p-5 border border-dashed border-ink border-t-0 [transition:color_var(--transition)] hover:text-accent hover:transition-none cursor-pointer">
-          <a
-            onClick={() => nativeAppleLogin()}
-            class="grid grid-cols-[min-content_180px] gap-2.5 items-center justify-center"
-          />
+          <a class="grid grid-cols-[min-content_180px] gap-2.5 items-center justify-center" />
           <IconApple />
           <div class="whitespace-nowrap">Continue with Apple</div>
         </div>

@@ -9,5 +9,6 @@ export interface ProjectPreviewData {
   id: string;
   name: string;
   owner: string;
+  path: string[];
   updatedAt: number;
 }

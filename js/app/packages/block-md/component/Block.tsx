@@ -1,12 +1,10 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { Keyboard } from '@capacitor/keyboard';
 import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { DocumentDebouncedNotificationReadMarker } from '@notifications/components/DebouncedNotificationReadMarker';
+import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@service-storage/instructionsMd';
-import { createEffect, createSignal, onCleanup, onMount, Show } from 'solid-js';
+import { createEffect, createSignal, onMount, Show } from 'solid-js';
 import { mdStore } from '../signal/markdownBlockData';
 import { FindAndReplace } from './FindAndReplace';
 import { InstructionsNotebook, Notebook } from './Notebook';
@@ -27,12 +25,6 @@ export default function BlockMarkdown() {
   onMount(() => {
     track(TrackingEvents.BLOCKMARKDOWN.OPEN);
   });
-
-  if (isNativeMobilePlatform()) {
-    // temporary fix for mobile
-    onMount(() => Keyboard.setAccessoryBarVisible({ isVisible: true }));
-    onCleanup(() => Keyboard.setAccessoryBarVisible({ isVisible: false }));
-  }
 
   createEffect(() => {
     const el = scrollRef();

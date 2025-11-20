@@ -424,7 +424,6 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                       )}
                     >
                       {(userOrContactOption) => {
-                        console.log('OPT', userOrContactOption());
                         const opt = userOrContactOption();
                         const name = getRecipientOptionName(opt);
                         const email = getRecipientOptionEmail(opt);
@@ -498,6 +497,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                 ) {
                   setDisabled(true);
                   queueMicrotask(() => setDisabled(false));
+                }
+                if (e.key === 'Escape') {
+                  if (inputValue().length === 0) {
+                    inputRef()?.blur();
+                  }
                 }
               }}
             />

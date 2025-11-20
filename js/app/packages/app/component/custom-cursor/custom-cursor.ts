@@ -321,7 +321,7 @@ function generateCustomCursorStyleTextContent() {
   styleTextContent += Object.keys(cursorSvgMap)
     .map((key) => {
       return `
-      .${getCursorClassFromKey(key)} { 
+      .${getCursorClassFromKey(key)} {
       cursor: ${getCursor(key)} !important;
       --custom-cursor: ${key};
        }`;
@@ -476,7 +476,7 @@ createRoot(() => {
 
   createEffect(() => {
     const { l, c, h } = themeReactive.a0;
-    const col = `oklch(${l[0]()} ${c[0]()} ${h[0]()}deg)`;
+    const _col = `oklch(${l[0]()} ${c[0]()} ${h[0]()}deg)`;
     if (!customCursorEnabled()) {
       clearAllCustomCursorStylesheetEls();
       return;

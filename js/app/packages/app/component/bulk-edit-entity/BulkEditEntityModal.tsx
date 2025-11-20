@@ -12,7 +12,7 @@ import { BulkDeleteView } from './BulkDeleteView';
 import { BulkRenameEntitiesView } from './BulkRenameEntitiesView';
 
 export const BulkEditEntityModalTitle = (props: { title: string }) => {
-  return <h2 class="text-lg mb-3">{props.title}</h2>;
+  return <h2 class="text-xl mb-3">{props.title}</h2>;
 };
 
 export const BulkEditEntityModalActionFooter = (props: {

@@ -57,16 +57,14 @@ import {
   type WithSearch,
 } from '@macro-entity';
 import {
-  markNotificationsForEntityAsDone,
-  useNotificationsForEntity,
-} from '@notifications/notificationHelpers';
-import {
   isChannelMention,
   isChannelMessageReply,
   isChannelMessageSend,
+  markNotificationsForEntityAsDone,
   notificationWithMetadata,
-} from '@notifications/notificationMetadata';
-import type { UnifiedNotification } from '@notifications/types';
+  type UnifiedNotification,
+  useNotificationsForEntity,
+} from '@notifications';
 import type { PaginatedSearchArgs } from '@service-search/client';
 import type {
   ChannelFilters,
@@ -200,7 +198,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const splitContext = useSplitPanelOrThrow();
   const { isPanelActive, unifiedListContext, panelRef, previewState } =
     splitContext;
-  const preview = () => previewState?.[0]?.() ?? false;
+  const [preview] = previewState;
   const {
     viewsDataStore: viewsData,
     setViewDataStore,
@@ -835,9 +833,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const entityClickHandler: EntityClickHandler<EntityData> = (
     entity,
-    event
+    event,
+    options
   ) => {
-    if (preview()) {
+    if (preview() && !options?.ignorePreview) {
       setViewDataStore(selectedView(), 'selectedEntity', entity);
       return;
     }
@@ -935,6 +934,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       setViewDataStore(selectedView(), 'initialConfig', stringifiedConfig);
     }
   });
+
+  let lastClickedEntityId = -1;
+  createEffect(
+    on(view, () => {
+      lastClickedEntityId = -1;
+    })
+  );
 
   return (
     <>
@@ -1279,17 +1285,77 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     isPanelActive() && focusedSelector(innerProps.entity.id)
                   }
                   checked={selectedSelector(innerProps.entity.id)}
-                  onChecked={(next) => {
-                    unifiedListContext.setViewDataStore(
-                      selectedView(),
-                      'selectedEntities',
-                      (p) => {
-                        if (!next) {
-                          return p.filter((e) => e.id !== innerProps.entity.id);
+                  onChecked={(next, shiftKey) => {
+                    const toggleSingle = () =>
+                      unifiedListContext.setViewDataStore(
+                        selectedView(),
+                        'selectedEntities',
+                        (p) => {
+                          if (!next) {
+                            return p.filter(
+                              (e) => e.id !== innerProps.entity.id
+                            );
+                          }
+                          return p.concat(innerProps.entity);
                         }
-                        return p.concat(innerProps.entity);
+                      );
+
+                    if (shiftKey) {
+                      const entityList = unifiedListContext.entitiesSignal[0]();
+                      if (!entityList) return;
+
+                      const selectedEntitySet = new Set(
+                        unifiedListContext.viewsDataStore[
+                          unifiedListContext.selectedView()
+                        ].selectedEntities
+                      );
+                      const newEnititiesForSeleciton: EntityData[] = [];
+
+                      // Try to grab the last clicked item and fall back on
+                      // the highest currently selected index.
+                      let anchorIndex = lastClickedEntityId;
+                      if (anchorIndex === -1) {
+                        for (let i = 0; i < entityList.length; i++) {
+                          if (selectedEntitySet.has(entityList[i])) {
+                            anchorIndex = i;
+                          }
+                        }
                       }
-                    );
+
+                      if (anchorIndex === -1) {
+                        toggleSingle();
+                        lastClickedEntityId = innerProps.index;
+                        return;
+                      }
+
+                      const targetIndex = innerProps.index;
+                      const sign = Math.sign(targetIndex - anchorIndex);
+                      if (anchorIndex === targetIndex) {
+                        // no_op
+                      } else {
+                        for (
+                          let i = anchorIndex;
+                          sign > 0 ? i <= targetIndex : i >= targetIndex;
+                          i += sign
+                        ) {
+                          const entity = entityList[i];
+                          if (!selectedEntitySet.has(entity)) {
+                            newEnititiesForSeleciton.push(entity);
+                          }
+                        }
+                      }
+                      unifiedListContext.setViewDataStore(
+                        selectedView(),
+                        'selectedEntities',
+                        (p) => {
+                          return p.concat(newEnititiesForSeleciton);
+                        }
+                      );
+                      lastClickedEntityId = innerProps.index;
+                    } else {
+                      toggleSingle();
+                      lastClickedEntityId = innerProps.index;
+                    }
                   }}
                 />
               );
@@ -1439,7 +1505,7 @@ function SearchBar(props: {
     setViewDataStore(selectedView(), 'searchText', text);
   };
 
-  const debouncedSetSearch = debounce(setSearchText, 200);
+  const debouncedSetSearch = debounce(setSearchText, 300);
 
   const isElementInViewport = (element: Element): Promise<boolean> => {
     return new Promise((resolve) => {

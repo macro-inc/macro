@@ -5,3 +5,11 @@ export function sleep(timeout: number) {
     }, timeout);
   });
 }
+
+export async function waitForFrames(n: number) {
+  for (let i = 0; i < n; i++) {
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => resolve())
+    );
+  }
+}

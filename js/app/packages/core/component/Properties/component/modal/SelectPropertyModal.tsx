@@ -1,5 +1,6 @@
 import { useBlockId } from '@core/block';
 import { IconButton } from '@core/component/IconButton';
+import { toast } from '@core/component/Toast/Toast';
 import { MODAL_VIEWPORT_CLASSES } from '@core/util/modalUtils';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
@@ -7,23 +8,17 @@ import LoadingSpinner from '@icon/regular/spinner.svg';
 import XIcon from '@icon/regular/x.svg';
 import { createEffect, createSignal, For, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { addEntityProperty } from '../../api/utils';
-import {
-  ACCENT_BUTTON_CLASSES,
-  BUTTON_BASE_CLASSES,
-  CHECKBOX_BASE_CLASSES,
-  MODAL_DIMENSIONS,
-  PRIMARY_BUTTON_CLASSES,
-  SECONDARY_BUTTON_CLASSES,
-} from '../../constants';
+import { addEntityProperty } from '../../api';
+import { MODAL_DIMENSIONS } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
-import { usePropertyModals } from '../../hooks/usePropertyModals';
-import { PROPERTY_STYLES } from '../../styles/styles';
+import { usePropertySelection } from '../../hooks/usePropertySelection';
+import { PROPERTY_STYLES } from '../../styles';
 import type { PropertySelectorProps } from '../../types';
 import {
   getPropertyDefinitionTypeDisplay,
   useSearchInputFocus,
 } from '../../utils';
+import { ERROR_MESSAGES } from '../../utils/errorHandling';
 import { CreatePropertyModal } from './CreatePropertyModal';
 
 export function SelectPropertyModal(props: PropertySelectorProps) {
@@ -41,7 +36,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
     filteredProperties,
     fetchAvailableProperties,
     togglePropertySelection,
-  } = usePropertyModals(props.existingPropertyIds, () => searchQuery());
+  } = usePropertySelection(props.existingPropertyIds, () => searchQuery());
 
   const handleAddProperties = async () => {
     const selected = state().selectedPropertyIds;
@@ -52,25 +47,41 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
     try {
       const addPromises = Array.from(selected).map(
         async (propertyDefinitionId) => {
-          return await addEntityProperty(
+          const result = await addEntityProperty(
             blockId,
-            propertyDefinitionId,
-            entityType
+            entityType,
+            propertyDefinitionId
           );
+
+          if (!result.ok) {
+            console.error(
+              'SelectPropertyModal.handleAddProperties:',
+              result.error,
+              ERROR_MESSAGES.PROPERTY_ADD
+            );
+            toast.failure(ERROR_MESSAGES.PROPERTY_ADD);
+          }
+
+          return result.ok;
         }
       );
 
       const results = await Promise.all(addPromises);
-      const failures = results.filter((success: boolean) => !success);
+      const failures = results.filter((success) => !success);
 
-      // Close modal regardless of success/failure (toast already shown by addEntityProperty)
+      // Close modal regardless of success/failure (toasts already shown)
       props.onClose();
 
       if (failures.length === 0) {
         onPropertyAdded();
       }
-    } catch (_error) {
-      // Close modal (toast already shown by addEntityProperty)
+    } catch (error) {
+      console.error(
+        'SelectPropertyModal.handleAddProperties:',
+        error,
+        ERROR_MESSAGES.PROPERTY_ADD
+      );
+      toast.failure(ERROR_MESSAGES.PROPERTY_ADD);
       props.onClose();
     } finally {
       setIsAdding(false);
@@ -264,13 +275,16 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                                       </h4>
                                     </div>
                                     <div class="text-xs text-ink-muted mt-0.5">
-                                      {getPropertyDefinitionTypeDisplay(
-                                        property
-                                      )}
+                                      {getPropertyDefinitionTypeDisplay({
+                                        dataType: property.data_type,
+                                        specificEntityType:
+                                          property.specific_entity_type,
+                                        isMultiSelect: property.is_multi_select,
+                                      })}
                                     </div>
                                   </div>
                                   <div
-                                    class={`${CHECKBOX_BASE_CLASSES} border-edge bg-transparent`}
+                                    class={`${PROPERTY_STYLES.checkbox.base} border-edge bg-transparent`}
                                   >
                                     <Show when={isSelected()}>
                                       <CheckIcon class="w-3 h-3 text-accent" />
@@ -291,7 +305,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
             <div class="flex items-center justify-between p-4 pt-2">
               <button
                 type="button"
-                class={`${BUTTON_BASE_CLASSES} ${SECONDARY_BUTTON_CLASSES}`}
+                class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.secondary}`}
                 onClick={() => props.onClose()}
                 disabled={isAdding()}
               >
@@ -300,7 +314,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
               <Show when={state().selectedPropertyIds.size > 0}>
                 <button
                   type="button"
-                  class={`${BUTTON_BASE_CLASSES} ${state().selectedPropertyIds.size > 0 && !isAdding() ? PRIMARY_BUTTON_CLASSES : 'bg-ink-muted text-ink cursor-not-allowed'}`}
+                  class={`${PROPERTY_STYLES.button.base} ${state().selectedPropertyIds.size > 0 && !isAdding() ? PROPERTY_STYLES.button.primary : 'bg-ink-muted text-ink cursor-not-allowed'}`}
                   onClick={handleAddProperties}
                   disabled={
                     state().selectedPropertyIds.size === 0 || isAdding()
@@ -329,7 +343,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                   <button
                     type="button"
                     onClick={() => setIsCreating(true)}
-                    class={`${BUTTON_BASE_CLASSES} ${ACCENT_BUTTON_CLASSES}`}
+                    class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.accent}`}
                     disabled={state().isLoading}
                   >
                     Create New Property

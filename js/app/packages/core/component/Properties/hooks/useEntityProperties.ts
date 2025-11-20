@@ -1,11 +1,12 @@
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createSignal, onMount } from 'solid-js';
 import {
-  addPropertyToEntity,
+  addEntityProperty,
   deleteEntityProperty,
   fetchEntityProperties,
 } from '../api';
 import type { Property } from '../types';
+import { ERROR_MESSAGES } from '../utils/errorHandling';
 
 /**
  * Main hook for fetching and managing properties for an entity
@@ -37,6 +38,12 @@ export function useEntityProperties(
   const [isLoading, setIsLoading] = createSignal(false);
   const [error, setError] = createSignal<string | null>(null);
 
+  const handleFetchError = (errorMessage: string) => {
+    setError(errorMessage);
+    // Return error for component to handle UI feedback
+    return { success: false, error: errorMessage };
+  };
+
   const fetch = async () => {
     // Don't show loading spinner if we already have properties (background refresh)
     if (properties().length === 0) {
@@ -54,16 +61,10 @@ export function useEntityProperties(
       if (result.ok) {
         setProperties(result.value);
       } else {
-        const errorMessage = 'Failed to load properties';
-        setError(errorMessage);
-        // Return error for component to handle UI feedback
-        return { success: false, error: errorMessage };
+        return handleFetchError(ERROR_MESSAGES.PROPERTY_FETCH);
       }
     } catch (_err) {
-      const errorMessage = 'Failed to load properties';
-      setError(errorMessage);
-      // Return error for component to handle UI feedback
-      return { success: false, error: errorMessage };
+      return handleFetchError(ERROR_MESSAGES.PROPERTY_FETCH);
     } finally {
       setIsLoading(false);
     }
@@ -74,7 +75,7 @@ export function useEntityProperties(
   const addProperty = async (
     propertyDefinitionId: string
   ): Promise<{ success: boolean; error?: string }> => {
-    const result = await addPropertyToEntity(
+    const result = await addEntityProperty(
       entityId,
       entityType,
       propertyDefinitionId
@@ -84,7 +85,7 @@ export function useEntityProperties(
       await fetch(); // Refetch to get updated list
       return { success: true };
     } else {
-      return { success: false, error: 'Failed to add property' };
+      return { success: false, error: ERROR_MESSAGES.PROPERTY_ADD };
     }
   };
 
@@ -97,7 +98,7 @@ export function useEntityProperties(
       await fetch(); // Refetch to get updated list
       return { success: true };
     } else {
-      return { success: false, error: 'Failed to delete property' };
+      return { success: false, error: ERROR_MESSAGES.PROPERTY_DELETE };
     }
   };
 

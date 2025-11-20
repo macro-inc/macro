@@ -81,8 +81,6 @@ export const ENABLE_NAME_IN_LOGIN = false;
 
 export const ENABLE_LIVE_INDICATORS = true;
 
-export const EXPERIMENTAL_DARK_MODE = true;
-
 export const ENABLE_MINDMAP = true;
 
 export const ENABLE_CONTACTS = true;
@@ -153,4 +151,4 @@ export const ENABLE_PREVIEW = true;
 export const ENABLE_DOCK_NOTITIFCATIONS = DEV_MODE_ENV;
 export const ENABLE_TTFT = DEV_MODE_ENV;
 
-export const ENABLE_CUSTOM_CURSOR = true;
+export const ENABLE_CUSTOM_CURSOR = false;
