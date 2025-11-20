@@ -1,9 +1,7 @@
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
-import {
-  useBigChat,
-} from '@core/signal/layout';
+import { useBigChat } from '@core/signal/layout';
 import { AiInstructionsIcon } from '@service-storage/instructionsMd';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMemo } from 'solid-js';
@@ -65,7 +63,6 @@ export default function GlobalShortcuts() {
     hotkeyToken: TOKENS.global.commandMenu,
     hotkey: 'cmd+k',
     scopeId: 'global',
-    // condition: () => !konsoleOpen(),
     description: () => {
       return konsoleOpen() ? 'Close command menu' : 'Open command menu';
     },

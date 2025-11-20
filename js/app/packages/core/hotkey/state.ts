@@ -24,7 +24,9 @@ export const hotkeyScopeTree = initialTree;
 export const [activeScope, setActiveScopeInner] =
   createSignal<string>('global');
 
-export function setActiveScope(...params: Parameters<typeof setActiveScopeInner>) {
+export function setActiveScope(
+  ...params: Parameters<typeof setActiveScopeInner>
+) {
   const scopeId = setActiveScopeInner(...params);
   updateActiveScopeBranch(scopeId);
 }

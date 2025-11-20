@@ -15,9 +15,9 @@ import {
   type CommandWithInfo,
   getActiveCommandsFromScope,
 } from '@core/hotkey/getCommands';
-import { runCommand } from '@core/hotkey/utils';
 import { pressedKeys } from '@core/hotkey/state';
 import type { ValidHotkey } from '@core/hotkey/types';
+import { runCommand } from '@core/hotkey/utils';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { type ChannelWithParticipants, idToDisplayName } from '@core/user';
 import PushPin from '@phosphor-icons/core/regular/push-pin.svg?component-solid';

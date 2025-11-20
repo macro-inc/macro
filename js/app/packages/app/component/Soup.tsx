@@ -406,7 +406,7 @@ export function Soup() {
                 list={Object.values(viewsData).map((view, index) => ({
                   value: view.id,
                   label: view.view,
-                  index: index
+                  index: index,
                 }))}
                 active={selectedView}
                 contextMenu={({ value, label }) => (
