@@ -43,6 +43,8 @@ export function SimpleSearch() {
     const query = searchResults()?.query;
     if (query) {
       setSearchText(query);
+    } else {
+      setSearchText('');
     }
 
     if (searchResults()) {
