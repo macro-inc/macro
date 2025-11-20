@@ -86,34 +86,53 @@ impl From<ChatMessage> for Vec<ChatCompletionRequestMessage> {
             }
             ChatMessageContent::AssistantMessageParts(parts) => {
                 let mut messages = Vec::new();
-                let mut accumulated_text = String::new();
+                let mut pending_text = None::<String>;
+                let mut pending_tool_calls: Vec<ChatCompletionMessageToolCall> = Vec::new();
+
+                fn flush_pending(
+                    messages: &mut Vec<ChatCompletionRequestMessage>,
+                    pending_text: &mut Option<String>,
+                    pending_tool_calls: &mut Vec<ChatCompletionMessageToolCall>,
+                ) {
+                    if pending_text.is_some() || !pending_tool_calls.is_empty() {
+                        messages.push(ChatCompletionRequestMessage::Assistant(
+                            ChatCompletionRequestAssistantMessage {
+                                content: if let Some(text) = pending_text {
+                                    Some(ChatCompletionRequestAssistantMessageContent::Text(
+                                        text.clone(),
+                                    ))
+                                } else {
+                                    None
+                                },
+                                refusal: None,
+                                name: None,
+                                audio: None,
+                                tool_calls: if !pending_tool_calls.is_empty() {
+                                    Some(pending_tool_calls.to_owned())
+                                } else {
+                                    None
+                                },
+                                #[allow(deprecated)]
+                                function_call: None,
+                            },
+                        ));
+                    }
+                    *pending_text = None;
+                    *pending_tool_calls = vec![];
+                }
 
                 for part in parts {
                     match part {
                         AssistantMessagePart::Text { text } => {
-                            if !accumulated_text.is_empty() {
-                                accumulated_text.push(' ');
+                            if text.is_empty() {
+                                continue;
                             }
-                            accumulated_text.push_str(&text);
+                            match pending_text.as_mut() {
+                                Some(pending) => pending.push_str(&text),
+                                None => pending_text = Some(text),
+                            }
                         }
                         AssistantMessagePart::ToolCall { name, json, id } => {
-                            // If we have accumulated text, create a text message first
-                            if !accumulated_text.is_empty() {
-                                messages.push(ChatCompletionRequestMessage::Assistant(
-                                    ChatCompletionRequestAssistantMessage {
-                                        content: Some(
-                                            ChatCompletionRequestAssistantMessageContent::Text(
-                                                accumulated_text.clone(),
-                                            ),
-                                        ),
-                                        tool_calls: None,
-                                        ..Default::default()
-                                    },
-                                ));
-                                accumulated_text.clear();
-                            }
-
-                            // Create a separate message for this tool call
                             let tool_call = ChatCompletionMessageToolCall {
                                 function: FunctionCall {
                                     arguments: serde_json::to_string(&json)
@@ -123,32 +142,15 @@ impl From<ChatMessage> for Vec<ChatCompletionRequestMessage> {
                                 id: id.clone(),
                                 r#type: async_openai::types::ChatCompletionToolType::Function,
                             };
-
-                            messages.push(ChatCompletionRequestMessage::Assistant(
-                                ChatCompletionRequestAssistantMessage {
-                                    content: None,
-                                    tool_calls: Some(vec![tool_call]),
-                                    ..Default::default()
-                                },
-                            ));
+                            pending_tool_calls.push(tool_call);
                         }
                         AssistantMessagePart::ToolCallResponseJson { json, id, .. } => {
-                            // If we have accumulated text, create a text message first
-                            if !accumulated_text.is_empty() {
-                                messages.push(ChatCompletionRequestMessage::Assistant(
-                                    ChatCompletionRequestAssistantMessage {
-                                        content: Some(
-                                            ChatCompletionRequestAssistantMessageContent::Text(
-                                                accumulated_text.clone(),
-                                            ),
-                                        ),
-                                        tool_calls: None,
-                                        ..Default::default()
-                                    },
-                                ));
-                                accumulated_text.clear();
-                            }
-
+                            // flush pending text and tool calls as an assistant message
+                            flush_pending(
+                                &mut messages,
+                                &mut pending_text,
+                                &mut pending_tool_calls,
+                            );
                             // Create a separate tool response message
                             messages.push(ChatCompletionRequestMessage::Tool(
                                 ChatCompletionRequestToolMessage {
@@ -165,20 +167,11 @@ impl From<ChatMessage> for Vec<ChatCompletionRequestMessage> {
                             description, id, ..
                         } => {
                             // If we have accumulated text, create a text message first
-                            if !accumulated_text.is_empty() {
-                                messages.push(ChatCompletionRequestMessage::Assistant(
-                                    ChatCompletionRequestAssistantMessage {
-                                        content: Some(
-                                            ChatCompletionRequestAssistantMessageContent::Text(
-                                                accumulated_text.clone(),
-                                            ),
-                                        ),
-                                        tool_calls: None,
-                                        ..Default::default()
-                                    },
-                                ));
-                                accumulated_text.clear();
-                            }
+                            flush_pending(
+                                &mut messages,
+                                &mut pending_text,
+                                &mut pending_tool_calls,
+                            );
 
                             // Create a separate tool error response message with error marker
                             messages.push(ChatCompletionRequestMessage::Tool(
@@ -197,47 +190,12 @@ impl From<ChatMessage> for Vec<ChatCompletionRequestMessage> {
                     }
                 }
 
-                // If there's remaining accumulated text, add it as a final message
-                if !accumulated_text.is_empty() {
-                    messages.push(ChatCompletionRequestMessage::Assistant(
-                        ChatCompletionRequestAssistantMessage {
-                            content: Some(ChatCompletionRequestAssistantMessageContent::Text(
-                                accumulated_text,
-                            )),
-                            tool_calls: None,
-                            ..Default::default()
-                        },
-                    ));
-                }
+                flush_pending(&mut messages, &mut pending_text, &mut pending_tool_calls);
 
                 messages
             }
         }
     }
-}
-
-// 1. the mapping between our types and openai types cringe
-// 2. this mapping compresses tools into assistant messages and destroys message order
-// 3. anthropic cares about this order and will fail on requests with subsequent assistant messages
-type Msg = ChatCompletionRequestMessage;
-pub fn order_messages_tool_calls(
-    mut messages: Vec<ChatCompletionRequestMessage>,
-) -> Vec<ChatCompletionRequestMessage> {
-    // look for pattern of [assistant_1, assistant_2, tool]
-    // replace with [assistant_2, tool, assistant_1] rotate_left(1)
-    let mut i = 0;
-    while i + 2 < messages.len() {
-        if let (Msg::Assistant(..), Msg::Assistant(..), Msg::Tool(..)) =
-            (&messages[i], &messages[i + 1], &messages[i + 2])
-        {
-            let slice = &mut messages[i..i + 3];
-            slice.rotate_left(1);
-            i += 3;
-        } else {
-            i += 1;
-        }
-    }
-    messages
 }
 
 /// Convert ChatCompletionRequestMessage to ChatMessage with optional tool call name mapping
@@ -724,56 +682,5 @@ mod tests {
         assert_eq!(original.role, converted_back.role);
         assert_eq!(original.content, converted_back.content);
         assert_eq!(original.image_urls, converted_back.image_urls);
-    }
-
-    #[test]
-    fn test_order_messages_tool_calls() {
-        use async_openai::types::*;
-
-        let messages = vec![
-            ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
-                content: Some(ChatCompletionRequestAssistantMessageContent::Text(
-                    "First assistant".to_string(),
-                )),
-                ..Default::default()
-            }),
-            ChatCompletionRequestMessage::Assistant(ChatCompletionRequestAssistantMessage {
-                content: None,
-                tool_calls: Some(vec![ChatCompletionMessageToolCall {
-                    id: "call_123".to_string(),
-                    function: FunctionCall {
-                        name: "test_tool".to_string(),
-                        arguments: "{}".to_string(),
-                    },
-                    r#type: ChatCompletionToolType::Function,
-                }]),
-                ..Default::default()
-            }),
-            ChatCompletionRequestMessage::Tool(ChatCompletionRequestToolMessage {
-                tool_call_id: "call_123".to_string(),
-                content: ChatCompletionRequestToolMessageContent::Text("Tool response".to_string()),
-            }),
-        ];
-
-        let ordered = order_messages_tool_calls(messages);
-
-        // Should be reordered as: [assistant_with_tool_call, tool_response, text_assistant]
-        assert!(matches!(
-            ordered[0],
-            ChatCompletionRequestMessage::Assistant(_)
-        ));
-        assert!(matches!(ordered[1], ChatCompletionRequestMessage::Tool(_)));
-        assert!(matches!(
-            ordered[2],
-            ChatCompletionRequestMessage::Assistant(_)
-        ));
-
-        if let ChatCompletionRequestMessage::Assistant(ref assistant) = ordered[0] {
-            assert!(assistant.tool_calls.is_some());
-        }
-
-        if let ChatCompletionRequestMessage::Assistant(ref assistant) = ordered[2] {
-            assert!(assistant.content.is_some());
-        }
     }
 }
