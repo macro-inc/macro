@@ -144,53 +144,49 @@ export interface ListEmailsInput {
  */
 
 export interface ListEmailsOutput {
-  /**
-   * the thread, with messages inside
-   */
-  previews: {
-    items: {
-      attachments: {
-        content_id?: string | null;
-        data_url?: string | null;
-        db_id?: string | null;
-        filename?: string | null;
-        mime_type?: string | null;
-        provider_id?: string | null;
-        size_bytes?: number | null;
-      }[];
-      attachmentsMacro: {
-        db_id?: string | null;
-        item_id: string;
-        item_type: string;
-        message_id?: string | null;
-      }[];
+  items: {
+    attachments: {
+      contentId?: string | null;
       createdAt: number;
+      filename?: string | null;
       id: string;
-      inboxVisible: boolean;
-      isDraft: boolean;
-      isImportant: boolean;
-      isRead: boolean;
-      name?: string | null;
-      ownerId: string;
-      participants: {
-        email_address?: string | null;
-        id?: string | null;
-        link_id: string;
-        name?: string | null;
-        original_photo_url?: string | null;
-        sfs_photo_url?: string | null;
-      }[];
-      providerId?: string | null;
-      senderEmail?: string | null;
-      senderName?: string | null;
-      senderPhotoUrl?: string | null;
-      snippet?: string | null;
-      sortTs: number;
-      updatedAt: number;
-      viewedAt?: number | null;
+      messageId: string;
+      mimeType?: string | null;
+      providerAttachmentId?: string | null;
+      sizeBytes?: number | null;
     }[];
-    next_cursor?: string | null;
-  };
+    contacts: {
+      emailAddress?: string | null;
+      id: string;
+      linkId: string;
+      name?: string | null;
+      sfsPhotoUrl?: string | null;
+    }[];
+    createdAt: number;
+    frecencyScore?: number | null;
+    id: string;
+    inboxVisible: boolean;
+    isDraft: boolean;
+    isImportant: boolean;
+    isRead: boolean;
+    macroAttachments: {
+      dbId: string;
+      itemId: string;
+      itemType: string;
+      messageId: string;
+    }[];
+    name?: string | null;
+    ownerId: string;
+    providerId?: string | null;
+    senderEmail?: string | null;
+    senderName?: string | null;
+    senderPhotoUrl?: string | null;
+    snippet?: string | null;
+    sortTs: number;
+    updatedAt: number;
+    viewedAt?: number | null;
+  }[];
+  next_cursor?: string | null;
 }
 
 

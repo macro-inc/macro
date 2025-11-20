@@ -22,6 +22,4 @@ export type ListDocumentsResult = FlattenArray<
   types.ListDocumentsOutput['results']
 >;
 
-export type ListEmailsResult = FlattenArray<
-  types.ListEmailsOutput['previews']['items']
->;
+export type ListEmailsResult = FlattenArray<types.ListEmailsOutput['items']>;
