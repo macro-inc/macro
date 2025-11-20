@@ -68,25 +68,17 @@ export function SplitContainer(
             'size-full': !panel.handle.isSpotLight(),
             'opacity-85': !panel.handle.isActive(),
           }}
+          ref={(ref) => { setRef(ref); props.ref(ref)}}
+          data-split-id={props.id}
+          data-split-container
+          tabindex={-1}
         >
           <ClippedPanel
             active={panel.handle.isActive() && multipleSplits() && !panel.handle.isSpotLight()}
-            tl={panel.handle.isFirst()}
-            tr={panel.handle.isLast() && !isRightPanelOpen()}
+            tr={panel.handle.isLast() && !isRightPanelOpen() && ! panel.handle.isSpotLight()}
+            tl={panel.handle.isFirst() && !panel.handle.isSpotLight()}
           >
-            <div
-              // classList={{
-              //   'fixed inset-[4rem] z-modal-overlay isolate opacity-50': panel.handle.isSpotLight(),
-              //   'opacity-100': panel.handle.isActive() || panel.handle.isSpotLight(),
-              //   'size-full': !panel.handle.isSpotLight(),
-              //   'opacity-85': !panel.handle.isActive(),
-              // }}
-              class="@container/split flex flex-col min-h-0 bracket-never size-full"
-              ref={(ref) => { setRef(ref); props.ref(ref)}}
-              data-split-id={props.id}
-              data-split-container
-              tabindex={-1}
-            >
+            <div class="@container/split flex flex-col min-h-0 bracket-never size-full">
               <SplitHeader ref={setHeaderRef} />
               <SplitToolbar ref={setToolbarRef} />
               <div class="size-full overflow-hidden">{props.children}</div>
@@ -144,7 +136,7 @@ export function SplitlikeContainer(
             bl={props.bl}
             br={props.br}
           >
-            <div class="size-full overflow-hidden">{props.children}</div>
+            <div class="size-full">{props.children}</div>
           </ClippedPanel>
         </div>
       </SplitDrawerGroup>

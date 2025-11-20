@@ -37,6 +37,7 @@ export function ClippedPanel(props: PanelProps) {
             props.br ? 'calc(0.5rem - 0.5px)' : 0,
             props.bl ? 'calc(0.5rem - 0.5px)' : 0
           ),
+          overflow: 'hidden',
           height: '100%',
           width: '100%',
         }}
