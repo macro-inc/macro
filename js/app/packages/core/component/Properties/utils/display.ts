@@ -28,15 +28,18 @@ export const getPropertyDataTypeDropdownOptions = () => [
  * Handles both backend UPPERCASE and frontend lowercase data_type values
  */
 export const getPropertyDefinitionTypeDisplay = (property: {
-  data_type: string;
-  specific_entity_type?: string | null;
-  is_multi_select: boolean;
+  dataType: string;
+  specificEntityType?: string | null;
+  isMultiSelect: boolean;
 }): string => {
   if (!property) {
     return 'Unknown';
   }
 
-  const { data_type, specific_entity_type, is_multi_select } = property;
+  // Map from camelCase parameters to snake_case for internal use
+  const data_type = property.dataType;
+  const specific_entity_type = property.specificEntityType;
+  const is_multi_select = property.isMultiSelect;
 
   if (!data_type || typeof data_type !== 'string') {
     return 'Unknown';

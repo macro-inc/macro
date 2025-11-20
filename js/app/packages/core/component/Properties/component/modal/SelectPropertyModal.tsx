@@ -275,9 +275,12 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
                                       </h4>
                                     </div>
                                     <div class="text-xs text-ink-muted mt-0.5">
-                                      {getPropertyDefinitionTypeDisplay(
-                                        property
-                                      )}
+                                      {getPropertyDefinitionTypeDisplay({
+                                        dataType: property.data_type,
+                                        specificEntityType:
+                                          property.specific_entity_type,
+                                        isMultiSelect: property.is_multi_select,
+                                      })}
                                     </div>
                                   </div>
                                   <div
