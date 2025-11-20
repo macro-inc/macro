@@ -310,33 +310,25 @@ impl AggregateFrecencyStorage for FrecencyPgStorage {
         Ok(())
     }
 
-    async fn get_aggregate_for_user_entities<T>(
+    async fn get_aggregate_for_user_entities<'a>(
         &self,
-        user_id: MacroUserIdStr<'static>,
-        entities: T,
-    ) -> Result<Vec<crate::domain::models::AggregateFrecency>, Self::Err>
-    where
-        T: Iterator<Item = Entity<'static>>,
-    {
-        let user_id = user_id.0.as_ref().to_string();
-        let entity_pairs: Vec<(String, String)> = entities
-            .map(|e| (e.entity_type.to_string(), e.entity_id.into_owned()))
-            .collect();
-
+        user_id: MacroUserIdStr<'a>,
+        entities: &'a [Entity<'a>],
+    ) -> Result<Vec<crate::domain::models::AggregateFrecency>, Self::Err> {
         // Build the WHERE conditions for each entity
         let mut conditions = Vec::new();
         let mut params = Vec::new();
 
-        params.push(user_id.clone());
+        params.push(user_id.as_ref());
 
-        for (entity_type, entity_id) in entity_pairs {
+        for entity in entities {
             conditions.push(format!(
                 "(entity_type = ${} AND entity_id = ${})",
                 params.len() + 1,
                 params.len() + 2
             ));
-            params.push(entity_type);
-            params.push(entity_id);
+            params.push(<&'static str>::from(entity.entity_type));
+            params.push(entity.entity_id.as_ref());
         }
 
         if conditions.is_empty() {

@@ -248,7 +248,7 @@ async fn test_get_aggregate_for_user_entities(pool: PgPool) {
     ];
 
     let results = storage
-        .get_aggregate_for_user_entities(test_user_id.into_owned(), entities_to_query.into_iter())
+        .get_aggregate_for_user_entities(test_user_id.into_owned(), entities_to_query.as_slice())
         .await
         .unwrap();
 
@@ -287,7 +287,7 @@ async fn test_get_aggregate_for_empty_entities_list(pool: PgPool) {
 
     // Query with empty entities list
     let results = storage
-        .get_aggregate_for_user_entities(test_user_id, std::iter::empty())
+        .get_aggregate_for_user_entities(test_user_id, &[])
         .await
         .unwrap();
 
