@@ -2791,6 +2791,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "email_utils",
  "futures",
  "macro_db_migrator",
  "macro_uuid",
@@ -2859,6 +2860,7 @@ dependencies = [
  "document_storage_service_client",
  "ego-tree",
  "email_db_client",
+ "email_utils",
  "frecency",
  "futures",
  "gmail_client",
@@ -2940,6 +2942,10 @@ dependencies = [
  "strum",
  "tokio",
 ]
+
+[[package]]
+name = "email_utils"
+version = "0.1.0"
 
 [[package]]
 name = "email_validator"
