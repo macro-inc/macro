@@ -14,7 +14,11 @@ function createDocumentItems(
   const items: CommandItemCard[] = [];
   if (doc.type !== 'document') return [];
 
-  if (doc.document_search_results.length === 0 || doc.metadata?.deleted_at)
+  if (
+    doc.document_search_results.length === 0 ||
+    !doc.metadata ||
+    doc.metadata.deleted_at
+  )
     return [];
 
   // TODO: de-duplicate: see logic in useDocumentItems
@@ -86,7 +90,11 @@ function createChatItems(chat: UnifiedSearchResponseItem): CommandItemCard[] {
   const items: CommandItemCard[] = [];
   if (chat.type !== 'chat') return [];
 
-  if (chat.chat_search_results.length === 0 || chat.metadata?.deleted_at)
+  if (
+    chat.chat_search_results.length === 0 ||
+    !chat.metadata ||
+    chat.metadata.deleted_at
+  )
     return [];
 
   // TODO: de-duplicate: see logic in useChatItems
@@ -155,7 +163,8 @@ function createProjectItems(
 
   if (
     project.project_search_results.length === 0 ||
-    project.metadata?.deleted_at
+    !project.metadata ||
+    project.metadata.deleted_at
   )
     return [];
 
