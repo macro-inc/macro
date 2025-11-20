@@ -42,6 +42,7 @@ export function createChannelsQuery(options?: {
           frecencyScore: channel.frecency_score,
           createdAt: Date.parse(channel.created_at),
           updatedAt: Date.parse(channel.updated_at),
+          particpantIds: channel.participants.map((p) => p.user_id),
           viewedAt: channel.viewed_at
             ? Date.parse(channel.viewed_at)
             : channel.interacted_at

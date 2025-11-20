@@ -1,4 +1,5 @@
 use super::*;
+use macro_db_client::chat::get::ChatHistoryInfo;
 use opensearch_client::search::model::Highlight;
 use sqlx::types::chrono;
 
@@ -15,10 +16,23 @@ fn create_test_response(
         role: "user".to_string(),
         updated_at: 1234567890,
         title: "Test Chat".to_string(),
+        score: None,
         highlight: Highlight {
             name: None,
             content: content.unwrap_or_default(),
         },
+    }
+}
+
+fn create_chat_history(chat_id: &str) -> macro_db_client::chat::get::ChatHistoryInfo {
+    let now = chrono::Utc::now();
+    macro_db_client::chat::get::ChatHistoryInfo {
+        item_id: chat_id.to_string(),
+        created_at: now,
+        updated_at: now,
+        viewed_at: None,
+        project_id: None,
+        ..Default::default()
     }
 }
 
@@ -37,7 +51,22 @@ fn test_single_chat_with_content() {
         "user_1",
         Some(vec!["hello world".to_string()]),
     )];
-    let result = construct_search_result(input, HashMap::new()).unwrap();
+
+    let mut chat_histories = HashMap::new();
+    let now = chrono::Utc::now();
+    chat_histories.insert(
+        "chat_1".to_string(),
+        macro_db_client::chat::get::ChatHistoryInfo {
+            item_id: "chat_1".to_string(),
+            created_at: now,
+            updated_at: now,
+            viewed_at: None,
+            project_id: None,
+            ..Default::default()
+        },
+    );
+
+    let result = construct_search_result(input, chat_histories).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.chat_id, "chat_1");
@@ -59,7 +88,11 @@ fn test_single_chat_with_content() {
 #[test]
 fn test_single_chat_without_content() {
     let input = vec![create_test_response("chat_1", "msg_1", "user_1", None)];
-    let result = construct_search_result(input, HashMap::new()).unwrap();
+
+    let mut chat_histories = HashMap::new();
+    chat_histories.insert("chat_1".to_string(), create_chat_history("chat_1"));
+
+    let result = construct_search_result(input, chat_histories).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.chat_id, "chat_1");
@@ -76,7 +109,11 @@ fn test_single_chat_multiple_messages() {
         create_test_response("chat_1", "msg_1", "user_1", Some(vec!["hello".to_string()])),
         create_test_response("chat_1", "msg_2", "user_1", Some(vec!["world".to_string()])),
     ];
-    let result = construct_search_result(input, HashMap::new()).unwrap();
+
+    let mut chat_histories = HashMap::new();
+    chat_histories.insert("chat_1".to_string(), create_chat_history("chat_1"));
+
+    let result = construct_search_result(input, chat_histories).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.chat_id, "chat_1");
@@ -100,7 +137,12 @@ fn test_multiple_chats() {
         create_test_response("chat_1", "msg_1", "user_1", Some(vec!["hello".to_string()])),
         create_test_response("chat_2", "msg_2", "user_2", Some(vec!["world".to_string()])),
     ];
-    let result = construct_search_result(input, HashMap::new()).unwrap();
+
+    let mut chat_histories = HashMap::new();
+    chat_histories.insert("chat_1".to_string(), create_chat_history("chat_1"));
+    chat_histories.insert("chat_2".to_string(), create_chat_history("chat_2"));
+
+    let result = construct_search_result(input, chat_histories).unwrap();
 
     assert_eq!(result.len(), 2);
 
@@ -132,7 +174,11 @@ fn test_mixed_content_presence() {
             Some(vec!["also visible".to_string()]),
         ),
     ];
-    let result = construct_search_result(input, HashMap::new()).unwrap();
+
+    let mut chat_histories = HashMap::new();
+    chat_histories.insert("chat_1".to_string(), create_chat_history("chat_1"));
+
+    let result = construct_search_result(input, chat_histories).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.chat_id, "chat_1");
@@ -165,7 +211,11 @@ fn test_user_id_taken_from_first_result() {
             Some(vec!["content2".to_string()]),
         ),
     ];
-    let result = construct_search_result(input, HashMap::new()).unwrap();
+
+    let mut chat_histories = HashMap::new();
+    chat_histories.insert("chat_1".to_string(), create_chat_history("chat_1"));
+
+    let result = construct_search_result(input, chat_histories).unwrap();
 
     assert_eq!(result.len(), 1);
     // user_id should come from the first result (base_search_result)
@@ -193,6 +243,7 @@ fn test_chat_history_timestamps() {
         updated_at: now,
         viewed_at: Some(now),
         project_id: Some("project_1".to_string()),
+        ..Default::default()
     };
 
     chat_histories.insert("chat_1".to_string(), history);
@@ -202,9 +253,18 @@ fn test_chat_history_timestamps() {
 
     // Verify that timestamps were copied from the chat history
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].created_at, now.timestamp());
-    assert_eq!(result[0].updated_at, now.timestamp());
-    assert_eq!(result[0].viewed_at, Some(now.timestamp()));
+    assert_eq!(
+        result[0].metadata.as_ref().unwrap().created_at,
+        now.timestamp()
+    );
+    assert_eq!(
+        result[0].metadata.as_ref().unwrap().updated_at,
+        now.timestamp()
+    );
+    assert_eq!(
+        result[0].metadata.as_ref().unwrap().viewed_at,
+        Some(now.timestamp())
+    );
 }
 
 #[test]
@@ -227,6 +287,7 @@ fn test_chat_history_missing_entry() {
         updated_at: now,
         viewed_at: None,
         project_id: Some("project_1".to_string()),
+        ..Default::default()
     };
 
     chat_histories.insert("different_chat".to_string(), history);
@@ -234,14 +295,61 @@ fn test_chat_history_missing_entry() {
     // Call the function under test
     let result = construct_search_result(input, chat_histories).unwrap();
 
-    // Verify that default timestamps were used
+    // Chats without history info should have metadata=None
     assert_eq!(result.len(), 1);
+    assert!(result[0].metadata.is_none());
+}
 
-    // Default values from ChatHistoryInfo::default()
-    let default_time = chrono::DateTime::<chrono::Utc>::default().timestamp();
-    assert_eq!(result[0].created_at, default_time);
-    assert_eq!(result[0].updated_at, default_time);
-    assert_eq!(result[0].viewed_at, None);
+#[test]
+fn test_chat_history_deleted() {
+    let now = chrono::Utc::now();
+
+    // Test 1: Chat that exists but is soft-deleted
+    let input_deleted = vec![create_test_response(
+        "chat_deleted",
+        "msg_1",
+        "user_1",
+        Some(vec!["hello world".to_string()]),
+    )];
+
+    let mut chat_histories = HashMap::new();
+    chat_histories.insert(
+        "chat_deleted".to_string(),
+        macro_db_client::chat::get::ChatHistoryInfo {
+            item_id: "chat_deleted".to_string(),
+            created_at: now,
+            updated_at: now,
+            viewed_at: Some(now),
+            project_id: Some("project_1".to_string()),
+            deleted_at: Some(now), // Soft deleted
+        },
+    );
+
+    let result = construct_search_result(input_deleted, chat_histories).unwrap();
+
+    // Deleted chat should be returned with metadata including deleted_at
+    assert_eq!(result.len(), 1);
+    assert!(result[0].metadata.is_some());
+    let metadata = result[0].metadata.as_ref().unwrap();
+    assert_eq!(metadata.deleted_at, Some(now.timestamp()));
+    assert_eq!(metadata.project_id, Some("project_1".to_string()));
+
+    // Test 2: Chat that doesn't exist in DB (OpenSearch has stale data)
+    let input_not_found = vec![create_test_response(
+        "chat_not_found",
+        "msg_2",
+        "user_1",
+        Some(vec!["stale data".to_string()]),
+    )];
+
+    let chat_histories_not_found = HashMap::new(); // No entry = not found
+
+    let result_not_found =
+        construct_search_result(input_not_found, chat_histories_not_found).unwrap();
+
+    // Chat not in DB should be returned with metadata=None
+    assert_eq!(result_not_found.len(), 1);
+    assert!(result_not_found[0].metadata.is_none());
 }
 
 #[test]
@@ -264,6 +372,7 @@ fn test_chat_history_null_viewed_at() {
         updated_at: now,
         viewed_at: None, // This user has never viewed this chat
         project_id: Some("project_1".to_string()),
+        ..Default::default()
     };
 
     chat_histories.insert("chat_1".to_string(), history);
@@ -273,7 +382,13 @@ fn test_chat_history_null_viewed_at() {
 
     // Verify that timestamps were copied correctly and viewed_at is None
     assert_eq!(result.len(), 1);
-    assert_eq!(result[0].created_at, now.timestamp());
-    assert_eq!(result[0].updated_at, now.timestamp());
-    assert_eq!(result[0].viewed_at, None);
+    assert_eq!(
+        result[0].metadata.as_ref().unwrap().created_at,
+        now.timestamp()
+    );
+    assert_eq!(
+        result[0].metadata.as_ref().unwrap().updated_at,
+        now.timestamp()
+    );
+    assert!(result[0].metadata.as_ref().unwrap().viewed_at.is_none());
 }

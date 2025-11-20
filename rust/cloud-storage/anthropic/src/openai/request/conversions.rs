@@ -25,12 +25,14 @@ pub enum MessageConversionError {
     FunctionMessage(ChatCompletionRequestFunctionMessage),
 }
 
+const MAX_OUTPUT_TOKENS: u32 = 32_000;
+
 impl From<CreateChatCompletionRequest> for request::CreateMessageRequestBody {
     fn from(msg: CreateChatCompletionRequest) -> Self {
         let mut request = Self {
             max_tokens: msg.max_completion_tokens.unwrap_or(
                 #[allow(deprecated)]
-                msg.max_tokens.unwrap_or(32_000),
+                msg.max_tokens.unwrap_or(MAX_OUTPUT_TOKENS),
             ),
             ..Default::default()
         };

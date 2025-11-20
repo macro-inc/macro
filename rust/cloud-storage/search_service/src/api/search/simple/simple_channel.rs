@@ -1,4 +1,5 @@
 use crate::api::search::{SearchPaginationParams, simple::SearchError};
+use item_filters::ChannelFilters;
 use std::collections::HashSet;
 
 use axum::{
@@ -57,6 +58,57 @@ pub async fn handler(
         .into_response())
 }
 
+pub(in crate::api::search) struct FilterChannelResponse {
+    pub channel_ids: Vec<sqlx::types::Uuid>,
+}
+
+pub(in crate::api::search) async fn filter_channels(
+    ctx: &ApiContext,
+    user_id: &str,
+    organization_id: Option<i32>,
+    filters: &ChannelFilters,
+) -> Result<FilterChannelResponse, SearchError> {
+    // Get all channel ids for the user
+    let channel_ids = ctx
+        .comms_service_client
+        .get_user_channel_ids(user_id, organization_id)
+        .await
+        .map_err(|e| SearchError::InternalError(e.into()))?;
+
+    // If the user has no channels, return an empty response
+    if channel_ids.is_empty() {
+        return Ok(FilterChannelResponse {
+            channel_ids: vec![],
+        });
+    }
+
+    // filter through specific channel ids if provided
+    let channel_ids = if !filters.channel_ids.is_empty() {
+        let available_ids: HashSet<String> = filters
+            .channel_ids
+            .iter()
+            .map(|id| id.to_string())
+            .collect();
+
+        channel_ids
+            .into_iter()
+            .filter(|id| available_ids.contains(&id.to_string()))
+            .collect()
+    } else {
+        channel_ids
+    };
+
+    // filter through org_id if provided
+    let channel_ids = if let Some(org_id) = filters.org_id {
+        macro_db_client::items::filter::filter_channels_by_org_id(&ctx.db, &channel_ids, org_id)
+            .await?
+    } else {
+        channel_ids
+    };
+
+    Ok(FilterChannelResponse { channel_ids })
+}
+
 pub(in crate::api::search) async fn search_channels(
     ctx: &ApiContext,
     user_id: &str,
@@ -94,46 +146,24 @@ pub(in crate::api::search) async fn search_channels(
         return Err(SearchError::NoQueryOrTermsProvided);
     };
 
-    // Get all channel ids for the user
-    let channel_ids = ctx
-        .comms_service_client
-        .get_user_channel_ids(user_id, organization_id)
-        .await
-        .map_err(|e| SearchError::InternalError(e.into()))?;
-
-    // If the user has no channels, return an empty response
-    if channel_ids.is_empty() {
-        return Ok(vec![]);
-    }
-
     let filters = req.filters.unwrap_or_default();
 
-    // filter through specific channel ids if provided
-    let channel_ids = if !filters.channel_ids.is_empty() {
-        let available_ids: HashSet<String> = filters.channel_ids.into_iter().collect();
+    let filter_channel_response = filter_channels(ctx, user_id, organization_id, &filters).await?;
 
-        channel_ids
-            .into_iter()
-            .filter(|id| available_ids.contains(&id.to_string()))
-            .collect()
-    } else {
-        channel_ids
-    };
-
-    // filter through org_id if provided
-    let channel_ids = if let Some(org_id) = filters.org_id {
-        macro_db_client::items::filter::filter_channels_by_org_id(&ctx.db, &channel_ids, org_id)
-            .await?
-    } else {
-        channel_ids
-    };
+    if filter_channel_response.channel_ids.is_empty() {
+        return Ok(vec![]);
+    }
 
     let results = ctx
         .opensearch_client
         .search_channel_messages(ChannelMessageSearchArgs {
             terms,
             user_id: user_id.to_string(),
-            channel_ids: channel_ids.iter().map(|c| c.to_string()).collect(),
+            channel_ids: filter_channel_response
+                .channel_ids
+                .iter()
+                .map(|c| c.to_string())
+                .collect(),
             thread_ids: filters.thread_ids,
             mentions: filters.mentions,
             page,

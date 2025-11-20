@@ -16,13 +16,13 @@ use thiserror::Error;
 #[derive(Debug)]
 pub enum CursorExtractor<Id, S: Sortable, F> {
     /// the client provided a valid parsed cursor
-    Some(Cursor<Id, CursorVal<S, F>>),
+    Some(Cursor<Id, CursorVal<S>, F>),
     /// the client did not provide a cursor param
     None,
 }
 
 impl<Id, S: Sortable, F> CursorExtractor<Id, S, F> {
-    /// convert self into an [Option]
+    /// convert self into an [Option]CursorWithVal
     pub fn into_option(self) -> Option<CursorWithValAndFilter<Id, S, F>> {
         match self {
             CursorExtractor::Some(parsed_cursor) => Some(parsed_cursor),
@@ -30,8 +30,8 @@ impl<Id, S: Sortable, F> CursorExtractor<Id, S, F> {
         }
     }
     /// convert self into a [Query] by supplying a fallback
-    pub fn into_query(self, sort: S) -> crate::cursor::Query<Id, S, F> {
-        crate::cursor::Query::new(self.into_option(), sort)
+    pub fn into_query(self, sort: S, filter: F) -> crate::cursor::Query<Id, S, F> {
+        crate::cursor::Query::new(self.into_option(), sort, filter)
     }
 }
 
@@ -71,7 +71,7 @@ where
     Sort: Sortable + DeserializeOwned,
     Sort::Value: DeserializeOwned,
     Id: DeserializeOwned,
-    F: DeserializeOwned + Default,
+    F: DeserializeOwned,
 {
     type Rejection = CusorExtractErr;
 
@@ -85,7 +85,6 @@ where
         else {
             return Ok(CursorExtractor::None);
         };
-
         let encoded: Base64Str<CursorWithValAndFilter<Id, Sort, F>> =
             Base64Str::new_from_string(cursor);
 

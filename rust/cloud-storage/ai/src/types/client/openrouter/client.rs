@@ -1,6 +1,7 @@
 use super::config::OpenRouterConfig;
 use crate::types::client::traits::{Client, RequestExtensions};
-use crate::types::{Model, ModelWithMetadataAndProvider};
+use crate::types::{AiError, Model, ModelWithMetadataAndProvider};
+
 use anyhow::Context;
 use async_openai::Client as OpenAiClient;
 use async_openai::types::CreateChatCompletionRequest;
@@ -48,7 +49,7 @@ impl Client for OpenRouterClient {
         &self,
         request: async_openai::types::CreateChatCompletionRequest,
         extensions: Option<RequestExtensions>,
-    ) -> anyhow::Result<async_openai::types::ChatCompletionResponseStream> {
+    ) -> Result<async_openai::types::ChatCompletionResponseStream, AiError> {
         let request = self.preprocess_request(request);
         let request = if let Some(ext) = extensions {
             self.extend_request(request, ext)
@@ -59,6 +60,6 @@ impl Client for OpenRouterClient {
             .chat()
             .create_stream_byot(request)
             .await
-            .map_err(anyhow::Error::from)
+            .map_err(AiError::from)
     }
 }

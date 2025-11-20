@@ -26,6 +26,8 @@ export interface HotkeyCommand {
   hide?: boolean | (() => boolean);
   // Optional icon to display in the command palette.
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+  // Optional tags for categorizing in the command palette.
+  tags?: string[];
 }
 
 export interface HotkeyRegistrationOptions {
@@ -102,6 +104,10 @@ export interface HotkeyRegistrationOptions {
    * Optional icon to display in the command palette.
    */
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+  /**
+   * Optional tags for categorizing in the command palette.
+   */
+  tags?: string[];
 }
 
 export type RegisterHotkeyReturn = {

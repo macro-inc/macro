@@ -100,11 +100,8 @@ impl Identify for ThreadPreviewFrecency {
 }
 
 impl SortOn<SimpleSortMethod> for ThreadPreviewFrecency {
-    fn sort_on<F>(
-        sort: SimpleSortMethod,
-        filter: F,
-    ) -> impl FnOnce(&Self) -> CursorVal<SimpleSortMethod, F> {
-        let cb = ThreadPreviewCursor::sort_on(sort, filter);
+    fn sort_on(sort: SimpleSortMethod) -> impl FnOnce(&Self) -> CursorVal<SimpleSortMethod> {
+        let cb = ThreadPreviewCursor::sort_on(sort);
         move |v| cb(&v.preview)
     }
 }
@@ -154,7 +151,7 @@ pub async fn previews_handler(
         view: preview_view,
         link_id: link.id,
         limit: params.limit,
-        query: cursor.into_query(params.sort_method),
+        query: cursor.into_query(params.sort_method, ()),
     };
     let sort_method = *query.query.sort_method();
 

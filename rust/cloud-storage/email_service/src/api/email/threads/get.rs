@@ -98,7 +98,7 @@ const MESSAGE_MAX: i64 = 100;
 
 
     responses(
-            (status = 200, body=Vec<GetThreadResponse>),
+            (status = 200, body=GetThreadResponse),
             (status = 400, body=ErrorResponse),
             (status = 401, body=ErrorResponse),
             (status = 404, body=ErrorResponse),
@@ -159,6 +159,7 @@ pub async fn get_thread_handler(
 // TODO: deduplicate with internal api
 #[utoipa::path(
     get,
+    tag = "Threads",
     path = "/email/threads/{id}/messages",
     params(
         ("id" = String, Path, description = "Thread ID"),

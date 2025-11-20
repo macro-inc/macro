@@ -1,0 +1,46 @@
+name: Build Cloud Storage Cache
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'rust/cloud-storage/**'
+      - '.github/workflows/build-cloud-storage-cache.yml'
+
+jobs:
+  build-cache:
+    name: Build cache image
+    runs-on:
+      [
+        runs-on,
+        runner=16cpu-linux-x64,
+        hdd=40,
+        spot=false,
+        ssh=false,
+        'run-id=${{github.run_id}}',
+      ]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: us-east-1
+      - name: login to ecr
+        shell: bash
+        run: |
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin 569036502058.dkr.ecr.us-east-1.amazonaws.com
+      - name: Build and push cache image
+        shell: bash
+        working-directory: rust/cloud-storage
+        run: |
+          docker buildx build \
+            --platform linux/amd64 \
+            --file Dockerfile.cache \
+            --cache-from type=registry,ref=569036502058.dkr.ecr.us-east-1.amazonaws.com/cloud-storage-cache:buildcache \
+            --cache-to type=registry,ref=569036502058.dkr.ecr.us-east-1.amazonaws.com/cloud-storage-cache:buildcache,mode=max \
+            --tag 569036502058.dkr.ecr.us-east-1.amazonaws.com/cloud-storage-cache:latest \
+            --push \
+            .

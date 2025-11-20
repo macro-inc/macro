@@ -59,7 +59,12 @@ impl FileTypeExt for FileType {
     fn is_image(&self) -> bool {
         matches!(
             self,
-            FileType::Png | FileType::Jpg | FileType::Gif | FileType::Svg | FileType::Jpeg
+            FileType::Png
+                | FileType::Jpg
+                | FileType::Jpeg
+                | FileType::Gif
+                | FileType::Svg
+                | FileType::Webp
         )
     }
 

@@ -15,6 +15,7 @@ import type {
   UploadQueue,
 } from '@core/component/AI/types';
 import { useUploadAttachment } from '@core/component/AI/util/uploadToChat';
+import { BrightJoins } from '@core/component/BrightJoins';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { IconButton } from '@core/component/IconButton';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
@@ -189,110 +190,114 @@ function ChatInput(props: ChatInputInternalProps) {
   const availableAttachments = useChatAttachableHistory();
 
   return (
-    <div
-      id="chat-input"
-      ref={containerRef}
-      class="relative flex-1 flex flex-col items-center sm:self-center bg-input border-t border-l border-r sm:border border-edge min-h-26 max-h-50 justify-between focus-within:bracket-offset-2"
-    >
-      <div class="relative w-full z-0 pt-2 px-4 flex-1 overflow-hidden">
-        <div
-          id="chat-input-text-area"
-          class="rounded-md w-full h-full text-base sm:text-sm text-ink"
-        >
-          <props.markdown.MarkdownArea
-            onEnter={handleEnter}
-            placeholder="Ask AI -  @mention anything"
-            history={availableAttachments}
-            dontFocusOnMount={
-              isMobileWidth() || props.autoFocusOnMount === false
-            }
-            onPasteFile={props.uploadQueue.upload}
-            captureEditor={props.captureEditor}
-          />
-        </div>
+    <>
+      <div class="flex flex-row items-center gap-2 pb-2">
+        <ToolsetSelector
+          toolset={toolsetSignal}
+          sources={[source, setSource]}
+        />
       </div>
-      <div class="w-full">
-        <div class="px-2 w-full min-h-0">
-          <AttachmentList
-            attached={props.attachments.attached}
-            removeAttachment={(id) => {
-              track(TrackingEvents.CHAT.ATTACHMENT.REMOVE);
-              props.attachments.removeAttachment(id);
-            }}
-            uploading={() =>
-              props.uploadQueue
-                .uploading()
-                .map((uploading) => uploading.preview)
-            }
-          />
+      <div
+        id="chat-input"
+        ref={containerRef}
+        class="relative flex flex-col flex-1 items-center justify-between bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px]"
+      >
+        <BrightJoins dots={[false, false, true, true]} />
+        <div class="relative w-full z-0 px-3 pt-2 sm:pb-4 flex-1 overflow-hidden placeholder:text-ink-placeholder placeholder:opacity-50">
+          <div
+            id="chat-input-text-area"
+            class="rounded-md w-full h-full text-base sm:text-sm text-ink"
+          >
+            <props.markdown.MarkdownArea
+              onEnter={handleEnter}
+              placeholder="Ask AI -  @mention anything"
+              history={availableAttachments}
+              dontFocusOnMount={
+                isMobileWidth() || props.autoFocusOnMount === false
+              }
+              onPasteFile={props.uploadQueue.upload}
+              captureEditor={props.captureEditor}
+            />
+          </div>
         </div>
-        <div class="flex justify-between w-full px-2">
-          <Show when={showAttachMenu()}>
-            <ChatAttachMenu
-              anchorRef={attachMenuAnchorRef()!}
-              close={() => setShowAttachMenu(false)}
-              containerRef={containerRef}
-              open={showAttachMenu()}
-              onAttach={(attachment) => {
-                track(TrackingEvents.CHAT.ATTACHMENT.ADD);
-                props.attachments.addAttachment(attachment);
+        <div class="w-full">
+          <div class="px-2 w-full min-h-0">
+            <AttachmentList
+              attached={props.attachments.attached}
+              removeAttachment={(id) => {
+                track(TrackingEvents.CHAT.ATTACHMENT.REMOVE);
+                props.attachments.removeAttachment(id);
               }}
-              uploadQueue={props.uploadQueue}
+              uploading={() =>
+                props.uploadQueue
+                  .uploading()
+                  .map((uploading) => uploading.preview)
+              }
             />
-          </Show>
-          <div class="flex items-center gap-x-1">
-            <IconButton
-              icon={showAttachMenu() ? XIcon : PlusIcon}
-              theme="base"
-              size="sm"
-              ref={setAttachMenuAnchorRef}
-              onClick={() => setShowAttachMenu((prev) => !prev)}
-            />
-            <Show when={props.showActiveTabs}>
-              <ActiveTabAttachment
-                onAddAttachment={(attachment) => {
+          </div>
+          <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2 allow-css-brackets">
+            <Show when={showAttachMenu()}>
+              <ChatAttachMenu
+                anchorRef={attachMenuAnchorRef()!}
+                close={() => setShowAttachMenu(false)}
+                containerRef={containerRef}
+                open={showAttachMenu()}
+                onAttach={(attachment) => {
                   track(TrackingEvents.CHAT.ATTACHMENT.ADD);
                   props.attachments.addAttachment(attachment);
                 }}
-                onAddAll={(attachments_) => {
-                  attachments_.forEach((attachment) => {
-                    track(TrackingEvents.CHAT.ATTACHMENT.ADD);
-                    props.attachments.addAttachment(attachment);
-                  });
-                }}
-                attachedAttachments={props.attachments.attached}
-                attachAllOnMount={!props.chatId()}
+                uploadQueue={props.uploadQueue}
               />
             </Show>
-            <ToolsetSelector
-              toolset={toolsetSignal}
-              sources={[source, setSource]}
-            />
+            <div class="flex flex-row items-center gap-2">
+              <IconButton
+                icon={showAttachMenu() ? XIcon : PlusIcon}
+                theme="base"
+                ref={setAttachMenuAnchorRef}
+                onClick={() => setShowAttachMenu((prev) => !prev)}
+              />
+              <Show when={props.showActiveTabs}>
+                <ActiveTabAttachment
+                  onAddAttachment={(attachment) => {
+                    track(TrackingEvents.CHAT.ATTACHMENT.ADD);
+                    props.attachments.addAttachment(attachment);
+                  }}
+                  onAddAll={(attachments_) => {
+                    attachments_.forEach((attachment) => {
+                      track(TrackingEvents.CHAT.ATTACHMENT.ADD);
+                      props.attachments.addAttachment(attachment);
+                    });
+                  }}
+                  attachedAttachments={props.attachments.attached}
+                  attachAllOnMount={!props.chatId()}
+                />
+              </Show>
+            </div>
+            <Switch>
+              <Match when={props.uploadQueue.uploading().length !== 0}>
+                <CircleSpinner />
+              </Match>
+              <Match when={!generating()}>
+                <SendMessageButton
+                  isDisabled={() => !canSendMessage()}
+                  onClick={() => {
+                    track(TrackingEvents.CHAT.MESSAGE.SEND);
+                    sendMessage();
+                  }}
+                />
+              </Match>
+              <Match when={generating()}>
+                <StopButton
+                  onClick={() => {
+                    track(TrackingEvents.CHAT.MESSAGE.STOP);
+                    props.onStop?.();
+                  }}
+                />
+              </Match>
+            </Switch>
           </div>
-          <Switch>
-            <Match when={props.uploadQueue.uploading().length !== 0}>
-              <CircleSpinner />
-            </Match>
-            <Match when={!generating()}>
-              <SendMessageButton
-                isDisabled={() => !canSendMessage()}
-                onClick={() => {
-                  track(TrackingEvents.CHAT.MESSAGE.SEND);
-                  sendMessage();
-                }}
-              />
-            </Match>
-            <Match when={generating()}>
-              <StopButton
-                onClick={() => {
-                  track(TrackingEvents.CHAT.MESSAGE.STOP);
-                  props.onStop?.();
-                }}
-              />
-            </Match>
-          </Switch>
         </div>
       </div>
-    </div>
+    </>
   );
 }

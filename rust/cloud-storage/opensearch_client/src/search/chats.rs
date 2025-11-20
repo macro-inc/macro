@@ -11,13 +11,14 @@ use crate::{
 
 use crate::SearchOn;
 use opensearch_query_builder::{
-    FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
+    BoolQueryBuilder, FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
+    ToOpenSearchJson,
 };
 use serde_json::Value;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChatIndex {
-    pub chat_id: String,
+    pub entity_id: String,
     pub chat_message_id: String,
     pub user_id: String,
     pub role: String,
@@ -26,7 +27,7 @@ pub(crate) struct ChatIndex {
     pub content: String,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct ChatSearchResponse {
     pub chat_id: String,
     pub chat_message_id: String,
@@ -34,18 +35,18 @@ pub struct ChatSearchResponse {
     pub role: String,
     pub updated_at: i64,
     pub title: String,
+    pub score: Option<f64>,
     pub highlight: Highlight,
 }
 
-struct ChatSearchConfig;
+pub(crate) struct ChatSearchConfig;
 
 impl SearchQueryConfig for ChatSearchConfig {
-    const ID_KEY: &'static str = "chat_id";
     const INDEX: &'static str = CHAT_INDEX;
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "title";
 
-    fn default_sort_types() -> Vec<SortType> {
+    fn default_sort_types() -> Vec<SortType<'static>> {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
@@ -54,7 +55,7 @@ impl SearchQueryConfig for ChatSearchConfig {
     }
 }
 
-struct ChatQueryBuilder {
+pub(crate) struct ChatQueryBuilder {
     inner: SearchQueryBuilder<ChatSearchConfig>,
     /// The role of the chat message
     role: Vec<String>,
@@ -86,8 +87,7 @@ impl ChatQueryBuilder {
         self
     }
 
-    fn build_search_request(self) -> Result<SearchRequest> {
-        // Build the main bool query containing all terms and any other filters
+    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
         let mut bool_query = self.inner.build_bool_query()?;
 
         // CUSTOM ATTRIBUTES SECTION
@@ -99,6 +99,12 @@ impl ChatQueryBuilder {
         }
 
         // END CUSTOM ATTRIBUTES SECTION
+
+        Ok(bool_query)
+    }
+
+    fn build_search_request(&self) -> Result<SearchRequest<'static>> {
+        let bool_query = self.build_bool_query()?;
 
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
@@ -124,21 +130,26 @@ pub struct ChatSearchArgs {
     pub disable_recency: bool,
 }
 
+impl From<ChatSearchArgs> for ChatQueryBuilder {
+    fn from(args: ChatSearchArgs) -> Self {
+        ChatQueryBuilder::new(args.terms)
+            .match_type(&args.match_type)
+            .page_size(args.page_size)
+            .page(args.page)
+            .user_id(&args.user_id)
+            .ids(args.chat_ids)
+            .role(args.role)
+            .search_on(args.search_on)
+            .collapse(args.collapse)
+            .ids_only(args.ids_only)
+            .disable_recency(args.disable_recency)
+    }
+}
+
 impl ChatSearchArgs {
     pub fn build(self) -> Result<Value> {
-        Ok(ChatQueryBuilder::new(self.terms)
-            .match_type(&self.match_type)
-            .page_size(self.page_size)
-            .page(self.page)
-            .user_id(&self.user_id)
-            .ids(self.chat_ids)
-            .role(self.role)
-            .search_on(self.search_on)
-            .collapse(self.collapse)
-            .ids_only(self.ids_only)
-            .disable_recency(self.disable_recency)
-            .build_search_request()?
-            .to_json())
+        let builder: ChatQueryBuilder = self.into();
+        Ok(builder.build_search_request()?.to_json())
     }
 }
 
@@ -157,24 +168,31 @@ pub(crate) async fn search_chats(
         .map_client_error()
         .await?;
 
-    let result = response
-        .json::<DefaultSearchResponse<ChatIndex>>()
+    let bytes = response
+        .bytes()
         .await
-        .map_err(|e| OpensearchClientError::DeserializationFailed {
+        .map_err(|e| OpensearchClientError::HttpBytesError {
             details: e.to_string(),
-            method: Some("search_chats".to_string()),
         })?;
+
+    let result: DefaultSearchResponse<ChatIndex> = serde_json::from_slice(&bytes).map_err(|e| {
+        OpensearchClientError::SearchDeserializationFailed {
+            details: e.to_string(),
+            raw_body: String::from_utf8_lossy(&bytes).to_string(),
+        }
+    })?;
 
     Ok(result
         .hits
         .hits
         .into_iter()
         .map(|hit| ChatSearchResponse {
-            chat_id: hit._source.chat_id,
-            chat_message_id: hit._source.chat_message_id,
-            user_id: hit._source.user_id,
-            role: hit._source.role,
-            title: hit._source.title,
+            chat_id: hit.source.entity_id,
+            chat_message_id: hit.source.chat_message_id,
+            user_id: hit.source.user_id,
+            role: hit.source.role,
+            title: hit.source.title,
+            score: hit.score,
             highlight: hit
                 .highlight
                 .map(|h| {
@@ -187,7 +205,7 @@ pub(crate) async fn search_chats(
                     )
                 })
                 .unwrap_or_default(),
-            updated_at: hit._source.updated_at_seconds,
+            updated_at: hit.source.updated_at_seconds,
         })
         .collect())
 }

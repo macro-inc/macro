@@ -27,7 +27,7 @@ export function ThreadReplyIndicator(props: {
 
   return (
     <div
-      class="flex flex-row gap-2 items-center justify-between pb-2 pt-2 text-xs w-full max-w-fit border-edge border pr-2 select-none hover:bg-hover focus:bracket-offset-2"
+      class="flex flex-row gap-2 items-center justify-between pb-2 pt-2 text-xs w-full max-w-fit border-edge-muted border pr-2 select-none hover:bg-hover focus:bracket-offset-2"
       onClick={props.onClick}
       onKeyDown={onKeyDownClick(props.onClick)}
       onKeyUp={onKeyUpClick(props.onClick)}

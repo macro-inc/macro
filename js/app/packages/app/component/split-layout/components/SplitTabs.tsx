@@ -1,4 +1,5 @@
 import { TOKENS } from '@core/hotkey/tokens';
+import { playSound } from '@app/util/sound';
 import type { ViewId } from '@core/types/view';
 import { Tabs } from '@kobalte/core';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -14,7 +15,8 @@ import {
 } from 'solid-js';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 
-const titleCase = (str: string) => {
+// NOTE: unused since everything should already be correctly cased
+const _titleCase = (str: string) => {
   return str
     .split('')
     .map((c, i) => (i === 0 ? c.toUpperCase() : c.toLowerCase()))
@@ -93,6 +95,16 @@ export function SplitTabs(props: {
     updateClipIndicators();
   });
 
+  // Play sound when tab changes
+  let previousActive: ViewId | undefined;
+  createEffect(() => {
+    const currentActive = props.active();
+    if (previousActive !== undefined && previousActive !== currentActive) {
+      playSound('open');
+    }
+    previousActive = currentActive;
+  });
+
   return (
     <div class="relative isolate h-full shrink grow-2 @container-normal">
       {/* Left clip boundary indicator */}
@@ -142,7 +154,7 @@ export function SplitTabs(props: {
 
             createEffect(() => {
               if (isActive()) {
-                panel.handle.setDisplayName(titleCase(label));
+                panel.handle.setDisplayName(label);
               }
             });
 
@@ -164,11 +176,11 @@ export function SplitTabs(props: {
                   ]
                 }
               >
-                <span class="flex items-center gap-1 w-full">
+                <span class="flex items-baseline gap-1 w-full">
                   <span class="text-xs font-mono opacity-70 mr-0.5">
                     {(i() + 1).toString()}
                   </span>
-                  <span class="truncate">{titleCase(label)}</span>
+                  <span class="truncate">{label}</span>
                 </span>
                 {/* <Show when={isActive()}>
                   <BrightJoins dots={[true, true, true, true]} />

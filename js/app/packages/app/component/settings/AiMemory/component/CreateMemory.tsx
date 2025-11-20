@@ -1,6 +1,6 @@
 import { TextButton } from '@core/component/TextButton';
 import clickOutside from '@core/directive/clickOutside';
-import CheckIcon from '@icon/regular/check.svg';
+import CheckIcon from '@icon/bold/check-bold.svg';
 import XIcon from '@icon/regular/x.svg';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import { creatingMemory, useCreateUserMemory } from '../signal';
@@ -69,7 +69,7 @@ export function CreateMemory() {
         contentEditable="plaintext-only"
       />
       <div
-        class={` ${visible() ? 'opacity-50' : 'opacity-0'} 
+        class={` ${visible() ? 'opacity-50' : 'opacity-0'}
           absolute left-2
           transition-opacity duration-300 ease-in-out select-none  ${value() ? 'hidden' : ''}
           `}

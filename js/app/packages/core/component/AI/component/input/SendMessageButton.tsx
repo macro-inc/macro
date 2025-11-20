@@ -1,5 +1,5 @@
 import StopIcon from '@phosphor-icons/core/bold/stop-bold.svg?component-solid';
-import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
+import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import type { Accessor } from 'solid-js';
 
 export function SendMessageButton(props: {
@@ -16,7 +16,7 @@ export function SendMessageButton(props: {
       class="text-ink-muted bg-transparent rounded-full hover:scale-110! transition ease-in-out delay-150 flex flex-col justify-center items-center"
     >
       <div class="bg-transparent rounded-full size-8 flex flex-row justify-center items-center">
-        <PaperPlaneRight
+        <ArrowFatLineUp
           width={20}
           height={20}
           class="!text-accent-ink !fill-accent"

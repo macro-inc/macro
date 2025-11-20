@@ -1,7 +1,7 @@
 import { useBlockId } from '@core/block';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { type Accessor, createSignal, type Setter } from 'solid-js';
-import { savePropertyValue } from '../api';
+import { saveEntityProperty } from '../api';
 import { NUMBER_DECIMAL_PLACES } from '../constants';
 import type { Property, PropertyApiValues } from '../types';
 import { formatPropertyValue } from '../utils';
@@ -34,7 +34,7 @@ export function useInlineEditor(
 
   const getCurrentRawValue = () => {
     const val = property.value;
-    if (val === undefined) return '';
+    if (val == null) return '';
 
     // This hook works with string and number properties
     // For these types, val is a single value, not an array
@@ -85,7 +85,7 @@ export function useInlineEditor(
         throw new Error(`Unsupported property type: ${property.valueType}`);
       }
 
-      const result = await savePropertyValue(
+      const result = await saveEntityProperty(
         blockId,
         entityType,
         property,

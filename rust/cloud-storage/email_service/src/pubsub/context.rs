@@ -1,6 +1,7 @@
 use crate::util::redis::RedisClient;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use document_storage_service_client::DocumentStorageServiceClient;
 use gmail_client::GmailClient;
 use macro_notify::MacroNotifyClient;
 use sqlx::PgPool;
@@ -17,5 +18,6 @@ pub struct PubSubContext {
     pub macro_notify_client: MacroNotifyClient,
     pub sfs_client: StaticFileServiceClient,
     pub connection_gateway_client: ConnectionGatewayClient,
+    pub dss_client: DocumentStorageServiceClient,
     pub notifications_enabled: bool,
 }

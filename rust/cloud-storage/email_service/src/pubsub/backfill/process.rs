@@ -1,5 +1,6 @@
 use crate::pubsub::backfill::{
-    backfill_message, backfill_thread, error_handlers, init, list_threads, update_metadata,
+    backfill_attachment, backfill_message, backfill_thread, error_handlers, init, list_threads,
+    update_metadata,
 };
 use crate::pubsub::context::PubSubContext;
 use crate::util::gmail::auth::fetch_gmail_access_token_from_link;
@@ -91,18 +92,15 @@ async fn inner_process_message(
         }
     };
 
-    let access_token = fetch_gmail_access_token_from_link(
-        link.clone(),
-        &ctx.redis_client,
-        &ctx.auth_service_client,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::AccessTokenFetchFailed,
-            source: e.context("Failed to fetch access token from link"),
-        })
-    })?;
+    let access_token =
+        fetch_gmail_access_token_from_link(&link, &ctx.redis_client, &ctx.auth_service_client)
+            .await
+            .map_err(|e| {
+                ProcessingError::NonRetryable(DetailedError {
+                    reason: FailureReason::AccessTokenFetchFailed,
+                    source: e.context("Failed to fetch access token from link"),
+                })
+            })?;
 
     match &data.backfill_operation {
         BackfillOperation::Init => {
@@ -119,6 +117,9 @@ async fn inner_process_message(
         }
         BackfillOperation::UpdateThreadMetadata(p) => {
             update_metadata::update_thread_metadata(ctx, data, &link, p).await?
+        }
+        BackfillOperation::BackfillAttachment(p) => {
+            backfill_attachment::backfill_attachment(ctx, &access_token, &link, p).await?
         }
     };
 
@@ -150,9 +151,6 @@ async fn handle_cancel_backfill_job(
         .await;
 
     match &data.backfill_operation {
-        BackfillOperation::Init => Ok(()),
-        BackfillOperation::ListThreads(_) => Ok(()),
-        BackfillOperation::BackfillThread(_) => Ok(()),
         BackfillOperation::BackfillMessage(p) => {
             let _ = ctx
                 .redis_client
@@ -160,6 +158,10 @@ async fn handle_cancel_backfill_job(
                 .await;
             Ok(())
         }
-        BackfillOperation::UpdateThreadMetadata(_) => Ok(()),
+        BackfillOperation::Init
+        | BackfillOperation::ListThreads(_)
+        | BackfillOperation::BackfillThread(_)
+        | BackfillOperation::UpdateThreadMetadata(_)
+        | BackfillOperation::BackfillAttachment(_) => Ok(()),
     }
 }
