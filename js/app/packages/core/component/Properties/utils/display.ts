@@ -67,9 +67,9 @@ export const getPropertyDefinitionTypeDisplay = (property: {
 
   // Add multi indicator
   if (['select_string', 'select_number', 'link'].includes(dataTypeLower)) {
-    display = `${is_multi_select === true ? 'Multi' : 'Single'} ${display}`;
+    display = `${is_multi_select ? 'Multi' : 'Single'} ${display}`;
   } else if (dataTypeLower === 'entity') {
-    display = `${is_multi_select === true ? 'Multi' : 'Single'}-Select ${display}`;
+    display = `${is_multi_select ? 'Multi' : 'Single'}-Select ${display}`;
   }
 
   return display;

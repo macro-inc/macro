@@ -25,8 +25,8 @@ export const BooleanValue: Component<BooleanValueProps> = (props) => {
 
   const isReadOnly = () => props.property.isMetadata || !props.canEdit;
 
-  // Treat null as false
-  const isChecked = () => value() === true;
+  // Treat null as false - use !! to convert any truthy value to boolean
+  const isChecked = () => !!value();
 
   const handleClick = () => {
     if (!isReadOnly() && !isSaving()) {
