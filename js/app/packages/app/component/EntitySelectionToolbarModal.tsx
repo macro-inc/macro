@@ -33,14 +33,18 @@ export const EntitySelectionToolbarModal = (
             onClick={props.onAction}
             class="p-1 px-2 flex gap-1 border-edge-muted border items-center h-full w-full hover:bg-hover hover-transition-bg"
           >
-            <Hotkey shortcut="cmd+k" />
+            <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
+              <Hotkey shortcut="cmd+k" class="space-x-1" />
+            </div>
             <span>Actions</span>
           </button>
           <button
             onClick={props.onClose}
             class="p-1 px-2 flex gap-1 border-edge-muted border items-center h-full w-full hover:bg-hover hover-transition-bg"
           >
-            <Hotkey shortcut="ESC" />
+            <div class="flex border border-edge-muted text-[0.625rem] rounded-xs items-center px-1.5 py-0.25 font-normal">
+              <Hotkey shortcut="ESC" />
+            </div>
             <span>Clear</span>
           </button>
         </div>
