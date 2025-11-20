@@ -8,6 +8,7 @@
   "packageManager": "bun@1.3.0",
   "scripts": {
     "dev": "cd packages/app && bun run --bun dev",
+    "dev:tauri": "cd packages/app && bun run --bun dev:tauri",
     "local-dcs": "cd packages/app && VITE_LOCAL_SERVERS='cognition-service,cognition-websocket-service' bun run --bun dev",
     "local-dss": "cd packages/app && VITE_LOCAL_SERVERS='document-storage-service' bun run --bun dev",
     "local-search": "cd packages/app && VITE_LOCAL_SERVERS='search-service' bun run --bun dev",
@@ -15,7 +16,7 @@
     "build": "cd packages/app && MODE=development NODE_ENV=production bun run --bun build",
     "build:dev": "bun run build",
     "build:staging": "cd packages/app && MODE=staging NODE_ENV=production bun run --bun build",
-    "build:tauri": "VITE_TAURI=true bun run build",
+    "build:tauri": "cd packages/app && MODE=development NODE_ENV=production bun run --bun build:tauri",
     "build:prod": "cd packages/app && MODE=production NODE_ENV=production bun run --bun build",
     "preview": "cd packages/app && bun run --bun preview:dev",
     "preview:prod": "cd packages/app && MODE=production NODE_ENV=production bun preview:prod",

@@ -3,6 +3,7 @@ interface ImportMetaEnv {
   readonly __LOCAL_GQL_SERVER__: boolean;
   readonly __MACRO_GQL_SERVICE__: string;
   readonly __LOCAL_JWT__: string;
+  readonly VITE_PLATFORM: 'web' | 'tauri-all' | 'tauri-ios' | 'tauri-android';
 
   readonly VITE_SEGMENT_WRITE_KEY: string;
   readonly VITE_DD_WEB_APP_ID: string;
