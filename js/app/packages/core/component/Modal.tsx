@@ -1,4 +1,3 @@
-import { useIsVirtualKeyboardVisible } from '@core/mobile/virtualKeyboardDetection';
 import { blockElementSignal } from '@core/signal/blockElement';
 import Dialog from '@corvu/dialog';
 import {
@@ -30,15 +29,12 @@ export function Modal(props: ComponentProps<typeof Dialog>) {
 }
 
 export function Overlay(props: ComponentProps<typeof Dialog.Overlay<'div'>>) {
-  const isVirutalKeyboardVisible = useIsVirtualKeyboardVisible();
   return (
     <Dialog.Overlay
       {...props}
       class={`flex sm:max-h-full items-center justify-content z-modal-overlay fixed inset-0 bg-modal-overlay ${props.class}`}
       style={{
-        'max-height': isVirutalKeyboardVisible()
-          ? 'calc(var(--viewport-height) - env(safe-area-inset-top, 0px))'
-          : `calc(100dvh - env(safe-area-inset-top, 0px))`,
+        'max-height': `calc(100dvh - env(safe-area-inset-top, 0px))`,
       }}
     >
       {props.children}

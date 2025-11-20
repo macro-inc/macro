@@ -17,7 +17,6 @@ import { Tabs } from '@kobalte/core/tabs';
 import MacroJump from '../MacroJump';
 import { Account } from './Account';
 import Dialog from '@corvu/dialog';
-import { Mobile } from './Mobile';
 
 export const [viewportOffset, setViewportOffset] = createSignal(0);
 
@@ -249,11 +248,6 @@ export function Settings() {
               <Tabs.Content value="Notification" class="h-full">
                 <Notification />
               </Tabs.Content>
-              <Show when={!!isNativeMobilePlatform() && DEV_MODE_ENV}>
-                <Tabs.Content value="Mobile" class="h-full">
-                  <Mobile />
-                </Tabs.Content>
-              </Show>
               <Show when={ENABLE_AI_MEMORY}>
                 <Tabs.Content value="AI Memory" class="h-full">
                   <AiMemory />
