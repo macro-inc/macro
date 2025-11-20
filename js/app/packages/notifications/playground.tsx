@@ -494,11 +494,13 @@ function PlaygroundContent() {
     return {
       ...baseNotification,
       id: `custom-${Date.now()}`,
+      notificationEventType: 'channel_message_send',
       notificationMetadata: {
-        ...baseNotification.notificationMetadata,
+        sender: baseNotification.senderId,
         messageContent: markdownArea.state(),
+        messageId: `msg-custom-${Date.now()}`,
       },
-    };
+    } as UnifiedNotification;
   });
 
   createEffect(() => {
