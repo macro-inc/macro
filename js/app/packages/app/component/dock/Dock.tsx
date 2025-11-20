@@ -152,7 +152,7 @@ export function Dock() {
               theme={isRightPanelCollapsed() ? 'clear' : 'accent'}
               tooltip={{
                 label: 'Toggle AI Panel',
-                hotkeyToken: TOKENS.global.toggleRightPanel,
+                hotkeyToken: TOKENS.split.go.toggleRightPanel,
               }}
               class="h-full aspect-square"
               onClick={() => {

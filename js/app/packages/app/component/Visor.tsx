@@ -39,8 +39,8 @@ function isElementVisible(element: HTMLElement) {
 
 type VisorLabel = {
   id: string;
-  hotkey: ValidHotkey;
-  command: HotkeyCommand;
+  hotkeys: ValidHotkey[];
+  commands: HotkeyCommand[];
   targetEl: HTMLElement;
   targetElScrollParent: HTMLElement | null;
 };
@@ -102,27 +102,33 @@ const VisorInner: Component<{
       const tokenString = hotkeyEl.dataset.hotkeyToken ?? '';
       const token = tokenMap.get(tokenString);
       if (!token) return acc;
-      const command = getActiveCommandByToken(token);
-      const primaryHotkey = command?.hotkeys?.[0];
-      // We only want to show visor for hotkeys that are in the current active scope branch.
-      if (
-        !command ||
-        !isScopeInActiveBranch(command.scopeId) ||
-        !primaryHotkey
-      ) {
-        return acc;
+      const commands = getActiveCommandByToken(token, true);
+      if (!commands || commands.length === 0) return acc;
+
+      // Collect all hotkeys from all commands
+      const hotkeys: ValidHotkey[] = [];
+      for (const command of commands) {
+        // this will never actually break, because getActiveCommandByToken only returns commands if they all have hotkeys
+        if (!command.hotkeys || command.hotkeys.length === 0) {
+          break;
+        }
+        // Add the first hotkey from each command
+        hotkeys.push(command.hotkeys[0]);
       }
+
+      if (hotkeys.length === 0) return acc;
 
       acc.push({
         id,
-        hotkey: primaryHotkey,
-        command: command,
+        hotkeys,
+        commands,
         targetEl: hotkeyEl,
         targetElScrollParent,
       } satisfies VisorLabel);
       return acc;
     }, []);
 
+  console.log('newVisorLabels', newVisorLabels);
   setVisorLabels(newVisorLabels);
 
   // If user clicks anywhere, exit
@@ -245,10 +251,16 @@ const VisorLabelOverlay: Component<VisorLabel> = (props) => {
       >
         <div
           class={
-            'relative font-mono text-page font-bold w-fit bg-accent border-l-accent border-t-accent border-r-page border-b-page border p-[2px] text-xs z-[1]'
+            'relative font-mono text-page font-bold w-fit bg-accent border-l-accent border-t-accent border-r-page border-b-page border p-[2px] text-xs z-[1] flex items-center gap-1'
           }
         >
-          <Hotkey shortcut={prettyPrintHotkeyString(props.hotkey)} />
+          <For each={props.hotkeys}>
+            {(hotkey) => (
+              <>
+                <Hotkey shortcut={prettyPrintHotkeyString(hotkey)} />
+              </>
+            )}
+          </For>
         </div>
         <div
           class="absolute inset-0 border-page border"

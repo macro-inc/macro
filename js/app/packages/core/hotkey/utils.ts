@@ -1,4 +1,5 @@
 import { IS_MAC } from '@core/constant/isMac';
+import { logger } from '@observability/logger';
 import {
   macOptionReverse,
   shiftPunctuationMap,
@@ -38,6 +39,7 @@ type RegisterDOMScopeArgs = RegisterScopeArgsBase & {
 
 type RegisterCommandScopeArgs = RegisterScopeArgsBase & {
   type: 'command';
+  activationKeys?: ValidHotkey[];
 };
 
 type RegisterScopeArgs = RegisterDOMScopeArgs | RegisterCommandScopeArgs;
@@ -66,6 +68,8 @@ export function registerScope(args: RegisterScopeArgs) {
       : {
           ...baseScope,
           type: 'command',
+          originalParentScopeId: parentScopeId ?? '',
+          activationKeys: args.activationKeys ?? [],
         };
 
   hotkeyScopeTree.set(scopeId, newScope);
@@ -176,9 +180,6 @@ export function updateActiveScopeBranch(activeScopeId: string | undefined) {
   setActiveScopeBranch(branch);
 }
 
-/**
- * Fast O(1) check if scope is in active branch using cached data
- */
 export function isScopeInActiveBranch(scopeId: string): boolean {
   return activeScopeBranch().has(scopeId);
 }
@@ -188,14 +189,93 @@ export function isScopeInActiveBranch(scopeId: string): boolean {
  */
 export function getActiveCommandByToken(
   token: HotkeyToken
-): HotkeyCommand | undefined {
+): HotkeyCommand | undefined;
+export function getActiveCommandByToken(
+  token: HotkeyToken,
+  showDependentCommandScopes: true
+): HotkeyCommand[] | undefined;
+export function getActiveCommandByToken(
+  token: HotkeyToken,
+  showDependentCommandScopes?: boolean
+): HotkeyCommand | HotkeyCommand[] | undefined {
   const commands = hotkeyTokenMap().get(token);
   if (!commands || commands.length === 0) return undefined;
 
   const branch = activeScopeBranch();
 
+  if (showDependentCommandScopes) {
+    // When showDependentCommandScopes is true,  look for commands in command scopes whose closest DOM scope parent is in the active branch
+    for (const command of commands) {
+      const commandScope = hotkeyScopeTree.get(command.scopeId);
+      // Check if command is directly in the active branch
+      if (branch.has(command.scopeId)) {
+        return [command];
+      }
+
+      if (commandScope?.type === 'command') {
+        const originalParentScope = hotkeyScopeTree.get(
+          commandScope.originalParentScopeId
+        );
+        if (!originalParentScope) {
+          logger.error('Original parent scope not found for command scope:', {
+            error: new Error(
+              'Original parent scope not found for command scope'
+            ),
+            commandScopeId: commandScope?.scopeId,
+          });
+          return [];
+        }
+
+        let reverseActivationCommands: HotkeyCommand[] = [];
+
+        let closestDOMScopeParent: ScopeNode | undefined;
+
+        let currentAncestor: ScopeNode | undefined = originalParentScope;
+        let currentCommandScope: ScopeNode = commandScope;
+        while (currentAncestor) {
+          const activationKey = currentCommandScope.activationKeys?.at(0);
+          if (activationKey) {
+            const activationCommand =
+              originalParentScope.hotkeyCommands.get(activationKey);
+            if (activationCommand) {
+              reverseActivationCommands.push(activationCommand);
+            } else break;
+          }
+          if (currentAncestor.type === 'dom') {
+            closestDOMScopeParent = currentAncestor;
+            break;
+          }
+          if (currentAncestor.originalParentScopeId) {
+            const parentScope = hotkeyScopeTree.get(
+              currentAncestor.originalParentScopeId
+            );
+            currentCommandScope = currentAncestor;
+            currentAncestor = parentScope;
+          } else {
+            break;
+          }
+        }
+
+        if (
+          closestDOMScopeParent &&
+          branch.has(closestDOMScopeParent.scopeId) &&
+          reverseActivationCommands.every(
+            (cmd) => cmd.hotkeys && cmd.hotkeys.length > 0
+          )
+        ) {
+          const activationCommands = reverseActivationCommands.reverse();
+
+          return activationCommands.concat(command);
+        }
+      }
+    }
+
+    return undefined;
+  }
+
   // Return the first command that's in the active scope branch
-  return commands.find((command) => branch.has(command.scopeId));
+  const command = commands.find((command) => branch.has(command.scopeId));
+  return command;
 }
 
 /**
