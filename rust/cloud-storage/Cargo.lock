@@ -5455,11 +5455,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "macro_user_id",
  "model-entity",
  "models_pagination",
  "serde",
  "strum",
  "utoipa",
+ "uuid",
 ]
 
 [[package]]
