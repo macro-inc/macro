@@ -14,7 +14,7 @@ export type TooltipProps = ParentProps<{
   class?: string;
   delayOverride?: number;
   spanMode?: boolean;
-  hidden?: boolean;
+  hide?: boolean;
 }>;
 
 /**
@@ -72,6 +72,7 @@ export function Tooltip(props: TooltipProps) {
       </CorvuTooltip.Trigger>
       <CorvuTooltip.Portal>
         <CorvuTooltip.Content
+          hidden={props.hide}
           class="z-tool-tip"
           style={{
             'max-width': `calc(100vw - ${2 * padding()}px)`,
