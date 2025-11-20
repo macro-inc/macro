@@ -306,6 +306,8 @@ export interface KeypressContext {
   commandScopeActivated: boolean;
   /** Whether a command was found and executed */
   commandFound: boolean;
+  /** The command that was executed */
+  commandCaptured: HotkeyCommand | undefined;
   /** The event type ('keydown' or 'keyup') */
   eventType: 'keydown' | 'keyup';
   /** Whether the keypress includes a non-modifier key */

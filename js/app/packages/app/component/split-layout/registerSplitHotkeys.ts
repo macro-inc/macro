@@ -72,7 +72,7 @@ export function registerSplitHotkeys({
 
   registerHotkey({
     scopeId: windowScope.commandScopeId,
-    hotkey: 'shift+escape',
+    hotkey: 'm',
     hotkeyToken: TOKENS.split.spotlight.toggle,
     description: `Spotlight ${splitName()}`,
     keyDownHandler: () => {

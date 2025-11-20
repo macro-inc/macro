@@ -233,6 +233,7 @@ export function Dock(){
                 }}
                 onClick={() => {setCreateMenuOpen(true)}}
                 class="dock-button-hover"
+                data-hotkey-token={TOKENS.global.createCommand}
               >
                 <MacroCreateIcon
                   style={{
