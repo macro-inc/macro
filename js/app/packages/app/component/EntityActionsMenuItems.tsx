@@ -12,9 +12,6 @@ interface EntityActionsMenuItemsProps {
   onSelectAction: (action: EntityActionType) => void;
 }
 
-// TODO (seamus): this does not handle restoring the previous soup selection
-//     very gracefully.
-
 export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
   const { unifiedListContext } = useSplitPanelOrThrow();
   const { actionRegistry, viewsDataStore, selectedView } = unifiedListContext;
@@ -45,7 +42,7 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
       <Show when={actionRegistry.has(props.action)}>
         <MenuItem
           text={props.label}
-          disabled={actionRegistry.isActionDisabled(props.action, entities())}
+          disabled={!actionRegistry.isActionEnabled(props.action, entities())}
           onClick={async () => {
             const { success, failedEntities } = await actionRegistry.execute(
               props.action,

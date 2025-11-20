@@ -238,13 +238,22 @@ export function createNavigationEntityListShortcut({
     const handler =
       VIEWCONFIG_DEFAULTS[selectedView() as View]?.hotkeyOptions?.e;
     if (handler) {
+      if (isEntityLastItem()) {
+        navigateThroughList({ axis: 'start', mode: 'step' });
+      } else {
+        navigateThroughList({ axis: 'end', mode: 'step' });
+      }
+
       for (const entity of entities) {
         handler(entity, {
           soupContext: unifiedListContext,
           notificationSource,
         });
       }
+
+      setViewDataStore(selectedView(), 'selectedEntities', []);
     }
+
     return { success: true };
   });
 
@@ -305,11 +314,15 @@ export function createNavigationEntityListShortcut({
       return { success: true };
     },
     {
-      disabled: (entity) => {
-        if (entity.type === 'channel' || entity.type === 'email') return true;
-        if (entity.ownerId !== userId()) return true;
-        return false;
+      testEnabled: (entity) => {
+        // can't delete these bad boys yet.
+        if (entity.type === 'channel' || entity.type === 'email') return false;
+        // only delete what you own.
+        return entity.ownerId === userId();
       },
+      // TODO (seamus): fix the handler from the modal so that we can delete
+      // some of the items. Then switch this to some.
+      enabledMode: 'every',
     }
   );
 
@@ -975,17 +988,11 @@ export function createNavigationEntityListShortcut({
     description: 'Mark done',
     condition: () =>
       isViewingList() &&
-      !actionRegistry.isActionDisabled('mark_as_done', plainSelectedEntities()),
+      !actionRegistry.isActionEnabled('mark_as_done', plainSelectedEntities()),
     keyDownHandler: () => {
       const entitiesForAction = getEntitiesForAction();
       if (entitiesForAction.entities.length === 0) {
         return false;
-      }
-
-      if (isEntityLastItem()) {
-        navigateThroughList({ axis: 'start', mode: 'step' });
-      } else {
-        navigateThroughList({ axis: 'end', mode: 'step' });
       }
 
       actionRegistry.execute(
@@ -993,7 +1000,6 @@ export function createNavigationEntityListShortcut({
         entitiesForAction.entities.map(({ entity }) => entity)
       );
 
-      setViewDataStore(selectedView(), 'selectedEntities', []);
       return true;
     },
     displayPriority: 10,
@@ -1030,7 +1036,7 @@ export function createNavigationEntityListShortcut({
       viewData().selectedEntities.length > 1 ? 'Delete items' : 'Delete item',
     condition: () =>
       isViewingList() &&
-      !actionRegistry.isActionDisabled('delete', plainSelectedEntities()),
+      !actionRegistry.isActionEnabled('delete', plainSelectedEntities()),
     keyDownHandler: () => {
       const entitiesForAction = getEntitiesForAction();
       if (entitiesForAction.entities.length === 0) {
