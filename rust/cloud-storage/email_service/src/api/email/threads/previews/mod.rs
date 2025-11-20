@@ -15,11 +15,11 @@ where
 {
     email::inbound::router(state).layer(
         ServiceBuilder::new()
-            .layer(axum::middleware::from_fn(link_to_link_uuid_extension))
             .layer(axum::middleware::from_fn_with_state(
                 api_context,
                 crate::api::middleware::link::attach_link_context,
-            )),
+            ))
+            .layer(axum::middleware::from_fn(link_to_link_uuid_extension)),
     )
 }
 
