@@ -20,6 +20,7 @@ fn test_construct_search_result_single_document() {
             owner_id: "user1".to_string(),
             file_type: "pdf".to_string(),
             updated_at: 1234567890,
+            score: None,
             highlight: Highlight {
                 name: None,
                 content: vec!["Test content".to_string()],
@@ -69,6 +70,7 @@ fn test_construct_search_result_multiple_nodes_same_document() {
             owner_id: "user1".to_string(),
             file_type: "pdf".to_string(),
             updated_at: 1234567890,
+            score: None,
             highlight: Highlight {
                 name: None,
                 content: vec!["First content".to_string()],
@@ -82,6 +84,7 @@ fn test_construct_search_result_multiple_nodes_same_document() {
             owner_id: "user1".to_string(),
             file_type: "pdf".to_string(),
             updated_at: 1234567891,
+            score: None,
             highlight: Highlight {
                 name: None,
                 content: vec!["Second content".to_string()],
@@ -136,6 +139,7 @@ fn create_test_document_response(
         owner_id: owner_id.to_string(),
         file_type: "pdf".to_string(),
         updated_at: 1234567890,
+        score: None,
         highlight: Highlight {
             name: None,
             content: content.unwrap_or_default(),

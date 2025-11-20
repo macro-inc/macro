@@ -95,6 +95,7 @@ pub struct DocumentSearchResponse {
     /// Contains the highlight matches for the document name and content
     pub highlight: Highlight,
     pub raw_content: Option<String>,
+    pub score: Option<f64>,
 }
 
 #[derive(Debug)]
@@ -163,13 +164,14 @@ pub(crate) async fn search_documents(
         .hits
         .into_iter()
         .map(|hit| DocumentSearchResponse {
-            document_id: hit._source.entity_id,
-            node_id: hit._source.node_id,
-            document_name: hit._source.document_name,
-            owner_id: hit._source.owner_id,
-            file_type: hit._source.file_type,
-            updated_at: hit._source.updated_at_seconds,
-            raw_content: hit._source.raw_content,
+            document_id: hit.source.entity_id,
+            node_id: hit.source.node_id,
+            document_name: hit.source.document_name,
+            owner_id: hit.source.owner_id,
+            file_type: hit.source.file_type,
+            updated_at: hit.source.updated_at_seconds,
+            raw_content: hit.source.raw_content,
+            score: hit.score,
             highlight: hit
                 .highlight
                 .map(|h| {

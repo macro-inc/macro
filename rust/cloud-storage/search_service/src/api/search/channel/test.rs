@@ -24,6 +24,7 @@ fn test_construct_search_result_single_channel() {
             mentions: vec!["@user2".to_string()],
             created_at: 1234567890,
             updated_at: 1234567891,
+            score: None,
             highlight: Highlight {
                 name: None,
                 content: vec!["Test message content".to_string()],
@@ -77,6 +78,7 @@ fn test_construct_search_result_multiple_messages_same_channel() {
             mentions: vec![],
             created_at: 1234567890,
             updated_at: 1234567891,
+            score: None,
             highlight: Highlight {
                 name: None,
                 content: vec!["First message".to_string()],
@@ -93,6 +95,7 @@ fn test_construct_search_result_multiple_messages_same_channel() {
             mentions: vec!["@user1".to_string()],
             created_at: 1234567892,
             updated_at: 1234567893,
+            score: None,
             highlight: Highlight {
                 name: None,
                 content: vec!["Second message".to_string()],
@@ -148,6 +151,7 @@ fn test_construct_search_result_filters_messages_without_content() {
             mentions: vec![],
             created_at: 1234567890,
             updated_at: 1234567891,
+            score: None,
             highlight: Highlight {
                 name: None,
                 content: vec!["Message with content".to_string()],
@@ -164,6 +168,7 @@ fn test_construct_search_result_filters_messages_without_content() {
             mentions: vec![],
             created_at: 1234567892,
             updated_at: 1234567893,
+            score: None,
             highlight: Highlight::default(),
         },
     ];
@@ -201,6 +206,7 @@ fn create_test_channel_response(
         mentions: vec![],
         created_at: 1234567890,
         updated_at: 1234567891,
+        score: None,
         highlight: Highlight {
             name: None,
             content: content.unwrap_or_default(),
