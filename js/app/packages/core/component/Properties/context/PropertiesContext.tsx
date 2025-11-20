@@ -82,7 +82,7 @@ export interface PropertiesProviderProps extends ParentProps {
 const PropertiesContext = createContext<PropertiesContextValue>();
 
 export function PropertiesProvider(props: PropertiesProviderProps) {
-  // Specific modal states
+  // Modal state signals
   const [propertySelectorModal, setPropertySelectorModal] =
     createSignal<PropertySelectorModalState | null>(null);
   const [propertyEditorModal, setPropertyEditorModal] =
