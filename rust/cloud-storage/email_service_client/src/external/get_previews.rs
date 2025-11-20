@@ -1,6 +1,7 @@
 use super::EmailServiceClientExternal;
 use anyhow::Result;
-use models_email::email::service::thread::{GetPreviewsCursorResponse, PreviewView};
+use email::inbound::ApiPaginatedThreadCursor;
+use models_email::email::service::thread::PreviewView;
 use reqwest::Method;
 use reqwest::Url;
 use std::borrow::Cow;
@@ -11,7 +12,7 @@ impl EmailServiceClientExternal {
         params: impl Iterator<Item = (&'static str, Cow<'_, str>)>,
         view: PreviewView,
         jwt: &str,
-    ) -> Result<GetPreviewsCursorResponse> {
+    ) -> Result<ApiPaginatedThreadCursor> {
         let url = format!("{}/email/threads/previews/cursor/{}", self.url, view);
         let url_with_params = Url::parse_with_params(&url, params)?;
         let res = self
@@ -31,7 +32,7 @@ impl EmailServiceClientExternal {
             );
             Err(anyhow::anyhow!("HTTP {}: {}", code, body))
         } else {
-            res.json::<GetPreviewsCursorResponse>()
+            res.json::<ApiPaginatedThreadCursor>()
                 .await
                 .map_err(anyhow::Error::from)
         }

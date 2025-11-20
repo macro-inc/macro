@@ -71,6 +71,11 @@ pub async fn get_channels_handler(
 
     let channel_ids: Vec<Uuid> = channels.iter().map(|c| c.channel.id).collect();
 
+    let ids: Vec<_> = channel_ids
+        .iter()
+        .map(|id| EntityType::Channel.with_entity_string(id.to_string()))
+        .collect();
+
     let (names_res, latest_messages, activities, frecency_score) = futures::join!(
         app_state
             .auth_service_client
@@ -79,9 +84,7 @@ pub async fn get_channels_handler(
         get_activities(db, &user_context.user_id),
         app_state.frecency_storage.get_aggregate_for_user_entities(
             MacroUserIdStr::parse_from_str(&user_context.0.user_id)?.into_owned(),
-            channel_ids
-                .iter()
-                .map(|id| EntityType::Channel.with_entity_string(id.to_string()))
+            ids.as_slice()
         )
     );
 
