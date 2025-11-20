@@ -6,12 +6,12 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import Bell from '@icon/regular/bell.svg';
 import {
-  useUnreadNotifications,
-  notificationWithMetadata,
-  type NavigationActions,
-  navigateToNotification,
   extractNotificationData,
+  type NavigationActions,
   type NotificationSource,
+  navigateToNotification,
+  notificationWithMetadata,
+  useUnreadNotifications,
 } from '@notifications';
 import { Show } from 'solid-js';
 

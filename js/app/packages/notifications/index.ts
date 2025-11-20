@@ -1,102 +1,82 @@
-// Core types
-export type {
-  UnifiedNotification,
-  CompositeEntity,
-} from './types';
-export { compositeEntity, notificationEntity } from './types';
-
-// Notification helpers
 export {
-  useNotificationsForEntity,
-  notificationIsOfEntity,
-  notificationIsOfEntityType,
-  notificationIsRead,
-  entityHasUnreadNotifications,
-  useUnreadNotifications,
-  useEntityHasUnreadNotifications,
-  useEntityTypeNotifications,
-  useUnreadEntityTypeNotifications,
-  markNotificationsForEntityAsDone,
-  markNotificationForEntityIdAsRead,
-  markNotificationsForEntityAsRead,
-  useNotificationsMutedForEntity,
-  createEffectOnEntityTypeNotification,
-} from './notification-helpers';
-
-// Notification metadata
+  ChannelDebouncedNotificationReadMarker,
+  DebouncedNotificationReadMarker,
+  DocumentDebouncedNotificationReadMarker,
+  EmailDebouncedReadMarker,
+} from './components/DebouncedNotificationReadMarker';
 export type {
-  NotificationMetadataByType,
-  UnifiedNotificationMetadata,
-  TypedNotification,
-  UnifiedNotificationWithMetadata,
-} from './notification-metadata';
-export {
-  isItemSharedUser,
-  isItemSharedOrganization,
-  isChannelMention,
-  isDocumentMention,
-  isChannelInvite,
-  isChannelMessageSend,
-  isChannelMessageReply,
-  isChannelMessageDocument,
-  isNewEmail,
-  isInviteToTeam,
-  isRejectTeamInvite,
-  extractMetadata,
-  isNotificationWithMetadata,
-  notificationWithMetadata,
-} from './notification-metadata';
-
-// Notification source
-export type { NotificationSource } from './notification-source';
-export { createNotificationSource } from './notification-source';
-
-// Notification navigation
-export type { NavigationActions } from './notification-navigation';
-export { navigateToNotification } from './notification-navigation';
-
-// Notification preview
-export type { NotificationData } from './notification-preview';
-export {
-  NOTIFICATION_LABEL_BY_TYPE,
-  extractNotificationData,
-  toBrowserNotification,
-} from './notification-preview';
-
-// Notification resolvers
-export type {
-  UserNameResolver,
-  DocumentNameResolver,
-  NotificationBlockNameResolver,
-} from './notification-resolvers';
-export {
-  DefaultUserNameResolver,
-  DefaultDocumentNameResolver,
-  DefaultNotificationBlockNameResolver,
-} from './notification-resolvers';
-
-// Notification election
-export { createTabLeaderSignal } from './notification-election';
-
-// Components
-export type {
-  PlatformNotificationInterface,
-  CreateAppNotificationInterface,
   AppNotification,
+  CreateAppNotificationInterface,
   NotificationUnsupported,
+  PlatformNotificationInterface,
 } from './components/PlatformNotificationProvider';
 export {
   PlatformNotificationProvider,
   usePlatformNotificationState,
 } from './components/PlatformNotificationProvider';
-
+export { createTabLeaderSignal } from './notification-election';
 export {
-  DebouncedNotificationReadMarker,
-  EmailDebouncedReadMarker,
-  DocumentDebouncedNotificationReadMarker,
-  ChannelDebouncedNotificationReadMarker,
-} from './components/DebouncedNotificationReadMarker';
-
-// Queries
+  createEffectOnEntityTypeNotification,
+  entityHasUnreadNotifications,
+  markNotificationForEntityIdAsRead,
+  markNotificationsForEntityAsDone,
+  markNotificationsForEntityAsRead,
+  notificationIsOfEntity,
+  notificationIsOfEntityType,
+  notificationIsRead,
+  useEntityHasUnreadNotifications,
+  useEntityTypeNotifications,
+  useNotificationsForEntity,
+  useNotificationsMutedForEntity,
+  useUnreadEntityTypeNotifications,
+  useUnreadNotifications,
+} from './notification-helpers';
+export type {
+  NotificationMetadataByType,
+  TypedNotification,
+  UnifiedNotificationMetadata,
+  UnifiedNotificationWithMetadata,
+} from './notification-metadata';
+export {
+  extractMetadata,
+  isChannelInvite,
+  isChannelMention,
+  isChannelMessageDocument,
+  isChannelMessageReply,
+  isChannelMessageSend,
+  isDocumentMention,
+  isInviteToTeam,
+  isItemSharedOrganization,
+  isItemSharedUser,
+  isNewEmail,
+  isNotificationWithMetadata,
+  isRejectTeamInvite,
+  notificationWithMetadata,
+} from './notification-metadata';
+export type { NavigationActions } from './notification-navigation';
+export { navigateToNotification } from './notification-navigation';
+export type { NotificationData } from './notification-preview';
+export {
+  extractNotificationData,
+  NOTIFICATION_LABEL_BY_TYPE,
+  toBrowserNotification,
+} from './notification-preview';
+export type {
+  DocumentNameResolver,
+  NotificationBlockNameResolver,
+  UserNameResolver,
+} from './notification-resolvers';
+export {
+  DefaultDocumentNameResolver,
+  DefaultNotificationBlockNameResolver,
+  DefaultUserNameResolver,
+} from './notification-resolvers';
+export type { NotificationSource } from './notification-source';
+export { createNotificationSource } from './notification-source';
 export { fetchNotificationsForEntities } from './queries/entities-notifications-query';
 export { createMutedEntitiesQuery } from './queries/muted-entities-query';
+export type {
+  CompositeEntity,
+  UnifiedNotification,
+} from './types';
+export { compositeEntity, notificationEntity } from './types';

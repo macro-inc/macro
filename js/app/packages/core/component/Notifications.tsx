@@ -5,11 +5,11 @@ import type { Entity } from '@core/types';
 import { formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
-  notificationWithMetadata,
-  navigateToNotification,
   extractNotificationData,
   NOTIFICATION_LABEL_BY_TYPE,
   type NotificationSource,
+  navigateToNotification,
+  notificationWithMetadata,
   type UnifiedNotification,
 } from '@notifications';
 import { createMemo, For, Show } from 'solid-js';

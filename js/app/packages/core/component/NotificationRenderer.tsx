@@ -3,8 +3,8 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import { useDisplayName } from '@core/user/displayName';
 import { formatDate } from '@core/util/date';
 import {
-  notificationWithMetadata,
   extractNotificationData,
+  notificationWithMetadata,
   type UnifiedNotification,
 } from '@notifications';
 import { Show } from 'solid-js';
