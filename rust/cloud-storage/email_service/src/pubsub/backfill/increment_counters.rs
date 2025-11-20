@@ -131,14 +131,13 @@ async fn handle_attachment_upload(
         email_db_client::attachments::provider::upload::fetch_job_attachments_for_backfill(
             &ctx.db, link.id,
         )
-            .await
-            .map_err(|e| {
-                ProcessingError::NonRetryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e
-                        .context("Failed to fetch job attachment backfill metadata".to_string()),
-                })
-            })?;
+        .await
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e.context("Failed to fetch job attachment backfill metadata".to_string()),
+            })
+        })?;
 
     tracing::info!(
         "Found {} condition 5 attachments to backfill for job {}",
@@ -150,10 +149,7 @@ async fn handle_attachment_upload(
 }
 
 #[tracing::instrument(skip(ctx))]
-async fn handle_contacts_sync(
-    ctx: &PubSubContext,
-    link: &Link,
-) -> Result<(), ProcessingError> {
+async fn handle_contacts_sync(ctx: &PubSubContext, link: &Link) -> Result<(), ProcessingError> {
     if cfg!(feature = "disable_contacts_sync") {
         return Ok(());
     }
@@ -208,7 +204,6 @@ async fn handle_contacts_sync(
 
     Ok(())
 }
-
 
 /// when a thread is done being backfilled, update its metadata and backfill its attachments.
 #[tracing::instrument(skip(ctx))]
