@@ -4,8 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AffiliateUser } from './affiliateUser';
 
-export interface GetAffiliateUsersResponse {
-  users: AffiliateUser[];
-}
+/**
+ * Limit the number of items returned. Defaults to 20. Max 500.
+ * @minimum 0
+ */
+export type ParamsLimit = number | null;

@@ -4,6 +4,6 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AffiliateUser } from './affiliateUser';
+import type { SoupApiSort } from './soupApiSort';
 
-export type GetUsersAffiliateResponseAffiliate = null | AffiliateUser;
+export type ParamsSortMethod = null | SoupApiSort;

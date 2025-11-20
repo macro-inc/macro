@@ -5,7 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface AffiliateUser {
-  createdAt: number;
-  email: string;
-}
+/**
+ * Whether to expand projects. Defaults to true.
+ */
+export type ParamsExpand = boolean | null;
