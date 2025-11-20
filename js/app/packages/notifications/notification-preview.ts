@@ -242,8 +242,8 @@ export interface BrowserNotificationPreview {
 }
 
 import { getFaviconUrl } from '@app/util/favicon';
-import { themeReactive } from '../block-theme/signals/themeReactive';
 import { markdownToPlainText } from '@lexical-core';
+import { themeReactive } from '../block-theme/signals/themeReactive';
 
 const USER_NAME_FALLBACK = 'Someone';
 const DOCUMENT_NAME_FALLBACK = 'Something';
