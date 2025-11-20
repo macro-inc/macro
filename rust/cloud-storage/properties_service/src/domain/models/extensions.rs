@@ -47,8 +47,8 @@ impl PropertyDefinition {
             return Err("Display name cannot be empty".to_string());
         }
 
-        if self.display_name.len() > 127 {
-            return Err("Display name cannot exceed 127 characters".to_string());
+        if self.display_name.len() > 100 {
+            return Err("Display name cannot exceed 100 characters".to_string());
         }
 
         // Validate multi-select compatibility

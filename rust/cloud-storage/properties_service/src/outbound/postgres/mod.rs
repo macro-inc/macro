@@ -88,14 +88,15 @@ impl PropertiesStorage for PropertiesPgStorage {
         definitions::create_property_definition(&self.pool, definition).await
     }
 
-    // Stub implementations - will be implemented in subsequent commits
     async fn create_property_definition_with_options(
         &self,
-        _definition: crate::domain::models::PropertyDefinition,
-        _options: Vec<crate::domain::models::PropertyOption>,
-    ) -> Result<crate::domain::models::PropertyDefinition, Self::Error> {
-        todo!("Will be implemented in subsequent commit")
+        definition: crate::domain::models::PropertyDefinition,
+        options: Vec<crate::domain::models::PropertyOption>,
+    ) -> Result<crate::domain::models::PropertyDefinitionWithOptions, Self::Error> {
+        definitions::create_property_definition_with_options(&self.pool, definition, options).await
     }
+
+    // Stub implementations - will be implemented in subsequent commits
 
     async fn get_property_definition(
         &self,
