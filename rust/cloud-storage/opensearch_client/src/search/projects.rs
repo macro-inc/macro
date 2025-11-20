@@ -22,7 +22,7 @@ impl SearchQueryConfig for ProjectSearchConfig {
     const TITLE_KEY: &'static str = "project_name";
 
     // Projects have no "content" to highlight match on, so match on the TITLE_KEY instead
-    fn default_highlight() -> opensearch_query_builder::Highlight {
+    fn default_highlight() -> opensearch_query_builder::Highlight<'static> {
         opensearch_query_builder::Highlight::new()
             .require_field_match(true)
             .field(
@@ -61,11 +61,11 @@ impl ProjectQueryBuilder {
         fn disable_recency(disable_recency: bool) -> Self;
     }
 
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder> {
+    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
         self.inner.build_bool_query()
     }
 
-    fn build_search_request(&self) -> Result<SearchRequest> {
+    fn build_search_request(&self) -> Result<SearchRequest<'static>> {
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
         // SearchOn::NameContent is used
