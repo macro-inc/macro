@@ -85,8 +85,8 @@ pub async fn handler(
     results.extend(enriched_project_results);
     results.extend(enriched_email_results);
 
-    // TODO: sort at the end. need to expose hit score first
-    // https://linear.app/macro-eng/issue/M-5244/sort-by-hit-score-after-combining-enriched-results
+    // Sort the results by their average score
+    results.sort_by(|a, b| b.average_score().total_cmp(&a.average_score()));
 
     Ok((StatusCode::OK, Json(UnifiedSearchResponse { results })).into_response())
 }

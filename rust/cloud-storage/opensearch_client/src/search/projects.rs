@@ -130,6 +130,7 @@ pub struct ProjectSearchResponse {
     pub project_name: String,
     pub created_at: i64,
     pub updated_at: i64,
+    pub score: Option<f64>,
     pub highlight: Highlight,
 }
 
@@ -169,11 +170,12 @@ pub(crate) async fn search_projects(
         .hits
         .into_iter()
         .map(|hit| ProjectSearchResponse {
-            project_id: hit._source.entity_id,
-            user_id: hit._source.user_id,
-            project_name: hit._source.project_name,
-            created_at: hit._source.created_at_seconds,
-            updated_at: hit._source.updated_at_seconds,
+            project_id: hit.source.entity_id,
+            user_id: hit.source.user_id,
+            project_name: hit.source.project_name,
+            created_at: hit.source.created_at_seconds,
+            updated_at: hit.source.updated_at_seconds,
+            score: hit.score,
             highlight: hit
                 .highlight
                 .map(|h| {
