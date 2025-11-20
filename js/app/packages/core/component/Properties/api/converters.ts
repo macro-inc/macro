@@ -2,12 +2,12 @@ import type { PropertyValue } from '@service-properties/generated/schemas/proper
 import { NUMBER_DECIMAL_PLACES } from '../constants';
 import type {
   EntityPropertyWithDefinition,
-  EntityReference,
   Property,
   PropertyApiValues,
   SetPropertyValue,
   ValueType,
 } from '../types';
+import { isEntityReferenceArray, isStringArray } from '../utils/typeGuards';
 
 /**
  * Type guard to check if PropertyValue has a specific type
@@ -111,14 +111,11 @@ export function entityPropertyFromApi(
     case 'SELECT_NUMBER': {
       if (hasPropertyValueType(propertyValue, 'SelectOption')) {
         const selectVal = propertyValue.value;
-        if (
-          Array.isArray(selectVal) &&
-          selectVal.every((v) => typeof v === 'string')
-        ) {
+        if (isStringArray(selectVal)) {
           return {
             ...baseProperty,
             valueType,
-            value: selectVal as string[],
+            value: selectVal,
           };
         }
       }
@@ -128,19 +125,8 @@ export function entityPropertyFromApi(
     case 'ENTITY': {
       if (hasPropertyValueType(propertyValue, 'EntityReference')) {
         const entityVal = propertyValue.value;
-        if (Array.isArray(entityVal)) {
-          const refs: EntityReference[] = [];
-          for (const ref of entityVal) {
-            if (
-              ref &&
-              typeof ref === 'object' &&
-              'entity_id' in ref &&
-              'entity_type' in ref
-            ) {
-              refs.push(ref as EntityReference);
-            }
-          }
-          return { ...baseProperty, valueType: 'ENTITY', value: refs };
+        if (isEntityReferenceArray(entityVal)) {
+          return { ...baseProperty, valueType: 'ENTITY', value: entityVal };
         }
       }
       return { ...baseProperty, valueType: 'ENTITY', value: null };
@@ -149,14 +135,11 @@ export function entityPropertyFromApi(
     case 'LINK': {
       if (hasPropertyValueType(propertyValue, 'Link')) {
         const linkVal = propertyValue.value;
-        if (
-          Array.isArray(linkVal) &&
-          linkVal.every((v) => typeof v === 'string')
-        ) {
+        if (isStringArray(linkVal)) {
           return {
             ...baseProperty,
             valueType: 'LINK',
-            value: linkVal as string[],
+            value: linkVal,
           };
         }
       }

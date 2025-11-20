@@ -145,7 +145,6 @@ export async function deleteItem(args: {
     }
   } else {
     if (itemType === 'channel') return false;
-    if (itemType === 'color') return false;
     if (itemType === 'email') return false;
     const removed = await removeHistoryItem(itemType, id);
     if (!removed) return false;

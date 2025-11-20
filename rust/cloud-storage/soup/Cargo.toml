@@ -11,6 +11,7 @@ axum = [
   "dep:model_user",
   "dep:utoipa",
   "models_pagination/axum",
+  "models_soup/schema",
 ]
 
 

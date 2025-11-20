@@ -1,4 +1,3 @@
-use crate::types::openai::message::order_messages_tool_calls;
 use crate::types::{ChatCompletionRequest, response::ChatStreamCompletionResponse};
 use anyhow::Context;
 use async_openai::types::{
@@ -39,7 +38,6 @@ impl TryFrom<ChatCompletionRequest> for CreateChatCompletionRequest {
             .into_iter()
             .flat_map(Vec::<ChatCompletionRequestMessage>::from)
             .collect();
-        let messages = order_messages_tool_calls(messages);
 
         all_messages.push(system_message);
         all_messages.extend(messages);
