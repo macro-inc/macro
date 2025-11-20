@@ -3,7 +3,6 @@ import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
 import { ENABLE_DOCK_NOTITIFCATIONS } from '@core/constant/featureFlags';
-
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import SplitIcon from '@icon/regular/square-split-horizontal.svg';
 import { useGlobalNotificationSource } from '../GlobalAppState';
@@ -162,12 +161,13 @@ export function Dock(){
         <ClippedPanel bl br>
           <div style={{
             'grid-template-columns':'min-content 1fr min-content',
+            'box-sizing': 'border-box',
             'scrollbar-width': 'none',
             'align-content': 'center',
             'overflow-y': 'hidden',
             'padding': '0 7px',
             'display': 'grid',
-            'height': '40px',
+            'height': '100%',
             'gap': '7px',
           }}>
 

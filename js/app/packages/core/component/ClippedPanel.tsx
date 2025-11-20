@@ -30,6 +30,7 @@ export function ClippedPanel(props: PanelProps) {
       <div
         style={{
           'background-color': 'var(--color-panel)',
+          'box-sizing': 'border-box',
           'clip-path': cornerClip(
             props.tl ? 'calc(0.5rem - 0.5px)' : 0,
             props.tr ? 'calc(0.5rem - 0.5px)' : 0,
