@@ -2,7 +2,7 @@ import { createControlledOpenSignal } from '@core/util/createControlledOpenSigna
 import { debounce } from '@solid-primitives/scheduled';
 import { createEffect, createSignal, untrack } from 'solid-js';
 
-const COMMAND_DEBOUNCE_MS = 200;
+const COMMAND_DEBOUNCE_MS = 300;
 
 export const [konsoleOpen, setKonsoleOpen] = createControlledOpenSignal();
 export const toggleKonsoleVisibility = () => {
