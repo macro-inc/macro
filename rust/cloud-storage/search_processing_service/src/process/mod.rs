@@ -32,6 +32,9 @@ pub async fn process_message(
     );
 
     match search_extractor_message {
+        SearchQueueMessage::UpdateEntityName(_message) => {
+            todo!()
+        }
         SearchQueueMessage::RemoveUserProfile(user_profile_id) => {
             tracing::trace!(user_profile_id = user_profile_id, "removing user profile");
             user::remove_user_profile(&ctx.opensearch_client, &user_profile_id).await?;
