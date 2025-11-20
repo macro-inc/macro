@@ -24,7 +24,6 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import { contain } from 'three/src/extras/TextureUtils.js';
 import {
   frontMatterPreference,
   setFrontMatterPreferenceForDoc,
