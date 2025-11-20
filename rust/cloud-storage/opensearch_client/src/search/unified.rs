@@ -259,7 +259,7 @@ where
 
 impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
     fn from(index: Hit<UnifiedSearchIndex>) -> Self {
-        match index._source {
+        match index.source {
             UnifiedSearchIndex::ChannelMessage(a) => {
                 UnifiedSearchResponse::ChannelMessage(ChannelMessageSearchResponse {
                     channel_id: a.entity_id,
@@ -272,6 +272,7 @@ impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
                     mentions: a.mentions,
                     created_at: a.created_at_seconds,
                     updated_at: a.updated_at_seconds,
+                    score: index.score,
                     highlight: index
                         .highlight
                         .map(|h| {
@@ -295,6 +296,7 @@ impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
                     owner_id: a.owner_id,
                     file_type: a.file_type,
                     updated_at: a.updated_at_seconds,
+                    score: index.score,
                     highlight: index
                         .highlight
                         .map(|h| {
@@ -322,6 +324,7 @@ impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
                 user_id: a.user_id,
                 updated_at: a.updated_at_seconds,
                 sent_at: a.sent_at_seconds,
+                score: index.score,
                 highlight: index
                     .highlight
                     .map(|h| {
@@ -342,6 +345,7 @@ impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
                     project_name: a.project_name,
                     created_at: a.created_at_seconds,
                     updated_at: a.updated_at_seconds,
+                    score: index.score,
                     highlight: index
                         .highlight
                         .map(|h| {
@@ -362,6 +366,7 @@ impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
                 user_id: a.user_id,
                 role: a.role,
                 title: a.title,
+                score: index.score,
                 highlight: index
                     .highlight
                     .map(|h| {

@@ -18,6 +18,9 @@ pub struct ChatMessageSearchResult {
     pub updated_at: i64,
     /// The title of the chat
     pub title: String,
+    /// The score of the result
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<f64>,
 }
 
 /// A single response item, part of the ChatSearchResponse object
