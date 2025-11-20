@@ -15,7 +15,6 @@ static ALLOWED_ORIGINS: [&str; 11] = [
     "https://staging.macro.com",
     "https://www.macro.com",
     "https://macro.com",
-    "capacitor://localhost",
     "http://tauri.localhost",
     "https://apollo-testing.macro.com",
 ];
