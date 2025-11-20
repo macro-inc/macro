@@ -1,17 +1,31 @@
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import { formatDate } from '@core/util/date';
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
-import { PlatformNotificationProvider, usePlatformNotificationState } from './components/PlatformNotificationProvider';
+import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
+import {
+  PlatformNotificationProvider,
+  usePlatformNotificationState,
+} from './components/PlatformNotificationProvider';
 import { createMockWebsocket } from './mock-websocket';
 import { notificationWithMetadata } from './notification-metadata';
-import { extractNotificationData, NOTIFICATION_LABEL_BY_TYPE, type NotificationData, toBrowserNotification } from './notification-preview';
-import { DefaultDocumentNameResolver, DefaultUserNameResolver } from './notification-resolvers';
+import {
+  extractNotificationData,
+  NOTIFICATION_LABEL_BY_TYPE,
+  type NotificationData,
+  toBrowserNotification,
+} from './notification-preview';
+import {
+  DefaultDocumentNameResolver,
+  DefaultUserNameResolver,
+} from './notification-resolvers';
 import { createNotificationSource } from './notification-source';
 import type { UnifiedNotification } from './types';
 
 type NotificationsByType = Map<string, UnifiedNotification[]>;
 
-function groupNotificationsByType(notifications: UnifiedNotification[]): NotificationsByType {
+function groupNotificationsByType(
+  notifications: UnifiedNotification[]
+): NotificationsByType {
   const groups = new Map<string, UnifiedNotification[]>();
   for (const notification of notifications) {
     const type = notification.notificationEventType;
@@ -23,7 +37,9 @@ function groupNotificationsByType(notifications: UnifiedNotification[]): Notific
   return groups;
 }
 
-function extractTypedNotificationData(notification: UnifiedNotification): NotificationData | null {
+function extractTypedNotificationData(
+  notification: UnifiedNotification
+): NotificationData | null {
   const typed = notificationWithMetadata(notification);
   if (!typed) return null;
   const data = extractNotificationData(typed);
@@ -37,33 +53,36 @@ function NotificationTypeButton(props: {
   isSelected: boolean;
   onSelect: () => void;
 }) {
-  const label = NOTIFICATION_LABEL_BY_TYPE[props.type as keyof typeof NOTIFICATION_LABEL_BY_TYPE] || props.type;
+  const label =
+    NOTIFICATION_LABEL_BY_TYPE[
+    props.type as keyof typeof NOTIFICATION_LABEL_BY_TYPE
+    ] || props.type;
 
   return (
     <button
-      class={`w-full p-4 text-left border-b border-edge-muted transition-all ${
-        props.isSelected
-          ? 'bg-accent text-ink'
-          : 'bg-menu hover:bg-hover'
-      }`}
+      class={`w-full p-4 text-left border-b border-edge-muted transition-all ${props.isSelected ? 'bg-accent text-ink' : 'bg-menu hover:bg-hover'
+        }`}
       onClick={props.onSelect}
     >
       <div class="flex items-center justify-between gap-3">
         <div class="flex flex-col gap-1 flex-1 min-w-0">
-          <span class={`text-xs font-mono uppercase font-medium ${
-            props.isSelected ? 'text-black' : 'text-accent'
-          }`}>
+          <span
+            class={`text-xs font-mono uppercase font-medium ${props.isSelected ? 'text-black' : 'text-accent'
+              }`}
+          >
             {label}
           </span>
-          <span class={`text-xs font-mono truncate ${
-            props.isSelected ? 'text-black/70' : 'text-ink-muted'
-          }`}>
+          <span
+            class={`text-xs font-mono truncate ${props.isSelected ? 'text-black/70' : 'text-ink-muted'
+              }`}
+          >
             {props.type}
           </span>
         </div>
-        <span class={`text-sm font-medium shrink-0 ${
-          props.isSelected ? 'text-black' : 'text-ink-muted'
-        }`}>
+        <span
+          class={`text-sm font-medium shrink-0 ${props.isSelected ? 'text-black' : 'text-ink-muted'
+            }`}
+        >
           {props.count}
         </span>
       </div>
@@ -81,18 +100,23 @@ function NotificationListItem(props: {
 
   return (
     <button
-      class={`w-full p-4 text-left border-b border-edge-muted transition-all ${
-        props.isSelected ? 'bg-accent/10 border-l-2 border-l-accent' : 'bg-menu hover:bg-hover'
-      }`}
+      class={`w-full p-4 text-left border-b border-edge-muted transition-all ${props.isSelected
+          ? 'bg-accent/10 border-l-2 border-l-accent'
+          : 'bg-menu hover:bg-hover'
+        }`}
       onClick={props.onSelect}
     >
       <div class="flex items-start gap-3">
-        <div class={`size-2 mt-1 shrink-0 ${
-          isUnread() ? 'bg-accent' : 'bg-ink-extra-muted'
-        }`} />
+        <div
+          class={`size-2 mt-1 shrink-0 ${isUnread() ? 'bg-accent' : 'bg-ink-extra-muted'
+            }`}
+        />
         <div class="flex-1 min-w-0">
           <Show when={data()}>
-            <NotificationRenderer notification={props.notification} mode="preview" />
+            <NotificationRenderer
+              notification={props.notification}
+              mode="preview"
+            />
           </Show>
           <div class="text-xs text-ink-muted font-mono mt-2">
             {formatDate(props.notification.createdAt)}
@@ -103,55 +127,83 @@ function NotificationListItem(props: {
   );
 }
 
-function BrowserNotificationFormat(props: { notification: UnifiedNotification }) {
-  const data = () => extractTypedNotificationData(props.notification);
+function BrowserNotificationFormat(props: {
+  notification: UnifiedNotification;
+}) {
+  const data = createMemo(() =>
+    extractTypedNotificationData(props.notification)
+  );
+  const [browserNotif, setBrowserNotif] = createSignal<any>(null);
+
+  createEffect(() => {
+    const notifData = data();
+    if (notifData) {
+      toBrowserNotification(
+        notifData,
+        DefaultUserNameResolver,
+        DefaultDocumentNameResolver
+      ).then((result) => {
+        setBrowserNotif(result);
+      });
+    } else {
+      setBrowserNotif(null);
+    }
+  });
 
   return (
     <Show
       when={data()}
-      fallback={<div class="text-ink-muted text-sm italic">No extractable data for this notification</div>}
+      fallback={
+        <div class="text-ink-muted text-sm italic">
+          No extractable data for this notification
+        </div>
+      }
     >
-      {(notifData) => {
-        const [browserNotif, setBrowserNotif] = createSignal<any>(null);
-        toBrowserNotification(notifData(), DefaultUserNameResolver, DefaultDocumentNameResolver)
-          .then(setBrowserNotif);
-
-        return (
-          <Show
-            when={browserNotif()}
-            fallback={<div class="text-ink-muted text-sm animate-pulse">Loading browser format...</div>}
-          >
-            <div class="space-y-4">
-              <div>
-                <div class="text-xs font-mono text-ink-muted uppercase mb-2">Title</div>
-                <div class="bg-menu p-4 rounded-lg border border-edge-muted text-sm text-ink font-medium">
-                  {browserNotif()!.title}
-                </div>
-              </div>
-              <div>
-                <div class="text-xs font-mono text-ink-muted uppercase mb-2">Description (Body)</div>
-                <div class="bg-menu p-4 rounded-lg border border-edge-muted text-sm text-ink">
-                  {browserNotif()!.body}
-                </div>
-              </div>
-              <div>
-                <div class="text-xs font-mono text-ink-muted uppercase mb-2">Icon</div>
-                <div class="bg-menu p-4 rounded-lg border border-edge-muted">
-                  <code class="text-xs text-ink-muted">{browserNotif()!.icon}</code>
-                </div>
-              </div>
-              <details class="group">
-                <summary class="text-xs font-mono text-ink-muted uppercase cursor-pointer hover:text-accent">
-                  Raw JSON ▸
-                </summary>
-                <pre class="bg-menu p-4 rounded-lg border border-edge-muted text-xs overflow-auto mt-2">
-                  {JSON.stringify(browserNotif(), null, 2)}
-                </pre>
-              </details>
+      <Show
+        when={browserNotif()}
+        fallback={
+          <div class="text-ink-muted text-sm animate-pulse">
+            Loading browser format...
+          </div>
+        }
+      >
+        <div class="space-y-4">
+          <div>
+            <div class="text-xs font-mono text-ink-muted uppercase mb-2">
+              Title
             </div>
-          </Show>
-        );
-      }}
+            <div class="bg-menu p-4 rounded-lg border border-edge-muted text-sm text-ink font-medium">
+              {browserNotif()!.title}
+            </div>
+          </div>
+          <div>
+            <div class="text-xs font-mono text-ink-muted uppercase mb-2">
+              Description (Body)
+            </div>
+            <div class="bg-menu p-4 rounded-lg border border-edge-muted text-sm text-ink">
+              {browserNotif()!.body || (
+                <span class="italic text-ink-muted">(empty)</span>
+              )}
+            </div>
+          </div>
+          <div>
+            <div class="text-xs font-mono text-ink-muted uppercase mb-2">
+              Icon
+            </div>
+            <div class="bg-menu p-4 rounded-lg border border-edge-muted">
+              <code class="text-xs text-ink-muted">{browserNotif()!.icon}</code>
+            </div>
+          </div>
+          <details class="group">
+            <summary class="text-xs font-mono text-ink-muted uppercase cursor-pointer hover:text-accent">
+              Raw JSON ▸
+            </summary>
+            <pre class="bg-menu p-4 rounded-lg border border-edge-muted text-xs overflow-auto mt-2">
+              {JSON.stringify(browserNotif(), null, 2)}
+            </pre>
+          </details>
+        </div>
+      </Show>
     </Show>
   );
 }
@@ -184,39 +236,79 @@ function PermissionStatus(props: { platformNotif: any }) {
 function PlaygroundContent() {
   const { ws, emit } = createMockWebsocket();
   const platformNotif = usePlatformNotificationState();
+  const markdownArea = useChannelMarkdownArea();
 
-  const notificationSource = createNotificationSource(ws, async (title, opts) => {
-    if (platformNotif !== 'not-supported') {
-      await platformNotif.showNotification(title, opts);
+  const notificationSource = createNotificationSource(
+    ws,
+    async (title, opts) => {
+      if (platformNotif !== 'not-supported') {
+        await platformNotif.showNotification(title, opts);
+      }
     }
-  });
+  );
 
   const allNotifications = createMemo(() => notificationSource.notifications());
-  const notificationsByType = createMemo(() => groupNotificationsByType(allNotifications()));
+  const notificationsByType = createMemo(() =>
+    groupNotificationsByType(allNotifications())
+  );
   const typeEntries = createMemo(() =>
-    Array.from(notificationsByType().entries()).sort((a, b) => a[0].localeCompare(b[0]))
+    Array.from(notificationsByType().entries()).sort((a, b) =>
+      a[0].localeCompare(b[0])
+    )
   );
 
   const [selectedType, setSelectedType] = createSignal<string | null>(null);
-  const [selectedNotification, setSelectedNotification] = createSignal<UnifiedNotification | null>(null);
+  const [selectedNotification, setSelectedNotification] =
+    createSignal<UnifiedNotification | null>(null);
+  const [customMode, setCustomMode] = createSignal(false);
 
-  const selectedNotifications = createMemo(() =>
-    notificationsByType().get(selectedType() || '') || []
+  const selectedNotifications = createMemo(
+    () => notificationsByType().get(selectedType() || '') || []
   );
 
   // Auto-select first notification when type changes
   createEffect(() => {
     const notifications = selectedNotifications();
-    if (notifications.length > 0 && selectedType() !== null) {
+    if (notifications.length > 0 && selectedType() !== null && !customMode()) {
       setSelectedNotification(notifications[0]);
+    }
+  });
+
+  // Update selected notification when custom content changes
+  createEffect(() => {
+    if (customMode()) {
+      setSelectedNotification(customNotification());
     }
   });
 
   const handleSelectType = (type: string) => {
     setSelectedType(type);
+    setCustomMode(false);
   };
 
-  const handleEmitBrowserNotification = async (notification: UnifiedNotification) => {
+  const customNotification = createMemo((): UnifiedNotification => {
+    return {
+      id: `custom-${Date.now()}`,
+      createdAt: Math.floor(Date.now() / 1000),
+      eventItemId: 'channel-custom',
+      eventItemType: 'channel',
+      senderId: 'user-custom',
+      notificationEventType: 'channel_message_send',
+      notificationMetadata: {
+        sender: 'user-custom',
+        messageContent: markdownArea.state(),
+        messageId: 'msg-custom',
+        channelType: 'direct_message',
+        channelName: 'test-channel',
+      },
+      viewedAt: null,
+      done: false,
+    };
+  });
+
+  const handleEmitBrowserNotification = async (
+    notification: UnifiedNotification
+  ) => {
     if (platformNotif === 'not-supported') return;
 
     const data = extractTypedNotificationData(notification);
@@ -230,10 +322,16 @@ function PlaygroundContent() {
 
     if (!browserNotif) return;
 
-    const result = await platformNotif.showNotification(browserNotif.title, browserNotif);
+    const result = await platformNotif.showNotification(
+      browserNotif.title,
+      browserNotif
+    );
 
     if (result === 'not-granted' || result === 'disabled-in-ui') {
-      if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
+      if (
+        typeof Notification !== 'undefined' &&
+        Notification.permission === 'granted'
+      ) {
         new Notification(browserNotif.title, browserNotif);
       }
     }
@@ -247,7 +345,9 @@ function PlaygroundContent() {
       fallback={
         <div class="h-screen flex items-center justify-center bg-menu">
           <div class="text-center">
-            <div class="text-lg text-ink-muted animate-pulse mb-2">Loading notifications...</div>
+            <div class="text-lg text-ink-muted animate-pulse mb-2">
+              Loading notifications...
+            </div>
             <div class="text-xs text-ink-extra-muted">Fetching from server</div>
           </div>
         </div>
@@ -257,13 +357,41 @@ function PlaygroundContent() {
         {/* Type column */}
         <div class="w-80 border-r border-edge-muted bg-menu flex flex-col shrink-0">
           <div class="p-6 border-b border-edge-muted bg-menu sticky top-0">
-            <h1 class="text-xl font-semibold text-ink mb-2">Notifications Playground</h1>
+            <h1 class="text-xl font-semibold text-ink mb-2">
+              Notifications Playground
+            </h1>
             <div class="flex items-center gap-4 text-xs text-ink-muted">
               <span>{allNotifications().length} total</span>
               <span>•</span>
               <span>{typeEntries().length} types</span>
             </div>
             <PermissionStatus platformNotif={platformNotif} />
+          </div>
+
+          {/* Custom notification builder */}
+          <div class="border-b border-edge-muted">
+            <button
+              class={`w-full p-4 text-left transition-all ${customMode() ? 'bg-accent text-ink' : 'bg-menu hover:bg-hover'
+                }`}
+              onClick={() => {
+                setCustomMode(true);
+                setSelectedType(null);
+                setSelectedNotification(customNotification());
+              }}
+            >
+              <div class="flex items-center justify-between">
+                <span
+                  class={`text-sm font-medium ${customMode() ? 'text-black' : 'text-accent'}`}
+                >
+                  Custom Message Builder
+                </span>
+                <span
+                  class={`text-xs ${customMode() ? 'text-black/70' : 'text-ink-muted'}`}
+                >
+                  Builder
+                </span>
+              </div>
+            </button>
           </div>
 
           <div class="flex-1 overflow-auto">
@@ -280,42 +408,108 @@ function PlaygroundContent() {
           </div>
         </div>
 
-        {/* Notification list column */}
+        {/* Notification list column or Custom builder */}
         <Show
-          when={selectedType() !== null}
+          when={customMode()}
           fallback={
-            <div class="flex-1 flex items-center justify-center text-center p-8">
-              <div>
-                <h2 class="text-2xl font-medium text-ink mb-3">Select a notification type</h2>
-                <p class="text-ink-muted max-w-md">
-                  Choose a type from the left sidebar to see all notifications of that type
-                </p>
+            <Show
+              when={selectedType() !== null}
+              fallback={
+                <div class="flex-1 flex items-center justify-center text-center p-8">
+                  <div>
+                    <h2 class="text-2xl font-medium text-ink mb-3">
+                      Select a notification type
+                    </h2>
+                    <p class="text-ink-muted max-w-md">
+                      Choose a type from the left sidebar to see all
+                      notifications of that type
+                    </p>
+                  </div>
+                </div>
+              }
+            >
+              <div class="w-96 border-r border-edge-muted bg-menu flex flex-col shrink-0">
+                <div class="p-6 border-b border-edge-muted bg-menu sticky top-0">
+                  <h2 class="text-lg font-semibold text-ink mb-1">
+                    {NOTIFICATION_LABEL_BY_TYPE[
+                      selectedType()! as keyof typeof NOTIFICATION_LABEL_BY_TYPE
+                    ] || selectedType()}
+                  </h2>
+                  <p class="text-xs text-ink-muted">
+                    {selectedNotifications().length} notification
+                    {selectedNotifications().length !== 1 ? 's' : ''}
+                  </p>
+                </div>
+
+                <div class="flex-1 overflow-auto">
+                  <For each={selectedNotifications()}>
+                    {(notification) => (
+                      <NotificationListItem
+                        notification={notification}
+                        isSelected={
+                          selectedNotification()?.id === notification.id
+                        }
+                        onSelect={() => setSelectedNotification(notification)}
+                      />
+                    )}
+                  </For>
+                </div>
               </div>
-            </div>
+            </Show>
           }
         >
+          {/* Custom notification builder panel */}
           <div class="w-96 border-r border-edge-muted bg-menu flex flex-col shrink-0">
             <div class="p-6 border-b border-edge-muted bg-menu sticky top-0">
               <h2 class="text-lg font-semibold text-ink mb-1">
-                {NOTIFICATION_LABEL_BY_TYPE[selectedType()! as keyof typeof NOTIFICATION_LABEL_BY_TYPE] || selectedType()}
+                Custom Message Builder
               </h2>
-              <p class="text-xs text-ink-muted">
-                {selectedNotifications().length} notification{selectedNotifications().length !== 1 ? 's' : ''}
-              </p>
+              <p class="text-xs text-ink-muted">Test markdown rendering</p>
             </div>
 
-            <div class="flex-1 overflow-auto">
-              <For each={selectedNotifications()}>
-                {(notification) => (
-                  <NotificationListItem
-                    notification={notification}
-                    isSelected={selectedNotification()?.id === notification.id}
-                    onSelect={() => setSelectedNotification(notification)}
+            <div class="flex-1 overflow-auto p-6 space-y-6">
+              <div>
+                <label class="block text-sm font-medium text-ink mb-3">
+                  Message Content
+                </label>
+                <div class="border border-edge-muted rounded-lg p-3 bg-menu min-h-64 max-h-96 overflow-auto">
+                  <markdownArea.MarkdownArea
+                    placeholder="Type your markdown message here... (use @ for mentions)"
+                    users={() => []}
+                    history={() => []}
                   />
-                )}
-              </For>
+                </div>
+              </div>
+
+              <div class="pt-4 border-t border-edge-muted">
+                <button
+                  class="w-full px-4 py-3 bg-accent text-ink rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium"
+                  onClick={() => {
+                    const notif = customNotification();
+                    setSelectedNotification(notif);
+                    handleEmitBrowserNotification(notif);
+                  }}
+                >
+                  Test Browser Notification
+                </button>
+              </div>
+
+              <div>
+                <h3 class="text-sm font-medium text-ink mb-3">Live Preview</h3>
+                <div class="p-4 bg-menu-hover rounded-lg border border-edge-muted">
+                  <NotificationRenderer
+                    notification={customNotification()}
+                    mode="preview"
+                  />
+                </div>
+              </div>
             </div>
           </div>
+        </Show>
+
+        {/* Keep original notification list for non-custom mode */}
+        <Show when={selectedType() !== null && !customMode()}>
+          <></>
         </Show>
 
         {/* Detail view */}
@@ -325,9 +519,12 @@ function PlaygroundContent() {
             fallback={
               <div class="h-full flex items-center justify-center text-center p-8">
                 <div>
-                  <h2 class="text-2xl font-medium text-ink mb-3">Select a notification</h2>
+                  <h2 class="text-2xl font-medium text-ink mb-3">
+                    Select a notification
+                  </h2>
                   <p class="text-ink-muted max-w-md">
-                    Choose a notification from the list to see detailed rendering and format information
+                    Choose a notification from the list to see detailed
+                    rendering and format information
                   </p>
                 </div>
               </div>
@@ -340,7 +537,10 @@ function PlaygroundContent() {
                   <div class="flex items-start justify-between gap-4 mb-4">
                     <div class="flex-1">
                       <h2 class="text-3xl font-semibold text-ink mb-2">
-                        {NOTIFICATION_LABEL_BY_TYPE[notification().notificationEventType as keyof typeof NOTIFICATION_LABEL_BY_TYPE] || notification().notificationEventType}
+                        {NOTIFICATION_LABEL_BY_TYPE[
+                          notification()
+                            .notificationEventType as keyof typeof NOTIFICATION_LABEL_BY_TYPE
+                        ] || notification().notificationEventType}
                       </h2>
                       <p class="text-sm text-ink-muted">
                         {formatDate(notification().createdAt)}
@@ -348,7 +548,9 @@ function PlaygroundContent() {
                     </div>
                     <button
                       class="px-4 py-2 bg-accent text-ink rounded-lg hover:bg-accent-hover transition-colors text-sm font-medium shadow-sm"
-                      onClick={() => handleEmitBrowserNotification(notification())}
+                      onClick={() =>
+                        handleEmitBrowserNotification(notification())
+                      }
                     >
                       Test Browser Notification
                     </button>
@@ -357,14 +559,22 @@ function PlaygroundContent() {
 
                 {/* Preview Mode */}
                 <section class="mb-10">
-                  <h3 class="text-lg font-semibold text-ink mb-4">Preview Mode</h3>
+                  <h3 class="text-lg font-semibold text-ink mb-4">
+                    Preview Mode
+                  </h3>
                   <div class="p-4 bg-menu rounded-xl border border-edge-muted">
                     <div class="flex items-start gap-3">
-                      <div class={`size-2 mt-1 shrink-0 rounded-full ${
-                        !notification().viewedAt ? 'bg-accent' : 'bg-ink-extra-muted'
-                      }`} />
+                      <div
+                        class={`size-2 mt-1 shrink-0 rounded-full ${!notification().viewedAt
+                            ? 'bg-accent'
+                            : 'bg-ink-extra-muted'
+                          }`}
+                      />
                       <div class="flex-1 min-w-0">
-                        <NotificationRenderer notification={notification()} mode="preview" />
+                        <NotificationRenderer
+                          notification={notification()}
+                          mode="preview"
+                        />
                       </div>
                     </div>
                   </div>
@@ -373,28 +583,42 @@ function PlaygroundContent() {
                 {/* Full Mode */}
                 <section class="mb-10">
                   <h3 class="text-lg font-semibold text-ink mb-4">Full Mode</h3>
-                  <div class={`p-6 rounded-xl border border-edge-muted ${
-                    !notification().viewedAt ? 'bg-menu-hover' : 'bg-menu'
-                  }`}>
+                  <div
+                    class={`p-6 rounded-xl border border-edge-muted ${!notification().viewedAt ? 'bg-menu-hover' : 'bg-menu'
+                      }`}
+                  >
                     <div class="flex justify-start items-center gap-3 mb-4 font-mono text-ink-muted text-xs uppercase">
-                      <div class={`size-2 rounded-full ${
-                        !notification().viewedAt ? 'bg-accent' : 'bg-ink-extra-muted'
-                      }`} />
+                      <div
+                        class={`size-2 rounded-full ${!notification().viewedAt
+                            ? 'bg-accent'
+                            : 'bg-ink-extra-muted'
+                          }`}
+                      />
                       <div class="font-medium">
-                        {NOTIFICATION_LABEL_BY_TYPE[notification().notificationEventType as keyof typeof NOTIFICATION_LABEL_BY_TYPE]}
+                        {
+                          NOTIFICATION_LABEL_BY_TYPE[
+                          notification()
+                            .notificationEventType as keyof typeof NOTIFICATION_LABEL_BY_TYPE
+                          ]
+                        }
                       </div>
                       <div class="grow" />
                       <div>{formatDate(notification().createdAt)}</div>
                     </div>
                     <div class="ml-5">
-                      <NotificationRenderer notification={notification()} mode="full" />
+                      <NotificationRenderer
+                        notification={notification()}
+                        mode="full"
+                      />
                     </div>
                   </div>
                 </section>
 
                 {/* Browser Notification Format */}
                 <section class="mb-10">
-                  <h3 class="text-lg font-semibold text-ink mb-4">Browser Notification Format</h3>
+                  <h3 class="text-lg font-semibold text-ink mb-4">
+                    Browser Notification Format
+                  </h3>
                   <BrowserNotificationFormat notification={notification()} />
                 </section>
 
