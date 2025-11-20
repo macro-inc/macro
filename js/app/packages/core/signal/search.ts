@@ -24,7 +24,6 @@ function createSearchResource<T>(
       return null;
     }
     try {
-      // TODO: debouncing
       const result = await searchFn(term, signal());
       if (isErr(result)) {
         console.error('Failed to get search query');
