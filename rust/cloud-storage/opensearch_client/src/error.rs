@@ -11,11 +11,19 @@ pub enum OpensearchClientError {
         details: String,
         method: Option<String>,
     },
+
+    #[error("error deserializing search response. error: {details}, raw_body: {raw_body}")]
+    SearchDeserializationFailed { details: String, raw_body: String },
+
+    #[error("unable to grab bytes from http response: {details}")]
+    HttpBytesError { details: String },
+
     #[error("unable to serialize into json. method: {method:?} details: {details}")]
     SerializationFailed {
         details: String,
         method: Option<String>,
     },
+
     #[error("a network error occurred. status_code: {status_code} message: {message}")]
     NetworkError { status_code: u16, message: String },
 

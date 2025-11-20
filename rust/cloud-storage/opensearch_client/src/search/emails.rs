@@ -256,12 +256,19 @@ pub(crate) async fn search_emails(
         .map_client_error()
         .await?;
 
-    let result = response
-        .json::<DefaultSearchResponse<EmailIndex>>()
+    let bytes = response
+        .bytes()
         .await
-        .map_err(|e| OpensearchClientError::DeserializationFailed {
+        .map_err(|e| OpensearchClientError::HttpBytesError {
             details: e.to_string(),
-            method: Some("search_emails".to_string()),
+        })?;
+
+    let result: DefaultSearchResponse<EmailIndex> =
+        serde_json::from_slice(&bytes).map_err(|e| {
+            OpensearchClientError::SearchDeserializationFailed {
+                details: e.to_string(),
+                raw_body: String::from_utf8_lossy(&bytes).to_string(),
+            }
         })?;
 
     Ok(result
