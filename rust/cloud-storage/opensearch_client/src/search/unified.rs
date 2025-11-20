@@ -587,12 +587,17 @@ pub(crate) async fn search_unified(
         .map_client_error()
         .await?;
 
-    let result = response
-        .json::<DefaultSearchResponse<UnifiedSearchIndex>>()
+    let bytes = response
+        .bytes()
         .await
-        .map_err(|e| OpensearchClientError::DeserializationFailed {
+        .map_err(|e| OpensearchClientError::HttpBytesError {
             details: e.to_string(),
-            method: Some("search_unified".to_string()),
+        })?;
+
+    let result: DefaultSearchResponse<UnifiedSearchIndex> = serde_json::from_slice(&bytes)
+        .map_err(|e| OpensearchClientError::SearchDeserializationFailed {
+            details: e.to_string(),
+            raw_body: String::from_utf8_lossy(&bytes).to_string(),
         })?;
 
     Ok(result.hits.hits.into_iter().map(|h| h.into()).collect())
