@@ -19,7 +19,7 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
     for (const prop of props.properties) {
       if (prop.isMetadata) {
         // Hide "Project" property if value is null
-        if (!(prop.displayName === 'Project' && prop.value == null)) {
+        if (prop.value != null) {
           metadata.push(prop);
         }
       } else {
