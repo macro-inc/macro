@@ -413,7 +413,7 @@ export function Soup() {
                   <TabContextMenu value={value} label={label} />
                 )}
                 newButton={
-                  <div class="flex items-center px-2 border-t border-t-edge-muted border-b border-b-edge-muted h-full">
+                  <div class="flex items-center px-2 h-full">
                     <Button
                       size="Base"
                       classList={{
