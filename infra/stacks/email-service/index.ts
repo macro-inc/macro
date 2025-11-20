@@ -208,7 +208,7 @@ const queueArns = [
   insightContextQueueArn,
   backfillQueueArn,
   sfsUploaderQueueArn,
-  contactsQueueArn
+  contactsQueueArn,
 ];
 
 const emailService = new EmailService('email-service', {
