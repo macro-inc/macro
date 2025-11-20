@@ -386,7 +386,7 @@ impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
 }
 
 #[tracing::instrument(skip(args), err)]
-fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchRequest> {
+fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchRequest<'static>> {
     if args.search_indices.is_empty() {
         return Err(OpensearchClientError::EmptySearchIndices);
     }
@@ -460,7 +460,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     if args.search_on == SearchOn::NameContent {
         search_request_builder.track_total_hits(true);
         search_request_builder.add_agg(
-            "total_uniques".to_string(),
+            "total_uniques",
             AggregationType::Cardinality(CardinalityAggregation::new("entity_id")),
         );
     }
@@ -547,10 +547,10 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
 
                 function_score_query.function(ScoreFunction {
                     function: ScoreFunctionType::Gauss(DecayFunction {
-                        field: "updated_at_seconds".to_string(),
+                        field: "updated_at_seconds".into(),
                         origin: Some("now".into()),
-                        scale: "21d".to_string(),
-                        offset: Some("3d".to_string()),
+                        scale: "21d".into(),
+                        offset: Some("3d".into()),
                         decay: Some(0.5),
                     }),
                     filter: None,
