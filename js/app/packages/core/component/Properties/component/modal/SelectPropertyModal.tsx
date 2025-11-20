@@ -19,14 +19,12 @@ import {
   useSearchInputFocus,
 } from '../../utils';
 import { ERROR_MESSAGES } from '../../utils/errorHandling';
-import { CreatePropertyModal } from './CreatePropertyModal';
-
 export function SelectPropertyModal(props: PropertySelectorProps) {
   const blockId = useBlockId();
-  const { entityType, onPropertyAdded } = usePropertiesContext();
+  const { entityType, onPropertyAdded, openCreateProperty } =
+    usePropertiesContext();
   const [isAdding, setIsAdding] = createSignal(false);
   const [searchQuery, setSearchQuery] = createSignal('');
-  const [isCreating, setIsCreating] = createSignal(false);
 
   let searchInputRef!: HTMLInputElement;
   let modalRef!: HTMLDivElement;
@@ -114,15 +112,13 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
 
   useSearchInputFocus(
     () => searchInputRef,
-    () =>
-      props.isOpen && !isCreating() && state().availableProperties.length > 0
+    () => props.isOpen && state().availableProperties.length > 0
   );
 
   createEffect(() => {
     if (props.isOpen) {
       fetchAvailableProperties();
       setSearchQuery('');
-      setIsCreating(false);
     }
   });
 
@@ -143,217 +139,202 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
   });
 
   return (
-    <Show
-      when={!isCreating()}
-      fallback={
-        <CreatePropertyModal
-          isOpen={isCreating()}
-          onClose={() => setIsCreating(false)}
-          onPropertyCreated={() => {
-            fetchAvailableProperties();
-            onPropertyAdded();
-          }}
-        />
-      }
-    >
-      <Portal>
+    <Portal>
+      <div
+        class="fixed inset-0 bg-overlay z-modal-overlay"
+        onClick={() => props.onClose()}
+        onKeyDown={(e) => e.key === 'Escape' && props.onClose()}
+        role="dialog"
+        aria-modal="true"
+      >
         <div
-          class="fixed inset-0 bg-overlay z-modal-overlay"
-          onClick={() => props.onClose()}
-          onKeyDown={(e) => e.key === 'Escape' && props.onClose()}
-          role="dialog"
-          aria-modal="true"
+          ref={modalRef}
+          class={`absolute bg-dialog border-3 border-edge shadow-xl w-full overflow-hidden font-mono z-modal-content max-w-md max-h-[80vh] ${MODAL_VIEWPORT_CLASSES}`}
+          style={{
+            ...modalPosition(),
+            'max-width': '28rem',
+            'max-height': '80vh',
+          }}
+          onClick={(e) => e.stopPropagation()}
+          onKeyDown={(e) => e.stopPropagation()}
+          role="document"
         >
-          <div
-            ref={modalRef}
-            class={`absolute bg-dialog border-3 border-edge shadow-xl w-full overflow-hidden font-mono z-modal-content max-w-md max-h-[80vh] ${MODAL_VIEWPORT_CLASSES}`}
-            style={{
-              ...modalPosition(),
-              'max-width': '28rem',
-              'max-height': '80vh',
-            }}
-            onClick={(e) => e.stopPropagation()}
-            onKeyDown={(e) => e.stopPropagation()}
-            role="document"
-          >
-            <div class="flex items-center justify-between p-4">
-              <h3 class="text-base font-semibold text-ink">Add Properties</h3>
-              <IconButton
-                icon={XIcon}
-                theme="clear"
-                size="sm"
-                onClick={() => props.onClose()}
-              />
-            </div>
+          <div class="flex items-center justify-between p-4">
+            <h3 class="text-base font-semibold text-ink">Add Properties</h3>
+            <IconButton
+              icon={XIcon}
+              theme="clear"
+              size="sm"
+              onClick={() => props.onClose()}
+            />
+          </div>
 
-            <Show when={state().availableProperties.length > 0}>
-              <div class="px-4 pb-2">
-                <div class="relative">
-                  <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
-                    <SearchIcon class="h-4 w-4 text-ink-muted" />
-                  </div>
-                  <input
-                    ref={searchInputRef}
-                    type="text"
-                    value={searchQuery()}
-                    onInput={(e) => setSearchQuery(e.currentTarget.value)}
-                    placeholder="Search properties..."
-                    class={`${PROPERTY_STYLES.input.search} relative z-0`}
-                  />
+          <Show when={state().availableProperties.length > 0}>
+            <div class="px-4 pb-2">
+              <div class="relative">
+                <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none z-10">
+                  <SearchIcon class="h-4 w-4 text-ink-muted" />
                 </div>
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  value={searchQuery()}
+                  onInput={(e) => setSearchQuery(e.currentTarget.value)}
+                  placeholder="Search properties..."
+                  class={`${PROPERTY_STYLES.input.search} relative z-0`}
+                />
               </div>
-            </Show>
+            </div>
+          </Show>
 
-            <div class="px-4 pb-2 overflow-y-auto max-h-[60vh]">
+          <div class="px-4 pb-2 overflow-y-auto max-h-[60vh]">
+            <Show
+              when={!state().isLoading}
+              fallback={
+                <div class="flex items-center justify-center py-8">
+                  <div class="w-5 h-5 animate-spin">
+                    <LoadingSpinner />
+                  </div>
+                  <span class="ml-2 text-ink-muted">Loading properties...</span>
+                </div>
+              }
+            >
               <Show
-                when={!state().isLoading}
+                when={!state().error}
                 fallback={
-                  <div class="flex items-center justify-center py-8">
-                    <div class="w-5 h-5 animate-spin">
-                      <LoadingSpinner />
+                  <div class="text-center py-6">
+                    <div class="text-failure-ink mb-3 text-sm">
+                      {state().error}
                     </div>
-                    <span class="ml-2 text-ink-muted">
-                      Loading properties...
-                    </span>
+                    <button
+                      type="button"
+                      onClick={fetchAvailableProperties}
+                      class="px-3 py-1.5 bg-accent text-accent-ink text-sm hover:bg-accent/90"
+                    >
+                      Retry
+                    </button>
                   </div>
                 }
               >
                 <Show
-                  when={!state().error}
+                  when={state().availableProperties.length > 0}
                   fallback={
                     <div class="text-center py-6">
-                      <div class="text-failure-ink mb-3 text-sm">
-                        {state().error}
+                      <div class="text-ink-muted text-sm">
+                        No additional properties available
                       </div>
-                      <button
-                        type="button"
-                        onClick={fetchAvailableProperties}
-                        class="px-3 py-1.5 bg-accent text-accent-ink text-sm hover:bg-accent/90"
-                      >
-                        Retry
-                      </button>
                     </div>
                   }
                 >
-                  <Show
-                    when={state().availableProperties.length > 0}
-                    fallback={
-                      <div class="text-center py-6">
-                        <div class="text-ink-muted text-sm">
-                          No additional properties available
+                  <div class="space-y-2 max-h-80 overflow-y-auto">
+                    <Show
+                      when={filteredProperties().length > 0}
+                      fallback={
+                        <div class="text-center py-4 text-ink-muted text-sm">
+                          No properties match your search
                         </div>
-                      </div>
-                    }
-                  >
-                    <div class="space-y-2 max-h-80 overflow-y-auto">
-                      <Show
-                        when={filteredProperties().length > 0}
-                        fallback={
-                          <div class="text-center py-4 text-ink-muted text-sm">
-                            No properties match your search
-                          </div>
-                        }
-                      >
-                        <For each={filteredProperties()}>
-                          {(property) => {
-                            const isSelected = () =>
-                              state().selectedPropertyIds.has(property.id);
+                      }
+                    >
+                      <For each={filteredProperties()}>
+                        {(property) => {
+                          const isSelected = () =>
+                            state().selectedPropertyIds.has(property.id);
 
-                            return (
-                              <button
-                                type="button"
-                                class={`w-full px-2.5 py-1.5 text-left border ${isSelected() ? 'bg-active border-accent text-accent-ink' : 'hover:bg-hover border-edge text-ink'}`}
-                                onClick={() =>
-                                  togglePropertySelection(property.id)
-                                }
-                              >
-                                <div class="flex items-center justify-between">
-                                  <div class="flex-1">
-                                    <div class="flex items-center gap-2">
-                                      <h4 class="font-medium text-xs">
-                                        {property.display_name}
-                                      </h4>
-                                    </div>
-                                    <div class="text-xs text-ink-muted mt-0.5">
-                                      {getPropertyDefinitionTypeDisplay({
-                                        dataType: property.data_type,
-                                        specificEntityType:
-                                          property.specific_entity_type,
-                                        isMultiSelect: property.is_multi_select,
-                                      })}
-                                    </div>
+                          return (
+                            <button
+                              type="button"
+                              class={`w-full px-2.5 py-1.5 text-left border ${isSelected() ? 'bg-active border-accent text-accent-ink' : 'hover:bg-hover border-edge text-ink'}`}
+                              onClick={() =>
+                                togglePropertySelection(property.id)
+                              }
+                            >
+                              <div class="flex items-center justify-between">
+                                <div class="flex-1">
+                                  <div class="flex items-center gap-2">
+                                    <h4 class="font-medium text-xs">
+                                      {property.display_name}
+                                    </h4>
                                   </div>
-                                  <div
-                                    class={`${PROPERTY_STYLES.checkbox.base} border-edge bg-transparent`}
-                                  >
-                                    <Show when={isSelected()}>
-                                      <CheckIcon class="w-3 h-3 text-accent" />
-                                    </Show>
+                                  <div class="text-xs text-ink-muted mt-0.5">
+                                    {getPropertyDefinitionTypeDisplay({
+                                      dataType: property.data_type,
+                                      specificEntityType:
+                                        property.specific_entity_type,
+                                      isMultiSelect: property.is_multi_select,
+                                    })}
                                   </div>
                                 </div>
-                              </button>
-                            );
-                          }}
-                        </For>
-                      </Show>
-                    </div>
-                  </Show>
+                                <div
+                                  class={`${PROPERTY_STYLES.checkbox.base} border-edge bg-transparent`}
+                                >
+                                  <Show when={isSelected()}>
+                                    <CheckIcon class="w-3 h-3 text-accent" />
+                                  </Show>
+                                </div>
+                              </div>
+                            </button>
+                          );
+                        }}
+                      </For>
+                    </Show>
+                  </div>
                 </Show>
               </Show>
-            </div>
+            </Show>
+          </div>
 
-            <div class="flex items-center justify-between p-4 pt-2">
+          <div class="flex items-center justify-between p-4 pt-2">
+            <button
+              type="button"
+              class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.secondary}`}
+              onClick={() => props.onClose()}
+              disabled={isAdding()}
+            >
+              Cancel
+            </button>
+            <Show when={state().selectedPropertyIds.size > 0}>
               <button
                 type="button"
-                class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.secondary}`}
-                onClick={() => props.onClose()}
-                disabled={isAdding()}
+                class={`${PROPERTY_STYLES.button.base} ${state().selectedPropertyIds.size > 0 && !isAdding() ? PROPERTY_STYLES.button.accent : 'bg-ink-muted text-ink cursor-not-allowed'}`}
+                onClick={handleAddProperties}
+                disabled={state().selectedPropertyIds.size === 0 || isAdding()}
               >
-                Cancel
-              </button>
-              <Show when={state().selectedPropertyIds.size > 0}>
-                <button
-                  type="button"
-                  class={`${PROPERTY_STYLES.button.base} ${state().selectedPropertyIds.size > 0 && !isAdding() ? PROPERTY_STYLES.button.primary : 'bg-ink-muted text-ink cursor-not-allowed'}`}
-                  onClick={handleAddProperties}
-                  disabled={
-                    state().selectedPropertyIds.size === 0 || isAdding()
+                <Show
+                  when={!isAdding()}
+                  fallback={
+                    <div class="flex items-center gap-1.5">
+                      <div class="w-3 h-3 animate-spin">
+                        <LoadingSpinner />
+                      </div>
+                      Adding...
+                    </div>
                   }
                 >
-                  <Show
-                    when={!isAdding()}
-                    fallback={
-                      <div class="flex items-center gap-1.5">
-                        <div class="w-3 h-3 animate-spin">
-                          <LoadingSpinner />
-                        </div>
-                        Adding...
-                      </div>
-                    }
-                  >
-                    Add{' '}
-                    {state().selectedPropertyIds.size > 0
-                      ? `(${state().selectedPropertyIds.size})`
-                      : ''}
-                  </Show>
+                  Add{' '}
+                  {state().selectedPropertyIds.size > 0
+                    ? `(${state().selectedPropertyIds.size})`
+                    : ''}
+                </Show>
+              </button>
+            </Show>
+            <Show when={state().selectedPropertyIds.size === 0}>
+              <div class="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => {
+                    props.onClose();
+                    openCreateProperty();
+                  }}
+                  class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.accent}`}
+                  disabled={state().isLoading}
+                >
+                  Create New Property
                 </button>
-              </Show>
-              <Show when={state().selectedPropertyIds.size === 0}>
-                <div class="flex gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsCreating(true)}
-                    class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.accent}`}
-                    disabled={state().isLoading}
-                  >
-                    Create New Property
-                  </button>
-                </div>
-              </Show>
-            </div>
+              </div>
+            </Show>
           </div>
         </div>
-      </Portal>
-    </Show>
+      </div>
+    </Portal>
   );
 }
