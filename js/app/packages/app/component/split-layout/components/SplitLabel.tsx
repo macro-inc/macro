@@ -155,7 +155,7 @@ export function BlockItemSplitLabel(props: {
 
   return (
     <div class="z-3 relative flex items-center gap-2 w-screen max-w-full h-full shrink">
-      <EntityIcon class="shrink-0" targetType={blockName} size="xs" />
+      <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
       <Show when={props.badges}>{props.badges}</Show>
       <SplitLabel
         label={fileName()}
