@@ -105,10 +105,7 @@ impl EmailQueryBuilder {
 
         // If link_ids are provided, add them to the query
         if !self.link_ids.is_empty() {
-            bool_query.must(QueryType::terms(
-                "link_id".to_string(),
-                self.link_ids.clone(),
-            ));
+            bool_query.must(QueryType::terms("link_id", self.link_ids.clone()));
         }
 
         if !self.sender.is_empty() {
