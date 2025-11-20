@@ -1,4 +1,3 @@
-import { Share } from '@capacitor/share';
 import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { useIsAuthenticated } from '@core/auth';
@@ -13,7 +12,6 @@ import { ENABLE_MARKDOWN_COMMENTS } from '@core/constant/featureFlags';
 import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockEditPermissionEnabledSignal } from '@core/signal/load';
 import { useIsDocumentOwner } from '@core/signal/permissions';
@@ -29,7 +27,6 @@ import EyeSlash from '@icon/bold/eye-slash-bold.svg';
 import GlobeIcon from '@icon/bold/globe-simple-bold.svg';
 import LinkIconBold from '@icon/bold/link-bold.svg';
 import Users from '@icon/bold/users-bold.svg';
-import ExportIcon from '@icon/regular/export.svg';
 import User from '@icon/regular/user.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
@@ -683,28 +680,13 @@ export function ShareButton(props: ShareButtonProps) {
   });
 
   const ShareLinkAction = createMemo(() => {
-    if (isNativeMobilePlatform()) {
-      return {
-        action: (e: MouseEvent | KeyboardEvent) => {
-          e.stopPropagation();
-          Share.share({
-            title: props.name,
-            text: props.name,
-            url: defaultUrl(),
-            dialogTitle: 'Share link',
-          });
-        },
-        icon: ExportIcon,
-      };
-    } else {
-      return {
-        action: (e: MouseEvent | KeyboardEvent) => {
-          e.stopPropagation();
-          copyLink();
-        },
-        icon: LinkIconBold,
-      };
-    }
+    return {
+      action: (e: MouseEvent | KeyboardEvent) => {
+        e.stopPropagation();
+        copyLink();
+      },
+      icon: LinkIconBold,
+    };
   });
 
   const shareAccessLevelText = createMemo(() => {

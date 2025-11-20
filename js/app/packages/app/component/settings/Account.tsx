@@ -17,7 +17,6 @@ import {
 } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { fileSelector } from '@core/directive/fileSelector';
-import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import {
   type ProfilePictureItem,
   useProfilePictureUrl,
@@ -35,7 +34,6 @@ import {
   useEmailLinksStatus,
 } from '../../signal/emailAuth';
 import { BetaTooltip } from '../BetaTooltip';
-import { deleteAccount, unregisterFromPushNotifications } from './Mobile';
 
 // NOTE: solid directives
 false && fileSelector;
@@ -104,11 +102,6 @@ export function Account() {
 
   const logoutHandler = () => {
     let redirectUrl = window.location.origin;
-    if (isNativeMobilePlatform()) {
-      unregisterFromPushNotifications();
-      redirectUrl = '/app/login';
-    }
-
     logout(redirectUrl);
   };
 
@@ -277,15 +270,6 @@ export function Account() {
             <Logout class="w-4 h-4" />
             <div class="text-sm select-none">Logout</div>
           </div>
-
-          <Show when={isNativeMobilePlatform()}>
-            <TextButton
-              theme="red"
-              text="Delete Account"
-              onClick={() => deleteAccount()}
-              class="mb-4.5"
-            />
-          </Show>
         </div>
       </div>
     </TabContent>
