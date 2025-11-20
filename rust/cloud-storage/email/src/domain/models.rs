@@ -1,8 +1,8 @@
-use frecency::domain::ports::FrecencyQueryErr;
+use chrono::{DateTime, Utc};
+use frecency::domain::models::FrecencyQueryErr;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Identify, Query, SimpleSortMethod, SortOn};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
-use sqlx::types::chrono::{DateTime, Utc};
 use std::str::FromStr;
 use strum::{Display, EnumString};
 use thiserror::Error;
