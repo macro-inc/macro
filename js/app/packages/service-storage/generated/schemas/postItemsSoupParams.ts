@@ -5,10 +5,9 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface ProjectPreviewData {
-  id: string;
-  name: string;
-  owner: string;
-  path: string[];
-  updatedAt: number;
-}
+export type PostItemsSoupParams = {
+/**
+ * Base64 encoded cursor value.
+ */
+cursor?: string;
+};
