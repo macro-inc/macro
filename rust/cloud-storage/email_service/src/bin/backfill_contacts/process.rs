@@ -1,10 +1,8 @@
-use crate::config;
 use model::contacts::ConnectionsMessage;
 use sqs_client::SQS;
 
 /// Process contacts for a single macro ID
 pub async fn process_macro_id(
-    config: &config::Config,
     db_pool: &sqlx::PgPool,
     sqs_client: &SQS,
     macro_id: &str,

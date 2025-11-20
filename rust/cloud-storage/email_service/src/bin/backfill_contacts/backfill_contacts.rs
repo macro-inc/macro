@@ -53,13 +53,12 @@ async fn main() -> anyhow::Result<()> {
             macro_ids.len()
         );
 
-        match process::process_macro_id(&config, &db_pool, &sqs_client, macro_id).await {
+        match process::process_macro_id(&db_pool, &sqs_client, macro_id).await {
             Ok(()) => {
                 println!("Completed processing for {}.", macro_id);
             }
             Err(e) => {
-                // println!("Failed to process macro ID {}: {:?}", macro_id, e);
-                panic!("Failed to process macro ID {}", macro_id);
+                panic!("Failed to process macro ID {}: {:?}", macro_id, e);
             }
         }
     }

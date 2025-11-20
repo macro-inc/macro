@@ -134,8 +134,7 @@ async fn handle_job_completed(
         send_attachment_backfill_messages(ctx, link.id, job_id, attachments).await?;
     }
 
-    // temporarily only populate contacts for macro emails for testing
-    if link.macro_id.ends_with("@macro.com") && !cfg!(feature = "disable_contacts_sync") {
+    if !cfg!(feature = "disable_contacts_sync") {
         let email_addresses =
             email_db_client::contacts::get::fetch_contacts_emails_by_link_id(&ctx.db, link.id)
                 .await

@@ -224,12 +224,7 @@ async fn handle_contacts_sync(
     provider_message_id: &str,
 ) -> result::Result<(), ProcessingError> {
     // if the user sent the message, upsert contacts for its recipients in contacts-service.
-    // testing with macro emails only for now.
-    if !link.macro_id.ends_with("@macro.com")
-        || cfg!(feature = "disable_contacts_sync")
-        || !is_sent
-        || recipient_emails.is_empty()
-    {
+    if !cfg!(feature = "disable_contacts_sync") || !is_sent || recipient_emails.is_empty() {
         return Ok(());
     }
 
