@@ -294,17 +294,6 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   onCleanup(() => props.setManager(undefined));
 
-  registerHotkey({
-    hotkeyToken: TOKENS.global.createNewSplit,
-    hotkey: '\\',
-    scopeId: 'global',
-    description: 'Create new split',
-    keyDownHandler: () => {
-      splitManager.createNewSplit();
-      return true;
-    },
-  });
-
   createEffect(() => {
     setTabTitle(splitManager.tabTitle());
   });
@@ -344,6 +333,7 @@ type SplitPanelProps = {
 
 function SplitPanel(props: SplitPanelProps) {
   const [panelRef, setPanelRef] = createSignal<HTMLDivElement | null>(null);
+  const splitManager = useSplitLayout;
   const [attachHotKeys, splitHotkeyScope] = useHotkeyDOMScope(
     `split=${props.split.id}`
   );
@@ -358,8 +348,29 @@ function SplitPanel(props: SplitPanelProps) {
     return type;
   });
 
-  registerHotkey({
+  const windowScope = registerHotkey({
     scopeId: splitHotkeyScope,
+    hotkey: 'w',
+    description: 'Window',
+    keyDownHandler: () => {
+      return true;
+    },
+    activateCommandScope: true,
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.global.createNewSplit,
+    hotkey: '\\',
+    scopeId: windowScope.commandScopeId,
+    description: 'Create new split',
+    keyDownHandler: () => {
+      splitManager().insertSplit({ type: 'component', id: 'unified-list' });
+      return true;
+    },
+  });
+
+  registerHotkey({
+    scopeId: windowScope.commandScopeId,
     hotkey: 'w',
     description: `Close split`,
     keyDownHandler: () => {
@@ -370,7 +381,7 @@ function SplitPanel(props: SplitPanelProps) {
   });
 
   registerHotkey({
-    scopeId: splitHotkeyScope,
+    scopeId: windowScope.commandScopeId,
     hotkey: 'shift+escape',
     hotkeyToken: TOKENS.split.spotlight.toggle,
     description: `Spotlight ${splitName()}`,
@@ -394,30 +405,6 @@ function SplitPanel(props: SplitPanelProps) {
     runWithInputFocused: true,
   });
 
-  registerHotkey({
-    scopeId: splitHotkeyScope,
-    hotkey: '[',
-    hotkeyToken: TOKENS.split.back,
-    condition: () => props.handle.canGoBack(),
-    description: `Go back in split`,
-    keyDownHandler: () => {
-      props.handle.goBack();
-      return true;
-    },
-  });
-
-  registerHotkey({
-    scopeId: splitHotkeyScope,
-    hotkey: ']',
-    hotkeyToken: TOKENS.split.forward,
-    condition: () => props.handle.canGoForward(),
-    description: `Go back in split`,
-    keyDownHandler: () => {
-      props.handle.goForward();
-      return true;
-    },
-  });
-
   const goScope = registerHotkey({
     scopeId: splitHotkeyScope,
     hotkey: 'g',
@@ -427,11 +414,36 @@ function SplitPanel(props: SplitPanelProps) {
     },
     activateCommandScope: true,
     hotkeyToken: TOKENS.split.goCommand,
+    displayPriority: 10,
+  });
+
+  const goScopeId = goScope.commandScopeId;
+
+  registerHotkey({
+    scopeId: goScopeId,
+    hotkey: '[',
+    hotkeyToken: TOKENS.split.go.back,
+    condition: () => props.handle.canGoBack(),
+    description: `Go back`,
+    keyDownHandler: () => {
+      props.handle.goBack();
+      return true;
+    },
+  });
+
+  registerHotkey({
+    scopeId: goScopeId,
+    hotkey: ']',
+    hotkeyToken: TOKENS.split.go.forward,
+    condition: () => props.handle.canGoForward(),
+    description: `Go forward`,
+    keyDownHandler: () => {
+      props.handle.goForward();
+      return true;
+    },
   });
 
   const { replaceSplit } = useSplitLayout();
-
-  const goScopeId = goScope.commandScopeId;
 
   registerHotkey({
     scopeId: goScopeId,

@@ -270,7 +270,7 @@ export function Soup() {
       setPreview((prev) => !prev);
       return true;
     },
-    hide: true,
+    // displayPriority: 10,
   });
 
   const [isDragging, setIsDragging] = createSignal(false);
