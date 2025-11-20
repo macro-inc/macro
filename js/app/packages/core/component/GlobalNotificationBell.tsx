@@ -5,14 +5,14 @@ import {
 import { useSplitLayout } from '@app/component/split-layout/layout';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import Bell from '@icon/regular/bell.svg';
-import { useUnreadNotifications } from '@notifications/notificationHelpers';
-import { notificationWithMetadata } from '@notifications/notificationMetadata';
 import {
+  extractNotificationData,
   type NavigationActions,
+  type NotificationSource,
   navigateToNotification,
-} from '@notifications/notificationNavigation';
-import { extractNotificationData } from '@notifications/notificationPreview';
-import type { NotificationSource } from '@notifications/notificationSource';
+  notificationWithMetadata,
+  useUnreadNotifications,
+} from '@notifications';
 import { Show } from 'solid-js';
 
 export type GlobalNotificationBellProps = {

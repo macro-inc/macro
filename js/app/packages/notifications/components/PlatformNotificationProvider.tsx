@@ -9,13 +9,13 @@ import {
   type Setter,
   useContext,
 } from 'solid-js';
-import { createTabLeaderSignal } from './election';
+import { createTabLeaderSignal } from '../notification-election';
 
 type NotGranted = 'not-granted';
 
 /// the context provider value which provides an interface wherein downstream consumers can interact with
 // this platforms Notifcation implementation
-export interface AppNotificationInterface {
+export interface PlatformNotificationInterface {
   requestPermission: () => Promise<NotificationPermission>;
   getCurrentPermission: () => Promise<NotificationPermission>;
   showNotification: (
@@ -27,7 +27,7 @@ export interface AppNotificationInterface {
 
 export type CreateAppNotificationInterface = (
   setDisabled: () => Promise<void>
-) => AppNotificationInterface;
+) => PlatformNotificationInterface;
 
 /// the interface for a singular notification on this device
 export interface AppNotification {
@@ -45,7 +45,7 @@ const ELECTION_NAMESPACE = 'notification-provider';
 // which Iis why it is passed in
 function createDefaultBrowserInterface(
   unregisterNotifications: () => Promise<void>
-): AppNotificationInterface | NotificationUnsupported {
+): PlatformNotificationInterface | NotificationUnsupported {
   if (!('Notification' in window)) return 'not-supported';
 
   const isLeader = createTabLeaderSignal(ELECTION_NAMESPACE);
@@ -92,13 +92,13 @@ function createBrowserNotication(
 }
 
 const NotificationInterfaceContext = createContext<
-  AppNotificationInterface | NotificationUnsupported
+  PlatformNotificationInterface | NotificationUnsupported
 >('not-supported');
 
 /// this hook gives you access to the raw notification inteferface which is probably not what you want
 // you are probably looking for useNotificationState which handles UI disabled notifications
 export function usePlatformNotifications():
-  | AppNotificationInterface
+  | PlatformNotificationInterface
   | NotificationUnsupported {
   const platformNotif = useContext(NotificationInterfaceContext);
 
@@ -114,7 +114,7 @@ export function usePlatformNotifications():
 type UiDisabled = 'disabled-in-ui';
 export type UserSetting = 'allowed' | UiDisabled;
 
-interface NotificationState {
+interface PlatformNotificationState {
   permission: Resource<NotificationPermission | UiDisabled>;
   requestPermission: () => Promise<NotificationPermission>;
   unregisterNotification: () => Promise<void>;
@@ -125,11 +125,11 @@ interface NotificationState {
 }
 
 export const NotificationStateContext = createContext<
-  NotificationState | NotificationUnsupported | undefined
+  PlatformNotificationState | NotificationUnsupported | undefined
 >(undefined);
 
-export function useNotificationState():
-  | NotificationState
+export function usePlatformNotificationState():
+  | PlatformNotificationState
   | NotificationUnsupported {
   const res = useContext(NotificationStateContext);
   if (res === undefined) {
@@ -143,7 +143,7 @@ export function useNotificationState():
   return res;
 }
 
-function NotificationState(props: {
+function PlatformNotificationState(props: {
   children: JSX.Element;
   manuallyDisabled: Accessor<UserSetting>;
   setManuallyDisabled: Setter<UserSetting>;
@@ -226,12 +226,12 @@ export function PlatformNotificationProvider(props: {
 
   return (
     <NotificationInterfaceContext.Provider value={value}>
-      <NotificationState
+      <PlatformNotificationState
         manuallyDisabled={manuallyDisabled}
         setManuallyDisabled={setManuallyDisabled}
       >
         {props.children}
-      </NotificationState>
+      </PlatformNotificationState>
     </NotificationInterfaceContext.Provider>
   );
 }

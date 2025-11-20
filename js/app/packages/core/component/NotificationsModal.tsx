@@ -3,8 +3,10 @@ import { useDrawerControl } from '@app/component/split-layout/components/SplitDr
 import clickOutside from '@core/directive/clickOutside';
 import type { Entity } from '@core/types';
 import Bell from '@icon/regular/bell.svg';
-import { useNotificationsForEntity } from '@notifications/notificationHelpers';
-import type { NotificationSource } from '@notifications/notificationSource';
+import {
+  type NotificationSource,
+  useNotificationsForEntity,
+} from '@notifications';
 import { createMemo, Show, Suspense } from 'solid-js';
 import { IconButton } from './IconButton';
 import { Notifications } from './Notifications';

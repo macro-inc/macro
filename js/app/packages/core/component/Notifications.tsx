@@ -4,14 +4,14 @@ import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import type { Entity } from '@core/types';
 import { formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
-import { notificationWithMetadata } from '@notifications/notificationMetadata';
-import { navigateToNotification } from '@notifications/notificationNavigation';
 import {
   extractNotificationData,
   NOTIFICATION_LABEL_BY_TYPE,
-} from '@notifications/notificationPreview';
-import type { NotificationSource } from '@notifications/notificationSource';
-import type { UnifiedNotification } from '@notifications/types';
+  type NotificationSource,
+  navigateToNotification,
+  notificationWithMetadata,
+  type UnifiedNotification,
+} from '@notifications';
 import { createMemo, For, Show } from 'solid-js';
 
 export type NotificationsProps = {
