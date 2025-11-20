@@ -39,7 +39,10 @@ const MAX_SEARCH_TERM_LENGTH = 1000;
  * to last <macro_em> tag, removing all macro_em tags to create plain text.
  * Truncates to MAX_SEARCH_TERM_LENGTH characters.
  */
-function extractSearchTermFromHighlight(highlightedContent: string): string {
+function extractSearchTermFromHighlight(
+  highlightedContent: string,
+  searchQuery?: string
+): string {
   const firstMatch = highlightedContent.indexOf('<macro_em>');
   const lastMatch = highlightedContent.lastIndexOf('</macro_em>');
 
@@ -51,16 +54,40 @@ function extractSearchTermFromHighlight(highlightedContent: string): string {
     firstMatch,
     lastMatch + '</macro_em>'.length
   );
-  const plainText = substring.replace(/<\/?macro_em>/g, '');
 
-  return plainText.substring(0, MAX_SEARCH_TERM_LENGTH);
+  // Group adjacent macro_em tags into single tags
+  let grouped = substring.replace(/<\/macro_em>\s*<macro_em>/g, '');
+
+  // Extract all content from macro_em tags
+  const macroEmRegex = /<macro_em>(.*?)<\/macro_em>/gs;
+  const matches = Array.from(grouped.matchAll(macroEmRegex));
+
+  if (matches.length === 0) {
+    return '';
+  }
+
+  // If search query provided, check if any macro_em content matches it
+  if (searchQuery) {
+    const normalizedQuery = searchQuery.toLowerCase().trim();
+    for (const match of matches) {
+      const content = match[1].trim().toLowerCase();
+      if (content === normalizedQuery) {
+        return searchQuery.substring(0, MAX_SEARCH_TERM_LENGTH);
+      }
+    }
+  }
+
+  // Otherwise, use the first macro_em tag content
+  const firstContent = matches[0][1].trim();
+  return firstContent.substring(0, MAX_SEARCH_TERM_LENGTH);
 }
 
 const getLocationHighlights = (
   innerResults: DocumentSearchResult[],
-  fileType: FileTypeWithLocation
+  fileType: FileTypeWithLocation,
+  searchQuery?: string
 ) => {
-  const contentHighlights = innerResults.flatMap((r, resultIndex) => {
+  const contentHighlights = innerResults.flatMap((r) => {
     const contents = r.highlight.content ?? [];
 
     return contents.map((content, contentIndex) => {
@@ -72,7 +99,10 @@ const getLocationHighlights = (
         case 'pdf':
           try {
             const searchPage = parseInt(r.node_id);
-            const searchTerm = extractSearchTermFromHighlight(content);
+            const searchTerm = extractSearchTermFromHighlight(
+              content,
+              searchQuery
+            );
             location = {
               type: 'pdf' as const,
               searchPage,
@@ -123,14 +153,18 @@ const useMapSearchResponseItem = () => {
 
   const history = useHistory();
 
-  return (result: UnifiedSearchResponseItem): Entity | undefined => {
+  return (
+    result: UnifiedSearchResponseItem,
+    searchQuery?: string
+  ): Entity | undefined => {
     switch (result.type) {
       case 'document': {
         if (!result.metadata || result.metadata.deleted_at) return;
         const search = ['md', 'pdf'].includes(result.file_type)
           ? getLocationHighlights(
               result.document_search_results,
-              result.file_type as FileTypeWithLocation
+              result.file_type as FileTypeWithLocation,
+              searchQuery
             )
           : getHighlights(result.document_search_results);
         return {
@@ -314,12 +348,14 @@ export function createUnifiedSearchInfiniteQuery(
         page: lastPageParam.page + 1,
       };
     },
-    select: (data) =>
-      data.pages.flatMap((page) =>
+    select: (data) => {
+      const searchQuery = terms()[0];
+      return data.pages.flatMap((page) =>
         page.results
-          .map(mapSearchResponseItem)
+          .map((result) => mapSearchResponseItem(result, searchQuery))
           .filter((entity): entity is Entity => !!entity)
-      ),
+      );
+    },
     enabled: enabled(),
   }));
 
