@@ -56,36 +56,36 @@ impl PropertiesStorage for PropertiesPgStorage {
         Ok(result.definition)
     }
 
-    // Stub implementations - will be implemented in subsequent commits
-
     async fn get_property_definition(
         &self,
-        _id: uuid::Uuid,
+        id: uuid::Uuid,
     ) -> Result<Option<crate::domain::models::PropertyDefinition>, Self::Error> {
-        todo!("Will be implemented in subsequent commit")
+        definitions::get_property_definition(&self.pool, id).await
     }
 
     async fn get_property_definition_with_owner(
         &self,
-        _id: uuid::Uuid,
-        _user_id: &str,
-        _organization_id: Option<i32>,
+        id: uuid::Uuid,
+        user_id: &str,
+        organization_id: Option<i32>,
     ) -> Result<Option<crate::domain::models::PropertyDefinition>, Self::Error> {
-        todo!("Will be implemented in subsequent commit")
+        definitions::get_property_definition_with_owner(&self.pool, id, user_id, organization_id)
+            .await
     }
 
     async fn list_property_definitions(
         &self,
-        _organization_id: Option<i32>,
-        _user_id: Option<&str>,
-        _limit: Option<i32>,
-        _offset: Option<i32>,
+        organization_id: Option<i32>,
+        user_id: Option<&str>,
+        limit: Option<i32>,
+        offset: Option<i32>,
     ) -> Result<Vec<crate::domain::models::PropertyDefinition>, Self::Error> {
-        todo!("Will be implemented in subsequent commit")
+        definitions::list_property_definitions(&self.pool, organization_id, user_id, limit, offset)
+            .await
     }
 
-    async fn delete_property_definition(&self, _id: uuid::Uuid) -> Result<bool, Self::Error> {
-        todo!("Will be implemented in subsequent commit")
+    async fn delete_property_definition(&self, id: uuid::Uuid) -> Result<bool, Self::Error> {
+        definitions::delete_property_definition(&self.pool, id).await
     }
 
     async fn create_property_option(

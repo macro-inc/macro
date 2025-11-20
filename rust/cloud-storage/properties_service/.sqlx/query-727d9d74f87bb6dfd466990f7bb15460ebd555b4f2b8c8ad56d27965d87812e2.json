@@ -1,0 +1,103 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, organization_id, user_id, display_name, \n               data_type AS \"data_type!: models_properties::shared::DataType\",\n               is_multi_select, \n               specific_entity_type AS \"specific_entity_type?: models_properties::shared::EntityType\",\n               created_at, updated_at\n        FROM property_definitions\n        WHERE (\n            ($1::INTEGER IS NULL OR organization_id = $1)\n            AND ($2::TEXT IS NULL OR user_id = $2)\n            AND (\n                ($1::INTEGER IS NOT NULL AND organization_id = $1 AND ($2::TEXT IS NULL OR user_id = $2)) OR\n                ($2::TEXT IS NOT NULL AND user_id = $2 AND ($1::INTEGER IS NULL OR organization_id = $1)) OR\n                ($1::INTEGER IS NULL AND $2::TEXT IS NULL)\n            )\n        )\n        ORDER BY display_name\n        LIMIT $3 OFFSET $4\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "organization_id",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "display_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "data_type!: models_properties::shared::DataType",
+        "type_info": {
+          "Custom": {
+            "name": "property_data_type",
+            "kind": {
+              "Enum": [
+                "BOOLEAN",
+                "DATE",
+                "NUMBER",
+                "STRING",
+                "SELECT_NUMBER",
+                "SELECT_STRING",
+                "ENTITY",
+                "LINK"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "is_multi_select",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "specific_entity_type?: models_properties::shared::EntityType",
+        "type_info": {
+          "Custom": {
+            "name": "property_entity_type",
+            "kind": {
+              "Enum": [
+                "CHANNEL",
+                "CHAT",
+                "DOCUMENT",
+                "PROJECT",
+                "THREAD",
+                "USER"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 7,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 8,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int4",
+        "Text",
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "727d9d74f87bb6dfd466990f7bb15460ebd555b4f2b8c8ad56d27965d87812e2"
+}

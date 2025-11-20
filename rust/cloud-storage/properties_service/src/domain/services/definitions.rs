@@ -88,23 +88,122 @@ where
 }
 
 pub(super) async fn list_properties<S, P>(
-    _service: &PropertyServiceImpl<S, P>,
-    _request: crate::domain::models::ListPropertiesRequest,
+    service: &PropertyServiceImpl<S, P>,
+    request: crate::domain::models::ListPropertiesRequest,
 ) -> Result<crate::domain::models::ListPropertiesResponse>
 where
     S: PropertiesStorage,
     P: PermissionChecker,
+    anyhow::Error: From<S::Error>,
 {
-    unimplemented!("list_properties")
+    // Extract organization_id and user_id from owner
+    let (organization_id, user_id) = match &request.owner {
+        crate::domain::models::PropertyOwner::Organization { organization_id } => {
+            (Some(*organization_id), None)
+        }
+        crate::domain::models::PropertyOwner::User { user_id } => (None, Some(user_id.as_str())),
+        crate::domain::models::PropertyOwner::UserAndOrganization {
+            user_id,
+            organization_id,
+        } => (Some(*organization_id), Some(user_id.as_str())),
+    };
+
+    // List property definitions from storage
+    let definitions = service
+        .storage
+        .list_property_definitions(organization_id, user_id, None, None)
+        .await
+        .map_err(|e| PropertyError::Internal(e.into()))?;
+
+    if request.include_options {
+        // Fetch options for each property definition
+        let mut properties_with_options = Vec::new();
+        for definition in definitions {
+            let options = service
+                .storage
+                .get_property_options(definition.id)
+                .await
+                .map_err(|e| PropertyError::Internal(e.into()))?;
+
+            properties_with_options.push(crate::domain::models::PropertyDefinitionWithOptions {
+                definition,
+                property_options: options,
+            });
+        }
+
+        Ok(crate::domain::models::ListPropertiesResponse {
+            properties: properties_with_options,
+        })
+    } else {
+        // Return definitions without options
+        let properties_with_options = definitions
+            .into_iter()
+            .map(
+                |definition| crate::domain::models::PropertyDefinitionWithOptions {
+                    definition,
+                    property_options: Vec::new(),
+                },
+            )
+            .collect();
+
+        Ok(crate::domain::models::ListPropertiesResponse {
+            properties: properties_with_options,
+        })
+    }
 }
 
 pub(super) async fn delete_property<S, P>(
-    _service: &PropertyServiceImpl<S, P>,
-    _request: crate::domain::models::DeletePropertyRequest,
+    service: &PropertyServiceImpl<S, P>,
+    request: crate::domain::models::DeletePropertyRequest,
 ) -> Result<crate::domain::models::DeletePropertyResponse>
 where
     S: PropertiesStorage,
     P: PermissionChecker,
+    anyhow::Error: From<S::Error>,
 {
-    unimplemented!("delete_property")
+    // Extract organization_id and user_id from owner
+    let (organization_id, user_id) = match &request.owner {
+        crate::domain::models::PropertyOwner::Organization { organization_id } => {
+            (Some(*organization_id), None)
+        }
+        crate::domain::models::PropertyOwner::User { user_id } => (None, Some(user_id.as_str())),
+        crate::domain::models::PropertyOwner::UserAndOrganization {
+            user_id,
+            organization_id,
+        } => (Some(*organization_id), Some(user_id.as_str())),
+    };
+
+    // Verify the property exists and belongs to the owner
+    let definition = service
+        .storage
+        .get_property_definition_with_owner(
+            request.property_id,
+            user_id.unwrap_or(""),
+            organization_id,
+        )
+        .await
+        .map_err(|e| PropertyError::Internal(e.into()))?;
+
+    if definition.is_none() {
+        return Err(PropertyError::NotFound(format!(
+            "Property definition {} not found or access denied",
+            request.property_id
+        )));
+    }
+
+    // Delete the property definition (options are deleted via cascade)
+    let deleted = service
+        .storage
+        .delete_property_definition(request.property_id)
+        .await
+        .map_err(|e| PropertyError::Internal(e.into()))?;
+
+    if !deleted {
+        return Err(PropertyError::NotFound(format!(
+            "Property definition {} not found",
+            request.property_id
+        )));
+    }
+
+    Ok(crate::domain::models::DeletePropertyResponse {})
 }
