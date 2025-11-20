@@ -118,7 +118,10 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
     return allOptions;
   });
 
-  useSearchInputFocus(() => searchInputRef);
+  useSearchInputFocus(
+    () => searchInputRef,
+    () => !props.isLoading && !props.error
+  );
 
   const AddOptionButton = () => (
     <div

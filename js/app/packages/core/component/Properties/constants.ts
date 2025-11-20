@@ -6,10 +6,7 @@
 export const NUMBER_DECIMAL_PLACES = 4; // Matches backend precision
 
 export const FOCUS_CONFIG = {
-  DEFAULT_DELAY: 100, // Initial render delay
-  PROPERTY_NAME_DELAY: 200, // Modal animation delay
-  MAX_ATTEMPTS: 10, // Max focus retries
-  RETRY_DELAY: 50, // Retry interval
+  DELAY: 100, // Delay before focusing element after it's connected to DOM
 } as const;
 
 export const MODAL_DIMENSIONS = {
