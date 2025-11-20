@@ -45,7 +45,7 @@ export const NumberValue: Component<NumberValueProps> = (props) => {
     }
   };
 
-  const hasValue = () => props.property.value !== null;
+  const hasValue = () => props.property.value != null;
   const displayValue = hasValue()
     ? formatNumber(props.property.value as number)
     : '';

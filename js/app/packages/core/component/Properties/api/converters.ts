@@ -187,7 +187,7 @@ export function propertyValueToApi(
 ): SetPropertyValue | null {
   switch (apiValues.valueType) {
     case 'STRING':
-      if (apiValues.value === null) {
+      if (apiValues.value == null) {
         return null;
       }
       return {
@@ -196,7 +196,7 @@ export function propertyValueToApi(
       };
 
     case 'NUMBER':
-      if (apiValues.value === null) {
+      if (apiValues.value == null) {
         return null;
       }
       return {
@@ -205,7 +205,7 @@ export function propertyValueToApi(
       };
 
     case 'DATE':
-      if (apiValues.value === null) {
+      if (apiValues.value == null) {
         return null;
       }
       return {
@@ -214,7 +214,7 @@ export function propertyValueToApi(
       };
 
     case 'BOOLEAN':
-      if (apiValues.value === null) {
+      if (apiValues.value == null) {
         return null;
       }
       return {

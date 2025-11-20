@@ -24,7 +24,7 @@ export const DateValue: Component<DateValueProps> = (props) => {
   const isReadOnly = () => props.property.isMetadata || !props.canEdit;
 
   const displayValue =
-    props.property.value !== null
+    props.property.value != null
       ? formatDate(props.property.value as Date)
       : '';
 

@@ -97,7 +97,7 @@ export const Modals: Component = () => {
         {(state) => {
           const property = state().property;
           const dateValue =
-            property.value !== null ? new Date(property.value) : new Date();
+            property.value != null ? new Date(property.value) : new Date();
           const anchor = state().anchor;
 
           return anchor ? (

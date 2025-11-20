@@ -38,7 +38,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
   const [selectedEntityRefs, setSelectedEntityRefs] = createSignal<
     EntityReference[]
   >(
-    props.property.valueType === 'ENTITY' && props.property.value !== null
+    props.property.valueType === 'ENTITY' && props.property.value != null
       ? props.property.value
       : []
   );
