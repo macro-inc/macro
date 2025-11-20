@@ -84,7 +84,6 @@ members = [
   "organization_service",
   "organization_service_client",
   "permission",
-  "properties_db_client",
   "properties_service",
   "properties_service_client",
   "roles_and_permissions",
