@@ -12,7 +12,8 @@ export type EntityClickEvent = Parameters<
 >[0];
 export type EntityClickHandler<T extends EntityData> = (
   entity: T,
-  event: EntityClickEvent
+  event: EntityClickEvent,
+  options?: { ignorePreview?: boolean }
 ) => void;
 interface EntityProps<T extends EntityData> extends ParentProps {
   entity: T;

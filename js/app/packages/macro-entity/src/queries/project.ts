@@ -1,5 +1,9 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import type { WithRequired } from '@core/util/withRequired';
+import type {
+  GetBatchProjectPreviewResponse,
+  ProjectPreviewData,
+} from '@service-storage/generated/schemas';
 import { useQuery } from '@tanstack/solid-query';
 import type { ChatEntity, DocumentEntity, EntityData } from '../types/entity';
 import { createApiTokenQuery } from './auth';
@@ -17,7 +21,10 @@ export const isProjectContainedEntity = (
   return !!entity.projectId;
 };
 
-const fetchProjectData = async (projectId: string, apiToken?: string) => {
+const fetchProjectData = async (
+  projectId: string,
+  apiToken?: string
+): Promise<ProjectPreviewData> => {
   if (!apiToken) throw new Error('No API token provided');
 
   const dssHost = SERVER_HOSTS['document-storage-service'];
@@ -68,11 +75,11 @@ const fetchProjectData = async (projectId: string, apiToken?: string) => {
       );
     }
 
-    const json = await response.json();
+    const json = (await response.json()) as GetBatchProjectPreviewResponse;
 
     // Find the preview for our specific project ID
     const projectPreview = json.previews.find(
-      (preview: any) => preview.id === projectId
+      (preview) => preview.id === projectId
     );
 
     if (!projectPreview) {
