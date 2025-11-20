@@ -3,6 +3,7 @@ import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
+import { runCommand } from '@core/hotkey/utils';
 import {
   CONDITIONAL_VIEWS,
   DEFAULT_VIEWS,
@@ -18,11 +19,7 @@ import { useTutorialCompleted } from '@service-gql/client';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { useQuery } from '@tanstack/solid-query';
-import {
-  registerHotkey,
-  runCommand,
-  useHotkeyDOMScope,
-} from 'core/hotkey/hotkeys';
+import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   batch,
@@ -774,7 +771,7 @@ export function createNavigationEntityListShortcut({
     hotkey: ['shift+arrowdown', 'shift+j'],
     scopeId: splitHotkeyScope,
     description: 'Select down',
-    hotkeyToken: TOKENS.entity.step.end,
+    hotkeyToken: TOKENS.entity.select.end,
     keyDownHandler: () => {
       const navigationInput: NavigationInput = { axis: 'end', mode: 'step' };
       return handleNavigationSelection(navigationInput);
@@ -797,7 +794,7 @@ export function createNavigationEntityListShortcut({
   registerHotkey({
     hotkey: ['shift+arrowup', 'shift+k'],
     scopeId: splitHotkeyScope,
-    hotkeyToken: TOKENS.entity.step.start,
+    hotkeyToken: TOKENS.entity.select.start,
     description: 'Select up',
     keyDownHandler: () => {
       const navigationInput: NavigationInput = { axis: 'start', mode: 'step' };
@@ -880,7 +877,8 @@ export function createNavigationEntityListShortcut({
       // displayPriority: 0,
       hide: true,
     });
-  }1
+  }
+  1;
 
   registerHotkey({
     hotkey: 'tab',
