@@ -10,6 +10,7 @@ import { Message } from '@core/component/Message';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { ENABLE_GMAIL_BASED_CONTACTS } from '@core/constant/featureFlags';
+import { HotkeyTags } from '@core/hotkey/constants';
 import {
   type CommandWithInfo,
   getActiveCommandsFromScope,
@@ -453,7 +454,7 @@ export function filterItemByCategory(item: CommandItemCard) {
       currentKonsoleMode() === 'SELECTION_MODIFICATION' &&
       item.type === 'command'
     ) {
-      return item.data.tags?.includes('selection-modification');
+      return item.data.tags?.includes(HotkeyTags.SelectionModification);
     }
     return false;
   }

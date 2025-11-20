@@ -185,3 +185,11 @@ export const MODIFIER_LIST_MAC = [
 ] as const;
 
 export const MODIFIER_LIST_NON_MAC = ['ctrlKey', 'altKey', 'shiftKey'] as const;
+
+// Hotkey tags are for sorting and filtering hotkeys in the command menu (and
+// other similar systems).
+export const HotkeyTags = {
+  // SelectionModification tag is for commands that apply to the current
+  // selected items - like 'delete items' or what have you.
+  SelectionModification: 'selection-modification',
+} as const;

@@ -121,7 +121,6 @@ export function registerHotkey(
     icon,
     tags,
   } = args;
-  ``;
 
   if (!scopeId) {
     logger.error('Scope ID is required for hotkey registration.', {
