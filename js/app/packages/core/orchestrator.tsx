@@ -439,8 +439,7 @@ function defaultSourceResolver(
 ): Source {
   const def = BLOCK_REGISTRY[type];
   if (!def) {
-    console.error(`Block definition not found for type: ${type}. Available blocks: 
-${Object.keys(BLOCK_REGISTRY).join(', ')}`);
+    console.warn(`Block definition not found for type: ${type} with id: ${id}`);
   }
   if (def?.syncServiceEnabled) return { type: 'sync-service', id };
   return {
