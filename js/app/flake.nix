@@ -46,6 +46,7 @@
           curl
           wget
           pkg-config
+          xdg-utils
 
           bun
           biome
