@@ -13,17 +13,9 @@ export interface BackfillJob {
   fusionauth_user_id: string;
   id: string;
   link_id?: BackfillJobLinkId;
-  messages_failed_count: number;
-  messages_processed_count: number;
-  messages_retrieved_count: number;
-  messages_succeeded_count: number;
   status: BackfillJobStatus;
-  threads_failed_count: number;
-  threads_processed_count: number;
   threads_requested_limit?: BackfillJobThreadsRequestedLimit;
   threads_retrieved_count: number;
-  threads_skipped_count: number;
-  threads_succeeded_count: number;
   total_threads: number;
   updated_at: string;
 }

@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [dependencies]
 anyhow = { workspace = true }
+email = { path = "../email", features = ["axum"] }
 model = { path = "../model" }
 models_email = { path = "../models_email" }
 reqwest = { workspace = true }

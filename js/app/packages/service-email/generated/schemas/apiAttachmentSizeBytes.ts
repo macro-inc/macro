@@ -5,4 +5,4 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ThreadPreviewPaginationNextCursor = string | null;
+export type ApiAttachmentSizeBytes = number | null;

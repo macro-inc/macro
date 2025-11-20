@@ -4,28 +4,28 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { Attachment } from './attachment';
-import type { AttachmentMacro } from './attachmentMacro';
-import type { ContactInfo } from './contactInfo';
-import type { MessageBodyHtmlSanitized } from './messageBodyHtmlSanitized';
-import type { MessageBodyMacro } from './messageBodyMacro';
-import type { MessageBodyText } from './messageBodyText';
-import type { MessageDbId } from './messageDbId';
-import type { MessageFrom } from './messageFrom';
-import type { MessageGlobalId } from './messageGlobalId';
-import type { MessageHeadersJson } from './messageHeadersJson';
-import type { MessageInternalDateTs } from './messageInternalDateTs';
 import type { Label } from './label';
-import type { MessageProviderHistoryId } from './messageProviderHistoryId';
-import type { MessageProviderId } from './messageProviderId';
-import type { MessageProviderThreadId } from './messageProviderThreadId';
-import type { MessageReplyingToId } from './messageReplyingToId';
-import type { MessageScheduledSendTime } from './messageScheduledSendTime';
-import type { MessageSentAt } from './messageSentAt';
-import type { MessageSizeEstimate } from './messageSizeEstimate';
-import type { MessageSnippet } from './messageSnippet';
-import type { MessageSubject } from './messageSubject';
 import type { MessageThreadDbId } from './messageThreadDbId';
+import type { MessageSubject } from './messageSubject';
+import type { MessageSnippet } from './messageSnippet';
+import type { MessageSizeEstimate } from './messageSizeEstimate';
+import type { MessageSentAt } from './messageSentAt';
+import type { MessageScheduledSendTime } from './messageScheduledSendTime';
+import type { MessageReplyingToId } from './messageReplyingToId';
+import type { MessageProviderThreadId } from './messageProviderThreadId';
+import type { MessageProviderId } from './messageProviderId';
+import type { MessageProviderHistoryId } from './messageProviderHistoryId';
+import type { Attachment } from './attachment';
+import type { MessageInternalDateTs } from './messageInternalDateTs';
+import type { MessageHeadersJson } from './messageHeadersJson';
+import type { MessageGlobalId } from './messageGlobalId';
+import type { MessageFrom } from './messageFrom';
+import type { MessageDbId } from './messageDbId';
+import type { MessageBodyText } from './messageBodyText';
+import type { MessageBodyMacro } from './messageBodyMacro';
+import type { MessageBodyHtmlSanitized } from './messageBodyHtmlSanitized';
+import type { ContactInfo } from './contactInfo';
+import type { AttachmentMacro } from './attachmentMacro';
 
 export interface Message {
   attachments: Attachment[];

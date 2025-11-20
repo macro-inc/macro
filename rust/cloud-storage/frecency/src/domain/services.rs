@@ -4,7 +4,7 @@ use crate::{
     domain::{
         models::{
             AggregateFrecency, AggregateId, EventAggregationStats, EventRecordWithId,
-            FrecencyPageRequest, FrecencyPageResponse,
+            FrecencyByIdsRequest, FrecencyPageRequest, FrecencyPageResponse,
         },
         ports::{
             AggregateFrecencyStorage, EventIngestorService, EventRecordStorage, FrecencyQueryErr,
@@ -256,6 +256,19 @@ where
         let res = self
             .storage
             .get_top_entities(query)
+            .await
+            .map_err(anyhow::Error::from)?;
+        Ok(FrecencyPageResponse::new(res))
+    }
+
+    async fn get_frecencies_by_ids<'a>(
+        &self,
+        request: FrecencyByIdsRequest<'a>,
+    ) -> Result<FrecencyPageResponse, FrecencyQueryErr> {
+        let FrecencyByIdsRequest { user_id, ids } = request;
+        let res = self
+            .storage
+            .get_aggregate_for_user_entities(user_id, ids)
             .await
             .map_err(anyhow::Error::from)?;
         Ok(FrecencyPageResponse::new(res))

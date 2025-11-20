@@ -1,45 +1,38 @@
-pub(crate) mod cursor;
-
-use axum::Router;
-use axum::routing::get;
-use models_email::service::thread::GetPreviewsCursorParams;
-use models_pagination::SimpleSortMethod;
+use axum::extract::Request;
+use axum::middleware::Next;
+use axum::response::Response;
+use axum::{Extension, Router};
+use email::domain::ports::EmailService;
+use email::inbound::EmailPreviewState;
+use tower::ServiceBuilder;
 
 use crate::api::ApiContext;
 
-pub fn router(state: ApiContext) -> Router<ApiContext> {
-    Router::new().route(
-        "/cursor/:view",
-        get(cursor::previews_handler).layer(axum::middleware::from_fn_with_state(
-            state,
-            crate::api::middleware::link::attach_link_context,
-        )),
+pub fn router<S, T>(state: EmailPreviewState<T>, api_context: ApiContext) -> Router<S>
+where
+    S: Send + Sync + Clone + 'static,
+    T: EmailService,
+{
+    email::inbound::router(state).layer(
+        ServiceBuilder::new()
+            .layer(axum::middleware::from_fn(link_to_link_uuid_extension))
+            .layer(axum::middleware::from_fn_with_state(
+                api_context,
+                crate::api::middleware::link::attach_link_context,
+            )),
     )
 }
 
-/// The default number of previews to return
-const DEFAULT_PREVIEW_LIMIT: u32 = 20;
-/// The max number of previews that can be returned in a response
-const PREVIEW_MAX: u32 = 500;
-
-#[derive(Debug, Clone)]
-struct GetPreviewsPaginationCursorParams {
-    limit: u32,
-    sort_method: SimpleSortMethod,
-}
-
-impl GetPreviewsPaginationCursorParams {
-    /// Extracts pagination parameters from query params, using defaults when not specified
-    fn new_from_params(params: GetPreviewsCursorParams) -> Self {
-        GetPreviewsPaginationCursorParams {
-            limit: params
-                .limit
-                .filter(|&limit| 0 < limit && limit <= PREVIEW_MAX)
-                .unwrap_or(DEFAULT_PREVIEW_LIMIT),
-            sort_method: params
-                .sort_method
-                .map(|s| s.into_simple_sort())
-                .unwrap_or(SimpleSortMethod::ViewedUpdated),
-        }
-    }
+/// the email inbound router currently depends on a [email::inbound::LinkUuid] extension
+/// the service itself should be able to extract this but thats too much of a rework for right now
+/// this middleware is used to take a [models_email::service::link::Link] extension and create a [email::inbound::LinkUuid] extension
+async fn link_to_link_uuid_extension(
+    link: Extension<models_email::service::link::Link>,
+    mut req: Request,
+    next: Next,
+) -> Response {
+    let link_uuid = link.0.id;
+    req.extensions_mut()
+        .insert(email::inbound::LinkUuid(link_uuid));
+    next.run(req).await
 }
