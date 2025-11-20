@@ -52,46 +52,53 @@ export type PaginatedSearchArgs = {
 };
 
 export const searchClient = {
-  async searchDocuments(args: DocumentSearchRequest) {
+  async searchDocuments(args: DocumentSearchRequest, init?: SafeFetchInit) {
     return mapOk(
       await searchServiceFetch<DocumentSearchResponse>(`/search/document`, {
         method: 'POST',
         body: JSON.stringify(args),
+        ...init,
       }),
       (result) => result
     );
   },
-  async searchEmails(args: {
-    request: EmailSearchRequest;
-    params: EmailSearchParams;
-  }) {
+  async searchEmails(
+    args: {
+      request: EmailSearchRequest;
+      params: EmailSearchParams;
+    },
+    init?: SafeFetchInit
+  ) {
     return mapOk(
       await searchServiceFetch<EmailSearchResponse>(
         `/search/email?page=${args.params.page ?? 0}&page_size=${args.params.page_size ?? 10}`,
         {
           method: 'POST',
           body: JSON.stringify(args.request),
+          ...init,
         }
       ),
       (result) => result
     );
   },
-  async searchChats(args: ChatSearchRequest) {
+  async searchChats(args: ChatSearchRequest, init?: SafeFetchInit) {
     return mapOk(
       await searchServiceFetch<ChatSearchResponse>(`/search/chat`, {
         method: 'POST',
         body: JSON.stringify(args),
+        ...init,
       }),
       (result) => result
     );
   },
-  async search(args: PaginatedSearchArgs) {
+  async search(args: PaginatedSearchArgs, init?: SafeFetchInit) {
     return mapOk(
       await searchServiceFetch<UnifiedSearchResponse>(
         `/search?page=${args.params.page}&page_size=${args.params.page_size}`,
         {
           method: 'POST',
           body: JSON.stringify(args.request),
+          ...init,
         }
       ),
       (result) => result
