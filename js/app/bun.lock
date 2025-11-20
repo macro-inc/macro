@@ -1,6 +1,5 @@
 {
   "lockfileVersion": 1,
-  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "@coparse/monorepo",
@@ -204,10 +203,6 @@
     },
     "packages/block-code": {
       "name": "block-code",
-    },
-    "packages/block-color": {
-      "name": "block-color",
-      "version": "0.0.1",
     },
     "packages/block-contact": {
       "name": "block-contact",
@@ -1741,8 +1736,6 @@
     "block-chat": ["block-chat@workspace:packages/block-chat"],
 
     "block-code": ["block-code@workspace:packages/block-code"],
-
-    "block-color": ["block-color@workspace:packages/block-color"],
 
     "block-contact": ["block-contact@workspace:packages/block-contact"],
 

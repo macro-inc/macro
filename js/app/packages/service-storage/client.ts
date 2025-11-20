@@ -129,12 +129,11 @@ export type Success = {
 };
 type SuccessResponse = { data: Success };
 
-export type ItemType = CloudStorageItemType | 'channel' | 'color' | 'email';
+export type ItemType = CloudStorageItemType | 'channel' | 'email';
 
 const _itemTypeSet = new Set([
   'document',
   'channel',
-  'color',
   'email',
   'chat',
   'project',
@@ -186,8 +185,6 @@ export function blockNameToItemType(
       return 'channel';
     case 'project':
       return 'project';
-    case 'color':
-      return 'color';
     case 'email':
       return 'email';
     default:
@@ -201,7 +198,6 @@ export function stringToItemType(str: string): ItemType | undefined {
     case 'document':
     case 'project':
     case 'channel':
-    case 'color':
       return str;
     default:
       return undefined;
