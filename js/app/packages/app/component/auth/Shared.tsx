@@ -40,14 +40,6 @@ export const identifyUser = async () => {
   }
 };
 
-export const checkAffiliate = () => {
-  const url = new URL(window.location.href);
-  const affiliateCode = url.searchParams.get('referral');
-  if (affiliateCode) {
-    sessionStorage.setItem('affiliateCode', affiliateCode);
-  }
-};
-
 export const assignABGroup = async () => {
   const randomGroup = Math.random() < 0.5 ? 'A' : 'B';
   gqlServiceClient.setGroup({ group: randomGroup });

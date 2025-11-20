@@ -31,7 +31,6 @@ import type { SafeFetchInit } from '@core/util/safeFetch';
 import { utf8Encode } from '@core/util/string';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import { platformFetch } from 'core/util/platformFetch';
-import { createResource } from 'solid-js';
 import type { AccessLevel, View, ViewsResponse } from './generated/schemas';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
@@ -241,36 +240,6 @@ export const storageServiceClient = {
       await dssFetch<SuccessResponse>(`/ping`),
       (result) => result.data
     );
-  },
-
-  affiliates: {
-    async getAffiliateList() {
-      const response = await dssFetch<{
-        users: {
-          email: string;
-          createdAt: number;
-        }[];
-      }>(`/affiliate`);
-      return response;
-    },
-    async assignAffiliate(params: { email: string }) {
-      return mapOk(
-        await dssFetch<SuccessResponse>(`/affiliate/${params.email}`, {
-          method: 'POST',
-        }),
-        (result) => result.data
-      );
-    },
-    async getReferredBy() {
-      return mapOk(
-        await dssFetch<{
-          affiliate?: {
-            email: string;
-          };
-        }>(`/affiliate/referred_by`),
-        (result) => result
-      );
-    },
   },
 
   permissionsTokens: {
@@ -1333,23 +1302,5 @@ export const uploadFileToPresignedUrl = async (
     throw new Error(`Failed to upload file: ${text}`);
   }
 };
-
-export const [affiliateList, { refetch: refetchAffiliateList }] =
-  createResource(async () => {
-    const response = await storageServiceClient.affiliates.getAffiliateList();
-    if (!isOk(response)) return;
-    const [, responseData] = response;
-    return responseData.users;
-  });
-
-export const [referredBy, { refetch: refetchReferredBy }] = createResource(
-  async () => {
-    const response = await storageServiceClient.affiliates.getReferredBy();
-    if (!isOk(response)) return;
-    const [, responseData] = response;
-
-    return responseData.affiliate?.email;
-  }
-);
 
 registerClient('storage', storageServiceClient);
