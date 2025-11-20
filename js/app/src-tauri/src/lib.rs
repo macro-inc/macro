@@ -2,7 +2,6 @@ use crate::logger::{Context, ContextErr, Logger};
 use reqwest::cookie::CookieStore;
 use reqwest::header::COOKIE;
 use serde::{Deserialize, Serialize};
-use std::str::FromStr;
 use std::{borrow::Cow, collections::HashMap};
 use tauri::http::{HeaderMap, HeaderValue};
 use tauri::{AppHandle, Emitter};
@@ -21,9 +20,9 @@ mod logger;
 /// This should be as restrictive as possible.
 /// If the webview attempts to naviate to other domains,
 /// they will be opened in the systems default browser
-static ALLOWED_DOMAINS: &'static [&'static str] = &[
-    // local urls
+static ALLOWED_DOMAINS: &[&str] = &[
     "http://tauri.localhost",
+    "tauri://localhost",
     "https://macro.com",
     "http://localhost:3000",
 ];
@@ -37,6 +36,7 @@ pub fn run() {
         .with_target(false)
         .with_writer(std::io::stderr)
         .with_line_number(true)
+        .pretty()
         .with_env_filter(EnvFilter::try_from_default_env().unwrap_or_else(|_| {
             // Set default log levels
             if cfg!(debug_assertions) {
@@ -93,13 +93,6 @@ pub fn run() {
                     .log_and_consume();
             }
 
-            if cfg!(debug_assertions) {
-                let window = app
-                    .get_webview_window("main")
-                    .expect("Main window not found");
-                window.open_devtools();
-            }
-
             app.chain(attach_deep_link_handler);
 
             Ok(())
@@ -120,7 +113,7 @@ fn merge_header_callback<R: Runtime>(url: String, headers: &mut HeaderMap, handl
     };
     url.set_scheme(match url.scheme() {
         "ws" => "http",
-        "wss" | _ => "https",
+        _ => "https",
     })
     .ok();
     tracing::debug!("checking cookies for {url}");
@@ -145,11 +138,11 @@ impl AppChain for tauri::App {
 
 #[derive(Debug, Error)]
 enum AppError {
-    #[error("{0}")]
+    #[error(transparent)]
     SchemeErr(#[from] SchemeError),
-    #[error("{0}")]
+    #[error(transparent)]
     ContextErr(#[from] ContextErr),
-    #[error("{0}")]
+    #[error(transparent)]
     Tauri(#[from] tauri::Error),
 }
 
@@ -206,9 +199,9 @@ impl MacroScheme {
     }
     /// turn a http(s) url into a macro scheme url
     fn from_url(url: &Url) -> Result<Self, SchemeError> {
-        let ("http" | "https") = url.scheme() else {
+        let ("http" | "https" | "tauri") = url.scheme() else {
             return Err(SchemeError::InvalidScheme {
-                expected: "http(s)".to_string(),
+                expected: "http(s) or tauri".to_string(),
                 found: url.scheme().to_string(),
             });
         };
@@ -246,7 +239,7 @@ impl MacroNavigationPlugin {
     pub fn new(allow_list: &'static [&'static str]) -> Result<Self, url::ParseError> {
         Ok(MacroNavigationPlugin {
             internal_domains: allow_list
-                .into_iter()
+                .iter()
                 .map(|s| s.parse())
                 .collect::<Result<Vec<_>, _>>()?,
         })
@@ -254,14 +247,11 @@ impl MacroNavigationPlugin {
 
     #[tracing::instrument(ret, level = tracing::Level::DEBUG, skip(self))]
     fn is_internal_domain(&self, url: &Url) -> bool {
-        self.internal_domains
-            .iter()
-            .find(|cur| {
-                cur.scheme().eq(url.scheme())
-                    && cur.domain().eq(&url.domain())
-                    && cur.port().eq(&url.port())
-            })
-            .is_some()
+        self.internal_domains.iter().any(|cur| {
+            cur.scheme().eq(url.scheme())
+                && cur.domain().eq(&url.domain())
+                && cur.port().eq(&url.port())
+        })
     }
 
     #[tracing::instrument(ret, level = tracing::Level::DEBUG)]
