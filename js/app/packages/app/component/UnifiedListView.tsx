@@ -938,11 +938,23 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   });
 
   let lastClickedEntityId = -1;
+
+  // reset last clicked on view change.
   createEffect(
     on(view, () => {
       lastClickedEntityId = -1;
     })
   );
+
+  // reset last clicked on reset multi-selection.
+  createEffect(() => {
+    if (
+      unifiedListContext.viewsDataStore[selectedView()].selectedEntities
+        .length === 0
+    ) {
+      lastClickedEntityId = -1;
+    }
+  });
 
   return (
     <>
