@@ -45,7 +45,7 @@ const useMapSearchResponseItem = () => {
   return (result: UnifiedSearchResponseItem): Entity | undefined => {
     switch (result.type) {
       case 'document': {
-        if (result.metadata?.deleted_at) return;
+        if (!result.metadata || result.metadata.deleted_at) return;
         const search = getHighlights(result.document_search_results);
         return {
           type: 'document',
@@ -83,7 +83,7 @@ const useMapSearchResponseItem = () => {
         };
       }
       case 'chat': {
-        if (result.metadata?.deleted_at) return;
+        if (!result.metadata || result.metadata.deleted_at) return;
         const search = getHighlights(result.chat_search_results);
         let name = result.name;
         if (!name || name === 'New Chat') {
@@ -138,7 +138,7 @@ const useMapSearchResponseItem = () => {
       }
 
       case 'project': {
-        if (result.metadata?.deleted_at) return;
+        if (!result.metadata || result.metadata.deleted_at) return;
         const search = getHighlights(result.project_search_results);
         return {
           type: 'project',
