@@ -6359,26 +6359,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "properties_db_client"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "cached",
- "chrono",
- "futures",
- "macro_db_migrator",
- "macro_uuid",
- "models_properties",
- "serde",
- "serde_json",
- "sqlx",
- "strum",
- "thiserror 2.0.17",
- "tracing",
- "uuid",
-]
-
-[[package]]
 name = "properties_service"
 version = "0.1.0"
 dependencies = [

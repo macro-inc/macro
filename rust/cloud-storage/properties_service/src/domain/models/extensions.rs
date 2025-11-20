@@ -5,10 +5,11 @@
 //! come from models_properties::service and models_properties::shared.
 
 use chrono::Utc;
-use models_properties::service::{
-    EntityPropertyWithDefinition, PropertyDefinition, PropertyDefinitionWithOptions,
-    PropertyOption, PropertyOptionValue,
-};
+use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use models_properties::service::property_definition::PropertyDefinition;
+use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
+use models_properties::service::property_option::PropertyOption;
+use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::shared::{DataType, EntityType, PropertyOwner};
 use uuid::Uuid;
 
@@ -166,7 +167,10 @@ impl DataType {
 
 // ===== EntityProperty Behavior =====
 
-impl models_properties::service::EntityProperty {
+use models_properties::service::entity_property::EntityProperty;
+use models_properties::service::property_value::PropertyValue;
+
+impl EntityProperty {
     /// Validate the entity property
     pub fn validate(&self) -> Result<(), &'static str> {
         if self.entity_id.is_empty() {
@@ -178,16 +182,14 @@ impl models_properties::service::EntityProperty {
 
 // ===== PropertyValue Behavior =====
 
-impl models_properties::service::PropertyValue {
+impl PropertyValue {
     /// Validate the property value
     pub fn validate(&self) -> Result<(), &'static str> {
         match self {
-            models_properties::service::PropertyValue::Num(n) if !n.is_finite() => {
+            PropertyValue::Num(n) if !n.is_finite() => {
                 Err("Property value must be a finite number")
             }
-            models_properties::service::PropertyValue::Str(s) if s.is_empty() => {
-                Err("Property value cannot be empty string")
-            }
+            PropertyValue::Str(s) if s.is_empty() => Err("Property value cannot be empty string"),
             _ => Ok(()),
         }
     }

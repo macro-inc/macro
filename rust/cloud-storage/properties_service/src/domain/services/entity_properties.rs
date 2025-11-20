@@ -188,10 +188,10 @@ fn validate_value_compatibility(
 
 fn validate_value_against_options(
     value: &PropertyValue,
-    options: &[models_properties::service::PropertyOption],
+    options: &[models_properties::service::property_option::PropertyOption],
     is_multi_select: bool,
 ) -> Result<()> {
-    use models_properties::service::PropertyOptionValue;
+    use models_properties::service::property_option::PropertyOptionValue;
 
     let valid_option_values: Vec<&PropertyOptionValue> = options.iter().map(|o| &o.value).collect();
 

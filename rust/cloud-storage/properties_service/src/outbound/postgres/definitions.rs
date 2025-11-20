@@ -1,6 +1,8 @@
 //! Property definition storage operations
 
-use models_properties::service::{PropertyDefinition, PropertyOption, PropertyOptionValue};
+use models_properties::service::property_definition::PropertyDefinition;
+use models_properties::service::property_option::PropertyOption;
+use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::shared::{DataType, EntityType, PropertyOwner};
 use sqlx::PgPool;
 use std::str::FromStr;
@@ -52,7 +54,7 @@ pub async fn create_property_definition(
     Ok(PropertyDefinition {
         id: row.id,
         display_name: row.display_name,
-        data_type: DataType::from_str(&row.data_type)
+        data_type: super::parse_data_type(&row.data_type)
             .map_err(|e| PropertiesStorageError::Parse(e.to_string()))?,
         owner: PropertyOwner::from_optional_ids(row.organization_id, row.user_id).ok_or_else(
             || {
@@ -64,7 +66,7 @@ pub async fn create_property_definition(
         is_multi_select: row.is_multi_select,
         specific_entity_type: row
             .specific_entity_type
-            .and_then(|s| EntityType::from_str(&s).ok()),
+            .and_then(|s| super::parse_entity_type(&s).ok()),
         created_at: row.created_at,
         updated_at: row.updated_at,
         is_metadata: row.is_metadata,
@@ -120,7 +122,7 @@ pub async fn create_property_definition_with_options(
     let created_definition = PropertyDefinition {
         id: row.id,
         display_name: row.display_name,
-        data_type: DataType::from_str(&row.data_type)
+        data_type: super::parse_data_type(&row.data_type)
             .map_err(|e| PropertiesStorageError::Parse(e.to_string()))?,
         owner: PropertyOwner::from_optional_ids(row.organization_id, row.user_id).ok_or_else(
             || {
@@ -132,7 +134,7 @@ pub async fn create_property_definition_with_options(
         is_multi_select: row.is_multi_select,
         specific_entity_type: row
             .specific_entity_type
-            .and_then(|s| EntityType::from_str(&s).ok()),
+            .and_then(|s| super::parse_entity_type(&s).ok()),
         created_at: row.created_at,
         updated_at: row.updated_at,
         is_metadata: row.is_metadata,

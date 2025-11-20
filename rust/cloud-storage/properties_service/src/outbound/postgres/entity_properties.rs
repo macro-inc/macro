@@ -1,8 +1,10 @@
 //! Entity property storage operations
 
-use models_properties::service::{
-    EntityProperty, PropertyDefinition, PropertyOption, PropertyOptionValue, PropertyValue,
-};
+use models_properties::service::entity_property::EntityProperty;
+use models_properties::service::property_definition::PropertyDefinition;
+use models_properties::service::property_option::PropertyOption;
+use models_properties::service::property_option::PropertyOptionValue;
+use models_properties::service::property_value::PropertyValue;
 use models_properties::shared::{DataType, EntityType, PropertyOwner};
 use sqlx::PgPool;
 use std::collections::HashMap;
@@ -79,7 +81,7 @@ pub async fn get_entity_properties_with_values(
     for row in rows {
         let entity_property = EntityProperty {
             entity_id: row.entity_id,
-            entity_type: EntityType::from_str(&row.entity_type)
+            entity_type: super::parse_entity_type(&row.entity_type)
                 .map_err(|e| PropertiesStorageError::Parse(e))?,
             property_definition_id: row.property_definition_id,
             created_at: row.ep_created_at,
@@ -89,7 +91,7 @@ pub async fn get_entity_properties_with_values(
         let definition = PropertyDefinition {
             id: row.def_id,
             display_name: row.display_name,
-            data_type: DataType::from_str(&row.data_type)
+            data_type: super::parse_data_type(&row.data_type)
                 .map_err(|e| PropertiesStorageError::Parse(e))?,
             owner: PropertyOwner::from_optional_ids(row.organization_id, row.user_id).ok_or_else(
                 || {
@@ -101,7 +103,7 @@ pub async fn get_entity_properties_with_values(
             is_multi_select: row.is_multi_select,
             specific_entity_type: row
                 .specific_entity_type
-                .and_then(|s| EntityType::from_str(&s).ok()),
+                .and_then(|s| super::parse_entity_type(&s).ok()),
             created_at: row.def_created_at,
             updated_at: row.def_updated_at,
             is_metadata: row.is_metadata,
@@ -277,7 +279,7 @@ pub async fn get_bulk_entity_properties(
     for row in rows {
         let entity_property = EntityProperty {
             entity_id: row.entity_id.clone(),
-            entity_type: EntityType::from_str(&row.entity_type)
+            entity_type: super::parse_entity_type(&row.entity_type)
                 .map_err(|e| PropertiesStorageError::Parse(e))?,
             property_definition_id: row.property_definition_id,
             created_at: row.ep_created_at,
@@ -287,7 +289,7 @@ pub async fn get_bulk_entity_properties(
         let definition = PropertyDefinition {
             id: row.def_id,
             display_name: row.display_name,
-            data_type: DataType::from_str(&row.data_type)
+            data_type: super::parse_data_type(&row.data_type)
                 .map_err(|e| PropertiesStorageError::Parse(e))?,
             owner: PropertyOwner::from_optional_ids(row.organization_id, row.user_id).ok_or_else(
                 || {
@@ -299,7 +301,7 @@ pub async fn get_bulk_entity_properties(
             is_multi_select: row.is_multi_select,
             specific_entity_type: row
                 .specific_entity_type
-                .and_then(|s| EntityType::from_str(&s).ok()),
+                .and_then(|s| super::parse_entity_type(&s).ok()),
             created_at: row.def_created_at,
             updated_at: row.def_updated_at,
             is_metadata: row.is_metadata,

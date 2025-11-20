@@ -8,7 +8,6 @@ mod options;
 use crate::domain::ports::PropertiesStorage;
 use models_properties::shared::{DataType, EntityType};
 use sqlx::PgPool;
-use std::str::FromStr;
 use thiserror::Error;
 
 /// PostgreSQL storage implementation for properties
@@ -35,44 +34,36 @@ impl PropertiesPgStorage {
     }
 }
 
-// Helper implementations for parsing database strings to models_properties types
-impl FromStr for DataType {
-    type Err = PropertiesStorageError;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        match s {
-            "Boolean" => Ok(DataType::Boolean),
-            "Date" => Ok(DataType::Date),
-            "Number" => Ok(DataType::Number),
-            "String" => Ok(DataType::String),
-            "SelectNumber" => Ok(DataType::SelectNumber),
-            "SelectString" => Ok(DataType::SelectString),
-            "Entity" => Ok(DataType::Entity),
-            "Link" => Ok(DataType::Link),
-            _ => Err(PropertiesStorageError::Parse(format!(
-                "Unknown DataType: {}",
-                s
-            ))),
-        }
+// Helper functions for parsing database strings to models_properties types
+pub(super) fn parse_data_type(s: &str) -> Result<DataType, PropertiesStorageError> {
+    match s {
+        "Boolean" => Ok(DataType::Boolean),
+        "Date" => Ok(DataType::Date),
+        "Number" => Ok(DataType::Number),
+        "String" => Ok(DataType::String),
+        "SelectNumber" => Ok(DataType::SelectNumber),
+        "SelectString" => Ok(DataType::SelectString),
+        "Entity" => Ok(DataType::Entity),
+        "Link" => Ok(DataType::Link),
+        _ => Err(PropertiesStorageError::Parse(format!(
+            "Unknown DataType: {}",
+            s
+        ))),
     }
 }
 
-impl FromStr for EntityType {
-    type Err = PropertiesStorageError;
-
-    fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-        match s {
-            "Channel" => Ok(EntityType::Channel),
-            "Chat" => Ok(EntityType::Chat),
-            "Document" => Ok(EntityType::Document),
-            "Project" => Ok(EntityType::Project),
-            "Thread" => Ok(EntityType::Thread),
-            "User" => Ok(EntityType::User),
-            _ => Err(PropertiesStorageError::Parse(format!(
-                "Unknown EntityType: {}",
-                s
-            ))),
-        }
+pub(super) fn parse_entity_type(s: &str) -> Result<EntityType, PropertiesStorageError> {
+    match s {
+        "Channel" => Ok(EntityType::Channel),
+        "Chat" => Ok(EntityType::Chat),
+        "Document" => Ok(EntityType::Document),
+        "Project" => Ok(EntityType::Project),
+        "Thread" => Ok(EntityType::Thread),
+        "User" => Ok(EntityType::User),
+        _ => Err(PropertiesStorageError::Parse(format!(
+            "Unknown EntityType: {}",
+            s
+        ))),
     }
 }
 

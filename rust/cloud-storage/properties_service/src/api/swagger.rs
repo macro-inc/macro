@@ -1,9 +1,5 @@
 use models_properties::api;
-use properties_service::inbound::http::{
-    create_property_definition, create_property_option, delete_entity_property,
-    delete_property_definition, delete_property_option, get_entity_properties,
-    get_property_definition, get_property_options, list_property_definitions, set_entity_property,
-};
+use properties_service::inbound::http::create_property_definition;
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -14,17 +10,18 @@ use utoipa::OpenApi;
     paths(
         // Property definitions
         create_property_definition,
-        list_property_definitions,
-        get_property_definition,
-        delete_property_definition,
-        // Property options
-        get_property_options,
-        create_property_option,
-        delete_property_option,
-        // Entity properties
-        get_entity_properties,
-        set_entity_property,
-        delete_entity_property,
+        // TODO: Implement remaining handlers
+        // list_property_definitions,
+        // get_property_definition,
+        // delete_property_definition,
+        // // Property options
+        // get_property_options,
+        // create_property_option,
+        // delete_property_option,
+        // // Entity properties
+        // get_entity_properties,
+        // set_entity_property,
+        // delete_entity_property,
     ),
     components(
         schemas(

@@ -11,16 +11,13 @@ pub mod requests;
 pub mod responses;
 
 // Re-export models_properties types as domain models (single source of truth)
-pub use models_properties::service::{
-    EntityProperty,
-    // Composite types
-    EntityPropertyWithDefinition,
-    PropertyDefinition,
-    PropertyDefinitionWithOptions,
-    PropertyOption,
-    PropertyOptionValue,
-    PropertyValue,
-};
+pub use models_properties::service::entity_property::EntityProperty;
+pub use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
+pub use models_properties::service::property_definition::PropertyDefinition;
+pub use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
+pub use models_properties::service::property_option::PropertyOption;
+pub use models_properties::service::property_option::PropertyOptionValue;
+pub use models_properties::service::property_value::PropertyValue;
 pub use models_properties::shared::{DataType, EntityReference, EntityType, PropertyOwner};
 
 // Re-export domain extensions (impl blocks for models_properties types)

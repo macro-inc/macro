@@ -26,7 +26,4 @@ where
     }
 }
 
-// Import modules to trigger impl blocks
-use definitions;
-use entity_properties;
-use options;
+// Import modules to trigger impl blocks - they're already declared as mod above

@@ -1,6 +1,7 @@
 //! Property option storage operations
 
-use models_properties::service::{PropertyOption, PropertyOptionValue};
+use models_properties::service::property_option::PropertyOption;
+use models_properties::service::property_option::PropertyOptionValue;
 use sqlx::PgPool;
 use uuid::Uuid;
 

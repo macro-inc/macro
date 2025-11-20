@@ -68,11 +68,14 @@ fn extract_data_type_info(
         models_properties::shared::DataType,
         bool,
         Option<models_properties::shared::EntityType>,
-        Vec<(models_properties::service::PropertyOptionValue, i32)>,
+        Vec<(
+            models_properties::service::property_option::PropertyOptionValue,
+            i32,
+        )>,
     ),
     HttpError,
 > {
-    use models_properties::service::PropertyOptionValue;
+    use models_properties::service::property_option::PropertyOptionValue;
     use models_properties::shared::DataType;
     use models_properties::shared::EntityType;
 
