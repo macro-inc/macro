@@ -57,16 +57,14 @@ import {
   type WithSearch,
 } from '@macro-entity';
 import {
-  markNotificationsForEntityAsDone,
-  useNotificationsForEntity,
-} from '@notifications/notification-helpers';
-import {
   isChannelMention,
   isChannelMessageReply,
   isChannelMessageSend,
+  markNotificationsForEntityAsDone,
   notificationWithMetadata,
-} from '@notifications/notification-metadata';
-import type { UnifiedNotification } from '@notifications/types';
+  type UnifiedNotification,
+  useNotificationsForEntity,
+} from '@notifications';
 import type { PaginatedSearchArgs } from '@service-search/client';
 import type {
   ChannelFilters,

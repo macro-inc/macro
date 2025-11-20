@@ -19,8 +19,10 @@ import { isErr } from '@core/util/maybeResult';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { isTauri, MaybeTauriProvider } from '@macro/tauri';
 import { createEmailSource, Provider as EntityProvider } from '@macro-entity';
-import { usePlatformNotificationState } from '@notifications/components/PlatformNotificationProvider';
-import { createNotificationSource } from '@notifications/notification-source';
+import {
+  createNotificationSource,
+  usePlatformNotificationState,
+} from '@notifications';
 import { setUser, useObserveRouting } from '@observability';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { gqlServiceClient } from '@service-gql/client';
@@ -62,7 +64,6 @@ import { Layout } from './Layout';
 import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
-
 
 const { track, identify, TrackingEvents } = withAnalytics();
 

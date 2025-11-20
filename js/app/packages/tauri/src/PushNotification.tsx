@@ -10,7 +10,7 @@ import {
 import {
   type PlatformNotificationInterface,
   PlatformNotificationProvider,
-} from '@notifications/components/PlatformNotificationProvider';
+} from '@notifications';
 import { notificationServiceClient } from '@service-notification/client';
 import { makePersisted } from '@solid-primitives/storage';
 import {

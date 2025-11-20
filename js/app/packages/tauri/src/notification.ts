@@ -1,7 +1,7 @@
 import type {
   AppNotification,
   PlatformNotificationInterface,
-} from '@notifications/components/PlatformNotificationProvider';
+} from '@notifications';
 import {
   isPermissionGranted,
   requestPermission,

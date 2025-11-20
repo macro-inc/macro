@@ -2,9 +2,11 @@ import { InlineItemPreview } from '@core/component/ItemPreview';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { useDisplayName } from '@core/user/displayName';
 import { formatDate } from '@core/util/date';
-import { notificationWithMetadata } from '@notifications/notificationMetadata';
-import { extractNotificationData } from '@notifications/notificationPreview';
-import type { UnifiedNotification } from '@notifications/types';
+import {
+  notificationWithMetadata,
+  extractNotificationData,
+  type UnifiedNotification,
+} from '@notifications';
 import { Show } from 'solid-js';
 
 type NotificationRendererProps = {

@@ -1,7 +1,7 @@
 import { TabContent } from '@core/component/TabContent';
 import { Switch } from '@kobalte/core/switch';
 import { Show } from 'solid-js';
-import { usePlatformNotificationState } from '@notifications/components/PlatformNotificationProvider';
+import { usePlatformNotificationState } from '@notifications';
 
 export function Notification() {
   const notificationState = usePlatformNotificationState();

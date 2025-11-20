@@ -1,11 +1,11 @@
 import type { Entity } from '@core/types';
+import { emailClient } from '@service-email/client';
+import { onCleanup, onMount } from 'solid-js';
 import {
   markNotificationForEntityIdAsRead,
   markNotificationsForEntityAsRead,
-} from '@notifications/notification-helpers';
-import type { NotificationSource } from '@notifications/notification-source';
-import { emailClient } from '@service-email/client';
-import { onCleanup, onMount } from 'solid-js';
+} from '../notification-helpers';
+import type { NotificationSource } from '../notification-source';
 
 const DEFAULT_DEBOUNCE_TIME = 2_000;
 
