@@ -1,10 +1,10 @@
 //! HTTP inbound adapters - thin wrappers around domain services
 
 use axum::{
+    Json,
     extract::{Extension, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    Json,
 };
 use std::sync::Arc;
 use thiserror::Error;
@@ -84,7 +84,12 @@ fn extract_data_type_info(
         PropertyDataType::SelectString { multi, options, .. } => {
             let opts = options
                 .iter()
-                .map(|o| (PropertyOptionValue::String(o.value.clone()), o.display_order))
+                .map(|o| {
+                    (
+                        PropertyOptionValue::String(o.value.clone()),
+                        o.display_order,
+                    )
+                })
                 .collect();
             Ok((DataType::SelectString, *multi, None, opts))
         }

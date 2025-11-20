@@ -178,7 +178,8 @@ impl PropertiesStorage for PropertiesPgStorage {
         entity_property: crate::domain::models::EntityProperty,
         value: Option<crate::domain::models::PropertyValue>,
     ) -> Result<crate::domain::models::EntityProperty, Self::Error> {
-        let (result, _) = entity_properties::set_entity_property(&self.pool, entity_property, value).await?;
+        let (result, _) =
+            entity_properties::set_entity_property(&self.pool, entity_property, value).await?;
         Ok(result)
     }
 
@@ -186,7 +187,9 @@ impl PropertiesStorage for PropertiesPgStorage {
         &self,
         _entity_property_id: uuid::Uuid,
     ) -> Result<bool, Self::Error> {
-        todo!("Will be implemented in subsequent commit - need entity_id, entity_type, property_definition_id")
+        todo!(
+            "Will be implemented in subsequent commit - need entity_id, entity_type, property_definition_id"
+        )
     }
 
     async fn delete_all_entity_properties(
@@ -194,7 +197,12 @@ impl PropertiesStorage for PropertiesPgStorage {
         entity_id: &str,
         entity_type: crate::domain::models::EntityType,
     ) -> Result<(), Self::Error> {
-        entity_properties::delete_all_entity_properties(&self.pool, entity_id.to_string(), entity_type).await?;
+        entity_properties::delete_all_entity_properties(
+            &self.pool,
+            entity_id.to_string(),
+            entity_type,
+        )
+        .await?;
         Ok(())
     }
 
@@ -207,7 +215,10 @@ impl PropertiesStorage for PropertiesPgStorage {
     > {
         entity_properties::get_bulk_entity_properties(
             &self.pool,
-            entity_refs.iter().map(|(id, et)| (id.clone(), *et)).collect(),
+            entity_refs
+                .iter()
+                .map(|(id, et)| (id.clone(), *et))
+                .collect(),
         )
         .await
     }

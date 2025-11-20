@@ -102,7 +102,10 @@ pub trait PropertiesStorage: Send + Sync + 'static {
         entity_refs: &[(String, EntityType)],
     ) -> impl std::future::Future<
         Output = Result<
-            std::collections::HashMap<String, Vec<crate::domain::models::EntityPropertyWithDefinition>>,
+            std::collections::HashMap<
+                String,
+                Vec<crate::domain::models::EntityPropertyWithDefinition>,
+            >,
             Self::Error,
         >,
     > + Send;
