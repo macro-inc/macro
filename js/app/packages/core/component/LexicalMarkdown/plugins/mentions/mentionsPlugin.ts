@@ -214,7 +214,6 @@ const getDocumentMentionItemType = (
     case 'chat':
     case 'channel':
     case 'project':
-    case 'color':
     case 'email':
       return itemType;
     default:
