@@ -150,27 +150,29 @@ export type SplitManager = {
 } & UrlCapabilities;
 
 export type SplitHandle = {
-  id: SplitId;
-  activate: () => void;
-  content: () => SplitContent;
-  canGoBack: () => boolean;
-  canGoForward: () => boolean;
-  goBack: () => void;
-  goForward: () => void;
-  reset: () => void;
-  replace: (next: SplitContent, mergeHistory?: boolean) => void;
-  close: () => void;
-  isActive: () => boolean;
-  isSpotLight: () => boolean;
-  toggleSpotlight: (force?: boolean) => void;
-  registerContentChangeListener: (
-    cb: (payload: SplitEventPayload[SplitEvent.ContentChange]) => void
-  ) => void;
   unregisterContentChangeListener: (
     cb: (payload: SplitEventPayload[SplitEvent.ContentChange]) => void
   ) => void;
-  displayName: () => string;
+  registerContentChangeListener: (
+    cb: (payload: SplitEventPayload[SplitEvent.ContentChange]) => void
+  ) => void;
+  replace: (next: SplitContent, mergeHistory?: boolean) => void;
+  toggleSpotlight: (force?: boolean) => void;
   setDisplayName: (name: string) => void;
+  canGoForward: () => boolean;
+  content: () => SplitContent;
+  isSpotLight: () => boolean;
+  displayName: () => string;
+  canGoBack: () => boolean;
+  isActive: () => boolean;
+  isFirst: () => boolean;
+  goForward: () => void;
+  isLast: () => boolean;
+  activate: () => void;
+  goBack: () => void;
+  close: () => void;
+  reset: () => void;
+  id: SplitId;
 } & UrlCapabilities;
 
 function newSplitId(): SplitId {
@@ -481,6 +483,8 @@ export function createSplitLayout(
       },
       getUrlSegments: () => [content().type, content().id].map(String),
       getUrl: () => content().type + '/' + content().id,
+      isFirst: () => state.splits.at(0)?.id === id,
+      isLast: () => state.splits.at(-1)?.id === id,
       isActive: () => currentSplit.id === state.activeSplitId,
       isSpotLight: () => state.spotlightId === currentSplit.id,
       toggleSpotlight: (force?: boolean) => {
