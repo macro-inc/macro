@@ -12,6 +12,7 @@ import {
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
 import { getScrollParent } from '@core/util/scrollParent';
+import { waitForFrames } from '@core/util/sleep';
 import type { EntityData } from '@macro-entity';
 import { useTutorialCompleted } from '@service-gql/client';
 import { storageServiceClient } from '@service-storage/client';
@@ -277,8 +278,13 @@ export function createNavigationEntityListShortcut({
                 ({ id }) => id === next.id
               );
               if (nextIndex !== undefined && nextIndex > -1) {
-                const elem = getEntityElAtIndex(nextIndex);
-                if (elem instanceof HTMLElement) elem.focus();
+                virtualizerHandle()?.scrollToIndex(nextIndex, {
+                  align: 'nearest',
+                });
+                waitForFrames(2).then(() => {
+                  const elem = getEntityElAtIndex(nextIndex);
+                  if (elem instanceof HTMLElement) elem.focus();
+                });
               }
             }
           },
