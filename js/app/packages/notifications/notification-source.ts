@@ -1,6 +1,6 @@
 import type { Entity } from '@core/types';
 import { createNotificationsInfiniteQuery as createNotificationQuery } from '@macro-entity';
-import { ws } from '@service-connection/websocket';
+import type { ConnectionGatewayWebsocket } from '@service-connection/websocket';
 import { notificationServiceClient } from '@service-notification/client';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas';
 import { trackStore } from '@solid-primitives/deep';
@@ -23,17 +23,17 @@ import {
   type Store,
   unwrap,
 } from 'solid-js/store';
-import { notificationWithMetadata } from './notificationMetadata';
+import { notificationWithMetadata } from './notification-metadata';
 import {
   extractNotificationData,
   toBrowserNotification,
-} from './notificationPreview';
+} from './notification-preview';
 import {
   DefaultDocumentNameResolver,
   DefaultUserNameResolver,
-} from './notificationResolvers';
-import { fetchNotificationsForEntities } from './queries/entitiesNotificationsQuery';
-import { createMutedEntitiesQuery } from './queries/mutedEntitiesQuery';
+} from './notification-resolvers';
+import { fetchNotificationsForEntities } from './queries/entities-notifications-query';
+import { createMutedEntitiesQuery } from './queries/muted-entities-query';
 import {
   type CompositeEntity,
   compositeEntity,
@@ -83,6 +83,7 @@ const NOTIFICATION_EVENT_TYPE = 'notification';
 const QUERY_LIMIT = 500;
 
 export function createNotificationSource(
+  ws: ConnectionGatewayWebsocket,
   onNotification?: (title: string, opts: NotificationOptions) => void
 ): NotificationSource {
   const [store, setStore] = createStore<NotificationStoreInner>({});
