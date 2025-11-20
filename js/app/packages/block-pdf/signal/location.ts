@@ -104,6 +104,8 @@ export interface SearchLocation {
   pageIndex: number;
   matchNum: number;
   term: string;
+  snippet: string;
+  highlightedContent: string;
 }
 
 export type PdfLocation =
@@ -188,9 +190,11 @@ export const URL_PARAMS = {
   width: 'pdf_width',
   height: 'pdf_height',
   annotationId: 'pdf_ann_id',
-  searchPage: 'pdf_search_page', // 0 indexed page number of the search result
-  searchMatchNumOnPage: 'pdf_search_match_num', // the index of the content from the search node that was clicked on. this loosely maps to match number since some highlights will contain multiple matches
-  searchTerm: 'pdf_search_term', // the search term that was used. this is grabbed from the inside of the <em> tag of the highlight
+  searchPage: 'pdf_search_page',
+  searchMatchNumOnPage: 'pdf_search_match_num',
+  searchTerm: 'pdf_search_term',
+  searchSnippet: 'pdf_search_snippet',
+  highlightedContent: 'pdf_highlighted_content',
 } as const;
 
 /**
@@ -328,14 +332,23 @@ export function parseLocationFromBlockParams(
   const searchPage = params[URL_PARAMS.searchPage];
   const searchMatchNumOnPage = params[URL_PARAMS.searchMatchNumOnPage];
   const searchTerm = params[URL_PARAMS.searchTerm];
+  const searchSnippet = params[URL_PARAMS.searchSnippet];
+  const highlightedContent = params[URL_PARAMS.highlightedContent];
 
-  if (searchPage && searchMatchNumOnPage && searchTerm) {
-    // TODO: setup analytics?
+  if (
+    searchPage &&
+    searchMatchNumOnPage &&
+    searchTerm &&
+    searchSnippet &&
+    highlightedContent
+  ) {
     return {
       type: 'search',
       pageIndex: Number(searchPage) + 1,
       matchNum: Number(searchMatchNumOnPage),
       term: searchTerm,
+      snippet: searchSnippet,
+      highlightedContent,
     };
   }
 
@@ -374,6 +387,8 @@ export type LocationSearchParams = {
   searchPage?: string;
   searchMatchNumOnPage?: string;
   searchTerm?: string;
+  searchSnippet?: string;
+  highlightedContent?: string;
   pageNumber?: string;
   yPos?: string;
   x?: string;
@@ -405,16 +420,24 @@ export function parseLocationFromUrl(
   // Next highest priority is a search result
   const searchPage = params.searchPage;
   const searchMatchNumOnPage = params.searchMatchNumOnPage;
-
   const searchTerm = params.searchTerm;
+  const searchSnippet = params.searchSnippet;
+  const highlightedContent = params.highlightedContent;
 
-  if (searchPage && searchMatchNumOnPage && searchTerm) {
-    // TODO: setup analytics?
+  if (
+    searchPage &&
+    searchMatchNumOnPage &&
+    searchTerm &&
+    searchSnippet &&
+    highlightedContent
+  ) {
     return {
       type: 'search',
       pageIndex: Number(searchPage) + 1,
       matchNum: Number(searchMatchNumOnPage),
       term: searchTerm,
+      snippet: searchSnippet,
+      highlightedContent,
     };
   }
 
@@ -483,28 +506,25 @@ export async function goToPdfLocation(location: PdfLocation) {
       break;
     case 'search':
       // Go to the page of the match
-      // We need to scroll to the top of the page with the search result to ensure we can go to the correct search match relative to the page
       await viewer.scrollTo({
         pageNumber: location.pageIndex,
         yPos: 0,
       });
 
-      // Perform initial search to goto the first match for the page
+      // Use the snippet to find the location in the PDF
       viewer.search({
-        query: location.term,
-        again: false, // set type to ''
+        query: location.snippet,
+        again: false,
         phraseSearch: true,
         caseSensitive: false,
         entireWord: false,
-        highlightAll: false, // we only want to highlight the actual match
+        highlightAll: false,
         findPrevious: false,
       });
 
       // Wait for the find controller to be ready
       const findControllerStateEvent = await waitForSignal(
         findControllerStateEventSignal,
-        // NOTE: if we run into a race condition where find controller is not cleared a cleaner solution would be to set updateFindControlStateSignal to
-        // undefined before you call hidden search then wait for search state to update
         (val) =>
           val?.state === FindState.FOUND || val?.state === FindState.NOT_FOUND
       );
@@ -519,6 +539,12 @@ export async function goToPdfLocation(location: PdfLocation) {
       for (let i = 0; i < location.matchNum; i++) {
         findControllerStateEvent?.source._nextMatch();
       }
+
+      // flash for a short period of time
+      setTimeout(() => {
+        findControllerStateEvent?.source._reset();
+        findControllerStateEvent?.source._updateAllPages();
+      }, 800);
 
       break;
   }

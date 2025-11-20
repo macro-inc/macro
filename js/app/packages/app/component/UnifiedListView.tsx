@@ -849,6 +849,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             [PDF_PARAMS.searchMatchNumOnPage]:
               location.searchMatchNumOnPage.toString(),
             [PDF_PARAMS.searchTerm]: location.searchTerm,
+            [PDF_PARAMS.searchSnippet]: location.searchSnippet,
+            [PDF_PARAMS.highlightedContent]: location.highlightedContent,
           });
           break;
       }

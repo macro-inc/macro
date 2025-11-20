@@ -35,6 +35,29 @@ type InnerSearchResult =
 const MAX_SEARCH_TERM_LENGTH = 1000;
 
 /**
+ * Extracts the full snippet from highlighted content by removing macro_em tags.
+ * This provides context for the search result.
+ */
+function extractSearchSnippet(highlightedContent: string): string {
+  return highlightedContent.replace(/<\/?macro_em>/g, '');
+
+  const firstMatch = highlightedContent.indexOf('<macro_em>');
+  const lastMatch = highlightedContent.lastIndexOf('</macro_em>');
+
+  if (firstMatch === -1 || lastMatch === -1) {
+    return '';
+  }
+
+  const substring = highlightedContent.substring(
+    firstMatch,
+    lastMatch + '</macro_em>'.length
+  );
+
+  const plainText = substring.replace(/<\/?macro_em>/g, '');
+  return plainText.substring(0, MAX_SEARCH_TERM_LENGTH);
+}
+
+/**
  * Extracts the search term from highlighted content by finding text from the first
  * to last <macro_em> tag, removing all macro_em tags to create plain text.
  * Truncates to MAX_SEARCH_TERM_LENGTH characters.
@@ -90,7 +113,7 @@ const getLocationHighlights = (
   const contentHighlights = innerResults.flatMap((r) => {
     const contents = r.highlight.content ?? [];
 
-    return contents.map((content, contentIndex) => {
+    return contents.map((content) => {
       let location: SearchLocation | undefined;
       switch (fileType) {
         case 'md':
@@ -103,11 +126,14 @@ const getLocationHighlights = (
               content,
               searchQuery
             );
+            const searchSnippet = extractSearchSnippet(content);
             location = {
               type: 'pdf' as const,
               searchPage,
-              searchMatchNumOnPage: contentIndex,
+              searchMatchNumOnPage: 0,
               searchTerm,
+              searchSnippet,
+              highlightedContent: content,
             };
           } catch (_e) {
             console.error('Cannot parse pdf page number', r.node_id);

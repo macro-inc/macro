@@ -8,6 +8,8 @@ type PdfHighlightLocation = {
   searchPage: number;
   searchMatchNumOnPage: number;
   searchTerm: string;
+  searchSnippet: string;
+  highlightedContent: string;
 };
 
 export type FileTypeWithLocation = 'md' | 'pdf';
