@@ -1,3 +1,4 @@
+export { BrowserNotificationModal } from './components/BrowserNotificationModal';
 export {
   ChannelDebouncedNotificationReadMarker,
   DebouncedNotificationReadMarker,
