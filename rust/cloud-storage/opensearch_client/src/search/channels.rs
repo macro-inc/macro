@@ -56,7 +56,7 @@ impl SearchQueryConfig for ChannelMessageSearchConfig {
     const USER_ID_KEY: &'static str = "sender_id";
     const TITLE_KEY: &'static str = "channel_name";
 
-    fn default_sort_types() -> Vec<SortType> {
+    fn default_sort_types() -> Vec<SortType<'static>> {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
@@ -110,7 +110,7 @@ impl ChannelMessageQueryBuilder {
     }
 
     /// Builds the main bool query for the index
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder> {
+    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
         // Build the main bool query containing all terms and any other filters
         let mut bool_query = self.inner.build_bool_query()?;
 
@@ -118,24 +118,33 @@ impl ChannelMessageQueryBuilder {
 
         // Add thread_ids to must clause if provided
         if !self.thread_ids.is_empty() {
-            bool_query.must(QueryType::terms("thread_id", self.thread_ids.clone()));
+            bool_query.must(QueryType::terms(
+                "thread_id".to_string(),
+                self.thread_ids.clone(),
+            ));
         }
 
         // Add mentions to must clause if provided
         if !self.mentions.is_empty() {
-            bool_query.must(QueryType::terms("mentions", self.mentions.clone()));
+            bool_query.must(QueryType::terms(
+                "mentions".to_string(),
+                self.mentions.clone(),
+            ));
         }
 
         // Add sender_ids to must clause if provided
         if !self.sender_ids.is_empty() {
-            bool_query.must(QueryType::terms("sender_id", self.sender_ids.clone()));
+            bool_query.must(QueryType::terms(
+                "sender_id".to_string(),
+                self.sender_ids.clone(),
+            ));
         }
         // END CUSTOM ATTRIBUTES SECTION
 
         Ok(bool_query)
     }
 
-    fn build_search_request(&self) -> Result<SearchRequest> {
+    fn build_search_request(&self) -> Result<SearchRequest<'static>> {
         let bool_query = self.build_bool_query()?;
 
         // Build the search request with the bool query
