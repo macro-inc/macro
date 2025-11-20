@@ -154,24 +154,29 @@ async fn handle_job_completed(
             link.macro_id
         );
 
-        for email_address in email_addresses {
-            let connections_message = ConnectionsMessage {
-                users: vec![link.macro_id.clone(), format!("macro|{}", email_address)],
-                connections: vec![(0, 1)],
-            };
-            ctx.sqs_client
-                .enqueue_contacts_add_connection(connections_message)
-                .await
-                .map_err(|e| {
-                    ProcessingError::NonRetryable(DetailedError {
-                        reason: FailureReason::SqsEnqueueFailed,
-                        source: e.context(format!(
-                            "Failed to enqueue contacts message for {}",
-                            email_address
-                        )),
-                    })
-                })?;
-        }
+        let mut users = vec![link.macro_id.clone()];
+        users.extend(
+            email_addresses
+                .iter()
+                .map(|email| format!("macro|{}", email)),
+        );
+
+        let connections = (1..users.len()).map(|i| (0, i)).collect::<Vec<_>>();
+
+        let connections_message = ConnectionsMessage { users, connections };
+
+        ctx.sqs_client
+            .enqueue_contacts_add_connection(connections_message)
+            .await
+            .map_err(|e| {
+                ProcessingError::NonRetryable(DetailedError {
+                    reason: FailureReason::SqsEnqueueFailed,
+                    source: e.context(format!(
+                        "Failed to enqueue contacts message for {}",
+                        email_addresses.join(", ")
+                    )),
+                })
+            })?;
         tracing::info!(
             "Successfully populated {} contacts for macro email {}",
             length,

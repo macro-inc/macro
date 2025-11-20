@@ -10,6 +10,10 @@ name = "email_service"
 path = "src/main.rs"
 
 [[bin]]
+name = "backfill_contacts"
+path = "src/bin/backfill_contacts/backfill_contacts.rs"
+
+[[bin]]
 name = "backfill_gmail_attachments"
 path = "src/bin/backfill_gmail_attachments/backfill_gmail_attachments.rs"
 
