@@ -26,6 +26,17 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
     return [props.entity];
   };
 
+  const canOpenEntityInSplit = () => {
+    const splits = globalSplitManager()?.splits;
+    if (!splits) return false;
+    for (const split of splits()) {
+      if (split.content.id === props.entity.id) {
+        return false;
+      }
+    }
+    return true;
+  };
+
   const setSelection: Setter<EntityData[]> = (entities) => {
     return unifiedListContext.setViewDataStore(
       selectedView(),
@@ -68,7 +79,7 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
       <MenuItemInner action="delete" label="Delete" />
       <MenuItem
         text="Open in new split"
-        disabled={entities().length > 1}
+        disabled={entities().length > 1 || !canOpenEntityInSplit()}
         onClick={() => {
           const splitManager = globalSplitManager();
           if (!splitManager) {

@@ -1,5 +1,5 @@
 import { type EntityData, isEntityData } from '@macro-entity';
-import { Component } from 'solid-js';
+import type { Component } from 'solid-js';
 
 export type EntityActionType =
   | 'mark_as_done'
@@ -57,9 +57,6 @@ export type EntityActionRegistry = {
   has: (action: EntityActionType) => boolean;
 };
 
-/**
- * Creates a registry for entity actions that supports both individual and bulk operations
- */
 export function createEntityActionRegistry(): EntityActionRegistry {
   const actions = new Map<EntityActionType, EntityActionHandler>();
   const configs = new Map<EntityActionType, EntityActionConfig>();

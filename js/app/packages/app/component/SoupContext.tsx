@@ -988,7 +988,7 @@ export function createNavigationEntityListShortcut({
     description: 'Mark done',
     condition: () =>
       isViewingList() &&
-      !actionRegistry.isActionEnabled('mark_as_done', plainSelectedEntities()),
+      actionRegistry.isActionEnabled('mark_as_done', plainSelectedEntities()),
     keyDownHandler: () => {
       const entitiesForAction = getEntitiesForAction();
       if (entitiesForAction.entities.length === 0) {
@@ -1036,7 +1036,7 @@ export function createNavigationEntityListShortcut({
       viewData().selectedEntities.length > 1 ? 'Delete items' : 'Delete item',
     condition: () =>
       isViewingList() &&
-      !actionRegistry.isActionEnabled('delete', plainSelectedEntities()),
+      actionRegistry.isActionEnabled('delete', plainSelectedEntities()),
     keyDownHandler: () => {
       const entitiesForAction = getEntitiesForAction();
       if (entitiesForAction.entities.length === 0) {
