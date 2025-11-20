@@ -96,13 +96,13 @@ export const TOKENS = {
       focusSplitLeft: 'split.go.focusSplitLeft',
       toggleRightPanel: 'split.go.toggleRightPanel',
       macroJump: 'split.go.macroJump',
+      back: 'split.go.back',
+      forward: 'split.go.forward',
     },
     spotlight: {
       toggle: 'split.spotlight.toggle',
       close: 'split.spotlight.close',
     },
-    back: 'split.back',
-    forward: 'split.forward',
     showHelpDrawer: 'split.showHelpDrawer',
   },
 
