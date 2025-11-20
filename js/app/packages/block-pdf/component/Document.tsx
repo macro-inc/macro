@@ -238,7 +238,7 @@ function InnerDocument() {
 /** Shows the document loading spinner without unloading the PDF Viewer */
 function LoadingDocumentSpinnerEffect() {
   return (
-    <Show when={!viewerHasVisiblePagesSignal()}>
+    <Show when={!viewerHasVisiblePagesSignal.get()}>
       <div class="flex absolute w-full h-full z-viewer-document-loading-spinner">
         <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2">
           <LoadingSpinner />

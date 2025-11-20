@@ -127,7 +127,7 @@ export const pendingLocationParamsSignal = createBlockSignal<
 
 // TODO: fix the aboslute clusterfuck that is location params
 createBlockEffect(() => {
-  const viewerReady = viewerReadySignal() && viewerHasVisiblePagesSignal();
+  const viewerReady = viewerReadySignal() && viewerHasVisiblePagesSignal.get();
   const params = pendingLocationParamsSignal();
   if (viewerReady && params) {
     // TODO: do we need to clear all overlays here
