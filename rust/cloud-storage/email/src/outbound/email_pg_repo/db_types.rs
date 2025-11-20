@@ -1,4 +1,4 @@
-use crate::domain::models::{Attachment, AttachmentMacro, ThreadPreviewCursor};
+use crate::domain::models::{Attachment, AttachmentMacro, EmailThreadPreview};
 use chrono::{DateTime, Utc};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use uuid::Uuid;
@@ -99,7 +99,7 @@ pub struct ThreadPreviewCursorDbRow {
 }
 
 impl ThreadPreviewCursorDbRow {
-    pub fn with_user_id(self, owner_id: MacroUserIdStr<'_>) -> ThreadPreviewCursor {
+    pub fn with_user_id(self, owner_id: MacroUserIdStr<'_>) -> EmailThreadPreview {
         let ThreadPreviewCursorDbRow {
             id,
             provider_id,
@@ -118,7 +118,7 @@ impl ThreadPreviewCursorDbRow {
             updated_at,
         } = self;
 
-        ThreadPreviewCursor {
+        EmailThreadPreview {
             id,
             provider_id,
             owner_id: owner_id.into_owned(),
