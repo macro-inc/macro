@@ -11,7 +11,7 @@ import {
   Show,
 } from 'solid-js';
 import { sendEmailCode, useResetEmailCode } from './EmailForm';
-import { checkAffiliate, ErrorMsg, Input, identifyUser, Stage } from './Shared';
+import { ErrorMsg, Input, identifyUser, Stage } from './Shared';
 
 const verifyCode = action(async (formData: FormData) => {
   const code = formData.get('one-time-code');
@@ -33,7 +33,6 @@ const verifyCode = action(async (formData: FormData) => {
   }
 
   await identifyUser();
-  checkAffiliate();
 
   const url = new URL(window.location.href);
   const searchParams = new URLSearchParams(url.search);
