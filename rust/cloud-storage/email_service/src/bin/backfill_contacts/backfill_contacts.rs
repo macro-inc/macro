@@ -1,14 +1,3 @@
-//! # Delete Gmail Attachment Utility
-//!
-//! This binary is used to delete any gmail attachments we uploaded for the user(s) from macro.
-//!
-//! ## Required Environment Variables:
-//! - `DATABASE_URL`: The connection string for the PostgreSQL database.
-//! - `DSS_URL`: The URL for the Document Storage Service.
-//! - `INTERNAL_AUTH_KEY`: An access token for authenticating with internal Macro services.
-//! - `MACRO_IDS`: The Macro IDs of the user accounts to delete attachments for
-//! - `DELETE_CONCURRENCY`: Number of concurrent uploads to process (optional, defaults to 10).
-
 mod config;
 mod process;
 

@@ -110,12 +110,27 @@ async fn handle_job_completed(
         })
     })?;
 
+    handle_attachment_upload(ctx, link, job_id).await?;
+    handle_contacts_sync(ctx, link).await?;
+
+    Ok(())
+}
+
+#[tracing::instrument(skip(ctx))]
+async fn handle_attachment_upload(
+    ctx: &PubSubContext,
+    link: &Link,
+    job_id: Uuid,
+) -> Result<(), ProcessingError> {
     // temporarily only enabling for macro emails for testing
-    if link.macro_id.ends_with("@macro.com") && !cfg!(feature = "disable_attachment_upload") {
-        let attachments =
-            email_db_client::attachments::provider::upload::fetch_job_attachments_for_backfill(
-                &ctx.db, link.id,
-            )
+    if !link.macro_id.ends_with("@macro.com") || cfg!(feature = "disable_attachment_upload") {
+        return Ok(());
+    }
+
+    let attachments =
+        email_db_client::attachments::provider::upload::fetch_job_attachments_for_backfill(
+            &ctx.db, link.id,
+        )
             .await
             .map_err(|e| {
                 ProcessingError::NonRetryable(DetailedError {
@@ -125,66 +140,75 @@ async fn handle_job_completed(
                 })
             })?;
 
-        tracing::info!(
-            "Found {} condition 5 attachments to backfill for job {}",
-            attachments.len(),
-            job_id
-        );
+    tracing::info!(
+        "Found {} condition 5 attachments to backfill for job {}",
+        attachments.len(),
+        job_id
+    );
 
-        send_attachment_backfill_messages(ctx, link.id, job_id, attachments).await?;
+    send_attachment_backfill_messages(ctx, link.id, job_id, attachments).await
+}
+
+#[tracing::instrument(skip(ctx))]
+async fn handle_contacts_sync(
+    ctx: &PubSubContext,
+    link: &Link,
+) -> Result<(), ProcessingError> {
+    if cfg!(feature = "disable_contacts_sync") {
+        return Ok(());
     }
 
-    if !cfg!(feature = "disable_contacts_sync") {
-        let email_addresses =
-            email_db_client::contacts::get::fetch_contacts_emails_by_link_id(&ctx.db, link.id)
-                .await
-                .map_err(|e| {
-                    ProcessingError::NonRetryable(DetailedError {
-                        reason: FailureReason::DatabaseQueryFailed,
-                        source: e.context("Failed to fetch contact email addresses".to_string()),
-                    })
-                })?;
-
-        let length = email_addresses.len();
-
-        tracing::info!(
-            "Populating {} contacts for macro email {}",
-            length,
-            link.macro_id
-        );
-
-        let mut users = vec![link.macro_id.clone()];
-        users.extend(
-            email_addresses
-                .iter()
-                .map(|email| format!("macro|{}", email)),
-        );
-
-        let connections = (1..users.len()).map(|i| (0, i)).collect::<Vec<_>>();
-
-        let connections_message = ConnectionsMessage { users, connections };
-
-        ctx.sqs_client
-            .enqueue_contacts_add_connection(connections_message)
+    let email_addresses =
+        email_db_client::contacts::get::fetch_contacts_emails_by_link_id(&ctx.db, link.id)
             .await
             .map_err(|e| {
                 ProcessingError::NonRetryable(DetailedError {
-                    reason: FailureReason::SqsEnqueueFailed,
-                    source: e.context(format!(
-                        "Failed to enqueue contacts message for {}",
-                        email_addresses.join(", ")
-                    )),
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context("Failed to fetch contact email addresses".to_string()),
                 })
             })?;
-        tracing::info!(
-            "Successfully populated {} contacts for macro email {}",
-            length,
-            link.macro_id
-        );
-    }
+
+    let length = email_addresses.len();
+
+    tracing::info!(
+        "Populating {} contacts for macro email {}",
+        length,
+        link.macro_id
+    );
+
+    let mut users = vec![link.macro_id.clone()];
+    users.extend(
+        email_addresses
+            .iter()
+            .map(|email| format!("macro|{}", email)),
+    );
+
+    let connections = (1..users.len()).map(|i| (0, i)).collect::<Vec<_>>();
+
+    let connections_message = ConnectionsMessage { users, connections };
+
+    ctx.sqs_client
+        .enqueue_contacts_add_connection(connections_message)
+        .await
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::SqsEnqueueFailed,
+                source: e.context(format!(
+                    "Failed to enqueue contacts message for {}",
+                    email_addresses.join(", ")
+                )),
+            })
+        })?;
+
+    tracing::info!(
+        "Successfully populated {} contacts for macro email {}",
+        length,
+        link.macro_id
+    );
 
     Ok(())
 }
+
 
 /// when a thread is done being backfilled, update its metadata and backfill its attachments.
 #[tracing::instrument(skip(ctx))]
