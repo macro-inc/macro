@@ -10,6 +10,10 @@ name = "email_service"
 path = "src/main.rs"
 
 [[bin]]
+name = "backfill_contacts"
+path = "src/bin/backfill_contacts/backfill_contacts.rs"
+
+[[bin]]
 name = "backfill_gmail_attachments"
 path = "src/bin/backfill_gmail_attachments/backfill_gmail_attachments.rs"
 
@@ -22,6 +26,7 @@ disable_attachment_upload = []
 disable_connection_gateway = []
 disable_gmail_webhook_auth = []
 disable_sfs_map = []
+disable_contacts_sync = []
 local_queue = []
 
 [dependencies]
@@ -40,6 +45,7 @@ document_storage_service_client = { path = "../document_storage_service_client" 
 ego-tree = { workspace = true }
 email = { path = "../email", features = ["axum"] }
 email_db_client = { path = "../email_db_client" }
+email_utils = { path = "../email_utils"}
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
 gmail_client = { path = "../gmail_client" }
@@ -80,7 +86,7 @@ sha2 = { workspace = true }
 sqlx = { workspace = true }
 sqlx-core = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
-
+  "contacts",
   "email",
   "gmail",
   "insight_context",
