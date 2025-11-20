@@ -47,19 +47,16 @@ export const BlockRegistry = [
   'chat',
   'write',
   'pdf',
-  'html',
   'md',
   'code',
   'image',
   'canvas',
   'channel',
   'project',
-  'start',
   'unknown',
   'video',
   'email',
   'contact',
-  'color',
 ] as const;
 
 type BlockNameKeys = keyof typeof BlockRegistry & number;
@@ -73,13 +70,11 @@ export type BlockName = (typeof BlockRegistry)[BlockNameKeys];
  * Represents the block types that do not correspond to a document type.
  */
 export const NonDocumentBlockTypes = [
-  'start',
   'chat',
   'channel',
   'project',
   'email',
   'contact',
-  'color',
 ] as BlockName[];
 
 /**
@@ -121,17 +116,14 @@ export const ValidBlockCombinations: BlockCombinationRules = {
   write: exclude(['write']),
   md: allBlockNames,
   code: exclude(['code']),
-  html: new Set([]),
   image: allBlockNames,
   channel: allBlockNames,
   email: allBlockNames,
   canvas: allBlockNames,
-  start: new Set([]),
   project: allBlockNames,
   unknown: allBlockNames,
   video: allBlockNames,
   contact: allBlockNames,
-  color: allBlockNames,
 } as const;
 
 // maps block name to valid parents
@@ -142,16 +134,13 @@ export const ValidNestingCombinations: BlockCombinationRules = {
   write: new Set([]),
   md: new Set([]),
   code: new Set(['md']),
-  html: new Set([]),
   image: new Set([]),
   channel: new Set([]),
   email: new Set([]),
-  start: new Set([]),
   project: new Set([]),
   unknown: new Set([]),
   video: new Set([]),
   contact: new Set([]),
-  color: new Set([]),
 };
 
 export const LoadErrors = {
