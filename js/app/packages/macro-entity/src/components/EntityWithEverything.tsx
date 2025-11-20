@@ -98,7 +98,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   highlighted?: boolean;
   selected?: boolean;
   ref?: Ref<HTMLDivElement>;
-  onChecked?: (checked: boolean) => void;
+  onChecked?: (checked: boolean, shiftKey?: boolean) => void;
   checked?: boolean;
 }
 
@@ -407,8 +407,8 @@ export function EntityWithEverything(
         <button
           type="button"
           class="col-1 size-full relative group/button flex items-center justify-center"
-          onClick={() => {
-            props.onChecked?.(!props.checked);
+          onClick={(e) => {
+            props.onChecked?.(!props.checked, e.shiftKey);
           }}
           data-blocks-navigation
         >
@@ -689,7 +689,7 @@ function DirectMessageIcon(props: { entity: EntityData }) {
   return (
     <div class="bg-panel size-5 rounded-full p-[2px]">
       <Show when={participantId()} fallback={<Fallback />}>
-        {(id) => <UserIcon id={id()} isDeleted={false} size="fill" />}
+        {(id) => <UserIcon id={id()} isDeleted={false} size="xs" />}
       </Show>
     </div>
   );
