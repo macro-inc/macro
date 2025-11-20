@@ -7,6 +7,7 @@ import {
   PlatformNotificationProvider,
   usePlatformNotificationState,
 } from './components/PlatformNotificationProvider';
+import { BrowserNotificationPreview } from './components/BrowserNotificationPreview';
 import { createMockWebsocket } from './mock-websocket';
 import { notificationWithMetadata } from './notification-metadata';
 import {
@@ -160,33 +161,47 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
           <div class="text-ink-muted text-sm animate-pulse">Loading...</div>
         }
       >
-        <div class="space-y-4">
+        <div class="space-y-6">
           <div>
-            <div class="text-xs font-mono text-ink-muted uppercase mb-2">
-              Title
+            <div class="text-xs font-mono text-ink-muted uppercase mb-3">
+              Visual Preview
             </div>
-            <div class="bg-menu p-4 rounded-lg border border-edge-muted text-sm text-ink font-medium">
-              {browserNotif()!.title}
+            <BrowserNotificationPreview
+              title={browserNotif()!.title}
+              body={browserNotif()!.body}
+              icon={browserNotif()!.icon}
+            />
+          </div>
+
+          <div class="pt-4 border-t border-edge-muted space-y-4">
+            <div>
+              <div class="text-xs font-mono text-ink-muted uppercase mb-2">
+                Title
+              </div>
+              <div class="bg-menu p-4 rounded-lg border border-edge-muted text-sm text-ink font-medium">
+                {browserNotif()!.title}
+              </div>
+            </div>
+            <div>
+              <div class="text-xs font-mono text-ink-muted uppercase mb-2">
+                Description (Body)
+              </div>
+              <div class="bg-menu p-4 rounded-lg border border-edge-muted text-sm text-ink">
+                {browserNotif()!.body || (
+                  <span class="italic text-ink-muted">(empty)</span>
+                )}
+              </div>
+            </div>
+            <div>
+              <div class="text-xs font-mono text-ink-muted uppercase mb-2">
+                Icon
+              </div>
+              <div class="bg-menu p-4 rounded-lg border border-edge-muted">
+                <code class="text-xs text-ink-muted">{browserNotif()!.icon}</code>
+              </div>
             </div>
           </div>
-          <div>
-            <div class="text-xs font-mono text-ink-muted uppercase mb-2">
-              Description (Body)
-            </div>
-            <div class="bg-menu p-4 rounded-lg border border-edge-muted text-sm text-ink">
-              {browserNotif()!.body || (
-                <span class="italic text-ink-muted">(empty)</span>
-              )}
-            </div>
-          </div>
-          <div>
-            <div class="text-xs font-mono text-ink-muted uppercase mb-2">
-              Icon
-            </div>
-            <div class="bg-menu p-4 rounded-lg border border-edge-muted">
-              <code class="text-xs text-ink-muted">{browserNotif()!.icon}</code>
-            </div>
-          </div>
+
           <details class="group">
             <summary class="text-xs font-mono text-ink-muted uppercase cursor-pointer hover:text-accent">
               Raw JSON ▸
@@ -456,24 +471,34 @@ function PlaygroundContent() {
     () => notificationsByType().get(selectedType() || '') || []
   );
 
-  const customNotification = createMemo((): UnifiedNotification => {
+  const customNotification = createMemo(() => {
+    const baseNotification = allNotifications()[0];
+    if (!baseNotification) {
+      return {
+        id: `custom-${Date.now()}`,
+        createdAt: Math.floor(Date.now() / 1000),
+        eventItemId: 'channel-custom',
+        eventItemType: 'channel',
+        senderId: 'user-custom',
+        notificationEventType: 'channel_message_send',
+        notificationMetadata: {
+          sender: 'user-custom',
+          messageContent: markdownArea.state(),
+          messageId: 'msg-custom',
+        },
+        viewedAt: null,
+        done: false,
+      } as unknown as UnifiedNotification;
+    }
+
     return {
+      ...baseNotification,
       id: `custom-${Date.now()}`,
-      createdAt: Math.floor(Date.now() / 1000),
-      eventItemId: 'channel-custom',
-      eventItemType: 'channel',
-      senderId: 'user-custom',
-      notificationEventType: 'channel_message_send',
       notificationMetadata: {
-        sender: 'user-custom',
+        ...baseNotification.notificationMetadata,
         messageContent: markdownArea.state(),
-        messageId: 'msg-custom',
-        channelType: 'direct_message',
-        channelName: 'test-channel',
       },
-      viewedAt: null,
-      done: false,
-    } as UnifiedNotification;
+    };
   });
 
   createEffect(() => {
