@@ -136,10 +136,10 @@ createBlockEffect(() => {
     autoRegister(
       md.editor.registerUpdateListener(() => {
         throttledUpdate();
-      })
+      }),
+      registerInternalLayoutShiftListener(md.editor, throttledUpdate),
+      registerEditorWidthObserver(md.editor, throttledUpdate)
     );
-    registerInternalLayoutShiftListener(md.editor, throttledUpdate);
-    registerEditorWidthObserver(md.editor, throttledUpdate);
   }
 });
 
