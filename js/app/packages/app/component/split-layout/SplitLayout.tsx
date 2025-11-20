@@ -44,7 +44,8 @@ type SplitLayoutContainerProps = {
 
 function getParentSplitId(element: Element | null) {
   if (!element || !element.isConnected) return null;
-  const splitParent = element.closest('[data-split-container]');
+  // Checking the parent element here so that we don't get the split container itself.
+  const splitParent = element.parentElement?.closest('[data-split-container]');
   if (!splitParent) return null;
   const splitId = splitParent.getAttribute('data-split-id');
   if (!splitId) return null;
@@ -134,7 +135,7 @@ function createSplitFocusTracker(props: {
     }
 
     // return if panel has a child already with focus.
-    if (splitPanelRef.contains(document.activeElement)) return;
+    if (splitPanelRef.contains(document.activeElement) && splitPanelRef !== document.activeElement) return;
 
     // look for a child to return focus to.
     const child = lastFocusedChildBySplitId.get(id);
