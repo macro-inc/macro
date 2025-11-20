@@ -6,7 +6,6 @@ mod entity_properties;
 mod options;
 
 use crate::domain::ports::PropertiesStorage;
-use models_properties::shared::{DataType, EntityType};
 use sqlx::PgPool;
 use thiserror::Error;
 
@@ -34,39 +33,6 @@ impl PropertiesPgStorage {
     }
 }
 
-// Helper functions for parsing database strings to models_properties types
-pub(super) fn parse_data_type(s: &str) -> Result<DataType, PropertiesStorageError> {
-    match s {
-        "Boolean" => Ok(DataType::Boolean),
-        "Date" => Ok(DataType::Date),
-        "Number" => Ok(DataType::Number),
-        "String" => Ok(DataType::String),
-        "SelectNumber" => Ok(DataType::SelectNumber),
-        "SelectString" => Ok(DataType::SelectString),
-        "Entity" => Ok(DataType::Entity),
-        "Link" => Ok(DataType::Link),
-        _ => Err(PropertiesStorageError::Parse(format!(
-            "Unknown DataType: {}",
-            s
-        ))),
-    }
-}
-
-pub(super) fn parse_entity_type(s: &str) -> Result<EntityType, PropertiesStorageError> {
-    match s {
-        "Channel" => Ok(EntityType::Channel),
-        "Chat" => Ok(EntityType::Chat),
-        "Document" => Ok(EntityType::Document),
-        "Project" => Ok(EntityType::Project),
-        "Thread" => Ok(EntityType::Thread),
-        "User" => Ok(EntityType::User),
-        _ => Err(PropertiesStorageError::Parse(format!(
-            "Unknown EntityType: {}",
-            s
-        ))),
-    }
-}
-
 // Import implementations from submodules
 impl PropertiesStorage for PropertiesPgStorage {
     type Error = PropertiesStorageError;
@@ -83,8 +49,11 @@ impl PropertiesStorage for PropertiesPgStorage {
         &self,
         definition: crate::domain::models::PropertyDefinition,
         options: Vec<crate::domain::models::PropertyOption>,
-    ) -> Result<crate::domain::models::PropertyDefinitionWithOptions, Self::Error> {
-        definitions::create_property_definition_with_options(&self.pool, definition, options).await
+    ) -> Result<crate::domain::models::PropertyDefinition, Self::Error> {
+        let result =
+            definitions::create_property_definition_with_options(&self.pool, definition, options)
+                .await?;
+        Ok(result.definition)
     }
 
     // Stub implementations - will be implemented in subsequent commits
@@ -134,7 +103,21 @@ impl PropertiesStorage for PropertiesPgStorage {
     }
 
     async fn delete_property_option(&self, option_id: uuid::Uuid) -> Result<bool, Self::Error> {
-        options::delete_property_option(&self.pool, option_id).await
+        // Fetch property_definition_id first for validation
+        let opt_row = sqlx::query!(
+            "SELECT property_definition_id FROM property_options WHERE id = $1",
+            option_id
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        if opt_row.is_none() {
+            return Ok(false);
+        }
+
+        let property_definition_id = opt_row.unwrap().property_definition_id;
+        options::delete_property_option(&self.pool, option_id, property_definition_id).await?;
+        Ok(true)
     }
 
     async fn get_entity_properties(

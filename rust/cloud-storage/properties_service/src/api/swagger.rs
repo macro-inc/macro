@@ -1,5 +1,5 @@
 use models_properties::api;
-use properties_service::inbound::http::create_property_definition;
+use properties_service::inbound::http;
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -9,7 +9,7 @@ use utoipa::OpenApi;
     ),
     paths(
         // Property definitions
-        create_property_definition,
+        http::create_property_definition,
         // TODO: Implement remaining handlers
         // list_property_definitions,
         // get_property_definition,
@@ -43,7 +43,7 @@ use utoipa::OpenApi;
             api::EntityPropertyWithDefinitionResponse,
             api::PropertyValue,
             api::EntityQueryParams,
-            api::BulkEntityPropertiesRequest,
+            api::BulkEntityQueryParams,
             api::BulkEntityPropertiesResponse,
         )
     ),

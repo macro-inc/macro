@@ -72,8 +72,7 @@ async fn main() -> anyhow::Result<()> {
 
     // Create outbound adapters (storage and permission checker)
     let properties_storage = properties_service::outbound::PropertiesPgStorage::new(db.clone());
-    let permission_checker =
-        properties_service::outbound::PgPermissionChecker::new(db.clone(), comms_client.clone());
+    let permission_checker = properties_service::outbound::PgPermissionChecker::new();
 
     // Compose unified domain service (handles definitions, options, and entity properties)
     let property_service = Arc::new(

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                SELECT \n                    COUNT(id) as count\n                FROM \n                    \"UserInsights\" i\n                WHERE\n                    i.\"userId\" = $1\n                    AND\n                    i.\"generated\" = $2\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "count",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "ea8ca1cc2c2685b94ff8138dbf7c02b4f24ed69045afabdea66a759c5e0e32c4"
+}

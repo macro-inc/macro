@@ -1,0 +1,48 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO \"DocumentSummary\" (\n                document_id,   \n                version_id, \n                summary\n            )\n            SELECT \n                u.document_id, u.version_id, u.summary\n            FROM \n                UNNEST($1::text[], $2::text[], $3::text[])\n                AS u(document_id, version_id, summary)\n            RETURNING \n                id as \"id?\",  \n                \"createdAt\" as \"created_at?: DateTime<Utc>\",\n                document_id,\n                version_id, \n                summary\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "created_at?: DateTime<Utc>",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 2,
+        "name": "document_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "version_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "summary",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "ca6bca52697da1ef1b6bb702496b1dea573d8eb020c8f005dd620d1c334549b3"
+}

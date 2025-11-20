@@ -11,6 +11,7 @@ use thiserror::Error;
 
 use crate::domain::{
     models::{CreatePropertyRequest, PropertyOwner},
+    ports::PropertyService,
     services::PropertyServiceImpl,
 };
 use crate::outbound::{PgPermissionChecker, PropertiesPgStorage};
@@ -125,6 +126,18 @@ fn extract_data_type_info(
 // ===== Handlers =====
 
 /// Create a property definition (with or without options)
+#[utoipa::path(
+    post,
+    tag = "properties service",
+    path = "/properties/definitions",
+    request_body = CreatePropertyDefinitionRequest,
+    responses(
+        (status = 201, description = "Property definition created successfully"),
+        (status = 400, description = "Bad request"),
+        (status = 403, description = "Permission denied"),
+        (status = 500, description = "Internal server error"),
+    )
+)]
 #[tracing::instrument(skip(service, user_context), fields(user_id = %user_context.user_id))]
 pub async fn create_property_definition(
     State(service): State<Arc<PropertyServiceImpl<PropertiesPgStorage, PgPermissionChecker>>>,

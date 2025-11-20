@@ -7,7 +7,7 @@ use crate::domain::{
         CreatePropertyWithOptionsRequest, CreatePropertyWithOptionsResponse,
         DeleteAllEntityPropertiesRequest, DeleteAllEntityPropertiesResponse,
         DeleteEntityPropertyRequest, DeleteEntityPropertyResponse, DeleteOptionRequest,
-        DeleteOptionResponse, DeletePropertyRequest, DeletePropertyResponse,
+        DeleteOptionResponse, DeletePropertyRequest, DeletePropertyResponse, EntityType,
         GetBulkEntityPropertiesRequest, GetBulkEntityPropertiesResponse,
         GetEntityPropertiesRequest, GetEntityPropertiesResponse, GetOptionsRequest,
         GetOptionsResponse, ListPropertiesRequest, ListPropertiesResponse,

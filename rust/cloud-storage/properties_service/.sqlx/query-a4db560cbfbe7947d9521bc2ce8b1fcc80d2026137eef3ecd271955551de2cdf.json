@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        DELETE FROM property_options\n        WHERE id = $1 AND property_definition_id = $2\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a4db560cbfbe7947d9521bc2ce8b1fcc80d2026137eef3ecd271955551de2cdf"
+}

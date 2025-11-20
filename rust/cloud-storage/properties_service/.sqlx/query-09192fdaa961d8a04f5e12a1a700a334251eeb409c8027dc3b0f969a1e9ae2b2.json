@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT id, property_definition_id, display_order, number_value, string_value,\n               created_at, updated_at\n        FROM property_options\n        WHERE property_definition_id = ANY($1)\n        ORDER BY property_definition_id, display_order, number_value, LOWER(string_value)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "property_definition_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "display_order",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "number_value",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 4,
+        "name": "string_value",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "09192fdaa961d8a04f5e12a1a700a334251eeb409c8027dc3b0f969a1e9ae2b2"
+}

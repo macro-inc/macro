@@ -1,8 +1,6 @@
 //! Domain response models for property operations
 
-use super::{
-    EntityPropertyWithDefinition, PropertyDefinition, PropertyDefinitionWithOptions, PropertyOption,
-};
+use super::{EntityPropertyWithDefinition, PropertyDefinitionWithOptions, PropertyOption};
 use std::collections::HashMap;
 
 // ===== Property Definition Responses =====

@@ -1,0 +1,62 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO property_options (\n            id, property_definition_id, display_order, number_value, string_value\n        )\n        VALUES ($1, $2, $3, $4, $5)\n        RETURNING id, property_definition_id, display_order, number_value, string_value,\n                  created_at, updated_at\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "property_definition_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "display_order",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "number_value",
+        "type_info": "Float8"
+      },
+      {
+        "ordinal": 4,
+        "name": "string_value",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "created_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "updated_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int4",
+        "Float8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "f317d29af3fe404f1614823b22154c3884c2def22704f2e5962865d865a1a726"
+}

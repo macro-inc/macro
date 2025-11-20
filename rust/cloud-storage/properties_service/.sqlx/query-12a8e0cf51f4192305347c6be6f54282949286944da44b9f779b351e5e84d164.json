@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \n            id,\n            \"userId\" as user_id,\n            \"threadsProcessedCount\" as threads_processed_count,\n            \"insightsGeneratedCount\" as insights_generated_count,\n            status as \"status: InsightsBackfillJobStatus\",\n            \"completedAt\"::timestamptz as completed_at,\n            \"createdAt\"::timestamptz as \"created_at!\",\n            \"updatedAt\"::timestamptz as \"updated_at!\"\n        FROM \"EmailInsightsBackfillJob\"\n        WHERE id = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "threads_processed_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 3,
+        "name": "insights_generated_count",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 4,
+        "name": "status: InsightsBackfillJobStatus",
+        "type_info": {
+          "Custom": {
+            "name": "insights_backfill_job_status",
+            "kind": {
+              "Enum": [
+                "Init",
+                "InProgress",
+                "Complete",
+                "Cancelled",
+                "Failed"
+              ]
+            }
+          }
+        }
+      },
+      {
+        "ordinal": 5,
+        "name": "completed_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 7,
+        "name": "updated_at!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "12a8e0cf51f4192305347c6be6f54282949286944da44b9f779b351e5e84d164"
+}

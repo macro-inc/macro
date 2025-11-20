@@ -21,7 +21,7 @@ pub use models_properties::service::property_value::PropertyValue;
 pub use models_properties::shared::{DataType, EntityReference, EntityType, PropertyOwner};
 
 // Re-export domain extensions (impl blocks for models_properties types)
-pub use extensions::*;
+// Note: Extensions are used via impl blocks, not direct imports
 
 // Re-export request/response types
 pub use requests::*;

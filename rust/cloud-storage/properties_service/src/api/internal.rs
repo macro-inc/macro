@@ -1,8 +1,5 @@
 use crate::api::context::ApiContext;
-use axum::{
-    Router,
-    routing::{delete, post},
-};
+use axum::Router;
 // TODO: Implement internal handlers
 // use properties_service::inbound::http::{delete_all_entity_properties, get_bulk_entity_properties};
 

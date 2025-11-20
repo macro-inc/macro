@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT \"is_verified\"\n        FROM \"macro_user_email_verification\"\n        WHERE \"email\" = $1\n    ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "is_verified",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "d5fbd2557b6759572b20117681fac9c4d0b723c7a7abfa0fd92ae362ea32b88f"
+}

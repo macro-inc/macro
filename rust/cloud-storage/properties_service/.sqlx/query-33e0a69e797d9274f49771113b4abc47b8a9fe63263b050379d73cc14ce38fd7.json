@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            d.id\n        FROM\n            \"Document\" d\n        WHERE\n            d.\"projectId\" = ANY($1::text[])\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "33e0a69e797d9274f49771113b4abc47b8a9fe63263b050379d73cc14ce38fd7"
+}

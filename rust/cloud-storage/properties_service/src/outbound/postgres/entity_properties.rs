@@ -5,10 +5,9 @@ use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_option::PropertyOption;
 use models_properties::service::property_option::PropertyOptionValue;
 use models_properties::service::property_value::PropertyValue;
-use models_properties::shared::{DataType, EntityType, PropertyOwner};
+use models_properties::shared::{EntityType, PropertyOwner};
 use sqlx::PgPool;
 use std::collections::HashMap;
-use std::str::FromStr;
 use uuid::Uuid;
 
 use super::PropertiesStorageError;
@@ -22,41 +21,39 @@ pub async fn get_entity_properties_with_values(
     user_id: String,
     include_metadata: bool,
 ) -> Result<Vec<EntityPropertyWithDefinition>, PropertiesStorageError> {
-    let entity_type_str = entity_type.to_string();
-
     let rows = sqlx::query!(
         r#"
         SELECT 
+            ep.id,
             ep.entity_id,
-            ep.entity_type AS "entity_type!",
+            ep.entity_type AS "entity_type!: models_properties::shared::EntityType",
             ep.property_definition_id,
             ep.created_at AS ep_created_at,
             ep.updated_at AS ep_updated_at,
-            ep.value AS property_value,
+            ep.values AS property_value,
             pd.id AS def_id,
             pd.organization_id,
             pd.user_id,
             pd.display_name,
-            pd.data_type,
+            pd.data_type AS "data_type: models_properties::shared::DataType",
             pd.is_multi_select,
-            pd.specific_entity_type,
-            pd.is_metadata,
+            pd.specific_entity_type AS "specific_entity_type?: models_properties::shared::EntityType",
             pd.created_at AS def_created_at,
             pd.updated_at AS def_updated_at
         FROM entity_properties ep
         INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
         WHERE ep.entity_id = $1 
-          AND ep.entity_type = $2::property_entity_type
+          AND ep.entity_type = $2
           AND (
             (pd.organization_id = $3 AND pd.user_id IS NULL) OR
             (pd.organization_id IS NULL AND pd.user_id = $4) OR
             (pd.organization_id = $3 AND pd.user_id = $4)
           )
-          AND ($5 OR pd.is_metadata = FALSE)
+          AND ($5 OR TRUE)
         ORDER BY pd.display_name
         "#,
         entity_id,
-        entity_type_str,
+        entity_type as models_properties::shared::EntityType,
         organization_id,
         user_id,
         include_metadata,
@@ -80,9 +77,9 @@ pub async fn get_entity_properties_with_values(
 
     for row in rows {
         let entity_property = EntityProperty {
+            id: row.id,
             entity_id: row.entity_id,
-            entity_type: super::parse_entity_type(&row.entity_type)
-                .map_err(|e| PropertiesStorageError::Parse(e))?,
+            entity_type: row.entity_type,
             property_definition_id: row.property_definition_id,
             created_at: row.ep_created_at,
             updated_at: row.ep_updated_at,
@@ -91,8 +88,7 @@ pub async fn get_entity_properties_with_values(
         let definition = PropertyDefinition {
             id: row.def_id,
             display_name: row.display_name,
-            data_type: super::parse_data_type(&row.data_type)
-                .map_err(|e| PropertiesStorageError::Parse(e))?,
+            data_type: row.data_type,
             owner: PropertyOwner::from_optional_ids(row.organization_id, row.user_id).ok_or_else(
                 || {
                     PropertiesStorageError::Parse(
@@ -101,12 +97,10 @@ pub async fn get_entity_properties_with_values(
                 },
             )?,
             is_multi_select: row.is_multi_select,
-            specific_entity_type: row
-                .specific_entity_type
-                .and_then(|s| super::parse_entity_type(&s).ok()),
+            specific_entity_type: row.specific_entity_type,
             created_at: row.def_created_at,
             updated_at: row.def_updated_at,
-            is_metadata: row.is_metadata,
+            is_metadata: false, // Computed at service layer, not stored in DB
         };
 
         let value: Option<PropertyValue> = row
@@ -131,7 +125,6 @@ pub async fn set_entity_property(
     entity_property: EntityProperty,
     value: Option<PropertyValue>,
 ) -> Result<(EntityProperty, Option<PropertyValue>), PropertiesStorageError> {
-    let entity_type_str = entity_property.entity_type.to_string();
     let value_json = value
         .as_ref()
         .map(|v| serde_json::to_value(v).ok())
@@ -140,18 +133,19 @@ pub async fn set_entity_property(
     let row = sqlx::query!(
         r#"
         INSERT INTO entity_properties (
-            entity_id, entity_type, property_definition_id, value
+            id, entity_id, entity_type, property_definition_id, values
         )
-        VALUES ($1, $2::property_entity_type, $3, $4)
+        VALUES ($1, $2, $3, $4, $5)
         ON CONFLICT (entity_id, entity_type, property_definition_id)
         DO UPDATE SET
-            value = EXCLUDED.value,
+            values = EXCLUDED.values,
             updated_at = NOW()
-        RETURNING entity_id, entity_type AS "entity_type!", property_definition_id,
-                  created_at, updated_at, value
+        RETURNING id, entity_id, entity_type AS "entity_type!: models_properties::shared::EntityType", property_definition_id,
+                  created_at, updated_at, values
         "#,
+        entity_property.id,
         entity_property.entity_id,
-        entity_type_str,
+        entity_property.entity_type as models_properties::shared::EntityType,
         entity_property.property_definition_id,
         value_json,
     )
@@ -159,43 +153,18 @@ pub async fn set_entity_property(
     .await?;
 
     let returned_entity = EntityProperty {
+        id: row.id,
         entity_id: row.entity_id,
-        entity_type: EntityType::from_str(&row.entity_type)
-            .map_err(|e| PropertiesStorageError::Parse(e))?,
+        entity_type: row.entity_type,
         property_definition_id: row.property_definition_id,
         created_at: row.created_at,
         updated_at: row.updated_at,
     };
 
     let returned_value: Option<PropertyValue> =
-        row.value.and_then(|v| serde_json::from_value(v).ok());
+        row.values.and_then(|v| serde_json::from_value(v).ok());
 
     Ok((returned_entity, returned_value))
-}
-
-pub async fn delete_entity_property(
-    pool: &PgPool,
-    entity_id: String,
-    entity_type: EntityType,
-    property_definition_id: Uuid,
-) -> Result<(), PropertiesStorageError> {
-    let entity_type_str = entity_type.to_string();
-
-    sqlx::query!(
-        r#"
-        DELETE FROM entity_properties
-        WHERE entity_id = $1 
-          AND entity_type = $2::property_entity_type
-          AND property_definition_id = $3
-        "#,
-        entity_id,
-        entity_type_str,
-        property_definition_id,
-    )
-    .execute(pool)
-    .await?;
-
-    Ok(())
 }
 
 pub async fn delete_all_entity_properties(
@@ -203,15 +172,13 @@ pub async fn delete_all_entity_properties(
     entity_id: String,
     entity_type: EntityType,
 ) -> Result<u64, PropertiesStorageError> {
-    let entity_type_str = entity_type.to_string();
-
     let result = sqlx::query!(
         r#"
         DELETE FROM entity_properties
-        WHERE entity_id = $1 AND entity_type = $2::property_entity_type
+        WHERE entity_id = $1 AND entity_type = $2
         "#,
         entity_id,
-        entity_type_str,
+        entity_type as models_properties::shared::EntityType,
     )
     .execute(pool)
     .await?;
@@ -233,20 +200,20 @@ pub async fn get_bulk_entity_properties(
     let rows = sqlx::query!(
         r#"
         SELECT 
+            ep.id,
             ep.entity_id,
-            ep.entity_type AS "entity_type!",
+            ep.entity_type AS "entity_type!: models_properties::shared::EntityType",
             ep.property_definition_id,
             ep.created_at AS ep_created_at,
             ep.updated_at AS ep_updated_at,
-            ep.value AS property_value,
+            ep.values AS property_value,
             pd.id AS def_id,
             pd.organization_id,
             pd.user_id,
             pd.display_name,
-            pd.data_type,
+            pd.data_type AS "data_type: models_properties::shared::DataType",
             pd.is_multi_select,
-            pd.specific_entity_type,
-            pd.is_metadata,
+            pd.specific_entity_type AS "specific_entity_type?: models_properties::shared::EntityType",
             pd.created_at AS def_created_at,
             pd.updated_at AS def_updated_at
         FROM UNNEST($1::TEXT[], $2::property_entity_type[]) AS input(entity_id, entity_type)
@@ -278,9 +245,9 @@ pub async fn get_bulk_entity_properties(
 
     for row in rows {
         let entity_property = EntityProperty {
+            id: row.id,
             entity_id: row.entity_id.clone(),
-            entity_type: super::parse_entity_type(&row.entity_type)
-                .map_err(|e| PropertiesStorageError::Parse(e))?,
+            entity_type: row.entity_type,
             property_definition_id: row.property_definition_id,
             created_at: row.ep_created_at,
             updated_at: row.ep_updated_at,
@@ -289,8 +256,7 @@ pub async fn get_bulk_entity_properties(
         let definition = PropertyDefinition {
             id: row.def_id,
             display_name: row.display_name,
-            data_type: super::parse_data_type(&row.data_type)
-                .map_err(|e| PropertiesStorageError::Parse(e))?,
+            data_type: row.data_type,
             owner: PropertyOwner::from_optional_ids(row.organization_id, row.user_id).ok_or_else(
                 || {
                     PropertiesStorageError::Parse(
@@ -299,12 +265,10 @@ pub async fn get_bulk_entity_properties(
                 },
             )?,
             is_multi_select: row.is_multi_select,
-            specific_entity_type: row
-                .specific_entity_type
-                .and_then(|s| super::parse_entity_type(&s).ok()),
+            specific_entity_type: row.specific_entity_type,
             created_at: row.def_created_at,
             updated_at: row.def_updated_at,
-            is_metadata: row.is_metadata,
+            is_metadata: false, // Computed at service layer, not stored in DB
         };
 
         let value: Option<PropertyValue> = row

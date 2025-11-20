@@ -99,8 +99,8 @@ pub async fn delete_property_option(
     pool: &PgPool,
     option_id: Uuid,
     property_definition_id: Uuid,
-) -> Result<(), PropertiesStorageError> {
-    sqlx::query!(
+) -> Result<bool, PropertiesStorageError> {
+    let result = sqlx::query!(
         r#"
         DELETE FROM property_options
         WHERE id = $1 AND property_definition_id = $2
@@ -111,5 +111,5 @@ pub async fn delete_property_option(
     .execute(pool)
     .await?;
 
-    Ok(())
+    Ok(result.rows_affected() > 0)
 }

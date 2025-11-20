@@ -3,9 +3,8 @@
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_option::PropertyOption;
 use models_properties::service::property_option::PropertyOptionValue;
-use models_properties::shared::{DataType, EntityType, PropertyOwner};
+use models_properties::shared::PropertyOwner;
 use sqlx::PgPool;
-use std::str::FromStr;
 
 use super::PropertiesStorageError;
 use crate::domain::models::PropertyDefinitionWithOptions;
@@ -14,11 +13,6 @@ pub async fn create_property_definition(
     pool: &PgPool,
     definition: PropertyDefinition,
 ) -> Result<PropertyDefinition, PropertiesStorageError> {
-    let data_type_str = definition.data_type.to_string();
-    let entity_type_str = definition
-        .specific_entity_type
-        .as_ref()
-        .map(|t| t.to_string());
     let (org_id, user_id) = match &definition.owner {
         PropertyOwner::Organization { organization_id } => (Some(*organization_id), None),
         PropertyOwner::User { user_id } => (None, Some(user_id.as_str())),
@@ -32,21 +26,22 @@ pub async fn create_property_definition(
         r#"
         INSERT INTO property_definitions (
             id, organization_id, user_id, display_name, data_type,
-            is_multi_select, specific_entity_type, is_metadata
+            is_multi_select, specific_entity_type
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        RETURNING id, organization_id, user_id, display_name, data_type,
-                  is_multi_select, specific_entity_type, is_metadata,
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, organization_id, user_id, display_name, 
+                  data_type AS "data_type!: models_properties::shared::DataType",
+                  is_multi_select, 
+                  specific_entity_type AS "specific_entity_type?: models_properties::shared::EntityType",
                   created_at, updated_at
         "#,
         definition.id,
         org_id,
         user_id,
         definition.display_name,
-        data_type_str,
+        definition.data_type as models_properties::shared::DataType,
         definition.is_multi_select,
-        entity_type_str.as_deref(),
-        definition.is_metadata,
+        definition.specific_entity_type as Option<models_properties::shared::EntityType>,
     )
     .fetch_one(pool)
     .await?;
@@ -54,8 +49,7 @@ pub async fn create_property_definition(
     Ok(PropertyDefinition {
         id: row.id,
         display_name: row.display_name,
-        data_type: super::parse_data_type(&row.data_type)
-            .map_err(|e| PropertiesStorageError::Parse(e.to_string()))?,
+        data_type: row.data_type,
         owner: PropertyOwner::from_optional_ids(row.organization_id, row.user_id).ok_or_else(
             || {
                 PropertiesStorageError::Parse(
@@ -64,12 +58,10 @@ pub async fn create_property_definition(
             },
         )?,
         is_multi_select: row.is_multi_select,
-        specific_entity_type: row
-            .specific_entity_type
-            .and_then(|s| super::parse_entity_type(&s).ok()),
+        specific_entity_type: row.specific_entity_type,
         created_at: row.created_at,
         updated_at: row.updated_at,
-        is_metadata: row.is_metadata,
+        is_metadata: false, // Computed at service layer, not stored in DB
     })
 }
 
@@ -81,11 +73,6 @@ pub async fn create_property_definition_with_options(
     // Start transaction
     let mut tx = pool.begin().await?;
 
-    let data_type_str = definition.data_type.to_string();
-    let entity_type_str = definition
-        .specific_entity_type
-        .as_ref()
-        .map(|t| t.to_string());
     let (org_id, user_id) = match &definition.owner {
         PropertyOwner::Organization { organization_id } => (Some(*organization_id), None),
         PropertyOwner::User { user_id } => (None, Some(user_id.as_str())),
@@ -100,21 +87,22 @@ pub async fn create_property_definition_with_options(
         r#"
         INSERT INTO property_definitions (
             id, organization_id, user_id, display_name, data_type,
-            is_multi_select, specific_entity_type, is_metadata
+            is_multi_select, specific_entity_type
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        RETURNING id, organization_id, user_id, display_name, data_type,
-                  is_multi_select, specific_entity_type, is_metadata,
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        RETURNING id, organization_id, user_id, display_name, 
+                  data_type AS "data_type!: models_properties::shared::DataType",
+                  is_multi_select, 
+                  specific_entity_type AS "specific_entity_type?: models_properties::shared::EntityType",
                   created_at, updated_at
         "#,
         definition.id,
         org_id,
         user_id,
         definition.display_name,
-        data_type_str,
+        definition.data_type as models_properties::shared::DataType,
         definition.is_multi_select,
-        entity_type_str.as_deref(),
-        definition.is_metadata,
+        definition.specific_entity_type as Option<models_properties::shared::EntityType>,
     )
     .fetch_one(&mut *tx)
     .await?;
@@ -122,8 +110,7 @@ pub async fn create_property_definition_with_options(
     let created_definition = PropertyDefinition {
         id: row.id,
         display_name: row.display_name,
-        data_type: super::parse_data_type(&row.data_type)
-            .map_err(|e| PropertiesStorageError::Parse(e.to_string()))?,
+        data_type: row.data_type,
         owner: PropertyOwner::from_optional_ids(row.organization_id, row.user_id).ok_or_else(
             || {
                 PropertiesStorageError::Parse(
@@ -132,12 +119,10 @@ pub async fn create_property_definition_with_options(
             },
         )?,
         is_multi_select: row.is_multi_select,
-        specific_entity_type: row
-            .specific_entity_type
-            .and_then(|s| super::parse_entity_type(&s).ok()),
+        specific_entity_type: row.specific_entity_type,
         created_at: row.created_at,
         updated_at: row.updated_at,
-        is_metadata: row.is_metadata,
+        is_metadata: false, // Computed at service layer, not stored in DB
     };
 
     // Insert property options

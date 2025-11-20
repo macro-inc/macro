@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT p.id\n            FROM \"Project\" p\n            WHERE p.\"deletedAt\" IS NOT NULL AND p.\"deletedAt\" <= $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Timestamp"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9f595d4ae9aa9111c316efa5d4be2b8e4a6cc69374b90600457a32b14a91ae61"
+}

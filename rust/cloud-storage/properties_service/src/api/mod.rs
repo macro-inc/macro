@@ -38,7 +38,7 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 }
 
 fn api_router(app_state: ApiContext) -> Router {
-    use axum::routing::{delete, get, post, put};
+    use axum::routing::post;
     use properties_service::inbound::http::create_property_definition;
 
     // Replace old routes with hexagonal architecture routes (same paths, new handlers)
