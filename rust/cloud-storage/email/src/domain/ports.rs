@@ -31,7 +31,7 @@ pub trait EmailRepo: Send + Sync + 'static {
 }
 
 pub trait EmailService: Send + Sync + 'static {
-    fn get_emails(
+    fn get_email_thread_previews(
         &self,
         req: GetEmailsRequest,
     ) -> impl Future<

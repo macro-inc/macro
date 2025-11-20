@@ -33,7 +33,7 @@ where
     U: FrecencyQueryService,
     anyhow::Error: From<T::Err>,
 {
-    async fn get_emails(
+    async fn get_email_thread_previews(
         &self,
         req: GetEmailsRequest,
     ) -> Result<PaginatedCursor<EnrichedThreadPreviewCursor, Uuid, SimpleSortMethod, ()>, EmailErr>

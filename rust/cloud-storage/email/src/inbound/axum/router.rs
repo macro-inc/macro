@@ -82,7 +82,7 @@ async fn cursor_handler<T: EmailService>(
     Ok(Json(ApiPaginatedThreadCursor::new(
         service
             .inner
-            .get_emails(GetEmailsRequest {
+            .get_email_thread_previews(GetEmailsRequest {
                 view: preview_view,
                 link_id,
                 macro_id: macro_user.macro_user_id,
