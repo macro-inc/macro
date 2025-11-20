@@ -58,6 +58,8 @@ export default function GlobalShortcuts() {
     },
     displayPriority: 10,
     activateCommandScope: true,
+    // TODO: temporarily hiding this from the command menu, because we need to wire up the create options
+    hide: konsoleOpen,
   });
 
   registerHotkey({
