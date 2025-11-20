@@ -18,7 +18,7 @@ import {
   getPropertyDefinitionTypeDisplay,
   useSearchInputFocus,
 } from '../../utils';
-import { ERROR_MESSAGES } from '../../utils/errorHandling';
+import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
 export function SelectPropertyModal(props: PropertySelectorProps) {
   const blockId = useBlockId();
   const { entityType, onPropertyAdded, openCreateProperty } =
@@ -51,16 +51,11 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
             propertyDefinitionId
           );
 
-          if (!result.ok) {
-            console.error(
-              'SelectPropertyModal.handleAddProperties:',
-              result.error,
-              ERROR_MESSAGES.PROPERTY_ADD
-            );
-            toast.failure(ERROR_MESSAGES.PROPERTY_ADD);
-          }
-
-          return result.ok;
+          return handlePropertyError(
+            result,
+            ERROR_MESSAGES.PROPERTY_ADD,
+            'SelectPropertyModal.handleAddProperties'
+          );
         }
       );
 
@@ -74,6 +69,7 @@ export function SelectPropertyModal(props: PropertySelectorProps) {
         onPropertyAdded();
       }
     } catch (error) {
+      // Handle unexpected exceptions (e.g., Promise.all rejection)
       console.error(
         'SelectPropertyModal.handleAddProperties:',
         error,

@@ -8,6 +8,7 @@ import { saveEntityProperty } from '../../api';
 import { PROPERTY_STYLES } from '../../styles/styles';
 import type { Property } from '../../types';
 import { formatPropertyValue, getSelectValues } from '../../utils';
+import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
 import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
 
 type SelectValueProps = {
@@ -57,7 +58,13 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
         }
       );
 
-      if (result.ok) {
+      if (
+        handlePropertyError(
+          result,
+          ERROR_MESSAGES.PROPERTY_SAVE,
+          'SelectValue.handleRemoveValue'
+        )
+      ) {
         props.onRefresh?.();
       }
     } finally {

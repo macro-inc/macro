@@ -1,12 +1,11 @@
 import { useBlockId } from '@core/block';
 import { DatePicker } from '@core/component/DatePicker';
-import { toast } from '@core/component/Toast/Toast';
 import { type Component, createMemo } from 'solid-js';
 import { Portal, Show } from 'solid-js/web';
 import { saveEntityProperty } from '../../api';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
-import { ERROR_MESSAGES } from '../../utils/errorHandling';
+import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
 import { useModalPosition } from '../../utils/position';
 import { CreatePropertyModal } from './CreatePropertyModal';
 import { EditPropertyValueModal } from './EditPropertyValueModal';
@@ -44,13 +43,13 @@ export const Modals: Component = () => {
       value: newDate.toISOString(),
     });
 
-    if (!result.ok) {
-      console.error(
-        'Modals.handleDateSaved:',
-        result.error,
-        ERROR_MESSAGES.PROPERTY_SAVE
-      );
-      toast.failure(ERROR_MESSAGES.PROPERTY_SAVE);
+    if (
+      !handlePropertyError(
+        result,
+        ERROR_MESSAGES.PROPERTY_SAVE,
+        'Modals.handleDateSaved'
+      )
+    ) {
       return;
     }
 
