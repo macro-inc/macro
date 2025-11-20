@@ -1,12 +1,10 @@
-use std::str::FromStr;
-
+use crate::{map_soup_type, outbound::pg_soup_repo::type_err};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_pagination::{Query, SimpleSortMethod};
-use models_soup::{chat::SoupChat, document::SoupDocument, item::SoupItem, project::SoupProject};
+use models_soup::item::SoupItem;
 use sqlx::PgPool;
+use std::str::FromStr;
 use uuid::Uuid;
-
-use crate::outbound::pg_soup_repo::type_err;
 
 /// Returns objects that a user has EXPLICIT access to, including project items.
 ///
@@ -171,74 +169,7 @@ pub async fn unexpanded_generic_cursor_soup(
         cursor_timestamp, // $4
         cursor_id,        // $5
     )
-    .try_map(|r| match r.item_type.as_ref() {
-        "document" => Ok(SoupItem::Document(SoupDocument {
-            id: Uuid::parse_str(&r.id).map_err(type_err)?,
-            document_version_id: r
-                .document_version_id
-                .ok_or_else(|| type_err("document version id must exist"))
-                .and_then(|s| FromStr::from_str(&s).map_err(type_err))?,
-            owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
-                .map_err(type_err)?
-                .into_owned(),
-            name: r.name,
-            file_type: r.file_type,
-            sha: r.sha,
-            project_id: r
-                .project_id
-                .as_deref()
-                .map(Uuid::parse_str)
-                .transpose()
-                .map_err(type_err)?,
-            branched_from_id: r
-                .branched_from_id
-                .as_deref()
-                .map(Uuid::parse_str)
-                .transpose()
-                .map_err(type_err)?,
-            branched_from_version_id: r.branched_from_version_id,
-            document_family_id: r.document_family_id,
-            created_at: r.created_at,
-            updated_at: r.updated_at,
-            viewed_at: r.viewed_at,
-        })),
-        "chat" => Ok(SoupItem::Chat(SoupChat {
-            id: Uuid::parse_str(&r.id).map_err(type_err)?,
-            name: r.name,
-            owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
-                .map_err(type_err)?
-                .into_owned(),
-            project_id: r
-                .project_id
-                .as_deref()
-                .map(Uuid::parse_str)
-                .transpose()
-                .map_err(type_err)?,
-            is_persistent: r.is_persistent.unwrap_or_default(),
-            created_at: r.created_at,
-            updated_at: r.updated_at,
-            viewed_at: r.viewed_at,
-        })),
-        "project" => Ok(SoupItem::Project(SoupProject {
-            id: Uuid::parse_str(&r.id).map_err(type_err)?,
-            name: r.name,
-            owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
-                .map_err(type_err)?
-                .into_owned(),
-            parent_id: r
-                .project_id
-                .as_deref()
-                .map(Uuid::parse_str)
-                .transpose()
-                .map_err(type_err)?,
-            created_at: r.created_at,
-            updated_at: r.updated_at,
-            viewed_at: r.viewed_at,
-        })),
-        _ => Err(sqlx::Error::TypeNotFound {
-            type_name: r.item_type,
-        }),
-    })
+    .try_map(map_soup_type!())
     .fetch_all(db)
     .await?;
 
@@ -415,74 +346,7 @@ pub async fn no_frecency_unexpanded_generic_cursor_soup(
         cursor_timestamp, // $4
         cursor_id,        // $5
     )
-    .try_map(|r| match r.item_type.as_ref() {
-        "document" => Ok(SoupItem::Document(SoupDocument {
-            id: Uuid::parse_str(&r.id).map_err(type_err)?,
-            document_version_id: r
-                .document_version_id
-                .ok_or_else(|| type_err("document version id must exist"))
-                .and_then(|s| FromStr::from_str(&s).map_err(type_err))?,
-            owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
-                .map_err(type_err)?
-                .into_owned(),
-            name: r.name,
-            file_type: r.file_type,
-            sha: r.sha,
-            project_id: r
-                .project_id
-                .as_deref()
-                .map(Uuid::parse_str)
-                .transpose()
-                .map_err(type_err)?,
-            branched_from_id: r
-                .branched_from_id
-                .as_deref()
-                .map(Uuid::parse_str)
-                .transpose()
-                .map_err(type_err)?,
-            branched_from_version_id: r.branched_from_version_id,
-            document_family_id: r.document_family_id,
-            created_at: r.created_at,
-            updated_at: r.updated_at,
-            viewed_at: r.viewed_at,
-        })),
-        "chat" => Ok(SoupItem::Chat(SoupChat {
-            id: Uuid::parse_str(&r.id).map_err(type_err)?,
-            name: r.name,
-            owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
-                .map_err(type_err)?
-                .into_owned(),
-            project_id: r
-                .project_id
-                .as_deref()
-                .map(Uuid::parse_str)
-                .transpose()
-                .map_err(type_err)?,
-            is_persistent: r.is_persistent.unwrap_or_default(),
-            created_at: r.created_at,
-            updated_at: r.updated_at,
-            viewed_at: r.viewed_at,
-        })),
-        "project" => Ok(SoupItem::Project(SoupProject {
-            id: Uuid::parse_str(&r.id).map_err(type_err)?,
-            name: r.name,
-            owner_id: MacroUserIdStr::parse_from_str(&r.user_id)
-                .map_err(type_err)?
-                .into_owned(),
-            parent_id: r
-                .project_id
-                .as_deref()
-                .map(Uuid::parse_str)
-                .transpose()
-                .map_err(type_err)?,
-            created_at: r.created_at,
-            updated_at: r.updated_at,
-            viewed_at: r.viewed_at,
-        })),
-        _ => Err(sqlx::Error::TypeNotFound {
-            type_name: r.item_type,
-        }),
-    })
+    .try_map(map_soup_type!())
     .fetch_all(db)
     .await?;
 
