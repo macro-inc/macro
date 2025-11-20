@@ -83,6 +83,15 @@ if (LOCAL_ONLY) {
     'onboarding',
     lazy(() => import('@app/component/Onboarding'))
   );
+
+  registerComponent(
+    'notifications-playground',
+    lazy(() =>
+      import('@notifications/playground').then((m) => ({
+        default: m.NotificationsPlayground,
+      }))
+    )
+  );
 }
 
 if (DEV_MODE_ENV) {

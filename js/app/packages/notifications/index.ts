@@ -80,3 +80,6 @@ export type {
   UnifiedNotification,
 } from './types';
 export { compositeEntity, notificationEntity } from './types';
+export { NotificationsPlayground } from './playground';
+export { createMockWebsocket } from './mock-websocket';
+export type { MockWebsocketEmitter } from './mock-websocket';
