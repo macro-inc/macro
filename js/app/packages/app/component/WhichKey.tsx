@@ -10,7 +10,6 @@ import {
 } from '@core/hotkey/utils';
 import {
   type Accessor,
-  type Component,
   createMemo,
   createSignal,
   For,
@@ -27,69 +26,76 @@ type WhichKeyContentProps = {
   commandsWithoutActivateScope: Accessor<HotkeyCommand[]>;
 };
 
-const WhichKeyContent: Component<WhichKeyContentProps> = (props) => {
+function WhichKeyContent(props: WhichKeyContentProps) {
   return (
-    <Portal>
-      <div class="absolute z-9999 right-2 bottom-14">
-        {/* <dfiv class="absolute -z-1 top-2 right-2 pattern-edge pattern-diagonal-4 opacity-100 w-full h-full mask-l-from-[calc(100%_-_1rem)] mask-b-from-[calc(100%_-_1rem)]" /> */}
-        <div class="px-6 py-3 w-full h-full bg-dialog/75 backdrop-blur-sm border-2 border-accent text-sm shadow-[0_0_2px_0_var(--color-accent)]">
-          <Show when={props.commandsWithActivateScope().length > 0}>
-            <div class="mb-6">
-              <For each={props.commandsWithActivateScope()}>
-                {(command) => (
-                  <div class="grid grid-cols-[8ch_1fr] gap-x-2 mb-1">
-                    <div class="justify-self-start bg-panel border border-edge px-1.5 py-0.25 rounded-xs">
-                      <Hotkey
-                        token={command.hotkeyToken}
-                        shortcut={prettyPrintHotkeyString(
-                          // Asserting this, because useActiveCommands only returns commands with hotkeys.
-                          command.hotkeys!.at(0)!
-                        )}
-                      />
+    <Show
+      when={
+        props.commandsWithActivateScope().length > 0 ||
+        props.commandsWithoutActivateScope().length > 0
+      }
+    >
+      <Portal>
+        <div class="absolute z-9999 right-2 bottom-14">
+          {/* <dfiv class="absolute -z-1 top-2 right-2 pattern-edge pattern-diagonal-4 opacity-100 w-full h-full mask-l-from-[calc(100%_-_1rem)] mask-b-from-[calc(100%_-_1rem)]" /> */}
+          <div class="px-6 py-3 w-full h-full bg-dialog/75 backdrop-blur-sm border-2 border-accent text-sm shadow-[0_0_2px_0_var(--color-accent)]">
+            <Show when={props.commandsWithActivateScope().length > 0}>
+              <div class="mb-6">
+                <For each={props.commandsWithActivateScope()}>
+                  {(command) => (
+                    <div class="grid grid-cols-[8ch_1fr] gap-x-2 mb-1">
+                      <div class="justify-self-start bg-panel border border-edge px-1.5 py-0.25 rounded-xs">
+                        <Hotkey
+                          token={command.hotkeyToken}
+                          shortcut={prettyPrintHotkeyString(
+                            // Asserting this, because useActiveCommands only returns commands with hotkeys.
+                            command.hotkeys!.at(0)!
+                          )}
+                        />
+                      </div>
+                      <div>
+                        {typeof command.description === 'function'
+                          ? command.description()
+                          : command.description}{' '}
+                      </div>
                     </div>
-                    <div>
-                      {typeof command.description === 'function'
-                        ? command.description()
-                        : command.description}{' '}
-                    </div>
-                  </div>
-                )}
-              </For>
-            </div>
-          </Show>
-
-          <For each={props.commandsWithoutActivateScope()}>
-            {(command) => (
-              <div class="grid grid-cols-[8ch_1fr] gap-2 mb-1">
-                <div class="justify-self-start bg-panel border border-edge px-1.5 py-0.25 rounded-xs">
-                  <Hotkey
-                    token={command.hotkeyToken}
-                    shortcut={prettyPrintHotkeyString(
-                      // Asserting this, because useActiveCommands only returns commands with hotkeys.
-                      command.hotkeys!.at(0)!
-                    )}
-                  />
-                </div>
-                <div>
-                  {typeof command.description === 'function'
-                    ? command.description()
-                    : command.description}{' '}
-                </div>
+                  )}
+                </For>
               </div>
-            )}
-          </For>
+            </Show>
+            <For each={props.commandsWithoutActivateScope()}>
+              {(command) => (
+                <div class="grid grid-cols-[8ch_1fr] gap-2 mb-1">
+                  <div class="justify-self-start bg-panel border border-edge px-1.5 py-0.25 rounded-xs">
+                    <Hotkey
+                      token={command.hotkeyToken}
+                      shortcut={prettyPrintHotkeyString(
+                        // Asserting this, because useActiveCommands only returns commands with hotkeys.
+                        command.hotkeys!.at(0)!
+                      )}
+                    />
+                  </div>
+                  <div>
+                    {typeof command.description === 'function'
+                      ? command.description()
+                      : command.description}{' '}
+                  </div>
+                </div>
+              )}
+            </For>
+          </div>
         </div>
-      </div>
-    </Portal>
+      </Portal>
+    </Show>
   );
-};
+}
 
 export function WhichKey() {
   useSubscribeToKeypress((context) => {
     if (
       context.eventType === 'keydown' &&
       context.isNonModifierKeypress &&
-      !context.commandScopeActivated &&
+      (!context.commandScopeActivated ||
+        context.commandCaptured?.hotkeyToken === TOKENS.global.createCommand) &&
       !getHotkeyCommandByToken(TOKENS.global.toggleVisor)?.hotkeys?.some(
         (hotkey) => context.pressedKeysString === hotkey
       )

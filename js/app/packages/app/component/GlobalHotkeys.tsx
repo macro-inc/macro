@@ -57,6 +57,7 @@ export default function GlobalShortcuts() {
       return true;
     },
     displayPriority: 10,
+    activateCommandScope: true,
   });
 
   registerHotkey({

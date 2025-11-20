@@ -513,7 +513,7 @@ export function useHotKeyRoot() {
     const pressedKeysString = getKeyString(currentPressedKeys);
 
     let scopeNode = scopeTree.get(currentScopeId);
-    let commandCaptured = false;
+    let commandCaptured: HotkeyCommand | undefined = undefined;
     let commandScopeActivated = false;
 
     while (scopeNode) {
@@ -523,10 +523,32 @@ export function useHotKeyRoot() {
         (command.runWithInputFocused || !isEditableFocused) &&
         (!command.condition || command.condition())
       ) {
+        if (command.activateCommandScopeId) {
+          const commandScope = hotkeyScopeTree.get(
+            command.activateCommandScopeId
+          );
+          if (commandScope) {
+            // When the command scope is activated, we set its parent scope to the active scope when it was called, so that when the command scope is deactivated, scope will return to the correct scope. The commmand scope will still get cleaned up correctly when it's original parent scope is removed.
+            commandScope.parentScopeId = currentScopeId;
+            setPressedKeys(new Set<string>());
+            setActiveScope(commandScope.scopeId);
+            if (!commandCaptured) {
+              setExecutedTokens((prev) =>
+                prev.includes(command.hotkeyToken ?? '')
+                  ? prev
+                  : [...prev, command.hotkeyToken ?? '']
+              );
+            }
+            commandScopeActivated = true;
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }
+
         const captured = command.keyDownHandler?.(e);
         if (captured) {
           setPressedKeys(new Set<string>());
-          commandCaptured = true;
+          commandCaptured = command;
           setExecutedTokens((prev) =>
             prev.includes(command.hotkeyToken ?? '')
               ? prev
@@ -549,28 +571,6 @@ export function useHotKeyRoot() {
             scopeId: scopeNode.scopeId,
             command: () => command.keyUpHandler?.(e),
           });
-        }
-
-        if (command.activateCommandScopeId) {
-          const commandScope = hotkeyScopeTree.get(
-            command.activateCommandScopeId
-          );
-          if (commandScope) {
-            // When the command scope is activated, we set its parent scope to the active scope when it was called, so that when the command scope is deactivated, scope will return to the correct scope. The commmand scope will still get cleaned up correctly when it's original parent scope is removed.
-            commandScope.parentScopeId = currentScopeId;
-            setPressedKeys(new Set<string>());
-            setActiveScope(commandScope.scopeId);
-            if (!commandCaptured) {
-              setExecutedTokens((prev) =>
-                prev.includes(command.hotkeyToken ?? '')
-                  ? prev
-                  : [...prev, command.hotkeyToken ?? '']
-              );
-            }
-            commandScopeActivated = true;
-            e.preventDefault();
-            e.stopPropagation();
-          }
         }
       }
 
@@ -615,7 +615,8 @@ export function useHotKeyRoot() {
       activeScopeId: currentScopeId ?? null,
       isEditableFocused: isEditableFocused ?? false,
       commandScopeActivated,
-      commandFound: commandCaptured,
+      commandFound: !!commandCaptured,
+      commandCaptured: commandCaptured,
       eventType: e.type as 'keydown' | 'keyup',
       isNonModifierKeypress: ![...currentPressedKeys].every((key) =>
         ['cmd', 'ctrl', 'opt', 'shift'].includes(key)
