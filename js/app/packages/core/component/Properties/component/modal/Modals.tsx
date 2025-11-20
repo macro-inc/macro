@@ -1,10 +1,12 @@
 import { useBlockId } from '@core/block';
 import { DatePicker } from '@core/component/DatePicker';
+import { toast } from '@core/component/Toast/Toast';
 import { type Component, createMemo } from 'solid-js';
 import { Portal, Show } from 'solid-js/web';
-import { savePropertyValue } from '../../api/utils';
+import { saveEntityProperty } from '../../api';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
+import { ERROR_MESSAGES } from '../../utils/errorHandling';
 import { CreatePropertyModal } from './CreatePropertyModal';
 import { EditPropertyValueModal } from './EditPropertyValueModal';
 import { SelectPropertyModal } from './SelectPropertyModal';
@@ -36,15 +38,22 @@ export const Modals: Component = () => {
   };
 
   const handleDateSaved = async (newDate: Date, property: Property) => {
-    const success = await savePropertyValue(
-      blockId,
-      property,
-      { valueType: 'DATE', value: newDate.toISOString() },
-      entityType
-    );
-    if (success) {
-      onRefresh();
+    const result = await saveEntityProperty(blockId, entityType, property, {
+      valueType: 'DATE',
+      value: newDate.toISOString(),
+    });
+
+    if (!result.ok) {
+      console.error(
+        'Modals.handleDateSaved:',
+        result.error,
+        ERROR_MESSAGES.PROPERTY_SAVE
+      );
+      toast.failure(ERROR_MESSAGES.PROPERTY_SAVE);
+      return;
     }
+
+    onRefresh();
     closeDatePicker();
   };
 
@@ -59,7 +68,7 @@ export const Modals: Component = () => {
         <SelectPropertyModal
           isOpen={true}
           onClose={closePropertySelector}
-          existingPropertyIds={existingPropertyIds()}
+          existingPropertyIds={existingPropertyIds}
         />
       </Show>
 
@@ -87,9 +96,8 @@ export const Modals: Component = () => {
       <Show when={datePickerModal()}>
         {(state) => {
           const property = state().property;
-          const dateValue = property.value
-            ? new Date(property.value)
-            : new Date();
+          const dateValue =
+            property.value != null ? new Date(property.value) : new Date();
           const anchor = state().anchor;
 
           return anchor ? (

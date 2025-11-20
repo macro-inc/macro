@@ -1,4 +1,5 @@
 export { useBooleanEditor } from './useBooleanEditor';
 export { useEntityProperties } from './useEntityProperties';
 export { useInlineEditor } from './useInlineEditor';
-export { usePropertyModals } from './usePropertyModals';
+export { usePropertyEditor } from './usePropertyEditor';
+export { usePropertySelection } from './usePropertySelection';
