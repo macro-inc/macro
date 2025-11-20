@@ -20,7 +20,6 @@ import { client } from '../client';
  * 4. Verify deletion by counting remaining documents
  */
 
-
 // Get user_id and indices from environment variables
 const userId = process.env.USER_ID;
 const indicesEnv = process.env.INDICES;
@@ -28,15 +27,19 @@ const indicesEnv = process.env.INDICES;
 if (!userId || !indicesEnv) {
   console.error('Missing required environment variables:');
   console.error('USER_ID - the user ID to delete data for');
-  console.error('INDICES - comma-separated list of index names (e.g., "documents,chats,emails")');
+  console.error(
+    'INDICES - comma-separated list of index names (e.g., "documents,chats,emails")'
+  );
   process.exit(1);
 }
 
-const indicesToProcess = indicesEnv.split(',').map(index => index.trim());
+const indicesToProcess = indicesEnv.split(',').map((index) => index.trim());
 
 async function deleteUserData() {
   const opensearchClient = client();
-  console.log(`Deleting data for user_id: ${userId} from indices: ${indicesToProcess.join(', ')}`);
+  console.log(
+    `Deleting data for user_id: ${userId} from indices: ${indicesToProcess.join(', ')}`
+  );
 
   try {
     for (const index of indicesToProcess) {
@@ -58,29 +61,31 @@ async function deleteUserData() {
           should: [
             {
               term: {
-                user_id: userId
-              }
+                user_id: userId,
+              },
             },
             {
               term: {
-                owner_id: userId
-              }
-            }
+                owner_id: userId,
+              },
+            },
           ],
-          minimum_should_match: 1
-        }
+          minimum_should_match: 1,
+        },
       };
 
       // First, let's count how many documents we'll be deleting
       const countResult = await opensearchClient.count({
         index,
         body: {
-          query
-        }
+          query,
+        },
       });
 
       const docCount = countResult.body.count;
-      console.log(`Found ${docCount} documents with user_id OR owner_id: ${userId} in ${index}`);
+      console.log(
+        `Found ${docCount} documents with user_id OR owner_id: ${userId} in ${index}`
+      );
 
       if (docCount === 0) {
         console.log(`No documents to delete in ${index}`);
@@ -91,7 +96,7 @@ async function deleteUserData() {
       await opensearchClient.deleteByQuery({
         index,
         body: {
-          query
+          query,
         },
         refresh: true, // Refresh the index after deletion
       });
@@ -102,13 +107,15 @@ async function deleteUserData() {
       const verifyResult = await opensearchClient.count({
         index,
         body: {
-          query
-        }
+          query,
+        },
       });
 
       const remainingCount = verifyResult.body.count;
       const deletedCount = docCount - remainingCount;
-      console.log(`Deleted ${deletedCount} documents from ${index} (${remainingCount} remaining)`);
+      console.log(
+        `Deleted ${deletedCount} documents from ${index} (${remainingCount} remaining)`
+      );
     }
 
     console.log('User data deletion completed');
