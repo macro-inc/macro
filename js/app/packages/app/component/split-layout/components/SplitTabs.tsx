@@ -1,5 +1,5 @@
-import { TOKENS } from '@core/hotkey/tokens';
 import { playSound } from '@app/util/sound';
+import { TOKENS } from '@core/hotkey/tokens';
 import type { ViewId } from '@core/types/view';
 import { Tabs } from '@kobalte/core';
 import { createElementSize } from '@solid-primitives/resize-observer';

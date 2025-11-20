@@ -2,7 +2,9 @@ function matchScroll(str: string) {
   return str.match(/auto|scroll/);
 }
 
-export const getScrollElementParent = (el: HTMLElement | null): HTMLElement | null => {
+export const getScrollElementParent = (
+  el: HTMLElement | null
+): HTMLElement | null => {
   if (!el) {
     return null;
   }

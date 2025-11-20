@@ -61,7 +61,9 @@ const EntityNavigationIndicator = () => {
             disabled={selectedEntityIndex() === 0}
             theme="current"
             onDeepClick={() => {
-              const command = getActiveCommandByToken(TOKENS.entity.select.start);
+              const command = getActiveCommandByToken(
+                TOKENS.entity.select.start
+              );
               if (!command) return;
               runCommand(command);
             }}
