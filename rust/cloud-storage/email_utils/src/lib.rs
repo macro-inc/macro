@@ -122,6 +122,7 @@ pub fn is_generic_email(email: &str) -> bool {
             || email_lower.contains("automated")
             || email_lower.contains("unsub")
             || email_lower.contains("support")
+            || email_lower.contains("+")
             || email_lower.contains("do_not_reply"))
     {
         return true;
