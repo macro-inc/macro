@@ -74,3 +74,69 @@ export function buildMentionMarkdownString(info: MentionInfo): string {
       return wrapXml('m-date-mention', dropKey(info, 'type'));
   }
 }
+
+/**
+ * Converts markdown text with XML mention tags to plain text.
+ * Extracts the readable text from mention nodes:
+ * - User mentions: email
+ * - Contact mentions: name (fallback to emailOrDomain)
+ * - Date mentions: displayFormat
+ * - Document mentions: documentName
+ */
+export function markdownToPlainText(markdown: string): string {
+  let result = markdown;
+
+  // Replace user mentions with email
+  result = result.replace(
+    /<m-user-mention>(.*?)<\/m-user-mention>/g,
+    (_, json) => {
+      try {
+        const data = JSON.parse(json);
+        return data.email || '';
+      } catch {
+        return '';
+      }
+    }
+  );
+
+  // Replace contact mentions with name or emailOrDomain
+  result = result.replace(
+    /<m-contact-mention>(.*?)<\/m-contact-mention>/g,
+    (_, json) => {
+      try {
+        const data = JSON.parse(json);
+        return data.name || data.emailOrDomain || '';
+      } catch {
+        return '';
+      }
+    }
+  );
+
+  // Replace date mentions with displayFormat
+  result = result.replace(
+    /<m-date-mention>(.*?)<\/m-date-mention>/g,
+    (_, json) => {
+      try {
+        const data = JSON.parse(json);
+        return data.displayFormat || '';
+      } catch {
+        return '';
+      }
+    }
+  );
+
+  // Replace document mentions with documentName
+  result = result.replace(
+    /<m-document-mention>(.*?)<\/m-document-mention>/g,
+    (_, json) => {
+      try {
+        const data = JSON.parse(json);
+        return data.documentName || '';
+      } catch {
+        return '';
+      }
+    }
+  );
+
+  return result;
+}
