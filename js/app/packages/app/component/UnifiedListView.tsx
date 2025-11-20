@@ -57,16 +57,14 @@ import {
   type WithSearch,
 } from '@macro-entity';
 import {
-  markNotificationsForEntityAsDone,
-  useNotificationsForEntity,
-} from '@notifications/notificationHelpers';
-import {
   isChannelMention,
   isChannelMessageReply,
   isChannelMessageSend,
+  markNotificationsForEntityAsDone,
   notificationWithMetadata,
-} from '@notifications/notificationMetadata';
-import type { UnifiedNotification } from '@notifications/types';
+  type UnifiedNotification,
+  useNotificationsForEntity,
+} from '@notifications';
 import type { PaginatedSearchArgs } from '@service-search/client';
 import type {
   ChannelFilters,
@@ -1519,7 +1517,7 @@ function SearchBar(props: {
     setViewDataStore(selectedView(), 'searchText', text);
   };
 
-  const debouncedSetSearch = debounce(setSearchText, 200);
+  const debouncedSetSearch = debounce(setSearchText, 300);
 
   const isElementInViewport = (element: Element): Promise<boolean> => {
     return new Promise((resolve) => {

@@ -12,8 +12,10 @@ import {
   queryKeys,
   type WithNotification,
 } from '@macro-entity';
-import { markNotificationsForEntityAsDone } from '@notifications/notificationHelpers';
-import type { NotificationSource } from '@notifications/notificationSource';
+import {
+  markNotificationsForEntityAsDone,
+  type NotificationSource,
+} from '@notifications';
 import { emailClient } from '@service-email/client';
 import stringify from 'json-stable-stringify';
 import { queryClient } from '../../macro-entity/src/queries/client';

@@ -22,7 +22,7 @@ impl SearchQueryConfig for ProjectSearchConfig {
     const TITLE_KEY: &'static str = "project_name";
 
     // Projects have no "content" to highlight match on, so match on the TITLE_KEY instead
-    fn default_highlight() -> opensearch_query_builder::Highlight {
+    fn default_highlight() -> opensearch_query_builder::Highlight<'static> {
         opensearch_query_builder::Highlight::new()
             .require_field_match(true)
             .field(
@@ -61,11 +61,11 @@ impl ProjectQueryBuilder {
         fn disable_recency(disable_recency: bool) -> Self;
     }
 
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder> {
+    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
         self.inner.build_bool_query()
     }
 
-    fn build_search_request(&self) -> Result<SearchRequest> {
+    fn build_search_request(&self) -> Result<SearchRequest<'static>> {
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
         // SearchOn::NameContent is used
@@ -149,19 +149,17 @@ pub(crate) async fn search_projects(
         .map_client_error()
         .await?;
 
-    let json_value: serde_json::Value =
-        response
-            .json()
-            .await
-            .map_err(|e| OpensearchClientError::DeserializationFailed {
-                details: e.to_string(),
-                method: Some("search_projects".to_string()),
-            })?;
-
-    let result: SearchResponse<ProjectIndex> = serde_json::from_value(json_value).map_err(|e| {
-        OpensearchClientError::DeserializationFailed {
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| OpensearchClientError::HttpBytesError {
             details: e.to_string(),
-            method: Some("search_projects".to_string()),
+        })?;
+
+    let result: SearchResponse<ProjectIndex> = serde_json::from_slice(&bytes).map_err(|e| {
+        OpensearchClientError::SearchDeserializationFailed {
+            details: e.to_string(),
+            raw_body: String::from_utf8_lossy(&bytes).to_string(),
         }
     })?;
 

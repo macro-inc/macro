@@ -23,6 +23,7 @@ pub(crate) async fn upsert_channel_message(
     args: &UpsertChannelMessageArgs,
 ) -> Result<()> {
     let id = format!("{}:{}", args.channel_id, args.message_id);
+
     let response = client
         .index(opensearch::IndexParts::IndexId(CHANNEL_INDEX, &id))
         .body(args)

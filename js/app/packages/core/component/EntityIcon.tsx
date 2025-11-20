@@ -221,7 +221,7 @@ function isFileType(ext: string): boolean {
 }
 
 // this lets us show a archive icon for certain files which still get mapped to block-unknown
-function isArchiveType(ext: string): boolean {
+export function isArchiveType(ext: string): boolean {
   return ARCHIVE_EXTENSIONS.has(ext as any);
 }
 

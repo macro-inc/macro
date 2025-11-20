@@ -56,7 +56,7 @@ impl SearchQueryConfig for ChannelMessageSearchConfig {
     const USER_ID_KEY: &'static str = "sender_id";
     const TITLE_KEY: &'static str = "channel_name";
 
-    fn default_sort_types() -> Vec<SortType> {
+    fn default_sort_types() -> Vec<SortType<'static>> {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
@@ -110,7 +110,7 @@ impl ChannelMessageQueryBuilder {
     }
 
     /// Builds the main bool query for the index
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder> {
+    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
         // Build the main bool query containing all terms and any other filters
         let mut bool_query = self.inner.build_bool_query()?;
 
@@ -135,7 +135,7 @@ impl ChannelMessageQueryBuilder {
         Ok(bool_query)
     }
 
-    fn build_search_request(&self) -> Result<SearchRequest> {
+    fn build_search_request(&self) -> Result<SearchRequest<'static>> {
         let bool_query = self.build_bool_query()?;
 
         // Build the search request with the bool query
@@ -205,12 +205,17 @@ pub(crate) async fn search_channel_messages(
         .map_client_error()
         .await?;
 
-    let result = response
-        .json::<DefaultSearchResponse<ChannelMessageIndex>>()
+    let bytes = response
+        .bytes()
         .await
-        .map_err(|e| OpensearchClientError::DeserializationFailed {
+        .map_err(|e| OpensearchClientError::HttpBytesError {
             details: e.to_string(),
-            method: Some("search_channel".to_string()),
+        })?;
+
+    let result: DefaultSearchResponse<ChannelMessageIndex> = serde_json::from_slice(&bytes)
+        .map_err(|e| OpensearchClientError::SearchDeserializationFailed {
+            details: e.to_string(),
+            raw_body: String::from_utf8_lossy(&bytes).to_string(),
         })?;
 
     Ok(result

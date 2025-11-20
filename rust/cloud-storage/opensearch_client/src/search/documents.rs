@@ -23,7 +23,7 @@ impl SearchQueryConfig for DocumentSearchConfig {
     const USER_ID_KEY: &'static str = "owner_id";
     const TITLE_KEY: &'static str = "document_name";
 
-    fn default_sort_types() -> Vec<SortType> {
+    fn default_sort_types() -> Vec<SortType<'static>> {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
@@ -56,11 +56,11 @@ impl DocumentQueryBuilder {
         fn disable_recency(disable_recency: bool) -> Self;
     }
 
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder> {
+    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
         self.inner.build_bool_query()
     }
 
-    fn build_search_request(self) -> Result<SearchRequest> {
+    fn build_search_request(self) -> Result<SearchRequest<'static>> {
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
         // SearchOn::NameContent is used
@@ -151,12 +151,19 @@ pub(crate) async fn search_documents(
         .map_client_error()
         .await?;
 
-    let result = response
-        .json::<DefaultSearchResponse<DocumentIndex>>()
+    let bytes = response
+        .bytes()
         .await
-        .map_err(|e| OpensearchClientError::DeserializationFailed {
+        .map_err(|e| OpensearchClientError::HttpBytesError {
             details: e.to_string(),
-            method: Some("search_documents".to_string()),
+        })?;
+
+    let result: DefaultSearchResponse<DocumentIndex> =
+        serde_json::from_slice(&bytes).map_err(|e| {
+            OpensearchClientError::SearchDeserializationFailed {
+                details: e.to_string(),
+                raw_body: String::from_utf8_lossy(&bytes).to_string(),
+            }
         })?;
 
     Ok(result
