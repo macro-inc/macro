@@ -4,6 +4,7 @@ import { globalSplitManager } from '@app/signal/splitLayout';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { SplitModalProvider } from './SplitModalContext';
 import { SplitDrawerGroup } from './SplitDrawerContext';
+import { isRightPanelOpen } from '@core/signal/layout';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 import MacroJump from '@app/component/MacroJump';
 import { SplitToolbar } from './SplitToolbar';
@@ -29,8 +30,6 @@ export function SplitContainer(
       ref()?.focus();
     })
   );
-  const isSpotLight = () => panel.handle.isSpotLight();
-
 
   const [toolbarRef, setToolbarRef] = createSignal<HTMLDivElement | null>(null);
   const [headerRef, setHeaderRef] = createSignal<HTMLDivElement | null>(null);
@@ -43,7 +42,7 @@ export function SplitContainer(
     return offset;
   });
 
-  const multipleSplits = () => {
+  function multipleSplits(){
     const splits = globalSplitManager()?.splits?.();
     return Boolean(splits && splits.length > 1);
   };
@@ -54,7 +53,7 @@ export function SplitContainer(
         contentOffsetTop={offsetTop}
         panelSize={panel.panelSize}
       >
-        <Show when={isSpotLight()}>
+        <Show when={panel.handle.isSpotLight()}>
           <div
             class="fixed inset-0 w-screen h-screen z-modal-overlay bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
             onClick={() => panel.handle.toggleSpotlight(false)}
@@ -63,16 +62,16 @@ export function SplitContainer(
         </Show>
 
         <ClippedPanel
-          active={true}
-          tr={true}
-          tl={true}
+          active={panel.handle.isActive() && multipleSplits() && !panel.handle.isSpotLight()}
+          tl={panel.handle.isFirst()}
+          tr={panel.handle.isLast() && !isRightPanelOpen()}
         >
           <div
             classList={{
-              'fixed inset-[4rem] z-modal-overlay isolate opacity-50': isSpotLight(),
-              'opacity-100': panel.handle.isActive() || isSpotLight(),
+              'fixed inset-[4rem] z-modal-overlay isolate opacity-50': panel.handle.isSpotLight(),
+              'opacity-100': panel.handle.isActive() || panel.handle.isSpotLight(),
+              'size-full': !panel.handle.isSpotLight(),
               'opacity-85': !panel.handle.isActive(),
-              'size-full': !isSpotLight(),
             }}
             class="@container/split flex flex-col min-h-0 bracket-never"
             ref={(ref) => { setRef(ref); props.ref(ref)}}
@@ -83,7 +82,7 @@ export function SplitContainer(
             <SplitHeader ref={setHeaderRef} />
             <SplitToolbar ref={setToolbarRef} />
             <div class="size-full overflow-hidden">{props.children}</div>
-            <Show when={isSpotLight()}>
+            <Show when={panel.handle.isSpotLight()}>
               <MacroJump tabbableParent={ref} />
             </Show>
           </div>
