@@ -10,21 +10,30 @@ interface PropertiesListProps {
 export const PropertyGrid: Component<PropertiesListProps> = (props) => {
   const { openPropertyEditor, openDatePicker } = usePropertiesContext();
 
-  const metadataProperties = createMemo(() =>
-    props.properties.filter(
-      (prop) =>
-        prop.isMetadata &&
-        // Hide "Project" property if value is null
-        !(prop.displayName === 'Project' && prop.value == null)
-    )
-  );
+  // Single pass through properties array to split into metadata and editable
+  // More efficient than two separate filter operations
+  const propertyGroups = createMemo(() => {
+    const metadata: Property[] = [];
+    const editable: Property[] = [];
 
-  const editableProperties = createMemo(() =>
-    props.properties.filter((prop) => !prop.isMetadata)
-  );
+    for (const prop of props.properties) {
+      if (prop.isMetadata) {
+        // Hide "Project" property if value is null
+        if (prop.value != null) {
+          metadata.push(prop);
+        }
+      } else {
+        editable.push(prop);
+      }
+    }
+
+    return { metadata, editable };
+  });
 
   const showSeparator = createMemo(
-    () => metadataProperties().length > 0 && editableProperties().length > 0
+    () =>
+      propertyGroups().metadata.length > 0 &&
+      propertyGroups().editable.length > 0
   );
 
   const handleValueClick = (property: Property, anchor?: HTMLElement) => {
@@ -50,8 +59,8 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
       }
     >
       <div class="grid grid-cols-[minmax(120px,50%)_minmax(150px,1fr)] gap-x-4 gap-y-3 pt-2 min-w-fit">
-        <Show when={metadataProperties().length > 0}>
-          <For each={metadataProperties()}>
+        <Show when={propertyGroups().metadata.length > 0}>
+          <For each={propertyGroups().metadata}>
             {(property) => (
               <PropertyRow
                 property={property}
@@ -65,8 +74,8 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
           <div class="col-span-2 border-t border-edge my-4" />
         </Show>
 
-        <Show when={editableProperties().length > 0}>
-          <For each={editableProperties()}>
+        <Show when={propertyGroups().editable.length > 0}>
+          <For each={propertyGroups().editable}>
             {(property) => (
               <PropertyRow
                 property={property}
