@@ -140,13 +140,12 @@ const PreviewPanelContent: Component<{
         : props.selectedEntity.type,
       props.selectedEntity.id
     );
-  const [interactedWithMouseDown, setInteractedWithMouseDown] =
-    createSignal(false);
+  const [interactedWith, setInteractedWith] = createSignal(false);
 
   createRenderEffect((prevId: string) => {
     const id = props.selectedEntity.id;
     if (id !== prevId) {
-      setInteractedWithMouseDown(false);
+      setInteractedWith(false);
     }
     return id;
   }, props.selectedEntity.id);
@@ -155,16 +154,22 @@ const PreviewPanelContent: Component<{
     <div
       class="size-full"
       onFocusIn={(event) => {
-        if (interactedWithMouseDown()) return;
+        if (interactedWith()) return;
         const relatedTarget = event.relatedTarget as HTMLElement;
         const currentTarget = event.currentTarget as HTMLElement;
+
+        // TODO: use state instead to determine when preview block can recieve focus
+        if (event.target.hasAttribute('data-allow-focus-in-preview')) {
+          setInteractedWith(true);
+          return;
+        }
 
         if (!currentTarget.contains(relatedTarget)) {
           relatedTarget.focus();
         }
       }}
       onPointerDown={() => {
-        setInteractedWithMouseDown(true);
+        setInteractedWith(true);
       }}
     >
       <SplitPanelContext.Provider
@@ -226,20 +231,8 @@ export function Soup() {
     },
   } = splitPanelContext;
   const view = createMemo(() => viewsData[selectedView()]);
-  // Use preview state from SplitPanelContext (created in SplitLayout for unified-list)
   const previewState = () => splitPanelContext.previewState;
-  const preview = () => previewState()?.[0]?.() ?? false;
-  const setPreview = (value: boolean | ((prev: boolean) => boolean)) => {
-    const state = previewState();
-    if (state) {
-      const [, setState] = state;
-      if (typeof value === 'function') {
-        setState((prev) => value(prev));
-      } else {
-        setState(value);
-      }
-    }
-  };
+  const [preview, setPreview] = previewState();
   const selectedEntity = () => view().selectedEntity;
 
   const orchestrator = useGlobalBlockOrchestrator();
