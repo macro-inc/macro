@@ -127,7 +127,7 @@ impl PrimaryId for SearchQueueMessage {
             SearchQueueMessage::BulkRemoveProjectMessage(message) => message.project_ids[0].clone(),
 
             SearchQueueMessage::RemoveUserProfile(message) => message.clone(),
-            SearchQueueMessage::UpdateEntityName(message) => message.entity_id.clone(),
+            SearchQueueMessage::UpdateEntityName(message) => message.entity_id.to_string().clone(),
         }
     }
 }
