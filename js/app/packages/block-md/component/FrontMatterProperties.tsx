@@ -2,6 +2,7 @@ import { useBlockId } from '@core/block';
 import {
   $getPinnedProperties,
   ADD_PINNED_PROPERTY_COMMAND,
+  dispatchInternalLayoutShift,
   REMOVE_PINNED_PROPERTY_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
 import { Modals } from '@core/component/Properties/component/modal';
@@ -18,6 +19,7 @@ import {
   createMemo,
   createSignal,
   type JSX,
+  onCleanup,
   Show,
 } from 'solid-js';
 import {
@@ -36,6 +38,11 @@ interface FrontMatterPropertiesProps {
 export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
   const blockId = useBlockId();
   const mdData = mdStore.get; // Access block store at component level
+  const layoutShift = () => {
+    if (mdData.editor) {
+      dispatchInternalLayoutShift(mdData.editor);
+    }
+  };
 
   const { properties, isLoading, error, refetch } = useEntityProperties(
     blockId,
@@ -49,6 +56,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
     if (shouldRefresh) {
       propertiesRefreshSignal.set(false);
       refetch();
+      layoutShift();
     }
   });
 
@@ -60,6 +68,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
 
   const toggleExpanded = () => {
     setFrontMatterPreferenceForDoc(blockId, !isExpanded());
+    layoutShift();
   };
 
   // Track pinned property IDs from Lexical - reactively updates on editor state changes
@@ -84,10 +93,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
         });
       }
     );
-
-    return () => {
-      unregister();
-    };
+    onCleanup(unregister);
   });
 
   // Filter properties to show metadata/system properties and pinned ones
@@ -114,6 +120,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
     const editor = mdData.editor;
     if (editor) {
       editor.dispatchCommand(ADD_PINNED_PROPERTY_COMMAND, propertyId);
+      layoutShift();
     }
   };
 
@@ -121,6 +128,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
     const editor = mdData.editor;
     if (editor) {
       editor.dispatchCommand(REMOVE_PINNED_PROPERTY_COMMAND, propertyId);
+      layoutShift();
     }
   };
 
