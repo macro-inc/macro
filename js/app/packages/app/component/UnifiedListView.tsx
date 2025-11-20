@@ -936,6 +936,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
   });
 
+  let lastClickedEntityId = -1;
+  createEffect(
+    on(view, () => {
+      lastClickedEntityId = -1;
+    })
+  );
+
   return (
     <>
       <Show when={!props.hideToolbar}>
@@ -1305,22 +1312,27 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       );
                       const newEnititiesForSeleciton: EntityData[] = [];
 
-                      let anchorIndex = -1;
-                      for (let i = 0; i < entityList.length; i++) {
-                        if (selectedEntitySet.has(entityList[i])) {
-                          anchorIndex = i;
+                      // Try to grab the last clicked item and fall back on
+                      // the highest currently selected index.
+                      let anchorIndex = lastClickedEntityId;
+                      if (anchorIndex === -1) {
+                        for (let i = 0; i < entityList.length; i++) {
+                          if (selectedEntitySet.has(entityList[i])) {
+                            anchorIndex = i;
+                          }
                         }
                       }
 
                       if (anchorIndex === -1) {
                         toggleSingle();
+                        lastClickedEntityId = innerProps.index;
                         return;
                       }
 
                       const targetIndex = innerProps.index;
-
                       const sign = Math.sign(targetIndex - anchorIndex);
                       if (anchorIndex === targetIndex) {
+                        // no_op
                       } else {
                         for (
                           let i = anchorIndex;
@@ -1340,8 +1352,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                           return p.concat(newEnititiesForSeleciton);
                         }
                       );
+                      lastClickedEntityId = innerProps.index;
                     } else {
                       toggleSingle();
+                      lastClickedEntityId = innerProps.index;
                     }
                   }}
                 />
