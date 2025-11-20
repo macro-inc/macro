@@ -15,6 +15,7 @@ export {
   PlatformNotificationProvider,
   usePlatformNotificationState,
 } from './components/PlatformNotificationProvider';
+export { NotificationsPlayground } from './components/Playground';
 export { createTabLeaderSignal } from './notification-election';
 export {
   createEffectOnEntityTypeNotification,
