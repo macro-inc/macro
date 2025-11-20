@@ -216,8 +216,16 @@ export interface BrowserNotificationPreview {
   icon: string;
 }
 
+import { getFaviconUrl } from '@app/util/favicon';
+import { themeReactive } from '../block-theme/signals/themeReactive';
+
 const USER_NAME_FALLBACK = 'Someone';
 const DOCUMENT_NAME_FALLBACK = 'Something';
+
+function getAccentColorForIcon(): string {
+  const { l, c, h } = themeReactive.a0;
+  return `oklch(${l[0]()} ${c[0]()} ${h[0]()}deg)`;
+}
 
 export async function toBrowserNotification(
   data: NotificationData,
@@ -237,9 +245,12 @@ export async function toBrowserNotification(
       : undefined) ??
     DOCUMENT_NAME_FALLBACK;
 
+  const accentColor = getAccentColorForIcon();
+  const icon = getFaviconUrl(accentColor);
+
   return {
     title: `${actor} ${data.action} ${targetName}`,
     body: data.content ?? `${actor} ${data.action}`,
-    icon: '/app/logo192.png',
+    icon,
   };
 }
