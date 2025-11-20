@@ -4750,7 +4750,6 @@ dependencies = [
  "models_pagination",
  "models_permissions",
  "models_search",
- "models_soup",
  "models_team",
  "rand 0.9.0",
  "serde",
