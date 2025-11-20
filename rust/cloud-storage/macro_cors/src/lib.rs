@@ -6,7 +6,7 @@ use axum::http::{
 };
 use tower_http::cors::{AllowOrigin, CorsLayer};
 
-static ALLOWED_ORIGINS: [&str; 11] = [
+static ALLOWED_ORIGINS: [&str; 10] = [
     "http://localhost:5173",
     "https://dashboarddev.macro.com",
     "https://dashboard.macro.com",
