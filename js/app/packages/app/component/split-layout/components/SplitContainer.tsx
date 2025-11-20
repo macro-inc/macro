@@ -148,26 +148,26 @@ export function SplitlikeContainer(
           <div class="fixed inset-[4rem] bg-panel shadow-xl" />
         </Show>
 
-          <div
-            data-split-container
-            tabindex={-1}
-            ref={setPanel}
-            class="@container/split flex flex-col min-h-0 bracket-never"
-            classList={{
-              'size-full': !props.spotlight(),
-              'fixed inset-[4rem] z-modal isolate': props.spotlight(),
-            }}
+        <div
+          data-split-container
+          tabindex={-1}
+          ref={setPanel}
+          class="@container/split flex flex-col min-h-0 bracket-never"
+          classList={{
+            'size-full': !props.spotlight(),
+            'fixed inset-[4rem] z-modal isolate': props.spotlight(),
+          }}
+        >
+          <ClippedPanel
+            active={props.active}
+            tl={props.tl}
+            tr={props.tr}
+            bl={props.bl}
+            br={props.br}
           >
-            <ClippedPanel
-              active={props.active}
-              tl={props.tl}
-              tr={props.tr}
-              bl={props.bl}
-              br={props.br}
-            >
-              <div class="size-full overflow-hidden">{props.children}</div>
-            </ClippedPanel>
-          </div>
+            <div class="size-full overflow-hidden">{props.children}</div>
+          </ClippedPanel>
+        </div>
       </SplitDrawerGroup>
     </SplitModalProvider>
   );
