@@ -47,14 +47,19 @@ export function usePropertySelection(
 
     return availableProperties.filter((property) => {
       const name = property.display_name.toLowerCase();
+      // Check name first before doing string concatenation
+      if (name.includes(query)) {
+        return true;
+      }
+
       const dataType = property.data_type;
       let typeDisplay = dataType;
 
       if (dataType === 'ENTITY' && property.specific_entity_type) {
-        typeDisplay += ` (${property.specific_entity_type})`;
+        typeDisplay += ` ${property.specific_entity_type}`;
       }
 
-      return name.includes(query) || typeDisplay.toLowerCase().includes(query);
+      return typeDisplay.toLowerCase().includes(query);
     });
   });
 
