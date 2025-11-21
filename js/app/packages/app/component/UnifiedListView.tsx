@@ -20,7 +20,10 @@ import {
   blockAcceptsFileExtension,
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
-import { ENABLE_SOUP_FROM_FILTER } from '@core/constant/featureFlags';
+import {
+  ENABLE_PROPERTY_DISPLAY_CONTROL,
+  ENABLE_SOUP_FROM_FILTER,
+} from '@core/constant/featureFlags';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -117,6 +120,7 @@ import {
 import { EntityActionsMenuItems } from './EntityActionsMenuItems';
 import { EntityModal } from './EntityModal/EntityModal';
 import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
+import { PropertyDisplayControl } from './PropertyDisplayControl';
 import { useUpsertSavedViewMutation } from './Soup';
 import {
   SplitToolbarLeft,
@@ -384,6 +388,22 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       'display',
       'showUnreadIndicator',
       showUnreadIndicator
+    );
+  };
+
+  const displayProperties = createMemo(
+    () =>
+      view()?.display?.displayProperties ??
+      defaultDisplayOptions.displayProperties
+  );
+  const setDisplayProperties = (
+    properties: DisplayOptions['displayProperties']
+  ) => {
+    setViewDataStore(
+      selectedView(),
+      'display',
+      'displayProperties',
+      properties
     );
   };
 
@@ -1238,6 +1258,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       onChange={setShowUnreadIndicator}
                     />
                   </section>
+                  <Show when={ENABLE_PROPERTY_DISPLAY_CONTROL}>
+                    <section class="p-2">
+                      <PropertyDisplayControl
+                        selectedPropertyIds={displayProperties}
+                        setSelectedPropertyIds={setDisplayProperties}
+                      />
+                    </section>
+                  </Show>
                 </div>
               </div>
             </DropdownMenu>
