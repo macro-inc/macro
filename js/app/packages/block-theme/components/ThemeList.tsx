@@ -80,7 +80,7 @@ export function ThemeList() {
                   background-color: var(--b0);
                   align-items: center;
                   padding: 10px 20px;
-                  cursor: pointer;
+                  cursor: var(--cursor-pointer);
                   display: grid;
                   gap: 20px;
                 "

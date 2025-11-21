@@ -96,6 +96,7 @@ utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
+models_opensearch = { path = "../models_opensearch" }
 
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }

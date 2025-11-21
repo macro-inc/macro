@@ -34,7 +34,8 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { supportedExtensions } from '@lexical-core/utils';
 import {
   createChannelsQuery,
-  createDssInfiniteQuery,
+  createDssInfiniteQueryGet,
+  createDssInfiniteQueryPost,
   createEmailsInfiniteQuery,
   createFilterComposer,
   createProjectFilterFn,
@@ -77,7 +78,10 @@ import type {
   UnifiedSearchIndex,
   UnifiedSearchRequestFilters,
 } from '@service-search/generated/models';
-import type { GetItemsSoupParams } from '@service-storage/generated/schemas';
+import type {
+  GetItemsSoupParams,
+  PostSoupRequest,
+} from '@service-storage/generated/schemas';
 import { debounce } from '@solid-primitives/scheduled';
 import stringify from 'json-stable-stringify';
 import {
@@ -131,6 +135,7 @@ import {
   type SortOptions,
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_IDS,
+  VIEWCONFIG_DEFAULTS_IDS_ENUM,
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
@@ -639,6 +644,27 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       sort_method: sortType(),
     })
   );
+  const GARBAGE_UUID = '00000000-0000-0000-0000-000000000000';
+  const dssQueryPOSTRequestBody = createMemo(
+    (): PostSoupRequest => ({
+      channel_filters: {
+        channel_ids: [GARBAGE_UUID],
+      },
+      document_filters: {
+        document_ids: entityTypeFilter().includes('document')
+          ? []
+          : [GARBAGE_UUID],
+      },
+      chat_filters: {
+        chat_ids: [GARBAGE_UUID],
+      },
+      email_filters: {
+        recipients: [GARBAGE_UUID],
+      },
+      limit: props.defaultDisplayOptions?.limit ?? 100,
+      sort_method: sortType(),
+    })
+  );
   const emailQueryParams = createMemo((): FetchPaginatedEmailsParams => {
     const sort = sortType();
     return {
@@ -694,7 +720,18 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return false;
   });
 
-  const disableDssInfiniteQuery = createMemo(() => {
+  const disableDssInfiniteQueryGET = createMemo(() => {
+    if (view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.folders) return true;
+
+    const typeFilter = entityTypeFilter();
+    if (typeFilter.length === 0) return false;
+    const dssTypes = ['document', 'chat', 'project'];
+    const hasDssTypes = typeFilter.some((t) => dssTypes.includes(t));
+    return !hasDssTypes;
+  });
+  const disableDssInfiniteQueryPost = createMemo(() => {
+    if (view().id !== VIEWCONFIG_DEFAULTS_IDS_ENUM.folders) return true;
+
     const typeFilter = entityTypeFilter();
     if (typeFilter.length === 0) return false;
     const dssTypes = ['document', 'chat', 'project'];
@@ -711,8 +748,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const channelsQuery = createChannelsQuery({
     disabled: disableChannelsQuery,
   });
-  const dssInfiniteQuery = createDssInfiniteQuery(dssQueryParams, {
-    disabled: disableDssInfiniteQuery,
+  const dssInfiniteQueryGET = createDssInfiniteQueryGet(dssQueryParams, {
+    disabled: disableDssInfiniteQueryGET,
+  });
+  const dssInfiniteQueryPOST = createDssInfiniteQueryPost(dssQueryParams, {
+    disabled: disableDssInfiniteQueryPost,
+    requestBody: dssQueryPOSTRequestBody,
   });
   const emailsInfiniteQuery = createEmailsInfiniteQuery(emailQueryParams, {
     refetchInterval: () => emailRefetchInterval(),
@@ -792,7 +833,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     >({
       entityInfiniteQueries: [
         {
-          query: dssInfiniteQuery,
+          query: dssInfiniteQueryGET,
+          operations: { filter: true, search: true },
+        },
+        {
+          query: dssInfiniteQueryPOST,
           operations: { filter: true, search: true },
         },
         {

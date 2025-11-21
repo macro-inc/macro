@@ -199,7 +199,7 @@ const useMapSearchResponseItem = () => {
           type: 'channel',
           // TODO: distinguish channel name match from channel message match
           id: result.channel_id,
-          name: result.name ?? channelWithLatest?.name ?? '',
+          name: channelWithLatest?.name ?? '',
           ownerId: result.owner_id ?? '',
           createdAt: result.metadata?.created_at,
           updatedAt: result.metadata?.updated_at,

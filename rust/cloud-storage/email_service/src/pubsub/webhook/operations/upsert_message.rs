@@ -5,6 +5,7 @@ use crate::pubsub::webhook::process;
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
 use email_db_client::threads;
 use email_db_client::threads::get::get_outbound_threads_by_thread_ids;
+use email_utils::dedupe_emails;
 use futures::future::join_all;
 use insight_service_client::InsightContextProvider;
 use model::contacts::ConnectionsMessage;
@@ -23,8 +24,10 @@ use models_email::gmail::operations::GmailApiOperation;
 use models_email::gmail::webhook::UpsertMessagePayload;
 use models_email::service::message::Message;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use models_opensearch::SearchEntityType;
 use sqs_client::search::SearchQueueMessage;
 use sqs_client::search::email::EmailMessage;
+use sqs_client::search::name::UpdateEntityName;
 use std::collections::{HashMap, HashSet};
 use std::result;
 use uuid::Uuid;
@@ -73,15 +76,17 @@ pub async fn upsert_message(
     let is_sent = message.is_sent;
 
     // deduped list of all non-generic emails the message was sent to
-    let recipient_emails = message
-        .cc
-        .iter()
-        .map(|c| c.email.clone())
-        .chain(message.to.iter().map(|t| t.email.clone()))
-        .collect::<std::collections::HashSet<_>>()
-        .into_iter()
-        .filter(|e| !email_utils::is_generic_email(e))
-        .collect::<Vec<_>>();
+    let recipient_emails = dedupe_emails(
+        message
+            .cc
+            .iter()
+            .map(|c| c.email.clone())
+            .chain(message.to.iter().map(|t| t.email.clone()))
+            .collect(),
+    )
+    .into_iter()
+    .filter(|e| !email_utils::is_generic_email(e))
+    .collect::<Vec<_>>();
 
     // determine if message's thread already exists in the database
     let thread_provider_to_db_map = threads::get::get_threads_by_link_id_and_provider_ids(
@@ -403,12 +408,28 @@ async fn fetch_and_insert_thread(
 
     // insert threads into db
     for thread in threads.into_iter() {
-        threads::insert::insert_thread_and_messages(&ctx.db, thread, link_id)
+        let thread_id = threads::insert::insert_thread_and_messages(&ctx.db, thread, link_id)
             .await
             .map_err(|e| {
                 ProcessingError::Retryable(DetailedError {
                     reason: FailureReason::DatabaseQueryFailed,
                     source: e.context("Failed to insert thread and messages".to_string()),
+                })
+            })?;
+
+        // notify search about new entity
+        ctx.sqs_client
+            .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(
+                UpdateEntityName {
+                    entity_id: thread_id,
+                    entity_type: SearchEntityType::Emails,
+                },
+            ))
+            .await
+            .map_err(|e| {
+                ProcessingError::NonRetryable(DetailedError {
+                    reason: FailureReason::SqsEnqueueFailed,
+                    source: e.context("Failed to send message to search extractor queue"),
                 })
             })?;
     }

@@ -402,11 +402,11 @@ fn test_deserialization() -> anyhow::Result<()> {
 fn test_build_unified_search_request_content() -> anyhow::Result<()> {
     let unified_search_args = UnifiedSearchArgs {
         search_indices: vec![
-            SearchIndex::Documents,
-            SearchIndex::Emails,
-            SearchIndex::Projects,
-            SearchIndex::Channels,
-            SearchIndex::Chats,
+            SearchEntityType::Documents,
+            SearchEntityType::Emails,
+            SearchEntityType::Projects,
+            SearchEntityType::Channels,
+            SearchEntityType::Chats,
         ]
         .into_iter()
         .collect(),
@@ -798,11 +798,11 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
 fn test_build_unified_search_request_name() -> anyhow::Result<()> {
     let unified_search_args = UnifiedSearchArgs {
         search_indices: vec![
-            SearchIndex::Documents,
-            SearchIndex::Emails,
-            SearchIndex::Projects,
-            SearchIndex::Channels,
-            SearchIndex::Chats,
+            SearchEntityType::Documents,
+            SearchEntityType::Emails,
+            SearchEntityType::Projects,
+            SearchEntityType::Channels,
+            SearchEntityType::Chats,
         ]
         .into_iter()
         .collect(),
@@ -873,16 +873,6 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
                 "type": "plain"
             },
             "title": {
-                "number_of_fragments": 1,
-                "post_tags": [
-                    "</macro_em>"
-                ],
-                "pre_tags": [
-                    "<macro_em>"
-                ],
-                "type": "plain"
-            },
-            "channel_name": {
                 "number_of_fragments": 1,
                 "post_tags": [
                     "</macro_em>"
@@ -1079,57 +1069,6 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
                 "must": [
                   {
                     "match_phrase": {
-                      "channel_name": "test"
-                    }
-                  },
-                  {
-                    "terms": {
-                      "thread_id": [
-                        "id1",
-                        "id2"
-                      ]
-                    }
-                  },
-                  {
-                    "terms": {
-                      "mentions": [
-                        "id1",
-                        "id2"
-                      ]
-                    }
-                  },
-                  {
-                    "terms": {
-                      "sender_id": [
-                        "id1",
-                        "id2"
-                      ]
-                    }
-                  },
-                  {
-                    "term": {
-                      "_index": "channels"
-                    }
-                  }
-                ],
-                "should": [
-                  {
-                    "terms": {
-                      "entity_id": [
-                        "id1",
-                        "id2"
-                      ]
-                    }
-                  },
-                ]
-              }
-            },
-            {
-              "bool": {
-                "minimum_should_match": 1,
-                "must": [
-                  {
-                    "match_phrase": {
                       "title": "test"
                     }
                   },
@@ -1234,11 +1173,11 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
 fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
     let unified_search_args = UnifiedSearchArgs {
         search_indices: vec![
-            SearchIndex::Documents,
-            SearchIndex::Emails,
-            SearchIndex::Projects,
-            SearchIndex::Channels,
-            SearchIndex::Chats,
+            SearchEntityType::Documents,
+            SearchEntityType::Emails,
+            SearchEntityType::Projects,
+            SearchEntityType::Channels,
+            SearchEntityType::Chats,
         ]
         .into_iter()
         .collect(),
@@ -1296,16 +1235,6 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
       "from": 20,
       "highlight": {
         "fields": {
-          "channel_name": {
-            "number_of_fragments": 1,
-            "post_tags": [
-              "</macro_em>"
-            ],
-            "pre_tags": [
-              "<macro_em>"
-            ],
-            "type": "plain"
-          },
           "content": {
             "number_of_fragments": 1,
             "post_tags": [
@@ -1625,25 +1554,8 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                           "should": [
                             {
                               "match_phrase_prefix": {
-                                "channel_name": {
-                                  "boost": 1000.0,
-                                  "query": "test"
-                                }
-                              }
-                            },
-                            {
-                              "match_phrase_prefix": {
                                 "content": {
                                   "boost": 900.0,
-                                  "query": "test"
-                                }
-                              }
-                            },
-                            {
-                              "match": {
-                                "channel_name": {
-                                  "boost": 0.1,
-                                  "minimum_should_match": "80%",
                                   "query": "test"
                                 }
                               }
@@ -1887,7 +1799,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
 #[test]
 fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
     let unified_search_args = UnifiedSearchArgs {
-        search_indices: vec![SearchIndex::Documents].into_iter().collect(),
+        search_indices: vec![SearchEntityType::Documents].into_iter().collect(),
         terms: vec!["test".to_string()],
         user_id: "user".to_string(),
         page: 1,

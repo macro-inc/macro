@@ -126,7 +126,7 @@ fn test_generate_terms_must_query() -> anyhow::Result<()> {
 #[test]
 fn test_generate_name_content_query() -> anyhow::Result<()> {
     let keys = Keys {
-        title_key: "test_title",
+        title_key: Some("test_title"),
         content_key: "test_content",
     };
 
@@ -262,6 +262,40 @@ fn test_generate_name_content_query() -> anyhow::Result<()> {
                                 }
                             }
                         ]
+                    }
+                }
+            ]
+        }
+    });
+
+    assert_eq!(result.to_json(), expected);
+
+    let keys = Keys {
+        title_key: None,
+        content_key: "test_content",
+    };
+
+    let result = generate_name_content_query(&keys, &["test".to_string()]);
+
+    let expected = serde_json::json!({
+        "bool": {
+            "minimum_should_match": 1,
+            "should": [
+                {
+                    "match_phrase_prefix": {
+                        "test_content": {
+                            "query": "test",
+                            "boost": 900.0
+                        }
+                    }
+                },
+                {
+                    "match": {
+                        "test_content": {
+                            "boost": 0.09,
+                            "minimum_should_match": "1",
+                            "query": "test"
+                        }
                     }
                 }
             ]

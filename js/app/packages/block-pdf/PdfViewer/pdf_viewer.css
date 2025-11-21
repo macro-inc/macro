@@ -59,7 +59,7 @@
 }
 
 .pageOverlayInner *:not(.pointer-events-none),
-.pageOverLayInner *:not(.pdf-pointer-event-reset *){
+.pageOverLayInner *:not(.pdf-pointer-event-reset *) {
   pointer-events: all;
 }
 
@@ -122,7 +122,7 @@
 }
 
 .pdfPopupInner div.openInNewTab svg {
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 :root {
@@ -298,7 +298,7 @@
 
 .pdfViewer.enablePermissions .textLayer span {
   user-select: none !important;
-  cursor: not-allowed;
+  cursor: var(--cursor-not-allowed);
 }
 
 .pdfPresentationMode .pdfViewer {

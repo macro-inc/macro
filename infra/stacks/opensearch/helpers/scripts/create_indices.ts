@@ -76,16 +76,6 @@ async function createChannelIndex(opensearchClient: Client) {
             entity_id: {
               type: 'keyword',
             },
-            channel_name: {
-              type: 'text',
-              fields: {
-                keyword: {
-                  type: 'keyword',
-                  ignore_above: 128,
-                },
-              },
-              index: true,
-            },
             channel_type: {
               type: 'keyword',
               index: true,
