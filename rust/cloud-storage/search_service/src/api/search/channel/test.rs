@@ -15,7 +15,6 @@ fn test_construct_search_result_single_channel() {
     let search_results = vec![
         opensearch_client::search::channels::ChannelMessageSearchResponse {
             channel_id: channel_uuid.to_string(),
-            channel_name: Some("Test Channel".to_string()),
             channel_type: "public".to_string(),
             org_id: Some(123),
             message_id: "msg1".to_string(),
@@ -44,12 +43,6 @@ fn test_construct_search_result_single_channel() {
     assert_eq!(result[0].extra.channel_id, channel_uuid);
     assert_eq!(result[0].extra.id, channel_uuid);
     assert_eq!(
-        result[0].extra.channel_name,
-        Some("Test Channel".to_string())
-    );
-    assert_eq!(result[0].extra.name, Some("Test Channel".to_string()));
-    assert_eq!(result[0].extra.channel_message_search_results.len(), 1);
-    assert_eq!(
         result[0].extra.channel_message_search_results[0].message_id,
         "msg1"
     );
@@ -69,7 +62,6 @@ fn test_construct_search_result_multiple_messages_same_channel() {
     let search_results = vec![
         opensearch_client::search::channels::ChannelMessageSearchResponse {
             channel_id: channel_uuid.to_string(),
-            channel_name: Some("Test Channel".to_string()),
             channel_type: "public".to_string(),
             org_id: Some(123),
             message_id: "msg1".to_string(),
@@ -86,7 +78,6 @@ fn test_construct_search_result_multiple_messages_same_channel() {
         },
         opensearch_client::search::channels::ChannelMessageSearchResponse {
             channel_id: channel_uuid.to_string(),
-            channel_name: Some("Test Channel".to_string()),
             channel_type: "public".to_string(),
             org_id: Some(123),
             message_id: "msg2".to_string(),
@@ -114,7 +105,6 @@ fn test_construct_search_result_multiple_messages_same_channel() {
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.channel_id, channel_uuid);
     assert_eq!(result[0].extra.id, channel_uuid);
-    assert_eq!(result[0].extra.name, Some("Test Channel".to_string()));
     assert_eq!(result[0].extra.channel_message_search_results.len(), 2);
 
     let message_ids: Vec<String> = result[0]
@@ -142,7 +132,6 @@ fn test_construct_search_result_filters_messages_without_content() {
     let search_results = vec![
         opensearch_client::search::channels::ChannelMessageSearchResponse {
             channel_id: channel_uuid.to_string(),
-            channel_name: Some("Test Channel".to_string()),
             channel_type: "public".to_string(),
             org_id: Some(123),
             message_id: "msg1".to_string(),
@@ -159,7 +148,6 @@ fn test_construct_search_result_filters_messages_without_content() {
         },
         opensearch_client::search::channels::ChannelMessageSearchResponse {
             channel_id: channel_uuid.to_string(),
-            channel_name: Some("Test Channel".to_string()),
             channel_type: "public".to_string(),
             org_id: Some(123),
             message_id: "msg2".to_string(),
@@ -197,7 +185,6 @@ fn create_test_channel_response(
 ) -> opensearch_client::search::channels::ChannelMessageSearchResponse {
     opensearch_client::search::channels::ChannelMessageSearchResponse {
         channel_id: channel_id.to_string(),
-        channel_name: Some("Test Channel".to_string()),
         channel_type: "public".to_string(),
         org_id: Some(123),
         message_id: message_id.to_string(),
