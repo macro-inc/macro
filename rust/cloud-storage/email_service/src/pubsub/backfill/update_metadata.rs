@@ -102,7 +102,7 @@ pub async fn update_thread_metadata(
     ctx.sqs_client
         .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(
             UpdateEntityName {
-                entity_id: p.thread_db_id.clone(),
+                entity_id: p.thread_db_id,
                 entity_type: SearchEntityType::Emails,
             },
         ))
