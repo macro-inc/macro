@@ -23,6 +23,8 @@ use macro_middleware::cloud_storage::ensure_access::{
 use model::chat::NewChatAttachment;
 use model::{chat::AttachmentType, response::StringIDResponse, user::UserContext};
 use models_permissions::share_permission::access_level::EditAccessLevel;
+use sqs_client::search::SearchQueueMessage;
+use tracing::Instrument;
 
 #[utoipa::path(
         post,
@@ -172,6 +174,34 @@ pub async fn create_user_chat_v2(
         },
     )
     .await;
+
+    tokio::spawn({
+        let sqs_client = ctx.sqs_client.clone();
+        let chat_id = chat.clone();
+        async move {
+            tracing::trace!("sending message to search extractor queue");
+            let chat_id = match macro_uuid::string_to_uuid(&chat_id) {
+                Ok(chat_id) => chat_id,
+                Err(err) => {
+                    tracing::error!(error=?err, "failed to convert chat_id to uuid");
+                    return;
+                }
+            };
+
+            let _ = sqs_client
+                .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(
+                    sqs_client::search::name::UpdateEntityName {
+                        entity_id: chat_id,
+                        entity_type: models_opensearch::SearchEntityType::Chats,
+                    },
+                ))
+                .await
+                .inspect_err(|e| {
+                    tracing::error!(error=?e, "SEARCH_QUEUE unable to enqueue message");
+                });
+        }
+        .in_current_span()
+    });
 
     Ok(StringIDResponse { id: chat })
 }
