@@ -101,7 +101,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     const messageDiv = document.createElement('div');
     messageDiv.innerHTML = parsedHTML().mainContent;
     messageDiv.style.userSelect = 'text';
-    messageDiv.style.cursor = 'auto';
+    messageDiv.style.cursor = 'var(--cursor-auto)';
     messageDiv.style.overflow = 'auto';
     shadow.appendChild(messageDiv);
     return hostContainer;
