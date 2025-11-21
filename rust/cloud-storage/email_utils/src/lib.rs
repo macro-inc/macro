@@ -183,13 +183,12 @@ pub fn dedupe_emails(emails: Vec<String>) -> Vec<String> {
         .into_iter()
         .map(|mut email| {
             // Remove everything from + to @ if + exists
-            if let Some(plus_pos) = email.find('+') {
-                if let Some(at_pos) = email.find('@') {
-                    if plus_pos < at_pos {
-                        email.drain(plus_pos..at_pos);
-                    }
-                }
+            if let (Some(plus_pos), Some(at_pos)) = (email.find('+'), email.find('@'))
+                && plus_pos < at_pos
+            {
+                email.drain(plus_pos..at_pos);
             }
+
             email
         })
         .collect::<std::collections::HashSet<_>>()
