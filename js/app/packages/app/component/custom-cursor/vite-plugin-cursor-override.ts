@@ -90,7 +90,7 @@ function transformCssContent(css: string): string {
   // This regex matches: cursor: <value> [ !important];
   const cursorRegex = /cursor\s*:\s*([^;!]+?)(\s+!important)?\s*;/gi;
 
-  return css.replace(cursorRegex, (match, value, important = '') => {
+  return css.replace(cursorRegex, (_match, value, important = '') => {
     const transformedValue = transformCursorValue(value.trim());
     return `cursor: ${transformedValue}${important};`;
   });
