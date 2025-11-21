@@ -6,6 +6,6 @@
  */
 
 /**
- * The channel name
+ * The score of the result
  */
-export type SimpleChannelSearchReponseBaseItemChannelName = string | null;
+export type ChatMessageSearchResultScore = number | null;
