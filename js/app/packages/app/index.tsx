@@ -5,7 +5,7 @@ import './index.css';
 import * as analytics from '@coparse/analytics';
 import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import * as Observability from '@observability';
-import { getPlatform } from '@macro/tauri';
+import { getPlatform } from '@core/util/platform';
 import { ErrorBoundary, render } from 'solid-js/web';
 import { FatalError } from './component/FatalError';
 import { ReactiveFavicon } from './component/ReactiveFavicon';

@@ -1,9 +1,1 @@
-export {
-  getPlatform,
-  isPlatform,
-  isTauriDesktopPlatform,
-  isTauriMobilePlatform,
-  isTauriPlatform,
-  type MacroPlatform,
-} from './platform';
-export { isTauri, MaybeTauriProvider, useTauri } from './TauriProvider';
+export { MaybeTauriProvider, useTauri } from "./TauriProvider";

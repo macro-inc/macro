@@ -1,6 +1,4 @@
-export function isTauri(): boolean {
-  return typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window;
-}
+import { isTauri } from './platform';
 
 async function acquireFetch() {
   // @ts-ignore: tauri adds this on the window instance

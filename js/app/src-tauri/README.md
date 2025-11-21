@@ -48,9 +48,9 @@ frontend into `packages/app/dist`. Tauri then packages that output according to
 
 ## Platform aware UI
 
-The shared `@macro/tauri` package exposes helpers such as `isTauriPlatform`,
-`isTauriMobilePlatform`, and `getPlatform()`. Use them anywhere you need to
-branch behaviour, register extra routes, or mount native-only UI. All Solid
-components still render through the same `packages/app` entry point, so keeping
-platform checks inside `@macro/tauri` (or modules consuming it) keeps
-conditional UI localized.
+Use the helpers in `@core/util/platform` (`isTauri()`, `getPlatform()`,
+`isMobilePlatform()`, etc.) anywhere you need to branch behaviour, register
+extra routes, or mount native-only UI. Pair those checks with the
+`MaybeTauriProvider` from `@macro/tauri` to keep native-specific wiring
+localized while rendering everything through the shared `packages/app` entry
+point.
