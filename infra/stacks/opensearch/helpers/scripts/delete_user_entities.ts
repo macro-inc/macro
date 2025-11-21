@@ -1,4 +1,5 @@
 import { client } from '../client';
+import * as minimist from 'minimist';
 
 /**
  * Delete User Entities Script
@@ -6,13 +7,18 @@ import { client } from '../client';
  * This script deletes all items from specified OpenSearch indices that belong to a specific user.
  * It searches for items where either the 'user_id' or 'owner_id' field matches the target user ID.
  *
+ * Command Line Arguments:
+ * - --user-id: The user ID to delete data for (e.g., "macro|user@example.com")
+ * - --indices: Comma-separated list of index names to process (e.g., "documents,emails,chats")
+ *
  * Required Environment Variables:
- * - USER_ID: The user ID to delete data for (e.g., "macro|user@example.com")
- * - INDICES: Comma-separated list of index names to process (e.g., "documents,emails,chats")
  * - OPENSEARCH_URL: The OpenSearch cluster endpoint URL
  * - OPENSEARCH_USERNAME: Username for OpenSearch authentication
  * - OPENSEARCH_PASSWORD: Password for OpenSearch authentication
- **
+ *
+ * Usage:
+ * node script.js --user-id "macro|user@example.com" --indices "documents,emails,chats"
+ *
  * The script will:
  * 1. Connect to OpenSearch using the provided credentials
  * 2. For each specified index, count documents matching the user
@@ -20,20 +26,25 @@ import { client } from '../client';
  * 4. Verify deletion by counting remaining documents
  */
 
-// Get user_id and indices from environment variables
-const userId = process.env.USER_ID;
-const indicesEnv = process.env.INDICES;
+// Parse command line arguments
+const args = minimist(process.argv.slice(2));
+const userId = args['user-id'];
+const indicesArg = args['indices'];
 
-if (!userId || !indicesEnv) {
-  console.error('Missing required environment variables:');
-  console.error('USER_ID - the user ID to delete data for');
+if (!userId || !indicesArg) {
+  console.error('Missing required command line arguments:');
+  console.error('--user-id: The user ID to delete data for');
   console.error(
-    'INDICES - comma-separated list of index names (e.g., "documents,chats,emails")'
+    '--indices: Comma-separated list of index names (e.g., "documents,chats,emails")'
+  );
+  console.error('\nUsage:');
+  console.error(
+    'node script.js --user-id "macro|user@example.com" --indices "documents,emails,chats"'
   );
   process.exit(1);
 }
 
-const indicesToProcess = indicesEnv.split(',').map((index) => index.trim());
+const indicesToProcess = indicesArg.split(',').map((index) => index.trim());
 
 async function deleteUserData() {
   const opensearchClient = client();
