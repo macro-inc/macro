@@ -353,7 +353,6 @@ function SplitPanel(props: SplitPanelProps) {
     insertSplit: splitLayoutHelpers.insertSplit,
     closeSplit: () => props.handle.close(),
     toggleSpotlight: () => props.handle.toggleSpotlight(),
-    isSpotLight: () => props.handle.isSpotLight(),
     canGoBack: () => props.handle.canGoBack(),
     goBack: () => props.handle.goBack(),
     canGoForward: () => props.handle.canGoForward(),

@@ -16,7 +16,7 @@ import {
   getActiveCommandsFromScope,
 } from '@core/hotkey/getCommands';
 import { pressedKeys } from '@core/hotkey/state';
-import type { ValidHotkey } from '@core/hotkey/types';
+import type { HotkeyCommand } from '@core/hotkey/types';
 import { runCommand } from '@core/hotkey/utils';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { type ChannelWithParticipants, idToDisplayName } from '@core/user';
@@ -258,10 +258,7 @@ export type CommandPreview = {
   id: string;
   icon?: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
   name: string;
-  hotkeys: ValidHotkey[];
-  handler: (e: KeyboardEvent) => boolean;
-  activateCommandScopeId?: string;
-  tags?: string[];
+  command: HotkeyCommand;
 };
 
 export type ChannelPreview = {
@@ -377,9 +374,9 @@ export function useCommandItemAction(args: {
           break;
         }
         case 'command': {
-          if (item.data.activateCommandScopeId) {
+          if (item.data.command.activateCommandScopeId) {
             const commandScopeCommands = getActiveCommandsFromScope(
-              item.data.activateCommandScopeId,
+              item.data.command.activateCommandScopeId,
               {
                 sortByScopeLevel: false,
                 hideShadowedCommands: false,
@@ -394,7 +391,7 @@ export function useCommandItemAction(args: {
             setKonsoleOpen(false);
             resetQuery();
             resetKonsoleMode();
-            runCommand({ keyDownHandler: item.data.handler });
+            runCommand(item.data.command);
             break;
           }
         }
@@ -454,7 +451,7 @@ export function filterItemByCategory(item: CommandItemCard) {
       currentKonsoleMode() === 'SELECTION_MODIFICATION' &&
       item.type === 'command'
     ) {
-      return item.data.tags?.includes(HotkeyTags.SelectionModification);
+      return item.data.command.tags?.includes(HotkeyTags.SelectionModification);
     }
     return false;
   }
@@ -587,12 +584,12 @@ export function CommandItemCard(props: CommandItemProps) {
 
   const CommandItemHotkey = () => {
     if (props.item.type !== 'command') return null;
-    if (props.item.data.hotkeys.length === 0) return null;
+    if (props.item.data.command.hotkeys?.length === 0) return null;
     return (
       <div class="pr-2 flex items-center justify-center text-[0.75rem] font-medium text-ink-extra-muted">
         <div class="p-2 py-0.5 border border-edge-muted/50 rounded-xs">
           <Hotkey
-            shortcut={props.item.data.hotkeys.at(0)}
+            shortcut={props.item.data.command.hotkeys?.at(0)}
             class="flex gap-1 items-center"
           />
         </div>

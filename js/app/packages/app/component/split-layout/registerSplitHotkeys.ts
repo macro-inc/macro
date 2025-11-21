@@ -17,7 +17,6 @@ export function registerSplitHotkeys({
   insertSplit,
   closeSplit,
   toggleSpotlight,
-  isSpotLight,
   canGoBack,
   goBack,
   canGoForward,
@@ -30,7 +29,6 @@ export function registerSplitHotkeys({
   insertSplit: (content: SplitContent) => void;
   closeSplit: () => void;
   toggleSpotlight: () => void;
-  isSpotLight: () => boolean;
   canGoBack: () => boolean;
   goBack: () => void;
   canGoForward: () => boolean;
@@ -74,19 +72,6 @@ export function registerSplitHotkeys({
     scopeId: windowScope.commandScopeId,
     hotkey: 'm',
     hotkeyToken: TOKENS.split.spotlight.toggle,
-    description: `Spotlight ${splitName()}`,
-    keyDownHandler: () => {
-      toggleSpotlight();
-      return true;
-    },
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    scopeId: splitHotkeyScope,
-    hotkey: 'escape',
-    hotkeyToken: TOKENS.split.spotlight.close,
-    condition: () => isSpotLight(),
     description: `Spotlight ${splitName()}`,
     keyDownHandler: () => {
       toggleSpotlight();
