@@ -3,6 +3,7 @@ import {
   ENABLE_CUSTOM_CURSOR_TEXT_GLYPH_DETECTION,
 } from '@core/constant/featureFlags';
 import { isMobile } from '@solid-primitives/platform';
+import { throttle } from '@solid-primitives/scheduled';
 import {
   createEffect,
   createRoot,
@@ -503,6 +504,8 @@ if (document.readyState === 'loading') {
 createRoot(() => {
   if (!ENABLE_CUSTOM_CURSOR) return;
 
+  const throttledUpdateCursor = throttle(updateCursor, 250);
+
   createEffect(() => {
     const { l, c, h } = themeReactive.a0;
     const _col = `oklch(${l[0]()} ${c[0]()} ${h[0]()}deg)`;
@@ -510,6 +513,6 @@ createRoot(() => {
       clearAllCustomCursorStylesheetEls();
       return;
     }
-    updateCursor();
+    throttledUpdateCursor();
   });
 });
