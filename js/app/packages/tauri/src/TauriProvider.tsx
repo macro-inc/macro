@@ -4,7 +4,7 @@ import {
 } from '@notifications';
 import type { RouteSectionProps } from '@solidjs/router';
 import { type OsType, type as osType } from '@tauri-apps/plugin-os';
-import { isTauri } from 'core/util/platformFetch';
+import { isTauri } from '@core/util/platform';
 import {
   type Accessor,
   createContext,
@@ -16,8 +16,6 @@ import {
 import { getInsets, type Insets } from 'tauri-plugin-safe-area-insets';
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
-
-export { isTauri };
 
 type NotAndroid = 'not-android';
 
