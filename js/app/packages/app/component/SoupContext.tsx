@@ -14,6 +14,7 @@ import { isErr } from '@core/util/maybeResult';
 import { getScrollParent } from '@core/util/scrollParent';
 import { waitForFrames } from '@core/util/sleep';
 import type { EntityData } from '@macro-entity';
+import { entityHasUnreadNotifications } from '@notifications';
 import { useTutorialCompleted } from '@service-gql/client';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -234,28 +235,39 @@ export function createNavigationEntityListShortcut({
   });
   createEffect(() => console.log('IS VIEWING LIST', isViewingList()));
 
-  actionRegistry.register('mark_as_done', async (entities) => {
-    const handler =
-      VIEWCONFIG_DEFAULTS[selectedView() as View]?.hotkeyOptions?.e;
-    if (handler) {
-      if (isEntityLastItem()) {
-        navigateThroughList({ axis: 'start', mode: 'step' });
-      } else {
-        navigateThroughList({ axis: 'end', mode: 'step' });
+  actionRegistry.register(
+    'mark_as_done',
+    async (entities) => {
+      const handler =
+        VIEWCONFIG_DEFAULTS[selectedView() as View]?.hotkeyOptions?.e;
+      if (handler) {
+        if (isEntityLastItem()) {
+          navigateThroughList({ axis: 'start', mode: 'step' });
+        } else {
+          navigateThroughList({ axis: 'end', mode: 'step' });
+        }
+
+        for (const entity of entities) {
+          handler(entity, {
+            soupContext: unifiedListContext,
+            notificationSource,
+          });
+        }
+
+        setViewDataStore(selectedView(), 'selectedEntities', []);
       }
 
-      for (const entity of entities) {
-        handler(entity, {
-          soupContext: unifiedListContext,
-          notificationSource,
-        });
-      }
-
-      setViewDataStore(selectedView(), 'selectedEntities', []);
+      return { success: true };
+    },
+    {
+      testEnabled: (entity) => {
+        if (entity.type === 'email') return true;
+        if (entityHasUnreadNotifications(notificationSource, entity))
+          return true;
+        return false;
+      },
     }
-
-    return { success: true };
-  });
+  );
 
   actionRegistry.register(
     'delete',
@@ -295,7 +307,7 @@ export function createNavigationEntityListShortcut({
                   if (elem instanceof HTMLElement) {
                     elem.focus();
                     return;
-                    // cooked state (no focus returned)
+                    // TODO: cooked state (no focus returned - have not yet seen tho)
                   }
                 });
               } else {
@@ -303,7 +315,7 @@ export function createNavigationEntityListShortcut({
                 if (!firstIndex) return;
                 const elem = getEntityElAtIndex(firstIndex);
                 if (elem instanceof HTMLElement) elem.focus();
-                // cooked state (no focus returned)
+                // TODO: cooked state (no focus returned - have not yet seen tho)
               }
             }
           },
@@ -323,6 +335,28 @@ export function createNavigationEntityListShortcut({
       // TODO (seamus): fix the handler from the modal so that we can delete
       // some of the items. Then switch this to some.
       enabledMode: 'every',
+    }
+  );
+
+  actionRegistry.register(
+    'rename',
+    async (entitiesToRename) => {
+      openBulkEditModal({
+        view: 'rename',
+        entities: entitiesToRename,
+        onFinish: () => {
+          console.log('good shit');
+        },
+      });
+      return { success: true };
+    },
+    {
+      testEnabled: (entity) => {
+        // can't rename these bad boys yet.
+        if (entity.type === 'channel' || entity.type === 'email') return false;
+        // only rename what you own.
+        return entity.ownerId === userId();
+      },
     }
   );
 

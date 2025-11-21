@@ -77,6 +77,7 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
     <>
       <MenuItemInner action="mark_as_done" label="Mark Done" />
       <MenuItemInner action="delete" label="Delete" />
+      <MenuItemInner action="rename" label="Rename" />
       <MenuItem
         text="Open in new split"
         disabled={entities().length > 1 || !canOpenEntityInSplit()}
