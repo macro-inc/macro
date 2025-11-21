@@ -1,6 +1,10 @@
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { useSearch } from '@core/signal/search';
 import { isErr } from '@core/util/maybeResult';
+import {
+  extractSearchSnippet,
+  extractSearchTerms,
+} from '@core/util/searchHighlight';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
 import { createEffect, createMemo, createSignal } from 'solid-js';
 import { searchClient } from '../../../service-search/client';
@@ -41,6 +45,11 @@ function createDocumentItems(
             locationId: result.node_id,
             fileType: doc.file_type,
             matchIndex: index,
+            // For PDF files, extract additional location data
+            ...(['docx', 'pdf'].includes(doc.file_type) && {
+              searchSnippet: extractSearchSnippet(content),
+              highlightTerms: extractSearchTerms(content),
+            }),
           },
           updatedAt: result.updated_at * 1000, // Convert Unix timestamp to milliseconds
         });
