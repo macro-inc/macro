@@ -105,6 +105,7 @@ utoipa = { workspace = true, features = ["axum_extras"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 zip = { workspace = true }
+models_opensearch = { path = "../models_opensearch" }
 
 [dev-dependencies]
 cool_asserts = "2"
