@@ -49,13 +49,13 @@ function cornerToCursor(corner: Corner) {
   if (activeTool() === Tools.Grab) return 'grab';
   switch (corner) {
     case Corners.TopLeft:
-      return 'nwse-resize';
+      return 'var(--cursor-nwse-resize)';
     case Corners.TopRight:
-      return 'nesw-resize';
+      return 'var(--cursor-nesw-resize)';
     case Corners.BottomRight:
-      return 'nwse-resize';
+      return 'var(--cursor-nwse-resize)';
     case Corners.BottomLeft:
-      return 'nesw-resize';
+      return 'var(--cursor-nesw-resize)';
   }
 }
 
@@ -139,13 +139,13 @@ export function edgeToCursor(edge: Edge) {
 
   switch (edge) {
     case Edges.Top:
-      return 'ns-resize';
+      return 'var(--cursor-ns-resize)';
     case Edges.Right:
-      return 'ew-resize';
+      return 'var(--cursor-ew-resize)';
     case Edges.Bottom:
-      return 'ns-resize';
+      return 'var(--cursor-ns-resize)';
     case Edges.Left:
-      return 'ew-resize';
+      return 'var(--cursor-ew-resize)';
   }
 }
 

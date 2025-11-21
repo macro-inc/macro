@@ -9,10 +9,6 @@ import { ThemeEditorAdvanced } from '../../../block-theme/components/ThemeEditor
 import { ThemeEditorBasic } from '../../../block-theme/components/ThemeEditorBasic';
 import ThemeList from '../../../block-theme/components/ThemeList';
 import ThemeTools from '../../../block-theme/components/ThemeTools';
-// import {
-//   getCustomCursorEnabled,
-//   setCustomCursorEnabled,
-// } from '../../util/cursor';
 import {
   getSoundEffectsEnabled,
   getSoundEffectsVolume,
@@ -159,7 +155,7 @@ export function Appearance() {
                     position: 'absolute',
                     background: 'transparent',
                     appearance: 'none',
-                    cursor: 'pointer',
+                    cursor: 'var(--cursor-pointer)',
                     outline: 'none',
                     height: '100%',
                     margin: 0,
@@ -182,7 +178,7 @@ export function Appearance() {
               background-color: var(--b0);
               border: 1px solid var(--b4);
               border-radius: 0px;
-              cursor: pointer;
+              cursor: var(--cursor-pointer);
             }
             .sound-volume-slider::-moz-range-thumb {
               width: 18px;
@@ -190,7 +186,7 @@ export function Appearance() {
               background-color: var(--b0);
               border: 1px solid var(--b4);
               border-radius: 0px;
-              cursor: pointer;
+              cursor: var(--cursor-pointer);
             }
             .sound-volume-slider::-webkit-slider-runnable-track {
               width: 100%;

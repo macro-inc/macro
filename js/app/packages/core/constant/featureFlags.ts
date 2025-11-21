@@ -124,8 +124,10 @@ export const ENABLE_PREVIEW = true;
 export const ENABLE_DOCK_NOTITIFCATIONS = DEV_MODE_ENV;
 export const ENABLE_TTFT = DEV_MODE_ENV;
 
-export const ENABLE_CUSTOM_CURSOR = false;
-
 export const ENABLE_SOUND = false;
-
 export const ENABLE_JACK_IN = false;
+
+// pure css based custom cursor
+export const ENABLE_CUSTOM_CURSOR = true;
+// uses javascript to detect selectable text to switch to "text" cursor type (ibeam)
+export const ENABLE_CUSTOM_CURSOR_TEXT_GLYPH_DETECTION = true;
