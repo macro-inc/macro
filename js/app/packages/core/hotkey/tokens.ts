@@ -35,6 +35,7 @@ export const TOKENS = {
       home: 'entity.jump.home',
       end: 'entity.jump.end',
     },
+    open: 'entity.open',
   },
 
   // code block

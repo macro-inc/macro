@@ -912,12 +912,10 @@ export function createNavigationEntityListShortcut({
   const [attachEntityHotkeys, entityHotkeyScope] = useHotkeyDOMScope('entity');
   registerHotkey({
     hotkey: ['enter'],
+    hotkeyToken: TOKENS.entity.open,
     scopeId: entityHotkeyScope,
     description: 'Open',
     keyDownHandler: () => {
-      const [preview] = previewState;
-      if (!preview()) return false;
-
       const entity = getHighlightedEntity()?.entity;
       if (!entity) return false;
 
@@ -963,7 +961,6 @@ export function createNavigationEntityListShortcut({
             if (!splitNode) return undefined;
             return splitNode.hotkeyCommands.get('enter');
           };
-          // runCommandByToken(TOKENS.block.focus);
           const command = getEnterCommand();
           if (command) {
             runCommand(command);
@@ -1020,16 +1017,35 @@ export function createNavigationEntityListShortcut({
     },
     displayPriority: 10,
   });
+
+  const clearMultiCondition: () => boolean = () => isViewingList() && viewData().selectedEntities.length > 0;
+  const closeSpotlightCondition = () => splitHandle.isSpotLight();
+  const escapeDescription = () => {
+    if (clearMultiCondition()) {
+      return 'Clear multi selection';
+    }
+    if(closeSpotlightCondition()) {
+      return 'Close spotlight';
+    }
+    return '';
+  };
   registerHotkey({
     hotkey: ['escape'],
     scopeId: splitHotkeyScope,
-    description: 'Clear multi selection',
-    condition: () => isViewingList() && viewData().selectedEntities.length > 0,
+    description: escapeDescription,
+    condition: () => clearMultiCondition() || closeSpotlightCondition(),
     keyDownHandler: () => {
-      const length = viewData().selectedEntities.length;
-      setViewDataStore(selectedView(), 'selectedEntities', []);
-      return length > 1;
-    },
+      if (clearMultiCondition()) {
+        const length = viewData().selectedEntities.length;
+        setViewDataStore(selectedView(), 'selectedEntities', []);
+        return length > 1;
+      }
+      if (closeSpotlightCondition()) {
+        splitHandle.toggleSpotlight();
+        return true;
+      }
+      return false;
+    }
   });
   registerHotkey({
     hotkey: ['delete', 'backspace'],

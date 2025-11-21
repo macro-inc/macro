@@ -15,8 +15,8 @@ export function useNavigatedFromJK() {
     return (
       entities.length > 0 &&
       document.documentElement.getAttribute('data-modality') === 'keyboard' &&
-      (lastExecutedCommand()?.hotkeyToken !== TOKENS.entity.step.end ||
-        lastExecutedCommand()?.hotkeyToken !== TOKENS.entity.select.end)
+      (lastExecutedCommand()?.hotkeyToken === TOKENS.entity.step.end ||
+        lastExecutedCommand()?.hotkeyToken === TOKENS.entity.select.end)
     );
   });
   return { navigatedFromJK };
