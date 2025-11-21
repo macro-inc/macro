@@ -15,6 +15,7 @@ import { ToggleButton } from '@core/component/FormControls/ToggleButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { IconButton } from '@core/component/IconButton';
 import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
+import { getSuggestedProperties } from '@core/component/Properties/utils';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import {
   blockAcceptsFileExtension,
@@ -406,6 +407,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       properties
     );
   };
+
+  // Suggested properties reactive to filter type
+  const suggestedProperties = createMemo(() => {
+    const types = entityTypeFilter();
+    return getSuggestedProperties(types);
+  });
 
   const rawSearchText = createMemo<string>(() => view()?.searchText ?? '');
   const searchText = createMemo(() => rawSearchText()?.trim() ?? '');
@@ -1263,6 +1270,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       <PropertyDisplayControl
                         selectedPropertyIds={displayProperties}
                         setSelectedPropertyIds={setDisplayProperties}
+                        suggestedProperties={suggestedProperties()}
                       />
                     </section>
                   </Show>

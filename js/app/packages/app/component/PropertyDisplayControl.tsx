@@ -23,11 +23,17 @@ type PropertyDisplayControlProps = {
   setSelectedPropertyIds: (
     properties: DisplayOptions['displayProperties']
   ) => void;
+  suggestedProperties?: PropertyDefinitionFlat[];
 };
 
 type PropertyPillProps = {
   property: PropertyDefinitionFlat;
   onRemove: () => void;
+};
+
+type SuggestedPillProps = {
+  property: PropertyDefinitionFlat;
+  onClick: () => void;
 };
 
 type PropertyDropdownProps = {
@@ -81,6 +87,29 @@ const PropertyDropdown: Component<PropertyDropdownProps> = (props) => {
   );
 };
 
+const SuggestedPill: Component<SuggestedPillProps> = (props) => {
+  return (
+    <button
+      type="button"
+      onClick={props.onClick}
+      class="inline-flex max-w-[140px] shrink-0
+             w-fit min-h-[24px]
+             items-center gap-2
+             px-2 py-1
+             text-xs text-ink
+             bg-transparent hover:bg-hover
+             border border-edge
+             cursor-pointer
+             transition-colors"
+    >
+      <PropertyDataTypeIcon property={props.property} />
+      <span class="truncate flex-1 font-mono">
+        {props.property.display_name}
+      </span>
+    </button>
+  );
+};
+
 const PropertyPill: Component<PropertyPillProps> = (props) => {
   const [isHovered, setIsHovered] = createSignal(false);
 
@@ -92,7 +121,7 @@ const PropertyPill: Component<PropertyPillProps> = (props) => {
     >
       <div
         class="w-full min-h-[24px]
-               inline-flex items-center gap-1
+               inline-flex items-center gap-2
                px-2 py-1
                text-xs text-ink
                bg-transparent hover:bg-hover
@@ -171,6 +200,26 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
       selectedIds.includes(property.id)
     );
   });
+
+  const suggestedProperties = createMemo(() => {
+    const allSuggested = props.suggestedProperties ?? [];
+    const selectedIds = new Set(props.selectedPropertyIds());
+    return allSuggested.filter((property) => !selectedIds.has(property.id));
+  });
+
+  const handleSuggestedSelect = (property: PropertyDefinitionFlat) => {
+    const currentIds = props.selectedPropertyIds();
+    if (!currentIds.includes(property.id)) {
+      const currentIds = props.selectedPropertyIds();
+      // Enforce max 6 properties
+      if (currentIds.length >= 6) {
+        toast.failure('You can only select up to 6 properties to display.');
+        return;
+      }
+
+      props.setSelectedPropertyIds([...currentIds, property.id]);
+    }
+  };
 
   const handleRemoveProperty = (propertyId: string) => {
     const currentIds = props.selectedPropertyIds();
@@ -273,6 +322,26 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
   return (
     <>
       <div class="font-medium text-xs mb-2">Display Properties</div>
+
+      <Show when={suggestedProperties().length > 0}>
+        <div class="mb-2 px-2">
+          <div class="text-xs text-ink-muted mb-1">Suggested Properties</div>
+          <div
+            class="w-full h-fit
+                   flex flex-wrap items-start justify-start
+                   gap-1"
+          >
+            <For each={suggestedProperties()}>
+              {(property) => (
+                <SuggestedPill
+                  property={property}
+                  onClick={() => handleSuggestedSelect(property)}
+                />
+              )}
+            </For>
+          </div>
+        </div>
+      </Show>
 
       <div
         ref={containerRef}

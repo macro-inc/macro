@@ -9,5 +9,6 @@ export * from './formatting';
 // Export icon component
 export { PropertyDataTypeIcon } from './PropertyDataTypeIcon';
 export * from './position';
+export * from './suggestedProperties';
 export * from './typeGuards';
 export * from './validation';
