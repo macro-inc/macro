@@ -39,8 +39,6 @@ pub struct ChannelSearchResponseItem {
     pub channel_type: String,
     /// The id of the channel
     pub channel_id: String,
-    /// The name of the channel if present
-    pub channel_name: Option<String>,
     /// The search results for the channel
     /// This may be empty if the search result match was not on content
     pub channel_message_search_results: Vec<ChannelSearchResult>,
@@ -88,7 +86,6 @@ impl From<SearchResponseItem<ChannelSearchResult, ChannelSearchMetadata>>
             owner_id: None,
             channel_type: response.metadata.channel_type.clone(),
             channel_id: response.metadata.channel_id.clone(),
-            channel_name: response.metadata.channel_name.clone(),
             channel_message_search_results: response.results,
         }
     }

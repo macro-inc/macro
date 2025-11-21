@@ -264,7 +264,6 @@ impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
             UnifiedSearchIndex::ChannelMessage(a) => {
                 UnifiedSearchResponse::ChannelMessage(ChannelMessageSearchResponse {
                     channel_id: a.entity_id,
-                    channel_name: a.channel_name,
                     channel_type: a.channel_type,
                     org_id: a.org_id,
                     message_id: a.message_id,
