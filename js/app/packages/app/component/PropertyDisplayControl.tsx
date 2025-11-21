@@ -2,11 +2,20 @@ import { IconButton } from '@core/component/IconButton';
 import type { PropertyDefinitionFlat } from '@core/component/Properties/types';
 import { PropertyDataTypeIcon } from '@core/component/Properties/utils';
 import { ERROR_MESSAGES } from '@core/component/Properties/utils/errorHandling';
+import { toast } from '@core/component/Toast/Toast';
 import { isErr } from '@core/util/maybeResult';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { Accessor, Component } from 'solid-js';
-import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 import type { DisplayOptions } from './ViewConfig';
 
 type PropertyDisplayControlProps = {
@@ -19,6 +28,57 @@ type PropertyDisplayControlProps = {
 type PropertyPillProps = {
   property: PropertyDefinitionFlat;
   onRemove: () => void;
+};
+
+type PropertyDropdownProps = {
+  filteredProperties: Accessor<PropertyDefinitionFlat[]>;
+  onSelectProperty: (property: PropertyDefinitionFlat) => void;
+  dropdownRef: (el: HTMLDivElement) => void;
+  isOpen: Accessor<boolean>;
+};
+
+const PropertyDropdown: Component<PropertyDropdownProps> = (props) => {
+  return (
+    <Show when={props.isOpen()}>
+      <div
+        ref={props.dropdownRef}
+        class="absolute left-0 right-0 top-full mt-1 z-[100]
+               border border-edge bg-menu shadow-lg
+               max-h-48 overflow-y-auto
+               font-mono"
+      >
+        <Show
+          when={props.filteredProperties().length > 0}
+          fallback={
+            <div class="px-3 py-2 text-xs text-ink-muted text-center">
+              No properties found
+            </div>
+          }
+        >
+          <For each={props.filteredProperties()}>
+            {(property) => (
+              <button
+                type="button"
+                onMouseDown={(e) => {
+                  e.preventDefault(); // Prevent input blur
+                  e.stopPropagation(); // Prevent click outside handler
+                  props.onSelectProperty(property);
+                }}
+                class="w-full px-2 py-1.5
+                       text-xs text-ink
+                       hover:bg-hover
+                       flex items-center gap-2
+                       text-left"
+              >
+                <PropertyDataTypeIcon property={property} />
+                <span class="truncate flex-1">{property.display_name}</span>
+              </button>
+            )}
+          </For>
+        </Show>
+      </div>
+    </Show>
+  );
 };
 
 const PropertyPill: Component<PropertyPillProps> = (props) => {
@@ -71,8 +131,11 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
   const [_isLoading, setIsLoading] = createSignal(false);
   const [_error, setError] = createSignal<string | null>(null);
   const [searchQuery, setSearchQuery] = createSignal('');
+  const [isDropdownOpen, setIsDropdownOpen] = createSignal(false);
 
   let searchInputRef!: HTMLInputElement;
+  let dropdownRef!: HTMLDivElement;
+  let containerRef!: HTMLDivElement;
 
   const fetchAvailableProperties = async () => {
     setIsLoading(true);
@@ -114,7 +177,22 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
     props.setSelectedPropertyIds(currentIds.filter((id) => id !== propertyId));
   };
 
-  const _filteredProperties = createMemo(() => {
+  const handleSelectProperty = (property: PropertyDefinitionFlat) => {
+    const currentIds = props.selectedPropertyIds();
+    // Enforce max 6 properties
+    if (currentIds.length >= 6) {
+      toast.failure('You can only select up to 6 properties to display.');
+      return;
+    }
+
+    if (!currentIds.includes(property.id)) {
+      props.setSelectedPropertyIds([...currentIds, property.id]);
+      setSearchQuery('');
+      searchInputRef?.focus();
+    }
+  };
+
+  const filteredProperties = createMemo(() => {
     const query = searchQuery().toLowerCase().trim();
     const allProperties = availableProperties();
     const selectedIds = new Set(props.selectedPropertyIds());
@@ -144,14 +222,63 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
     fetchAvailableProperties();
   });
 
+  // Close dropdown when clicking or focusing outside the container
+  createEffect(() => {
+    if (!isDropdownOpen()) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+
+      const path = event.composedPath();
+
+      // Don't close if clicking inside container or dropdown
+      // Check both composedPath and contains for reliability
+      const isInsideContainer =
+        containerRef &&
+        (path.includes(containerRef) || containerRef.contains(target));
+      const isInsideDropdown =
+        dropdownRef &&
+        (path.includes(dropdownRef) || dropdownRef.contains(target));
+
+      if (isInsideContainer || isInsideDropdown) {
+        return;
+      }
+
+      setIsDropdownOpen(false);
+    };
+
+    const handleFocusOutside = () => {
+      const activeElement = document.activeElement;
+      if (
+        activeElement &&
+        containerRef &&
+        !containerRef.contains(activeElement) &&
+        dropdownRef &&
+        !dropdownRef.contains(activeElement)
+      ) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    document.addEventListener('focusin', handleFocusOutside);
+
+    onCleanup(() => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('focusin', handleFocusOutside);
+    });
+  });
+
   return (
     <>
-      <div class="font-medium text-xs mb-2">Properties</div>
+      <div class="font-medium text-xs mb-2">Display Properties</div>
 
       <div
+        ref={containerRef}
         class="flex flex-col
                 border border-edge
-                w-full max-w-full overflow-hidden
+                w-full max-w-full
                 focus-within:ring-2 focus-within:ring-accent/50 focus-within:border-accent"
       >
         <Show when={selectedProperties().length > 0}>
@@ -159,7 +286,7 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
             class="w-full h-fit
                    flex flex-wrap items-start justify-start
                    gap-1
-                   p-1.5"
+                   px-1.5 pt-1.5 pb-0.5"
           >
             <For each={selectedProperties()}>
               {(property) => (
@@ -172,22 +299,33 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
           </div>
         </Show>
 
-        <div class="px-1 py-0.5">
+        <div class="px-1 py-0.5 relative">
           <input
             ref={searchInputRef}
             type="text"
             value={searchQuery()}
-            onInput={(e) => setSearchQuery(e.currentTarget.value)}
-            placeholder="+ Add Property"
+            onInput={(e) => {
+              setSearchQuery(e.currentTarget.value);
+              setIsDropdownOpen(true);
+            }}
+            onFocus={() => setIsDropdownOpen(true)}
+            placeholder="Search Properties..."
             class="w-full
                    px-2 py-1
                    font-mono text-xs
                    text-ink placeholder-ink-muted
                    bg-transparent"
           />
-        </div>
 
-        {/* Search results dropdown will go here in chunk 7 */}
+          <PropertyDropdown
+            filteredProperties={filteredProperties}
+            onSelectProperty={handleSelectProperty}
+            dropdownRef={(el) => {
+              dropdownRef = el;
+            }}
+            isOpen={isDropdownOpen}
+          />
+        </div>
       </div>
     </>
   );
