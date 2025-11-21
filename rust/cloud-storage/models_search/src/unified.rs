@@ -210,7 +210,6 @@ impl From<opensearch_client::search::unified::UnifiedSearchResponse>
             opensearch_client::search::unified::UnifiedSearchResponse::ChannelMessage(a) => {
                 SimpleUnifiedSearchResponseItem::Channel(SimpleChannelSearchReponseBaseItem {
                     channel_id: a.channel_id,
-                    channel_name: a.channel_name,
                     channel_type: a.channel_type,
                     org_id: a.org_id,
                     message_id: a.message_id,

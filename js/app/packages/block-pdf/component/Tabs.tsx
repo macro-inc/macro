@@ -62,7 +62,7 @@ export function Tabs() {
   const deleteTab = useDeleteTab();
   const navigate = useNavigateToTab();
   return (
-    <Show when={viewerHasVisiblePagesSignal()}>
+    <Show when={viewerHasVisiblePagesSignal.get()}>
       <div class="w-full h-7 rounded-full flex px-1.5 shrink items-center">
         <For each={tabs}>
           {(tab, index) => (

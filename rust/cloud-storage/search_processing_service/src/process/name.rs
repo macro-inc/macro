@@ -21,6 +21,10 @@ pub async fn upsert_name(
         return Ok(());
     };
 
+    if name.is_empty() {
+        return Ok(());
+    }
+
     // Perform upsert
     opensearch_client
         .upsert_entity_name(&UpsertEntityNameArgs {

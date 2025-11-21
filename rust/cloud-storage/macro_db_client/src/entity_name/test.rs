@@ -9,9 +9,6 @@ async fn test_get_entity_name(pool: sqlx::Pool<sqlx::Postgres>) -> anyhow::Resul
     let entity_name = get_entity_name(&pool, &entity_id, &SearchEntityType::Chats).await?;
     assert_eq!(entity_name, Some("chat".to_string()));
 
-    let entity_name = get_entity_name(&pool, &entity_id, &SearchEntityType::Channels).await?;
-    assert_eq!(entity_name, Some("channel".to_string()));
-
     let entity_name = get_entity_name(&pool, &entity_id, &SearchEntityType::Emails).await?;
     assert_eq!(entity_name, Some("subject".to_string()));
 
