@@ -846,11 +846,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           console.log('go to pdf location', location);
           await blockHandle?.goToLocationFromParams({
             [PDF_PARAMS.searchPage]: location.searchPage.toString(),
-            [PDF_PARAMS.searchMatchNumOnPage]:
-              location.searchMatchNumOnPage.toString(),
-            [PDF_PARAMS.searchTerm]: location.searchTerm,
+            [PDF_PARAMS.searchRawQuery]: location.searchRawQuery,
+            [PDF_PARAMS.searchHighlightTerms]: JSON.stringify(
+              location.searchHighlightTerms
+            ),
             [PDF_PARAMS.searchSnippet]: location.searchSnippet,
-            [PDF_PARAMS.highlightedContent]: location.highlightedContent,
           });
           break;
       }

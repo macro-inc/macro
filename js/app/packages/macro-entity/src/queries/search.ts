@@ -32,29 +32,32 @@ type InnerSearchResult =
   | ChannelSearchResult
   | ProjectSearchResult;
 
-const MAX_SEARCH_TERM_LENGTH = 1000;
+const normalizeWhitespace = (str: string) => str.replace(/\s+/g, ' ').trim();
+
+/**
+ * Extracts terms from macro_em tags in the highlighted content.
+ * Returns array of text strings that should be highlighted, preserving order and duplicates.
+ */
+function extractSearchTerms(highlightedContent: string): string[] {
+  const terms: string[] = [];
+  const macroEmRegex = /<macro_em>(.*?)<\/macro_em>/gs;
+  const matches = Array.from(highlightedContent.matchAll(macroEmRegex));
+
+  for (const match of matches) {
+    terms.push(match[1].trim());
+  }
+
+  return terms;
+}
 
 /**
  * Extracts the full snippet from highlighted content by removing macro_em tags.
+ * Whitespace is normalized and trimmed.
  * This provides context for the search result.
  */
 function extractSearchSnippet(highlightedContent: string): string {
-  return highlightedContent.replace(/<\/?macro_em>/g, '');
-
-  const firstMatch = highlightedContent.indexOf('<macro_em>');
-  const lastMatch = highlightedContent.lastIndexOf('</macro_em>');
-
-  if (firstMatch === -1 || lastMatch === -1) {
-    return '';
-  }
-
-  const substring = highlightedContent.substring(
-    firstMatch,
-    lastMatch + '</macro_em>'.length
-  );
-
-  const plainText = substring.replace(/<\/?macro_em>/g, '');
-  return plainText.substring(0, MAX_SEARCH_TERM_LENGTH);
+  const rawContent = highlightedContent.replace(/<\/?macro_em>/g, '');
+  return normalizeWhitespace(rawContent);
 }
 
 /**
@@ -62,53 +65,53 @@ function extractSearchSnippet(highlightedContent: string): string {
  * to last <macro_em> tag, removing all macro_em tags to create plain text.
  * Truncates to MAX_SEARCH_TERM_LENGTH characters.
  */
-function extractSearchTermFromHighlight(
-  highlightedContent: string,
-  searchQuery?: string
-): string {
-  const firstMatch = highlightedContent.indexOf('<macro_em>');
-  const lastMatch = highlightedContent.lastIndexOf('</macro_em>');
-
-  if (firstMatch === -1 || lastMatch === -1) {
-    return '';
-  }
-
-  const substring = highlightedContent.substring(
-    firstMatch,
-    lastMatch + '</macro_em>'.length
-  );
-
-  // Group adjacent macro_em tags into single tags
-  let grouped = substring.replace(/<\/macro_em>\s*<macro_em>/g, '');
-
-  // Extract all content from macro_em tags
-  const macroEmRegex = /<macro_em>(.*?)<\/macro_em>/gs;
-  const matches = Array.from(grouped.matchAll(macroEmRegex));
-
-  if (matches.length === 0) {
-    return '';
-  }
-
-  // If search query provided, check if any macro_em content matches it
-  if (searchQuery) {
-    const normalizedQuery = searchQuery.toLowerCase().trim();
-    for (const match of matches) {
-      const content = match[1].trim().toLowerCase();
-      if (content === normalizedQuery) {
-        return searchQuery.substring(0, MAX_SEARCH_TERM_LENGTH);
-      }
-    }
-  }
-
-  // Otherwise, use the first macro_em tag content
-  const firstContent = matches[0][1].trim();
-  return firstContent.substring(0, MAX_SEARCH_TERM_LENGTH);
-}
+// function extractSearchTermFromHighlight(
+//   highlightedContent: string,
+//   searchQuery?: string
+// ): string {
+//   const firstMatch = highlightedContent.indexOf('<macro_em>');
+//   const lastMatch = highlightedContent.lastIndexOf('</macro_em>');
+//
+//   if (firstMatch === -1 || lastMatch === -1) {
+//     return '';
+//   }
+//
+//   const substring = highlightedContent.substring(
+//     firstMatch,
+//     lastMatch + '</macro_em>'.length
+//   );
+//
+//   // Group adjacent macro_em tags into single tags
+//   let grouped = substring.replace(/<\/macro_em>\s*<macro_em>/g, '');
+//
+//   // Extract all content from macro_em tags
+//   const macroEmRegex = /<macro_em>(.*?)<\/macro_em>/gs;
+//   const matches = Array.from(grouped.matchAll(macroEmRegex));
+//
+//   if (matches.length === 0) {
+//     return '';
+//   }
+//
+//   // If search query provided, check if any macro_em content matches it
+//   if (searchQuery) {
+//     const normalizedQuery = searchQuery.toLowerCase().trim();
+//     for (const match of matches) {
+//       const content = match[1].trim().toLowerCase();
+//       if (content === normalizedQuery) {
+//         return searchQuery.substring(0, MAX_SEARCH_TERM_LENGTH);
+//       }
+//     }
+//   }
+//
+//   // Otherwise, use the first macro_em tag content
+//   const firstContent = matches[0][1].trim();
+//   return firstContent.substring(0, MAX_SEARCH_TERM_LENGTH);
+// }
 
 const getLocationHighlights = (
   innerResults: DocumentSearchResult[],
   fileType: FileTypeWithLocation,
-  searchQuery?: string
+  searchQuery: string
 ) => {
   const contentHighlights = innerResults.flatMap((r) => {
     const contents = r.highlight.content ?? [];
@@ -122,21 +125,15 @@ const getLocationHighlights = (
         case 'pdf':
           try {
             const searchPage = parseInt(r.node_id);
-            const searchTerm = extractSearchTermFromHighlight(
-              content,
-              searchQuery
-            );
-            const searchSnippet = extractSearchSnippet(content);
             location = {
               type: 'pdf' as const,
               searchPage,
-              searchMatchNumOnPage: 0,
-              searchTerm,
-              searchSnippet,
-              highlightedContent: content,
+              searchSnippet: extractSearchSnippet(content),
+              searchRawQuery: searchQuery,
+              searchHighlightTerms: extractSearchTerms(content),
             };
           } catch (_e) {
-            console.error('Cannot parse pdf page number', r.node_id);
+            console.error('Cannot parse pdf serach info', r);
             location = undefined;
           }
           break;
@@ -181,7 +178,7 @@ const useMapSearchResponseItem = () => {
 
   return (
     result: UnifiedSearchResponseItem,
-    searchQuery?: string
+    searchQuery: string
   ): Entity | undefined => {
     switch (result.type) {
       case 'document': {

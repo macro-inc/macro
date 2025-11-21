@@ -30,50 +30,30 @@ import {
 } from './pdfViewer';
 
 /**
- * Extracts terms from macro_em tags in the highlighted content.
- * Returns array of text strings that should be highlighted, preserving order and duplicates.
- */
-function extractMacroEmTerms(highlightedContent: string): string[] {
-  const terms: string[] = [];
-  const macroEmRegex = /<macro_em>(.*?)<\/macro_em>/gs;
-  const matches = Array.from(highlightedContent.matchAll(macroEmRegex));
-
-  for (const match of matches) {
-    terms.push(match[1].trim());
-  }
-
-  return terms;
-}
-
-/**
  * Applies custom highlights using phraseSearch: false to highlight all macro_em terms
  * in a single search pass, filtered to only matches within the snippet boundaries.
  */
 async function applyCustomHighlights(
   viewer: PDFViewer,
+  currentScrollTop: number,
+  currentScrollLeft: number,
   findController: FindController,
   findControllerStateEventSignal: Accessor<
     IUpdateFindControlStateEvent | undefined
   >,
   pageIndex: number,
-  highlightedContent: string,
+  terms: string[],
   snippetStartPos: number,
   snippetEndPos: number
 ) {
-  // Extract the terms to highlight from macro_em tags
-  const terms = extractMacroEmTerms(highlightedContent);
-
   if (terms.length === 0) {
-    console.warn('No macro_em terms found to highlight');
+    console.warn('No highlight terms found');
     return;
   }
 
   // Join all terms with spaces for multi-term search
   // phraseSearch: false will create an alternation regex (term1|term2|term3)
   const query = terms.join(' ');
-
-  // Save the current scroll position to restore after search
-  const currentScrollTop = viewer.container().scrollTop;
 
   // Perform single search with phraseSearch: false to highlight all terms
   viewer.search({
@@ -98,6 +78,7 @@ async function applyCustomHighlights(
 
   // Restore the scroll position to where we were before the search
   viewer.container().scrollTop = currentScrollTop;
+  viewer.container().scrollLeft = currentScrollLeft;
 
   if (searchResult?.state === FindState.NOT_FOUND) {
     console.warn('Terms not found:', terms);
@@ -234,10 +215,9 @@ export interface AnnotationLocation {
 export interface SearchLocation {
   type: 'search';
   pageIndex: number;
-  matchNum: number;
-  term: string;
   snippet: string;
-  highlightedContent: string;
+  rawQuery: string;
+  highlightTerms: string[];
 }
 
 export type PdfLocation =
@@ -323,10 +303,9 @@ export const URL_PARAMS = {
   height: 'pdf_height',
   annotationId: 'pdf_ann_id',
   searchPage: 'pdf_search_page',
-  searchMatchNumOnPage: 'pdf_search_match_num',
-  searchTerm: 'pdf_search_term',
   searchSnippet: 'pdf_search_snippet',
-  highlightedContent: 'pdf_highlighted_content',
+  searchRawQuery: 'pdf_search_raw_query',
+  searchHighlightTerms: 'pdf_search_highlight_terms',
 } as const;
 
 /**
@@ -462,25 +441,20 @@ export function parseLocationFromBlockParams(
 
   // Next highest priority is a search result
   const searchPage = params[URL_PARAMS.searchPage];
-  const searchMatchNumOnPage = params[URL_PARAMS.searchMatchNumOnPage];
-  const searchTerm = params[URL_PARAMS.searchTerm];
   const searchSnippet = params[URL_PARAMS.searchSnippet];
-  const highlightedContent = params[URL_PARAMS.highlightedContent];
+  const searchRawQuery = params[URL_PARAMS.searchRawQuery];
+  const searchHighlightTermsString = params[URL_PARAMS.searchHighlightTerms];
+  const searchHighlightTerms = searchHighlightTermsString
+    ? JSON.parse(searchHighlightTermsString)
+    : [];
 
-  if (
-    searchPage &&
-    searchMatchNumOnPage &&
-    searchTerm &&
-    searchSnippet &&
-    highlightedContent
-  ) {
+  if (searchPage && searchRawQuery && searchSnippet && searchHighlightTerms) {
     return {
       type: 'search',
       pageIndex: Number(searchPage) + 1,
-      matchNum: Number(searchMatchNumOnPage),
-      term: searchTerm,
       snippet: searchSnippet,
-      highlightedContent,
+      rawQuery: searchRawQuery,
+      highlightTerms: searchHighlightTerms,
     };
   }
 
@@ -518,9 +492,9 @@ export type LocationSearchParams = {
   annotationId?: string;
   searchPage?: string;
   searchMatchNumOnPage?: string;
-  searchTerm?: string;
   searchSnippet?: string;
-  highlightedContent?: string;
+  searchRawQuery?: string;
+  highlightTerms?: string;
   pageNumber?: string;
   yPos?: string;
   x?: string;
@@ -551,25 +525,19 @@ export function parseLocationFromUrl(
 
   // Next highest priority is a search result
   const searchPage = params.searchPage;
-  const searchMatchNumOnPage = params.searchMatchNumOnPage;
-  const searchTerm = params.searchTerm;
+  const searchRawQuery = params.searchRawQuery;
   const searchSnippet = params.searchSnippet;
-  const highlightedContent = params.highlightedContent;
+  const highlightTerms = params.highlightTerms
+    ? JSON.parse(params.highlightTerms)
+    : [];
 
-  if (
-    searchPage &&
-    searchMatchNumOnPage &&
-    searchTerm &&
-    searchSnippet &&
-    highlightedContent
-  ) {
+  if (searchPage && searchSnippet && searchRawQuery && highlightTerms) {
     return {
       type: 'search',
       pageIndex: Number(searchPage) + 1,
-      matchNum: Number(searchMatchNumOnPage),
-      term: searchTerm,
       snippet: searchSnippet,
-      highlightedContent,
+      rawQuery: searchRawQuery,
+      highlightTerms,
     };
   }
 
@@ -645,13 +613,11 @@ export async function goToPdfLocation(location: PdfLocation) {
 
       // Save the current scroll position to restore after search
       const currentScrollTop = viewer.container().scrollTop;
-
-      // Normalize the snippet by replacing all whitespace characters with spaces
-      const normalizedSnippet = location.snippet.replace(/\s+/g, ' ').trim();
+      const currentScrollLeft = viewer.container().scrollLeft;
 
       // Use the snippet to find the location in the PDF
       viewer.search({
-        query: normalizedSnippet,
+        query: location.snippet,
         again: false,
         phraseSearch: true,
         caseSensitive: true,
@@ -664,18 +630,28 @@ export async function goToPdfLocation(location: PdfLocation) {
       const findControllerStateEvent = await waitForSignal(
         findControllerStateEventSignal,
         (val) =>
-          val?.state === FindState.FOUND || val?.state === FindState.NOT_FOUND
-      );
+          val?.state === FindState.FOUND || val?.state === FindState.NOT_FOUND,
+        10000
+      ).catch((_e) => {
+        console.error('search timed out');
+        return undefined;
+      });
 
-      viewer.container().scrollTop = currentScrollTop;
-
-      if (!findControllerStateEvent) return;
+      if (!findControllerStateEvent) {
+        viewer.resetSearch();
+        return;
+      }
 
       // Break early if we can't find the match
       if (findControllerStateEvent.state === FindState.NOT_FOUND) {
         console.warn('unable to find match', { location });
-        break;
+        // TODO: fallback to raw query
+        viewer.resetSearch();
+        return;
       }
+
+      viewer.container().scrollTop = currentScrollTop;
+      viewer.container().scrollLeft = currentScrollLeft;
 
       const findController = findControllerStateEvent.source;
 
@@ -688,7 +664,8 @@ export async function goToPdfLocation(location: PdfLocation) {
         !findController._pageMatchesLength
       ) {
         console.error('FindController state is incomplete');
-        break;
+        viewer.resetSearch();
+        return;
       }
 
       const snippetMatchIdx = findController._selected.matchIdx;
@@ -699,15 +676,11 @@ export async function goToPdfLocation(location: PdfLocation) {
 
       if (snippetStartPos === undefined || snippetLength === undefined) {
         console.error('Could not find snippet position');
-        break;
+        viewer.resetSearch();
+        return;
       }
 
       const snippetEndPos = snippetStartPos + snippetLength;
-
-      // Since we have a FOUND state, we can jump to the correct match
-      for (let i = 0; i < location.matchNum; i++) {
-        findController._nextMatch();
-      }
 
       // Clear the snippet search highlights without resetting state
       // This preserves the findController's ability to emit events
@@ -717,19 +690,20 @@ export async function goToPdfLocation(location: PdfLocation) {
       // Apply custom highlights based on macro_em tags
       await applyCustomHighlights(
         viewer,
+        currentScrollTop,
+        currentScrollLeft,
         findController,
         findControllerStateEventSignal,
         pageIdx,
-        location.highlightedContent,
+        location.highlightTerms,
         snippetStartPos,
         snippetEndPos
       );
 
       // flash the highlights
       setTimeout(() => {
-        findController._reset();
-        findController._updateAllPages();
-      }, 1000);
+        viewer.resetSearch();
+      }, 2000);
 
       break;
   }

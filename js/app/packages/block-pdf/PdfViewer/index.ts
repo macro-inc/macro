@@ -252,6 +252,8 @@ export class PDFViewer extends InternalPDFViewer {
   }
 
   resetSearch() {
+    this._findController._reset();
+    this._findController._updateAllPages();
     this._eventBus.dispatch('findbarclose', { source: this });
   }
 
