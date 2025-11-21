@@ -41,6 +41,9 @@ pub enum OpensearchClientError {
         details: String,
         method: Option<String>,
     },
+
+    #[error("no title key is available for name search")]
+    NoTitleKeyForNameSearch,
 }
 
 impl From<anyhow::Error> for OpensearchClientError {
