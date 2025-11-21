@@ -54,7 +54,7 @@ pub async fn patch_channel_handler(
     if name.is_some() {
         tokio::spawn({
             let sqs_client = ctx.sqs_client.clone();
-            let channel_id = channel_id.clone();
+            let channel_id = channel_id;
             async move {
                 tracing::trace!("sending message to search extractor queue");
 

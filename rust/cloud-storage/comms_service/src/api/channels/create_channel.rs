@@ -117,7 +117,7 @@ pub async fn create_channel_handler(
     if req.name.is_some() {
         tokio::spawn({
             let sqs_client = ctx.sqs_client.clone();
-            let channel_id = id.clone();
+            let channel_id = id;
             async move {
                 tracing::trace!("sending message to search extractor queue");
 
