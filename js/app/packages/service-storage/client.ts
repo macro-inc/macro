@@ -38,7 +38,6 @@ import {
   type CloudStorageItemType,
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
-import type { CreateBlankDocxRequest } from './generated/schemas/createBlankDocxRequest';
 import type { CreateCommentResponse } from './generated/schemas/createCommentResponse';
 import type { CreateDocumentHandler200 as CreateDocumentResponse } from './generated/schemas/createDocumentHandler200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
@@ -499,13 +498,6 @@ export const storageServiceClient = {
 
     return ok({
       metadata: documentMetadata,
-    });
-  },
-
-  async createBlankDocx(request: CreateBlankDocxRequest) {
-    return dssFetch<DocumentMetadata>(`/documents/blank_docx`, {
-      method: 'POST',
-      body: JSON.stringify(request),
     });
   },
 

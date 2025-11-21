@@ -457,13 +457,6 @@ export const StorageService = new Svc('Document++ Storage Service API')
     modifies: true,
     throws: withFetchErrors('INVALID_RESPONSE'),
   })
-  .fn('createBlankDocx', {
-    description: schemas.createBlankDocxResponse.description || '',
-    args: schemas.createBlankDocxBody.shape,
-    result: schemas.createBlankDocxResponse.shape,
-    modifies: true,
-    throws: withFetchErrors('INVALID_RESPONSE'),
-  })
   .fn('copyDocument', {
     description: schemas.copyDocumentHandlerResponse.description!,
     args: {
