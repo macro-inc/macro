@@ -408,6 +408,8 @@ export function createBulkDeleteDssItemsMutation() {
       );
     },
     onMutate: async (entities: EntityData[]) => {
+      console.log('ON MUTATE');
+      console.log('QUERY KEY', queryKeys.dss({ infinite: true }));
       const deletedIDs = entities.map((e) => e.id);
       await queryClient.cancelQueries({
         queryKey: queryKeys.dss({ infinite: true }),
@@ -416,6 +418,7 @@ export function createBulkDeleteDssItemsMutation() {
       queryClient.setQueriesData(
         { queryKey: queryKeys.dss({ infinite: true }) },
         (prev: { pages: { items: EntityData[] }[] }) => {
+          console.trace({ prev });
           const pages = prev.pages.map((page) => ({
             ...page,
             items: page.items.filter((item) => !deletedIDs.includes(item.id)),

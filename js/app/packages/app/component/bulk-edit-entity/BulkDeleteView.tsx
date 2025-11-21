@@ -14,9 +14,9 @@ export const BulkDeleteView = (props: {
   const bulkDelete = createBulkDeleteDssItemsMutation();
 
   const handleDelete = async () => {
+    console.trace('HANDLE DELETE');
     try {
       await bulkDelete.mutateAsync(props.entities);
-
       const context = konsoleContextInformation();
       const clearSelection = context.clearSelection as (() => void) | undefined;
       clearSelection?.();
