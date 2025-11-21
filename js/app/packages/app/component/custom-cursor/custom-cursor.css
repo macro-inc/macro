@@ -1,4 +1,4 @@
-/* This sheet is imported into base layer in index.css and injected into shadowRoot style element  */
+/* This sheet is imported into base layer in index.css and during runtime injected into shadowRoot style element  */
 
 :root {
   /* custom cursor fallback */
