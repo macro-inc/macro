@@ -1571,6 +1571,12 @@ export class InternalPDFViewer {
       },
     };
   }
+
+  markPageHighlightsSelected(pageIndex: number): void {
+    const pageView = this._viewer.getPageView(pageIndex);
+    if (!pageView) return;
+    markHighlightsSelected(pageView);
+  }
 }
 
 export function overlaysToElements(overlays: string[]) {
@@ -1609,4 +1615,15 @@ function disableTextLayer(pageView: PDFPageView) {
 function enableTextLayer(pageView: PDFPageView) {
   if (pageView.textLayer?.textLayerDiv == null) return;
   pageView.textLayer.textLayerDiv.style.userSelect = '';
+}
+
+function markHighlightsSelected(pageView: PDFPageView) {
+  const textLayerDiv = pageView.textLayer?.textLayerDiv;
+  if (!textLayerDiv) return;
+  const highlightSpans = textLayerDiv.querySelectorAll('.highlight.appended');
+  for (const span of highlightSpans) {
+    if (!span.classList.contains('selected')) {
+      span.classList.add('selected');
+    }
+  }
 }
