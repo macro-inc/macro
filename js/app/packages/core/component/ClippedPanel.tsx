@@ -16,8 +16,6 @@ export function ClippedPanel(props: PanelProps) {
     <div
       style={{
         'background-image': `linear-gradient(var(--color-accent), var(--color-edge-muted) ${props.active ? '80%' : '0%'})`,
-        transition: 'background-image var(--transition)',
-        'box-sizing': 'border-box',
         'clip-path': !beveledCorners()
           ? cornerClip(
               props.tl ? '0.5rem' : 0,
@@ -34,15 +32,11 @@ export function ClippedPanel(props: PanelProps) {
           ${props.bl ? '16px' : '4px'}
         `
           : '0',
-        padding: '1px',
-        height: '100%',
-        width: '100%',
       }}
+      class="p-px h-full w-full box-border"
     >
       <div
         style={{
-          'background-color': 'var(--color-panel)',
-          'box-sizing': 'border-box',
           'clip-path': !beveledCorners()
             ? cornerClip(
                 props.tl ? 'calc(0.5rem - 0.5px)' : 0,
@@ -59,10 +53,8 @@ export function ClippedPanel(props: PanelProps) {
             ${props.bl ? '15.5px' : '3.3px'}
           `
             : '0',
-          overflow: 'hidden',
-          height: '100%',
-          width: '100%',
         }}
+        class="h-full w-full box-border overflow-hidden bg-panel"
       >
         {props.children}
       </div>
