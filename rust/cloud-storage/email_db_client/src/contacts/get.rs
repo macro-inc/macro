@@ -1,6 +1,7 @@
 use crate::parse::db_to_service::map_db_contact_to_service;
 use anyhow::Context;
 use chrono::{DateTime, Utc};
+use email_utils::{dedupe_emails, is_generic_email};
 use models_email::service::address;
 use models_email::{db, service};
 use sqlx::PgPool;
@@ -358,10 +359,10 @@ pub async fn fetch_contacts_emails_by_link_id(
     .await
     .context("Failed to fetch contacts for link ID")?;
 
-    Ok(rows
+    let deduped = dedupe_emails(rows.into_iter().map(|row| row.email_address).collect());
+    Ok(deduped
         .into_iter()
-        .map(|row| row.email_address)
-        .filter(|e| !email_utils::is_generic_email(e))
+        .filter(|e| !is_generic_email(e))
         .collect())
 }
 
