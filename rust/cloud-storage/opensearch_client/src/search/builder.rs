@@ -46,9 +46,6 @@ macro_rules! delegate_methods {
 pub trait SearchQueryConfig {
     /// Key for item id
     const ID_KEY: &'static str = "entity_id";
-    /// Index name
-    #[allow(dead_code)]
-    const INDEX: &'static str;
     /// Key for user id
     const USER_ID_KEY: &'static str;
     /// Key for title

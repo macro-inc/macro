@@ -22,3 +22,4 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 unicode-segmentation = "1.9.0"
 strum = { workspace = true }
+models_opensearch = { path = "../models_opensearch" }

@@ -1,4 +1,6 @@
-use crate::{CHANNEL_INDEX, Result, error::OpensearchClientError};
+use models_opensearch::SearchIndex;
+
+use crate::{Result, error::OpensearchClientError};
 
 /// Deletes all channel messages with the specified channel_id
 #[tracing::instrument(skip(client))]
@@ -12,7 +14,9 @@ pub async fn delete_channel_by_id(client: &opensearch::OpenSearch, channel_id: &
     });
 
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[CHANNEL_INDEX]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
+            SearchIndex::Channels.as_ref(),
+        ]))
         .body(query)
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
@@ -76,7 +80,9 @@ pub async fn delete_channel_message_by_id(
     });
 
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[CHANNEL_INDEX]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
+            SearchIndex::Channels.as_ref(),
+        ]))
         .body(query)
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
