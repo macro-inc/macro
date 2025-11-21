@@ -2492,6 +2492,7 @@ dependencies = [
  "metering_service_client",
  "model",
  "models_dcs",
+ "models_opensearch",
  "models_permissions",
  "regex",
  "reqwest",
