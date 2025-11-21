@@ -1,4 +1,4 @@
-import { locationPendingSignal } from '@block-pdf/signal/location';
+import { searchLocationPendingSignal } from '@block-pdf/signal/location';
 import { IconButton } from '@core/component/IconButton';
 import { IS_MAC } from '@core/constant/isMac';
 import { blockElementSignal } from '@core/signal/blockElement';
@@ -28,7 +28,7 @@ export function SimpleSearch() {
   const searchResults = useSearchResults();
   const jumpToResult = useJumpToResult();
   const closeSearchBar = useSearchClose();
-  const locationPending = locationPendingSignal.get;
+  const locationPending = searchLocationPendingSignal.get;
   let inputRef: HTMLInputElement | undefined;
 
   const [isSearching, setIsSearching] = createSignal(false);
