@@ -1,10 +1,10 @@
 # Custom Cursor
 
-## ATTENTION use Tailind cursor-\* variant or css variable prefixed with --cursor-\*
+## ATTENTION use Tailind cursor-\* variant or css variable --cursor-\*
 
-Using default tailwind cursor variant, such as `cursor-pointer`, is fine to use because it is overriden by the vite plugin that replaces value to use custom cursor css variable.
+Using default tailwind cursor variant, such as `cursor-pointer`, works because it is overriden by the vite plugin that replaces value to use custom cursor css variable.
 
-Otherwise use custom cursor variable, cursor value prefixed with `--cursor-`, instead of default value
+Otherwise use custom cursor variable `--cursor-<value-of-cursor>`, instead of default value.
 
 ```css
 .pointer-on-img {
