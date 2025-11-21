@@ -129,4 +129,3 @@ export const ENABLE_CUSTOM_CURSOR = false;
 export const ENABLE_SOUND = false;
 
 export const ENABLE_JACK_IN = false;
-

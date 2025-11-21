@@ -1,4 +1,4 @@
-import { ENABLE_SOUND } from "@core/constant/featureFlags";
+import { ENABLE_SOUND } from '@core/constant/featureFlags';
 
 const SOUND_ENABLED_KEY = 'sound-effects-enabled';
 const SOUND_VOLUME_KEY = 'sound-effects-volume';
