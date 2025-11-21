@@ -2914,6 +2914,7 @@ dependencies = [
  "model-entity",
  "model_notifications",
  "models_email",
+ "models_opensearch",
  "models_pagination",
  "redis",
  "reqwest",
