@@ -313,86 +313,22 @@ export function useCreateShareUrl() {
 }
 
 /**
- * Parses params into a PDF location.
+ * Internal helper to parse location parameters into a PDF location.
  * Returns most precise location type possible based on available parameters.
- *
- * @param params - Block parameters containing location information
- * @returns PDF location object or null if no valid location found
  */
-export function parseLocationFromBlockParams(
-  params: LocationBlockParams
-): PdfLocation | null {
+function parseLocationParams(params: {
+  annotationId?: string;
+  searchPage?: string;
+  searchSnippet?: string;
+  searchRawQuery?: string;
+  searchHighlightTerms?: string;
+  pageNumber?: string;
+  yPos?: string;
+  x?: string;
+  width?: string;
+  height?: string;
+}): PdfLocation | null {
   // Check for annotation first as it's highest priority
-  const id = params[URL_PARAMS.annotationId];
-  if (id?.trim()) {
-    return {
-      type: 'annotation',
-      pageIndex: 1,
-      id,
-    };
-  }
-
-  // Next highest priority is a search result
-  const searchPage = params[URL_PARAMS.searchPage];
-  const searchSnippet = params[URL_PARAMS.searchSnippet];
-  const searchRawQuery = params[URL_PARAMS.searchRawQuery];
-  const searchHighlightTermsString = params[URL_PARAMS.searchHighlightTerms];
-  const searchHighlightTerms = searchHighlightTermsString
-    ? JSON.parse(searchHighlightTermsString)
-    : [];
-
-  if (searchPage && searchRawQuery && searchSnippet && searchHighlightTerms) {
-    return {
-      type: 'search',
-      pageIndex: Number(searchPage) + 1,
-      snippet: searchSnippet,
-      rawQuery: searchRawQuery,
-      highlightTerms: searchHighlightTerms,
-    };
-  }
-
-  const pageIndex = Number(params[URL_PARAMS.pageNumber]);
-  const y = Number(params[URL_PARAMS.yPos]);
-
-  if (isNaN(pageIndex) || isNaN(y) || pageIndex < 1) {
-    return null;
-  }
-
-  const x = Number(params[URL_PARAMS.x]);
-  const width = Number(params[URL_PARAMS.width]);
-  const height = Number(params[URL_PARAMS.height]);
-
-  if (!isNaN(x) && !isNaN(width) && !isNaN(height) && width > 0 && height > 0) {
-    return {
-      type: 'precise',
-      pageIndex,
-      y,
-      x,
-      width,
-      height,
-    };
-  }
-
-  // Fall back to general location
-  return {
-    type: 'general',
-    pageIndex,
-    y,
-  };
-}
-
-/**
- * Parses URL search parameters into a PDF location.
- * Returns most precise location type possible based on available parameters.
- *
- * @param searchParams - URL search parameters to parse
- * @returns PDF location object or null if no valid location found
- */
-export function parseLocationFromUrl(
-  params: LocationSearchParams
-): PdfLocation | null {
-  // Check for annotation first as it's highest priority
-
   const id = params.annotationId;
   if (id?.trim()) {
     return {
@@ -404,19 +340,20 @@ export function parseLocationFromUrl(
 
   // Next highest priority is a search result
   const searchPage = params.searchPage;
-  const searchRawQuery = params.searchRawQuery;
   const searchSnippet = params.searchSnippet;
-  const highlightTerms = params.highlightTerms
-    ? JSON.parse(params.highlightTerms)
+  const searchRawQuery = params.searchRawQuery;
+  const searchHighlightTermsString = params.searchHighlightTerms;
+  const searchHighlightTerms = searchHighlightTermsString
+    ? JSON.parse(searchHighlightTermsString)
     : [];
 
-  if (searchPage && searchSnippet && searchRawQuery && highlightTerms) {
+  if (searchPage && searchRawQuery && searchSnippet && searchHighlightTerms) {
     return {
       type: 'search',
       pageIndex: Number(searchPage) + 1,
       snippet: searchSnippet,
       rawQuery: searchRawQuery,
-      highlightTerms,
+      highlightTerms: searchHighlightTerms,
     };
   }
 
@@ -448,6 +385,54 @@ export function parseLocationFromUrl(
     pageIndex,
     y,
   };
+}
+
+/**
+ * Parses params into a PDF location.
+ * Returns most precise location type possible based on available parameters.
+ *
+ * @param params - Block parameters containing location information
+ * @returns PDF location object or null if no valid location found
+ */
+export function parseLocationFromBlockParams(
+  params: LocationBlockParams
+): PdfLocation | null {
+  return parseLocationParams({
+    annotationId: params[URL_PARAMS.annotationId],
+    searchPage: params[URL_PARAMS.searchPage],
+    searchSnippet: params[URL_PARAMS.searchSnippet],
+    searchRawQuery: params[URL_PARAMS.searchRawQuery],
+    searchHighlightTerms: params[URL_PARAMS.searchHighlightTerms],
+    pageNumber: params[URL_PARAMS.pageNumber],
+    yPos: params[URL_PARAMS.yPos],
+    x: params[URL_PARAMS.x],
+    width: params[URL_PARAMS.width],
+    height: params[URL_PARAMS.height],
+  });
+}
+
+/**
+ * Parses URL search parameters into a PDF location.
+ * Returns most precise location type possible based on available parameters.
+ *
+ * @param params - URL search parameters to parse
+ * @returns PDF location object or null if no valid location found
+ */
+export function parseLocationFromUrl(
+  params: LocationSearchParams
+): PdfLocation | null {
+  return parseLocationParams({
+    annotationId: params.annotationId,
+    searchPage: params.searchPage,
+    searchSnippet: params.searchSnippet,
+    searchRawQuery: params.searchRawQuery,
+    searchHighlightTerms: params.highlightTerms,
+    pageNumber: params.pageNumber,
+    yPos: params.yPos,
+    x: params.x,
+    width: params.width,
+    height: params.height,
+  });
 }
 
 /**
