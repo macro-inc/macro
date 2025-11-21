@@ -55,7 +55,6 @@ export function TopBar() {
   }
 
   const ops: FileOperation[] = [
-    ...(isAuth() && !isSpecialProject ? [{ op: 'pin' as const }] : []),
     ...(hasPermissions(permissions(), Permissions.OWNER) && !isSpecialProject
       ? [
           { op: 'rename' as const },
