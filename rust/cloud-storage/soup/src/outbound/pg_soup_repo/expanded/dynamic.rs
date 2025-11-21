@@ -250,7 +250,7 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
         filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
         filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
         filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectId(p)) => {
-            format!("p.id = '{p}'")
+            format!(r#"p."parentId" = '{p}'"#)
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::Owner(o)) => format!("p.owner = '{o}'"),
     });
