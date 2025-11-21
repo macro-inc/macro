@@ -510,7 +510,7 @@ export function EntityWithEverything(
               {(highlight) => (
                 <div class="text-sm text-ink-muted truncate flex items-center">
                   <StaticMarkdown
-                    markdown={highlight}
+                    markdown={highlight.content}
                     theme={unifiedListMarkdownTheme}
                     singleLine={true}
                   />
