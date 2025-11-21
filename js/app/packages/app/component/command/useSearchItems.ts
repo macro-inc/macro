@@ -138,7 +138,7 @@ function createChannelItems(
         type: 'channel',
         data: {
           id: channel.channel_id,
-          name: channel.channel_name!,
+          name: '', // Set name to empty string since search results don't contain channel names anymore
         },
         snippet: {
           content,
