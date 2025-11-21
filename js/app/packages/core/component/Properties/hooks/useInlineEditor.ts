@@ -5,6 +5,7 @@ import { saveEntityProperty } from '../api';
 import { NUMBER_DECIMAL_PLACES } from '../constants';
 import type { Property, PropertyApiValues } from '../types';
 import { formatPropertyValue } from '../utils';
+import { ERROR_MESSAGES, handlePropertyError } from '../utils/errorHandling';
 
 /**
  * Hook for inline editing of string and number properties
@@ -92,7 +93,13 @@ export function useInlineEditor(
         apiValues
       );
 
-      if (result.ok) {
+      if (
+        handlePropertyError(
+          result,
+          ERROR_MESSAGES.PROPERTY_SAVE,
+          'useInlineEditor.save'
+        )
+      ) {
         setIsEditing(false);
         onSaved?.();
       }

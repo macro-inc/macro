@@ -74,7 +74,7 @@ model_notifications = { path = "../model_notifications" }
 models_bulk_upload = { path = "../models_bulk_upload" }
 models_pagination = { path = "../models_pagination", features = ["axum"] }
 models_permissions = { path = "../models_permissions" }
-models_soup = { path = "../models_soup" }
+models_soup = { path = "../models_soup", features = ["schema"] }
 rayon = "1.10.0"
 redis = { workspace = true, features = [
   "aio",

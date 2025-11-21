@@ -14,25 +14,25 @@ INSERT INTO public."User" ("id", "email", "stripeCustomerId", "organizationId")
 VALUES ('macro|user@user.com', 'user@user.com', 'stripe_id', 1)
 ON CONFLICT DO NOTHING;
 INSERT INTO public."Project" ("id", "name", "userId", "createdAt", "updatedAt")
-VALUES ('test-project', 'Test Project', 'macro|user@user.com', '2023-01-17 12:00:00', '2023-01-17 12:00:00');
+VALUES ('ffffffff-ffff-ffff-ffff-ffffffffffff', 'Test Project', 'macro|user@user.com', '2023-01-17 12:00:00', '2023-01-17 12:00:00');
 INSERT INTO public."DocumentFamily" ("id", "rootDocumentId")
-VALUES (1, 'test-document');
+VALUES (1, 'dddddddd-dddd-dddd-dddd-dddddddddddd');
 INSERT INTO public."Document" ("id", "name", "fileType", "owner", "createdAt", "updatedAt", "documentFamilyId",
                                "projectId")
-VALUES ('test-document', 'Test Document', 'pdf', 'macro|user@user.com', '2023-01-15 10:00:00', '2023-01-15 10:00:00', 1,
-        'test-project');
+VALUES ('dddddddd-dddd-dddd-dddd-dddddddddddd', 'Test Document', 'pdf', 'macro|user@user.com', '2023-01-15 10:00:00', '2023-01-15 10:00:00', 1,
+        'ffffffff-ffff-ffff-ffff-ffffffffffff');
 INSERT INTO public."DocumentInstance" ("id", "revisionName", "documentId", "createdAt", "updatedAt", "sha")
-VALUES (1, 'Test Document', 'test-document', '2023-01-15 10:00:00', '2023-01-15 10:00:00', 'abc123sha');
+VALUES (1, 'Test Document', 'dddddddd-dddd-dddd-dddd-dddddddddddd', '2023-01-15 10:00:00', '2023-01-15 10:00:00', 'abc123sha');
 INSERT INTO public."Chat" ("id", "userId", "name", "createdAt", "updatedAt", "isPersistent", "projectId")
-VALUES ('test-chat', 'macro|user@user.com', 'Test Chat', '2023-01-16 11:00:00', '2023-01-16 11:00:00', true,
-        'test-project');
+VALUES ('cccccccc-1111-1111-1111-111111111111', 'macro|user@user.com', 'Test Chat', '2023-01-16 11:00:00', '2023-01-16 11:00:00', true,
+        'ffffffff-ffff-ffff-ffff-ffffffffffff');
 
 -- Add user access to all items (Same as original)
 INSERT INTO public."UserItemAccess" ("id", "user_id", "item_id", "item_type", "access_level", "created_at")
-VALUES (gen_random_uuid(), 'macro|user@user.com', 'test-document', 'document', 'owner', '2023-01-15 10:00:00'),
-       (gen_random_uuid(), 'macro|user@user.com', 'test-document', 'document', 'view', '2023-01-15 10:30:00'),
-       (gen_random_uuid(), 'macro|user@user.com', 'test-chat', 'chat', 'owner', '2023-01-16 11:00:00'),
-       (gen_random_uuid(), 'macro|user@user.com', 'test-project', 'project', 'owner', '2023-01-17 12:00:00');
+VALUES (gen_random_uuid(), 'macro|user@user.com', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'document', 'owner', '2023-01-15 10:00:00'),
+       (gen_random_uuid(), 'macro|user@user.com', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'document', 'view', '2023-01-15 10:30:00'),
+       (gen_random_uuid(), 'macro|user@user.com', 'cccccccc-1111-1111-1111-111111111111', 'chat', 'owner', '2023-01-16 11:00:00'),
+       (gen_random_uuid(), 'macro|user@user.com', 'ffffffff-ffff-ffff-ffff-ffffffffffff', 'project', 'owner', '2023-01-17 12:00:00');
 
 ---------------------------------------------------
 --  NEW: USER HISTORY DATA
@@ -42,9 +42,9 @@ VALUES (gen_random_uuid(), 'macro|user@user.com', 'test-document', 'document', '
 INSERT INTO public."UserHistory" ("userId", "itemId", "itemType", "createdAt", "updatedAt")
 VALUES
 -- Make the document the most recently viewed item
-('macro|user@user.com', 'test-document', 'document', '2024-02-15 09:00:00', '2024-02-15 10:00:00'),
+('macro|user@user.com', 'dddddddd-dddd-dddd-dddd-dddddddddddd', 'document', '2024-02-15 09:00:00', '2024-02-15 10:00:00'),
 -- Make the project the second most recently viewed item
-('macro|user@user.com', 'test-project', 'project', '2024-02-14 09:00:00', '2024-02-14 10:00:00');
+('macro|user@user.com', 'ffffffff-ffff-ffff-ffff-ffffffffffff', 'project', '2024-02-14 09:00:00', '2024-02-14 10:00:00');
 
 -- Re-enable foreign key constraints
 SET session_replication_role = 'origin';

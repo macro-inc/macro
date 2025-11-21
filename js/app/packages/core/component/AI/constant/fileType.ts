@@ -325,7 +325,6 @@ export const SUPPORTED_CHAT_ATTACHMENT_BLOCKS: BlockName[] = [
   'channel',
   'write',
   'pdf',
-  'html',
   'md',
   'code',
   'canvas',

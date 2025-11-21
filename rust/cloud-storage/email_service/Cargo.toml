@@ -10,6 +10,10 @@ name = "email_service"
 path = "src/main.rs"
 
 [[bin]]
+name = "backfill_contacts"
+path = "src/bin/backfill_contacts/backfill_contacts.rs"
+
+[[bin]]
 name = "backfill_gmail_attachments"
 path = "src/bin/backfill_gmail_attachments/backfill_gmail_attachments.rs"
 
@@ -22,6 +26,7 @@ disable_attachment_upload = []
 disable_connection_gateway = []
 disable_gmail_webhook_auth = []
 disable_sfs_map = []
+disable_contacts_sync = []
 local_queue = []
 
 [dependencies]
@@ -38,7 +43,9 @@ cloudfront_sign = { workspace = true }
 connection_gateway = { path = "../connection_gateway" }
 document_storage_service_client = { path = "../document_storage_service_client" }
 ego-tree = { workspace = true }
+email = { path = "../email", features = ["axum"] }
 email_db_client = { path = "../email_db_client" }
+email_utils = { path = "../email_utils"}
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
 gmail_client = { path = "../gmail_client" }
@@ -72,13 +79,14 @@ reqwest = { workspace = true, features = ["stream"] }
 s3_client = { path = "../s3_client" }
 schemars = { workspace = true }
 scraper = { workspace = true }
-sha2 = { workspace = true }
 secretsmanager_client = { path = "../secretsmanager_client" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 sqlx = { workspace = true }
+sqlx-core = { workspace = true }
 sqs_client = { path = "../sqs_client", default-features = false, features = [
-
+  "contacts",
   "email",
   "gmail",
   "insight_context",
@@ -97,7 +105,6 @@ urlencoding = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
-sqlx-core = { workspace = true }
 
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }

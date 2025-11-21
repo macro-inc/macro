@@ -1,9 +1,9 @@
 use crate::{RequestContext, ToolServiceContext};
 use ai::tool::{AsyncTool, ToolCallError, ToolResult};
 use async_trait::async_trait;
+use email::inbound::ApiPaginatedThreadCursor;
 use models_email::{
-    email::service::thread::{GetPreviewsCursorResponse, PreviewView},
-    service::thread::PreviewViewStandardLabel,
+    email::service::thread::PreviewView, service::thread::PreviewViewStandardLabel,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -94,7 +94,7 @@ impl ListEmails {
 
 #[async_trait]
 impl AsyncTool<ToolServiceContext, RequestContext> for ListEmails {
-    type Output = GetPreviewsCursorResponse;
+    type Output = ApiPaginatedThreadCursor;
 
     #[tracing::instrument(skip_all, fields(user_id=?request_context.user_id), err)]
     async fn call(

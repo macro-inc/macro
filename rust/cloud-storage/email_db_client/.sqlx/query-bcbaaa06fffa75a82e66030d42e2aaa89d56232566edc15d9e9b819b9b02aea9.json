@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT\n            c.email_address as \"email_address!\"\n        FROM\n            email_messages m\n        JOIN\n            email_message_recipients mr ON m.id = mr.message_id\n        JOIN\n            email_contacts c ON mr.contact_id = c.id\n        WHERE\n            m.link_id = $1\n            AND m.is_sent = TRUE\n            AND mr.contact_id IS NOT NULL\n        ORDER BY\n            c.email_address\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "email_address!",
+        "type_info": "Varchar"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "bcbaaa06fffa75a82e66030d42e2aaa89d56232566edc15d9e9b819b9b02aea9"
+}
