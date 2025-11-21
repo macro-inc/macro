@@ -1,15 +1,15 @@
 import { deleteItem } from '@core/component/FileList/itemOperations';
 import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import type { ItemType } from '@service-storage/client';
-import {
+import type {
   PostItemsSoupParams,
   PostSoupRequest,
   SoupApiSort,
 } from '@service-storage/generated/schemas';
 import {
   hashKey,
-  InfiniteData,
-  UseQueryResult,
+  type InfiniteData,
+  type UseQueryResult,
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
@@ -19,7 +19,7 @@ import type { GetItemsSoupParams } from 'service-storage/generated/schemas/getIt
 import type { SoupPage } from 'service-storage/generated/schemas/soupPage';
 import { useInstructionsMdIdQuery } from 'service-storage/instructionsMd';
 import { syncServiceClient } from 'service-sync/client';
-import { type Accessor } from 'solid-js';
+import type { Accessor } from 'solid-js';
 import type {
   ChatEntity,
   DocumentEntity,
@@ -143,7 +143,7 @@ export function createDssInfiniteQueryPost(
   const params = () => {
     const argParams = _params?.();
     let limit = 100;
-    let sort_method = undefined;
+    let sort_method;
     const requestBody = options?.requestBody;
 
     if (requestBody) {
