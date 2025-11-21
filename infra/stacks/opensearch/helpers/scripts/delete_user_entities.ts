@@ -7,8 +7,8 @@ import { client } from '../client';
  * It searches for items where either the 'user_id' or 'owner_id' field matches the target user ID.
  *
  * Command Line Arguments:
- * - First argument: The user ID to delete data for (e.g., "macro|user@example.com")
- * - Second argument: Comma-separated list of index names to process (e.g., "documents,emails,chats")
+ * - First argument: Comma-separated list of index names to process (e.g., "documents,emails,chats")
+ * - Second argument: The user ID to delete data for (e.g., "macro|user@example.com")
  *
  * Required Environment Variables:
  * - OPENSEARCH_URL: The OpenSearch cluster endpoint URL
@@ -16,7 +16,7 @@ import { client } from '../client';
  * - OPENSEARCH_PASSWORD: Password for OpenSearch authentication
  *
  * Usage:
- * node script.js "macro|user@example.com" "documents,emails,chats"
+ * node script.js "documents,emails,chats" "macro|user@example.com"
  *
  * The script will:
  * 1. Connect to OpenSearch using the provided credentials
@@ -25,20 +25,20 @@ import { client } from '../client';
  * 4. Verify deletion by counting remaining documents
  */
 
-// Get user_id and indices from command line arguments
-const userId = process.argv[2];
-const indicesArg = process.argv[3];
+// Get indices and user_id from command line arguments
+const indicesArg = process.argv[2];
+const userId = process.argv[3];
 
-if (!userId || !indicesArg) {
+if (!indicesArg || !userId) {
   console.error('Missing required command line arguments:');
-  console.error('Usage: node script.js <user_id> <indices>');
-  console.error('  user_id: The user ID to delete data for');
+  console.error('Usage: node script.js <indices> <user_id>');
   console.error(
     '  indices: Comma-separated list of index names (e.g., "documents,chats,emails")'
   );
+  console.error('  user_id: The user ID to delete data for');
   console.error('\nExample:');
   console.error(
-    'node script.js "macro|user@example.com" "documents,emails,chats"'
+    'node script.js "documents,emails,chats" "macro|user@example.com"'
   );
   process.exit(1);
 }
