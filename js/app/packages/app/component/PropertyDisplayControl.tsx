@@ -3,7 +3,7 @@ import { ERROR_MESSAGES } from '@core/component/Properties/utils/errorHandling';
 import { isErr } from '@core/util/maybeResult';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { Accessor, Component } from 'solid-js';
-import { createSignal, onMount } from 'solid-js';
+import { createMemo, createSignal, onMount } from 'solid-js';
 import type { DisplayOptions } from './ViewConfig';
 
 type PropertyDisplayControlProps = {
@@ -14,13 +14,16 @@ type PropertyDisplayControlProps = {
 };
 
 export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
-  _props
+  props
 ) => {
-  const [_availableProperties, setAvailableProperties] = createSignal<
+  const [availableProperties, setAvailableProperties] = createSignal<
     PropertyDefinitionFlat[]
   >([]);
   const [_isLoading, setIsLoading] = createSignal(false);
   const [_error, setError] = createSignal<string | null>(null);
+  const [searchQuery, setSearchQuery] = createSignal('');
+
+  let searchInputRef!: HTMLInputElement;
 
   const fetchAvailableProperties = async () => {
     setIsLoading(true);
@@ -49,6 +52,34 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
     }
   };
 
+  const _filteredProperties = createMemo(() => {
+    const query = searchQuery().toLowerCase().trim();
+    const allProperties = availableProperties();
+    const selectedIds = new Set(props.selectedPropertyIds());
+
+    // Filter out already selected properties
+    const available = allProperties.filter(
+      (property) => !selectedIds.has(property.id)
+    );
+
+    // Apply search filter
+    if (!query) return available;
+
+    return available.filter((property) => {
+      const name = property.display_name.toLowerCase();
+      if (name.includes(query)) return true;
+
+      const dataType = property.data_type;
+      let typeDisplay = dataType;
+
+      if (dataType === 'ENTITY' && property.specific_entity_type) {
+        typeDisplay += ` ${property.specific_entity_type}`;
+      }
+
+      return typeDisplay.toLowerCase().includes(query);
+    });
+  });
+
   onMount(() => {
     fetchAvailableProperties();
   });
@@ -56,10 +87,26 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
   return (
     <div>
       <div class="font-medium text-xs mb-2">Properties</div>
-      {/* Component will be built out in next chunks */}
-      {/* Available properties: {availableProperties().length} */}
-      {/* Loading: {isLoading() ? 'Yes' : 'No'} */}
-      {/* Error: {error() ?? 'None'} */}
+      <div class="border border-edge">
+        {/* Pills will go here in next chunk */}
+        <div class="w-full h-full">
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={searchQuery()}
+            onInput={(e) => setSearchQuery(e.currentTarget.value)}
+            placeholder="Search properties..."
+            class="w-full
+              px-2 py-1
+              font-mono text-xs
+              text-ink placeholder-ink-muted
+              bg-input
+              border focus:border-accent
+              focus:outline-none focus:ring-2 focus:ring-accent/50"
+          />
+        </div>
+        {/* Search results dropdown will go here in chunk 7 */}
+      </div>
     </div>
   );
 };
