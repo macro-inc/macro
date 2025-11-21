@@ -1,6 +1,8 @@
+import { IconButton } from '@core/component/IconButton';
 import type { PropertyDefinitionFlat } from '@core/component/Properties/types';
 import { ERROR_MESSAGES } from '@core/component/Properties/utils/errorHandling';
 import { isErr } from '@core/util/maybeResult';
+import DeleteIcon from '@icon/bold/x-bold.svg';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { Accessor, Component } from 'solid-js';
 import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
@@ -14,12 +16,19 @@ type PropertyDisplayControlProps = {
 };
 
 type PropertyPillProps = {
-  property: { display_name: string };
+  property: PropertyDefinitionFlat;
+  onRemove: () => void;
 };
 
 const PropertyPill: Component<PropertyPillProps> = (props) => {
+  const [isHovered, setIsHovered] = createSignal(false);
+
   return (
-    <div class="relative inline-flex max-w-[140px] shrink-0">
+    <div
+      class="relative inline-flex max-w-[140px] shrink-0"
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
+    >
       <div
         class="w-full min-h-[24px]
                inline-flex items-center
@@ -32,7 +41,20 @@ const PropertyPill: Component<PropertyPillProps> = (props) => {
         <span class="truncate flex-1 font-mono">
           {props.property.display_name}
         </span>
-        {/* X button will be added in chunk 6 */}
+        <Show when={isHovered()}>
+          <div class="absolute right-1 inset-y-0 flex items-center">
+            <IconButton
+              icon={DeleteIcon}
+              theme="clear"
+              size="xs"
+              class="!text-failure !bg-[#2a2a2a] hover:!bg-[#444444] !cursor-pointer !w-4 !h-4 !min-w-4 !min-h-4"
+              onClick={(e) => {
+                e.stopPropagation();
+                props.onRemove();
+              }}
+            />
+          </div>
+        </Show>
       </div>
     </div>
   );
@@ -85,6 +107,11 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
     );
   });
 
+  const handleRemoveProperty = (propertyId: string) => {
+    const currentIds = props.selectedPropertyIds();
+    props.setSelectedPropertyIds(currentIds.filter((id) => id !== propertyId));
+  };
+
   const _filteredProperties = createMemo(() => {
     const query = searchQuery().toLowerCase().trim();
     const allProperties = availableProperties();
@@ -133,7 +160,12 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
                    p-1.5"
           >
             <For each={selectedProperties()}>
-              {(property) => <PropertyPill property={property} />}
+              {(property) => (
+                <PropertyPill
+                  property={property}
+                  onRemove={() => handleRemoveProperty(property.id)}
+                />
+              )}
             </For>
           </div>
         </Show>
