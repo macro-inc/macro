@@ -37,3 +37,4 @@ tracing = { workspace = true }
 uuid = { workspace = true }
 user_quota = { path = "../user_quota" }
 macro_user_id = { path = "../macro_user_id" }
+models_opensearch = { path = "../models_opensearch" }

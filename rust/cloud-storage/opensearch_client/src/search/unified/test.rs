@@ -402,11 +402,11 @@ fn test_deserialization() -> anyhow::Result<()> {
 fn test_build_unified_search_request_content() -> anyhow::Result<()> {
     let unified_search_args = UnifiedSearchArgs {
         search_indices: vec![
-            SearchIndex::Documents,
-            SearchIndex::Emails,
-            SearchIndex::Projects,
-            SearchIndex::Channels,
-            SearchIndex::Chats,
+            SearchEntityType::Documents,
+            SearchEntityType::Emails,
+            SearchEntityType::Projects,
+            SearchEntityType::Channels,
+            SearchEntityType::Chats,
         ]
         .into_iter()
         .collect(),
@@ -798,11 +798,11 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
 fn test_build_unified_search_request_name() -> anyhow::Result<()> {
     let unified_search_args = UnifiedSearchArgs {
         search_indices: vec![
-            SearchIndex::Documents,
-            SearchIndex::Emails,
-            SearchIndex::Projects,
-            SearchIndex::Channels,
-            SearchIndex::Chats,
+            SearchEntityType::Documents,
+            SearchEntityType::Emails,
+            SearchEntityType::Projects,
+            SearchEntityType::Channels,
+            SearchEntityType::Chats,
         ]
         .into_iter()
         .collect(),
@@ -1234,11 +1234,11 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
 fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
     let unified_search_args = UnifiedSearchArgs {
         search_indices: vec![
-            SearchIndex::Documents,
-            SearchIndex::Emails,
-            SearchIndex::Projects,
-            SearchIndex::Channels,
-            SearchIndex::Chats,
+            SearchEntityType::Documents,
+            SearchEntityType::Emails,
+            SearchEntityType::Projects,
+            SearchEntityType::Channels,
+            SearchEntityType::Chats,
         ]
         .into_iter()
         .collect(),
@@ -1887,7 +1887,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
 #[test]
 fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
     let unified_search_args = UnifiedSearchArgs {
-        search_indices: vec![SearchIndex::Documents].into_iter().collect(),
+        search_indices: vec![SearchEntityType::Documents].into_iter().collect(),
         terms: vec!["test".to_string()],
         user_id: "user".to_string(),
         page: 1,

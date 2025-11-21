@@ -11,7 +11,6 @@ export const PROPERTY_STYLES = {
 
   button: {
     base: 'px-3 py-1.5 text-sm border',
-    primary: 'bg-accent/90 hover:bg-accent/80 text-ink',
     secondary: 'text-ink-muted hover:text-ink border-edge hover:bg-hover',
     accent: 'text-accent hover:text-accent/80 border-accent hover:bg-accent/10',
   },

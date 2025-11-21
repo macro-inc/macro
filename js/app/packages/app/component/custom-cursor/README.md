@@ -1,16 +1,20 @@
 # Custom Cursor
 
-## Adding Cursor styling
+## ATTENTION use Tailind cursor-\* variant or css variable --cursor-\*
 
-If you adding cursor styling, as long as you use tailwind cursor variant, such as `cursor-pointer`, or inline style, the custom cursor logic will automatically determine cursor property.
+Using default tailwind cursor variant, such as `cursor-pointer`, works because it is overriden by the vite plugin that replaces value to use custom cursor css variable.
 
-But if you're adding an arbritrary class with cursor property, make sure to add custom cursor variable inside that declaration.
+Otherwise use custom cursor variable `--cursor-<value-of-cursor>`, instead of default value.
 
 ```css
 .pointer-on-img {
-  /* keep native as fallback when custom cursor is disabled */
-  cursor: pointer;
-  /* add custom cursor variable */
-  --custom-cursor: pointer;
+  cursor: pointer /* <--- DONT DO THIS otherwise it will show default cursor instead of custom */
+
+  /* replace with custom cursor variable, variable uses native value as fallback */
+  cursor: var(--cursor-pointer);
 }
+```
+
+```html
+<div style="cursor: var(--cursor-not-allowed)"></div>
 ```

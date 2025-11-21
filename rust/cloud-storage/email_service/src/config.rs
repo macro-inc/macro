@@ -43,6 +43,9 @@ pub struct Config {
     /// The SQS queue name for the sfs_uploader process
     pub sfs_uploader_queue: String,
 
+    /// The SQS queue name for contacts service
+    pub contacts_queue: String,
+
     /// The SQS bucket for storing attachments
     pub attachment_bucket: String,
 
@@ -147,6 +150,9 @@ impl Config {
         let backfill_queue =
             std::env::var("BACKFILL_QUEUE").context("BACKFILL_QUEUE must be provided")?;
 
+        let contacts_queue =
+            std::env::var("CONTACTS_QUEUE").context("CONTACTS_QUEUE must be provided")?;
+
         let sfs_uploader_queue =
             std::env::var("SFS_UPLOADER_QUEUE").context("SFS_UPLOADER_QUEUE must be provided")?;
 
@@ -244,6 +250,7 @@ impl Config {
             notification_queue,
             backfill_queue,
             sfs_uploader_queue,
+            contacts_queue,
             attachment_bucket,
             notifications_enabled,
             queue_max_messages,

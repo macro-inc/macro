@@ -20,7 +20,7 @@ export function Debug() {
         transition: 'all 500ms',
         'font-size': '0.75rem',
         'line-height': '1rem',
-        cursor: 'pointer',
+        cursor: 'var(--cursor-pointer)',
         right: '-0.5rem',
         bottom: '100%',
         top: '300px',

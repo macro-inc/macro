@@ -84,7 +84,9 @@ export function WebsocketDebugger() {
       style={{
         left: `${position().x}px`,
         top: `${position().y}px`,
-        cursor: isDragging() ? 'grabbing' : 'default',
+        cursor: isDragging()
+          ? 'var(--cursor-grabbing)'
+          : 'var(--cursor-default)',
       }}
       onMouseDown={handleMouseDown}
     >
