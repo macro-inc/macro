@@ -6,6 +6,6 @@
  */
 
 /**
- * The name of the channel if present
+ * The score of the result
  */
-export type ChannelSearchResponseItemChannelName = string | null;
+export type EmailSearchResultScore = number | null;

@@ -945,10 +945,6 @@
             "items": { "$ref": "#/components/schemas/ChannelSearchResult" },
             "description": "The search results for the channel\nThis may be empty if the search result match was not on content"
           },
-          "channel_name": {
-            "type": ["string", "null"],
-            "description": "The name of the channel if present"
-          },
           "channel_type": {
             "type": "string",
             "description": "The type of channel"
@@ -957,7 +953,6 @@
             "type": "string",
             "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
           },
-          "name": { "type": ["string", "null"] },
           "owner_id": {
             "type": ["string", "null"],
             "description": "we don't store this for channels atm but keeping it here for consistency"
@@ -1007,6 +1002,11 @@
           "message_id": {
             "type": "string",
             "description": "The channel message id"
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
           },
           "sender_id": { "type": "string", "description": "The sender id" },
           "thread_id": {
@@ -1068,6 +1068,11 @@
           "role": {
             "type": "string",
             "description": "The role of the chat message"
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
           },
           "title": { "type": "string", "description": "The title of the chat" },
           "updated_at": {
@@ -1368,6 +1373,11 @@
             "type": ["string", "null"],
             "description": "The raw content of the document.\nThis is only included for markdown files and will be the raw json node of the match"
           },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
+          },
           "updated_at": {
             "type": "integer",
             "format": "int64",
@@ -1536,6 +1546,11 @@
             "description": "The email message id."
           },
           "recipients": { "type": "array", "items": { "type": "string" } },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
+          },
           "sender": { "type": "string" },
           "sent_at": {
             "type": ["integer", "null"],
@@ -2136,7 +2151,12 @@
         "type": "object",
         "required": ["highlight"],
         "properties": {
-          "highlight": { "$ref": "#/components/schemas/SearchHighlight" }
+          "highlight": { "$ref": "#/components/schemas/SearchHighlight" },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
+          }
         }
       },
       "SearchHighlight": {
@@ -2184,10 +2204,6 @@
         ],
         "properties": {
           "channel_id": { "type": "string", "description": "The channel id" },
-          "channel_name": {
-            "type": ["string", "null"],
-            "description": "The channel name"
-          },
           "channel_type": {
             "type": "string",
             "description": "The channel type"
@@ -2236,10 +2252,6 @@
         ],
         "properties": {
           "channel_id": { "type": "string", "description": "The channel id" },
-          "channel_name": {
-            "type": ["string", "null"],
-            "description": "The channel name"
-          },
           "channel_type": {
             "type": "string",
             "description": "The channel type"
