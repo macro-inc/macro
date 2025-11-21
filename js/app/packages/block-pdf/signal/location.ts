@@ -143,17 +143,16 @@ export const pendingLocationParamsSignal =
 
 export const searchLocationPendingSignal = createBlockSignal<boolean>(false);
 
-// TODO: fix the aboslute clusterfuck that is location params
 createBlockEffect(() => {
+  const getViewer = useGetRootViewer();
+  const goToLinkLocationFromParams = useGoToLinkLocationFromParams();
+
   const viewerReady = viewerReadySignal() && viewerHasVisiblePagesSignal.get();
   const params = pendingLocationParamsSignal();
-  const goToLinkLocationFromParams = useGoToLinkLocationFromParams();
 
   if (viewerReady && params) {
     // TODO: do we need to clear all overlays here
-    const getViewer = useGetRootViewer();
-    const viewer = getViewer();
-    viewer?.clearAllOverlays();
+    getViewer()?.clearAllOverlays();
 
     goToLinkLocationFromParams(params);
   }
