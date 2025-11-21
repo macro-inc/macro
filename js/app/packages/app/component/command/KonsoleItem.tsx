@@ -425,12 +425,15 @@ export interface CommandItemProps {
   snippets?: Record<string, string>;
 }
 
-function getCommandItemBlockName(item: CommandItemCard): BlockName | undefined {
+function getCommandItemBlockName(
+  item: CommandItemCard,
+  icon?: boolean
+): BlockName | undefined {
   if (item.type === 'item') {
     if (item.data.itemType === 'document' && item.data.fileType) {
-      return fileTypeToBlockName(item.data.fileType);
+      return fileTypeToBlockName(item.data.fileType, icon);
     }
-    return fileTypeToBlockName(item.data.itemType) ?? 'unknown';
+    return fileTypeToBlockName(item.data.itemType, icon) ?? 'unknown';
   } else if (item.type === 'channel') {
     return 'channel';
   } else if (item.type === 'email') {
@@ -509,7 +512,7 @@ export function filterItemByCategory(item: CommandItemCard) {
 }
 
 export function CommandItemCard(props: CommandItemProps) {
-  const blockName = () => getCommandItemBlockName(props.item);
+  const blockName = () => getCommandItemBlockName(props.item, true);
   const userId = useUserId();
   const name = () => {
     const name = getCommandItemName(props.item);
@@ -720,7 +723,7 @@ export function PinnedCommandItem(props: {
   item: CommandItemCard;
   itemAction: (item: CommandItemCard, action: ItemAction) => void;
 }) {
-  const type = () => getCommandItemBlockName(props.item);
+  const type = () => getCommandItemBlockName(props.item, true);
   const name = () => getCommandItemName(props.item);
 
   return (
