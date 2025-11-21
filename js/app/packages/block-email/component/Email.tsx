@@ -555,20 +555,22 @@ export function Email(props: EmailProps) {
 
   createEffect(() => {
     if (scopeId()) {
-      untrack(() => registerHotkey({
-        hotkey: 'enter',
-        scopeId: scopeId(),
-        description: 'Focus Email Input',
-        keyDownHandler: () => {
-          if (markdownDomRef) {
-            markdownDomRef.focus();
-            return true;
-          }
-          return false;
-        },
-        hotkeyToken: TOKENS.block.focus,
-        hide: true,
-      }));
+      untrack(() =>
+        registerHotkey({
+          hotkey: 'enter',
+          scopeId: scopeId(),
+          description: 'Focus Email Input',
+          keyDownHandler: () => {
+            if (markdownDomRef) {
+              markdownDomRef.focus();
+              return true;
+            }
+            return false;
+          },
+          hotkeyToken: TOKENS.block.focus,
+          hide: true,
+        })
+      );
     }
   });
 
