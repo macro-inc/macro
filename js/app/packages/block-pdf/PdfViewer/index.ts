@@ -3,7 +3,7 @@ import { debounce } from '@solid-primitives/scheduled';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { PDFPageView } from 'pdfjs-dist/web/pdf_viewer';
 import type { TDestArray } from './DestArray';
-import { FindState, type IFindEvent, type IPublicEventBus } from './EventBus';
+import type { IFindEvent, IPublicEventBus } from './EventBus';
 import { InternalPDFViewer } from './InternalPDFViewer';
 import {
   correctScrollAfterWheelZoom,
