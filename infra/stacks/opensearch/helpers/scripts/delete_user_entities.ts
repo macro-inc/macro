@@ -33,13 +33,19 @@ if (!userId || !indicesArg) {
   console.error('Missing required command line arguments:');
   console.error('Usage: node script.js <user_id> <indices>');
   console.error('  user_id: The user ID to delete data for');
-  console.error('  indices: Comma-separated list of index names (e.g., "documents,chats,emails")');
+  console.error(
+    '  indices: Comma-separated list of index names (e.g., "documents,chats,emails")'
+  );
   console.error('\nExample:');
-  console.error('node script.js "macro|user@example.com" "documents,emails,chats"');
+  console.error(
+    'node script.js "macro|user@example.com" "documents,emails,chats"'
+  );
   process.exit(1);
 }
 
-const indicesToProcess = indicesArg.split(',').map((index: string) => index.trim());
+const indicesToProcess = indicesArg
+  .split(',')
+  .map((index: string) => index.trim());
 
 async function deleteUserData() {
   const opensearchClient = client();
