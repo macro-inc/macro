@@ -78,7 +78,7 @@ export function Tooltip(props: TooltipProps) {
             'max-width': `calc(100vw - ${2 * padding()}px)`,
           }}
         >
-          <div class="flex items-center justify-center bg-ink p-1.5 text-panel rounded-sm text-xs wrap-break-word">
+          <div class="flex items-center justify-center bg-ink p-1.5 text-panel text-xs wrap-break-word rounded-xs">
             {props.tooltip}
           </div>
           {/* Note disabling arrows for now. I think its more on-brand - seamus */}
