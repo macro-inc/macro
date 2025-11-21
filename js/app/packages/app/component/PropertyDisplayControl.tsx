@@ -3,7 +3,7 @@ import { ERROR_MESSAGES } from '@core/component/Properties/utils/errorHandling';
 import { isErr } from '@core/util/maybeResult';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { Accessor, Component } from 'solid-js';
-import { createMemo, createSignal, onMount } from 'solid-js';
+import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import type { DisplayOptions } from './ViewConfig';
 
 type PropertyDisplayControlProps = {
@@ -11,6 +11,31 @@ type PropertyDisplayControlProps = {
   setSelectedPropertyIds: (
     properties: DisplayOptions['displayProperties']
   ) => void;
+};
+
+type PropertyPillProps = {
+  property: { display_name: string };
+};
+
+const PropertyPill: Component<PropertyPillProps> = (props) => {
+  return (
+    <div class="relative inline-flex max-w-[140px] shrink-0">
+      <div
+        class="w-full min-h-[24px]
+               inline-flex items-center
+               px-2 py-1
+               text-xs text-ink
+               bg-transparent hover:bg-hover
+               border border-edge
+               cursor-pointer"
+      >
+        <span class="truncate flex-1 font-mono">
+          {props.property.display_name}
+        </span>
+        {/* X button will be added in chunk 6 */}
+      </div>
+    </div>
+  );
 };
 
 export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
@@ -52,17 +77,23 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
     }
   };
 
+  const selectedProperties = createMemo(() => {
+    const selectedIds = props.selectedPropertyIds();
+    const allProperties = availableProperties();
+    return allProperties.filter((property) =>
+      selectedIds.includes(property.id)
+    );
+  });
+
   const _filteredProperties = createMemo(() => {
     const query = searchQuery().toLowerCase().trim();
     const allProperties = availableProperties();
     const selectedIds = new Set(props.selectedPropertyIds());
 
-    // Filter out already selected properties
     const available = allProperties.filter(
       (property) => !selectedIds.has(property.id)
     );
 
-    // Apply search filter
     if (!query) return available;
 
     return available.filter((property) => {
@@ -85,28 +116,45 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
   });
 
   return (
-    <div>
+    <>
       <div class="font-medium text-xs mb-2">Properties</div>
-      <div class="border border-edge">
-        {/* Pills will go here in next chunk */}
-        <div class="w-full h-full">
+
+      <div
+        class="flex flex-col
+                border border-edge
+                w-full max-w-full overflow-hidden
+                focus-within:ring-2 focus-within:ring-accent/50 focus-within:border-accent"
+      >
+        <Show when={selectedProperties().length > 0}>
+          <div
+            class="w-full h-fit
+                   flex flex-wrap items-start justify-start
+                   gap-1
+                   p-1.5"
+          >
+            <For each={selectedProperties()}>
+              {(property) => <PropertyPill property={property} />}
+            </For>
+          </div>
+        </Show>
+
+        <div class="px-1 py-0.5">
           <input
             ref={searchInputRef}
             type="text"
             value={searchQuery()}
             onInput={(e) => setSearchQuery(e.currentTarget.value)}
-            placeholder="Search properties..."
+            placeholder="+ Add Property"
             class="w-full
-              px-2 py-1
-              font-mono text-xs
-              text-ink placeholder-ink-muted
-              bg-input
-              border focus:border-accent
-              focus:outline-none focus:ring-2 focus:ring-accent/50"
+                   px-2 py-1
+                   font-mono text-xs
+                   text-ink placeholder-ink-muted
+                   bg-transparent"
           />
         </div>
+
         {/* Search results dropdown will go here in chunk 7 */}
       </div>
-    </div>
+    </>
   );
 };
