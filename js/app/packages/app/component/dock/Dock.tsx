@@ -2,7 +2,7 @@ import { setSettingsOpen, useSettingsState } from '@core/constant/SettingsState'
 import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
-import { ENABLE_DOCK_NOTITIFCATIONS } from '@core/constant/featureFlags';
+import { ENABLE_DOCK_NOTITIFCATIONS, ENABLE_JACK_IN } from '@core/constant/featureFlags';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import SplitIcon from '@icon/regular/square-split-horizontal.svg';
 import { useGlobalNotificationSource } from '../GlobalAppState';
@@ -21,7 +21,7 @@ import IconLogo from '@macro-icons/macro-logo.svg';
 import { BasicTierLimit } from './BasicTierLimit';
 import { setKonsoleOpen } from '../command/state';
 import { runCommand } from '@core/hotkey/hotkeys';
-import {  Hotkey  } from '@core/component/Hotkey';
+import { Hotkey } from '@core/component/Hotkey';
 import { setCreateMenuOpen } from '../Launcher';
 import { useHasPaidAccess } from '@core/auth';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -31,7 +31,7 @@ import { QuickAccess } from './QuickAccess';
 // import { Debug } from './Debug';
 import Hints from './Hints';
 
-export function Dock(){
+export function Dock() {
   const activeSplitId = createMemo(() => globalSplitManager()?.activeSplitId());
   const [showGlitchEffect, setShowGlitchEffect] = createSignal(false);
   const [isPresentMode, setIsPresentMode] = createSignal(false);
@@ -45,78 +45,78 @@ export function Dock(){
 
   const isSoupActive = createMemo(() => {
     const splitId = globalSplitManager()?.activeSplitId();
-    if(!splitId){return false};
+    if (!splitId) { return false };
     const split = globalSplitManager()?.getSplit(splitId);
-    if(!split){return false};
+    if (!split) { return false };
     return split.content().id === 'unified-list';
   });
 
   // This method of opening the correct help drawer is disgusting,
   // but it works and doesn't require changing anything else.
-  function activeSoupDrawerCommand(){
+  function activeSoupDrawerCommand() {
     const currentActiveScope = activeScope();
-    if(!currentActiveScope){return undefined};
+    if (!currentActiveScope) { return undefined };
     let activeScopeNode = hotkeyScopeTree.get(currentActiveScope);
-    if(!activeScopeNode){return undefined};
-    if(activeScopeNode?.type !== 'dom'){return};
+    if (!activeScopeNode) { return undefined };
+    if (activeScopeNode?.type !== 'dom') { return };
     const dom = activeScopeNode.element;
     const closestSplitScope = dom.closest('[data-hotkey-scope^="split"]');
-    if(!closestSplitScope || !(closestSplitScope instanceof HTMLElement)){return};
+    if (!closestSplitScope || !(closestSplitScope instanceof HTMLElement)) { return };
     const scopeId = closestSplitScope.dataset.hotkeyScope;
-    if(!scopeId){return undefined};
+    if (!scopeId) { return undefined };
     const splitNode = hotkeyScopeTree.get(scopeId);
-    if(!splitNode){return undefined};
+    if (!splitNode) { return undefined };
     return splitNode.hotkeyCommands.get('shift+/');
   };
 
-  async function enterPresentMode(){
-    try{
+  async function enterPresentMode() {
+    try {
       playSound('Stab_Destruct');
       const element = document.documentElement;
-      if(element.requestFullscreen){await element.requestFullscreen()}
-      else if((element as any).webkitRequestFullscreen){await (element as any).webkitRequestFullscreen()}// Safari
-      else if((element as any).mozRequestFullScreen){await (element as any).mozRequestFullScreen()}// Firefox
-      else if((element as any).msRequestFullscreen){await (element as any).msRequestFullscreen()}// IE/Edge
+      if (element.requestFullscreen) { await element.requestFullscreen() }
+      else if ((element as any).webkitRequestFullscreen) { await (element as any).webkitRequestFullscreen() }// Safari
+      else if ((element as any).mozRequestFullScreen) { await (element as any).mozRequestFullScreen() }// Firefox
+      else if ((element as any).msRequestFullscreen) { await (element as any).msRequestFullscreen() }// IE/Edge
       focusActiveSplit();
     }
-    catch(error){
+    catch (error) {
       console.error('Error entering present mode:', error);
     }
   };
 
-  async function exitPresentMode(){
-    try{
-      if(document.exitFullscreen){await document.exitFullscreen()}
-      else if((document as any).webkitExitFullscreen){await (document as any).webkitExitFullscreen()}// Safari
-      else if((document as any).mozCancelFullScreen){await (document as any).mozCancelFullScreen()}// Firefox
-      else if((document as any).msExitFullscreen){await (document as any).msExitFullscreen()}// IE/Edge
+  async function exitPresentMode() {
+    try {
+      if (document.exitFullscreen) { await document.exitFullscreen() }
+      else if ((document as any).webkitExitFullscreen) { await (document as any).webkitExitFullscreen() }// Safari
+      else if ((document as any).mozCancelFullScreen) { await (document as any).mozCancelFullScreen() }// Firefox
+      else if ((document as any).msExitFullscreen) { await (document as any).msExitFullscreen() }// IE/Edge
       focusActiveSplit();
     }
-    catch(error){
+    catch (error) {
       console.error('Error exiting present mode:', error);
     }
   };
 
-  async function focusActiveSplit(){
+  async function focusActiveSplit() {
     const id = activeSplitId();
     if (!id) return null;
     const splitEl = document.querySelector(`[data-split-id="${id}"]`) as HTMLElement;
     splitEl?.focus();
   };
 
-  function togglePresentMode(){
-    if(isPresentMode()){
+  function togglePresentMode() {
+    if (isPresentMode()) {
       exitPresentMode();
       setShowGlitchEffect(false);
     }
-    else{
+    else {
       setShowGlitchEffect(true); // Show glitch effect before entering fullscreen
-      setTimeout(() => {enterPresentMode()}, 200); // Enter fullscreen after a brief delay to let glitch start
+      setTimeout(() => { enterPresentMode() }, 200); // Enter fullscreen after a brief delay to let glitch start
     }
   };
 
   // Check if we're in fullscreen
-  function checkFullscreen(){
+  function checkFullscreen() {
     const isFullscreen = document.fullscreenElement || (document as any).webkitFullscreenElement || (document as any).mozFullScreenElement || (document as any).msFullscreenElement;
     setIsPresentMode(!!isFullscreen);
   };
@@ -125,17 +125,17 @@ export function Dock(){
   onMount(() => {
     const events = ['fullscreenchange', 'webkitfullscreenchange', 'mozfullscreenchange', 'MSFullscreenChange'];
 
-    events.forEach((event) => {document.addEventListener(event, checkFullscreen)});
-    const handleKeyDown = (e: KeyboardEvent) => {if(e.key === 'Escape' && isPresentMode()){exitPresentMode()}};
+    events.forEach((event) => { document.addEventListener(event, checkFullscreen) });
+    const handleKeyDown = (e: KeyboardEvent) => { if (e.key === 'Escape' && isPresentMode()) { exitPresentMode() } };
     document.addEventListener('keydown', handleKeyDown);
 
     onCleanup(() => {
-      events.forEach((event) => {document.removeEventListener(event, checkFullscreen)});
+      events.forEach((event) => { document.removeEventListener(event, checkFullscreen) });
       document.removeEventListener('keydown', handleKeyDown);
     });
   });
 
-  return(
+  return (
     <>
       <style>{`
         .dock-button-hover{
@@ -160,7 +160,7 @@ export function Dock(){
       >
         <ClippedPanel bl br>
           <div style={{
-            'grid-template-columns':'min-content 1fr min-content',
+            'grid-template-columns': 'min-content 1fr min-content',
             'box-sizing': 'border-box',
             'scrollbar-width': 'none',
             'align-content': 'center',
@@ -192,7 +192,7 @@ export function Dock(){
                   'height': '24px',
                   'gap': '7px'
                 }}
-                onClick={() => {setKonsoleOpen(true)}}
+                onClick={() => { setKonsoleOpen(true) }}
                 class="dock-button-hover"
               >
                 <IconLogo
@@ -218,7 +218,7 @@ export function Dock(){
                 'background-color': 'var(--color-edge-muted)',
                 'height': '38px',
                 'width': '1px',
-              }}/>
+              }} />
 
               <div
                 style={{
@@ -230,7 +230,7 @@ export function Dock(){
                   'height': '24px',
                   'gap': '10px'
                 }}
-                onClick={() => {setCreateMenuOpen(true)}}
+                onClick={() => { setCreateMenuOpen(true) }}
                 class="dock-button-hover"
               >
                 <MacroCreateIcon
@@ -298,7 +298,7 @@ export function Dock(){
                 <IconButton
                   onClick={() => {
                     const showHelp = activeSoupDrawerCommand();
-                    if(!showHelp){return};
+                    if (!showHelp) { return };
                     runCommand(showHelp);
                   }}
                   tooltip={{
@@ -313,8 +313,8 @@ export function Dock(){
 
               <IconButton
                 onClick={() => {
-                  if(isRightPanelCollapsed()){track(TrackingEvents.RIGHTBAR.OPEN)}
-                  else{track(TrackingEvents.RIGHTBAR.CLOSE)}
+                  if (isRightPanelCollapsed()) { track(TrackingEvents.RIGHTBAR.OPEN) }
+                  else { track(TrackingEvents.RIGHTBAR.CLOSE) }
                   toggleRightPanel();
                 }}
                 theme={isRightPanelCollapsed() ? 'clear' : 'accent'}
@@ -333,7 +333,7 @@ export function Dock(){
                 }}
                 onClick={() => {
                   const manager = globalSplitManager();
-                  if(manager){
+                  if (manager) {
                     manager.createNewSplit({
                       id: 'unified-list',
                       type: 'component',
@@ -345,15 +345,17 @@ export function Dock(){
                 size="sm"
               />
 
-              <IconButton
-                tooltip={{
-                  label: isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'
-                }}
-                theme={isPresentMode() ? 'accent' : 'clear'}
-                onClick={togglePresentMode}
-                icon={IconPower}
-                size="sm"
-              />
+              <Show when={ENABLE_JACK_IN}>
+                <IconButton
+                  tooltip={{
+                    label: isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'
+                  }}
+                  theme={isPresentMode() ? 'accent' : 'clear'}
+                  onClick={togglePresentMode}
+                  icon={IconPower}
+                  size="sm"
+                />
+              </Show>
 
               <IconButton
                 tooltip={{
@@ -361,7 +363,7 @@ export function Dock(){
                   hotkeyToken: TOKENS.global.toggleSettings,
                 }}
                 theme={settingsOpen() ? 'accent' : 'clear'}
-                onDeepClick={() => {setSettingsOpen(true)}}
+                onDeepClick={() => { setSettingsOpen(true) }}
                 icon={IconGear}
                 size="sm"
               />
@@ -370,10 +372,13 @@ export function Dock(){
         </ClippedPanel>
       </div>
 
-      <PresentModeGlitch
-        show={showGlitchEffect()}
-        onComplete={() => setShowGlitchEffect(false)}
-      />
+      <Show when={ENABLE_JACK_IN}>
+
+        <PresentModeGlitch
+          show={showGlitchEffect()}
+          onComplete={() => setShowGlitchEffect(false)}
+        />
+      </Show>
 
       {/*<Show when={DEV_MODE_ENV}>
         <Debug/>
