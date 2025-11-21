@@ -157,7 +157,7 @@ export function Appearance() {
                   position: 'absolute',
                   background: 'transparent',
                   appearance: 'none',
-                  cursor: 'pointer',
+                  cursor: 'var(--cursor-pointer)',
                   outline: 'none',
                   height: '100%',
                   margin: 0,
@@ -179,7 +179,7 @@ export function Appearance() {
               background-color: var(--b0);
               border: 1px solid var(--b4);
               border-radius: 0px;
-              cursor: pointer;
+              cursor: var(--cursor-pointer);
             }
             .sound-volume-slider::-moz-range-thumb {
               width: 18px;
@@ -187,7 +187,7 @@ export function Appearance() {
               background-color: var(--b0);
               border: 1px solid var(--b4);
               border-radius: 0px;
-              cursor: pointer;
+              cursor: var(--cursor-pointer);
             }
             .sound-volume-slider::-webkit-slider-runnable-track {
               width: 100%;

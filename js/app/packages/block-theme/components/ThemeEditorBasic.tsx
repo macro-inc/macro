@@ -393,7 +393,7 @@ export function ThemeEditorBasic(){
                 position: absolute;
                 background: #0000;
                 appearance: none;
-                cursor: pointer;
+                cursor: var(--cursor-pointer);
                 outline: none;
                 height: 100%;
                 left: -9px;
@@ -483,7 +483,7 @@ export function ThemeEditorBasic(){
                 position: absolute;
                 background: #0000;
                 appearance: none;
-                cursor: pointer;
+                cursor: var(--cursor-pointer);
                 outline: none;
                 height: 100%;
                 left: -9px;
@@ -579,7 +579,7 @@ export function ThemeEditorBasic(){
                 position: absolute;
                 background: #0000;
                 appearance: none;
-                cursor: pointer;
+                cursor: var(--cursor-pointer);
                 outline: none;
                 height: 100%;
                 left: -9px;

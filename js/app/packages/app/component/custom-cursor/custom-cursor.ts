@@ -317,16 +317,16 @@ const allCustomCursorClasses = Object.keys(cursorSvgMap).map((key) =>
 
 function generateCustomCursorStyleTextContent() {
   let styleTextContent = customCursorCSSFileRaw;
-  styleTextContent += `${'*'} { cursor: ${getCursor('default')} !important; }`;
+  styleTextContent += `html { cursor: ${getCursor('default')} }`;
+  styleTextContent += `:root { `
   styleTextContent += Object.keys(cursorSvgMap)
     .map((key) => {
       return `
-      .${getCursorClassFromKey(key)} {
-      cursor: ${getCursor(key)} !important;
-      --custom-cursor: ${key};
-       }`;
+      --cursor-${key}: ${getCursor(key)};
+       `;
     })
     .join('');
+  styleTextContent += ` }`;
   return styleTextContent;
 }
 function createCustomCursorStylesheetEl(element: HTMLElement | ShadowRoot) {
@@ -462,7 +462,7 @@ function initCursor() {
     target.classList.add(getCursorClassFromKey(currentCursorType));
   };
 
-  document.addEventListener('mousemove', onMouseMove);
+  // document.addEventListener('mousemove', onMouseMove);
 }
 
 if (document.readyState === 'loading') {

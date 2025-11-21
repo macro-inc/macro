@@ -371,7 +371,10 @@ function Gutter(props: GutterProps) {
       aria-label={`resize at ${props.index}`}
       style={{
         position: 'absolute',
-        cursor: ctx.direction === 'horizontal' ? 'col-resize' : 'row-resize',
+        cursor:
+          ctx.direction === 'horizontal'
+            ? 'var(--cursor-col-resize)'
+            : 'var(--cursor-row-resize)',
         ...styles(),
       }}
       onPointerDown={onPointerDown}

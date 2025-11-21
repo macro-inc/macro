@@ -11,6 +11,7 @@ import wasm from 'vite-plugin-wasm';
 import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { version } from './package.json';
+import { vitePluginCursorOverride } from './vite-plugin-cursor-override';
 
 export default defineConfig(({ command, mode }) => {
   // use mode from Env Var if it exists, otherwise use mode from Vite
@@ -30,6 +31,7 @@ export default defineConfig(({ command, mode }) => {
     },
     plugins: [
       // solidDevtools({ autoname: true }),
+      vitePluginCursorOverride(), // Transform cursor values before lightningcss
       solid(),
       wasm(),
       tailwind(),
@@ -71,17 +73,17 @@ export default defineConfig(({ command, mode }) => {
         },
         output: NO_MINIFY
           ? {
-              // remove hashes from output paths
-              // https://github.com/vitejs/vite/issues/378
-              entryFileNames: `assets/[name].js`,
-              chunkFileNames: `assets/[name].js`,
-              assetFileNames: `assets/[name].[ext]`,
-            }
+            // remove hashes from output paths
+            // https://github.com/vitejs/vite/issues/378
+            entryFileNames: `assets/[name].js`,
+            chunkFileNames: `assets/[name].js`,
+            assetFileNames: `assets/[name].[ext]`,
+          }
           : {
-              format: 'es',
-              chunkFileNames: '[name]-[hash].js',
-              entryFileNames: '[name]-[hash].js',
-            },
+            format: 'es',
+            chunkFileNames: '[name]-[hash].js',
+            entryFileNames: '[name]-[hash].js',
+          },
       },
       assetsInlineLimit: (filePath) => {
         if (filePath.includes('.wasm')) return false;
@@ -158,18 +160,18 @@ function define(mode: string, command: string) {
     'import.meta.env.__MACRO_GQL_SERVICE__':
       process.env.LOCAL_GQL_SERVER === 'true'
         ? (() => {
-            console.log('Using Local GQL server');
-            return '"http://localhost:8080/graphql/"';
-          })()
+          console.log('Using Local GQL server');
+          return '"http://localhost:8080/graphql/"';
+        })()
         : mode === 'development'
           ? (() => {
-              console.log('Using Dev GQL server');
-              return '"https://api-dev.macro.com/graphql/"';
-            })()
+            console.log('Using Dev GQL server');
+            return '"https://api-dev.macro.com/graphql/"';
+          })()
           : (() => {
-              console.log('Using Prod GQL server');
-              return '"https://api.macro.com/graphql/"';
-            })(),
+            console.log('Using Prod GQL server');
+            return '"https://api.macro.com/graphql/"';
+          })(),
     'import.meta.env.__LOCAL_DOCKER__': process.env.LOCAL_DOCKER === 'true',
     'import.meta.env.__LOCAL_JWT__': JSON.stringify(process.env.LOCAL_JWT),
   };

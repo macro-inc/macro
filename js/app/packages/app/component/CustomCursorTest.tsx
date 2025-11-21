@@ -198,13 +198,13 @@ const CustomCursorTest = () => {
         <For each={cursorTypes}>
           {({ name, cursor, tw }) => (
             <div
-              class="border border-[var(--color-edge)] p-4 rounded hover:bg-[var(--color-surface-hover)] transition-colors"
+              class="border border-[var(--color-edge)] p-2 rounded hover:bg-[var(--color-surface-hover)] transition-colors"
               classList={{ [`${tw}`]: !!tw && useClass() }}
               style={{
                 cursor: useStyle() ? cursor : undefined,
               }}
             >
-              {name}
+              <div class="py-2">{name}</div>
             </div>
           )}
         </For>
