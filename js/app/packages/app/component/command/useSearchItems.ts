@@ -46,7 +46,7 @@ function createDocumentItems(
             fileType: doc.file_type,
             matchIndex: index,
             // For PDF files, extract additional location data
-            ...(doc.file_type === 'pdf' && {
+            ...(['docx', 'pdf'].includes(doc.file_type) && {
               searchSnippet: extractSearchSnippet(content),
               highlightTerms: extractSearchTerms(content),
             }),

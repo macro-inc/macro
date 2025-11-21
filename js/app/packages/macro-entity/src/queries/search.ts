@@ -159,10 +159,12 @@ const useMapSearchResponseItem = () => {
     switch (result.type) {
       case 'document': {
         if (!result.metadata || result.metadata.deleted_at) return;
-        const search = ['md', 'pdf'].includes(result.file_type)
+        const searchFileType =
+          result.file_type === 'docx' ? 'pdf' : result.file_type;
+        const search = ['md', 'pdf'].includes(searchFileType)
           ? getLocationHighlights(
               result.document_search_results,
-              result.file_type as FileTypeWithLocation,
+              searchFileType as FileTypeWithLocation,
               searchQuery
             )
           : getHighlights(result.document_search_results);
