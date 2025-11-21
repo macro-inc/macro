@@ -636,9 +636,7 @@ function useGoToPdfLocation() {
         const findControllerStateEvent = await waitForSignal(
           findControllerStateEventSignal,
           (val) =>
-            val?.state === FindState.FOUND ||
-            val?.state === FindState.NOT_FOUND,
-          10000
+            val?.state === FindState.FOUND || val?.state === FindState.NOT_FOUND
         ).catch((_e) => {
           console.error('search timed out');
           return undefined;
