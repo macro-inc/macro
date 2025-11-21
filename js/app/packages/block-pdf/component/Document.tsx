@@ -565,8 +565,9 @@ export function Document() {
     return {
       annotationId: searchParams[URL_PARAMS.annotationId],
       searchPage: searchParams[URL_PARAMS.searchPage],
-      searchMatchNumOnPage: searchParams[URL_PARAMS.searchMatchNumOnPage],
-      searchTerm: searchParams[URL_PARAMS.searchTerm],
+      searchSnippet: searchParams[URL_PARAMS.searchSnippet],
+      searchRawQuery: searchParams[URL_PARAMS.searchRawQuery],
+      highlightTerms: searchParams[URL_PARAMS.searchHighlightTerms],
       pageNumber: searchParams[URL_PARAMS.pageNumber],
       yPos: searchParams[URL_PARAMS.yPos],
       x: searchParams[URL_PARAMS.x],

@@ -848,7 +848,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
             [PDF_PARAMS.searchPage]: location.searchPage.toString(),
             [PDF_PARAMS.searchRawQuery]: location.searchRawQuery,
             [PDF_PARAMS.searchHighlightTerms]: JSON.stringify(
-              location.searchHighlightTerms
+              location.highlightTerms
             ),
             [PDF_PARAMS.searchSnippet]: location.searchSnippet,
           });

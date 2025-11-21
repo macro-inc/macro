@@ -130,7 +130,7 @@ const getLocationHighlights = (
               searchPage,
               searchSnippet: extractSearchSnippet(content),
               searchRawQuery: searchQuery,
-              searchHighlightTerms: extractSearchTerms(content),
+              highlightTerms: extractSearchTerms(content),
             };
           } catch (_e) {
             console.error('Cannot parse pdf serach info', r);
