@@ -1,4 +1,4 @@
-use crate::is_generic_email;
+use crate::{dedupe_emails, is_generic_email};
 
 #[test]
 fn test_is_generic_email() {
@@ -61,4 +61,91 @@ fn test_is_generic_email() {
     assert!(!is_generic_email("maryinformation@gmail.com")); // Contains "information" but not as a pattern
 
     assert!(is_generic_email("evanwithplus+199@gmail.com")); // Contains "information" but not as a pattern
+}
+
+#[test]
+fn test_dedupe_emails() {
+    let emails = vec![
+        // Basic duplicates
+        "user@example.com".to_string(),
+        "user@example.com".to_string(),
+        // Plus aliases that should normalize to the same email
+        "user+shopping@example.com".to_string(),
+        "user+newsletter@example.com".to_string(),
+        "user@example.com".to_string(),
+        // Different emails that should remain separate
+        "alice@example.com".to_string(),
+        "bob@example.com".to_string(),
+        // Plus aliases for different base emails
+        "alice+work@example.com".to_string(),
+        "alice+personal@example.com".to_string(),
+        "bob+shopping@example.com".to_string(),
+        // Edge cases
+        "user+@example.com".to_string(),         // Empty plus part
+        "user++extra@example.com".to_string(),   // Multiple plus signs
+        "user+tag+more@example.com".to_string(), // Plus in the tag part
+        "no-plus@example.com".to_string(),
+        // Plus sign after @ (shouldn't be processed)
+        "user@example+tag.com".to_string(),
+        "user@example+tag.com".to_string(),
+        // Complex cases
+        "test.user+tag@domain.co.uk".to_string(),
+        "test.user+different@domain.co.uk".to_string(),
+        "test.user@domain.co.uk".to_string(),
+    ];
+
+    let mut result = dedupe_emails(emails);
+    result.sort();
+
+    let expected = vec![
+        "alice@example.com".to_string(),
+        "bob@example.com".to_string(),
+        "no-plus@example.com".to_string(),
+        "test.user@domain.co.uk".to_string(),
+        "user@example+tag.com".to_string(), // Plus after @ should remain
+        "user@example.com".to_string(),
+    ];
+
+    assert_eq!(result, expected);
+    assert_eq!(result.len(), 6);
+}
+
+#[test]
+fn test_dedupe_emails_empty() {
+    let emails: Vec<String> = vec![];
+    let result = dedupe_emails(emails);
+    assert_eq!(result, Vec::<String>::new());
+}
+
+#[test]
+fn test_dedupe_emails_no_duplicates() {
+    let emails = vec![
+        "user1@example.com".to_string(),
+        "user2@example.com".to_string(),
+        "user3@example.com".to_string(),
+    ];
+    let mut result = dedupe_emails(emails);
+    result.sort();
+
+    let expected = vec![
+        "user1@example.com".to_string(),
+        "user2@example.com".to_string(),
+        "user3@example.com".to_string(),
+    ];
+
+    assert_eq!(result, expected);
+}
+
+#[test]
+fn test_dedupe_emails_all_same_base() {
+    let emails = vec![
+        "user+tag1@example.com".to_string(),
+        "user+tag2@example.com".to_string(),
+        "user+tag3@example.com".to_string(),
+        "user@example.com".to_string(),
+    ];
+    let result = dedupe_emails(emails);
+
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0], "user@example.com");
 }
