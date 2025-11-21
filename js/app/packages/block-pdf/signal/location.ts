@@ -733,9 +733,10 @@ const useGoToPreviousLocation = () => {
 
 const useWithPending = () => {
   const setPending = locationPendingSignal.set;
-  return async <T, U>(args: T, fn: (args: T) => Promise<U>) => {
+
+  return async <T>(fn: () => Promise<T>) => {
     setPending(true);
-    const result = await fn(args);
+    const result = await fn();
     setPending(false);
     return result;
   };
@@ -748,18 +749,17 @@ export function useGoToLinkLocation() {
   const goToPreviousLocation = useGoToPreviousLocation();
   const withPending = useWithPending();
 
-  const go = async (params: LocationSearchParams) => {
-    const location = parseLocationFromUrl(params);
-    if (location) {
-      await goToPdfLocation(location);
-      return;
-    }
+  return async (params: LocationSearchParams) => {
+    const go = async () => {
+      const location = parseLocationFromUrl(params);
+      if (location) {
+        await goToPdfLocation(location);
+        return;
+      }
 
-    await goToPreviousLocation();
-  };
-
-  return (params: LocationSearchParams) => {
-    return withPending(params, go);
+      await goToPreviousLocation();
+    };
+    return withPending(go);
   };
 }
 
@@ -770,17 +770,17 @@ export function useGoToLinkLocationFromParams() {
   const goToPreviousLocation = useGoToPreviousLocation();
   const withPending = useWithPending();
 
-  const go = async (params: Record<string, string>) => {
-    const location = parseLocationFromBlockParams(params);
-    if (location) {
-      await goToPdfLocation(location);
-      return;
-    }
+  return async (params: Record<string, string>) => {
+    const go = async () => {
+      const location = parseLocationFromBlockParams(params);
+      if (location) {
+        await goToPdfLocation(location);
+        return;
+      }
 
-    await goToPreviousLocation();
-  };
+      await goToPreviousLocation();
+    };
 
-  return (params: Record<string, string>) => {
-    return withPending(params, go);
+    return withPending(go);
   };
 }
