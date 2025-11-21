@@ -258,12 +258,13 @@ export const useOverlayViewsChanged = () => {
     isPopup ? overlayViewsChangedPopupSignal_() : overlayViewsChangedSignal_();
 };
 
-// /** Indicates that at least one page is visible */
-export const viewerHasVisiblePagesSignal = createBlockMemo(() => {
+export const viewerHasVisiblePagesSignal = createBlockSignal<boolean>(false);
+
+createBlockEffect(() => {
   const visiblePages = visiblePagesChangedSignal()?.visiblePages;
   const loadedIds = visiblePages?.ids;
-  if (!loadedIds) return false;
-  return loadedIds.size > 0;
+  const hasVisiblePages = loadedIds ? loadedIds.size > 0 : false;
+  viewerHasVisiblePagesSignal.set(hasVisiblePages);
 });
 
 // /** Indicates that all pages have been loaded */

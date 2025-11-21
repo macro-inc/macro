@@ -6,6 +6,6 @@
  */
 
 /**
- * The channel name
+ * The score of the result
  */
-export type SimpleChannelSearchReponseBaseItemTimestampSecondsChannelName = string | null;
+export type ProjectSearchResultScore = number | null;
