@@ -8,6 +8,7 @@ version = "0.1.0"
 chrono = { workspace = true }
 item_filters = { path = "../item_filters" }
 opensearch_client = { path = "../opensearch_client" }
+models_opensearch = { path = "../models_opensearch" }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

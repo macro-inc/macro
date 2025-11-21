@@ -1,5 +1,5 @@
 use crate::{
-    EMAIL_INDEX, Result, delegate_methods,
+    Result, delegate_methods,
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
@@ -10,6 +10,7 @@ use crate::{
 };
 
 use crate::SearchOn;
+use models_opensearch::SearchIndex;
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, QueryType, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
     ToOpenSearchJson,
@@ -21,7 +22,6 @@ use serde_json::Value;
 pub(crate) struct EmailSearchConfig;
 
 impl SearchQueryConfig for EmailSearchConfig {
-    const INDEX: &'static str = EMAIL_INDEX;
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "subject";
 
@@ -249,7 +249,9 @@ pub(crate) async fn search_emails(
     let query_body = args.build()?;
 
     let response = client
-        .search(opensearch::SearchParts::Index(&[EMAIL_INDEX]))
+        .search(opensearch::SearchParts::Index(&[
+            SearchIndex::Emails.as_ref()
+        ]))
         .body(query_body)
         .send()
         .await
