@@ -680,73 +680,6 @@
         }
       }
     },
-    "/documents/blank_docx": {
-      "post": {
-        "tags": ["documents::create_document::create_blank_docx"],
-        "summary": "Creates a new blank docx file for the user",
-        "operationId": "create_blank_docx",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateBlankDocxRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/DocumentMetadata" }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/documents/initialize_user_documents": {
       "post": {
         "tags": ["document"],
@@ -4376,10 +4309,6 @@
           }
         }
       },
-      "CreateBlankDocxRequest": {
-        "type": "object",
-        "properties": { "projectId": { "type": ["string", "null"] } }
-      },
       "CreateBulkDocumentResponse": {
         "type": "object",
         "required": ["error", "data"],
@@ -6818,7 +6747,11 @@
             "format": "int64",
             "description": "The time the chat was created"
           },
-          "id": { "type": "string", "description": "The chat uuid" },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The chat uuid"
+          },
           "isPersistent": {
             "type": "boolean",
             "description": "Whether the chat is persistent or not"
@@ -6830,6 +6763,7 @@
           },
           "projectId": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "The project id of the chat"
           },
           "updatedAt": {
@@ -6858,6 +6792,7 @@
         "properties": {
           "branchedFromId": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "The id of the document this document branched from"
           },
           "branchedFromVersionId": {
@@ -6884,7 +6819,11 @@
             "type": ["string", "null"],
             "description": "The file type of the document (e.g. pdf, docx)"
           },
-          "id": { "type": "string", "description": "The document id" },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The document id"
+          },
           "name": {
             "type": "string",
             "description": "The name of the document"
@@ -6895,6 +6834,7 @@
           },
           "projectId": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "The id of the project that this document belongs to"
           },
           "sha": {
@@ -6959,7 +6899,11 @@
             "format": "int64",
             "description": "The time the project was created"
           },
-          "id": { "type": "string", "description": "The id of the project" },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the project"
+          },
           "name": {
             "type": "string",
             "description": "The name of the project"
@@ -6970,6 +6914,7 @@
           },
           "parentId": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "The parent project id"
           },
           "updatedAt": {

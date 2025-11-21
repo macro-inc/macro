@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ChannelSearchResponseItemName = string | null;
+/**
+ * The score of the result
+ */
+export type DocumentSearchResultScore = number | null;

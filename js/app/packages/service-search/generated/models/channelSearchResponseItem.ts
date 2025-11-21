@@ -5,8 +5,6 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChannelSearchResult } from './channelSearchResult';
-import type { ChannelSearchResponseItemChannelName } from './channelSearchResponseItemChannelName';
-import type { ChannelSearchResponseItemName } from './channelSearchResponseItemName';
 import type { ChannelSearchResponseItemOwnerId } from './channelSearchResponseItemOwnerId';
 
 /**
@@ -18,15 +16,12 @@ export interface ChannelSearchResponseItem {
   /** The search results for the channel
 This may be empty if the search result match was not on content */
   channel_message_search_results: ChannelSearchResult[];
-  /** The name of the channel if present */
-  channel_name?: ChannelSearchResponseItemChannelName;
   /** The type of channel */
   channel_type: string;
   /** Standardized fields that all item types will share.
 These field names are being aligned across all item types
 for consistency in our data model. */
   id: string;
-  name?: ChannelSearchResponseItemName;
   /** we don't store this for channels atm but keeping it here for consistency */
   owner_id?: ChannelSearchResponseItemOwnerId;
 }

@@ -70,8 +70,6 @@ export * from './copyDocumentQueryParams';
 export * from './copyDocumentQueryParamsVersionId';
 export * from './copyDocumentRequest';
 export * from './copyDocumentRequestVersionId';
-export * from './createBlankDocxRequest';
-export * from './createBlankDocxRequestProjectId';
 export * from './createBulkDocumentResponse';
 export * from './createBulkDocumentResponseData';
 export * from './createBulkDocumentResponseDataDocumentMetadata';
