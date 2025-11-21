@@ -58,7 +58,14 @@ export const queryKeys = {
     ...BASE_ENTITY.dss,
     { type: 'document', ...args },
   ],
-  dss: (args?: InfiniteKeyOptions) => [...BASE_ENTITY.dss, { ...args }],
+  dss: (args?: InfiniteKeyOptions & { method?: 'GET' }) => [
+    ...BASE_ENTITY.dss,
+    { method: 'GET', ...args },
+  ],
+  dssPost: (args?: InfiniteKeyOptions & { method?: 'POST' }) => [
+    ...BASE_ENTITY.dss,
+    { method: 'POST', ...args },
+  ],
   email: (args: EmailKeyOptions) => [...BASE_ENTITY.email, { ...args }],
   notification: (args?: NotificationKeyOptions) => [
     ...BASE_ENTITY.notification,
