@@ -8,10 +8,7 @@ use axum::{
 use comms_db_client::channels::create_channel::{CreateChannelOptions, create_channel};
 use model::comms::ChannelType;
 use model::user::UserContext;
-use models_opensearch::SearchEntityType;
 use serde::{Deserialize, Serialize};
-use sqs_client::search::{SearchQueueMessage, name::UpdateEntityName};
-use tracing::Instrument;
 use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -112,29 +109,6 @@ pub async fn create_channel_handler(
                     "unable to create 'add participant' SQS message".to_string(),
                 )
             })?;
-    }
-
-    if req.name.is_some() {
-        tokio::spawn({
-            let sqs_client = ctx.sqs_client.clone();
-            let channel_id = id;
-            async move {
-                tracing::trace!("sending message to search extractor queue");
-
-                let _ = sqs_client
-                    .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(
-                        UpdateEntityName {
-                            entity_id: channel_id,
-                            entity_type: SearchEntityType::Channels,
-                        },
-                    ))
-                    .await
-                    .inspect_err(|e| {
-                        tracing::error!(error=?e, "SEARCH_QUEUE unable to enqueue message");
-                    });
-            }
-            .in_current_span()
-        });
     }
 
     Ok((

@@ -19,14 +19,15 @@ pub(crate) struct ProjectSearchConfig;
 
 impl SearchQueryConfig for ProjectSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
-    const TITLE_KEY: &'static str = "project_name";
+    const TITLE_KEY: Option<&'static str> = Some("project_name");
 
     // Projects have no "content" to highlight match on, so match on the TITLE_KEY instead
     fn default_highlight() -> opensearch_query_builder::Highlight<'static> {
         opensearch_query_builder::Highlight::new()
             .require_field_match(true)
             .field(
-                Self::TITLE_KEY,
+                // we know the title key exists because it's implemented right above
+                Self::TITLE_KEY.unwrap(),
                 HighlightField::new()
                     .highlight_type("plain")
                     .number_of_fragments(1)
