@@ -1,6 +1,10 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { isErr } from '@core/util/maybeResult';
+import {
+  extractSearchSnippet,
+  extractSearchTerms,
+} from '@core/util/searchHighlight';
 import type { ChannelType } from '@service-comms/generated/models';
 import { type PaginatedSearchArgs, searchClient } from '@service-search/client';
 import type {
@@ -31,34 +35,6 @@ type InnerSearchResult =
   | ChatMessageSearchResult
   | ChannelSearchResult
   | ProjectSearchResult;
-
-const normalizeWhitespace = (str: string) => str.replace(/\s+/g, ' ').trim();
-
-/**
- * Extracts terms from macro_em tags in the highlighted content.
- * Returns array of text strings that should be highlighted, preserving order and duplicates.
- */
-function extractSearchTerms(highlightedContent: string): string[] {
-  const terms: string[] = [];
-  const macroEmRegex = /<macro_em>(.*?)<\/macro_em>/gs;
-  const matches = Array.from(highlightedContent.matchAll(macroEmRegex));
-
-  for (const match of matches) {
-    terms.push(match[1].trim());
-  }
-
-  return terms;
-}
-
-/**
- * Extracts the full snippet from highlighted content by removing macro_em tags.
- * Whitespace is normalized and trimmed.
- * This provides context for the search result.
- */
-function extractSearchSnippet(highlightedContent: string): string {
-  const rawContent = highlightedContent.replace(/<\/?macro_em>/g, '');
-  return normalizeWhitespace(rawContent);
-}
 
 /**
  * Extracts the search term from highlighted content by finding text from the first

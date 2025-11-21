@@ -203,6 +203,9 @@ export type SearchSnippet = {
   fileType: string;
   matchIndex?: number;
   senderId?: string;
+  // PDF/DOCX-specific fields for search navigation
+  searchSnippet?: string;
+  highlightTerms?: string[];
 };
 
 type CommandItemBase = {
@@ -321,8 +324,11 @@ async function gotoSnippetLocation(
     case 'docx':
       handle.goToLocationFromParams({
         [PDF_PARAMS.searchPage]: snippet.locationId,
-        [PDF_PARAMS.searchMatchNumOnPage]: (snippet.matchIndex ?? 0).toString(),
-        [PDF_PARAMS.searchTerm]: searchTerm,
+        [PDF_PARAMS.searchRawQuery]: searchTerm,
+        [PDF_PARAMS.searchHighlightTerms]: JSON.stringify(
+          snippet.highlightTerms
+        ),
+        [PDF_PARAMS.searchSnippet]: snippet.searchSnippet,
       });
       break;
     case 'chat':
