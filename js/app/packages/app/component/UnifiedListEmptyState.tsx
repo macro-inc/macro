@@ -1,15 +1,15 @@
-import { useEmailLinksStatus } from "@app/signal/emailAuth";
-import { useHandleFileUpload } from "@app/util/handleFileUpload";
+import { useEmailLinksStatus } from '@app/signal/emailAuth';
+import { useHandleFileUpload } from '@app/util/handleFileUpload';
 
-import { useMaybeBlockId, useMaybeBlockName } from "@core/block";
-import { fileSelector } from "@core/directive/fileSelector";
-import { folderSelector } from "@core/directive/folderSelector";
-import { isTouchDevice } from "@core/mobile/isTouchDevice";
-import { isMobileWidth } from "@core/mobile/mobileWidth";
-import type { ViewId } from "@core/types/view";
-import { handleFolderSelect } from "@core/util/upload";
-import { createMemo, Match, onMount, Show, Switch } from "solid-js";
-import { useSplitPanelOrThrow } from "./split-layout/layoutUtils";
+import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
+import { fileSelector } from '@core/directive/fileSelector';
+import { folderSelector } from '@core/directive/folderSelector';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { isMobileWidth } from '@core/mobile/mobileWidth';
+import type { ViewId } from '@core/types/view';
+import { handleFolderSelect } from '@core/util/upload';
+import { createMemo, Match, onMount, Show, Switch } from 'solid-js';
+import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 false && fileSelector;
 false && folderSelector;
@@ -22,60 +22,60 @@ export function EmptyState(props: { viewId?: ViewId }) {
   } = splitPanelContext;
   return (
     <Switch>
-      <Match when={props.viewId === "emails" && !emailActive()}>
+      <Match when={props.viewId === 'emails' && !emailActive()}>
         {(_) => {
           onMount(() =>
-            setShowHelpDrawer((prev) => new Set([...prev, "emails"]))
+            setShowHelpDrawer((prev) => new Set([...prev, 'emails']))
           );
-          return <EmptyStateInner emptyMessage={"Email not connected."} />;
+          return <EmptyStateInner emptyMessage={'Email not connected.'} />;
         }}
       </Match>
       <Match
         when={
-          (props.viewId === "emails" || props.viewId === "inbox") &&
+          (props.viewId === 'emails' || props.viewId === 'inbox') &&
           emailActive()
         }
       >
-        <EmptyStateInner emptyMessage={"Inbox zero."} />
+        <EmptyStateInner emptyMessage={'Inbox zero.'} />
       </Match>
-      <Match when={props.viewId === "inbox" && !emailActive()}>
+      <Match when={props.viewId === 'inbox' && !emailActive()}>
         {(_) => {
           onMount(() =>
-            setShowHelpDrawer((prev) => new Set([...prev, "inbox"]))
+            setShowHelpDrawer((prev) => new Set([...prev, 'inbox']))
           );
           return (
             <EmptyStateInner
-              emptyMessage={"Nothing to show. Email not connected."}
+              emptyMessage={'Nothing to show. Email not connected.'}
             />
           );
         }}
       </Match>
-      <Match when={props.viewId === "comms"}>
+      <Match when={props.viewId === 'comms'}>
         {(_) => {
           onMount(() =>
-            setShowHelpDrawer((prev) => new Set([...prev, "comms"]))
+            setShowHelpDrawer((prev) => new Set([...prev, 'comms']))
           );
-          return <EmptyStateInner emptyMessage={"No messages to show."} />;
+          return <EmptyStateInner emptyMessage={'No messages to show.'} />;
         }}
       </Match>
-      <Match when={props.viewId === "docs"}>
+      <Match when={props.viewId === 'docs'}>
         {(_) => {
           onMount(() =>
-            setShowHelpDrawer((prev) => new Set([...prev, "docs"]))
+            setShowHelpDrawer((prev) => new Set([...prev, 'docs']))
           );
           return <EmptyStateInner showDropZone />;
         }}
       </Match>
-      <Match when={props.viewId === "ai"}>
+      <Match when={props.viewId === 'ai'}>
         {(_) => {
-          onMount(() => setShowHelpDrawer((prev) => new Set([...prev, "ai"])));
-          return <EmptyStateInner emptyMessage={"No AI chats to show."} />;
+          onMount(() => setShowHelpDrawer((prev) => new Set([...prev, 'ai'])));
+          return <EmptyStateInner emptyMessage={'No AI chats to show.'} />;
         }}
       </Match>
-      <Match when={props.viewId === "folders"}>
+      <Match when={props.viewId === 'folders'}>
         {(_) => {
           onMount(() =>
-            setShowHelpDrawer((prev) => new Set([...prev, "folders"]))
+            setShowHelpDrawer((prev) => new Set([...prev, 'folders']))
           );
           return <EmptyStateInner showDropZone />;
         }}
@@ -100,7 +100,7 @@ export function EmptyStateInner(props: EmptyStateInnerProps) {
   const blockName = useMaybeBlockName();
   const blockId = useMaybeBlockId();
   const projectId = createMemo(() => {
-    if (blockName === "project" && blockId) {
+    if (blockName === 'project' && blockId) {
       return blockId;
     }
     return undefined;
@@ -130,7 +130,7 @@ export function EmptyStateInner(props: EmptyStateInnerProps) {
           <div class="drop-zone flex flex-col items-center justify-center w-full py-8 border border-dashed border-edge-muted bg-hover">
             <p class="text-ink-muted">Drag & drop files and folders here</p>
             <p class="text-ink-muted">
-              or{" "}
+              or{' '}
               <span
                 use:fileSelector={{
                   multiple: true,
@@ -141,8 +141,8 @@ export function EmptyStateInner(props: EmptyStateInnerProps) {
                 class="underline cursor-pointer"
               >
                 Upload files
-              </span>{" "}
-              /{" "}
+              </span>{' '}
+              /{' '}
               <span
                 use:folderSelector={{
                   onSelect: async (files) => {
