@@ -1,5 +1,6 @@
 import { IconButton } from '@core/component/IconButton';
 import type { PropertyDefinitionFlat } from '@core/component/Properties/types';
+import { PropertyDataTypeIcon } from '@core/component/Properties/utils';
 import { ERROR_MESSAGES } from '@core/component/Properties/utils/errorHandling';
 import { isErr } from '@core/util/maybeResult';
 import DeleteIcon from '@icon/bold/x-bold.svg';
@@ -31,13 +32,14 @@ const PropertyPill: Component<PropertyPillProps> = (props) => {
     >
       <div
         class="w-full min-h-[24px]
-               inline-flex items-center
+               inline-flex items-center gap-1
                px-2 py-1
                text-xs text-ink
                bg-transparent hover:bg-hover
                border border-edge
                cursor-pointer"
       >
+        <PropertyDataTypeIcon property={props.property} />
         <span class="truncate flex-1 font-mono">
           {props.property.display_name}
         </span>
