@@ -85,7 +85,7 @@ export type UnifiedListContext = {
   actionRegistry: EntityActionRegistry;
 };
 
-const DEFAULT_VIEW_ID: View = 'all';
+const DEFAULT_VIEW_ID: View = 'inbox';
 
 const DEFAULT_VIEW_IDS_SET = new Set(VIEWCONFIG_DEFAULTS_IDS);
 
