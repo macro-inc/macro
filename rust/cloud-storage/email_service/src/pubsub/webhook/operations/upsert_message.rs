@@ -5,6 +5,7 @@ use crate::pubsub::webhook::process;
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
 use email_db_client::threads;
 use email_db_client::threads::get::get_outbound_threads_by_thread_ids;
+use email_utils::dedupe_emails;
 use futures::future::join_all;
 use insight_service_client::InsightContextProvider;
 use model::contacts::ConnectionsMessage;
@@ -73,15 +74,17 @@ pub async fn upsert_message(
     let is_sent = message.is_sent;
 
     // deduped list of all non-generic emails the message was sent to
-    let recipient_emails = message
-        .cc
-        .iter()
-        .map(|c| c.email.clone())
-        .chain(message.to.iter().map(|t| t.email.clone()))
-        .collect::<std::collections::HashSet<_>>()
-        .into_iter()
-        .filter(|e| !email_utils::is_generic_email(e))
-        .collect::<Vec<_>>();
+    let recipient_emails = dedupe_emails(
+        message
+            .cc
+            .iter()
+            .map(|c| c.email.clone())
+            .chain(message.to.iter().map(|t| t.email.clone()))
+            .collect(),
+    )
+    .into_iter()
+    .filter(|e| !email_utils::is_generic_email(e))
+    .collect::<Vec<_>>();
 
     // determine if message's thread already exists in the database
     let thread_provider_to_db_map = threads::get::get_threads_by_link_id_and_provider_ids(
