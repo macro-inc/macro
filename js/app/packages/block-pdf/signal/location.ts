@@ -1,4 +1,9 @@
-import { FindState } from '@block-pdf/PdfViewer/EventBus';
+import type { PDFViewer } from '@block-pdf/PdfViewer';
+import {
+  FindState,
+  type IUpdateFindControlStateEvent,
+} from '@block-pdf/PdfViewer/EventBus';
+import type { FindController } from '@block-pdf/PdfViewer/FindController';
 import { useScrollToCommentThread } from '@block-pdf/store/comments/commentOperations';
 import { activeCommentThreadSignal } from '@block-pdf/store/comments/commentStore';
 import {
@@ -14,6 +19,7 @@ import {
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { waitForSignal } from '@core/util/waitForSignal';
 import { createCallback } from '@solid-primitives/rootless';
+import type { Accessor } from 'solid-js';
 import { z } from 'zod';
 import { pdfViewLocation } from './document';
 import {
@@ -22,6 +28,132 @@ import {
   viewerHasVisiblePagesSignal,
   viewerReadySignal,
 } from './pdfViewer';
+
+/**
+ * Extracts terms from macro_em tags in the highlighted content.
+ * Returns array of text strings that should be highlighted, preserving order and duplicates.
+ */
+function extractMacroEmTerms(highlightedContent: string): string[] {
+  const terms: string[] = [];
+  const macroEmRegex = /<macro_em>(.*?)<\/macro_em>/gs;
+  const matches = Array.from(highlightedContent.matchAll(macroEmRegex));
+
+  for (const match of matches) {
+    terms.push(match[1].trim());
+  }
+
+  return terms;
+}
+
+/**
+ * Applies custom highlights using phraseSearch: false to highlight all macro_em terms
+ * in a single search pass, filtered to only matches within the snippet boundaries.
+ */
+async function applyCustomHighlights(
+  viewer: PDFViewer,
+  findController: FindController,
+  findControllerStateEventSignal: Accessor<
+    IUpdateFindControlStateEvent | undefined
+  >,
+  pageIndex: number,
+  highlightedContent: string,
+  snippetStartPos: number,
+  snippetEndPos: number
+) {
+  // Extract the terms to highlight from macro_em tags
+  const terms = extractMacroEmTerms(highlightedContent);
+
+  if (terms.length === 0) {
+    console.warn('No macro_em terms found to highlight');
+    return;
+  }
+
+  // Join all terms with spaces for multi-term search
+  // phraseSearch: false will create an alternation regex (term1|term2|term3)
+  const query = terms.join(' ');
+
+  // Save the current scroll position to restore after search
+  const currentScrollTop = viewer.container().scrollTop;
+
+  // Perform single search with phraseSearch: false to highlight all terms
+  viewer.search({
+    query,
+    again: false,
+    phraseSearch: false,
+    caseSensitive: true,
+    entireWord: false,
+    highlightAll: true,
+    findPrevious: false,
+  });
+
+  // Wait for search to complete
+  const searchResult = await waitForSignal(
+    findControllerStateEventSignal,
+    (val) => {
+      return (
+        val?.state === FindState.FOUND || val?.state === FindState.NOT_FOUND
+      );
+    }
+  );
+
+  // Restore the scroll position to where we were before the search
+  viewer.container().scrollTop = currentScrollTop;
+
+  if (searchResult?.state === FindState.NOT_FOUND) {
+    console.warn('Terms not found:', terms);
+    return;
+  }
+
+  if (!searchResult) {
+    console.warn('Search result is undefined');
+    return;
+  }
+
+  // Log pageMatches and pageMatchesLength for debugging
+  const pageMatches = findController.pageMatches;
+  const pageMatchesLength = findController.pageMatchesLength;
+
+  if (!pageMatches || !pageMatchesLength) {
+    console.warn('pageMatches or pageMatchesLength is undefined');
+    return;
+  }
+
+  const filteredMatches: number[] = [];
+  const filteredLengths: number[] = [];
+
+  const targetPageMatches = pageMatches[pageIndex] || [];
+  const targetPageLengths = pageMatchesLength[pageIndex] || [];
+
+  for (let i = 0; i < targetPageMatches.length; i++) {
+    const matchStart = targetPageMatches[i];
+    const matchEnd = matchStart + targetPageLengths[i];
+
+    // Only keep matches that are completely within the snippet bounds
+    if (matchStart >= snippetStartPos && matchEnd <= snippetEndPos) {
+      filteredMatches.push(matchStart);
+      filteredLengths.push(targetPageLengths[i]);
+    }
+  }
+
+  // Clear matches on all pages
+  if (findController._pageMatches && findController._pageMatchesLength) {
+    for (let i = 0; i < pageMatches.length; i++) {
+      findController._pageMatches[i] = [];
+      findController._pageMatchesLength[i] = [];
+    }
+
+    // Set only the filtered matches on the target page
+    findController._pageMatches[pageIndex] = filteredMatches;
+    findController._pageMatchesLength[pageIndex] = filteredLengths;
+  }
+
+  findController._matchesCountTotal = filteredMatches.length;
+
+  // Force re-render with the filtered matches
+  findController._updateAllPages();
+
+  viewer.markPageHighlightsSelected(pageIndex);
+}
 
 export const useGoToTempRedirect = () => {
   const [activeThreadId, setActiveThreadId] = activeCommentThreadSignal;
@@ -511,12 +643,18 @@ export async function goToPdfLocation(location: PdfLocation) {
         yPos: 0,
       });
 
+      // Save the current scroll position to restore after search
+      const currentScrollTop = viewer.container().scrollTop;
+
+      // Normalize the snippet by replacing all whitespace characters with spaces
+      const normalizedSnippet = location.snippet.replace(/\s+/g, ' ').trim();
+
       // Use the snippet to find the location in the PDF
       viewer.search({
-        query: location.snippet,
+        query: normalizedSnippet,
         again: false,
         phraseSearch: true,
-        caseSensitive: false,
+        caseSensitive: true,
         entireWord: false,
         highlightAll: false,
         findPrevious: false,
@@ -529,22 +667,69 @@ export async function goToPdfLocation(location: PdfLocation) {
           val?.state === FindState.FOUND || val?.state === FindState.NOT_FOUND
       );
 
+      viewer.container().scrollTop = currentScrollTop;
+
+      if (!findControllerStateEvent) return;
+
       // Break early if we can't find the match
-      if (findControllerStateEvent?.state === FindState.NOT_FOUND) {
+      if (findControllerStateEvent.state === FindState.NOT_FOUND) {
         console.warn('unable to find match', { location });
         break;
       }
 
-      // Since we have a FOUND state, we can jump to the correct match
-      for (let i = 0; i < location.matchNum; i++) {
-        findControllerStateEvent?.source._nextMatch();
+      const findController = findControllerStateEvent.source;
+
+      // Get the snippet's position on the page before navigating
+      const pageIdx = location.pageIndex - 1; // Convert to 0-indexed
+
+      if (
+        !findController._selected ||
+        !findController._pageMatches ||
+        !findController._pageMatchesLength
+      ) {
+        console.error('FindController state is incomplete');
+        break;
       }
 
-      // flash for a short period of time
+      const snippetMatchIdx = findController._selected.matchIdx;
+      const snippetStartPos =
+        findController._pageMatches[pageIdx]?.[snippetMatchIdx];
+      const snippetLength =
+        findController._pageMatchesLength[pageIdx]?.[snippetMatchIdx];
+
+      if (snippetStartPos === undefined || snippetLength === undefined) {
+        console.error('Could not find snippet position');
+        break;
+      }
+
+      const snippetEndPos = snippetStartPos + snippetLength;
+
+      // Since we have a FOUND state, we can jump to the correct match
+      for (let i = 0; i < location.matchNum; i++) {
+        findController._nextMatch();
+      }
+
+      // Clear the snippet search highlights without resetting state
+      // This preserves the findController's ability to emit events
+      findController._highlightMatches = false;
+      findController._updateAllPages();
+
+      // Apply custom highlights based on macro_em tags
+      await applyCustomHighlights(
+        viewer,
+        findController,
+        findControllerStateEventSignal,
+        pageIdx,
+        location.highlightedContent,
+        snippetStartPos,
+        snippetEndPos
+      );
+
+      // flash the highlights
       setTimeout(() => {
-        findControllerStateEvent?.source._reset();
-        findControllerStateEvent?.source._updateAllPages();
-      }, 800);
+        findController._reset();
+        findController._updateAllPages();
+      }, 1000);
 
       break;
   }
