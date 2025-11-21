@@ -36,54 +36,6 @@ type InnerSearchResult =
   | ChannelSearchResult
   | ProjectSearchResult;
 
-/**
- * Extracts the search term from highlighted content by finding text from the first
- * to last <macro_em> tag, removing all macro_em tags to create plain text.
- * Truncates to MAX_SEARCH_TERM_LENGTH characters.
- */
-// function extractSearchTermFromHighlight(
-//   highlightedContent: string,
-//   searchQuery?: string
-// ): string {
-//   const firstMatch = highlightedContent.indexOf('<macro_em>');
-//   const lastMatch = highlightedContent.lastIndexOf('</macro_em>');
-//
-//   if (firstMatch === -1 || lastMatch === -1) {
-//     return '';
-//   }
-//
-//   const substring = highlightedContent.substring(
-//     firstMatch,
-//     lastMatch + '</macro_em>'.length
-//   );
-//
-//   // Group adjacent macro_em tags into single tags
-//   let grouped = substring.replace(/<\/macro_em>\s*<macro_em>/g, '');
-//
-//   // Extract all content from macro_em tags
-//   const macroEmRegex = /<macro_em>(.*?)<\/macro_em>/gs;
-//   const matches = Array.from(grouped.matchAll(macroEmRegex));
-//
-//   if (matches.length === 0) {
-//     return '';
-//   }
-//
-//   // If search query provided, check if any macro_em content matches it
-//   if (searchQuery) {
-//     const normalizedQuery = searchQuery.toLowerCase().trim();
-//     for (const match of matches) {
-//       const content = match[1].trim().toLowerCase();
-//       if (content === normalizedQuery) {
-//         return searchQuery.substring(0, MAX_SEARCH_TERM_LENGTH);
-//       }
-//     }
-//   }
-//
-//   // Otherwise, use the first macro_em tag content
-//   const firstContent = matches[0][1].trim();
-//   return firstContent.substring(0, MAX_SEARCH_TERM_LENGTH);
-// }
-
 const getLocationHighlights = (
   innerResults: DocumentSearchResult[],
   fileType: FileTypeWithLocation,
