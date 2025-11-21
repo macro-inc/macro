@@ -44,7 +44,7 @@ pub(crate) struct ChatSearchConfig;
 
 impl SearchQueryConfig for ChatSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
-    const TITLE_KEY: &'static str = "title";
+    const TITLE_KEY: Option<&'static str> = Some("title");
 
     fn default_sort_types() -> Vec<SortType<'static>> {
         vec![

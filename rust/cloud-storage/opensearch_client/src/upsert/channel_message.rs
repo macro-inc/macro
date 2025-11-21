@@ -7,7 +7,6 @@ use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
 pub struct UpsertChannelMessageArgs {
     #[serde(rename = "entity_id")]
     pub channel_id: String,
-    pub channel_name: Option<String>,
     pub channel_type: String,
     pub org_id: Option<i64>,
     pub message_id: String,
