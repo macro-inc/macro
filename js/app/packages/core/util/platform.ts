@@ -35,9 +35,7 @@ export function isDesktopPlatform(): boolean {
   return isPlatform('desktop');
 }
 
-export function getNativeMobilePlatform():
-  | NativeMobilePlatform
-  | undefined {
+export function getNativeMobilePlatform(): NativeMobilePlatform | undefined {
   return isMobilePlatform()
     ? (getPlatform() as NativeMobilePlatform)
     : undefined;
