@@ -712,7 +712,7 @@ export async function goToPdfLocation(location: PdfLocation) {
       // Clear the snippet search highlights without resetting state
       // This preserves the findController's ability to emit events
       findController._highlightMatches = false;
-      findController._updateAllPages();
+      findController._updatePage(pageIdx);
 
       // Apply custom highlights based on macro_em tags
       await applyCustomHighlights(
