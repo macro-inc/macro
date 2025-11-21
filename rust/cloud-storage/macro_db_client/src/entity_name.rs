@@ -80,3 +80,6 @@ pub async fn get_entity_name(
 
     Ok(name)
 }
+
+#[cfg(test)]
+mod test;
