@@ -158,21 +158,20 @@ export function SimpleSearch() {
           onInput={(e) => setSearchText(e.target.value)}
           onKeyDown={inputKeyDownHandler}
         />
-        <Show when={!!searchText() && searchResults()}>
-          {(result) => {
-            const current = () => result().count.current;
-            const total = () => result().count.total;
+        <div class="flex-0 ml-auto mr-3 text-right w-24">
+          <Show when={!!searchText() && searchResults()}>
+            {(result) => {
+              const current = () => result().count.current;
+              const total = () => result().count.total;
 
-            return (
-              <p class="flex-0 ml-auto mr-3 text-right w-24">
-                {current()}/{total()}
-              </p>
-            );
-          }}
-        </Show>
-        <Show when={!searchResults() && isSearching()}>
-          <p class="flex-0 ml-auto mr-3 text-right w-24" />
-        </Show>
+              return (
+                <>
+                  {current()}/{total()}
+                </>
+              );
+            }}
+          </Show>
+        </div>
         <IconButton
           icon={CaretUp}
           theme="clear"
