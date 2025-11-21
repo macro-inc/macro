@@ -29,6 +29,8 @@ import {
   viewerReadySignal,
 } from './pdfViewer';
 
+export const locationPendingSignal = createBlockSignal<boolean>(false);
+
 /**
  * Applies custom highlights using phraseSearch: false to highlight all macro_em terms
  * in a single search pass, filtered to only matches within the snippet boundaries.
@@ -243,6 +245,8 @@ export const pendingLocationParamsSignal = createBlockSignal<
 createBlockEffect(() => {
   const viewerReady = viewerReadySignal() && viewerHasVisiblePagesSignal.get();
   const params = pendingLocationParamsSignal();
+  const goToLinkLocationFromParams = useGoToLinkLocationFromParams();
+
   if (viewerReady && params) {
     // TODO: do we need to clear all overlays here
     const getViewer = useGetRootViewer();
@@ -576,12 +580,12 @@ export function parseLocationFromUrl(
  *
  * @param location - The location to go to
  */
-export async function goToPdfLocation(location: PdfLocation) {
+export async function goToPdfLocation(location: PdfLocation): Promise<boolean> {
   const getRootViewer = useGetRootViewer();
   const viewer = getRootViewer();
   const documentId = useBlockId();
   const findControllerStateEventSignal = updateFindControlStateSignal.get;
-  if (!viewer || !documentId) return;
+  if (!viewer || !documentId) return false;
 
   switch (location.type) {
     case 'general':
@@ -589,21 +593,21 @@ export async function goToPdfLocation(location: PdfLocation) {
         pageNumber: location.pageIndex,
         yPos: location.y,
       });
-      break;
+      return true;
     case 'precise':
       await viewer.scrollTo({
         pageNumber: location.pageIndex,
         yPos: location.y,
       });
       viewer.generateOverlayForSelectionRect(location.pageIndex - 1, location);
-      break;
+      return true;
     case 'annotation':
       // TODO: implement specific annotation navigation, e.g. comments
       await viewer.scrollTo({
         pageNumber: location.pageIndex,
         yPos: 0,
       });
-      break;
+      return true;
     case 'search':
       // Go to the page of the match
       await viewer.scrollTo({
@@ -614,6 +618,12 @@ export async function goToPdfLocation(location: PdfLocation) {
       // Save the current scroll position to restore after search
       const currentScrollTop = viewer.container().scrollTop;
       const currentScrollLeft = viewer.container().scrollLeft;
+
+      // Pre-warm text extraction for just the target page
+      const findController = viewer.findController;
+      const pageIdx = location.pageIndex - 1; // Convert to 0-indexed
+
+      await findController.warmSearchTextForPage(pageIdx);
 
       // Use the snippet to find the location in the PDF
       viewer.search({
@@ -638,25 +648,18 @@ export async function goToPdfLocation(location: PdfLocation) {
       });
 
       if (!findControllerStateEvent) {
-        viewer.resetSearch();
-        return;
+        return false;
       }
 
       // Break early if we can't find the match
       if (findControllerStateEvent.state === FindState.NOT_FOUND) {
         console.warn('unable to find match', { location });
         // TODO: fallback to raw query
-        viewer.resetSearch();
-        return;
+        return false;
       }
 
       viewer.container().scrollTop = currentScrollTop;
       viewer.container().scrollLeft = currentScrollLeft;
-
-      const findController = findControllerStateEvent.source;
-
-      // Get the snippet's position on the page before navigating
-      const pageIdx = location.pageIndex - 1; // Convert to 0-indexed
 
       if (
         !findController._selected ||
@@ -664,8 +667,7 @@ export async function goToPdfLocation(location: PdfLocation) {
         !findController._pageMatchesLength
       ) {
         console.error('FindController state is incomplete');
-        viewer.resetSearch();
-        return;
+        return false;
       }
 
       const snippetMatchIdx = findController._selected.matchIdx;
@@ -676,8 +678,7 @@ export async function goToPdfLocation(location: PdfLocation) {
 
       if (snippetStartPos === undefined || snippetLength === undefined) {
         console.error('Could not find snippet position');
-        viewer.resetSearch();
-        return;
+        return false;
       }
 
       const snippetEndPos = snippetStartPos + snippetLength;
@@ -700,52 +701,86 @@ export async function goToPdfLocation(location: PdfLocation) {
         snippetEndPos
       );
 
-      // flash the highlights
-      setTimeout(() => {
-        viewer.resetSearch();
-      }, 2000);
+      // Trigger full extraction in the background immediately
+      findController.forceFullExtraction();
 
-      break;
+      // resets the highlight after a short delay
+      return new Promise((resolve) => {
+        setTimeout(() => {
+          this.findBarClose();
+          resolve(true);
+        }, 2000);
+      });
   }
 }
 
-// TODO: this should be a hook
-const goToPreviousLocation = () => {
+const useGoToPreviousLocation = () => {
   const getViewer = useGetRootViewer();
-  const viewer = getViewer();
+  const getViewLocation = pdfViewLocation.get;
 
-  // since this is not a hook we wait an arbitrary amount of time for the signal to be set
-  waitForSignal(pdfViewLocation, (location) => !!location, 300).then(
-    (prevLocationHash) => {
-      if (viewer && prevLocationHash) {
-        viewer.goToLocationHash(prevLocationHash);
+  return async () => {
+    const viewer = getViewer();
+
+    await waitForSignal(getViewLocation, (location) => !!location, 300).then(
+      (prevLocationHash) => {
+        if (viewer && prevLocationHash) {
+          viewer.goToLocationHash(prevLocationHash);
+        }
       }
-    }
-  );
+    );
+  };
+};
+
+const useWithPending = () => {
+  const setPending = locationPendingSignal.set;
+  return async <T, U>(args: T, fn: (args: T) => Promise<U>) => {
+    setPending(true);
+    const result = await fn(args);
+    setPending(false);
+    return result;
+  };
 };
 
 /**
  * Go to the location in the pdf viewer based on the current url
  */
-export async function goToLinkLocation(params: LocationSearchParams) {
-  const location = parseLocationFromUrl(params);
-  if (location) {
-    return await goToPdfLocation(location);
-  }
+export function useGoToLinkLocation() {
+  const goToPreviousLocation = useGoToPreviousLocation();
+  const withPending = useWithPending();
 
-  goToPreviousLocation();
+  const go = async (params: LocationSearchParams) => {
+    const location = parseLocationFromUrl(params);
+    if (location) {
+      await goToPdfLocation(location);
+      return;
+    }
+
+    await goToPreviousLocation();
+  };
+
+  return (params: LocationSearchParams) => {
+    return withPending(params, go);
+  };
 }
 
 /**
  * Go to the location in the pdf viewer based on the params
  */
-export async function goToLinkLocationFromParams(
-  params: Record<string, string>
-) {
-  const location = parseLocationFromBlockParams(params);
-  if (location) {
-    return await goToPdfLocation(location);
-  }
+export function useGoToLinkLocationFromParams() {
+  const goToPreviousLocation = useGoToPreviousLocation();
+  const withPending = useWithPending();
 
-  goToPreviousLocation();
+  const go = async (params: Record<string, string>) => {
+    const location = parseLocationFromBlockParams(params);
+    if (location) {
+      await goToPdfLocation(location);
+      return;
+    }
+
+    await goToPreviousLocation();
+  };
+
+  return (params: Record<string, string>) => {
+    return withPending(params, go);
+  };
 }

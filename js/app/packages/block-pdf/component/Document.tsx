@@ -55,10 +55,10 @@ import {
 } from '../signal/document';
 import {
   generalPopupLocationSignal,
-  goToLinkLocation,
   type LocationSearchParams,
   locationChangedSignal,
   URL_PARAMS,
+  useGoToLinkLocation,
   useGoToTempRedirect,
   useSetLocationStore,
 } from '../signal/location';
@@ -575,6 +575,7 @@ export function Document() {
     } as LocationSearchParams;
   };
 
+  const goToLinkLocation = useGoToLinkLocation();
   createEffect(() => {
     if (locationChangedSignal() || !viewerReadySignal()) return;
     let params = locationSearchParams();

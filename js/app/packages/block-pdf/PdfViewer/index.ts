@@ -3,7 +3,7 @@ import { debounce } from '@solid-primitives/scheduled';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { PDFPageView } from 'pdfjs-dist/web/pdf_viewer';
 import type { TDestArray } from './DestArray';
-import type { IFindEvent, IPublicEventBus } from './EventBus';
+import { FindState, type IFindEvent, type IPublicEventBus } from './EventBus';
 import { InternalPDFViewer } from './InternalPDFViewer';
 import {
   correctScrollAfterWheelZoom,
@@ -38,6 +38,10 @@ export class PDFViewer extends InternalPDFViewer {
 
   get pdfDocument() {
     return this._viewer.pdfDocument;
+  }
+
+  get findController() {
+    return this._findController;
   }
 
   async destroy() {
@@ -251,9 +255,7 @@ export class PDFViewer extends InternalPDFViewer {
     });
   }
 
-  resetSearch() {
-    this._findController._reset();
-    this._findController._updateAllPages();
+  findBarClose() {
     this._eventBus.dispatch('findbarclose', { source: this });
   }
 

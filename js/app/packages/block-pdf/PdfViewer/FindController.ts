@@ -109,6 +109,12 @@ export class FindController extends PDFFindController {
       this._extractTextPromises[i] = extractTextCapability.promise;
 
       promise = promise.then(() => {
+        // Skip if this page was already extracted via _extractTextForPage
+        if (this._pageContents && this._pageContents[i] !== undefined) {
+          extractTextCapability.resolve(i);
+          return;
+        }
+
         if (!this._pdfDocument) {
           return;
         }
@@ -164,6 +170,106 @@ export class FindController extends PDFFindController {
             }
           );
       });
+    }
+  }
+
+  /**
+   * Force a full text extraction for all pages.
+   * This clears the _extractTextPromises array and re-runs extraction.
+   * Useful after warmSearchTextForPage to ensure all pages are available for future searches.
+   */
+  forceFullExtraction() {
+    if (!this._extractTextPromises) {
+      return;
+    }
+
+    // Clear the promises array so _extractText() will run
+    this._extractTextPromises = [];
+
+    // Clear page contents that were set to empty strings by warmSearchTextForPage
+    // This ensures _extractText() will actually extract them instead of skipping
+    if (this._pageContents) {
+      for (let i = 0; i < this._pageContents.length; i++) {
+        if (this._pageContents[i] === '') {
+          this._pageContents[i] = undefined as any;
+        }
+      }
+    }
+
+    // Trigger full extraction
+    this._extractText();
+  }
+
+  /**
+   * Extract text for a specific page immediately and prevent full extraction.
+   * This populates the _extractTextPromises array so _extractText() won't run.
+   * After using this, call forceFullExtraction() to extract remaining pages.
+   * @param pageIndex - 0-indexed page number
+   * @returns Promise that resolves when text extraction is complete for that page
+   */
+  async warmSearchTextForPage(pageIndex: number): Promise<number | undefined> {
+    if (!this._pdfDocument || !this._extractTextPromises) {
+      return undefined;
+    }
+
+    // Check if this page is already extracted
+    if (this._pageContents && this._pageContents[pageIndex] !== undefined) {
+      return pageIndex;
+    }
+
+    // Initialize arrays
+    if (!this._pageContents) this._pageContents = [];
+    if (!this._pageDiffs) this._pageDiffs = [];
+    if (!this._hasDiacritics) this._hasDiacritics = [];
+    if (!this._pageContentsAsTextLayer) this._pageContentsAsTextLayer = [];
+
+    // Populate _extractTextPromises with resolved promises to prevent _extractText() from running
+    // This is the key optimization - we tell the FindController that extraction is "done"
+    const pagesCount = this._linkService.pagesCount;
+    if (this._extractTextPromises.length === 0) {
+      for (let i = 0; i < pagesCount; i++) {
+        // Mark all pages as "extracted" with empty content
+        // The target page will be filled with real content below
+        this._extractTextPromises[i] = Promise.resolve(i);
+        this._pageContents[i] = '';
+        this._pageDiffs[i] = null;
+        this._hasDiacritics[i] = false;
+      }
+    }
+
+    try {
+      const pdfPage = await this._pdfDocument.getPage(pageIndex + 1);
+      const textContent: any = await pdfPage.getTextContent();
+      const textItems = textContent.items;
+      const strBuf: string[] = [];
+      const pageContentsAsTextLayerStrBuf: string[] = [];
+
+      for (const textItem of textItems) {
+        strBuf.push(textItem.str);
+        pageContentsAsTextLayerStrBuf.push(textItem.str);
+        if (textItem.hasEOL) {
+          strBuf.push('\n');
+        }
+      }
+
+      this._pageContentsAsTextLayer[pageIndex] = pageContentsAsTextLayerStrBuf;
+
+      [
+        this._pageContents[pageIndex],
+        this._pageDiffs[pageIndex],
+        this._hasDiacritics[pageIndex],
+      ] = normalize(strBuf.join(''));
+
+      return pageIndex;
+    } catch (reason) {
+      console.error(
+        `Unable to get text content for page ${pageIndex + 1}`,
+        reason
+      );
+      this._pageContents[pageIndex] = '';
+      this._pageDiffs[pageIndex] = null;
+      this._hasDiacritics[pageIndex] = false;
+      return pageIndex;
     }
   }
 }
