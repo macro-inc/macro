@@ -32,7 +32,8 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { supportedExtensions } from '@lexical-core/utils';
 import {
   createChannelsQuery,
-  createDssInfiniteQuery,
+  createDssInfiniteQueryGet,
+  createDssInfiniteQueryPost,
   createEmailsInfiniteQuery,
   createFilterComposer,
   createProjectFilterFn,
@@ -57,16 +58,14 @@ import {
   type WithSearch,
 } from '@macro-entity';
 import {
-  markNotificationsForEntityAsDone,
-  useNotificationsForEntity,
-} from '@notifications/notificationHelpers';
-import {
   isChannelMention,
   isChannelMessageReply,
   isChannelMessageSend,
+  markNotificationsForEntityAsDone,
   notificationWithMetadata,
-} from '@notifications/notificationMetadata';
-import type { UnifiedNotification } from '@notifications/types';
+  type UnifiedNotification,
+  useNotificationsForEntity,
+} from '@notifications';
 import type { PaginatedSearchArgs } from '@service-search/client';
 import type {
   ChannelFilters,
@@ -77,7 +76,10 @@ import type {
   UnifiedSearchIndex,
   UnifiedSearchRequestFilters,
 } from '@service-search/generated/models';
-import type { GetItemsSoupParams } from '@service-storage/generated/schemas';
+import type {
+  GetItemsSoupParams,
+  PostSoupRequest,
+} from '@service-storage/generated/schemas';
 import { debounce } from '@solid-primitives/scheduled';
 import stringify from 'json-stable-stringify';
 import {
@@ -131,6 +133,7 @@ import {
   type SortOptions,
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_IDS,
+  VIEWCONFIG_DEFAULTS_IDS_ENUM,
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
@@ -200,7 +203,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const splitContext = useSplitPanelOrThrow();
   const { isPanelActive, unifiedListContext, panelRef, previewState } =
     splitContext;
-  const preview = () => previewState?.[0]?.() ?? false;
+  const [preview] = previewState;
   const {
     viewsDataStore: viewsData,
     setViewDataStore,
@@ -639,6 +642,27 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       sort_method: sortType(),
     })
   );
+  const GARBAGE_UUID = '00000000-0000-0000-0000-000000000000';
+  const dssQueryPOSTRequestBody = createMemo(
+    (): PostSoupRequest => ({
+      channel_filters: {
+        channel_ids: [GARBAGE_UUID],
+      },
+      document_filters: {
+        document_ids: entityTypeFilter().includes('document')
+          ? []
+          : [GARBAGE_UUID],
+      },
+      chat_filters: {
+        chat_ids: [GARBAGE_UUID],
+      },
+      email_filters: {
+        recipients: [GARBAGE_UUID],
+      },
+      limit: props.defaultDisplayOptions?.limit ?? 100,
+      sort_method: sortType(),
+    })
+  );
   const emailQueryParams = createMemo((): FetchPaginatedEmailsParams => {
     const sort = sortType();
     return {
@@ -694,7 +718,18 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return false;
   });
 
-  const disableDssInfiniteQuery = createMemo(() => {
+  const disableDssInfiniteQueryGET = createMemo(() => {
+    if (view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.folders) return true;
+
+    const typeFilter = entityTypeFilter();
+    if (typeFilter.length === 0) return false;
+    const dssTypes = ['document', 'chat', 'project'];
+    const hasDssTypes = typeFilter.some((t) => dssTypes.includes(t));
+    return !hasDssTypes;
+  });
+  const disableDssInfiniteQueryPost = createMemo(() => {
+    if (view().id !== VIEWCONFIG_DEFAULTS_IDS_ENUM.folders) return true;
+
     const typeFilter = entityTypeFilter();
     if (typeFilter.length === 0) return false;
     const dssTypes = ['document', 'chat', 'project'];
@@ -711,8 +746,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const channelsQuery = createChannelsQuery({
     disabled: disableChannelsQuery,
   });
-  const dssInfiniteQuery = createDssInfiniteQuery(dssQueryParams, {
-    disabled: disableDssInfiniteQuery,
+  const dssInfiniteQueryGET = createDssInfiniteQueryGet(dssQueryParams, {
+    disabled: disableDssInfiniteQueryGET,
+  });
+  const dssInfiniteQueryPOST = createDssInfiniteQueryPost(dssQueryParams, {
+    disabled: disableDssInfiniteQueryPost,
+    requestBody: dssQueryPOSTRequestBody,
   });
   const emailsInfiniteQuery = createEmailsInfiniteQuery(emailQueryParams, {
     refetchInterval: () => emailRefetchInterval(),
@@ -792,7 +831,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     >({
       entityInfiniteQueries: [
         {
-          query: dssInfiniteQuery,
+          query: dssInfiniteQueryGET,
+          operations: { filter: true, search: true },
+        },
+        {
+          query: dssInfiniteQueryPOST,
           operations: { filter: true, search: true },
         },
         {
@@ -835,9 +878,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const entityClickHandler: EntityClickHandler<EntityData> = (
     entity,
-    event
+    event,
+    options
   ) => {
-    if (preview()) {
+    if (preview() && !options?.ignorePreview) {
       setViewDataStore(selectedView(), 'selectedEntity', entity);
       return;
     }
@@ -935,6 +979,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       setViewDataStore(selectedView(), 'initialConfig', stringifiedConfig);
     }
   });
+
+  let lastClickedEntityId = -1;
+  createEffect(
+    on(view, () => {
+      lastClickedEntityId = -1;
+    })
+  );
 
   return (
     <>
@@ -1279,17 +1330,77 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     isPanelActive() && focusedSelector(innerProps.entity.id)
                   }
                   checked={selectedSelector(innerProps.entity.id)}
-                  onChecked={(next) => {
-                    unifiedListContext.setViewDataStore(
-                      selectedView(),
-                      'selectedEntities',
-                      (p) => {
-                        if (!next) {
-                          return p.filter((e) => e.id !== innerProps.entity.id);
+                  onChecked={(next, shiftKey) => {
+                    const toggleSingle = () =>
+                      unifiedListContext.setViewDataStore(
+                        selectedView(),
+                        'selectedEntities',
+                        (p) => {
+                          if (!next) {
+                            return p.filter(
+                              (e) => e.id !== innerProps.entity.id
+                            );
+                          }
+                          return p.concat(innerProps.entity);
                         }
-                        return p.concat(innerProps.entity);
+                      );
+
+                    if (shiftKey) {
+                      const entityList = unifiedListContext.entitiesSignal[0]();
+                      if (!entityList) return;
+
+                      const selectedEntitySet = new Set(
+                        unifiedListContext.viewsDataStore[
+                          unifiedListContext.selectedView()
+                        ].selectedEntities
+                      );
+                      const newEnititiesForSeleciton: EntityData[] = [];
+
+                      // Try to grab the last clicked item and fall back on
+                      // the highest currently selected index.
+                      let anchorIndex = lastClickedEntityId;
+                      if (anchorIndex === -1) {
+                        for (let i = 0; i < entityList.length; i++) {
+                          if (selectedEntitySet.has(entityList[i])) {
+                            anchorIndex = i;
+                          }
+                        }
                       }
-                    );
+
+                      if (anchorIndex === -1) {
+                        toggleSingle();
+                        lastClickedEntityId = innerProps.index;
+                        return;
+                      }
+
+                      const targetIndex = innerProps.index;
+                      const sign = Math.sign(targetIndex - anchorIndex);
+                      if (anchorIndex === targetIndex) {
+                        // no_op
+                      } else {
+                        for (
+                          let i = anchorIndex;
+                          sign > 0 ? i <= targetIndex : i >= targetIndex;
+                          i += sign
+                        ) {
+                          const entity = entityList[i];
+                          if (!selectedEntitySet.has(entity)) {
+                            newEnititiesForSeleciton.push(entity);
+                          }
+                        }
+                      }
+                      unifiedListContext.setViewDataStore(
+                        selectedView(),
+                        'selectedEntities',
+                        (p) => {
+                          return p.concat(newEnititiesForSeleciton);
+                        }
+                      );
+                      lastClickedEntityId = innerProps.index;
+                    } else {
+                      toggleSingle();
+                      lastClickedEntityId = innerProps.index;
+                    }
                   }}
                 />
               );
@@ -1439,7 +1550,7 @@ function SearchBar(props: {
     setViewDataStore(selectedView(), 'searchText', text);
   };
 
-  const debouncedSetSearch = debounce(setSearchText, 200);
+  const debouncedSetSearch = debounce(setSearchText, 300);
 
   const isElementInViewport = (element: Element): Promise<boolean> => {
     return new Promise((resolve) => {

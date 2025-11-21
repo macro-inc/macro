@@ -1,4 +1,6 @@
-use crate::{CHANNEL_INDEX, Result, date_format::EpochSeconds, error::OpensearchClientError};
+use models_opensearch::SearchIndex;
+
+use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
 
 /// The arguments for upserting a channel message into the opensearch index
 #[derive(Debug, serde::Serialize)]
@@ -23,8 +25,12 @@ pub(crate) async fn upsert_channel_message(
     args: &UpsertChannelMessageArgs,
 ) -> Result<()> {
     let id = format!("{}:{}", args.channel_id, args.message_id);
+
     let response = client
-        .index(opensearch::IndexParts::IndexId(CHANNEL_INDEX, &id))
+        .index(opensearch::IndexParts::IndexId(
+            SearchIndex::Channels.as_ref(),
+            &id,
+        ))
         .body(args)
         .send()
         .await

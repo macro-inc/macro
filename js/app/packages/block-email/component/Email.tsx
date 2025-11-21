@@ -1,5 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -12,8 +13,10 @@ import {
   useEmailContacts,
   useOrganizationUsers,
 } from '@core/user';
-import { createEffectOnEntityTypeNotification } from '@notifications/notificationHelpers';
-import { isNotificationWithMetadata } from '@notifications/notificationMetadata';
+import {
+  createEffectOnEntityTypeNotification,
+  isNotificationWithMetadata,
+} from '@notifications';
 import { emailClient } from '@service-email/client';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 import type { Thread } from '@service-email/generated/schemas/thread';
@@ -560,6 +563,7 @@ export function Email(props: EmailProps) {
           }
           return false;
         },
+        hotkeyToken: TOKENS.block.focus,
         hide: true,
       });
     }

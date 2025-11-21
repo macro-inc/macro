@@ -1,5 +1,5 @@
 use crate::{
-    PROJECT_INDEX, Result, delegate_methods,
+    Result, delegate_methods,
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
@@ -9,6 +9,7 @@ use crate::{
 };
 
 use crate::SearchOn;
+use models_opensearch::SearchIndex;
 use opensearch_query_builder::{BoolQueryBuilder, HighlightField, SearchRequest, ToOpenSearchJson};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -17,12 +18,11 @@ use serde_json::Value;
 pub(crate) struct ProjectSearchConfig;
 
 impl SearchQueryConfig for ProjectSearchConfig {
-    const INDEX: &'static str = PROJECT_INDEX;
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "project_name";
 
     // Projects have no "content" to highlight match on, so match on the TITLE_KEY instead
-    fn default_highlight() -> opensearch_query_builder::Highlight {
+    fn default_highlight() -> opensearch_query_builder::Highlight<'static> {
         opensearch_query_builder::Highlight::new()
             .require_field_match(true)
             .field(
@@ -61,11 +61,11 @@ impl ProjectQueryBuilder {
         fn disable_recency(disable_recency: bool) -> Self;
     }
 
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder> {
+    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
         self.inner.build_bool_query()
     }
 
-    fn build_search_request(&self) -> Result<SearchRequest> {
+    fn build_search_request(&self) -> Result<SearchRequest<'static>> {
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
         // SearchOn::NameContent is used
@@ -130,6 +130,7 @@ pub struct ProjectSearchResponse {
     pub project_name: String,
     pub created_at: i64,
     pub updated_at: i64,
+    pub score: Option<f64>,
     pub highlight: Highlight,
 }
 
@@ -141,26 +142,26 @@ pub(crate) async fn search_projects(
     let query_body = args.build()?;
 
     let response = client
-        .search(opensearch::SearchParts::Index(&[PROJECT_INDEX]))
+        .search(opensearch::SearchParts::Index(&[
+            SearchIndex::Projects.as_ref()
+        ]))
         .body(query_body)
         .send()
         .await
         .map_client_error()
         .await?;
 
-    let json_value: serde_json::Value =
-        response
-            .json()
-            .await
-            .map_err(|e| OpensearchClientError::DeserializationFailed {
-                details: e.to_string(),
-                method: Some("search_projects".to_string()),
-            })?;
-
-    let result: SearchResponse<ProjectIndex> = serde_json::from_value(json_value).map_err(|e| {
-        OpensearchClientError::DeserializationFailed {
+    let bytes = response
+        .bytes()
+        .await
+        .map_err(|e| OpensearchClientError::HttpBytesError {
             details: e.to_string(),
-            method: Some("search_projects".to_string()),
+        })?;
+
+    let result: SearchResponse<ProjectIndex> = serde_json::from_slice(&bytes).map_err(|e| {
+        OpensearchClientError::SearchDeserializationFailed {
+            details: e.to_string(),
+            raw_body: String::from_utf8_lossy(&bytes).to_string(),
         }
     })?;
 
@@ -169,11 +170,12 @@ pub(crate) async fn search_projects(
         .hits
         .into_iter()
         .map(|hit| ProjectSearchResponse {
-            project_id: hit._source.entity_id,
-            user_id: hit._source.user_id,
-            project_name: hit._source.project_name,
-            created_at: hit._source.created_at_seconds,
-            updated_at: hit._source.updated_at_seconds,
+            project_id: hit.source.entity_id,
+            user_id: hit.source.user_id,
+            project_name: hit.source.project_name,
+            created_at: hit.source.created_at_seconds,
+            updated_at: hit.source.updated_at_seconds,
+            score: hit.score,
             highlight: hit
                 .highlight
                 .map(|h| {

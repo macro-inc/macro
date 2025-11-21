@@ -1,5 +1,5 @@
 use crate::{
-    CHANNEL_INDEX, Result, delegate_methods,
+    Result, delegate_methods,
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
@@ -9,6 +9,7 @@ use crate::{
 };
 
 use crate::SearchOn;
+use models_opensearch::SearchIndex;
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, QueryType, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
     ToOpenSearchJson,
@@ -42,6 +43,8 @@ pub struct ChannelMessageSearchResponse {
     pub mentions: Vec<String>,
     pub created_at: i64,
     pub updated_at: i64,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<f64>,
     /// Contains the highlight matches for the channel name and content
     pub highlight: Highlight,
 }
@@ -50,11 +53,10 @@ pub struct ChannelMessageSearchResponse {
 pub(crate) struct ChannelMessageSearchConfig;
 
 impl SearchQueryConfig for ChannelMessageSearchConfig {
-    const INDEX: &'static str = CHANNEL_INDEX;
     const USER_ID_KEY: &'static str = "sender_id";
     const TITLE_KEY: &'static str = "channel_name";
 
-    fn default_sort_types() -> Vec<SortType> {
+    fn default_sort_types() -> Vec<SortType<'static>> {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
@@ -108,7 +110,7 @@ impl ChannelMessageQueryBuilder {
     }
 
     /// Builds the main bool query for the index
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder> {
+    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
         // Build the main bool query containing all terms and any other filters
         let mut bool_query = self.inner.build_bool_query()?;
 
@@ -133,7 +135,7 @@ impl ChannelMessageQueryBuilder {
         Ok(bool_query)
     }
 
-    fn build_search_request(&self) -> Result<SearchRequest> {
+    fn build_search_request(&self) -> Result<SearchRequest<'static>> {
         let bool_query = self.build_bool_query()?;
 
         // Build the search request with the bool query
@@ -196,19 +198,26 @@ pub(crate) async fn search_channel_messages(
     let query_body = args.build()?;
 
     let response = client
-        .search(opensearch::SearchParts::Index(&[CHANNEL_INDEX]))
+        .search(opensearch::SearchParts::Index(&[
+            SearchIndex::Channels.as_ref()
+        ]))
         .body(query_body)
         .send()
         .await
         .map_client_error()
         .await?;
 
-    let result = response
-        .json::<DefaultSearchResponse<ChannelMessageIndex>>()
+    let bytes = response
+        .bytes()
         .await
-        .map_err(|e| OpensearchClientError::DeserializationFailed {
+        .map_err(|e| OpensearchClientError::HttpBytesError {
             details: e.to_string(),
-            method: Some("search_channel".to_string()),
+        })?;
+
+    let result: DefaultSearchResponse<ChannelMessageIndex> = serde_json::from_slice(&bytes)
+        .map_err(|e| OpensearchClientError::SearchDeserializationFailed {
+            details: e.to_string(),
+            raw_body: String::from_utf8_lossy(&bytes).to_string(),
         })?;
 
     Ok(result
@@ -216,16 +225,17 @@ pub(crate) async fn search_channel_messages(
         .hits
         .into_iter()
         .map(|hit| ChannelMessageSearchResponse {
-            channel_id: hit._source.entity_id,
-            channel_name: hit._source.channel_name,
-            channel_type: hit._source.channel_type,
-            org_id: hit._source.org_id,
-            message_id: hit._source.message_id,
-            thread_id: hit._source.thread_id,
-            sender_id: hit._source.sender_id,
-            mentions: hit._source.mentions,
-            created_at: hit._source.created_at_seconds,
-            updated_at: hit._source.updated_at_seconds,
+            channel_id: hit.source.entity_id,
+            channel_name: hit.source.channel_name,
+            channel_type: hit.source.channel_type,
+            org_id: hit.source.org_id,
+            message_id: hit.source.message_id,
+            thread_id: hit.source.thread_id,
+            sender_id: hit.source.sender_id,
+            mentions: hit.source.mentions,
+            created_at: hit.source.created_at_seconds,
+            updated_at: hit.source.updated_at_seconds,
+            score: hit.score,
             highlight: hit
                 .highlight
                 .map(|h| {

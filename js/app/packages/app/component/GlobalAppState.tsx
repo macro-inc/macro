@@ -1,6 +1,6 @@
 import type { BlockOrchestrator } from '@core/orchestrator';
 import type { EmailSource } from '@macro-entity';
-import type { NotificationSource } from '@notifications/notificationSource';
+import type { NotificationSource } from '@notifications';
 import { createContext, type ParentProps, useContext } from 'solid-js';
 
 export interface GlobalAppState {

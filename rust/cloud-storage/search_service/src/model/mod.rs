@@ -32,6 +32,7 @@ impl From<&ChatOpenSearchResponse> for Option<ChatMessageSearchResult> {
             highlight: response.inner.highlight.clone().into(),
             updated_at: response.inner.updated_at,
             title: response.inner.title.clone(),
+            score: response.inner.score,
         })
     }
 }
@@ -74,6 +75,7 @@ impl From<&ProjectOpenSearchResponse> for Option<ProjectSearchResult> {
     fn from(response: &ProjectOpenSearchResponse) -> Self {
         Some(ProjectSearchResult {
             highlight: response.inner.highlight.clone().into(),
+            score: response.inner.score,
         })
     }
 }
@@ -109,6 +111,7 @@ impl From<&DocumentOpenSearchResponse> for Option<DocumentSearchResult> {
             raw_content: response.inner.raw_content.clone(),
             updated_at: response.inner.updated_at,
             highlight: response.inner.highlight.clone().into(),
+            score: response.inner.score,
         })
     }
 }
@@ -149,6 +152,7 @@ impl From<&EmailOpenSearchResponse> for Option<EmailSearchResult> {
             highlight: response.inner.highlight.clone().into(),
             updated_at: response.inner.updated_at,
             sent_at: response.inner.sent_at,
+            score: response.inner.score,
         })
     }
 }
@@ -186,6 +190,7 @@ impl From<&ChannelOpenSearchResponse> for Option<ChannelSearchResult> {
             highlight: response.inner.highlight.clone().into(),
             updated_at: response.inner.updated_at,
             created_at: response.inner.created_at,
+            score: response.inner.score,
         })
     }
 }

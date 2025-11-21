@@ -2,7 +2,6 @@ import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator'
 import { IconButton } from '@core/component/IconButton';
 import { ENABLE_PREVIEW } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
-import { cornerClip } from '@core/util/clipPath';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import CaretLeft from '@icon/regular/caret-left.svg';
@@ -121,7 +120,7 @@ function SplitPreviewToggle() {
 
 function SplitControlButtons() {
   return (
-    <div class="flex flex-row items-center px-2 border-t border-t-edge-muted border-b border-b-edge-muted h-full shrink-0">
+    <div class="flex flex-row items-center px-2 h-full shrink-0">
       <SplitCloseButton />
       <SplitBackButton />
       <SplitForwardButton />
@@ -136,16 +135,11 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
 
   return (
     <div
-      class="isolate relative bg-edge-muted w-full h-10 overflow-clip text-ink shrink-0"
+      class="isolate relative w-full h-10 overflow-clip text-ink shrink-0"
       data-split-header
       ref={props.ref}
     >
-      <div
-        class="absolute inset-0 flex justify-start items-center bg-panel"
-        style={{
-          'clip-path': cornerClip('calc(0.5rem + 0.5px)', 0, 0, 0),
-        }}
-      >
+      <div class="absolute inset-0 flex justify-start items-center bg-panel border-b border-b-edge-muted">
         <SplitControlButtons />
         <div
           class="relative w-fit min-w-0 h-full shrink"
@@ -155,15 +149,15 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
         />
 
         {/* space filler */}
-        <div class="border-t border-t-edge-muted border-b border-b-edge-muted h-full grow-1" />
+        <div class="h-full grow-1" />
 
         <div
-          class="border-t border-t-edge-muted border-b border-b-edge-muted min-w-4 h-full shrink-0"
+          class="min-w-4 h-full shrink-0"
           ref={(ref) => {
             ctx.layoutRefs.headerRight = ref;
           }}
         />
-        <div class="z-2 relative flex items-center bg-panel pr-2 border-t border-t-edge-muted border-b border-b-edge-muted h-full">
+        <div class="z-2 relative flex items-center bg-panel pr-2 h-full">
           <EntityNavigationIndicator />
           <SplitPreviewToggle />
           <SplitSpotlightButton />

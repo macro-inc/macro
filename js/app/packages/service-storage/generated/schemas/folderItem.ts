@@ -8,6 +8,8 @@ import type { FolderItemFileType } from './folderItemFileType';
 
 export interface FolderItem {
   fileType?: FolderItemFileType;
+  /** The full OS name of the file for deduplication */
+  fullName: string;
   /** The name of the file, without the extension */
   name: string;
   /** The relative path of the file.

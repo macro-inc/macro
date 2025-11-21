@@ -5,6 +5,7 @@ use crate::chat::ChatSearchResponseItemWithMetadata;
 use crate::document::DocumentSearchResponseItemWithMetadata;
 use crate::email::EmailSearchResponseItemWithMetadata;
 use crate::project::ProjectSearchResponseItemWithMetadata;
+use crate::score::calculate_average;
 use crate::{
     MatchType, SearchOn, channel::SimpleChannelSearchReponseBaseItem,
     chat::SimpleChatSearchResponseBaseItem, document::SimpleDocumentSearchResponseBaseItem,
@@ -58,7 +59,7 @@ pub struct UnifiedSearchRequest {
     pub include: Vec<UnifiedSearchIndex>,
 }
 
-impl From<UnifiedSearchIndex> for opensearch_client::search::model::SearchIndex {
+impl From<UnifiedSearchIndex> for models_opensearch::SearchEntityType {
     fn from(index: UnifiedSearchIndex) -> Self {
         match index {
             UnifiedSearchIndex::Channels => Self::Channels,
@@ -73,9 +74,9 @@ impl From<UnifiedSearchIndex> for opensearch_client::search::model::SearchIndex 
 /// Generates the search indices to search over for unified search
 pub fn generate_unified_search_indices(
     include: Vec<UnifiedSearchIndex>,
-) -> HashSet<opensearch_client::search::model::SearchIndex> {
+) -> HashSet<models_opensearch::SearchEntityType> {
     if include.is_empty() {
-        let include: Vec<opensearch_client::search::model::SearchIndex> = [
+        let include: Vec<models_opensearch::SearchEntityType> = [
             UnifiedSearchIndex::Channels,
             UnifiedSearchIndex::Chats,
             UnifiedSearchIndex::Documents,
@@ -128,6 +129,19 @@ pub enum UnifiedSearchResponseItem {
     Email(EmailSearchResponseItemWithMetadata),
     Channel(ChannelSearchResponseItemWithMetadata),
     Project(ProjectSearchResponseItemWithMetadata),
+}
+
+impl UnifiedSearchResponseItem {
+    /// Calculate the average score from search_results
+    pub fn average_score(&self) -> f64 {
+        match self {
+            Self::Document(item) => calculate_average(&item.extra.document_search_results),
+            Self::Chat(item) => calculate_average(&item.extra.chat_search_results),
+            Self::Email(item) => calculate_average(&item.extra.email_message_search_results),
+            Self::Channel(item) => calculate_average(&item.extra.channel_message_search_results),
+            Self::Project(item) => calculate_average(&item.extra.project_search_results),
+        }
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, Default)]

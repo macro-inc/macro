@@ -6,7 +6,7 @@
   position: absolute;
   opacity: 1;
   pointer-events: all;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .overouter .overlay div.section,
@@ -14,7 +14,7 @@
   /* opacity is used so that the intersection observer can pick it up */
   opacity: 0;
   pointer-events: none;
-  cursor: auto;
+  cursor: var(--cursor-auto);
 }
 
 .noShowParse .overouter .overlay div div {
@@ -30,7 +30,7 @@
 .overouter {
   position: absolute;
   pointer-events: none;
-  cursor: auto;
+  cursor: var(--cursor-auto);
   top: 0;
   left: 0;
   width: 100%;

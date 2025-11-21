@@ -14,16 +14,15 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import { savePropertyValue } from '../../api/propertyValues';
+import { saveEntityProperty } from '../../api';
 import { MODAL_DIMENSIONS } from '../../constants';
-import { usePropertyEditor } from '../../hooks/usePropertyModals';
+import { usePropertyEditor } from '../../hooks/usePropertyEditor';
 import type { PropertyApiValues, PropertyEditorProps } from '../../types';
 import { getValueTypeDisplay } from '../../utils';
 import {
   entityReferencesToIdSet,
   updateEntityReferences,
 } from '../../utils/entityConversion';
-import { ErrorHandler } from '../../utils/errorHandling';
 import { PropertyEntitySelector } from './shared/PropertyEntitySelector';
 import { PropertyOptionSelector } from './shared/PropertyOptionSelector';
 
@@ -39,7 +38,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
   const [selectedEntityRefs, setSelectedEntityRefs] = createSignal<
     EntityReference[]
   >(
-    props.property.valueType === 'ENTITY' && props.property.value
+    props.property.valueType === 'ENTITY' && props.property.value != null
       ? props.property.value
       : []
   );
@@ -80,18 +79,17 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
       }
       default:
         // Should not reach here as modal only handles select and entity types
-        ErrorHandler.handleApiError(
+        console.error(
+          'PropertyEditor.saveChanges:',
           new Error(
             `Invalid property type for modal editor: ${props.property.valueType}`
-          ),
-          'PropertyEditor.saveChanges',
-          'Invalid property type'
+          )
         );
         return;
     }
 
-    // savePropertyValue already handles error logging and user feedback
-    const result = await savePropertyValue(
+    // saveEntityProperty already handles error logging and user feedback
+    const result = await saveEntityProperty(
       blockId,
       props.entityType,
       props.property,
@@ -109,7 +107,7 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
     if (props.property.valueType !== 'ENTITY') return false;
 
     const currentRefs = selectedEntityRefs();
-    const originalRefs = (props.property.value as EntityReference[]) || [];
+    const originalRefs = props.property.value ?? [];
 
     // Compare lengths first
     if (currentRefs.length !== originalRefs.length) return true;

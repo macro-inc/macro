@@ -2,16 +2,6 @@ use std::{collections::HashMap, fmt::Display};
 
 use crate::search::query::Keys;
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, strum::Display, strum::EnumString, strum::AsRefStr)]
-#[strum(serialize_all = "lowercase")]
-pub enum SearchIndex {
-    Channels,
-    Chats,
-    Documents,
-    Emails,
-    Projects,
-}
-
 /// macro open/close tags for highlight matches
 #[derive(Debug, PartialEq)]
 pub(crate) enum MacroEm {
@@ -32,8 +22,10 @@ impl Display for MacroEm {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct Hit<T> {
-    pub _score: Option<f64>,
-    pub _source: T,
+    #[serde(rename = "_score")]
+    pub score: Option<f64>,
+    #[serde(rename = "_source")]
+    pub source: T,
     /// Highlights may or may not be present since we could match
     /// purely on the title of the item
     pub highlight: Option<HashMap<String, Vec<String>>>,

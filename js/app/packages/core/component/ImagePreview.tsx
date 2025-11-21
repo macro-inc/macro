@@ -133,11 +133,16 @@ export function ImagePreview(props: ImagePreviewProps) {
     }
   };
 
-  const handleDeleteMedia = async () => {
-    if (!props.isDss) {
-      console.error('delete not implemented for dss');
-      return;
-    }
+  const showDeleteMediaButton = () => {
+    return (
+      props.channelId &&
+      props.messageId &&
+      props.attachmentId &&
+      props.isCurrentUser
+    );
+  };
+
+  const handleDeleteChannelMedia = async () => {
     if (!props.channelId || !props.messageId || !props.attachmentId) return;
     await commsServiceClient.patchMessage({
       channel_id: props.channelId,
@@ -229,15 +234,15 @@ export function ImagePreview(props: ImagePreviewProps) {
       maxScale: 5,
       contain: 'outside',
       startScale: 1,
-      cursor: 'default',
+      cursor: 'var(--cursor-default)',
     });
 
     const updateCursor = () => {
       const scale = panzoom.getScale();
       if (scale <= 1.01) {
-        image.style.cursor = 'default';
+        image.style.cursor = 'var(--cursor-default)';
       } else {
-        image.style.cursor = 'grab';
+        image.style.cursor = 'var(--cursor-grab)';
       }
     };
 
@@ -291,12 +296,12 @@ export function ImagePreview(props: ImagePreviewProps) {
                     icon={DownloadIcon}
                     onClick={downloadImage}
                   />
-                  <Show when={props.isCurrentUser}>
+                  <Show when={showDeleteMediaButton()}>
                     <MenuSeparator />
                     <MenuItem
                       text="Delete image"
                       icon={TrashIcon}
-                      onClick={handleDeleteMedia}
+                      onClick={handleDeleteChannelMedia}
                     />
                   </Show>
                 </DropdownMenuContent>

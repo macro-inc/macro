@@ -1,6 +1,7 @@
 use crate::parse::db_to_service::map_db_contact_to_service;
 use anyhow::Context;
 use chrono::{DateTime, Utc};
+use email_utils::{dedupe_emails, is_generic_email};
 use models_email::service::address;
 use models_email::{db, service};
 use sqlx::PgPool;
@@ -327,6 +328,42 @@ pub async fn fetch_contacts_by_link_id(
     .context("Failed to fetch contacts for link ID")?;
 
     Ok(db_contacts.into_iter().map(Into::into).collect())
+}
+
+/// returns all non-generic email addresses the passed link has sent emails to.
+#[tracing::instrument(skip(pool))]
+pub async fn fetch_contacts_emails_by_link_id(
+    pool: &PgPool,
+    link_id: Uuid,
+) -> anyhow::Result<Vec<String>> {
+    let rows = sqlx::query!(
+        r#"
+        SELECT DISTINCT
+            c.email_address as "email_address!"
+        FROM
+            email_messages m
+        JOIN
+            email_message_recipients mr ON m.id = mr.message_id
+        JOIN
+            email_contacts c ON mr.contact_id = c.id
+        WHERE
+            m.link_id = $1
+            AND m.is_sent = TRUE
+            AND mr.contact_id IS NOT NULL
+        ORDER BY
+            c.email_address
+        "#,
+        link_id
+    )
+    .fetch_all(pool)
+    .await
+    .context("Failed to fetch contacts for link ID")?;
+
+    let deduped = dedupe_emails(rows.into_iter().map(|row| row.email_address).collect());
+    Ok(deduped
+        .into_iter()
+        .filter(|e| !is_generic_email(e))
+        .collect())
 }
 
 /// Fetches contacts who sent messages in the specified threads, organized by thread ID

@@ -17,7 +17,6 @@ import {
   useContext,
 } from 'solid-js';
 
-const CHANNEL_QUERY_KEY = queryKeys.all.channel;
 const ACTIVITY_QUERY_KEY = ['channelActivity'];
 
 export function createChannelActivityQuery() {
@@ -37,7 +36,7 @@ export function createChannelActivityQuery() {
 
 export function createChannelsQuery() {
   return useQuery(() => ({
-    queryKey: CHANNEL_QUERY_KEY,
+    queryKey: queryKeys.all.channel,
     queryFn: async () => {
       const result = await commsServiceClient.getChannels();
 

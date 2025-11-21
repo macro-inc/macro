@@ -1,6 +1,7 @@
 import { Tooltip } from '@core/component/Tooltip';
 import { matches } from '@core/util/match';
 import CheckIcon from '@icon/regular/check.svg';
+import { notificationWithMetadata } from '@notifications';
 import { useEmail, useUserId } from '@service-gql/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
@@ -10,9 +11,10 @@ import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
 import { emailToId, useDisplayName } from 'core/user';
 import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
-import { notificationWithMetadata } from 'notifications/notificationMetadata';
 import type { ParentProps, Ref } from 'solid-js';
 import {
+  createDeferred,
+  createEffect,
   createMemo,
   createSignal,
   For,
@@ -28,10 +30,10 @@ import {
   isProjectContainedEntity,
   type ProjectContainedEntity,
 } from '../queries/project';
-import type { EntityData } from '../types/entity';
+import type { EntityData, ProjectEntity } from '../types/entity';
 import type { Notification, WithNotification } from '../types/notification';
 import type { WithSearch } from '../types/search';
-import type { EntityClickHandler } from './Entity';
+import type { EntityClickEvent, EntityClickHandler } from './Entity';
 
 function UnreadIndicator(props: { active?: boolean }) {
   return (
@@ -96,7 +98,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   highlighted?: boolean;
   selected?: boolean;
   ref?: Ref<HTMLDivElement>;
-  onChecked?: (checked: boolean) => void;
+  onChecked?: (checked: boolean, shiftKey?: boolean) => void;
   checked?: boolean;
 }
 
@@ -405,8 +407,8 @@ export function EntityWithEverything(
         <button
           type="button"
           class="col-1 size-full relative group/button flex items-center justify-center"
-          onClick={() => {
-            props.onChecked?.(!props.checked);
+          onClick={(e) => {
+            props.onChecked?.(!props.checked, e.shiftKey);
           }}
           data-blocks-navigation
         >
@@ -473,7 +475,9 @@ export function EntityWithEverything(
               )}
             </Show>
             <Show when={matches(props.entity, isProjectContainedEntity)}>
-              {(entity) => <EntityProject entity={entity()} />}
+              {(entity) => (
+                <EntityProject entity={entity()} onClick={props.onClick} />
+              )}
             </Show>
             <Show when={props.timestamp ?? props.entity.updatedAt}>
               {(date) => {
@@ -685,7 +689,7 @@ function DirectMessageIcon(props: { entity: EntityData }) {
   return (
     <div class="bg-panel size-5 rounded-full p-[2px]">
       <Show when={participantId()} fallback={<Fallback />}>
-        {(id) => <UserIcon id={id()} isDeleted={false} size="fill" />}
+        {(id) => <UserIcon id={id()} isDeleted={false} size="xs" />}
       </Show>
     </div>
   );
@@ -716,10 +720,97 @@ function NotificationUserIcon(props: { id: string; name?: string }) {
   );
 }
 
-function EntityProject(props: { entity: ProjectContainedEntity }) {
-  const projectQuery = createProjectQuery(props.entity);
+function EntityProjectPathDisplay(props: { name: string; path: string[] }) {
+  const [displayPath, setDisplayPath] = createSignal<string | undefined>(
+    props.name
+  );
+  const [truncated, setTruncated] = createSignal(false);
+
+  const fullPath = createMemo(() => props.path.join(' / '));
+
+  const getDisplayPath = (): { name: string; truncated: boolean } => {
+    const fullPathString = fullPath();
+    const maxLength = 30;
+
+    if (fullPathString.length <= maxLength) {
+      return { name: fullPathString, truncated: false };
+    }
+
+    if (props.path.length === 1) {
+      return {
+        name: props.path[0].slice(0, maxLength - 3) + '...',
+        truncated: true,
+      };
+    }
+
+    if (props.path.length === 2) {
+      const first = props.path[0];
+      const last = props.path[props.path.length - 1];
+      const combined = `${first} / ... / ${last}`;
+      if (combined.length <= maxLength) {
+        return { name: combined, truncated: true };
+      }
+      return {
+        name: `${first.slice(0, 10)}... / ${last.slice(0, 10)}...`,
+        truncated: true,
+      };
+    }
+
+    const first = props.path[0];
+    const last = props.path[props.path.length - 1];
+    return { name: `${first} / ... / ${last}`, truncated: true };
+  };
+
+  createDeferred(() => {
+    const { name, truncated } = getDisplayPath();
+    setDisplayPath(name);
+    setTruncated(truncated);
+  });
+
   return (
-    <div class="flex gap-1 items-center text-xs text-ink-extra-muted min-w-0">
+    <Tooltip tooltip={fullPath()} hide={!truncated()}>
+      <div class="truncate">{displayPath()}</div>
+    </Tooltip>
+  );
+}
+
+function EntityProject(props: {
+  entity: ProjectContainedEntity;
+  onClick?: EntityClickHandler<ProjectEntity>;
+}) {
+  const projectQuery = createProjectQuery(props.entity);
+  let projectIconRef!: HTMLDivElement;
+
+  createEffect(() => {
+    const click = props.onClick;
+    if (!click) return;
+    if (!projectQuery.isSuccess) return;
+
+    const data = projectQuery.data;
+    const handleClick = (e: EntityClickEvent) => {
+      const projectEntity: ProjectEntity = {
+        type: 'project',
+        id: data.id,
+        name: data.name,
+        ownerId: data.owner,
+        updatedAt: data.updatedAt,
+      };
+      click(projectEntity, e, { ignorePreview: true });
+    };
+
+    projectIconRef.classList.add('hover:text-accent');
+    projectIconRef.dataset.blocksNavigation = 'true';
+    projectIconRef.addEventListener('click', handleClick);
+    onCleanup(() => {
+      projectIconRef.removeEventListener('click', handleClick);
+    });
+  });
+
+  return (
+    <div
+      ref={projectIconRef}
+      class="flex gap-1 items-center text-xs text-ink-extra-muted min-w-0"
+    >
       <svg
         class="shrink-0"
         xmlns="http://www.w3.org/2000/svg"
@@ -736,8 +827,10 @@ function EntityProject(props: { entity: ProjectContainedEntity }) {
       <Suspense
         fallback={<div class="h-3 w-10 bg-ink-placeholder animate-pulse" />}
       >
-        <Show when={projectQuery.data?.name}>
-          {(name) => <div class="truncate">{name()}</div>}
+        <Show when={projectQuery.data}>
+          {(data) => (
+            <EntityProjectPathDisplay name={data().name} path={data().path} />
+          )}
         </Show>
       </Suspense>
     </div>

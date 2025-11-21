@@ -1,8 +1,8 @@
 use crate::{
-    OpensearchClient, Result, delete, get_document,
+    OpensearchClient, Result, delete,
     search::{
         self,
-        documents::{DocumentIndex, DocumentSearchResponse, search_documents},
+        documents::{DocumentSearchResponse, search_documents},
     },
     upsert::{self, document::UpsertDocumentArgs},
 };
@@ -30,12 +30,6 @@ impl OpensearchClient {
         args: search::documents::DocumentSearchArgs,
     ) -> Result<Vec<DocumentSearchResponse>> {
         search_documents(&self.inner, args).await
-    }
-
-    /// Gets all results for a given document id
-    #[tracing::instrument(skip(self))]
-    pub async fn get_document_by_id(&self, document_id: &str) -> Result<Vec<DocumentIndex>> {
-        get_document::get_document_by_id(&self.inner, document_id).await
     }
 
     /// Deletes a document from the opensearch document index

@@ -1,5 +1,5 @@
 use crate::{
-    EMAIL_INDEX, Result, delegate_methods,
+    Result, delegate_methods,
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
@@ -10,6 +10,7 @@ use crate::{
 };
 
 use crate::SearchOn;
+use models_opensearch::SearchIndex;
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, QueryType, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
     ToOpenSearchJson,
@@ -21,11 +22,10 @@ use serde_json::Value;
 pub(crate) struct EmailSearchConfig;
 
 impl SearchQueryConfig for EmailSearchConfig {
-    const INDEX: &'static str = EMAIL_INDEX;
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "subject";
 
-    fn default_sort_types() -> Vec<SortType> {
+    fn default_sort_types() -> Vec<SortType<'static>> {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
@@ -97,7 +97,7 @@ impl EmailQueryBuilder {
         self
     }
 
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder> {
+    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
         // Build the main bool query containing all terms and any other filters
         let mut bool_query = self.inner.build_bool_query()?;
 
@@ -136,7 +136,7 @@ impl EmailQueryBuilder {
         Ok(bool_query)
     }
 
-    fn build_search_request(&self) -> Result<SearchRequest> {
+    fn build_search_request(&self) -> Result<SearchRequest<'static>> {
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
         // SearchOn::NameContent is used
@@ -192,6 +192,7 @@ pub struct EmailSearchResponse {
     pub updated_at: i64,
     pub sent_at: Option<i64>,
     pub subject: Option<String>,
+    pub score: Option<f64>,
     pub highlight: Highlight,
 }
 
@@ -248,19 +249,28 @@ pub(crate) async fn search_emails(
     let query_body = args.build()?;
 
     let response = client
-        .search(opensearch::SearchParts::Index(&[EMAIL_INDEX]))
+        .search(opensearch::SearchParts::Index(&[
+            SearchIndex::Emails.as_ref()
+        ]))
         .body(query_body)
         .send()
         .await
         .map_client_error()
         .await?;
 
-    let result = response
-        .json::<DefaultSearchResponse<EmailIndex>>()
+    let bytes = response
+        .bytes()
         .await
-        .map_err(|e| OpensearchClientError::DeserializationFailed {
+        .map_err(|e| OpensearchClientError::HttpBytesError {
             details: e.to_string(),
-            method: Some("search_emails".to_string()),
+        })?;
+
+    let result: DefaultSearchResponse<EmailIndex> =
+        serde_json::from_slice(&bytes).map_err(|e| {
+            OpensearchClientError::SearchDeserializationFailed {
+                details: e.to_string(),
+                raw_body: String::from_utf8_lossy(&bytes).to_string(),
+            }
         })?;
 
     Ok(result
@@ -268,18 +278,19 @@ pub(crate) async fn search_emails(
         .hits
         .into_iter()
         .map(|hit| EmailSearchResponse {
-            thread_id: hit._source.entity_id,
-            message_id: hit._source.message_id,
-            subject: hit._source.subject,
-            sender: hit._source.sender,
-            recipients: hit._source.recipients,
-            cc: hit._source.cc,
-            bcc: hit._source.bcc,
-            labels: hit._source.labels,
-            link_id: hit._source.link_id,
-            user_id: hit._source.user_id,
-            updated_at: hit._source.updated_at_seconds,
-            sent_at: hit._source.sent_at_seconds,
+            thread_id: hit.source.entity_id,
+            message_id: hit.source.message_id,
+            subject: hit.source.subject,
+            sender: hit.source.sender,
+            recipients: hit.source.recipients,
+            cc: hit.source.cc,
+            bcc: hit.source.bcc,
+            labels: hit.source.labels,
+            link_id: hit.source.link_id,
+            user_id: hit.source.user_id,
+            updated_at: hit.source.updated_at_seconds,
+            sent_at: hit.source.sent_at_seconds,
+            score: hit.score,
             highlight: hit
                 .highlight
                 .map(|h| {

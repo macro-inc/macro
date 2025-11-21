@@ -4,10 +4,11 @@ import DeleteIcon from '@icon/bold/x-bold.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Component } from 'solid-js';
 import { createSignal, For, Show } from 'solid-js';
-import { savePropertyValue } from '../../api/propertyValues';
+import { saveEntityProperty } from '../../api';
 import { PROPERTY_STYLES } from '../../styles/styles';
 import type { Property } from '../../types';
-import { formatPropertyValue } from '../../utils';
+import { formatPropertyValue, getSelectValues } from '../../utils';
+import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
 import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
 
 type SelectValueProps = {
@@ -47,7 +48,7 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
         return;
       }
 
-      const result = await savePropertyValue(
+      const result = await saveEntityProperty(
         blockId,
         props.entityType,
         props.property,
@@ -57,7 +58,13 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
         }
       );
 
-      if (result.ok) {
+      if (
+        handlePropertyError(
+          result,
+          ERROR_MESSAGES.PROPERTY_SAVE,
+          'SelectValue.handleRemoveValue'
+        )
+      ) {
         props.onRefresh?.();
       }
     } finally {
@@ -66,7 +73,7 @@ export const SelectValue: Component<SelectValueProps> = (props) => {
   };
 
   const isReadOnly = () => props.property.isMetadata || !props.canEdit;
-  const displayValues = (props.property.value || []) as string[];
+  const displayValues = getSelectValues(props.property);
 
   return (
     <div

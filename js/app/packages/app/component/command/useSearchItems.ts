@@ -14,7 +14,12 @@ function createDocumentItems(
   const items: CommandItemCard[] = [];
   if (doc.type !== 'document') return [];
 
-  if (doc.document_search_results.length === 0) return [];
+  if (
+    doc.document_search_results.length === 0 ||
+    !doc.metadata ||
+    doc.metadata.deleted_at
+  )
+    return [];
 
   // TODO: de-duplicate: see logic in useDocumentItems
   for (const result of doc.document_search_results) {
@@ -85,7 +90,12 @@ function createChatItems(chat: UnifiedSearchResponseItem): CommandItemCard[] {
   const items: CommandItemCard[] = [];
   if (chat.type !== 'chat') return [];
 
-  if (chat.chat_search_results.length === 0) return [];
+  if (
+    chat.chat_search_results.length === 0 ||
+    !chat.metadata ||
+    chat.metadata.deleted_at
+  )
+    return [];
 
   // TODO: de-duplicate: see logic in useChatItems
   for (const result of chat.chat_search_results) {
@@ -151,7 +161,12 @@ function createProjectItems(
   const items: CommandItemCard[] = [];
   if (project.type !== 'project') return [];
 
-  if (project.project_search_results.length === 0) return [];
+  if (
+    project.project_search_results.length === 0 ||
+    !project.metadata ||
+    project.metadata.deleted_at
+  )
+    return [];
 
   for (const result of project.project_search_results) {
     const contents = result.highlight.content ?? [];
@@ -217,11 +232,16 @@ export function usePaginatedSearchItems(searchTerm: () => string) {
   const [currentPage, setCurrentPage] = createSignal(0);
   const [hasMore, setHasMore] = createSignal(true);
   const [isLoading, setIsLoading] = createSignal(false);
+  let loadMoreAbortController: AbortController | null = null;
 
   // Reset when search term changes
   createEffect(() => {
     const term = searchTerm();
     if (term !== '') {
+      if (loadMoreAbortController) {
+        loadMoreAbortController.abort();
+        loadMoreAbortController = null;
+      }
       setAllItems([]);
       setCurrentPage(0);
       setHasMore(true);
@@ -243,6 +263,11 @@ export function usePaginatedSearchItems(searchTerm: () => string) {
   const loadMore = async () => {
     if (isLoading()) return;
 
+    if (loadMoreAbortController) {
+      loadMoreAbortController.abort();
+    }
+    loadMoreAbortController = new AbortController();
+
     setIsLoading(true);
     try {
       const nextPage = currentPage() + 1;
@@ -252,13 +277,16 @@ export function usePaginatedSearchItems(searchTerm: () => string) {
         return;
       }
 
-      const result = await searchClient.search({
-        request: {
-          match_type: 'partial',
-          query: term,
+      const result = await searchClient.search(
+        {
+          request: {
+            match_type: 'partial',
+            query: term,
+          },
+          params: { page: nextPage, page_size: 10 },
         },
-        params: { page: nextPage, page_size: 10 },
-      });
+        { signal: loadMoreAbortController.signal }
+      );
 
       if (isErr(result)) {
         console.error('Failed to load more search results');
@@ -272,6 +300,10 @@ export function usePaginatedSearchItems(searchTerm: () => string) {
         setCurrentPage(nextPage);
         if (newItems.length === 0) setHasMore(false);
       }
+    } catch (error) {
+      if (loadMoreAbortController.signal.aborted) return;
+
+      throw error;
     } finally {
       setIsLoading(false);
     }

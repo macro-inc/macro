@@ -89,7 +89,7 @@
 //           padding: 0px 20px;
 //           user-select: none;
 //           color: var(--b0);
-//           cursor: copy;
+//           cursor: var(--cursor-copy);
 //           left: 100%;
 //           top: 20px;
 //         }

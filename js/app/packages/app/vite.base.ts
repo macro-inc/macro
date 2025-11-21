@@ -7,6 +7,7 @@ import solid from "vite-plugin-solid";
 import solidSvg from "vite-plugin-solid-svg";
 import wasm from "vite-plugin-wasm";
 import tsconfigpaths from "vite-tsconfig-paths";
+import { vitePluginCursorOverride } from "./component/custom-cursor/vite-plugin-cursor-override";
 // @ts-ignore
 import { version } from "./package.json";
 
@@ -39,6 +40,7 @@ export const createAppViteConfig = ({
       },
       plugins: [
         // solidDevtools({ autoname: true }),
+        vitePluginCursorOverride(), // Transform cursor values before lightningcss
         solid(),
         wasm(),
         tailwind(),

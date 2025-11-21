@@ -661,6 +661,7 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
           <SplitlikeContainer
             spotlight={bigChatOpen}
             setSpotlight={setBigChatOpen}
+            tr={!bigChatOpen()}
           >
             <Rightbar
               chatId={chatId()}

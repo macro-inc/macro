@@ -37,6 +37,7 @@ fn test_construct_search_result_single_thread() {
         updated_at: 1234567890,
         sent_at: Some(1234567800),
         subject: Some("Test Subject".to_string()),
+        score: None,
         highlight: Highlight {
             name: None,
             content: vec!["Test content".to_string()],

@@ -36,8 +36,8 @@ export type ValueType =
 /**
  * UI layer property with discriminated union for type-safe values
  *
- * Note: Single-value types use `value?: T`, multi-value types use `value?: T[]`
- * This reflects the semantic difference between logically single vs multiple values.
+ * Note: All value types use `value: T | null` or `value: T[] | null` (not optional properties)
+ * This reflects that unset values are explicitly `null` rather than `undefined`.
  *
  * @see EntityPropertyWithDefinition - Backend structured type
  * @see PropertyValue - Backend discriminated union for values
@@ -54,15 +54,15 @@ export type Property = {
   createdAt: string;
   updatedAt: string;
 } & ( // Single-value types
-  | { valueType: 'STRING'; value?: string }
-  | { valueType: 'NUMBER'; value?: number }
-  | { valueType: 'BOOLEAN'; value?: boolean }
-  | { valueType: 'DATE'; value?: Date }
+  | { valueType: 'STRING'; value: string | null }
+  | { valueType: 'NUMBER'; value: number | null }
+  | { valueType: 'BOOLEAN'; value: boolean | null }
+  | { valueType: 'DATE'; value: Date | null }
   // Multi-value types (select values are option IDs, not display values)
-  | { valueType: 'SELECT_STRING'; value?: string[] }
-  | { valueType: 'SELECT_NUMBER'; value?: string[] }
-  | { valueType: 'ENTITY'; value?: EntityReference[] }
-  | { valueType: 'LINK'; value?: string[] }
+  | { valueType: 'SELECT_STRING'; value: string[] | null }
+  | { valueType: 'SELECT_NUMBER'; value: string[] | null }
+  | { valueType: 'ENTITY'; value: EntityReference[] | null }
+  | { valueType: 'LINK'; value: string[] | null }
 );
 
 /**
@@ -135,7 +135,7 @@ export type PropertyEditorProps = {
 export type PropertySelectorProps = {
   isOpen: boolean;
   onClose: () => void;
-  existingPropertyIds: string[];
+  existingPropertyIds: () => string[];
 };
 
 // Re-export generated API types from service-properties

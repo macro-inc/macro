@@ -16,11 +16,7 @@ import {
   Show,
 } from 'solid-js';
 import { Portal } from 'solid-js/web';
-import {
-  BUTTON_BASE_CLASSES,
-  PRIMARY_BUTTON_CLASSES,
-  SECONDARY_BUTTON_CLASSES,
-} from '../../constants';
+import { PROPERTY_STYLES } from '../../styles';
 import {
   getPropertyDataTypeDropdownOptions,
   usePropertyNameFocus,
@@ -32,6 +28,89 @@ import { Dropdown, type DropdownOption } from './shared/Dropdown';
 type DataTypeValue = ReturnType<
   typeof getPropertyDataTypeDropdownOptions
 >[number]['value'];
+
+type Option<T> = {
+  id: string;
+  value: T;
+  display_order: number;
+};
+
+type OptionInputProps<T extends string | number> = {
+  options: () => Option<T>[];
+  type: 'string' | 'number';
+  onAdd: () => string;
+  onRemove: (id: string) => void;
+  onUpdate: (id: string, value: T) => void;
+  placeholder?: string;
+};
+
+const OptionInput: Component<OptionInputProps<string | number>> = (props) => {
+  const handleKeyDown = (
+    e: KeyboardEvent,
+    _optionId: string,
+    currentValue: string | number
+  ) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+
+      const hasValue =
+        props.type === 'string'
+          ? !!(currentValue as string).trim()
+          : props.type === 'number';
+
+      if (hasValue) {
+        const newOptionId = props.onAdd();
+
+        setTimeout(() => {
+          const newInput = document.querySelector(
+            `input[data-option-id="${newOptionId}"]`
+          ) as HTMLInputElement;
+          if (newInput) {
+            newInput.focus();
+          }
+        }, 50);
+      }
+    }
+  };
+
+  return (
+    <div class="space-y-2 max-h-40 overflow-y-auto">
+      <Index each={props.options()}>
+        {(option) => (
+          <div class="flex items-center gap-2">
+            <input
+              type={props.type === 'string' ? 'text' : 'number'}
+              value={option().value}
+              onInput={(e) => {
+                const value =
+                  props.type === 'string'
+                    ? e.currentTarget.value
+                    : Number(e.currentTarget.value);
+                props.onUpdate(option().id, value as string | number);
+              }}
+              onKeyDown={(e) => handleKeyDown(e, option().id, option().value)}
+              placeholder={props.placeholder}
+              class="flex-1 px-2 py-1 border border-edge text-sm"
+              data-option-id={option().id}
+            />
+            <button
+              type="button"
+              onClick={() => props.onRemove(option().id)}
+              class="text-failure-ink hover:text-failure-ink text-md px-1"
+            >
+              ×
+            </button>
+          </div>
+        )}
+      </Index>
+      <Show when={props.options().length === 0}>
+        <div class="text-center py-4 text-ink-muted text-sm">
+          No options added yet
+        </div>
+      </Show>
+    </div>
+  );
+};
 
 interface CreatePropertyModalProps {
   isOpen: boolean;
@@ -54,6 +133,54 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     Array<{ id: string; value: number; display_order: number }>
   >([]);
   const [error, setError] = createSignal<string | null>(null);
+
+  // Unified option management helpers
+  type Option<T> = { id: string; value: T; display_order: number };
+
+  const addOption = <T extends string | number>(
+    options: () => Option<T>[],
+    setOptions: (options: Option<T>[]) => void,
+    defaultValue: T
+  ): string => {
+    const newOption: Option<T> = {
+      id: crypto.randomUUID(),
+      value: defaultValue,
+      display_order: options().length,
+    };
+    setOptions([...options(), newOption]);
+    return newOption.id;
+  };
+
+  const removeOption = <T extends string | number>(
+    options: () => Option<T>[],
+    setOptions: (options: Option<T>[]) => void,
+    optionId: string
+  ) => {
+    setOptions(options().filter((opt) => opt.id !== optionId));
+  };
+
+  const updateOption = <T extends string | number>(
+    options: () => Option<T>[],
+    setOptions: (options: Option<T>[]) => void,
+    optionId: string,
+    value: T
+  ) => {
+    setOptions(
+      options().map((opt) => (opt.id === optionId ? { ...opt, value } : opt))
+    );
+  };
+
+  const hasDuplicateOptions = <T extends string | number>(
+    options: () => Option<T>[]
+  ): boolean => {
+    const values = options().map((opt) =>
+      typeof opt.value === 'string' ? opt.value.trim() : opt.value
+    );
+    const nonEmptyValues = values.filter((v) =>
+      typeof v === 'string' ? v !== '' : !isNaN(v)
+    );
+    return new Set(nonEmptyValues).size !== nonEmptyValues.length;
+  };
 
   let propertyNameInputRef!: HTMLInputElement;
 
@@ -170,9 +297,16 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     }
 
     // Check for duplicate options if options are required
-    if (shouldShowOptions() && hasDuplicateOptions()) {
-      setError(ERROR_MESSAGES.VALIDATION_DUPLICATE);
-      return;
+    if (shouldShowOptions()) {
+      const { type } = parseDataTypeValue(selectedDataType());
+      const hasDuplicates =
+        type === 'select_string'
+          ? hasDuplicateOptions(newStringOptions)
+          : hasDuplicateOptions(newNumberOptions);
+      if (hasDuplicates) {
+        setError(ERROR_MESSAGES.VALIDATION_DUPLICATE);
+        return;
+      }
     }
 
     // Validate that select types have at least one option
@@ -187,7 +321,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
 
     // Validate that we have a user ID for user-scoped properties
     if (!orgId && !currentUserId) {
-      setError('Unable to create property: user information not available');
+      setError(ERROR_MESSAGES.PROPERTY_CREATE);
       return;
     }
 
@@ -215,7 +349,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
       });
 
       if (isErr(result)) {
-        setError(ERROR_MESSAGES.CREATE_PROPERTY);
+        setError(ERROR_MESSAGES.PROPERTY_CREATE);
         return;
       }
 
@@ -223,7 +357,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
       props.onPropertyCreated?.();
       props.onClose();
     } catch (_error) {
-      setError(ERROR_MESSAGES.CREATE_PROPERTY);
+      setError(ERROR_MESSAGES.PROPERTY_CREATE);
     } finally {
       setIsCreatingProperty(false);
     }
@@ -236,104 +370,6 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
     setNewStringOptions([]);
     setNewNumberOptions([]);
     setError(null);
-  };
-
-  const addNewStringOption = () => {
-    const newOption = {
-      id: crypto.randomUUID(),
-      value: '',
-      display_order: newStringOptions().length,
-    };
-    setNewStringOptions([...newStringOptions(), newOption]);
-    return newOption.id;
-  };
-
-  const addNewNumberOption = () => {
-    const newOption = {
-      id: crypto.randomUUID(),
-      value: 0,
-      display_order: newNumberOptions().length,
-    };
-    setNewNumberOptions([...newNumberOptions(), newOption]);
-    return newOption.id;
-  };
-
-  const hasDuplicateOptions = () => {
-    const dataType = selectedDataType();
-
-    if (dataType === 'select_string') {
-      const values = newStringOptions()
-        .map((opt) => opt.value.trim())
-        .filter((v) => v !== '');
-      return new Set(values).size !== values.length;
-    }
-
-    if (dataType === 'select_number') {
-      const values = newNumberOptions().map((opt) => opt.value);
-      return new Set(values).size !== values.length;
-    }
-
-    return false;
-  };
-
-  const handleOptionKeyDown = (
-    e: KeyboardEvent,
-    _optionId: string,
-    currentValue: string | number
-  ) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-
-      const dataType = selectedDataType();
-      const hasValue =
-        dataType === 'select_string'
-          ? !!(currentValue as string).trim()
-          : dataType === 'select_number';
-
-      if (hasValue) {
-        const newOptionId =
-          dataType === 'select_string'
-            ? addNewStringOption()
-            : addNewNumberOption();
-
-        setTimeout(() => {
-          const newInput = document.querySelector(
-            `input[data-option-id="${newOptionId}"]`
-          ) as HTMLInputElement;
-          if (newInput) {
-            newInput.focus();
-          }
-        }, 50);
-      }
-    }
-  };
-
-  const removeStringOption = (optionId: string) => {
-    setNewStringOptions(
-      newStringOptions().filter((opt) => opt.id !== optionId)
-    );
-  };
-
-  const removeNumberOption = (optionId: string) => {
-    setNewNumberOptions(
-      newNumberOptions().filter((opt) => opt.id !== optionId)
-    );
-  };
-
-  const updateStringOption = (optionId: string, value: string) => {
-    setNewStringOptions(
-      newStringOptions().map((opt) =>
-        opt.id === optionId ? { ...opt, value } : opt
-      )
-    );
-  };
-
-  const updateNumberOption = (optionId: string, value: number) => {
-    setNewNumberOptions(
-      newNumberOptions().map((opt) =>
-        opt.id === optionId ? { ...opt, value } : opt
-      )
-    );
   };
 
   const shouldShowMultiSelect = createMemo(() => {
@@ -469,95 +505,67 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
                     </label>
                     <button
                       type="button"
-                      onClick={() =>
-                        selectedDataType() === 'select_string'
-                          ? addNewStringOption()
-                          : addNewNumberOption()
-                      }
+                      onClick={() => {
+                        const { type } = parseDataTypeValue(selectedDataType());
+                        if (type === 'select_string') {
+                          addOption(newStringOptions, setNewStringOptions, '');
+                        } else {
+                          addOption(newNumberOptions, setNewNumberOptions, 0);
+                        }
+                      }}
                       class="px-2 py-1 text-xs bg-accent text-ink hover:bg-accent/90"
                     >
                       + Add Option
                     </button>
                   </div>
-                  <div class="space-y-2 max-h-40 overflow-y-auto">
-                    <Show
-                      when={selectedDataType() === 'select_string'}
-                      fallback={
-                        <Index each={newNumberOptions()}>
-                          {(option) => (
-                            <div class="flex items-center gap-2">
-                              <input
-                                type="number"
-                                value={option().value}
-                                onInput={(e) =>
-                                  updateNumberOption(
-                                    option().id,
-                                    Number(e.currentTarget.value)
-                                  )
-                                }
-                                onKeyDown={(e) =>
-                                  handleOptionKeyDown(
-                                    e,
-                                    option().id,
-                                    option().value
-                                  )
-                                }
-                                placeholder="Enter number"
-                                class="flex-1 px-2 py-1 border border-edge text-sm"
-                                data-option-id={option().id}
-                              />
-                              <button
-                                type="button"
-                                onClick={() => removeNumberOption(option().id)}
-                                class="text-failure-ink hover:text-failure-ink text-md px-1"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          )}
-                        </Index>
+                  <Show
+                    when={selectedDataType() === 'select_string'}
+                    fallback={
+                      <OptionInput
+                        options={newNumberOptions}
+                        type="number"
+                        onAdd={() =>
+                          addOption(newNumberOptions, setNewNumberOptions, 0)
+                        }
+                        onRemove={(id) =>
+                          removeOption(
+                            newNumberOptions,
+                            setNewNumberOptions,
+                            id
+                          )
+                        }
+                        onUpdate={(id, value) =>
+                          updateOption(
+                            newNumberOptions,
+                            setNewNumberOptions,
+                            id,
+                            value as number
+                          )
+                        }
+                        placeholder="Enter number"
+                      />
+                    }
+                  >
+                    <OptionInput
+                      options={newStringOptions}
+                      type="string"
+                      onAdd={() =>
+                        addOption(newStringOptions, setNewStringOptions, '')
                       }
-                    >
-                      <Index each={newStringOptions()}>
-                        {(option) => (
-                          <div class="flex items-center gap-2">
-                            <input
-                              type="text"
-                              value={option().value}
-                              onInput={(e) =>
-                                updateStringOption(
-                                  option().id,
-                                  e.currentTarget.value
-                                )
-                              }
-                              onKeyDown={(e) =>
-                                handleOptionKeyDown(
-                                  e,
-                                  option().id,
-                                  option().value
-                                )
-                              }
-                              placeholder="Enter option value"
-                              class="flex-1 px-2 py-1 border border-edge text-sm"
-                              data-option-id={option().id}
-                            />
-                            <button
-                              type="button"
-                              onClick={() => removeStringOption(option().id)}
-                              class="text-failure-ink hover:text-failure-ink text-md px-1"
-                            >
-                              ×
-                            </button>
-                          </div>
-                        )}
-                      </Index>
-                    </Show>
-                    <Show when={getOptionsForCurrentType().length === 0}>
-                      <div class="text-center py-4 text-ink-muted text-sm">
-                        No options added yet
-                      </div>
-                    </Show>
-                  </div>
+                      onRemove={(id) =>
+                        removeOption(newStringOptions, setNewStringOptions, id)
+                      }
+                      onUpdate={(id, value) =>
+                        updateOption(
+                          newStringOptions,
+                          setNewStringOptions,
+                          id,
+                          value as string
+                        )
+                      }
+                      placeholder="Enter option value"
+                    />
+                  </Show>
                 </div>
               </Show>
             </div>
@@ -567,7 +575,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
             <div class="flex gap-2">
               <button
                 type="button"
-                class={`${BUTTON_BASE_CLASSES} ${SECONDARY_BUTTON_CLASSES}`}
+                class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.secondary}`}
                 onClick={() => {
                   resetCreateForm();
                   props.onClose();
@@ -579,7 +587,7 @@ export const CreatePropertyModal: Component<CreatePropertyModalProps> = (
             </div>
             <button
               type="button"
-              class={`${BUTTON_BASE_CLASSES} ${newPropertyName().trim() && !isCreatingProperty() ? PRIMARY_BUTTON_CLASSES : 'bg-ink-muted text-ink cursor-not-allowed'}`}
+              class={`${PROPERTY_STYLES.button.base} ${PROPERTY_STYLES.button.accent} ${newPropertyName().trim() && !isCreatingProperty() ? '' : 'cursor-not-allowed'}`}
               onClick={handleCreateProperty}
               disabled={!newPropertyName().trim() || isCreatingProperty()}
             >

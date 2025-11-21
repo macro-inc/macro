@@ -317,7 +317,7 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
       maxScale: 5,
       contain: 'outside',
       startScale: 1,
-      cursor: 'default',
+      cursor: 'var(--cursor-default)',
     });
 
     setPanzoomInstance(panzoom);
@@ -325,9 +325,9 @@ export const ImageGalleryPreview: Component<ImageGalleryPreviewProps> = (
     const updateCursor = () => {
       const scale = panzoom.getScale();
       if (scale <= 1.01) {
-        image.style.cursor = 'default';
+        image.style.cursor = 'var(--cursor-default)';
       } else {
-        image.style.cursor = 'grab';
+        image.style.cursor = 'var(--cursor-grab)';
       }
     };
 

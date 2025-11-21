@@ -9,7 +9,7 @@
 * There will always be a div in between the portal mount point and the actual
 * mounted component. We want to let the components render transparently.
 */
-.__decorator-mount-ref>div:first-child {
+.__decorator-mount-ref > div:first-child {
   display: contents;
 }
 
@@ -40,7 +40,7 @@
   padding-right: 0.15em;
 }
 
-.md-list.md-number>li::marker {
+.md-list.md-number > li::marker {
   font-variant-numeric: normal;
 }
 
@@ -48,15 +48,15 @@
   list-style: none;
 }
 
-.md-list>li {
+.md-list > li {
   position: relative;
 }
 
-.md-list>li:empty {
+.md-list > li:empty {
   min-height: 1.5em;
 }
 
-.md-list.md-bullet>li::before {
+.md-list.md-bullet > li::before {
   content: " ";
   width: 0.4em;
   height: 0.4em;
@@ -69,7 +69,7 @@
   background-color: currentcolor;
 }
 
-.md-list.md-check>li::before {
+.md-list.md-check > li::before {
   content: " ";
   width: 0.8em;
   height: 0.8em;
@@ -80,20 +80,22 @@
   outline: 2px solid currentcolor;
   background-color: transparent;
   border-radius: 0;
-  transition: background-color 0.2s ease, outline 0.1s ease;
+  transition:
+    background-color 0.2s ease,
+    outline 0.1s ease;
 }
 
-.md-list.md-check>li.checked::before {
+.md-list.md-check > li.checked::before {
   background-color: var(--color-accent);
   outline: 2px solid var(--color-accent);
 }
 
-.md-list.md-check>li.checked.chat-blue::before {
+.md-list.md-check > li.checked.chat-blue::before {
   background-color: var(--color-accent);
   outline: 2px solid var(--color-accent);
 }
 
-.md-list.md-check>li.checked::after {
+.md-list.md-check > li.checked::after {
   border-bottom: 2px solid var(--color-panel);
   border-left: 2px solid var(--color-panel);
   content: " ";
@@ -103,10 +105,12 @@
   left: -1.2em;
   top: 0.45em;
   transform: rotate(-45deg);
-  transition: background-color 0.2s ease, outline 0.1s ease;
+  transition:
+    background-color 0.2s ease,
+    outline 0.1s ease;
 }
 
-.md-list>li.nested::before {
+.md-list > li.nested::before {
   content: none;
   display: none;
 }
@@ -117,11 +121,11 @@ ol.static-md {
   list-style: none;
 }
 
-ol.static-md>li {
+ol.static-md > li {
   position: relative;
 }
 
-ol.static-md>li:not(.list-none)::before {
+ol.static-md > li:not(.list-none)::before {
   position: absolute;
   left: -1.5rem;
   text-align: right;
@@ -129,51 +133,51 @@ ol.static-md>li:not(.list-none)::before {
   padding-right: 0.25rem;
 }
 
-ol.static-md.depth-1>li:not(.list-none) {
+ol.static-md.depth-1 > li:not(.list-none) {
   counter-increment: static-md-counter-1;
 }
 
-ol.static-md.depth-1>li:not(.list-none)::before {
+ol.static-md.depth-1 > li:not(.list-none)::before {
   content: counter(static-md-counter-1) ". ";
 }
 
-ol.static-md.depth-2>li:not(.list-none) {
+ol.static-md.depth-2 > li:not(.list-none) {
   counter-increment: static-md-counter-2;
 }
 
-ol.static-md.depth-2>li:not(.list-none)::before {
+ol.static-md.depth-2 > li:not(.list-none)::before {
   content: counter(static-md-counter-2) ". ";
 }
 
-ol.static-md.depth-3>li:not(.list-none) {
+ol.static-md.depth-3 > li:not(.list-none) {
   counter-increment: static-md-counter-3;
 }
 
-ol.static-md.depth-3>li:not(.list-none)::before {
+ol.static-md.depth-3 > li:not(.list-none)::before {
   content: counter(static-md-counter-3) ". ";
 }
 
-ol.static-md.depth-4>li:not(.list-none) {
+ol.static-md.depth-4 > li:not(.list-none) {
   counter-increment: static-md-counter-4;
 }
 
-ol.static-md.depth-4>li:not(.list-none)::before {
+ol.static-md.depth-4 > li:not(.list-none)::before {
   content: counter(static-md-counter-4) ". ";
 }
 
-ol.static-md.depth-5>li:not(.list-none) {
+ol.static-md.depth-5 > li:not(.list-none) {
   counter-increment: static-md-counter-5;
 }
 
-ol.static-md.depth-5>li:not(.list-none)::before {
+ol.static-md.depth-5 > li:not(.list-none)::before {
   content: counter(static-md-counter-5) ". ";
 }
 
-ol.static-md.depth-6>li:not(.list-none) {
+ol.static-md.depth-6 > li:not(.list-none) {
   counter-increment: static-md-counter-6;
 }
 
-ol.static-md.depth-6>li:not(.list-none)::before {
+ol.static-md.depth-6 > li:not(.list-none)::before {
   content: counter(static-md-counter-6) ". ";
 }
 
@@ -196,7 +200,7 @@ ol.static-md.depth-6>li:not(.list-none)::before {
   text-decoration-thickness: max(0.1em, 1px);
 }
 
-.md-inline-mention>div {
+.md-inline-mention > div {
   display: contents;
 }
 
@@ -242,7 +246,7 @@ ol.static-md.depth-6>li:not(.list-none)::before {
   height: 400px;
   overflow: hidden;
 
-  >* {
+  > * {
     display: none;
   }
 }
@@ -291,14 +295,14 @@ ol.static-md.depth-6>li:not(.list-none)::before {
   margin: 0;
 }
 
-.md-table-frozen-row tr:nth-of-type(1)>td {
+.md-table-frozen-row tr:nth-of-type(1) > td {
   overflow: clip;
   position: sticky;
   z-index: 2;
   top: 44px;
 }
 
-.md-table-frozen-row tr:nth-of-type(1)>th {
+.md-table-frozen-row tr:nth-of-type(1) > th {
   overflow: clip;
   background-color: #f2f3f5;
   position: sticky;
@@ -306,8 +310,8 @@ ol.static-md.depth-6>li:not(.list-none)::before {
   top: 44px;
 }
 
-.md-table-frozen-row tr:nth-of-type(1)>th:after,
-.md-table-frozen-row tr:nth-of-type(1)>td:after {
+.md-table-frozen-row tr:nth-of-type(1) > th:after,
+.md-table-frozen-row tr:nth-of-type(1) > td:after {
   content: "";
   position: absolute;
   left: 0;
@@ -315,19 +319,19 @@ ol.static-md.depth-6>li:not(.list-none)::before {
   width: 100%;
 }
 
-.md-table-frozen-column tr>td:first-child {
+.md-table-frozen-column tr > td:first-child {
   position: sticky;
   z-index: 2;
   left: 0;
 }
 
-.md-table-frozen-column tr>th:first-child {
+.md-table-frozen-column tr > th:first-child {
   position: sticky;
   z-index: 2;
   left: 0;
 }
 
-.md-table-frozen-column tr> :first-child::after {
+.md-table-frozen-column tr > :first-child::after {
   content: "";
   position: absolute;
   left: 0;
@@ -363,7 +367,7 @@ ol.static-md.depth-6>li:not(.list-none)::before {
 A firefox workaround to allow scrolling of overflowing table cell
 ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
 */
-.md-table-cell>* {
+.md-table-cell > * {
   overflow: inherit;
 }
 
@@ -372,7 +376,7 @@ ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
   right: -4px;
   height: 100%;
   width: 8px;
-  cursor: ew-resize;
+  cursor: var(--cursor-ew-resize);
   z-index: 10;
   top: 0;
 }
@@ -402,7 +406,7 @@ ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
   height: 100%;
   animation: table-controls 0.2s ease;
   border: 0;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .md-table-add-columns:after {
@@ -429,7 +433,7 @@ ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
   width: calc(100% - 25px);
   animation: table-controls 0.2s ease;
   border: 0;
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
 }
 
 .md-table-add-columns:after {
@@ -482,7 +486,7 @@ ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
   width: 20px;
   height: 20px;
   color: var(--color-ink-muted);
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   background-color: transparent;
 }
 
@@ -491,7 +495,7 @@ ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
 }
 
 .md-editor-equation {
-  cursor: pointer;
+  cursor: var(--cursor-pointer);
   user-select: none;
 }
 
@@ -499,7 +503,7 @@ ref: https://bugzilla.mozilla.org/show_bug.cgi?id=1904159
   outline: 2px solid rgb(60, 132, 244);
 }
 
-.md-quote+.md-quote {
+.md-quote + .md-quote {
   margin-top: -1rem;
 }
 
@@ -510,7 +514,7 @@ mark {
 
 .md-mark {
   /* add a subtle bg to "default" marks and save comment styling for semantic comments */
-  background-color: oklch(from var(--color-ink-extra-muted) l c h /0.1);
+  background-color: oklch(from var(--color-ink-extra-muted) l c h / 0.1);
 }
 
 .md-mark.comment {
@@ -572,12 +576,12 @@ mark {
   padding: 0 2rem 0 4rem;
   background: rgb(from var(--color-failure-bg) r g b / 0.25);
 
-  >* {
+  > * {
     position: relative;
   }
 
   *::before {
-    content: '-';
+    content: "-";
     position: absolute;
     left: -2rem;
   }
@@ -588,12 +592,12 @@ mark {
   background: rgb(from var(--color-success-bg) r g b / 0.25);
 }
 
-.md-diff-insert>* {
+.md-diff-insert > * {
   position: relative;
 }
 
-.md-diff-insert>*::before {
-  content: '+';
+.md-diff-insert > *::before {
+  content: "+";
   position: absolute;
   left: -2rem;
 }

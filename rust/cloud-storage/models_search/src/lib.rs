@@ -8,6 +8,7 @@ pub mod chat;
 pub mod document;
 pub mod email;
 pub mod project;
+pub mod score;
 pub mod timestamp;
 pub mod unified;
 

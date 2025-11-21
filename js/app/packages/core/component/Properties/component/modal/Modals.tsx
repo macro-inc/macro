@@ -2,9 +2,11 @@ import { useBlockId } from '@core/block';
 import { DatePicker } from '@core/component/DatePicker';
 import { type Component, createMemo } from 'solid-js';
 import { Portal, Show } from 'solid-js/web';
-import { savePropertyValue } from '../../api/utils';
+import { saveEntityProperty } from '../../api';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
+import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
+import { useModalPosition } from '../../utils/position';
 import { CreatePropertyModal } from './CreatePropertyModal';
 import { EditPropertyValueModal } from './EditPropertyValueModal';
 import { SelectPropertyModal } from './SelectPropertyModal';
@@ -36,15 +38,22 @@ export const Modals: Component = () => {
   };
 
   const handleDateSaved = async (newDate: Date, property: Property) => {
-    const success = await savePropertyValue(
-      blockId,
-      property,
-      { valueType: 'DATE', value: newDate.toISOString() },
-      entityType
-    );
-    if (success) {
-      onRefresh();
+    const result = await saveEntityProperty(blockId, entityType, property, {
+      valueType: 'DATE',
+      value: newDate.toISOString(),
+    });
+
+    if (
+      !handlePropertyError(
+        result,
+        ERROR_MESSAGES.PROPERTY_SAVE,
+        'Modals.handleDateSaved'
+      )
+    ) {
+      return;
     }
+
+    onRefresh();
     closeDatePicker();
   };
 
@@ -59,25 +68,20 @@ export const Modals: Component = () => {
         <SelectPropertyModal
           isOpen={true}
           onClose={closePropertySelector}
-          existingPropertyIds={existingPropertyIds()}
+          existingPropertyIds={existingPropertyIds}
         />
       </Show>
 
       <Show when={propertyEditorModal()}>
         {(state) => {
-          const position = state().anchor
-            ? {
-                top: state().anchor!.getBoundingClientRect().top,
-                left: state().anchor!.getBoundingClientRect().left,
-              }
-            : undefined;
+          const position = useModalPosition(() => state().anchor);
 
           return (
             <EditPropertyValueModal
               property={state().property}
               onClose={closePropertyEditor}
               onSaved={handlePropertySaved}
-              position={position}
+              position={position()}
               entityType={entityType}
             />
           );
@@ -87,9 +91,8 @@ export const Modals: Component = () => {
       <Show when={datePickerModal()}>
         {(state) => {
           const property = state().property;
-          const dateValue = property.value
-            ? new Date(property.value)
-            : new Date();
+          const dateValue =
+            property.value != null ? new Date(property.value) : new Date();
           const anchor = state().anchor;
 
           return anchor ? (

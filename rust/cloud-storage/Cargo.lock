@@ -85,6 +85,7 @@ dependencies = [
  "async-trait",
  "chrono",
  "cool_asserts",
+ "email",
  "email_service_client",
  "insight_service_client",
  "lazy_static",
@@ -2786,11 +2787,38 @@ dependencies = [
 ]
 
 [[package]]
+name = "email"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "axum",
+ "chrono",
+ "frecency",
+ "macro_user_id",
+ "model-entity",
+ "model-error-response",
+ "model_user",
+ "models_pagination",
+ "schemars",
+ "serde",
+ "serde_json",
+ "serde_with",
+ "sqlx",
+ "strum",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "utoipa",
+ "uuid",
+]
+
+[[package]]
 name = "email_db_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "email_utils",
  "futures",
  "macro_db_migrator",
  "macro_uuid",
@@ -2858,7 +2886,9 @@ dependencies = [
  "connection_gateway",
  "document_storage_service_client",
  "ego-tree",
+ "email",
  "email_db_client",
+ "email_utils",
  "frecency",
  "futures",
  "gmail_client",
@@ -2914,6 +2944,7 @@ name = "email_service_client"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "email",
  "model",
  "models_email",
  "reqwest",
@@ -2940,6 +2971,10 @@ dependencies = [
  "strum",
  "tokio",
 ]
+
+[[package]]
+name = "email_utils"
+version = "0.1.0"
 
 [[package]]
 name = "email_validator"
@@ -4707,6 +4742,7 @@ dependencies = [
  "model",
  "model-entity",
  "models_dcs",
+ "models_opensearch",
  "models_pagination",
  "models_permissions",
  "models_search",
@@ -5355,6 +5391,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "models_opensearch"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "strum",
+]
+
+[[package]]
 name = "models_pagination"
 version = "0.1.0"
 dependencies = [
@@ -5403,6 +5448,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "item_filters",
+ "models_opensearch",
  "opensearch_client",
  "schemars",
  "serde",
@@ -5426,11 +5472,13 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "macro_user_id",
  "model-entity",
  "models_pagination",
  "serde",
  "strum",
  "utoipa",
+ "uuid",
 ]
 
 [[package]]
@@ -5742,6 +5790,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "macro_entrypoint",
+ "models_opensearch",
  "opensearch",
  "opensearch_query_builder",
  "serde",
@@ -5756,9 +5805,9 @@ dependencies = [
 
 [[package]]
 name = "opensearch_query_builder"
-version = "0.1.0"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2729a66d99a0d14cbda2d04888b5315c2312980558021e924a1a4690fdaa36b0"
+checksum = "fad14f01f6fddacf5c28f40c08384e206f68ecb135e253b01bcb5fd3af531472"
 dependencies = [
  "serde",
  "serde_json",
@@ -7150,6 +7199,7 @@ dependencies = [
  "schemars_derive",
  "serde",
  "serde_json",
+ "uuid",
 ]
 
 [[package]]
@@ -8144,6 +8194,7 @@ dependencies = [
  "chrono",
  "model",
  "models_email",
+ "models_opensearch",
  "serde",
  "serde_json",
  "strum",
