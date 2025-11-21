@@ -1,4 +1,6 @@
-use crate::{DOCUMENTS_INDEX, Result, date_format::EpochSeconds, error::OpensearchClientError};
+use models_opensearch::SearchIndex;
+
+use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
 
 /// The arguments for upserting a document into the opensearch index
 #[derive(Debug, serde::Serialize)]
@@ -100,7 +102,9 @@ async fn bulk_upsert_single_chunk(
     }
 
     let response = client
-        .bulk(opensearch::BulkParts::Index(DOCUMENTS_INDEX))
+        .bulk(opensearch::BulkParts::Index(
+            SearchIndex::Documents.as_ref(),
+        ))
         .body(bulk_body)
         .refresh(opensearch::params::Refresh::WaitFor) // Ensure consistency
         .send()
@@ -226,7 +230,10 @@ pub(crate) async fn upsert_document(
 ) -> Result<()> {
     let id = format!("{}:{}", args.document_id, args.node_id);
     let response = client
-        .index(opensearch::IndexParts::IndexId(DOCUMENTS_INDEX, &id))
+        .index(opensearch::IndexParts::IndexId(
+            SearchIndex::Documents.as_ref(),
+            &id,
+        ))
         .body(args)
         .send()
         .await
@@ -285,7 +292,9 @@ pub(crate) async fn update_document_metadata(
     });
 
     let response = client
-        .update_by_query(UpdateByQueryParts::Index(&[DOCUMENTS_INDEX]))
+        .update_by_query(UpdateByQueryParts::Index(
+            &[SearchIndex::Documents.as_ref()],
+        ))
         .body(query)
         .send()
         .await

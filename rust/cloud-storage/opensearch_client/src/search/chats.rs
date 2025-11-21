@@ -1,5 +1,5 @@
 use crate::{
-    CHAT_INDEX, Result, delegate_methods,
+    Result, delegate_methods,
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
@@ -10,6 +10,7 @@ use crate::{
 };
 
 use crate::SearchOn;
+use models_opensearch::SearchIndex;
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
     ToOpenSearchJson,
@@ -42,7 +43,6 @@ pub struct ChatSearchResponse {
 pub(crate) struct ChatSearchConfig;
 
 impl SearchQueryConfig for ChatSearchConfig {
-    const INDEX: &'static str = CHAT_INDEX;
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "title";
 
@@ -161,7 +161,9 @@ pub(crate) async fn search_chats(
     let query_body = args.build()?;
 
     let response = client
-        .search(opensearch::SearchParts::Index(&[CHAT_INDEX]))
+        .search(opensearch::SearchParts::Index(&[
+            SearchIndex::Chats.as_ref()
+        ]))
         .body(query_body)
         .send()
         .await

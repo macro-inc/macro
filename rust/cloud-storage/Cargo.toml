@@ -67,6 +67,7 @@ members = [
   "models_dcs",
   "models_email",
   "models_metering",
+  "models_opensearch",
   "models_pagination",
   "models_permissions",
   "models_properties",
