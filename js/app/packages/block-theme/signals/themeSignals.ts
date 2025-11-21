@@ -92,7 +92,7 @@ createEffect(() => {
   so this will do
 */
 export function toggleGutterSize(){
-  if(gutterSize() === 8){setGutterSize(4)}
+  if(gutterSize() === 8){setGutterSize(5)}
   else(setGutterSize(8));
 }
 
