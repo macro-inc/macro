@@ -707,7 +707,7 @@ export async function goToPdfLocation(location: PdfLocation): Promise<boolean> {
       // resets the highlight after a short delay
       return new Promise((resolve) => {
         setTimeout(() => {
-          this.findBarClose();
+          viewer.findBarClose();
           resolve(true);
         }, 2000);
       });
