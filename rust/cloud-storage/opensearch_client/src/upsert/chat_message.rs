@@ -1,4 +1,6 @@
-use crate::{CHAT_INDEX, Result, date_format::EpochSeconds, error::OpensearchClientError};
+use models_opensearch::SearchIndex;
+
+use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
 
 /// The arguments for upserting a chat message into the opensearch index
 #[derive(Debug, serde::Serialize)]
@@ -29,7 +31,10 @@ pub(crate) async fn upsert_chat_message(
 ) -> Result<()> {
     let id = format!("{}:{}", args.chat_id, args.chat_message_id);
     let response = client
-        .index(opensearch::IndexParts::IndexId(CHAT_INDEX, &id))
+        .index(opensearch::IndexParts::IndexId(
+            SearchIndex::Chats.as_ref(),
+            &id,
+        ))
         .body(args)
         .send()
         .await
@@ -90,7 +95,7 @@ pub(crate) async fn update_chat_metadata(
     });
 
     let response = client
-        .update_by_query(UpdateByQueryParts::Index(&[CHAT_INDEX]))
+        .update_by_query(UpdateByQueryParts::Index(&[SearchIndex::Chats.as_ref()]))
         .body(query)
         .send()
         .await

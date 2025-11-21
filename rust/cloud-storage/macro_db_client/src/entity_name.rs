@@ -1,12 +1,14 @@
+use models_opensearch::SearchEntityType;
+
 /// Gets the entity name for the provided entity id and entity type
 #[tracing::instrument(skip(db), err)]
 pub async fn get_entity_name(
     db: &sqlx::PgPool,
     entity_id: &uuid::Uuid,
-    entity_type: &str,
+    entity_type: &SearchEntityType,
 ) -> anyhow::Result<Option<String>> {
     let name: Option<String> = match entity_type {
-        "chats" => {
+        SearchEntityType::Chats => {
             sqlx::query!(
                 r#"
                 SELECT
@@ -22,7 +24,7 @@ pub async fn get_entity_name(
             .fetch_one(db)
             .await?
         }
-        "documents" => {
+        SearchEntityType::Documents => {
             sqlx::query!(
                 r#"
                 SELECT
@@ -38,7 +40,7 @@ pub async fn get_entity_name(
             .fetch_one(db)
             .await?
         }
-        "emails" => {
+        SearchEntityType::Emails => {
             sqlx::query!(
                 r#"
                 SELECT
@@ -55,7 +57,7 @@ pub async fn get_entity_name(
             .fetch_one(db)
             .await?
         }
-        "channels" => {
+        SearchEntityType::Channels => {
             sqlx::query!(
                 r#"
                 SELECT

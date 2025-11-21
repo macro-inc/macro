@@ -1,4 +1,6 @@
-use crate::{CHAT_INDEX, Result, error::OpensearchClientError};
+use models_opensearch::SearchIndex;
+
+use crate::{Result, error::OpensearchClientError};
 
 /// Deletes all email messages with the specified thread_id
 #[tracing::instrument(skip(client))]
@@ -15,7 +17,9 @@ pub async fn delete_email_by_thread_id(
     });
 
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[CHAT_INDEX]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
+            SearchIndex::Emails.as_ref(),
+        ]))
         .body(query)
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
@@ -64,7 +68,9 @@ pub async fn delete_email_by_link_id(client: &opensearch::OpenSearch, link_id: &
     });
 
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[CHAT_INDEX]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
+            SearchIndex::Emails.as_ref(),
+        ]))
         .body(query)
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
@@ -116,7 +122,9 @@ pub async fn delete_email_message_by_id(
     });
 
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[CHAT_INDEX]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
+            SearchIndex::Emails.as_ref(),
+        ]))
         .body(query)
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
@@ -165,7 +173,9 @@ pub async fn delete_email_by_user_id(client: &opensearch::OpenSearch, user_id: &
     });
 
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[CHAT_INDEX]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
+            SearchIndex::Emails.as_ref(),
+        ]))
         .body(query)
         .refresh(true) // Ensure the index reflects changes immediately
         .send()

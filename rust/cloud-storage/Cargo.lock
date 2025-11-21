@@ -4736,6 +4736,7 @@ dependencies = [
  "model",
  "model-entity",
  "models_dcs",
+ "models_opensearch",
  "models_pagination",
  "models_permissions",
  "models_search",
@@ -5384,6 +5385,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "models_opensearch"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "strum",
+]
+
+[[package]]
 name = "models_pagination"
 version = "0.1.0"
 dependencies = [
@@ -5432,6 +5442,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "item_filters",
+ "models_opensearch",
  "opensearch_client",
  "schemars",
  "serde",
@@ -5771,6 +5782,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "macro_entrypoint",
+ "models_opensearch",
  "opensearch",
  "opensearch_query_builder",
  "serde",
@@ -8174,6 +8186,7 @@ dependencies = [
  "chrono",
  "model",
  "models_email",
+ "models_opensearch",
  "serde",
  "serde_json",
  "strum",

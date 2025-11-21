@@ -1,6 +1,8 @@
 //! This module handles the upserting of entity names into the opensearch index
 
-use crate::{Result, SearchEntityType, SearchIndex, error::ResponseExt};
+use models_opensearch::{SearchEntityType, SearchIndex};
+
+use crate::{Result, error::ResponseExt};
 
 /// The arguments for upserting an entity name into the opensearch index
 #[derive(Debug, serde::Serialize)]

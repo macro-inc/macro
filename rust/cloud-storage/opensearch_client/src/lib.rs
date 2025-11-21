@@ -1,7 +1,6 @@
 pub mod date_format;
 pub mod delete;
 pub mod error;
-pub mod get_document;
 pub mod name;
 pub mod search;
 pub mod search_on;
@@ -28,46 +27,6 @@ use opensearch::{
     },
     indices::{IndicesCreateParts, IndicesExistsParts},
 };
-
-pub static DOCUMENTS_INDEX: &str = "documents";
-pub static CHAT_INDEX: &str = "chats";
-pub static EMAIL_INDEX: &str = "emails";
-pub static CHANNEL_INDEX: &str = "channels";
-pub static PROJECT_INDEX: &str = "projects";
-pub static NAME_INDEX: &str = "names";
-
-#[derive(Debug, Clone, Hash, Eq, PartialEq, strum::Display, strum::EnumString, strum::AsRefStr)]
-#[strum(serialize_all = "lowercase")]
-pub enum SearchIndex {
-    Channels,
-    Chats,
-    Documents,
-    Emails,
-    Projects,
-    Names,
-}
-
-/// The entity indices
-#[derive(
-    Debug,
-    Clone,
-    Hash,
-    Eq,
-    PartialEq,
-    strum::Display,
-    strum::EnumString,
-    strum::AsRefStr,
-    serde::Serialize,
-)]
-#[strum(serialize_all = "lowercase")]
-#[serde(rename_all = "lowercase")]
-pub enum SearchEntityType {
-    Channels,
-    Chats,
-    Documents,
-    Emails,
-    Projects,
-}
 
 #[derive(Clone, Debug)]
 pub struct OpensearchClient {

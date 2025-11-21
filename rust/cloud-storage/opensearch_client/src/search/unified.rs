@@ -1,8 +1,7 @@
 use std::collections::HashSet;
 
 use crate::{
-    CHANNEL_INDEX, CHAT_INDEX, DOCUMENTS_INDEX, EMAIL_INDEX, PROJECT_INDEX, Result,
-    SearchEntityType,
+    Result,
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::SearchQueryConfig,
@@ -30,6 +29,7 @@ use crate::{
 };
 
 use crate::SearchOn;
+use models_opensearch::{SearchEntityType, SearchIndex};
 use opensearch_query_builder::*;
 
 #[derive(Debug, Default, Clone)]
@@ -410,7 +410,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         let document_search_args: DocumentSearchArgs = args.clone().into();
         let document_query_builder: DocumentQueryBuilder = document_search_args.into();
         let mut document_bool_query = document_query_builder.build_bool_query()?;
-        document_bool_query.must(QueryType::term("_index", DOCUMENTS_INDEX));
+        document_bool_query.must(QueryType::term("_index", SearchIndex::Documents.as_ref()));
         bool_query.should(document_bool_query.build().into());
     }
 
@@ -418,7 +418,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         let email_search_args: EmailSearchArgs = args.clone().into();
         let email_query_builder: EmailQueryBuilder = email_search_args.into();
         let mut email_bool_query = email_query_builder.build_bool_query()?;
-        email_bool_query.must(QueryType::term("_index", EMAIL_INDEX));
+        email_bool_query.must(QueryType::term("_index", SearchIndex::Emails.as_ref()));
         bool_query.should(email_bool_query.build().into());
     }
 
@@ -427,7 +427,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         let channel_message_query_builder: ChannelMessageQueryBuilder =
             channel_message_search_args.into();
         let mut channel_message_bool_query = channel_message_query_builder.build_bool_query()?;
-        channel_message_bool_query.must(QueryType::term("_index", CHANNEL_INDEX));
+        channel_message_bool_query.must(QueryType::term("_index", SearchIndex::Channels.as_ref()));
         bool_query.should(channel_message_bool_query.build().into());
     }
 
@@ -435,7 +435,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         let chat_search_args: ChatSearchArgs = args.clone().into();
         let chat_query_builder: ChatQueryBuilder = chat_search_args.into();
         let mut chat_bool_query = chat_query_builder.build_bool_query()?;
-        chat_bool_query.must(QueryType::term("_index", CHAT_INDEX));
+        chat_bool_query.must(QueryType::term("_index", SearchIndex::Chats.as_ref()));
         bool_query.should(chat_bool_query.build().into());
     }
 
@@ -443,7 +443,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         let project_search_args: ProjectSearchArgs = args.clone().into();
         let project_query_builder: ProjectQueryBuilder = project_search_args.into();
         let mut project_bool_query = project_query_builder.build_bool_query()?;
-        project_bool_query.must(QueryType::term("_index", PROJECT_INDEX));
+        project_bool_query.must(QueryType::term("_index", SearchIndex::Projects.as_ref()));
         bool_query.should(project_bool_query.build().into());
     }
 
