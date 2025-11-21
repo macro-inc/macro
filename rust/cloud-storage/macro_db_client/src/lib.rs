@@ -9,6 +9,7 @@ pub mod dcs;
 pub mod document;
 pub mod document_text;
 pub mod docx_unzip;
+pub mod entity_name;
 pub mod experiment;
 pub mod experiment_log;
 pub mod history;

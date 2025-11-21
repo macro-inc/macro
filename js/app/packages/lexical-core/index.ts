@@ -28,3 +28,4 @@ export * from './plugins/nodeIdPlugin';
 export * from './plugins/peerIdPlugin';
 
 export * from './transformers';
+export * from './utils/mentions';

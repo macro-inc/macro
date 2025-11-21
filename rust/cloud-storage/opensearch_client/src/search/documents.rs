@@ -1,5 +1,5 @@
 use crate::{
-    DOCUMENTS_INDEX, Result, delegate_methods,
+    Result, delegate_methods,
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
@@ -9,6 +9,7 @@ use crate::{
 };
 
 use crate::SearchOn;
+use models_opensearch::SearchIndex;
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
     ToOpenSearchJson,
@@ -19,7 +20,6 @@ use serde_json::Value;
 pub(crate) struct DocumentSearchConfig;
 
 impl SearchQueryConfig for DocumentSearchConfig {
-    const INDEX: &'static str = DOCUMENTS_INDEX;
     const USER_ID_KEY: &'static str = "owner_id";
     const TITLE_KEY: &'static str = "document_name";
 
@@ -144,7 +144,9 @@ pub(crate) async fn search_documents(
     tracing::trace!("query: {}", query_body);
 
     let response = client
-        .search(opensearch::SearchParts::Index(&[DOCUMENTS_INDEX]))
+        .search(opensearch::SearchParts::Index(&[
+            SearchIndex::Documents.as_ref()
+        ]))
         .body(query_body)
         .send()
         .await

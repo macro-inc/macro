@@ -4,275 +4,59 @@
 @source '../../packages/core/component/LexicalMarkdown/theme.ts';
 @config '../../tailwind.config.ts';
 
-@property --a0l {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.88;
+/* custom cursor */
+/* must be imported inside base layer to prevent tag element default properties overriding TW cursor utility  */
+@layer base {
+  @import "./component/custom-cursor/custom-cursor.css";
 }
 
-@property --a0c {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.20;
-}
+@property --a0l { syntax: "<number>"; inherits: false; initial-value:   0.88; }
+@property --a0c { syntax: "<number>"; inherits: false; initial-value:   0.20; }
+@property --a0h { syntax: "<angle>";  inherits: false; initial-value: 145deg; }
+@property --a1l { syntax: "<number>"; inherits: false; initial-value:   0.61; }
+@property --a1c { syntax: "<number>"; inherits: false; initial-value:   0.37; }
+@property --a1h { syntax: "<angle>";  inherits: false; initial-value:  54deg; }
+@property --a2l { syntax: "<number>"; inherits: false; initial-value:   0.61; }
+@property --a2c { syntax: "<number>"; inherits: false; initial-value:   0.37; }
+@property --a2h { syntax: "<angle>";  inherits: false; initial-value:  94deg; }
+@property --a3l { syntax: "<number>"; inherits: false; initial-value:   0.61; }
+@property --a3c { syntax: "<number>"; inherits: false; initial-value:   0.37; }
+@property --a3h { syntax: "<angle>";  inherits: false; initial-value: 144deg; }
+@property --a4l { syntax: "<number>"; inherits: false; initial-value:   0.61; }
+@property --a4c { syntax: "<number>"; inherits: false; initial-value:   0.37; }
+@property --a4h { syntax: "<angle>";  inherits: false; initial-value: 194deg; }
 
-@property --a0h {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 145deg;
-}
+@property --b0l { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --b0c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --b0h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
+@property --b1l { syntax: "<number>"; inherits: false; initial-value:   0.15; }
+@property --b1c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --b1h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
+@property --b2l { syntax: "<number>"; inherits: false; initial-value:   0.16; }
+@property --b2c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --b2h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
+@property --b3l { syntax: "<number>"; inherits: false; initial-value:   0.18; }
+@property --b3c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --b3h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
+@property --b4l { syntax: "<number>"; inherits: false; initial-value:   0.36; }
+@property --b4c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --b4h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
 
-@property --a1l {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.61;
-}
-
-@property --a1c {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.37;
-}
-
-@property --a1h {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 54deg;
-}
-
-@property --a2l {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.61;
-}
-
-@property --a2c {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.37;
-}
-
-@property --a2h {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 94deg;
-}
-
-@property --a3l {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.61;
-}
-
-@property --a3c {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.37;
-}
-
-@property --a3h {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 144deg;
-}
-
-@property --a4l {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.61;
-}
-
-@property --a4c {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.37;
-}
-
-@property --a4h {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 194deg;
-}
-
-@property --b0l {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0;
-}
-
-@property --b0c {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0;
-}
-
-@property --b0h {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 14deg;
-}
-
-@property --b1l {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.15;
-}
-
-@property --b1c {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0;
-}
-
-@property --b1h {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 14deg;
-}
-
-@property --b2l {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.16;
-}
-
-@property --b2c {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0;
-}
-
-@property --b2h {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 14deg;
-}
-
-@property --b3l {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.18;
-}
-
-@property --b3c {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0;
-}
-
-@property --b3h {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 14deg;
-}
-
-@property --b4l {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.36;
-}
-
-@property --b4c {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0;
-}
-
-@property --b4h {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 14deg;
-}
-
-@property --c0l {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 1;
-}
-
-@property --c0c {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0;
-}
-
-@property --c0h {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 14deg;
-}
-
-@property --c1l {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.90;
-}
-
-@property --c1c {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0;
-}
-
-@property --c1h {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 14deg;
-}
-
-@property --c2l {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.80;
-}
-
-@property --c2c {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0;
-}
-
-@property --c2h {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 14deg;
-}
-
-@property --c3l {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.70;
-}
-
-@property --c3c {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0;
-}
-
-@property --c3h {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 14deg;
-}
-
-@property --c4l {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.60;
-}
-
-@property --c4c {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0;
-}
-
-@property --c4h {
-  syntax: "<angle>";
-  inherits: false;
-  initial-value: 14deg;
-}
+@property --c0l { syntax: "<number>"; inherits: false; initial-value:      1; }
+@property --c0c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --c0h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
+@property --c1l { syntax: "<number>"; inherits: false; initial-value:   0.90; }
+@property --c1c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --c1h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
+@property --c2l { syntax: "<number>"; inherits: false; initial-value:   0.80; }
+@property --c2c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --c2h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
+@property --c3l { syntax: "<number>"; inherits: false; initial-value:   0.70; }
+@property --c3c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --c3h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
+@property --c4l { syntax: "<number>"; inherits: false; initial-value:   0.60; }
+@property --c4c { syntax: "<number>"; inherits: false; initial-value:      0; }
+@property --c4h { syntax: "<angle>";  inherits: false; initial-value:  14deg; }
 
 @theme {
   --a0: oklch(var(--a0l) var(--a0c) var(--a0h));
@@ -303,20 +87,20 @@
   --c3: oklch(var(--c3l) var(--c3c) var(--c3h));
   --c4: oklch(var(--c4l) var(--c4c) var(--c4h));
 
-  --theme-folder: oklch(from var(--a0) l c 240deg);
-  --theme-canvas: oklch(from var(--a0) l c 60deg);
-  --theme-write: oklch(from var(--a0) l c 260deg);
-  --theme-video: oklch(from var(--a0) l c 277deg);
-  --theme-note: oklch(from var(--a0) l c 293deg);
-  --theme-code: oklch(from var(--a0) l c 162deg);
-  --theme-chat: oklch(from var(--a0) l c 220deg);
-  --theme-image: oklch(from var(--a0) l c 95deg);
-  --theme-html: oklch(from var(--a0) l c 47deg);
-  --theme-rss: oklch(from var(--a0) l c 260deg);
-  --theme-pdf: oklch(from var(--a0) l c 25deg);
-  --theme-comment: oklch(from var(--a0) l c 90deg);
+  --theme-folder:    oklch(from var(--a0) l c 240deg);
+  --theme-canvas:    oklch(from var(--a0) l c  60deg);
+  --theme-write:     oklch(from var(--a0) l c 260deg);
+  --theme-video:     oklch(from var(--a0) l c 277deg);
+  --theme-note:      oklch(from var(--a0) l c 293deg);
+  --theme-code:      oklch(from var(--a0) l c 162deg);
+  --theme-chat:      oklch(from var(--a0) l c 220deg);
+  --theme-image:     oklch(from var(--a0) l c  95deg);
+  --theme-html:      oklch(from var(--a0) l c  47deg);
+  --theme-rss:       oklch(from var(--a0) l c 260deg);
+  --theme-pdf:       oklch(from var(--a0) l c  25deg);
+  --theme-comment:   oklch(from var(--a0) l c  90deg);
 
-  /* Semantic Color names, use these when writing tailwind */
+/* Semantic Color names, use these when writing tailwind */
 
   /* text */
   --color-ink: var(--c0);
@@ -332,10 +116,10 @@
   --color-accent-ink: var(--a0);
   --color-accent-edge: var(--a0);
 
-  --color-accent-1: var(--a1);
-  --color-accent-2: var(--a2);
-  --color-accent-3: var(--a3);
-  --color-accent-4: var(--a4);
+  --color-accent-1 : var(--a1);
+  --color-accent-2 : var(--a2);
+  --color-accent-3 : var(--a3);
+  --color-accent-4 : var(--a4);
 
 
   --color-focus: var(--color-accent);
@@ -354,8 +138,7 @@
   /* message background */
   --color-message: var(--b3);
   /* overlay, e.g. modal background */
-  --color-overlay: oklch(from var(--b2) l c h / .5);
-  /* maybe break */
+  --color-overlay: oklch(from var(--b2) l c h / .5); /* maybe break */
   /* hover, e.g. hover state for buttons/items */
   --color-hover: var(--b2);
   /* elements that are selected or activated */
@@ -426,9 +209,9 @@
 
   /* SCUFFED We probably want to let the theme determine 3 or 4 "extra" hue offsets. Rights now these are only being */
   /* used as debug colors and to improve the consistency of markdown block lightness/chroma with themed css */
-  --color-accent-30: oklch(var(--a0l) var(--a0c) calc(var(--a0h) + 30deg));
-  --color-accent-60: oklch(var(--a0l) var(--a0c) calc(var(--a0h) + 60deg));
-  --color-accent-90: oklch(var(--a0l) var(--a0c) calc(var(--a0h) + 90deg));
+  --color-accent-30:  oklch(var(--a0l) var(--a0c) calc(var(--a0h) +  30deg));
+  --color-accent-60:  oklch(var(--a0l) var(--a0c) calc(var(--a0h) +  60deg));
+  --color-accent-90:  oklch(var(--a0l) var(--a0c) calc(var(--a0h) +  90deg));
   --color-accent-120: oklch(var(--a0l) var(--a0c) calc(var(--a0h) + 120deg));
   --color-accent-150: oklch(var(--a0l) var(--a0c) calc(var(--a0h) + 150deg));
   --color-accent-180: oklch(var(--a0l) var(--a0c) calc(var(--a0h) + 180deg));
@@ -450,8 +233,7 @@
   --color-focus: var(--color-panel);
 }
 
-.bg-panel,
-.bg-dialog {
+.bg-panel, .bg-dialog {
   --color-focus: var(--color-accent);
 }
 
@@ -529,7 +311,7 @@
       conic-gradient(from 0deg at bottom 2px left 2px, #0000 90deg, var(--color-focus) 0) 0 100% / 20px 20px border-box no-repeat,
       conic-gradient(from -90deg at bottom 2px right 2px, #0000 90deg, var(--color-focus) 0) 100% 100% / 20px 20px border-box no-repeat;
     z-index: 10;
-  }
+    }
 }
 
 @utility bracket-* {
@@ -563,15 +345,15 @@
 /* utils for striped bg images */
 @utility pattern-diagonal-* {
   background-image: linear-gradient(-45deg,
-      transparent 10%,
-      var(--pattern-color) 10%,
-      var(--pattern-color) 20%,
-      transparent 20%,
-      transparent 60%,
-      var(--pattern-color) 60%,
-      var(--pattern-color) 70%,
-      transparent 70%,
-      transparent);
+    transparent 10%,
+    var(--pattern-color) 10%,
+    var(--pattern-color) 20%,
+    transparent 20%,
+    transparent 60%,
+    var(--pattern-color) 60%,
+    var(--pattern-color) 70%,
+    transparent 70%,
+    transparent);
   background-size: --value(integer)px --value(integer)px;
 }
 
@@ -582,11 +364,12 @@
 }
 
 @utility pattern-scanline-* {
-  background-image: linear-gradient(to bottom,
-      transparent 0%,
-      var(--pattern-color) 30%,
-      var(--pattern-color) 70%,
-      transparent 100%);
+  background-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    var(--pattern-color) 30%,
+    var(--pattern-color) 70%,
+    transparent 100%);
   background-size: 100% --value(integer)px;
   background-repeat: repeat-y;
 }
@@ -596,12 +379,12 @@
 }
 
 @utility text-glow {
-  text-shadow: 0 0 0.5em rgb(from currentColor r g b / 40%), 0 0 0.01em rgb(from currentColor r g b / 50%);
+  text-shadow: 0 0 0.5em rgb( from currentColor r g b / 40%), 0 0 0.01em rgb( from currentColor r g b / 50%);
 }
 
 @utility text-glow-sm {
-  text-shadow: 0 0 0.2em rgb(from currentColor r g b / 15%), 0 0 0.05em rgb(from currentColor r g b / 25%);
-}
+    text-shadow: 0 0 0.2em rgb( from currentColor r g b / 15%), 0 0 0.05em rgb( from currentColor r g b / 25%);
+  }
 
 @utility optical-* {
   font-optical-sizing: none;
@@ -666,13 +449,9 @@
 }
 
 @utility scrollbar-hidden {
-  scrollbar-width: none;
-  /* Firefox */
-  -ms-overflow-style: none;
-
-  /* Internet Explorer 10+ */
-  &::-webkit-scrollbar {
-    /* Safari etc */
+  scrollbar-width: none;     /* Firefox */
+  -ms-overflow-style: none;  /* Internet Explorer 10+ */
+  &::-webkit-scrollbar {     /* Safari etc */
     display: none;
     width: 0;
     height: 0;
@@ -685,229 +464,211 @@
 }
 
 /** isolate the app-root stacking context from the kobalte dialog and modal stacking context */
-#root {
-  isolation: isolate;
-}
+#root { isolation: isolate; }
 
 @theme default {
-  /* Font families */
-  --font-sans: "Forma Macro", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
-  --font-mono: "Forma DJR Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-  --font-serif: "Georgia", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
+    /* Font families */
+    --font-sans: "Forma Macro", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+    --font-mono: "Forma DJR Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    --font-serif: "Georgia", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 
-  /* Colors */
-  --color-macro-accent: #00c4ff;
-  --color-macro-input-border: #e4e4e4;
-  --color-macro-doc: #F9FAFB;
+    /* Colors */
+    --color-macro-accent: #00c4ff;
+    --color-macro-input-border: #e4e4e4;
+    --color-macro-doc: #F9FAFB;
 
-  /* Transitions */
-  --transition-duration-quick: 20ms;
-  --transition-duration-slow: 100ms;
-  --ease-click: cubic-bezier(.18, .91, .27, 1.14);
+    /* Transitions */
+    --transition-duration-quick: 20ms;
+    --transition-duration-slow: 100ms;
+    --ease-click: cubic-bezier(.18,.91,.27,1.14);
 
-  /* Animations */
-  --animate-hide: hide 100ms ease-in;
-  --animate-slide-in: slideIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
-  --animate-swipe-out: swipeOut 100ms ease-out;
-  --animate-typing-dot: typing-dot 1s infinite;
+   /* Animations */
+   --animate-hide: hide 100ms ease-in;
+   --animate-slide-in: slideIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
+   --animate-swipe-out: swipeOut 100ms ease-out;
+   --animate-typing-dot: typing-dot 1s infinite;
 
-  @keyframes hide {
-    from {
-      opacity: 1;
+    @keyframes hide {
+        from {
+            opacity: 1;
+        }
+
+        to {
+            opacity: 0;
+        }
     }
 
-    to {
-      opacity: 0;
-    }
-  }
+    @keyframes slideIn {
+        from {
+            transform: translateX(calc(100% + var(--viewport-padding)));
+        }
 
-  @keyframes slideIn {
-    from {
-      transform: translateX(calc(100% + var(--viewport-padding)));
-    }
-
-    to {
-      transform: translateX(0);
-    }
-  }
-
-  @keyframes swipeOut {
-    from {
-      transform: translateX(var(--kb-toast-swipe-end-x));
+        to {
+            transform: translateX(0);
+        }
     }
 
-    to {
-      transform: translateX(calc(100% + var(--viewport-padding)));
-    }
-  }
+    @keyframes swipeOut {
+        from {
+            transform: translateX(var(--kb-toast-swipe-end-x));
+        }
 
-  @keyframes typing-dot {
-    0% {
-      transform: scale(1) translateY(0);
-    }
-
-    50% {
-      transform: scale(1.5) translateY(-2px);
+        to {
+            transform: translateX(calc(100% + var(--viewport-padding)));
+        }
     }
 
-    100% {
-      transform: scale(1) translateY(0);
+    @keyframes typing-dot {
+        0% {
+            transform: scale(1) translateY(0);
+        }
+
+        50% {
+            transform: scale(1.5) translateY(-2px);
+        }
+
+        100% {
+            transform: scale(1) translateY(0);
+        }
     }
-  }
 
-  --container-c: 0;
+    --container-c: 0;
 
-  /* --shadow-*: initial; */
-  --radius-sm: 6px;
-  --radius-md: 6px;
-  --radius-lg: 6px;
-  --radius-xl: 6px;
-  --radius-2xl: 6px;
-  --radius-3xl: 6px;
+    /* --shadow-*: initial; */
+    --radius-sm: 6px;
+    --radius-md: 6px;
+    --radius-lg: 6px;
+    --radius-xl: 6px;
+    --radius-2xl: 6px;
+    --radius-3xl: 6px;
 }
 
 @custom-variant drop-valid (&[data-drop-valid]);
 @custom-variant drop-invalid (&[data-drop-invalid]);
 
 @layer base {
-  html {
-    overscroll-behavior: none;
-  }
+    html {
+        overscroll-behavior: none;
+    }
 
-  /* Custom cursor is set via JavaScript in index.tsx to match theme accent color */
+    /* Custom cursor is set via JavaScript in index.tsx to match theme accent color */
 
-  body {
-    @apply overflow-clip overscroll-none relative m-0 p-0 font-sans optical-auto;
+    body {
+        @apply overflow-clip overscroll-none relative m-0 p-0 font-sans optical-auto;
 
-    /* SCUFFED; surface might change to surface2  */
-    background-color: var(--b3);
+        /* SCUFFED; surface might change to surface2  */
+        background-color: var(--b3);
 
-    width: 100dvw;
-    height: 100dvh;
+        width: 100dvw;
+        height: 100dvh;
 
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
 
-    font-size: 16.5px;
-    /* Need to set opsz here so that it will apply to MD */
-    font-variation-settings: "opsz" 11;
-    font-synthesis: none;
+        font-size: 16.5px;
+        /* Need to set opsz here so that it will apply to MD */
+        font-variation-settings: "opsz" 11;
+        font-synthesis: none;
 
-    color: var(--color-ink);
-  }
+        color: var(--color-ink);
+    }
 
-  @font-face {
-    font-family: "oooh-baby";
-    src: url("./asset/fonts/OoohBaby-Regular.woff2") format("truetype");
-  }
+    @font-face {
+        font-family: "oooh-baby";
+        src: url("./asset/fonts/OoohBaby-Regular.woff2") format("truetype");
+    }
 
-  @font-face {
-    font-family: "Forma Macro";
-    src: url("./asset/fonts/FormaMacroVariable.woff2") format("woff2");
-    font-weight: 200 700;
-    font-style: oblique 0deg 13deg;
-    font-feature-settings: "ss17" on, "calt", "liga", "rlig", "rvrn", "kern", "rclt";
+    @font-face {
+      font-family: "Forma Macro";
+      src: url("./asset/fonts/FormaMacroVariable.woff2") format("woff2");
+      font-weight: 200 700;
+      font-style: oblique 0deg 13deg;
+      font-feature-settings: "ss17" on, "calt", "liga", "rlig", "rvrn", "kern", "rclt";
 
-    font-display: swap;
-    /* ascent-override: 100%; No longer needed but keeping just in case */
-  }
+      font-display: swap;
+      /* ascent-override: 100%; No longer needed but keeping just in case */
+    }
 
-  @font-face {
-    font-family: "Forma Macro Mono";
-    src: url("./asset/fonts/FormaMacroMonoVariable.woff2") format("woff2");
-    font-weight: 200 700;
-    font-style: normal italic;
-    font-display: swap;
-    font-feature-settings: "ss11" on, "ss19" on, "calt", "liga", "rlig", "rvrn", "kern", "rclt";
-  }
+    @font-face {
+      font-family: "Forma Macro Mono";
+      src: url("./asset/fonts/FormaMacroMonoVariable.woff2") format("woff2");
+      font-weight: 200 700;
+      font-style: normal italic;
+      font-display: swap;
+      font-feature-settings: "ss11" on, "ss19" on, "calt", "liga", "rlig", "rvrn", "kern", "rclt";
+    }
 
-  .text-xs {
-    @apply optical-9;
-  }
+    .text-xs { @apply optical-9; }
+    .text-sm { @apply optical-10; }
+    .text-base { @apply optical-11; }
+    .text-xl { @apply optical-15; }
+    .text-2xl { @apply optical-27; }
 
-  .text-sm {
-    @apply optical-10;
-  }
+    /* This is ugly, and we can probably do better, but it stops text from being selectable by default, which is important for mobile usage */
+    :where(*, ::before, ::after) {
+        user-select: none;
+    }
 
-  .text-base {
-    @apply optical-11;
-  }
+    :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
+        user-select: text;
+    }
 
-  .text-xl {
-    @apply optical-15;
-  }
+    *:focus-visible {
+        position: relative;
+    }
 
-  .text-2xl {
-    @apply optical-27;
-  }
-
-  /* This is ugly, and we can probably do better, but it stops text from being selectable by default, which is important for mobile usage */
-  :where(*, ::before, ::after) {
-    user-select: none;
-  }
-
-  :where(input, textarea, select, p *, p span, .pdfViewer *, .markdown-content *, [contenteditable], .md *) {
-    user-select: text;
-  }
-
-  *:focus-visible {
-    position: relative;
-  }
-
-  html[data-modality="keyboard"] .focus-bracket-within:focus-within {
-    position: relative;
-  }
+    html[data-modality="keyboard"] .focus-bracket-within:focus-within {
+        position: relative;
+    }
 
   code {
     @apply font-mono;
   }
 }
 
-@layer components {}
-
+@layer components {
+}
 /* Option to add to focusable elements */
 html[data-modality="keyboard"] .focus-bracket:focus-visible::after {
-  position: absolute;
-  display: block;
-  content: "";
-  inset: var(--focus-border-inset, 0);
-  @apply util-bracket-bg-image;
-  pointer-events: none;
+    position: absolute;
+    display: block;
+    content: "";
+    inset: var(--focus-border-inset, 0);
+    @apply util-bracket-bg-image;
+    pointer-events: none;
 }
 
 /* Add to focusable elements that can't render ::after psuedo class like radio input */
 html[data-modality="keyboard"] .focus-bracket-within:focus-within::after {
-  position: absolute;
-  display: block;
-  content: "";
-  inset: var(--focus-border-inset, 0);
-  @apply util-bracket-bg-image;
-  pointer-events: none;
+    position: absolute;
+    display: block;
+    content: "";
+    inset: var(--focus-border-inset, 0);
+    @apply util-bracket-bg-image;
+    pointer-events: none;
 }
 
 
 /* Applies to almost all focusable elements  */
 html[data-modality="keyboard"] :focus-visible::after {
-  position: absolute;
-  display: block;
-  content: "";
-  inset: var(--focus-border-inset, 0);
-  @apply util-bracket-bg-image;
-  pointer-events: none;
+    position: absolute;
+    display: block;
+    content: "";
+    inset: var(--focus-border-inset, 0);
+    @apply util-bracket-bg-image;
+    pointer-events: none;
 }
 
 /* Use class 'suppress-css-brackets' to suppress the focus bracket on descendants */
 html[data-modality="keyboard"] .suppress-css-brackets *:focus-visible::after {
-  content: none;
+    content: none;
 }
-
 html[data-modality="keyboard"] .suppress-css-bracket:focus-visible::after {
-  content: none;
+    content: none;
 }
 
 /* Use class 'allow-css-brackets' to re-enable focus brackets inside a suppressed container */
-html[data-modality="keyboard"] .suppress-css-brackets .allow-css-brackets *:focus-visible::after,
-html[data-modality="mouse"] .suppress-css-brackets .allow-css-brackets *:focus-visible::after {
+html[data-modality="keyboard"] .suppress-css-brackets .allow-css-brackets *:focus-visible::after, html[data-modality="mouse"] .suppress-css-brackets .allow-css-brackets *:focus-visible::after {
   position: absolute;
   display: block;
   content: "";
@@ -919,24 +680,24 @@ html[data-modality="mouse"] .suppress-css-brackets .allow-css-brackets *:focus-v
 html[data-modality="keyboard"] input:focus-visible::after,
 html[data-modality="keyboard"] textarea:focus-visible::after,
 html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
-  display: none;
+    display: none;
 }
 
 @utility no-select-children {
-  * {
-    user-select: none;
-  }
+    * {
+        user-select: none;
+    }
 }
 
 @utility select-children {
-  * {
-    user-select: text;
-  }
+    * {
+        user-select: text;
+    }
 }
 
 @utility bg-modal-overlay {
-  background-color: var(--color-overlay);
-  --pattern-color: color-mix(in srgb, var(--color-overlay), var(--color-ink) 2%);
+    background-color: var(--color-overlay);
+    --pattern-color: color-mix(in srgb, var(--color-overlay), var(--color-ink) 2%);
 }
 
 @utility bg-modal-overlay-konsole {
@@ -945,222 +706,219 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 }
 
 @utility portal-scope {
-  --documentation: "Set this element as a bounding scope for the ScopedPortal component";
+    --documentation: "Set this element as a bounding scope for the ScopedPortal component";
 }
 
 @utility macro-message-width {
-  @media (min-width: 640px) {
-    max-width: 800px;
-    min-width: 250px;
-  }
+    @media (min-width: 640px) {
+        max-width: 800px;
+        min-width: 250px;
+    }
 
-  @container (width < 816px) {
-    margin-inline: calc(var(--spacing) * 4);
-  }
-
-  @container (width < 640px) {
-    margin-inline: calc(var(--spacing) * 2);
-  }
+    @container (width < 816px) {
+        margin-inline: calc(var(--spacing) * 4);
+    }
+    @container (width < 640px) {
+        margin-inline: calc(var(--spacing) * 2);
+    }
 
 }
 
 
 
 ::-webkit-scrollbar {
-  height: 8px;
-  /* Thickness of horizontal scrollbar */
-  width: 8px;
-  /* Thickness of vertical scrollbar */
-  overflow: auto;
+    height: 8px;
+    /* Thickness of horizontal scrollbar */
+    width: 8px;
+    /* Thickness of vertical scrollbar */
+    overflow: auto;
 }
 
 ::-webkit-scrollbar-thumb {
-  background: oklch(from var(--color-edge) l c h / 0.5);
-  border-radius: 10px;
-  margin: 2px;
+    background: oklch(from var(--color-edge) l c h / 0.5);
+    border-radius: 10px;
+    margin: 2px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--color-edge);
+    background: var(--color-edge);
 }
 
 :focus-visible {
-  outline: none;
+    outline: none;
 }
 
 [type="file"]:focus {
-  outline: none;
+    outline: none;
 }
 
 /* Prevent up/down arrows showing in Firefox */
 input[type="number"] {
-  -moz-appearance: textfield;
+    -moz-appearance: textfield;
 }
 
 input[type="number"]::-webkit-inner-spin-button,
 input[type="number"]::-webkit-outer-spin-button {
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  margin: 0;
+    -webkit-appearance: none;
+    -moz-appearance: none;
+    appearance: none;
+    margin: 0;
 }
 
 .chat-markdown-container {
 
-  .table-container,
-  .katex-display,
-  pre {
-    overflow-x: auto;
-    overflow-y: hidden;
-  }
+    .table-container,
+    .katex-display,
+    pre {
+        overflow-x: auto;
+        overflow-y: hidden;
+    }
 }
 
 .no-touch-callout {
-  -webkit-touch-callout: none;
-  -webkit-user-select: none;
-  -khtml-user-select: none;
-  -moz-user-select: none;
-  -ms-user-select: none;
-  user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-user-select: none;
+    -khtml-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
 }
 
 @media (pointer: coarse) {
-  .md-table-cell-resizer {
-    background-color: #adf;
-    mix-blend-mode: color;
-  }
+    .md-table-cell-resizer {
+        background-color: #adf;
+        mix-blend-mode: color;
+    }
 }
 
 .media-error {
-  background-size: 8px 8px;
-  background-image: linear-gradient(-45deg, transparent 10%, var(--color-edge-muted) 10%, var(--color-edge-muted) 20%, transparent 10%, transparent 60%, var(--color-edge-muted) 60%, var(--color-edge-muted) 70%, transparent 70%, transparent);
+    background-size: 8px 8px;
+    background-image: linear-gradient(-45deg, transparent 10%, var(--color-edge-muted) 10%, var(--color-edge-muted) 20%, transparent 10%, transparent 60%, var(--color-edge-muted) 60%, var(--color-edge-muted) 70%, transparent 70%, transparent);
 }
 
 [cmdk-list] {
-  height: var(--cmdk-list-height);
-  max-height: 500px;
-  transition: height 100ms ease;
-  overflow: auto;
+    height: var(--cmdk-list-height);
+    max-height: 500px;
+    transition: height 100ms ease;
+    overflow: auto;
 }
 
 .dotted-banner {
-  position: relative;
+    position: relative;
 }
 
 .dotted-banner::before {
-  content: '';
-  position: absolute;
-  top: 20%;
-  left: 0;
-  right: 0;
-  height: 60%;
-  background-image:
-    radial-gradient(circle, var(--color-accent) .5px, transparent .5px),
-    radial-gradient(circle, var(--color-accent) .5px, transparent .5px);
-  background-size: 8px 8px;
-  background-position: 0 0, 4px 4px;
-  /* Offset second layer by half */
-  z-index: 0;
-  pointer-events: none;
+    content: '';
+    position: absolute;
+    top: 20%;
+    left: 0;
+    right: 0;
+    height: 60%;
+    background-image:
+        radial-gradient(circle, var(--color-accent) .5px, transparent .5px),
+        radial-gradient(circle, var(--color-accent) .5px, transparent .5px);
+    background-size: 8px 8px;
+    background-position: 0 0, 4px 4px;
+    /* Offset second layer by half */
+    z-index: 0;
+    pointer-events: none;
 }
 
 .dotted-banner>div {
-  position: relative;
-  z-index: 1;
-  width: auto;
+    position: relative;
+    z-index: 1;
+    width: auto;
 }
 
 @property --pulse-width {
-  syntax: "<length>";
-  initial-value: .5px;
-  inherits: true;
+    syntax: "<length>";
+    initial-value: .5px;
+    inherits: true;
 }
 
 .pulse-corners {
-  --pulse-width: 1px;
-  --pulse-length: 50%;
+    --pulse-width: 1px;
+    --pulse-length: 50%;
 }
 
 @keyframes pulse-lines-reverse {
-  0% {
-    background-size:
-      0% var(--pulse-width),
-      0% var(--pulse-width),
-      0% var(--pulse-width),
-      0% var(--pulse-width),
-      var(--pulse-width) 0%,
-      var(--pulse-width) 0%,
-      var(--pulse-width) 0%,
-      var(--pulse-width) 0%;
-    opacity: 1;
-  }
+    0% {
+        background-size:
+            0% var(--pulse-width),
+            0% var(--pulse-width),
+            0% var(--pulse-width),
+            0% var(--pulse-width),
+            var(--pulse-width) 0%,
+            var(--pulse-width) 0%,
+            var(--pulse-width) 0%,
+            var(--pulse-width) 0%;
+        opacity: 1;
+    }
 
-  40% {
-    background-size:
-      var(--pulse-length) var(--pulse-width),
-      var(--pulse-length) var(--pulse-width),
-      var(--pulse-length) var(--pulse-width),
-      var(--pulse-length) var(--pulse-width),
-      var(--pulse-width) var(--pulse-length),
-      var(--pulse-width) var(--pulse-length),
-      var(--pulse-width) var(--pulse-length),
-      var(--pulse-width) var(--pulse-length);
-    opacity: 1;
-  }
+    40% {
+        background-size:
+            var(--pulse-length) var(--pulse-width),
+            var(--pulse-length) var(--pulse-width),
+            var(--pulse-length) var(--pulse-width),
+            var(--pulse-length) var(--pulse-width),
+            var(--pulse-width) var(--pulse-length),
+            var(--pulse-width) var(--pulse-length),
+            var(--pulse-width) var(--pulse-length),
+            var(--pulse-width) var(--pulse-length);
+        opacity: 1;
+    }
 
-  100% {
-    background-size:
-      var(--pulse-length) var(--pulse-width),
-      var(--pulse-length) var(--pulse-width),
-      var(--pulse-length) var(--pulse-width),
-      var(--pulse-length) var(--pulse-width),
-      var(--pulse-width) var(--pulse-length),
-      var(--pulse-width) var(--pulse-length),
-      var(--pulse-width) var(--pulse-length),
-      var(--pulse-width) var(--pulse-length);
-    opacity: 0;
-  }
+    100% {
+        background-size:
+            var(--pulse-length) var(--pulse-width),
+            var(--pulse-length) var(--pulse-width),
+            var(--pulse-length) var(--pulse-width),
+            var(--pulse-length) var(--pulse-width),
+            var(--pulse-width) var(--pulse-length),
+            var(--pulse-width) var(--pulse-length),
+            var(--pulse-width) var(--pulse-length),
+            var(--pulse-width) var(--pulse-length);
+        opacity: 0;
+    }
 }
 
 .pulse-corners::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background:
-    /* Top edge */
-    linear-gradient(90deg, var(--color-accent), var(--color-accent)) top center,
-    linear-gradient(90deg, var(--color-accent), var(--color-accent)) top center,
-    /* Bottom edge */
-    linear-gradient(90deg, var(--color-accent), var(--color-accent)) bottom center,
-    linear-gradient(90deg, var(--color-accent), var(--color-accent)) bottom center,
-    /* Left edge */
-    linear-gradient(180deg, var(--color-accent), var(--color-accent)) center left,
-    linear-gradient(180deg, var(--color-accent), var(--color-accent)) center left,
-    /* Right edge */
-    linear-gradient(180deg, var(--color-accent), var(--color-accent)) center right,
-    linear-gradient(180deg, var(--color-accent), var(--color-accent)) center right;
-  background-size: 0% 1px, 0% 1px, 0% 1px, 0% 1px, 1px 0%, 1px 0%, 1px 0%, 1px 0%;
-  background-repeat: no-repeat;
-  background-position:
-    top left, top right, bottom left, bottom right,
-    top left, bottom left, top right, bottom right;
-  pointer-events: none;
-  animation: pulse-lines-reverse .7s ease-out .1s forwards;
+    content: '';
+    position: absolute;
+    inset: 0;
+    background:
+        /* Top edge */
+        linear-gradient(90deg, var(--color-accent), var(--color-accent)) top center,
+        linear-gradient(90deg, var(--color-accent), var(--color-accent)) top center,
+        /* Bottom edge */
+        linear-gradient(90deg, var(--color-accent), var(--color-accent)) bottom center,
+        linear-gradient(90deg, var(--color-accent), var(--color-accent)) bottom center,
+        /* Left edge */
+        linear-gradient(180deg, var(--color-accent), var(--color-accent)) center left,
+        linear-gradient(180deg, var(--color-accent), var(--color-accent)) center left,
+        /* Right edge */
+        linear-gradient(180deg, var(--color-accent), var(--color-accent)) center right,
+        linear-gradient(180deg, var(--color-accent), var(--color-accent)) center right;
+    background-size: 0% 1px, 0% 1px, 0% 1px, 0% 1px, 1px 0%, 1px 0%, 1px 0%, 1px 0%;
+    background-repeat: no-repeat;
+    background-position:
+        top left, top right, bottom left, bottom right,
+        top left, bottom left, top right, bottom right;
+    pointer-events: none;
+    animation: pulse-lines-reverse .7s ease-out .1s forwards;
 }
 
 @keyframes flicker {
-
-  0%,
-  49% {
-    opacity: 0;
-  }
-
-  50%,
-  100% {
-    opacity: 1;
-  }
+    0%,
+    49% {
+        opacity: 0;
+    }
+    50%,
+    100% {
+        opacity: 1;
+    }
 }
 
-.portal-child-collapse>div {
+.portal-child-collapse > div {
   display: contents;
 }
