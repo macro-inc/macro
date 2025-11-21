@@ -100,6 +100,9 @@
   --theme-pdf:       oklch(from var(--a0) l c  25deg);
   --theme-comment:   oklch(from var(--a0) l c  90deg);
 
+  --gutter-size: 8px;
+  --transition: 0.2s;
+
 /* Semantic Color names, use these when writing tailwind */
 
   /* text */

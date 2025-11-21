@@ -52,7 +52,7 @@ import customCursorCSSFileRaw from './custom-cursor.css?raw';
 let defaultCursor: string = '';
 let hexColor: string = '';
 let cursorCache: Record<string, string> = {};
-let currentCursorType: string | null = 'auto';
+let _currentCursorType: string | null = 'auto';
 const styleElements = new Set<HTMLStyleElement>();
 
 export const [customCursorEnabled, setCustomCursorEnabled] = createSignal(true);
@@ -315,7 +315,7 @@ const cursorClassPrefix = createUniqueId();
 const getCursorClassFromKey = (key: string) => {
   return `${cursorClassPrefix}-${key}`;
 };
-const allCustomCursorClasses = Object.keys(cursorSvgMap).map((key) =>
+const _allCustomCursorClasses = Object.keys(cursorSvgMap).map((key) =>
   getCursorClassFromKey(key)
 );
 

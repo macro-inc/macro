@@ -152,7 +152,7 @@ export function Dock() {
 
       <div
         style={{
-          'padding': '0 0.5rem 0.5rem 0.5rem',
+          'padding': '0 var(--gutter-size) var(--gutter-size) var(--gutter-size)',
           'height': 'calc(40px + 0.5rem)',
           'box-sizing': 'border-box',
           'width': '100vw'

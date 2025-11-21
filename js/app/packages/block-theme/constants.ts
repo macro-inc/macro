@@ -1,7 +1,9 @@
 import type { ThemeV1 } from './types/themeTypes';
 
-export const DEFAULT_DARK_THEME: DefaultTheme = 'Macro Dark';
 export const DEFAULT_LIGHT_THEME: DefaultTheme = 'Macro Light';
+export const DEFAULT_DARK_THEME: DefaultTheme = 'Macro Dark';
+export const BEVELED_CORNERS: boolean = false;
+
 
 export const DEFAULT_THEMES = [
   {
