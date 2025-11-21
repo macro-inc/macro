@@ -1,4 +1,6 @@
-use crate::{EMAIL_INDEX, Result, date_format::EpochSeconds, error::OpensearchClientError};
+use models_opensearch::SearchIndex;
+
+use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
 
 /// The arguments for upserting an email message into the opensearch index
 #[derive(Debug, serde::Serialize)]
@@ -39,7 +41,10 @@ pub(crate) async fn upsert_email_message(
 ) -> Result<()> {
     let id = format!("{}:{}", args.thread_id, args.message_id);
     let response = client
-        .index(opensearch::IndexParts::IndexId(EMAIL_INDEX, &id))
+        .index(opensearch::IndexParts::IndexId(
+            SearchIndex::Emails.as_ref(),
+            &id,
+        ))
         .body(args)
         .send()
         .await

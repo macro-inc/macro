@@ -2,16 +2,6 @@ use std::{collections::HashMap, fmt::Display};
 
 use crate::search::query::Keys;
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, strum::Display, strum::EnumString, strum::AsRefStr)]
-#[strum(serialize_all = "lowercase")]
-pub enum SearchIndex {
-    Channels,
-    Chats,
-    Documents,
-    Emails,
-    Projects,
-}
-
 /// macro open/close tags for highlight matches
 #[derive(Debug, PartialEq)]
 pub(crate) enum MacroEm {

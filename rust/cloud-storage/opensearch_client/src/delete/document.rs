@@ -1,4 +1,6 @@
-use crate::{DOCUMENTS_INDEX, Result, error::OpensearchClientError};
+use models_opensearch::SearchIndex;
+
+use crate::{Result, error::OpensearchClientError};
 
 /// Deletes all document nodes with the specified document_id
 #[tracing::instrument(skip(client))]
@@ -16,7 +18,9 @@ pub async fn delete_document_by_id(
     });
 
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[DOCUMENTS_INDEX]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
+            SearchIndex::Documents.as_ref(),
+        ]))
         .body(query)
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
@@ -69,7 +73,9 @@ pub async fn delete_document_by_owner_id(
     });
 
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[DOCUMENTS_INDEX]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
+            SearchIndex::Documents.as_ref(),
+        ]))
         .body(query)
         .refresh(true) // Ensure the index reflects changes immediately
         .send()
