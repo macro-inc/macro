@@ -2,7 +2,7 @@
 
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { TabContent } from '@core/component/TabContent';
-import { ENABLE_CUSTOM_CURSOR } from '@core/constant/featureFlags';
+import { ENABLE_CUSTOM_CURSOR, ENABLE_SOUND } from '@core/constant/featureFlags';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { createEffect, createSignal, Show } from 'solid-js';
 import { ThemeEditorAdvanced } from '../../../block-theme/components/ThemeEditorAdvanced';
@@ -107,69 +107,72 @@ export function Appearance() {
             'font-size': '14px',
           }}
         >
-          <div
-            style={{
-              display: 'flex',
-              'align-items': 'center',
-              'justify-content': 'space-between',
-            }}
-          >
-            <span>Sound effects</span>
-            <ToggleSwitch
-              checked={soundEnabled()}
-              onChange={(enabled) => setSoundEnabled(enabled)}
-            />
-          </div>
-          <div
-            style={{
-              display: 'flex',
-              'align-items': 'center',
-              gap: '12px',
-            }}
-          >
-            <span style={{ 'min-width': '60px' }}>Volume</span>
+
+          <Show when={ENABLE_SOUND}>
             <div
               style={{
-                position: 'relative',
-                flex: 1,
-                height: '18px',
                 display: 'flex',
                 'align-items': 'center',
+                'justify-content': 'space-between',
               }}
             >
-              <input
-                type="range"
-                min="0"
-                max="1"
-                step="0.01"
-                value={soundVolume()}
-                onInput={(e) => {
-                  const value = parseFloat(
-                    (e.target as HTMLInputElement).value
-                  );
-                  setSoundVolume(value);
-                }}
-                style={{
-                  '-webkit-appearance': 'none',
-                  width: '100%',
-                  'box-sizing': 'border-box',
-                  'border-radius': '0px',
-                  position: 'absolute',
-                  background: 'transparent',
-                  appearance: 'none',
-                  cursor: 'var(--cursor-pointer)',
-                  outline: 'none',
-                  height: '100%',
-                  margin: 0,
-                  padding: 0,
-                }}
-                class="sound-volume-slider"
+              <span>Sound effects</span>
+              <ToggleSwitch
+                checked={soundEnabled()}
+                onChange={(enabled) => setSoundEnabled(enabled)}
               />
             </div>
-            <span style={{ 'min-width': '40px', 'text-align': 'right' }}>
-              {Math.round(soundVolume() * 100)}%
-            </span>
-          </div>
+            <div
+              style={{
+                display: 'flex',
+                'align-items': 'center',
+                gap: '12px',
+              }}
+            >
+              <span style={{ 'min-width': '60px' }}>Volume</span>
+              <div
+                style={{
+                  position: 'relative',
+                  flex: 1,
+                  height: '18px',
+                  display: 'flex',
+                  'align-items': 'center',
+                }}
+              >
+                <input
+                  type="range"
+                  min="0"
+                  max="1"
+                  step="0.01"
+                  value={soundVolume()}
+                  onInput={(e) => {
+                    const value = parseFloat(
+                      (e.target as HTMLInputElement).value
+                    );
+                    setSoundVolume(value);
+                  }}
+                  style={{
+                    '-webkit-appearance': 'none',
+                    width: '100%',
+                    'box-sizing': 'border-box',
+                    'border-radius': '0px',
+                    position: 'absolute',
+                    background: 'transparent',
+                    appearance: 'none',
+                    cursor: 'pointer',
+                    outline: 'none',
+                    height: '100%',
+                    margin: 0,
+                    padding: 0,
+                  }}
+                  class="sound-volume-slider"
+                />
+              </div>
+              <span style={{ 'min-width': '40px', 'text-align': 'right' }}>
+                {Math.round(soundVolume() * 100)}%
+              </span>
+            </div>
+          </Show>
           <style>{`
             .sound-volume-slider::-webkit-slider-thumb {
               -webkit-appearance: none;
@@ -179,7 +182,7 @@ export function Appearance() {
               background-color: var(--b0);
               border: 1px solid var(--b4);
               border-radius: 0px;
-              cursor: var(--cursor-pointer);
+              cursor: pointer;
             }
             .sound-volume-slider::-moz-range-thumb {
               width: 18px;
@@ -187,7 +190,7 @@ export function Appearance() {
               background-color: var(--b0);
               border: 1px solid var(--b4);
               border-radius: 0px;
-              cursor: var(--cursor-pointer);
+              cursor: pointer;
             }
             .sound-volume-slider::-webkit-slider-runnable-track {
               width: 100%;

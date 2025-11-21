@@ -329,6 +329,42 @@ pub async fn fetch_contacts_by_link_id(
     Ok(db_contacts.into_iter().map(Into::into).collect())
 }
 
+/// returns all non-generic email addresses the passed link has sent emails to.
+#[tracing::instrument(skip(pool))]
+pub async fn fetch_contacts_emails_by_link_id(
+    pool: &PgPool,
+    link_id: Uuid,
+) -> anyhow::Result<Vec<String>> {
+    let rows = sqlx::query!(
+        r#"
+        SELECT DISTINCT
+            c.email_address as "email_address!"
+        FROM
+            email_messages m
+        JOIN
+            email_message_recipients mr ON m.id = mr.message_id
+        JOIN
+            email_contacts c ON mr.contact_id = c.id
+        WHERE
+            m.link_id = $1
+            AND m.is_sent = TRUE
+            AND mr.contact_id IS NOT NULL
+        ORDER BY
+            c.email_address
+        "#,
+        link_id
+    )
+    .fetch_all(pool)
+    .await
+    .context("Failed to fetch contacts for link ID")?;
+
+    Ok(rows
+        .into_iter()
+        .map(|row| row.email_address)
+        .filter(|e| !email_utils::is_generic_email(e))
+        .collect())
+}
+
 /// Fetches contacts who sent messages in the specified threads, organized by thread ID
 /// Contacts are ordered chronologically by message creation time
 #[tracing::instrument(skip(executor), err)]
