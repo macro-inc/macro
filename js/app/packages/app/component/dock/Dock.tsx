@@ -2,7 +2,6 @@ import { setSettingsOpen, useSettingsState } from '@core/constant/SettingsState'
 import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
-import { ENABLE_DOCK_NOTITIFCATIONS } from '@core/constant/featureFlags';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import SplitIcon from '@icon/regular/square-split-horizontal.svg';
 import { useGlobalNotificationSource } from '../GlobalAppState';
@@ -26,7 +25,6 @@ import { setCreateMenuOpen } from '../Launcher';
 import { useHasPaidAccess } from '@core/auth';
 import { TOKENS } from '@core/hotkey/tokens';
 import { playSound } from '@app/util/sound';
-import { QuickAccess } from './QuickAccess';
 
 // import { Debug } from './Debug';
 import Hints from './Hints';
@@ -160,12 +158,8 @@ export function Dock() {
       >
         <ClippedPanel bl br>
           <div style={{
-<<<<<<< Updated upstream
-            'grid-template-columns':'min-content 1fr min-content',
-            'box-sizing': 'border-box',
-=======
             'grid-template-columns': 'min-content 1fr min-content',
->>>>>>> Stashed changes
+            'box-sizing': 'border-box',
             'scrollbar-width': 'none',
             'align-content': 'center',
             'overflow-y': 'hidden',
