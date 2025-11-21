@@ -1085,6 +1085,27 @@ export function createNavigationEntityListShortcut({
     tags: [HotkeyTags.SelectionModification],
     displayPriority: 10,
   });
+  registerHotkey({
+    scopeId: splitHotkeyScope,
+    description: () =>
+      viewData().selectedEntities.length > 1 ? 'Rename items' : 'Rename item',
+    condition: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled('rename', plainSelectedEntities()),
+    keyDownHandler: () => {
+      const entitiesForAction = getEntitiesForAction();
+      if (entitiesForAction.entities.length === 0) {
+        return false;
+      }
+      actionRegistry.execute(
+        'rename',
+        entitiesForAction.entities.map(({ entity }) => entity)
+      );
+      return true;
+    },
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+  });
 
   createEffect(() => {
     const ref = entityListRef();

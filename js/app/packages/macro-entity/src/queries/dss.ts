@@ -1,15 +1,18 @@
-import { deleteItem } from '@core/component/FileList/itemOperations';
-import { useItemOperations } from '@core/component/FileList/useItemOperations';
-import type { ItemType } from '@service-storage/client';
 import {
+  deleteItem,
+  renameItem,
+} from '@core/component/FileList/itemOperations';
+import type { ItemType } from '@service-storage/client';
+import type {
+  Item,
   PostItemsSoupParams,
   PostSoupRequest,
   SoupApiSort,
 } from '@service-storage/generated/schemas';
 import {
   hashKey,
-  InfiniteData,
-  UseQueryResult,
+  type InfiniteData,
+  type UseQueryResult,
   useInfiniteQuery,
   useMutation,
 } from '@tanstack/solid-query';
@@ -19,7 +22,7 @@ import type { GetItemsSoupParams } from 'service-storage/generated/schemas/getIt
 import type { SoupPage } from 'service-storage/generated/schemas/soupPage';
 import { useInstructionsMdIdQuery } from 'service-storage/instructionsMd';
 import { syncServiceClient } from 'service-sync/client';
-import { type Accessor } from 'solid-js';
+import type { Accessor } from 'solid-js';
 import type {
   ChatEntity,
   DocumentEntity,
@@ -482,19 +485,17 @@ export function createBulkDeleteDssItemsMutation() {
 }
 
 export function createRenameDssEntityMutation() {
-  const itemOperations = useItemOperations();
   return useMutation(() => ({
     mutationFn: async ({
-      entity: { id, type, name },
+      entity: { id, type },
       newName,
     }: {
       entity: EntityData & { name: string };
       newName: string;
     }) => {
-      const success = await itemOperations.renameItem({
+      const success = await renameItem({
         itemType: type as ItemType,
         id,
-        itemName: name,
         newName,
       });
 
@@ -567,8 +568,6 @@ export function createRenameDssEntityMutation() {
 }
 
 export function createBulkRenameDssEntityMutation() {
-  // const itemOperations = useItemOperations();
-
   const isUnsupportedEntity = (entity: EntityData) => {
     const type = entity.type;
     return type === 'channel' || type === 'email';
@@ -577,34 +576,34 @@ export function createBulkRenameDssEntityMutation() {
   return useMutation(() => ({
     mutationFn: async ({
       entities,
-      newName,
+      name,
     }: {
-      entities: EntityData[];
-      newName: string;
+      entities: (EntityData & { name: string })[];
+      name: (oldName: string) => string | string;
     }) => {
       if (entities.some(isUnsupportedEntity)) {
         throw new Error(`Unsupported entity type provided`);
       }
-
-      // const success = await itemOperations.bulkRename(
-      //   entities.map((entity) => ({}))
-      // );
-      //
-      const success = false;
-
-      if (!success) {
-        throw new Error(`TODO (SEAMUS): bulk rename! – ${newName}`);
-      }
-
-      return { success: true };
+      return await Promise.all(
+        entities.map((e) => {
+          return renameItem({
+            itemType: e.type as ItemType,
+            id: e.id,
+            newName: typeof name === 'function' ? name(e.name) : name,
+          });
+        })
+      );
     },
+
     onMutate: async ({
       entities,
-      newName,
+      name,
     }: {
-      entities: EntityData[];
-      newName: string;
+      entities: (EntityData & { name: string })[];
+      name: (oldName: string) => string | string;
     }) => {
+      const ids = new Set(entities.map((e) => e.id));
+
       await Promise.all([
         queryClient.cancelQueries({
           queryKey: queryKeys.dss({ infinite: true }),
@@ -613,45 +612,47 @@ export function createBulkRenameDssEntityMutation() {
           queryKey: queryKeys.dssPost({ infinite: true }),
         }),
       ]);
-      function updateBulkEntityNamesInQueryData(
-        prev: { pages: { items: EntityData[] }[] } | undefined
-      ): { pages: { items: EntityData[] }[] } | undefined {
-        if (!prev) return prev;
-        const pages = prev.pages.map((page) => ({
-          ...page,
-          items: page.items.map((item) => {
-            const found = entities.find((e) => e.id === item.id);
-            if (!found) return item;
 
-            return { ...item, name: newName };
-          }),
-        }));
+      function update(prev: { pages: { items: EntityData[] }[] } | undefined) {
+        if (!prev) return prev;
         return {
           ...prev,
-          pages,
+          pages: prev.pages.map((page) => ({
+            ...page,
+            items: page.items.map((item) =>
+              ids.has(item.id)
+                ? {
+                    ...item,
+                    name: typeof name === 'function' ? name(item.name) : name,
+                  }
+                : item
+            ),
+          })),
         };
       }
+
       queryClient.setQueriesData(
         { queryKey: queryKeys.dss({ infinite: true }) },
-        (prev) =>
-          updateBulkEntityNamesInQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined
-          )
+        (prev) => update(prev as any)
       );
+
       queryClient.setQueriesData(
         { queryKey: queryKeys.dssPost({ infinite: true }) },
-        (prev) =>
-          updateBulkEntityNamesInQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined
-          )
+        (prev) => update(prev as any)
       );
     },
+
     onSettled: (data, error, { entities }) => {
-      if (error)
-        console.error(`Failed to rename dss items`, entities, data, error);
+      if (error) {
+        console.error(`Failed bulk rename`, entities, data, error);
+      }
 
       queryClient.invalidateQueries({
         queryKey: queryKeys.dss({ infinite: true }),
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dssPost({ infinite: true }),
       });
     },
   }));

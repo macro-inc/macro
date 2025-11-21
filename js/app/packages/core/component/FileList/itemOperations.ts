@@ -67,6 +67,7 @@ export async function renameItem(args: {
   skipRefetch?: boolean;
 }): Promise<boolean> {
   const { itemType, id, newName, skipRefetch = false } = args;
+  console.log('RENAMING ITEM', args);
 
   let result;
 
@@ -192,6 +193,7 @@ export async function bulkRename(
   selectedItems: { item: Item; newName: string }[],
   chunkSize: number = DEFAULT_CHUNK_SIZE
 ): Promise<{ success: boolean; failedItems: Item[] }> {
+  console.log('bulk rename', selectedItems);
   const failedItems: Item[] = [];
 
   for (let i = 0; i < selectedItems.length; i += chunkSize) {
