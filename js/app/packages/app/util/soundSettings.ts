@@ -1,3 +1,5 @@
+import { ENABLE_SOUND } from '@core/constant/featureFlags';
+
 const SOUND_ENABLED_KEY = 'sound-effects-enabled';
 const SOUND_VOLUME_KEY = 'sound-effects-volume';
 
@@ -5,6 +7,7 @@ const DEFAULT_ENABLED = true;
 const DEFAULT_VOLUME = 0.5; // 50%
 
 export function getSoundEffectsEnabled(): boolean {
+  if (!ENABLE_SOUND) return false;
   const stored = localStorage.getItem(SOUND_ENABLED_KEY);
   return stored === null ? DEFAULT_ENABLED : stored === 'true';
 }
