@@ -1,6 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -553,25 +553,18 @@ export function Email(props: EmailProps) {
   );
   let markdownDomRef!: HTMLDivElement;
 
-  createEffect(() => {
-    if (scopeId()) {
-      untrack(() =>
-        registerHotkey({
-          hotkey: 'enter',
-          scopeId: scopeId(),
-          description: 'Focus Email Input',
-          keyDownHandler: () => {
-            if (markdownDomRef) {
-              markdownDomRef.focus();
-              return true;
-            }
-            return false;
-          },
-          hotkeyToken: TOKENS.block.focus,
-          hide: true,
-        })
-      );
-    }
+  registerScopeSignalHotkey(scopeId, {
+    hotkey: 'enter',
+    description: 'Focus Email Input',
+    keyDownHandler: () => {
+      if (markdownDomRef) {
+        markdownDomRef.focus();
+        return true;
+      }
+      return false;
+    },
+    hotkeyToken: TOKENS.block.focus,
+    hide: true,
   });
 
   return (
