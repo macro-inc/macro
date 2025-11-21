@@ -10,10 +10,12 @@ import type {
 export type NotificationData = {
   actor?: { id: string };
   action: string;
+  type: NotificationEventType;
   target?: {
     type: EntityType;
     id?: string;
     name?: string | null;
+    show?: boolean;
   };
   content?: string | null;
   meta?: {
@@ -53,6 +55,7 @@ const extractors: {
     const m = n.notificationMetadata;
     if (!m) return null;
     return {
+      type: n.notificationEventType,
       actor: m.sharedBy ? { id: m.sharedBy! } : undefined,
       action: 'shared',
       target: {
@@ -72,6 +75,7 @@ const extractors: {
     const m = n.notificationMetadata;
     if (!m) return null;
     return {
+      type: n.notificationEventType,
       actor: m.sharedBy ? { id: m.sharedBy! } : undefined,
       action: 'shared',
       target: {
@@ -91,9 +95,14 @@ const extractors: {
     const m = n.notificationMetadata;
     if (!m) return null;
     return {
+      type: n.notificationEventType,
       actor: n.senderId ? { id: n.senderId! } : undefined,
       action: 'mentioned you in',
-      target: { type: 'channel', id: n.eventItemId },
+      target: {
+        type: 'channel',
+        id: n.eventItemId,
+        show: n.notificationMetadata.channelType !== 'direct_message',
+      },
       content: m.messageContent,
       meta: {
         messageId: m.messageId,
@@ -104,6 +113,7 @@ const extractors: {
     const m = n.notificationMetadata;
     if (!m) return null;
     return {
+      type: n.notificationEventType,
       actor: n.senderId ? { id: n.senderId! } : undefined,
       action: 'mentioned you in',
       target: { type: 'document', id: n.eventItemId, name: m.documentName },
@@ -117,6 +127,7 @@ const extractors: {
     const m = n.notificationMetadata;
     if (!m) return null;
     return {
+      type: n.notificationEventType,
       actor: m.invitedBy ? { id: m.invitedBy! } : undefined,
       action: 'invited you to',
       target: { type: 'channel', id: n.eventItemId, name: m.channelName },
@@ -127,9 +138,14 @@ const extractors: {
     const m = n.notificationMetadata;
     if (!m) return null;
     return {
+      type: n.notificationEventType,
       actor: m.sender ? { id: m.sender! } : undefined,
       action: 'sent a message in',
-      target: { type: 'channel', id: n.eventItemId },
+      target: {
+        type: 'channel',
+        id: n.eventItemId,
+        show: n.notificationMetadata.channelType !== 'direct_message',
+      },
       content: m.messageContent,
       meta: {
         messageId: m.messageId,
@@ -140,9 +156,14 @@ const extractors: {
     const m = n.notificationMetadata;
     if (!m) return null;
     return {
+      type: n.notificationEventType,
       actor: m.userId ? { id: m.userId! } : undefined,
       action: 'replied in',
-      target: { type: 'channel', id: n.eventItemId },
+      target: {
+        type: 'channel',
+        id: n.eventItemId,
+        show: n.notificationMetadata.channelType !== 'direct_message',
+      },
       content: m.messageContent,
       meta: {
         messageId: m.messageId,
@@ -154,6 +175,7 @@ const extractors: {
     const m = n.notificationMetadata;
     if (!m) return null;
     return {
+      type: n.notificationEventType,
       actor: m.owner ? { id: m.owner! } : undefined,
       action: 'shared with you',
       target: { type: 'document', id: n.eventItemId, name: m.documentName },
@@ -167,9 +189,10 @@ const extractors: {
     const m = n.notificationMetadata;
     if (!m) return null;
     return {
+      type: n.notificationEventType,
       actor: m.sender ? { id: m.sender! } : undefined,
       action: 'sent a new email',
-      target: { type: 'email', id: n.eventItemId },
+      target: { type: 'email', id: n.eventItemId, show: false },
       content: m.subject,
       meta: {
         sender: m.sender,
@@ -182,6 +205,7 @@ const extractors: {
     const m = n.notificationMetadata;
     if (!m) return null;
     return {
+      type: n.notificationEventType,
       actor: m.invitedBy ? { id: m.invitedBy! } : undefined,
       action: 'invited you to',
       target: { type: 'team', id: n.eventItemId, name: m.teamName },
@@ -192,6 +216,7 @@ const extractors: {
     const m = n.notificationMetadata;
     if (!m) return null;
     return {
+      type: n.notificationEventType,
       actor: undefined,
       action: 'rejected your team invitation',
       target: { type: 'team', id: n.eventItemId },
@@ -217,6 +242,7 @@ export interface BrowserNotificationPreview {
 }
 
 import { getFaviconUrl } from '@app/util/favicon';
+import { markdownToPlainText } from '@lexical-core';
 import { themeReactive } from '../block-theme/signals/themeReactive';
 
 const USER_NAME_FALLBACK = 'Someone';
@@ -238,6 +264,8 @@ export async function toBrowserNotification(
     (data.actor ? await resolveUserName(data.actor.id) : undefined) ??
     USER_NAME_FALLBACK;
 
+  const showTarget = data.target?.show ?? false;
+
   const targetName =
     data.target?.name ??
     (data.target?.id
@@ -249,8 +277,8 @@ export async function toBrowserNotification(
   const icon = getFaviconUrl(accentColor);
 
   return {
-    title: `${actor} ${data.action} ${targetName}`,
-    body: data.content ?? `${actor} ${data.action}`,
+    title: `${actor}${showTarget ? ` <${targetName}>` : ''}`,
+    body: data.content ? markdownToPlainText(data.content) : `${data.action}`,
     icon,
   };
 }
