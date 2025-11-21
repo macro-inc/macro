@@ -16,8 +16,8 @@ import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
 import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isErr } from '@core/util/maybeResult';
-import { transformShortIdInUrlPathname } from '@core/util/url';
 import { isTauri } from '@core/util/platform';
+import { transformShortIdInUrlPathname } from '@core/util/url';
 import { MaybeTauriProvider } from '@macro/tauri';
 import { createEmailSource, Provider as EntityProvider } from '@macro-entity';
 import {

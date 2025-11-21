@@ -1,10 +1,10 @@
+import { isTauri } from '@core/util/platform';
 import {
   BrowserNotificationModal,
   PlatformNotificationProvider,
 } from '@notifications';
 import type { RouteSectionProps } from '@solidjs/router';
 import { type OsType, type as osType } from '@tauri-apps/plugin-os';
-import { isTauri } from '@core/util/platform';
 import {
   type Accessor,
   createContext,
