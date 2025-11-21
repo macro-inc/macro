@@ -1,12 +1,8 @@
-import { makePersisted } from '@solid-primitives/storage';
+import { DEFAULT_DARK_THEME, DEFAULT_LIGHT_THEME, DEFAULT_THEMES, BEVELED_CORNERS } from '../constants';
 import { createEffect, createMemo, createSignal } from 'solid-js';
-import {
-  DEFAULT_DARK_THEME,
-  DEFAULT_LIGHT_THEME,
-  DEFAULT_THEMES,
-} from '../constants';
 import type { ThemeV0, ThemeV1 } from '../types/themeTypes';
 import { convertThemev0v1 } from '../utils/themeMigrations';
+import { makePersisted } from '@solid-primitives/storage';
 
 export const [isThemeSaved, setIsThemeSaved] = createSignal<boolean>(true);
 
@@ -77,6 +73,28 @@ export const [monochromeIcons, setMonochromeIcons] = makePersisted(
   createSignal<boolean>(false),
   {name: 'enable-monochrome-icons'}
 );
+
+export const [beveledCorners, setBeveledCorners] = makePersisted(
+  createSignal<boolean>(BEVELED_CORNERS),
+  {name: 'macro-beveled-corners'}
+);
+
+export const [gutterSize, setGutterSize] = makePersisted(
+  createSignal<number>(8),
+  {name: 'macro-gutter-size'}
+);
+createEffect(() => {
+  document.documentElement.style.setProperty('--gutter-size', `${gutterSize()}px`);
+});
+/*
+  this should be a slider in a theme block
+  for now its only reachable via GlobalHotkeys.tsx
+  so this will do
+*/
+export function toggleGutterSize(){
+  if(gutterSize() === 8){setGutterSize(5)}
+  else(setGutterSize(8));
+}
 
 createEffect(() => {
   if(monochromeIcons()){
