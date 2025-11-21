@@ -2581,6 +2581,7 @@ dependencies = [
  "model-entity",
  "model_notifications",
  "models_bulk_upload",
+ "models_opensearch",
  "models_pagination",
  "models_permissions",
  "models_soup",
