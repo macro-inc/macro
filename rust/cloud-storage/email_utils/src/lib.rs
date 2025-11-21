@@ -176,3 +176,22 @@ pub fn is_generic_email(email: &str) -> bool {
 
     false
 }
+
+/// Deduplicates a list of email addresses by normalizing them (removing + aliases)
+pub fn dedupe_emails(emails: Vec<String>) -> Vec<String> {
+    emails
+        .into_iter()
+        .map(|mut email| {
+            // Remove everything from + to @ if + exists
+            if let (Some(plus_pos), Some(at_pos)) = (email.find('+'), email.find('@'))
+                && plus_pos < at_pos
+            {
+                email.drain(plus_pos..at_pos);
+            }
+
+            email
+        })
+        .collect::<std::collections::HashSet<_>>()
+        .into_iter()
+        .collect()
+}
