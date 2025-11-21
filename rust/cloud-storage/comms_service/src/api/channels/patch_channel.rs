@@ -7,6 +7,8 @@ use axum::{Json, extract::State, http::StatusCode};
 use axum_extra::extract::Cached;
 use comms_db_client::channels::patch_channel::{self, PatchChannelOptions};
 use model::comms::ChannelType;
+use models_opensearch::SearchEntityType;
+use tracing::Instrument;
 
 #[utoipa::path(
         patch,
@@ -36,6 +38,8 @@ pub async fn patch_channel_handler(
         ));
     }
 
+    let name = req.channel_name.clone();
+
     patch_channel::patch_channel(&ctx.db, &channel_id, &channel_owner.context.user_id, req)
         .await
         .map_err(|e| {
@@ -46,6 +50,31 @@ pub async fn patch_channel_handler(
                 "error patching channel".to_string(),
             )
         })?;
+
+    if name.is_some() {
+        tokio::spawn({
+            let sqs_client = ctx.sqs_client.clone();
+            let channel_id = channel_id.clone();
+            async move {
+                tracing::trace!("sending message to search extractor queue");
+
+                let _ = sqs_client
+                    .send_message_to_search_event_queue(
+                        sqs_client::search::SearchQueueMessage::UpdateEntityName(
+                            sqs_client::search::name::UpdateEntityName {
+                                entity_id: channel_id,
+                                entity_type: SearchEntityType::Channels,
+                            },
+                        ),
+                    )
+                    .await
+                    .inspect_err(|e| {
+                        tracing::error!(error=?e, "SEARCH_QUEUE unable to enqueue message");
+                    });
+            }
+            .in_current_span()
+        });
+    }
 
     Ok((StatusCode::OK, "patched channel".to_string()))
 }

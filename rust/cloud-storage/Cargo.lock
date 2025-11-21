@@ -1745,6 +1745,7 @@ dependencies = [
  "model-entity",
  "model_notifications",
  "models_comms",
+ "models_opensearch",
  "models_permissions",
  "reqwest",
  "secretsmanager_client",
