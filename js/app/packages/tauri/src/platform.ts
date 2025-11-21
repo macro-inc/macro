@@ -1,4 +1,4 @@
-export type MacroPlatform = 'web' | 'tauri-all' | 'tauri-ios' | 'tauri-android';
+export type MacroPlatform = 'web' | 'desktop' | 'ios' | 'android';
 
 const DEFAULT_PLATFORM: MacroPlatform = 'web';
 
@@ -6,9 +6,9 @@ const platform = (() => {
   const envPlatform = import.meta.env.VITE_PLATFORM;
   if (
     envPlatform === 'web' ||
-    envPlatform === 'tauri-all' ||
-    envPlatform === 'tauri-ios' ||
-    envPlatform === 'tauri-android'
+    envPlatform === 'desktop' ||
+    envPlatform === 'ios' ||
+    envPlatform === 'android'
   ) {
     return envPlatform;
   }
@@ -30,9 +30,9 @@ export function isTauriPlatform(): boolean {
 }
 
 export function isTauriMobilePlatform(): boolean {
-  return platform === 'tauri-ios' || platform === 'tauri-android';
+  return platform === 'ios' || platform === 'android';
 }
 
 export function isTauriDesktopPlatform(): boolean {
-  return platform === 'tauri-all';
+  return platform === 'desktop';
 }

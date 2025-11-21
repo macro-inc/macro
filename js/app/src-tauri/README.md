@@ -23,9 +23,9 @@ the correct Vite config:
 
 | `TAURI_ENV_PLATFORM` | Script invoked            | Resulting `VITE_PLATFORM` |
 | -------------------- | ------------------------- | ------------------------- |
-| `macos`/`windows`/`linux` (default) | `dev:tauri-all`     | `tauri-all`              |
-| `ios`                | `dev:tauri-ios`           | `tauri-ios`               |
-| `android`            | `dev:tauri-android`       | `tauri-android`           |
+| `macos`/`windows`/`linux` (default) | `dev:desktop`     | `desktop`              |
+| `ios`                | `dev:ios`           | `ios`               |
+| `android`            | `dev:android`       | `android`           |
 
 You can override the dev server host for devices/emulators by exporting
 `TAURI_DEV_HOST` before running `cargo tauri …`.

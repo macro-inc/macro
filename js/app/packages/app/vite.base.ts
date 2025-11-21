@@ -1,16 +1,16 @@
-import { resolve } from 'node:path';
-import importMetaUrlPlugin from '@codingame/esbuild-import-meta-url-plugin';
-import tailwind from '@tailwindcss/vite';
-import { Features } from 'lightningcss';
-import type { UserConfigFn } from 'vite';
-import solid from 'vite-plugin-solid';
-import solidSvg from 'vite-plugin-solid-svg';
-import wasm from 'vite-plugin-wasm';
-import tsconfigpaths from 'vite-tsconfig-paths';
+import { resolve } from "node:path";
+import importMetaUrlPlugin from "@codingame/esbuild-import-meta-url-plugin";
+import tailwind from "@tailwindcss/vite";
+import { Features } from "lightningcss";
+import type { UserConfigFn } from "vite";
+import solid from "vite-plugin-solid";
+import solidSvg from "vite-plugin-solid-svg";
+import wasm from "vite-plugin-wasm";
+import tsconfigpaths from "vite-tsconfig-paths";
 // @ts-ignore
-import { version } from './package.json';
+import { version } from "./package.json";
 
-const PLATFORMS = ['web', 'tauri-all', 'tauri-ios', 'tauri-android'] as const;
+const PLATFORMS = ["web", "desktop", "ios", "android"] as const;
 
 export type AppPlatform = (typeof PLATFORMS)[number];
 
@@ -23,16 +23,16 @@ export const createAppViteConfig = ({
 }: CreateAppViteConfigOptions): UserConfigFn => {
   return ({ command, mode }) => {
     const ENV_MODE = process.env.MODE ?? mode;
-    const NO_MINIFY = process.env.NO_MINIFY === 'true';
-    const isLegacyTauriBuild = process.env.VITE_TAURI === 'true';
-    const isTauriPlatform = platform !== 'web' || isLegacyTauriBuild;
+    const NO_MINIFY = process.env.NO_MINIFY === "true";
+    const isLegacyTauriBuild = process.env.VITE_TAURI === "true";
+    const isTauriPlatform = platform !== "web" || isLegacyTauriBuild;
 
     return {
-      base: command === 'serve' || isTauriPlatform ? '/' : '/app',
-      assetsInclude: ['**/*.glb'],
+      base: command === "serve" || isTauriPlatform ? "/" : "/app",
+      assetsInclude: ["**/*.glb"],
       css: {
         preprocessorMaxWorkers: true,
-        transformer: 'lightningcss',
+        transformer: "lightningcss",
         lightningcss: {
           include: Features.VendorPrefixes,
         },
@@ -44,39 +44,39 @@ export const createAppViteConfig = ({
         tailwind(),
         solidSvg({ defaultAsComponent: true }),
         tsconfigpaths({
-          root: '../../',
+          root: "../../",
         }),
       ],
       define: defineEnv(ENV_MODE, command, platform),
       clearScreen: false,
       worker: {
-        format: 'es',
+        format: "es",
         plugins: () => [
           tsconfigpaths({
-            root: '../../',
+            root: "../../",
           }),
         ],
         rollupOptions: {
           output: {
-            format: 'es',
-            chunkFileNames: '[name]-[hash].js',
-            entryFileNames: '[name]-[hash].js',
+            format: "es",
+            chunkFileNames: "[name]-[hash].js",
+            entryFileNames: "[name]-[hash].js",
           },
         },
       },
       mode: ENV_MODE,
       build: {
-        cssMinify: 'lightningcss',
+        cssMinify: "lightningcss",
         // target older safari to avoid lightningcss using text-decoration shorthand:
         // https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration#browser_compatibility
-        cssTarget: ['esnext', 'safari15'],
-        target: 'esnext',
-        outDir: 'dist',
+        cssTarget: ["esnext", "safari15"],
+        target: "esnext",
+        outDir: "dist",
         emptyOutDir: true,
         minify: !NO_MINIFY,
         rollupOptions: {
           input: {
-            app: resolve(__dirname, 'index.html'),
+            app: resolve(__dirname, "index.html"),
           },
           output: NO_MINIFY
             ? {
@@ -87,49 +87,49 @@ export const createAppViteConfig = ({
                 assetFileNames: `assets/[name].[ext]`,
               }
             : {
-                format: 'es',
-                chunkFileNames: '[name]-[hash].js',
-                entryFileNames: '[name]-[hash].js',
+                format: "es",
+                chunkFileNames: "[name]-[hash].js",
+                entryFileNames: "[name]-[hash].js",
               },
         },
         assetsInlineLimit: (filePath) => {
-          if (filePath.includes('.wasm')) return false;
-          if (filePath.includes('/lok/')) return false;
+          if (filePath.includes(".wasm")) return false;
+          if (filePath.includes("/lok/")) return false;
         },
         sourcemap: true,
       },
       esbuild: {
         supported: {
-          'top-level-await': true,
+          "top-level-await": true,
         },
-        jsx: 'automatic',
-        jsxImportSource: 'solid-js',
+        jsx: "automatic",
+        jsxImportSource: "solid-js",
       },
       optimizeDeps: {
         include: [
-          'vscode-textmate',
-          'vscode-oniguruma',
+          "vscode-textmate",
+          "vscode-oniguruma",
           // 'solid-devtools/setup',
-          'libheif-js/wasm-bundle',
+          "libheif-js/wasm-bundle",
         ],
         esbuildOptions: {
-          target: 'esnext',
+          target: "esnext",
           plugins: [importMetaUrlPlugin],
         },
       },
       resolve: {
         dedupe: [
-          '@codingame/monaco-vscode-api',
-          '@codingame/monaco-vscode-*-common',
+          "@codingame/monaco-vscode-api",
+          "@codingame/monaco-vscode-*-common",
         ],
       },
       server: {
         port: 3000,
-        host: '0.0.0.0',
+        host: "0.0.0.0",
         strictPort: true,
         hmr: {
-          protocol: 'ws',
-          host: process.env.TAURI_DEV_HOST || 'localhost',
+          protocol: "ws",
+          host: process.env.TAURI_DEV_HOST || "localhost",
           port: 3000,
         },
         cors: true,
@@ -140,7 +140,7 @@ export const createAppViteConfig = ({
         fs: {
           allow: [
             // Allow serving files from the workspace root
-            resolve(__dirname, '../../'),
+            resolve(__dirname, "../../"),
           ],
         },
       },
@@ -148,40 +148,45 @@ export const createAppViteConfig = ({
   };
 };
 
+function getAssetsPath(mode: string, command: string): string {
+  switch (mode) {
+    case "development":
+      return command === "serve" ? "/local" : "/dev";
+    case "staging":
+      return "/staging";
+    default:
+      return "/";
+  }
+}
+
+function getGqlService(mode: string): string {
+  if (process.env.LOCAL_GQL_SERVER === "true") {
+    console.log("Using Local GQL server");
+    return "http://localhost:8080/graphql/";
+  }
+
+  if (mode === "development") {
+    console.log("Using Dev GQL server");
+    return "https://api-dev.macro.com/graphql/";
+  }
+
+  console.log("Using Prod GQL server");
+  return "https://api.macro.com/graphql/";
+}
+
 function defineEnv(mode: string, command: string, platform: AppPlatform) {
   return {
-    'import.meta.env.__APP_VERSION__': JSON.stringify(
-      process.env.WEB_APP_VERSION || version
+    "import.meta.env.__APP_VERSION__": JSON.stringify(
+      process.env.WEB_APP_VERSION || version,
     ),
-    'import.meta.env.VITE_PLATFORM': JSON.stringify(platform),
-    'import.meta.env.ASSETS_PATH':
-      command === 'serve' && mode === 'development'
-        ? JSON.stringify('/local')
-        : mode === 'development'
-          ? JSON.stringify('/dev')
-          : mode === 'staging'
-            ? JSON.stringify('/staging')
-            : mode === 'production'
-              ? JSON.stringify('/')
-              : JSON.stringify('/'),
-    'import.meta.env.__LOCAL_GQL_SERVER__':
-      process.env.LOCAL_GQL_SERVER === 'true',
-    'import.meta.env.__MACRO_GQL_SERVICE__':
-      process.env.LOCAL_GQL_SERVER === 'true'
-        ? (() => {
-            console.log('Using Local GQL server');
-            return '"http://localhost:8080/graphql/"';
-          })()
-        : mode === 'development'
-          ? (() => {
-              console.log('Using Dev GQL server');
-              return '"https://api-dev.macro.com/graphql/"';
-            })()
-          : (() => {
-              console.log('Using Prod GQL server');
-              return '"https://api.macro.com/graphql/"';
-            })(),
-    'import.meta.env.__LOCAL_DOCKER__': process.env.LOCAL_DOCKER === 'true',
-    'import.meta.env.__LOCAL_JWT__': JSON.stringify(process.env.LOCAL_JWT),
+    "import.meta.env.VITE_PLATFORM": JSON.stringify(platform),
+    "import.meta.env.ASSETS_PATH": JSON.stringify(getAssetsPath(mode, command)),
+    "import.meta.env.__LOCAL_GQL_SERVER__":
+      process.env.LOCAL_GQL_SERVER === "true",
+    "import.meta.env.__MACRO_GQL_SERVICE__": JSON.stringify(
+      getGqlService(mode),
+    ),
+    "import.meta.env.__LOCAL_DOCKER__": process.env.LOCAL_DOCKER === "true",
+    "import.meta.env.__LOCAL_JWT__": JSON.stringify(process.env.LOCAL_JWT),
   };
 }
