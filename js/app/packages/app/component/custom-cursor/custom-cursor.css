@@ -1,8 +1,50 @@
-/* This sheet is injected into style element appended into document.head and shadowRoots  */
+/* This sheet is imported into base layer in index.css and injected into shadowRoot style element  */
+
+:root {
+  /* custom cursor fallback */
+  --cursor-auto: auto;
+  --cursor-default: default;
+  --cursor-none: none;
+  --cursor-context-menu: context-menu;
+  --cursor-help: help;
+  --cursor-pointer: pointer;
+  --cursor-progress: progress;
+  --cursor-wait: wait;
+  --cursor-cell: cell;
+  --cursor-crosshair: crosshair;
+  --cursor-text: text;
+  --cursor-vertical-text: vertical-text;
+  --cursor-alias: alias;
+  --cursor-copy: copy;
+  --cursor-move: move;
+  --cursor-no-drop: no-drop;
+  --cursor-not-allowed: not-allowed;
+  --cursor-grab: grab;
+  --cursor-grabbing: grabbing;
+  --cursor-all-scroll: all-scroll;
+  --cursor-col-resize: col-resize;
+  --cursor-row-resize: row-resize;
+  --cursor-n-resize: n-resize;
+  --cursor-s-resize: s-resize;
+  --cursor-e-resize: e-resize;
+  --cursor-w-resize: w-resize;
+  --cursor-ne-resize: ne-resize;
+  --cursor-nw-resize: nw-resize;
+  --cursor-se-resize: se-resize;
+  --cursor-sw-resize: sw-resize;
+  --cursor-ew-resize: ew-resize;
+  --cursor-ns-resize: ns-resize;
+  --cursor-nesw-resize: nesw-resize;
+  --cursor-nwse-resize: nwse-resize;
+  --cursor-zoom-in: zoom-in;
+  --cursor-zoom-out: zoom-out;
+}
+
 a[href] {
   cursor: var(--cursor-pointer);
 }
-button {
+button,
+[role="button"] {
   cursor: var(--cursor-default);
 }
 summary {
@@ -44,8 +86,4 @@ input:disabled,
 select:disabled,
 textarea:disabled {
   cursor: var(--cursor-not-allowed);
-}
-
-[style="cursor: pointer;"] {
-  cursor: var(--cursor-pointer) !important;
 }
