@@ -73,6 +73,7 @@ tracing = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras", "chrono", "uuid"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
+models_opensearch = { path = "../models_opensearch" }
 
 [package.metadata.cargo-machete]
 ignored = ["connection_gateway"]

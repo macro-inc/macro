@@ -85,23 +85,6 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
             ),
         )
         .route(
-            "/blank_docx",
-            post(create_document::create_blank_docx::handler).layer(
-                ServiceBuilder::new()
-                    .layer(axum::middleware::from_fn(
-                        macro_middleware::auth::ensure_user_exists::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        macro_middleware::user_permissions::attach_user_permissions::handler,
-                    ))
-                    .layer(axum::middleware::from_fn_with_state(
-                        state.clone(),
-                        macro_middleware::user_permissions::validate_user_quota::document_handler,
-                    )),
-            ),
-        )
-        .route(
             "/list",
             get(get_document_list::get_document_list_handler).layer(axum::middleware::from_fn(
                 macro_middleware::auth::ensure_user_exists::handler,
