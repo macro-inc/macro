@@ -31,7 +31,6 @@ pub struct ChannelSearchResponseItem {
     /// These field names are being aligned across all item types
     /// for consistency in our data model.
     pub id: String,
-    pub name: Option<String>,
     /// we don't store this for channels atm but keeping it here for consistency
     pub owner_id: Option<String>,
 
@@ -69,8 +68,6 @@ pub struct ChannelSearchResponseItemWithMetadata {
 pub struct ChannelSearchMetadata {
     /// The id of the channel
     pub channel_id: String,
-    /// The name of the channel if present
-    pub channel_name: Option<String>,
     /// The type of channel
     pub channel_type: String,
 }
@@ -81,7 +78,6 @@ impl From<SearchResponseItem<ChannelSearchResult, ChannelSearchMetadata>>
     fn from(response: SearchResponseItem<ChannelSearchResult, ChannelSearchMetadata>) -> Self {
         ChannelSearchResponseItem {
             id: response.metadata.channel_id.clone(),
-            name: response.metadata.channel_name.clone(),
             // we don't store this for channels atm but keeping it here for consistency
             owner_id: None,
             channel_type: response.metadata.channel_type.clone(),
@@ -125,8 +121,6 @@ pub struct ChannelSearchRequest {
 pub struct SimpleChannelSearchReponseBaseItem<T> {
     /// The channel id
     pub channel_id: String,
-    /// The channel name
-    pub channel_name: Option<String>,
     /// The channel type
     pub channel_type: String,
     /// The org id
@@ -158,7 +152,6 @@ impl From<opensearch_client::search::channels::ChannelMessageSearchResponse>
     fn from(response: opensearch_client::search::channels::ChannelMessageSearchResponse) -> Self {
         Self {
             channel_id: response.channel_id,
-            channel_name: response.channel_name,
             channel_type: response.channel_type,
             org_id: response.org_id,
             message_id: response.message_id,

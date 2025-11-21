@@ -391,7 +391,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         return Err(OpensearchClientError::EmptySearchIndices);
     }
     // Build out the title keys that we could need for highlighting
-    let mut title_keys = vec![];
+    let mut title_keys: Vec<Option<&'static str>> = vec![];
     for index in &args.search_indices {
         match index {
             SearchEntityType::Channels => title_keys.push(ChannelMessageSearchConfig::TITLE_KEY),
@@ -401,6 +401,8 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
             SearchEntityType::Projects => title_keys.push(ProjectSearchConfig::TITLE_KEY),
         }
     }
+
+    let title_keys: Vec<&'static str> = title_keys.into_iter().flatten().collect();
 
     let mut bool_query = BoolQueryBuilder::new();
     bool_query.minimum_should_match(1);
@@ -421,7 +423,9 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         bool_query.should(email_bool_query.build().into());
     }
 
-    if args.search_indices.contains(&SearchEntityType::Channels) {
+    // We can only search over channels if we are not explicitly searching by name
+    if args.search_indices.contains(&SearchEntityType::Channels) && args.search_on != SearchOn::Name
+    {
         let channel_message_search_args: ChannelMessageSearchArgs = args.clone().into();
         let channel_message_query_builder: ChannelMessageQueryBuilder =
             channel_message_search_args.into();
