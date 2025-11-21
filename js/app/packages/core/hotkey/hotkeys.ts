@@ -4,7 +4,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { logger } from '@observability';
-import { createMemo, onCleanup, onMount } from 'solid-js';
+import { createMemo, onCleanup, onMount, untrack } from 'solid-js';
 import {
   EVENT_MODIFIER_KEYS,
   EVENT_MODIFIER_NAME_MAP,
@@ -144,7 +144,7 @@ export function registerHotkey(
 
   // Check for duplicate hotkeyToken
   const existingCommand = hotkeyToken
-    ? hotkeyTokenMap().get(hotkeyToken)
+    ? untrack(() => hotkeyTokenMap().get(hotkeyToken))
     : undefined;
   if (existingCommand) {
     const existingHotkeys = new Set(existingCommand.hotkeys);
