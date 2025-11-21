@@ -59,7 +59,6 @@ type EmailProps = {
 export function Email(props: EmailProps) {
   const scopeId = blockHotkeyScopeSignal.get;
 
-  console.log('scopeId()', scopeId());
   const setIsScrollingToMessage = isScrollingToMessage.set;
   const { navigateThread } = useThreadNavigation();
   const blockElement = blockElementSignal.get;
@@ -515,10 +514,14 @@ export function Email(props: EmailProps) {
     });
   });
 
+  // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
+  let hasRun = false;
   createEffect(() => {
+    if (hasRun) return;
     // Focus the email block on mount
     if (!blockElement()) return;
     blockElement()?.focus();
+    hasRun = true;
   });
 
   const notificationSource = useGlobalNotificationSource();
@@ -552,7 +555,7 @@ export function Email(props: EmailProps) {
 
   createEffect(() => {
     if (scopeId()) {
-      registerHotkey({
+      untrack(() => registerHotkey({
         hotkey: 'enter',
         scopeId: scopeId(),
         description: 'Focus Email Input',
@@ -565,7 +568,7 @@ export function Email(props: EmailProps) {
         },
         hotkeyToken: TOKENS.block.focus,
         hide: true,
-      });
+      }));
     }
   });
 

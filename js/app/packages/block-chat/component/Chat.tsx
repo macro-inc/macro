@@ -31,7 +31,7 @@ import { invalidateUserQuota } from '@service-auth/userQuota';
 import { cognitionWebsocketServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
 import type { LexicalEditor } from 'lexical';
-import { createEffect, createSignal, Show } from 'solid-js';
+import { createEffect, createSignal, Show, untrack } from 'solid-js';
 import { pendingLocationParamsSignal } from '../signal/pendingLocationParams';
 
 export function Chat(props: { data: ChatData }) {
@@ -149,7 +149,8 @@ export function Chat(props: { data: ChatData }) {
   });
 
   createEffect(() => {
-    if (scopeId()) {
+    if (!scopeId()) return;
+    untrack(() => {
       registerHotkey({
         hotkey: 'enter',
         scopeId: scopeId(),
@@ -165,13 +166,17 @@ export function Chat(props: { data: ChatData }) {
         hotkeyToken: TOKENS.block.focus,
         hide: true,
       });
-    }
+    });
   });
 
+  // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
+  let hasRun = false;
   createEffect(() => {
+    if (hasRun) return;
     if (!blockElement()) return;
     if (!navigatedFromJK()) return;
     blockElement()?.focus();
+    hasRun = true;
   });
 
   return (

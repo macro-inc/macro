@@ -154,6 +154,7 @@ import {
   onCleanup,
   onMount,
   Show,
+  untrack,
 } from 'solid-js';
 import {
   completionSignal,
@@ -167,6 +168,7 @@ import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
 import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
+import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 
 false && fileDrop;
 
@@ -182,6 +184,8 @@ const DRAG_EVENT_PADDING = 8;
 export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
+
+  const mdDocumentName = useBlockDocumentName('');
 
   const saveMarkdownDocument = useSaveMarkdownDocument();
   const setMdStore = mdStore.set;
@@ -838,9 +842,9 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     setEditorReady(true);
   });
 
-  // Auto-focus on mount if enabled and editor is ready and empty.
+  // Auto-focus on mount if enabled and editor is ready and document name is not empty.
   createEffect(() => {
-    if (props.autoFocusOnMount && editorReady() && editorHasNoContent()) {
+    if (props.autoFocusOnMount && editorReady() && untrack(mdDocumentName) !== '') {
       editor.focus(undefined, { defaultSelection: 'rootStart' });
     }
   });
