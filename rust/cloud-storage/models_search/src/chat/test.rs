@@ -218,6 +218,7 @@ fn test_search_response_item_to_chat_response_item_with_metadata() {
                 highlight: SearchHighlight::default(),
                 updated_at: 1234567890,
                 title: "Test".to_string(),
+                score: None,
             },
             ChatMessageSearchResult {
                 chat_message_id: "msg_2".to_string(),
@@ -225,6 +226,7 @@ fn test_search_response_item_to_chat_response_item_with_metadata() {
                 highlight: SearchHighlight::default(),
                 updated_at: 1234567891,
                 title: "Test".to_string(),
+                score: None,
             },
         ],
         metadata: ChatSearchMetadata {
@@ -267,6 +269,7 @@ fn test_serialization_equivalence() {
             highlight: SearchHighlight::default(),
             updated_at: 1234567890,
             title: "Test Chat".to_string(),
+            score: None,
         }],
     };
 
@@ -278,6 +281,7 @@ fn test_serialization_equivalence() {
             highlight: SearchHighlight::default(),
             updated_at: 1234567890,
             title: "Test Chat".to_string(),
+            score: None,
         }],
         metadata: ChatSearchMetadata {
             chat_id: "chat_123".to_string(),

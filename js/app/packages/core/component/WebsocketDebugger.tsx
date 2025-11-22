@@ -10,14 +10,15 @@ import {
   state as storageState,
   ws as storageWs,
 } from '@service-storage/websocket';
-import { WebSocketState } from '@websocket/index';
+import { WebsocketConnectionState } from '@websocket';
 import { createSignal, onCleanup, onMount, Show } from 'solid-js';
 
-const WebSocketStateLabels = {
-  [WebSocketState.Connecting]: 'Connecting',
-  [WebSocketState.Open]: 'Open',
-  [WebSocketState.Closing]: 'Closing',
-  [WebSocketState.Closed]: 'Closed',
+const WebsocketConnectionStateLabels = {
+  [WebsocketConnectionState.Connecting]: 'Connecting',
+  [WebsocketConnectionState.Open]: 'Open',
+  [WebsocketConnectionState.Closing]: 'Closing',
+  [WebsocketConnectionState.Closed]: 'Closed',
+  [WebsocketConnectionState.Reconnecting]: 'Reconnecting',
 } as const;
 
 export function WebsocketDebugger() {
@@ -83,7 +84,9 @@ export function WebsocketDebugger() {
       style={{
         left: `${position().x}px`,
         top: `${position().y}px`,
-        cursor: isDragging() ? 'grabbing' : 'default',
+        cursor: isDragging()
+          ? 'var(--cursor-grabbing)'
+          : 'var(--cursor-default)',
       }}
       onMouseDown={handleMouseDown}
     >
@@ -105,26 +108,26 @@ export function WebsocketDebugger() {
               <div class="text-sm font-medium text-ink">Cognition Service</div>
               <span
                 class={`text-xs font-medium px-3 py-1.5 rounded-lg ${
-                  cognitionState() === WebSocketState.Open
+                  cognitionState() === WebsocketConnectionState.Open
                     ? 'bg-success-bg text-success-ink border border-success/30'
-                    : cognitionState() === WebSocketState.Connecting
+                    : cognitionState() === WebsocketConnectionState.Connecting
                       ? 'bg-alert/10 text-alert-ink border border-alert/30'
                       : 'bg-failure-bg text-failure-ink border border-failure/30'
                 }`}
               >
-                {WebSocketStateLabels[cognitionState()]}
+                {WebsocketConnectionStateLabels[cognitionState()]}
               </span>
             </div>
             <div class="flex gap-2">
               <button
                 onClick={() => cognitionWs.close()}
                 disabled={
-                  cognitionState() === WebSocketState.Closed ||
-                  cognitionState() === WebSocketState.Closing
+                  cognitionState() === WebsocketConnectionState.Closed ||
+                  cognitionState() === WebsocketConnectionState.Closing
                 }
                 class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${
-                  cognitionState() === WebSocketState.Closed ||
-                  cognitionState() === WebSocketState.Closing
+                  cognitionState() === WebsocketConnectionState.Closed ||
+                  cognitionState() === WebsocketConnectionState.Closing
                     ? 'bg-edge/20 text-ink-disabled border-edge/30 cursor-not-allowed'
                     : 'bg-failure-bg hover:bg-failure text-failure-ink border-failure/30'
                 }`}
@@ -133,9 +136,9 @@ export function WebsocketDebugger() {
               </button>
               <button
                 onClick={() => cognitionWs.reconnect()}
-                disabled={cognitionState() === WebSocketState.Open}
+                disabled={cognitionState() === WebsocketConnectionState.Open}
                 class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${
-                  cognitionState() === WebSocketState.Open
+                  cognitionState() === WebsocketConnectionState.Open
                     ? 'bg-edge/20 text-ink-disabled border-edge/30 cursor-not-allowed'
                     : 'bg-accent/10 hover:bg-accent/20 text-accent-ink border-accent/30'
                 }`}
@@ -151,26 +154,26 @@ export function WebsocketDebugger() {
               <div class="text-sm font-medium text-ink">Connection Service</div>
               <span
                 class={`text-xs font-medium px-3 py-1.5 rounded-lg ${
-                  connectionState() === WebSocketState.Open
+                  connectionState() === WebsocketConnectionState.Open
                     ? 'bg-success-bg text-success-ink border border-success/30'
-                    : connectionState() === WebSocketState.Connecting
+                    : connectionState() === WebsocketConnectionState.Connecting
                       ? 'bg-alert/10 text-alert-ink border border-alert/30'
                       : 'bg-failure-bg text-failure-ink border border-failure/30'
                 }`}
               >
-                {WebSocketStateLabels[connectionState()]}
+                {WebsocketConnectionStateLabels[connectionState()]}
               </span>
             </div>
             <div class="flex gap-2">
               <button
                 onClick={() => connectionWs.close()}
                 disabled={
-                  connectionState() === WebSocketState.Closed ||
-                  connectionState() === WebSocketState.Closing
+                  connectionState() === WebsocketConnectionState.Closed ||
+                  connectionState() === WebsocketConnectionState.Closing
                 }
                 class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${
-                  connectionState() === WebSocketState.Closed ||
-                  connectionState() === WebSocketState.Closing
+                  connectionState() === WebsocketConnectionState.Closed ||
+                  connectionState() === WebsocketConnectionState.Closing
                     ? 'bg-edge/20 text-ink-disabled border-edge/30 cursor-not-allowed'
                     : 'bg-failure-bg hover:bg-failure text-failure-ink border-failure/30'
                 }`}
@@ -179,9 +182,9 @@ export function WebsocketDebugger() {
               </button>
               <button
                 onClick={() => connectionWs.reconnect()}
-                disabled={connectionState() === WebSocketState.Open}
+                disabled={connectionState() === WebsocketConnectionState.Open}
                 class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${
-                  connectionState() === WebSocketState.Open
+                  connectionState() === WebsocketConnectionState.Open
                     ? 'bg-edge/20 text-ink-disabled border-edge/30 cursor-not-allowed'
                     : 'bg-accent/10 hover:bg-accent/20 text-accent-ink border-accent/30'
                 }`}
@@ -197,26 +200,26 @@ export function WebsocketDebugger() {
               <div class="text-sm font-medium text-ink">Storage Service</div>
               <span
                 class={`text-xs font-medium px-3 py-1.5 rounded-lg ${
-                  storageState() === WebSocketState.Open
+                  storageState() === WebsocketConnectionState.Open
                     ? 'bg-success-bg text-success-ink border border-success/30'
-                    : storageState() === WebSocketState.Connecting
+                    : storageState() === WebsocketConnectionState.Connecting
                       ? 'bg-alert/10 text-alert-ink border border-alert/30'
                       : 'bg-failure-bg text-failure-ink border border-failure/30'
                 }`}
               >
-                {WebSocketStateLabels[storageState()]}
+                {WebsocketConnectionStateLabels[storageState()]}
               </span>
             </div>
             <div class="flex gap-2">
               <button
                 onClick={() => storageWs.close()}
                 disabled={
-                  storageState() === WebSocketState.Closed ||
-                  storageState() === WebSocketState.Closing
+                  storageState() === WebsocketConnectionState.Closed ||
+                  storageState() === WebsocketConnectionState.Closing
                 }
                 class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${
-                  storageState() === WebSocketState.Closed ||
-                  storageState() === WebSocketState.Closing
+                  storageState() === WebsocketConnectionState.Closed ||
+                  storageState() === WebsocketConnectionState.Closing
                     ? 'bg-edge/20 text-ink-disabled border-edge/30 cursor-not-allowed'
                     : 'bg-failure-bg hover:bg-failure text-failure-ink border-failure/30'
                 }`}
@@ -225,9 +228,9 @@ export function WebsocketDebugger() {
               </button>
               <button
                 onClick={() => storageWs.reconnect()}
-                disabled={storageState() === WebSocketState.Open}
+                disabled={storageState() === WebsocketConnectionState.Open}
                 class={`flex-1 text-xs font-medium px-3 py-2 rounded-lg transition-colors duration-150 border ${
-                  storageState() === WebSocketState.Open
+                  storageState() === WebsocketConnectionState.Open
                     ? 'bg-edge/20 text-ink-disabled border-edge/30 cursor-not-allowed'
                     : 'bg-accent/10 hover:bg-accent/20 text-accent-ink border-accent/30'
                 }`}

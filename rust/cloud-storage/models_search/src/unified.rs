@@ -1,8 +1,11 @@
+use std::collections::HashSet;
+
 use crate::channel::ChannelSearchResponseItemWithMetadata;
 use crate::chat::ChatSearchResponseItemWithMetadata;
 use crate::document::DocumentSearchResponseItemWithMetadata;
 use crate::email::EmailSearchResponseItemWithMetadata;
 use crate::project::ProjectSearchResponseItemWithMetadata;
+use crate::score::calculate_average;
 use crate::{
     MatchType, SearchOn, channel::SimpleChannelSearchReponseBaseItem,
     chat::SimpleChatSearchResponseBaseItem, document::SimpleDocumentSearchResponseBaseItem,
@@ -56,6 +59,40 @@ pub struct UnifiedSearchRequest {
     pub include: Vec<UnifiedSearchIndex>,
 }
 
+impl From<UnifiedSearchIndex> for models_opensearch::SearchEntityType {
+    fn from(index: UnifiedSearchIndex) -> Self {
+        match index {
+            UnifiedSearchIndex::Channels => Self::Channels,
+            UnifiedSearchIndex::Chats => Self::Chats,
+            UnifiedSearchIndex::Documents => Self::Documents,
+            UnifiedSearchIndex::Emails => Self::Emails,
+            UnifiedSearchIndex::Projects => Self::Projects,
+        }
+    }
+}
+
+/// Generates the search indices to search over for unified search
+pub fn generate_unified_search_indices(
+    include: Vec<UnifiedSearchIndex>,
+) -> HashSet<models_opensearch::SearchEntityType> {
+    if include.is_empty() {
+        let include: Vec<models_opensearch::SearchEntityType> = [
+            UnifiedSearchIndex::Channels,
+            UnifiedSearchIndex::Chats,
+            UnifiedSearchIndex::Documents,
+            UnifiedSearchIndex::Emails,
+            UnifiedSearchIndex::Projects,
+        ]
+        .into_iter()
+        .map(|i| i.into())
+        .collect();
+
+        include.into_iter().collect()
+    } else {
+        include.into_iter().map(|i| i.into()).collect()
+    }
+}
+
 // TODO: there's a data correlation between Filters and Response Item. Can this be consolidated?
 // None means do not search this entity, Some(_::default()) means search all for this entity
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone, JsonSchema)]
@@ -94,6 +131,19 @@ pub enum UnifiedSearchResponseItem {
     Project(ProjectSearchResponseItemWithMetadata),
 }
 
+impl UnifiedSearchResponseItem {
+    /// Calculate the average score from search_results
+    pub fn average_score(&self) -> f64 {
+        match self {
+            Self::Document(item) => calculate_average(&item.extra.document_search_results),
+            Self::Chat(item) => calculate_average(&item.extra.chat_search_results),
+            Self::Email(item) => calculate_average(&item.extra.email_message_search_results),
+            Self::Channel(item) => calculate_average(&item.extra.channel_message_search_results),
+            Self::Project(item) => calculate_average(&item.extra.project_search_results),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, ToSchema, Default)]
 pub struct UnifiedSearchResponse {
     pub results: Vec<UnifiedSearchResponseItem>,
@@ -111,6 +161,79 @@ pub enum SimpleUnifiedSearchResponseBaseItem<T> {
 
 pub type SimpleUnifiedSearchResponseItem =
     SimpleUnifiedSearchResponseBaseItem<crate::TimestampSeconds>;
+
+impl From<opensearch_client::search::unified::UnifiedSearchResponse>
+    for SimpleUnifiedSearchResponseItem
+{
+    fn from(response: opensearch_client::search::unified::UnifiedSearchResponse) -> Self {
+        match response {
+            opensearch_client::search::unified::UnifiedSearchResponse::Document(a) => {
+                SimpleUnifiedSearchResponseItem::Document(SimpleDocumentSearchResponseBaseItem {
+                    document_id: a.document_id,
+                    document_name: a.document_name,
+                    node_id: a.node_id,
+                    owner_id: a.owner_id,
+                    file_type: a.file_type,
+                    updated_at: a.updated_at.into(),
+                    highlight: a.highlight.into(),
+                    raw_content: a.raw_content,
+                })
+            }
+            opensearch_client::search::unified::UnifiedSearchResponse::Chat(a) => {
+                SimpleUnifiedSearchResponseItem::Chat(SimpleChatSearchResponseBaseItem {
+                    chat_id: a.chat_id,
+                    chat_message_id: a.chat_message_id,
+                    user_id: a.user_id,
+                    role: a.role,
+                    title: a.title,
+                    highlight: a.highlight.into(),
+                    updated_at: a.updated_at.into(),
+                })
+            }
+            opensearch_client::search::unified::UnifiedSearchResponse::Email(a) => {
+                SimpleUnifiedSearchResponseItem::Email(SimpleEmailSearchResponseBaseItem {
+                    thread_id: a.thread_id,
+                    message_id: a.message_id,
+                    subject: a.subject,
+                    sender: a.sender,
+                    recipients: a.recipients,
+                    cc: a.cc,
+                    bcc: a.bcc,
+                    labels: a.labels,
+                    link_id: a.link_id,
+                    user_id: a.user_id,
+                    updated_at: a.updated_at.into(),
+                    sent_at: a.sent_at.map(|a| a.into()),
+                    highlight: a.highlight.into(),
+                })
+            }
+            opensearch_client::search::unified::UnifiedSearchResponse::ChannelMessage(a) => {
+                SimpleUnifiedSearchResponseItem::Channel(SimpleChannelSearchReponseBaseItem {
+                    channel_id: a.channel_id,
+                    channel_type: a.channel_type,
+                    org_id: a.org_id,
+                    message_id: a.message_id,
+                    thread_id: a.thread_id,
+                    sender_id: a.sender_id,
+                    mentions: a.mentions,
+                    created_at: a.created_at.into(),
+                    updated_at: a.updated_at.into(),
+                    highlight: a.highlight.into(),
+                })
+            }
+            opensearch_client::search::unified::UnifiedSearchResponse::Project(a) => {
+                SimpleUnifiedSearchResponseItem::Project(SimpleProjectSearchResponseBaseItem {
+                    project_id: a.project_id,
+                    project_name: a.project_name,
+                    user_id: a.user_id,
+                    created_at: a.created_at.into(),
+                    updated_at: a.updated_at.into(),
+                    highlight: a.highlight.into(),
+                })
+            }
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, Default)]
 pub struct SimpleUnifiedSearchBaseResponse<T> {

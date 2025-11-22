@@ -136,12 +136,6 @@
       "@block-image/*": [
         "./packages/block-image/*"
       ],
-      "@block-color/*": [
-        "./packages/block-color/*"
-      ],
-      "@block-start/*": [
-        "./packages/block-start/*"
-      ],
       "@block-unknown/*": [
         "./packages/block-unknown/*"
       ],

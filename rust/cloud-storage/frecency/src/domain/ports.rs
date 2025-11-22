@@ -7,7 +7,7 @@ use thiserror::Error;
 
 use crate::domain::models::{
     AggregateFrecency, AggregateId, EventAggregationStats, EventRecord, EventRecordWithId,
-    FrecencyPageRequest, FrecencyPageResponse,
+    FrecencyByIdsRequest, FrecencyPageRequest, FrecencyPageResponse,
 };
 
 /// Trait for interacting with the storage of [EventRecord] records
@@ -57,8 +57,7 @@ pub trait AggregateFrecencyStorage: Send + Sync + 'static {
     /// retrieve the top frecency score records for this user
     fn get_top_entities(
         &self,
-        user_id: MacroUserIdStr<'_>,
-        limit: u32,
+        req: FrecencyPageRequest<'_>,
     ) -> impl Future<Output = Result<Vec<AggregateFrecency>, Self::Err>> + Send;
 
     /// write an [AggregateFrecency] back to storage
@@ -67,21 +66,12 @@ pub trait AggregateFrecencyStorage: Send + Sync + 'static {
         frecency: AggregateFrecency,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
-    /// retrieve the specific aggregate record for this entity + user pair
-    fn get_aggregate_for_user_entity_pair(
-        &self,
-        user_id: MacroUserIdStr<'_>,
-        entity: Entity<'_>,
-    ) -> impl Future<Output = Result<Option<AggregateFrecency>, Self::Err>> + Send;
-
     /// retrieve the specific aggregate record for the input entities + user pair
-    fn get_aggregate_for_user_entities<T>(
+    fn get_aggregate_for_user_entities<'a>(
         &self,
-        user_id: MacroUserIdStr<'static>,
-        entities: T,
-    ) -> impl Future<Output = Result<Vec<AggregateFrecency>, Self::Err>>
-    where
-        T: Iterator<Item = Entity<'static>>;
+        user_id: MacroUserIdStr<'a>,
+        entities: &'a [Entity<'a>],
+    ) -> impl Future<Output = Result<Vec<AggregateFrecency>, Self::Err>> + Send;
 }
 
 /// port for getting the current system time
@@ -134,5 +124,11 @@ pub trait FrecencyQueryService: Send + Sync + 'static {
     fn get_frecency_page<'a>(
         &self,
         query: FrecencyPageRequest<'a>,
+    ) -> impl Future<Output = Result<FrecencyPageResponse, FrecencyQueryErr>> + Send;
+
+    /// the the [FrecencyPageResponse] for the input [FrecencyByIdsRequest]
+    fn get_frecencies_by_ids<'a>(
+        &self,
+        request: FrecencyByIdsRequest<'a>,
     ) -> impl Future<Output = Result<FrecencyPageResponse, FrecencyQueryErr>> + Send;
 }

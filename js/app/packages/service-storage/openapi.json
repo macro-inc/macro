@@ -74,140 +74,6 @@
         "deprecated": true
       }
     },
-    "/affiliate": {
-      "get": {
-        "tags": ["affiliate::get_affiliate_users"],
-        "summary": "Gets the users that have been affiliated with your code",
-        "operationId": "get_affiliate_users",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetAffiliateUsersResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/affiliate/referred_by": {
-      "get": {
-        "tags": ["affiliate::get_affiliate_referred_by"],
-        "summary": "Gets who the affiliate code the user was referred by",
-        "operationId": "get_affiliate_referred_by",
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetUsersAffiliateResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/affiliate/{affiliate_code}": {
-      "post": {
-        "tags": ["affiliate::affiliate_user"],
-        "summary": "Affiliates a user with a given affiliate code",
-        "operationId": "affiliate_user",
-        "parameters": [
-          {
-            "name": "affiliate_code",
-            "in": "path",
-            "description": "Affiliate code",
-            "required": true,
-            "schema": { "type": "string" }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
     "/annotations/anchors": {
       "delete": {
         "tags": ["annotations::delete_anchor"],
@@ -768,73 +634,6 @@
                     }
                   }
                 }
-              }
-            }
-          },
-          "400": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "403": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GenericErrorResponse"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/documents/blank_docx": {
-      "post": {
-        "tags": ["documents::create_document::create_blank_docx"],
-        "summary": "Creates a new blank docx file for the user",
-        "operationId": "create_blank_docx",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateBlankDocxRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "",
-            "content": {
-              "application/json": {
-                "schema": { "$ref": "#/components/schemas/DocumentMetadata" }
               }
             }
           },
@@ -2328,7 +2127,7 @@
           {
             "name": "expand",
             "in": "query",
-            "description": "Whether to expand projects. Defaults to false.",
+            "description": "Whether to expand projects. Defaults to true.",
             "required": false,
             "schema": { "type": "boolean" }
           },
@@ -2354,6 +2153,46 @@
             "schema": { "type": "string" }
           }
         ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SoupPage" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["soup::inbound::axum_router"],
+        "summary": "Gets the items the user has access to",
+        "operationId": "post_items_soup",
+        "parameters": [
+          {
+            "name": "cursor",
+            "in": "query",
+            "description": "Base64 encoded cursor value.",
+            "required": false,
+            "schema": { "type": "string" }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PostSoupRequest" }
+            }
+          },
+          "required": true
+        },
         "responses": {
           "200": {
             "description": "",
@@ -4054,14 +3893,6 @@
           "pinType": { "type": "string", "description": "The type of the pin" }
         }
       },
-      "AffiliateUser": {
-        "type": "object",
-        "required": ["email", "createdAt"],
-        "properties": {
-          "createdAt": { "type": "integer", "format": "int64" },
-          "email": { "type": "string" }
-        }
-      },
       "Anchor": { "oneOf": [{ "$ref": "#/components/schemas/PdfAnchor" }] },
       "AnchorId": {
         "oneOf": [
@@ -4300,6 +4131,37 @@
           }
         }
       },
+      "ChannelFilters": {
+        "type": "object",
+        "description": "The channel message filters used to filter down what channel messages you search over.",
+        "properties": {
+          "channel_ids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Channel IDs to search within. Examples: ['general']. Empty to search all accessible channels."
+          },
+          "mentions": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Channel user mentions to search for. Examples: ['@username']. Empty if not filtering by mentions."
+          },
+          "org_id": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Channel organization ID to search within. Empty to ignore organization filtering."
+          },
+          "sender_ids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Sender IDs to search within. Examples: ['user1']. Empty to search all accessible senders."
+          },
+          "thread_ids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Channel thread IDs to search within. Examples: ['thread123']. Empty to search all threads."
+          }
+        }
+      },
       "ChannelSharePermission": {
         "type": "object",
         "description": "The channel share permission",
@@ -4353,6 +4215,32 @@
           "userId": {
             "type": "string",
             "description": "Who the chat belongs to"
+          }
+        }
+      },
+      "ChatFilters": {
+        "type": "object",
+        "description": "The chat filters used to filter down what chats you search over.",
+        "properties": {
+          "chat_ids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Chat ids to search over. Examples: ['chat1'], ['chat1', 'chat2']. When provided, chat search will only match results on these chats. Empty to search all accessible chats."
+          },
+          "owners": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Filter by chat owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+          },
+          "project_ids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "A list of project ids to search within. Examples: ['project1']. Empty to ignore project filtering."
+          },
+          "role": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Chat message roles to search. Examples: ['user'], ['assistant']. Empty to search all roles."
           }
         }
       },
@@ -4420,10 +4308,6 @@
             ]
           }
         }
-      },
-      "CreateBlankDocxRequest": {
-        "type": "object",
-        "properties": { "projectId": { "type": ["string", "null"] } }
       },
       "CreateBulkDocumentResponse": {
         "type": "object",
@@ -4517,6 +4401,11 @@
             "format": "int64",
             "description": "The version id if the document is being branched."
           },
+          "createdAt": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Optional time to set the document's created_at to. Set when backfilling email attachments."
+          },
           "documentFamilyId": {
             "type": ["integer", "null"],
             "format": "int64",
@@ -4525,6 +4414,11 @@
           "documentName": {
             "type": "string",
             "description": "The name of the document without extension."
+          },
+          "emailAttachmentId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "Internal only field that links the document created to the specified email attachment by\ncreating a row in the document_email table."
           },
           "fileType": {
             "type": ["string", "null"],
@@ -4731,6 +4625,32 @@
             }
           }
         ]
+      },
+      "DocumentFilters": {
+        "type": "object",
+        "description": "The document filters used to filter down what documents you search over.",
+        "properties": {
+          "document_ids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Document ids to search over. Examples: ['doc1'], ['doc1', 'doc2']. Empty to search all accessible documents."
+          },
+          "file_types": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Document file types to search. Examples: ['pdf'], ['md', 'txt']. Empty to search all file types."
+          },
+          "owners": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Filter by document owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+          },
+          "project_ids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "A list of project ids to search within. Examples: ['project1'].\nfiltering. Empty to ignore project filtering."
+          }
+        }
       },
       "DocumentMetadata": {
         "type": "object",
@@ -5092,9 +5012,61 @@
           "yPct": { "type": ["number", "null"], "format": "double" }
         }
       },
+      "EmailFilters": {
+        "type": "object",
+        "description": "The email filters used to filter down what emails you search over.",
+        "properties": {
+          "bcc": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Email BCC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by BCC."
+          },
+          "cc": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Email CC addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by CC."
+          },
+          "recipients": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Email Recipient addresses to filter by. Examples: ['user@example.com']. Empty if not filtering by Recipient."
+          },
+          "senders": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders."
+          }
+        }
+      },
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
+      },
+      "EntityFilters": {
+        "type": "object",
+        "description": "a bundle of all of the filters for each entity type",
+        "properties": {
+          "channel_filters": {
+            "$ref": "#/components/schemas/ChannelFilters",
+            "description": "the bundled [ChannelFilters]"
+          },
+          "chat_filters": {
+            "$ref": "#/components/schemas/ChatFilters",
+            "description": "the bundled [ChatFilters]"
+          },
+          "document_filters": {
+            "$ref": "#/components/schemas/DocumentFilters",
+            "description": "the bundled [DocumentFilters]"
+          },
+          "email_filters": {
+            "$ref": "#/components/schemas/EmailFilters",
+            "description": "the bundled [EmailFilters]"
+          },
+          "project_filters": {
+            "$ref": "#/components/schemas/ProjectFilters",
+            "description": "the bundled [ProjectFilters]"
+          }
+        }
       },
       "ErrorResponse": {
         "type": "object",
@@ -5589,7 +5561,7 @@
       },
       "FolderItem": {
         "type": "object",
-        "required": ["name", "relativePath", "sha"],
+        "required": ["name", "fullName", "relativePath", "sha"],
         "properties": {
           "fileType": {
             "oneOf": [
@@ -5599,6 +5571,10 @@
                 "description": "The file type of the file"
               }
             ]
+          },
+          "fullName": {
+            "type": "string",
+            "description": "The full OS name of the file for deduplication"
           },
           "name": {
             "type": "string",
@@ -5669,16 +5645,6 @@
           }
         },
         "deprecated": true
-      },
-      "GetAffiliateUsersResponse": {
-        "type": "object",
-        "required": ["users"],
-        "properties": {
-          "users": {
-            "type": "array",
-            "items": { "$ref": "#/components/schemas/AffiliateUser" }
-          }
-        }
       },
       "GetBatchPreviewRequest": {
         "type": "object",
@@ -6007,17 +5973,6 @@
           }
         }
       },
-      "GetUsersAffiliateResponse": {
-        "type": "object",
-        "properties": {
-          "affiliate": {
-            "oneOf": [
-              { "type": "null" },
-              { "$ref": "#/components/schemas/AffiliateUser" }
-            ]
-          }
-        }
-      },
       "HashMap": {
         "type": "object",
         "additionalProperties": {
@@ -6100,6 +6055,30 @@
             }
           }
         ]
+      },
+      "Params": {
+        "type": "object",
+        "properties": {
+          "expand": {
+            "type": ["boolean", "null"],
+            "description": "Whether to expand projects. Defaults to true."
+          },
+          "limit": {
+            "type": ["integer", "null"],
+            "format": "int32",
+            "description": "Limit the number of items returned. Defaults to 20. Max 500.",
+            "minimum": 0
+          },
+          "sort_method": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/SoupApiSort",
+                "description": "Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at."
+              }
+            ]
+          }
+        }
       },
       "PatchProjectRequestV2": {
         "type": "object",
@@ -6423,6 +6402,12 @@
           }
         }
       },
+      "PostSoupRequest": {
+        "allOf": [
+          { "$ref": "#/components/schemas/EntityFilters" },
+          { "$ref": "#/components/schemas/Params" }
+        ]
+      },
       "PreSaveDocumentRequest": {
         "type": "object",
         "required": ["newBom"],
@@ -6533,6 +6518,22 @@
           "status": { "$ref": "#/components/schemas/UploadDocumentStatus" }
         }
       },
+      "ProjectFilters": {
+        "type": "object",
+        "description": "The project filters used to filter down what projects you search over.",
+        "properties": {
+          "owners": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Filter by project owner. Examples: ['macro|user1@user.com'], ['macro|user1@user.com', 'macro|user2@user.com']. Empty to search all owners."
+          },
+          "project_ids": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects."
+          }
+        }
+      },
       "ProjectPreview": {
         "oneOf": [
           {
@@ -6575,11 +6576,12 @@
       },
       "ProjectPreviewData": {
         "type": "object",
-        "required": ["id", "name", "owner", "updatedAt"],
+        "required": ["id", "name", "owner", "path", "updatedAt"],
         "properties": {
           "id": { "type": "string" },
           "name": { "type": "string" },
           "owner": { "type": "string" },
+          "path": { "type": "array", "items": { "type": "string" } },
           "updatedAt": { "type": "integer", "format": "int64" }
         }
       },
@@ -6745,7 +6747,11 @@
             "format": "int64",
             "description": "The time the chat was created"
           },
-          "id": { "type": "string", "description": "The chat uuid" },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The chat uuid"
+          },
           "isPersistent": {
             "type": "boolean",
             "description": "Whether the chat is persistent or not"
@@ -6757,6 +6763,7 @@
           },
           "projectId": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "The project id of the chat"
           },
           "updatedAt": {
@@ -6785,6 +6792,7 @@
         "properties": {
           "branchedFromId": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "The id of the document this document branched from"
           },
           "branchedFromVersionId": {
@@ -6811,7 +6819,11 @@
             "type": ["string", "null"],
             "description": "The file type of the document (e.g. pdf, docx)"
           },
-          "id": { "type": "string", "description": "The document id" },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The document id"
+          },
           "name": {
             "type": "string",
             "description": "The name of the document"
@@ -6822,6 +6834,7 @@
           },
           "projectId": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "The id of the project that this document belongs to"
           },
           "sha": {
@@ -6886,7 +6899,11 @@
             "format": "int64",
             "description": "The time the project was created"
           },
-          "id": { "type": "string", "description": "The id of the project" },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The id of the project"
+          },
           "name": {
             "type": "string",
             "description": "The name of the project"
@@ -6897,6 +6914,7 @@
           },
           "parentId": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "The parent project id"
           },
           "updatedAt": {

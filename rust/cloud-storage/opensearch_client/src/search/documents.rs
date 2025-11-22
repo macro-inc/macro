@@ -1,5 +1,5 @@
 use crate::{
-    DOCUMENTS_INDEX, Result, delegate_methods,
+    Result, delegate_methods,
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
@@ -9,20 +9,21 @@ use crate::{
 };
 
 use crate::SearchOn;
+use models_opensearch::SearchIndex;
 use opensearch_query_builder::{
-    FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType, ToOpenSearchJson,
+    BoolQueryBuilder, FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
+    ToOpenSearchJson,
 };
 use serde_json::Value;
 
 #[derive(Clone)]
-struct DocumentSearchConfig;
+pub(crate) struct DocumentSearchConfig;
 
 impl SearchQueryConfig for DocumentSearchConfig {
-    const INDEX: &'static str = DOCUMENTS_INDEX;
     const USER_ID_KEY: &'static str = "owner_id";
-    const TITLE_KEY: &'static str = "document_name";
+    const TITLE_KEY: Option<&'static str> = Some("document_name");
 
-    fn default_sort_types() -> Vec<SortType> {
+    fn default_sort_types() -> Vec<SortType<'static>> {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
@@ -31,7 +32,7 @@ impl SearchQueryConfig for DocumentSearchConfig {
     }
 }
 
-struct DocumentQueryBuilder {
+pub(crate) struct DocumentQueryBuilder {
     inner: SearchQueryBuilder<DocumentSearchConfig>,
 }
 
@@ -55,20 +56,24 @@ impl DocumentQueryBuilder {
         fn disable_recency(disable_recency: bool) -> Self;
     }
 
-    fn build_search_request(self) -> Result<SearchRequest> {
+    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
+        self.inner.build_bool_query()
+    }
+
+    fn build_search_request(self) -> Result<SearchRequest<'static>> {
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
         // SearchOn::NameContent is used
         let search_request = self
             .inner
-            .build_search_request(self.inner.build_bool_query()?.build())?;
+            .build_search_request(self.build_bool_query()?.build())?;
 
         Ok(search_request)
     }
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
-pub struct DocumentIndex {
+pub(crate) struct DocumentIndex {
     pub entity_id: String,
     pub document_name: String,
     pub node_id: String,
@@ -79,7 +84,7 @@ pub struct DocumentIndex {
     pub updated_at_seconds: i64,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct DocumentSearchResponse {
     pub document_id: String,
     pub document_name: String,
@@ -90,6 +95,7 @@ pub struct DocumentSearchResponse {
     /// Contains the highlight matches for the document name and content
     pub highlight: Highlight,
     pub raw_content: Option<String>,
+    pub score: Option<f64>,
 }
 
 #[derive(Debug)]
@@ -106,20 +112,25 @@ pub struct DocumentSearchArgs {
     pub disable_recency: bool,
 }
 
+impl From<DocumentSearchArgs> for DocumentQueryBuilder {
+    fn from(args: DocumentSearchArgs) -> Self {
+        DocumentQueryBuilder::new(args.terms)
+            .match_type(&args.match_type)
+            .page_size(args.page_size)
+            .page(args.page)
+            .user_id(&args.user_id)
+            .ids(args.document_ids)
+            .search_on(args.search_on)
+            .collapse(args.collapse)
+            .ids_only(args.ids_only)
+            .disable_recency(args.disable_recency)
+    }
+}
+
 impl DocumentSearchArgs {
     pub fn build(self) -> Result<Value> {
-        Ok(DocumentQueryBuilder::new(self.terms)
-            .match_type(&self.match_type)
-            .page_size(self.page_size)
-            .page(self.page)
-            .user_id(&self.user_id)
-            .ids(self.document_ids)
-            .search_on(self.search_on)
-            .collapse(self.collapse)
-            .ids_only(self.ids_only)
-            .disable_recency(self.disable_recency)
-            .build_search_request()?
-            .to_json())
+        let builder: DocumentQueryBuilder = self.into();
+        Ok(builder.build_search_request()?.to_json())
     }
 }
 
@@ -133,19 +144,28 @@ pub(crate) async fn search_documents(
     tracing::trace!("query: {}", query_body);
 
     let response = client
-        .search(opensearch::SearchParts::Index(&[DOCUMENTS_INDEX]))
+        .search(opensearch::SearchParts::Index(&[
+            SearchIndex::Documents.as_ref()
+        ]))
         .body(query_body)
         .send()
         .await
         .map_client_error()
         .await?;
 
-    let result = response
-        .json::<DefaultSearchResponse<DocumentIndex>>()
+    let bytes = response
+        .bytes()
         .await
-        .map_err(|e| OpensearchClientError::DeserializationFailed {
+        .map_err(|e| OpensearchClientError::HttpBytesError {
             details: e.to_string(),
-            method: Some("search_documents".to_string()),
+        })?;
+
+    let result: DefaultSearchResponse<DocumentIndex> =
+        serde_json::from_slice(&bytes).map_err(|e| {
+            OpensearchClientError::SearchDeserializationFailed {
+                details: e.to_string(),
+                raw_body: String::from_utf8_lossy(&bytes).to_string(),
+            }
         })?;
 
     Ok(result
@@ -153,13 +173,14 @@ pub(crate) async fn search_documents(
         .hits
         .into_iter()
         .map(|hit| DocumentSearchResponse {
-            document_id: hit._source.entity_id,
-            node_id: hit._source.node_id,
-            document_name: hit._source.document_name,
-            owner_id: hit._source.owner_id,
-            file_type: hit._source.file_type,
-            updated_at: hit._source.updated_at_seconds,
-            raw_content: hit._source.raw_content,
+            document_id: hit.source.entity_id,
+            node_id: hit.source.node_id,
+            document_name: hit.source.document_name,
+            owner_id: hit.source.owner_id,
+            file_type: hit.source.file_type,
+            updated_at: hit.source.updated_at_seconds,
+            raw_content: hit.source.raw_content,
+            score: hit.score,
             highlight: hit
                 .highlight
                 .map(|h| {

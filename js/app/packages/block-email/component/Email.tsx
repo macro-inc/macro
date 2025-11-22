@@ -1,5 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
-import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
+import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -12,8 +13,10 @@ import {
   useEmailContacts,
   useOrganizationUsers,
 } from '@core/user';
-import { createEffectOnEntityTypeNotification } from '@notifications/notificationHelpers';
-import { isNotificationWithMetadata } from '@notifications/notificationMetadata';
+import {
+  createEffectOnEntityTypeNotification,
+  isNotificationWithMetadata,
+} from '@notifications';
 import { emailClient } from '@service-email/client';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 import type { Thread } from '@service-email/generated/schemas/thread';
@@ -56,7 +59,6 @@ type EmailProps = {
 export function Email(props: EmailProps) {
   const scopeId = blockHotkeyScopeSignal.get;
 
-  console.log('scopeId()', scopeId());
   const setIsScrollingToMessage = isScrollingToMessage.set;
   const { navigateThread } = useThreadNavigation();
   const blockElement = blockElementSignal.get;
@@ -512,10 +514,14 @@ export function Email(props: EmailProps) {
     });
   });
 
+  // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
+  let hasRun = false;
   createEffect(() => {
+    if (hasRun) return;
     // Focus the email block on mount
     if (!blockElement()) return;
     blockElement()?.focus();
+    hasRun = true;
   });
 
   const notificationSource = useGlobalNotificationSource();
@@ -547,22 +553,18 @@ export function Email(props: EmailProps) {
   );
   let markdownDomRef!: HTMLDivElement;
 
-  createEffect(() => {
-    if (scopeId()) {
-      registerHotkey({
-        hotkey: 'enter',
-        scopeId: scopeId(),
-        description: 'Focus Email Input',
-        keyDownHandler: () => {
-          if (markdownDomRef) {
-            markdownDomRef.focus();
-            return true;
-          }
-          return false;
-        },
-        hide: true,
-      });
-    }
+  registerScopeSignalHotkey(scopeId, {
+    hotkey: 'enter',
+    description: 'Focus Email Input',
+    keyDownHandler: () => {
+      if (markdownDomRef) {
+        markdownDomRef.focus();
+        return true;
+      }
+      return false;
+    },
+    hotkeyToken: TOKENS.block.focus,
+    hide: true,
   });
 
   return (

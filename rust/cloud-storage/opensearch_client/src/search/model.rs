@@ -22,8 +22,10 @@ impl Display for MacroEm {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct Hit<T> {
-    pub _score: Option<f64>,
-    pub _source: T,
+    #[serde(rename = "_score")]
+    pub score: Option<f64>,
+    #[serde(rename = "_source")]
+    pub source: T,
     /// Highlights may or may not be present since we could match
     /// purely on the title of the item
     pub highlight: Option<HashMap<String, Vec<String>>>,
@@ -44,10 +46,14 @@ pub(crate) fn parse_highlight_hit(
     highlight: HashMap<String, Vec<String>>,
     keys: Keys,
 ) -> Highlight {
-    let name = highlight
-        .get(keys.title_key)
-        .and_then(|v| v.first())
-        .map(|v| v.to_string());
+    let name = if let Some(title_key) = keys.title_key {
+        highlight
+            .get(title_key)
+            .and_then(|v| v.first())
+            .map(|v| v.to_string())
+    } else {
+        None
+    };
 
     Highlight {
         name,

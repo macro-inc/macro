@@ -121,7 +121,7 @@ const handler = createToolRenderer({
       renderContext={ctx.renderContext}
       type="response"
     >
-      <ListEmailsToolResponse results={ctx.tool.data.previews?.items || []} />
+      <ListEmailsToolResponse results={ctx.tool.data.items || []} />
     </BaseTool>
   ),
 });

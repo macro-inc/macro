@@ -1,8 +1,9 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
+import { cornerClip } from '@core/util/clipPath';
 import CorvuTooltip, { type FloatingOptions } from '@corvu/tooltip';
 import type { Placement } from '@floating-ui/dom';
 import { type JSX, mergeProps, type ParentProps, Show } from 'solid-js';
-import { BasicHotkey } from './Hotkey';
+import { Hotkey } from './Hotkey';
 
 const TOOLTIP_DELAY = 250;
 
@@ -14,7 +15,7 @@ export type TooltipProps = ParentProps<{
   class?: string;
   delayOverride?: number;
   spanMode?: boolean;
-  hidden?: boolean;
+  hide?: boolean;
 }>;
 
 /**
@@ -72,12 +73,16 @@ export function Tooltip(props: TooltipProps) {
       </CorvuTooltip.Trigger>
       <CorvuTooltip.Portal>
         <CorvuTooltip.Content
+          hidden={props.hide}
           class="z-tool-tip"
           style={{
             'max-width': `calc(100vw - ${2 * padding()}px)`,
           }}
         >
-          <div class="flex items-center justify-center bg-ink p-1.5 text-panel rounded-sm text-xs wrap-break-word">
+          <div
+            class="flex items-center justify-center bg-ink p-1.5 text-panel text-xs wrap-break-word"
+            style={{ 'clip-path': cornerClip('0.2rem', 0, 0, 0) }}
+          >
             {props.tooltip}
           </div>
           {/* Note disabling arrows for now. I think its more on-brand - seamus */}
@@ -112,10 +117,10 @@ export function LabelAndHotKey(props: LabelAndHotKeyProps) {
     >
       <div class="text-xs capitalize">{props.label}</div>
       <Show when={props.hotkeyToken || props.shortcut}>
-        <div class="text-[0.625rem] text-page ml-auto">
+        <div class="text-[0.625rem] text-page ml-auto border border-edge-muted/30 px-1.5 py-0.25">
           {props.hotkeyToken
-            ? BasicHotkey({ token: props.hotkeyToken })
-            : BasicHotkey({ shortcut: props.shortcut })}
+            ? Hotkey({ token: props.hotkeyToken, class: 'flex gap-1' })
+            : Hotkey({ shortcut: props.shortcut, class: 'flex gap-1' })}
         </div>
       </Show>
     </div>

@@ -19,6 +19,9 @@ pub struct ChannelSearchResult {
     pub created_at: i64,
     /// When the channel message was last updated
     pub updated_at: i64,
+    /// The score of the result
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<f64>,
 }
 
 /// A single response item, part of the ChannelSearchResponse object
@@ -28,7 +31,6 @@ pub struct ChannelSearchResponseItem {
     /// These field names are being aligned across all item types
     /// for consistency in our data model.
     pub id: String,
-    pub name: Option<String>,
     /// we don't store this for channels atm but keeping it here for consistency
     pub owner_id: Option<String>,
 
@@ -36,11 +38,18 @@ pub struct ChannelSearchResponseItem {
     pub channel_type: String,
     /// The id of the channel
     pub channel_id: String,
-    /// The name of the channel if present
-    pub channel_name: Option<String>,
     /// The search results for the channel
     /// This may be empty if the search result match was not on content
     pub channel_message_search_results: Vec<ChannelSearchResult>,
+}
+
+/// Metadata for a channel fetched from the database
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ChannelMetadata {
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub viewed_at: Option<i64>,
+    pub interacted_at: Option<i64>,
 }
 
 /// ChannelSearchResponseItem object with channel metadata we fetch from macrodb. we don't store these
@@ -48,10 +57,8 @@ pub struct ChannelSearchResponseItem {
 /// every time the chat updates (specifically for updated_at and viewed_at and interacted_at)
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ChannelSearchResponseItemWithMetadata {
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub viewed_at: Option<i64>,
-    pub interacted_at: Option<i64>,
+    /// Metadata from the database. None if the channel doesn't exist in the database.
+    pub metadata: Option<ChannelMetadata>,
     #[serde(flatten)]
     pub extra: ChannelSearchResponseItem,
 }
@@ -61,8 +68,6 @@ pub struct ChannelSearchResponseItemWithMetadata {
 pub struct ChannelSearchMetadata {
     /// The id of the channel
     pub channel_id: String,
-    /// The name of the channel if present
-    pub channel_name: Option<String>,
     /// The type of channel
     pub channel_type: String,
 }
@@ -73,12 +78,10 @@ impl From<SearchResponseItem<ChannelSearchResult, ChannelSearchMetadata>>
     fn from(response: SearchResponseItem<ChannelSearchResult, ChannelSearchMetadata>) -> Self {
         ChannelSearchResponseItem {
             id: response.metadata.channel_id.clone(),
-            name: response.metadata.channel_name.clone(),
             // we don't store this for channels atm but keeping it here for consistency
             owner_id: None,
             channel_type: response.metadata.channel_type.clone(),
             channel_id: response.metadata.channel_id.clone(),
-            channel_name: response.metadata.channel_name.clone(),
             channel_message_search_results: response.results,
         }
     }
@@ -118,8 +121,6 @@ pub struct ChannelSearchRequest {
 pub struct SimpleChannelSearchReponseBaseItem<T> {
     /// The channel id
     pub channel_id: String,
-    /// The channel name
-    pub channel_name: Option<String>,
     /// The channel type
     pub channel_type: String,
     /// The org id
@@ -151,7 +152,6 @@ impl From<opensearch_client::search::channels::ChannelMessageSearchResponse>
     fn from(response: opensearch_client::search::channels::ChannelMessageSearchResponse) -> Self {
         Self {
             channel_id: response.channel_id,
-            channel_name: response.channel_name,
             channel_type: response.channel_type,
             org_id: response.org_id,
             message_id: response.message_id,

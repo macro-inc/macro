@@ -20,30 +20,20 @@ use models_search::channel::{
 };
 use sqlx::types::Uuid;
 
-/// Performs a search through channels and enriches the results with metadata
-pub async fn search_channels_enriched(
+/// Enriches channel message search results with metadata
+#[tracing::instrument(skip(ctx, results), err)]
+pub(in crate::api::search) async fn enrich_channels(
     ctx: &ApiContext,
     user_id: &str,
-    user_organization_id: Option<i32>,
-    query_params: &SearchPaginationParams,
-    req: ChannelSearchRequest,
+    results: Vec<opensearch_client::search::channels::ChannelMessageSearchResponse>,
 ) -> Result<Vec<ChannelSearchResponseItemWithMetadata>, SearchError> {
-    // Use the simple search to get raw OpenSearch results
-    let opensearch_results =
-        search_channels(ctx, user_id, user_organization_id, query_params, req).await?;
-
+    if results.is_empty() {
+        return Ok(vec![]);
+    }
     // Extract channel IDs from results
-    let channel_ids: Vec<Uuid> = opensearch_results
+    let channel_ids: Vec<Uuid> = results
         .iter()
-        .filter_map(|r| {
-            match Uuid::parse_str(&r.channel_id) {
-                Ok(uuid) => Some(uuid),
-                Err(e) => {
-                    tracing::warn!(error=?e, channel_id=?r.channel_id, "Failed to parse channel ID as UUID");
-                    None
-                }
-            }
-        })
+        .map(|r| r.channel_id.parse().unwrap())
         .collect();
 
     // Fetch channel metadata from comms service
@@ -57,11 +47,26 @@ pub async fn search_channels_enriched(
         .map_err(|e| SearchError::InternalError(e.into()))?;
 
     // Construct enriched results
-    let enriched_results =
-        construct_search_result(opensearch_results, channel_histories.channels_history)
-            .map_err(SearchError::InternalError)?;
+    let enriched_results = construct_search_result(results, channel_histories.channels_history)
+        .map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
+}
+
+/// Performs a search through channels and enriches the results with metadata
+#[tracing::instrument(skip(ctx, req, query_params, user_organization_id), err)]
+pub async fn search_channels_enriched(
+    ctx: &ApiContext,
+    user_id: &str,
+    user_organization_id: Option<i32>,
+    query_params: &SearchPaginationParams,
+    req: ChannelSearchRequest,
+) -> Result<Vec<ChannelSearchResponseItemWithMetadata>, SearchError> {
+    // Use the simple search to get raw OpenSearch results
+    let opensearch_results =
+        search_channels(ctx, user_id, user_organization_id, query_params, req).await?;
+
+    enrich_channels(ctx, user_id, opensearch_results).await
 }
 
 /// Perform a search through your emails
@@ -122,16 +127,20 @@ pub fn construct_search_result(
     let result: Vec<ChannelSearchResponseItemWithMetadata> = result
         .into_iter()
         .map(|item| {
-            let channel_uuid = Uuid::parse_str(&item.channel_id).unwrap_or_else(|_| Uuid::nil());
-            let channel_history_info = channel_histories
-                .get(&channel_uuid)
-                .cloned()
-                .unwrap_or_default();
+            let metadata = Uuid::parse_str(&item.channel_id)
+                .ok()
+                .and_then(|channel_uuid| channel_histories.get(&channel_uuid))
+                .map(
+                    |channel_history_info| models_search::channel::ChannelMetadata {
+                        created_at: channel_history_info.created_at.timestamp(),
+                        updated_at: channel_history_info.updated_at.timestamp(),
+                        viewed_at: channel_history_info.viewed_at.map(|a| a.timestamp()),
+                        interacted_at: channel_history_info.interacted_at.map(|a| a.timestamp()),
+                    },
+                );
+
             ChannelSearchResponseItemWithMetadata {
-                created_at: channel_history_info.created_at.timestamp(),
-                updated_at: channel_history_info.updated_at.timestamp(),
-                viewed_at: channel_history_info.viewed_at.map(|a| a.timestamp()),
-                interacted_at: channel_history_info.interacted_at.map(|a| a.timestamp()),
+                metadata,
                 extra: item,
             }
         })

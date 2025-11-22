@@ -92,18 +92,15 @@ async fn inner_process_message(
         }
     };
 
-    let access_token = fetch_gmail_access_token_from_link(
-        link.clone(),
-        &ctx.redis_client,
-        &ctx.auth_service_client,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::AccessTokenFetchFailed,
-            source: e.context("Failed to fetch access token from link"),
-        })
-    })?;
+    let access_token =
+        fetch_gmail_access_token_from_link(&link, &ctx.redis_client, &ctx.auth_service_client)
+            .await
+            .map_err(|e| {
+                ProcessingError::NonRetryable(DetailedError {
+                    reason: FailureReason::AccessTokenFetchFailed,
+                    source: e.context("Failed to fetch access token from link"),
+                })
+            })?;
 
     match &data.backfill_operation {
         BackfillOperation::Init => {

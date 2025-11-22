@@ -1,12 +1,11 @@
 import { isErr } from '@core/util/maybeResult';
 import { emailClient } from '@service-email/client';
-import type { GetPreviewsCursorResponse } from '@service-email/generated/schemas';
+import type { ApiPaginatedThreadCursor } from '@service-email/generated/schemas';
 import { createSingletonRoot } from '@solid-primitives/rootless';
 import type { Accessor } from 'solid-js';
 import { createMemo, createResource } from 'solid-js';
 
-export type EmailPreview =
-  GetPreviewsCursorResponse['previews']['items'][number];
+export type EmailPreview = ApiPaginatedThreadCursor['items'][number];
 
 // TODO
 async function getPreviews() {
@@ -28,6 +27,6 @@ export function usePreviewEmails(): Accessor<EmailPreview[]> {
   return createMemo(() => {
     const result = r.latest;
     if (!result) return [];
-    return result.previews.items;
+    return result.items;
   });
 }

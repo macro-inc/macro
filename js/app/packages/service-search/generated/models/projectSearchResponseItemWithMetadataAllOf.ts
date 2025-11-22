@@ -4,12 +4,8 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ProjectSearchResponseItemWithMetadataAllOfParentProjectId } from './projectSearchResponseItemWithMetadataAllOfParentProjectId';
-import type { ProjectSearchResponseItemWithMetadataAllOfViewedAt } from './projectSearchResponseItemWithMetadataAllOfViewedAt';
+import type { ProjectSearchResponseItemWithMetadataAllOfMetadata } from './projectSearchResponseItemWithMetadataAllOfMetadata';
 
 export type ProjectSearchResponseItemWithMetadataAllOf = {
-  created_at: number;
-  parent_project_id?: ProjectSearchResponseItemWithMetadataAllOfParentProjectId;
-  updated_at: number;
-  viewed_at?: ProjectSearchResponseItemWithMetadataAllOfViewedAt;
+  metadata?: ProjectSearchResponseItemWithMetadataAllOfMetadata;
 };

@@ -309,6 +309,14 @@ pub struct FrecencyPageRequest<'a> {
     pub filters: Option<EntityFilterAst>,
 }
 
+/// request to get the frecency scores of some list of [Entity] for a specific user [MacroUserIdStr]
+pub struct FrecencyByIdsRequest<'a> {
+    /// the user to fetch the frecency for
+    pub user_id: MacroUserIdStr<'a>,
+    /// the list of entities to fetch
+    pub ids: &'a [Entity<'a>],
+}
+
 /// the response which contains the single page of frecency from the service
 pub struct FrecencyPageResponse {
     results: HashMap<AggregateId<'static>, FrecencyData>,
@@ -328,12 +336,15 @@ impl FrecencyPageResponse {
     pub fn new_mock(iter: impl IntoIterator<Item = AggregateFrecency>) -> Self {
         Self::new(iter)
     }
-}
 
-impl FrecencyPageResponse {
     /// return an iterator over all the ids in the [FrecencyPageResponse]
     pub fn ids(&self) -> impl Iterator<Item = &AggregateId<'static>> + '_ {
         self.results.keys()
+    }
+
+    /// return the inner data structure
+    pub fn into_inner(self) -> HashMap<AggregateId<'static>, FrecencyData> {
+        self.results
     }
 }
 

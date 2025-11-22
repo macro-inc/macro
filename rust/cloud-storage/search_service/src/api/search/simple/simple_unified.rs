@@ -1,65 +1,168 @@
-use super::{simple_channel, simple_chat, simple_document, simple_email, simple_project};
 use crate::api::{
     ApiContext,
-    search::{SearchPaginationParams, simple::SearchError},
+    search::{
+        SearchPaginationParams,
+        simple::{
+            SearchError,
+            filter::{FilterVariantToSearchArgs, UnifiedSearchArgsVariant},
+        },
+    },
 };
 use axum::{
     Extension,
     extract::{self, State},
-    http::StatusCode,
-    response::{IntoResponse, Json, Response},
+    response::Json,
 };
-use futures::{FutureExt, StreamExt, stream::FuturesUnordered};
 use model::{response::ErrorResponse, user::UserContext};
-use models_search::{
-    channel::ChannelSearchRequest,
-    chat::ChatSearchRequest,
-    document::DocumentSearchRequest,
-    email::EmailSearchRequest,
-    project::ProjectSearchRequest,
-    unified::{
-        SimpleUnifiedSearchResponse, SimpleUnifiedSearchResponseItem, UnifiedSearchIndex,
-        UnifiedSearchRequest,
-    },
+use models_search::unified::{
+    SimpleUnifiedSearchResponse, UnifiedSearchIndex, UnifiedSearchRequest,
+    generate_unified_search_indices,
 };
+use opensearch_client::search::unified::UnifiedSearchArgs;
 
-/// This utility function provides a unified approach for processing search futures across different content types
-/// (documents, chats, emails, etc.). It handles the complete flow from raw search execution through metadata
-/// enrichment to final result formatting.
-///
-/// # Type Parameters
-/// - `Fut`: Future that executes the OpenSearch query and fetches associated metadata, yielding `(T, U)`
-/// - `T`: Raw search results returned from the OpenSearch operation
-/// - `U`: Metadata retrieved from external sources to enrich the search results
-/// - `S`: Intermediate search result type after combining raw results with metadata
-/// - `V`: Structured search result type for the unified response format
-///
-/// # Parameters
-/// - `search_future`: Async operation performing the search and metadata retrieval
-/// - `variant_mapper`: Converts structured results into the unified response format
-///
-/// # Returns
-/// A boxed future resolving to either unified search response items or a SearchError
-pub(crate) fn boxed_search_future<Fut, T, S, V>(
-    search_future: Fut,
-    variant_mapper: fn(S) -> V,
-) -> futures::future::BoxFuture<'static, Result<Vec<V>, SearchError>>
-where
-    Fut: futures::Future<Output = Result<Vec<T>, SearchError>> + Send + 'static,
-    T: 'static + std::convert::Into<S>,
-    S: 'static,
-    V: 'static,
-{
-    search_future
-        .map(move |res| {
-            res.map(|items| {
-                items
-                    .into_iter()
-                    .map(|item| variant_mapper(item.into()))
-                    .collect::<Vec<V>>()
-            })
-        })
-        .boxed()
+/// Creates a unified search request and performs the search
+/// Returning the opensearch results
+#[tracing::instrument(skip(ctx, user_context, query_params, req), err)]
+pub(in crate::api::search) async fn perform_unified_search(
+    ctx: &ApiContext,
+    user_context: &UserContext,
+    query_params: SearchPaginationParams,
+    req: UnifiedSearchRequest,
+) -> Result<Vec<opensearch_client::search::unified::UnifiedSearchResponse>, SearchError> {
+    let user_id = &user_context.user_id;
+    let user_organization_id = user_context.organization_id;
+    let search_on = req.search_on;
+    let collapse = req.collapse.unwrap_or(false);
+
+    if user_id.is_empty() {
+        return Err(SearchError::NoUserId);
+    }
+
+    let page = query_params.page.unwrap_or(0);
+
+    let page_size = query_params.page_size.unwrap_or(10);
+    if !(0..=100).contains(&page_size) {
+        return Err(SearchError::InvalidPageSize);
+    }
+
+    let terms: Vec<String> = match (req.terms, req.query) {
+        (Some(terms), _) => terms.into_iter().filter(|t| t.len() >= 3).collect(),
+        (None, Some(query)) if query.len() >= 3 => vec![query],
+        (None, Some(_)) => {
+            return Err(SearchError::InvalidQuerySize);
+        }
+        _ => vec![],
+    };
+
+    let match_type = req.match_type;
+    let disable_recency = req.disable_recency;
+
+    let include = req.include;
+
+    // Create default filters
+    let filters = req.filters.unwrap_or_default();
+    let channel_filters = filters.channel.unwrap_or_default();
+    let email_filters = filters.email.unwrap_or_default();
+    let chat_filters = filters.chat.unwrap_or_default();
+    let project_filters = filters.project.unwrap_or_default();
+    let doc_filters = filters.document.unwrap_or_default();
+
+    let should_include_documents =
+        include.is_empty() || include.contains(&UnifiedSearchIndex::Documents);
+
+    let should_include_channels =
+        include.is_empty() || include.contains(&UnifiedSearchIndex::Channels);
+
+    let should_include_chats = include.is_empty() || include.contains(&UnifiedSearchIndex::Chats);
+
+    let should_include_projects =
+        include.is_empty() || include.contains(&UnifiedSearchIndex::Projects);
+
+    let should_include_emails = include.is_empty() || include.contains(&UnifiedSearchIndex::Emails);
+
+    // Await all tasks in parallel
+    let (doc_result, channel_result, chat_result, project_result, email_result) = tokio::try_join!(
+        doc_filters.filter_to_search_args(
+            ctx,
+            user_id,
+            user_organization_id,
+            should_include_documents,
+        ),
+        channel_filters.filter_to_search_args(
+            ctx,
+            user_id,
+            user_organization_id,
+            should_include_channels,
+        ),
+        chat_filters.filter_to_search_args(
+            ctx,
+            user_id,
+            user_organization_id,
+            should_include_chats,
+        ),
+        project_filters.filter_to_search_args(
+            ctx,
+            user_id,
+            user_organization_id,
+            should_include_projects,
+        ),
+        email_filters.filter_to_search_args(
+            ctx,
+            user_id,
+            user_organization_id,
+            should_include_emails,
+        ),
+    )
+    .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
+
+    let filter_document_response = match doc_result {
+        UnifiedSearchArgsVariant::Document(response) => response,
+        _ => unreachable!(),
+    };
+
+    let filter_channel_response = match channel_result {
+        UnifiedSearchArgsVariant::Channel(response) => response,
+        _ => unreachable!(),
+    };
+
+    let filter_chat_response = match chat_result {
+        UnifiedSearchArgsVariant::Chat(response) => response,
+        _ => unreachable!(),
+    };
+
+    let filter_project_response = match project_result {
+        UnifiedSearchArgsVariant::Project(response) => response,
+        _ => unreachable!(),
+    };
+
+    let filter_email_response = match email_result {
+        UnifiedSearchArgsVariant::Email(response) => response,
+        _ => unreachable!(),
+    };
+
+    let unified_search_args = UnifiedSearchArgs {
+        terms,
+        user_id: user_id.to_string(),
+        page,
+        page_size,
+        match_type: match_type.to_string(),
+        search_on: search_on.into(),
+        collapse,
+        disable_recency,
+        search_indices: generate_unified_search_indices(include),
+        document_search_args: filter_document_response,
+        email_search_args: filter_email_response,
+        channel_message_search_args: filter_channel_response,
+        chat_search_args: filter_chat_response,
+        project_search_args: filter_project_response,
+    };
+
+    let results = ctx
+        .opensearch_client
+        .search_unified(unified_search_args)
+        .await?;
+
+    Ok(results)
 }
 
 /// Perform a search through all items.
@@ -85,202 +188,12 @@ pub async fn handler(
     user_context: Extension<UserContext>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
-) -> Result<Response, SearchError> {
+) -> Result<Json<SimpleUnifiedSearchResponse>, SearchError> {
     tracing::info!("simple_unified_search");
 
-    let user_id = &user_context.user_id;
-    let user_organization_id = user_context.organization_id;
-    let search_on = req.search_on;
-    let collapse = req.collapse.unwrap_or(false);
+    let results = perform_unified_search(&ctx, &user_context, query_params, req).await?;
 
-    if user_id.is_empty() {
-        return Err(SearchError::NoUserId);
-    }
+    let results = results.into_iter().map(|a| a.into()).collect();
 
-    // TODO: deduplicate logic for getting page and page size
-
-    let page = query_params.page.unwrap_or(0);
-
-    let page_size = query_params.page_size.unwrap_or(10);
-    if !(0..=100).contains(&page_size) {
-        return Err(SearchError::InvalidPageSize);
-    }
-
-    // TODO: deduplicate logic for extracting terms
-    let terms: Vec<String> = match (req.terms, req.query) {
-        (Some(terms), _) => terms.into_iter().filter(|t| t.len() >= 3).collect(),
-        (None, Some(query)) if query.len() >= 3 => vec![query],
-        (None, Some(_)) => {
-            return Err(SearchError::InvalidQuerySize);
-        }
-        _ => vec![],
-    };
-
-    // no filters means search all
-    let filters = req.filters.unwrap_or_default();
-    let match_type = req.match_type;
-    let disable_recency = req.disable_recency;
-
-    let include_all_items = req.include.is_empty();
-
-    let mut tasks = FuturesUnordered::new();
-
-    if include_all_items || req.include.contains(&UnifiedSearchIndex::Documents) {
-        let query_params = SearchPaginationParams {
-            page: Some(page),
-            page_size: Some(page_size),
-        };
-
-        let request = DocumentSearchRequest {
-            query: None,
-            terms: Some(terms.clone()),
-            match_type,
-            filters: filters.document,
-            search_on,
-            collapse: Some(collapse),
-            disable_recency,
-        };
-
-        let ctx = ctx.clone();
-        let user_id = user_id.clone();
-
-        tasks.push(boxed_search_future(
-            async move {
-                simple_document::search_documents(&ctx, &user_id, &query_params, request).await
-            },
-            SimpleUnifiedSearchResponseItem::Document,
-        ));
-    }
-
-    if include_all_items || req.include.contains(&UnifiedSearchIndex::Chats) {
-        let query_params = SearchPaginationParams {
-            page: Some(page),
-            page_size: Some(page_size),
-        };
-
-        let request = ChatSearchRequest {
-            query: None,
-            terms: Some(terms.clone()),
-            match_type,
-            filters: filters.chat,
-            search_on,
-            collapse: Some(collapse),
-            disable_recency,
-        };
-
-        let ctx = ctx.clone();
-        let user_id = user_id.clone();
-
-        tasks.push(boxed_search_future(
-            async move { simple_chat::search_chats(&ctx, &user_id, &query_params, request).await },
-            SimpleUnifiedSearchResponseItem::Chat,
-        ));
-    }
-
-    if include_all_items || req.include.contains(&UnifiedSearchIndex::Emails) {
-        let query_params = SearchPaginationParams {
-            page: Some(page),
-            page_size: Some(page_size),
-        };
-
-        let request = EmailSearchRequest {
-            query: None,
-            terms: Some(terms.clone()),
-            match_type,
-            filters: filters.email,
-            search_on,
-            collapse: Some(collapse),
-            disable_recency,
-        };
-
-        let ctx = ctx.clone();
-        let user_id = user_id.clone();
-
-        tasks.push(
-            boxed_search_future(
-                async move {
-                    simple_email::search_emails(&ctx, &user_id, &query_params, request).await
-                },
-                SimpleUnifiedSearchResponseItem::Email,
-            ),
-        );
-    }
-
-    if include_all_items || req.include.contains(&UnifiedSearchIndex::Channels) {
-        let query_params = SearchPaginationParams {
-            page: Some(page),
-            page_size: Some(page_size),
-        };
-
-        let request = ChannelSearchRequest {
-            query: None,
-            terms: Some(terms.clone()),
-            match_type,
-            filters: filters.channel,
-            search_on,
-            collapse: Some(collapse),
-            disable_recency,
-        };
-
-        let ctx = ctx.clone();
-        let user_id = user_id.clone();
-
-        tasks.push(boxed_search_future(
-            async move {
-                simple_channel::search_channels(
-                    &ctx,
-                    &user_id,
-                    user_organization_id,
-                    &query_params,
-                    request,
-                )
-                .await
-            },
-            SimpleUnifiedSearchResponseItem::Channel,
-        ));
-    }
-
-    if include_all_items || req.include.contains(&UnifiedSearchIndex::Projects) {
-        let query_params = SearchPaginationParams {
-            page: Some(page),
-            page_size: Some(page_size),
-        };
-
-        let request = ProjectSearchRequest {
-            query: None,
-            terms: Some(terms),
-            match_type,
-            filters: filters.project,
-            search_on,
-            collapse: Some(collapse),
-            disable_recency,
-        };
-
-        let ctx = ctx.clone();
-        let user_id = user_id.clone();
-
-        tasks.push(
-            boxed_search_future(
-                async move {
-                    simple_project::search_projects(&ctx, &user_id, &query_params, request).await
-                },
-                SimpleUnifiedSearchResponseItem::Project,
-            ),
-        );
-    }
-
-    let mut results = Vec::new();
-
-    while let Some(result) = tasks.next().await {
-        match result {
-            Ok(items) => results.extend(items),
-            Err(err_response) => return Err(err_response),
-        }
-    }
-
-    Ok((
-        StatusCode::OK,
-        Json(SimpleUnifiedSearchResponse { results }),
-    )
-        .into_response())
+    Ok(Json(SimpleUnifiedSearchResponse { results }))
 }

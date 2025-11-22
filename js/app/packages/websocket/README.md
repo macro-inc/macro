@@ -1,55 +1,73 @@
+# @macro/websocket
+
+Type-safe WebSocket abstraction with auto-reconnect, buffering, and heartbeat support.
+
+## Basic Usage
 
 ```typescript
-// Simple WebSocket with auto-cleanup
-const ws = createWS('ws://localhost:5000');
+import { Websocket } from 'websocket';
 
-// With reconnection
-const ws = createReconnectingWS('ws://localhost:5000', [], {
-  delay: 3000,    // 3s between reconnects
-  retries: 10     // stop after 10 attempts
+const ws = new Websocket<SendType, ReceiveType>('ws://localhost:5000');
+
+ws.addEventListener('message', (event) => {
+  console.log('Received:', event.detail);
+});
+
+ws.send({ type: 'hello' });
+```
+
+## Builder Pattern
+
+```typescript
+import { WebsocketBuilder, ExponentialBackoff, JsonSerializer } from 'websocket';
+
+const ws = new WebsocketBuilder('ws://localhost:5000')
+  .withBackoff(new ExponentialBackoff(1000, 30000))
+  .withSerializer(new JsonSerializer())
+  .withHeartbeat({ interval: 30000, timeout: 5000 })
+  .build();
+```
+
+## Reconnection
+
+Configurable via `retryOptions`:
+
+```typescript
+const ws = new Websocket(url, {
+  retryOptions: {
+    maxRetries: 10,
+    backoff: new ExponentialBackoff(1000, 30000)
+  }
 });
 ```
 
-## Composing Features
+## Serialization
 
-Stack wrappers from inside out:
-
-```typescript
-const ws = makeAuthenticatedWS(      // 4. Auth handling
-  makeFocusTrackingWS(               // 3. Reconnect on focus
-    makeHeartbeatWS(                 // 2. Connection health
-      makeJsonWS(                    // 1. JSON serialization
-        createReconnectingWS(url)    // 0. Base reconnection
-      )
-    )
-  )
-);
-
-// Or use the sensible defaults
-const ws = makeJsonWS(
-  createSensibleWS('ws://localhost:5000')
-);
-```
-
-## Message Serialization
+Built-in serializers for common formats:
 
 ```typescript
+import { JsonSerializer, BebopSerializer } from 'websocket';
+
 // JSON
-const ws = makeJsonWS<SendType, ReceiveType>(createWS(url));
-ws.send({ type: 'chat', text: 'Hello' }); // auto-serialized
+new WebsocketBuilder(url)
+  .withSerializer(new JsonSerializer())
+  .build();
 
-// Zod validation
-const ws = makeZodWS(createWS(url), SendSchema, ReceiveSchema);
-
-// Binary (Bebop)
-const ws = makeBebopWS(createWS(url), MessageType, ServerMessageType);
+// Bebop (binary)
+new WebsocketBuilder(url)
+  .withSerializer(new BebopSerializer(encoder, decoder))
+  .build();
 ```
 
-## Reactive Effects
+## SolidJS Integration
+
+Reactive effects for message handling:
 
 ```typescript
+import { createSocketEffect, createWebsocketEventEffect } from 'websocket';
+
 // Listen to all messages
-createWebsocketEffect(ws, (data) => {
+createSocketEffect(ws, (data) => {
   console.log('Received:', data);
 });
 
@@ -57,49 +75,46 @@ createWebsocketEffect(ws, (data) => {
 createWebsocketEventEffect(ws, 'chat', (msg: ChatMessage) => {
   addToChat(msg);
 });
-
-// Custom selectors
-createWebsocketSelectEffect(ws,
-  (data): data is CriticalEvent => data.priority === 'high',
-  (event) => handleCritical(event)
-);
-
-// Block effects for special contexts
-createBlockWebsocketEffect(ws, (data) => {
-  updateBlockState(data);
-});
 ```
 
-## Selector Helpers
+## Connection State
+
+Track connection lifecycle:
 
 ```typescript
-// Single type
-messageTypeSelector('chat')
+ws.addEventListener('open', () => console.log('Connected'));
+ws.addEventListener('close', () => console.log('Disconnected'));
+ws.addEventListener('retry', (e) => console.log('Retrying:', e.detail));
+ws.addEventListener('reconnect', (e) => console.log('Reconnected:', e.detail));
 
-// Multiple types
-multiTypeSelector('chat', 'status', 'typing')
-
-// Property matching
-propertySelector('userId', currentUser.id)
+// Or use reactive state
+import { createWebsocketStateSignal } from 'websocket';
+const [state] = createWebsocketStateSignal(ws);
 ```
 
-## Quick Reference
+## API Reference
 
-**Base Functions**
-- `makeWS` / `createWS` - Basic WebSocket
-- `makeReconnectingWS` / `createReconnectingWS` - Auto-reconnect
-- `createWSState` - Reactive connection state
+**Core**
+- `Websocket<Send, Receive>` - Main WebSocket wrapper
+- `WebsocketBuilder` - Fluent builder interface
 
-**Wrappers** (compose these!)
-- `makeHeartbeatWS` - Ping/pong health checks
-- `makeFocusTrackingWS` - Reconnect on tab focus
-- `makeAuthenticatedWS` - Handle auth changes
-- `makeJsonWS` - JSON serialization
-- `makeZodWS` - Type validation
-- `makeBebopWS` - Binary protocol
+**Backoff Strategies**
+- `ExponentialBackoff(initial, max)` - Exponential growth
+- `LinearBackoff(initial, increment)` - Linear growth
+- `ConstantBackoff(delay)` - Fixed delay
 
-**Effects**
-- `createWebsocketEffect` - Listen to all messages
-- `createWebsocketEventEffect` - Listen by type field
-- `createWebsocketSelectEffect` - Custom selector
-- `createBlock*` variants - For block contexts
+**Serializers**
+- `JsonSerializer<T>()` - JSON serialization
+- `BebopSerializer<T>(encoder, decoder)` - Binary serialization
+
+**Queues** (for message buffering)
+- `ArrayQueue<T>()` - Unbounded array-based queue
+- `RingQueue<T>(capacity)` - Fixed-size circular buffer
+
+**SolidJS Effects**
+- `createSocketEffect(ws, handler)` - Listen to all messages
+- `createWebsocketEventEffect(ws, type, handler)` - Filter by message type
+- `createWebsocketStateSignal(ws)` - Reactive connection state
+
+**Utils**
+- `untilMessage<T>(ws, predicate)` - Promise that resolves on matching message

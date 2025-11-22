@@ -4,12 +4,12 @@ import {
   ADD_PINNED_PROPERTY_COMMAND,
   REMOVE_PINNED_PROPERTY_COMMAND,
 } from '@core/component/LexicalMarkdown/plugins';
+import { EntityIcon } from '@core/component/Properties/component/propertyValue';
 import {
   PropertiesProvider,
   usePropertiesContext,
 } from '@core/component/Properties/context/PropertiesContext';
-import { EntityValueDisplay } from '@core/component/Properties/EntityValueDisplay';
-import { useProperties } from '@core/component/Properties/hooks';
+import { useEntityProperties } from '@core/component/Properties/hooks';
 import {
   extractDomain,
   formatPropertyValue,
@@ -110,13 +110,13 @@ function InlineEntityValue(props: {
   };
 
   // For inline display, we want entity values to be clickable
-  // So we wrap EntityValueDisplay in a clickable element
+  // So we wrap EntityIcon in a clickable element
   return (
     <div class="flex items-center gap-1">
       <For each={entities()}>
         {(entityRef) => (
           <div onClick={handleEntityClick} class="cursor-pointer">
-            <EntityValueDisplay
+            <EntityIcon
               property={props.property}
               entityId={entityRef.entity_id}
               entityType={entityRef.entity_type}
@@ -133,7 +133,7 @@ export function InlineProperties(props: InlinePropertiesProps) {
   const blockId = useBlockId();
   const mdData = mdStore.get;
 
-  const { properties, isLoading, error, refetch } = useProperties(
+  const { properties, isLoading, error, refetch } = useEntityProperties(
     blockId,
     'DOCUMENT' as EntityType,
     true // includeMetadata
@@ -234,7 +234,7 @@ export function InlineProperties(props: InlinePropertiesProps) {
                 // Format value for display
                 const displayValue = createMemo(() => {
                   if (property.valueType === 'ENTITY') {
-                    // For entity types (like Owner), we'll render EntityValueDisplay
+                    // For entity types (like Owner), we'll render EntityIcon
                     return null;
                   }
                   if (

@@ -173,7 +173,9 @@ export async function upload(
   let jobId: string | undefined;
   let docxProcessingPromise: Promise<boolean | undefined> | undefined;
   if (fileTypeOrExtension === 'docx') {
-    const [uploadJobPromise, processingPromise] = uploadDocx(storageWS);
+    const [uploadJobPromise, processingPromise] = uploadDocx(
+      storageWS.underlyingWebsocket
+    );
 
     jobId = await uploadJobPromise;
     if (jobId == null) {

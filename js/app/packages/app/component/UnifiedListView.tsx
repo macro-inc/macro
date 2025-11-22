@@ -6,18 +6,15 @@ import {
   emailRefetchInterval,
   useEmailLinksStatus,
 } from '@app/signal/onboarding/email-link';
-import { globalSplitManager } from '@app/signal/splitLayout';
+import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
+import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import { Button } from '@core/component/FormControls/Button';
 import DropdownMenu from '@core/component/FormControls/DropdownMenu';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ToggleButton } from '@core/component/FormControls/ToggleButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { IconButton } from '@core/component/IconButton';
-import {
-  ContextMenuContent,
-  MenuItem,
-  MenuSeparator,
-} from '@core/component/Menu';
+import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import {
   blockAcceptsFileExtension,
@@ -37,8 +34,8 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { supportedExtensions } from '@lexical-core/utils';
 import {
   createChannelsQuery,
-  createDeleteDssItemMutation,
-  createDssInfiniteQuery,
+  createDssInfiniteQueryGet,
+  createDssInfiniteQueryPost,
   createEmailsInfiniteQuery,
   createFilterComposer,
   createProjectFilterFn,
@@ -63,16 +60,14 @@ import {
   type WithSearch,
 } from '@macro-entity';
 import {
-  markNotificationsForEntityAsDone,
-  useNotificationsForEntity,
-} from '@notifications/notificationHelpers';
-import {
   isChannelMention,
   isChannelMessageReply,
   isChannelMessageSend,
+  markNotificationsForEntityAsDone,
   notificationWithMetadata,
-} from '@notifications/notificationMetadata';
-import type { UnifiedNotification } from '@notifications/types';
+  type UnifiedNotification,
+  useNotificationsForEntity,
+} from '@notifications';
 import type { PaginatedSearchArgs } from '@service-search/client';
 import type {
   ChannelFilters,
@@ -83,7 +78,10 @@ import type {
   UnifiedSearchIndex,
   UnifiedSearchRequestFilters,
 } from '@service-search/generated/models';
-import type { GetItemsSoupParams } from '@service-storage/generated/schemas';
+import type {
+  GetItemsSoupParams,
+  PostSoupRequest,
+} from '@service-storage/generated/schemas';
 import { debounce } from '@solid-primitives/scheduled';
 import stringify from 'json-stable-stringify';
 import {
@@ -104,9 +102,21 @@ import {
 } from 'solid-js';
 import { createStore, type SetStoreFunction, unwrap } from 'solid-js/store';
 import { EntityWithEverything } from '../../macro-entity/src/components/EntityWithEverything';
-import { createCopyDssEntityMutation } from '../../macro-entity/src/queries/dss';
 import type { FetchPaginatedEmailsParams } from '../../macro-entity/src/queries/email';
+import {
+  resetCommandCategoryIndex,
+  searchCategories,
+  setCommandCategoryIndex,
+  setKonsoleContextInformation,
+} from './command/KonsoleItem';
+import {
+  resetKonsoleMode,
+  setKonsoleMode,
+  toggleKonsoleVisibility,
+} from './command/state';
+import { EntityActionsMenuItems } from './EntityActionsMenuItems';
 import { EntityModal } from './EntityModal/EntityModal';
+import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
 import { useUpsertSavedViewMutation } from './Soup';
 import {
   SplitToolbarLeft,
@@ -125,6 +135,7 @@ import {
   type SortOptions,
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_IDS,
+  VIEWCONFIG_DEFAULTS_IDS_ENUM,
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
@@ -174,21 +185,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     prevSelectedEntity: undefined,
   });
 
-  const openEntityModal = (view: 'rename' | 'moveToProject') => {
-    // terrible will fix
-    // context menu upon closing steals focus from mounted menu
-    setTimeout(() => {
-      setTimeout(() => {
-        setContextAndModalState((prev) => ({
-          ...prev,
-          modalOpen: true,
-          modalView: view,
-          selectedEntity: prev.prevSelectedEntity,
-        }));
-      }, 100);
-    });
-  };
-
   const [localEntityListRef, setLocalEntityListRef] = createSignal<
     HTMLDivElement | undefined
   >();
@@ -209,7 +205,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const splitContext = useSplitPanelOrThrow();
   const { isPanelActive, unifiedListContext, panelRef, previewState } =
     splitContext;
-  const preview = () => previewState?.[0]?.() ?? false;
+  const [preview] = previewState;
   const {
     viewsDataStore: viewsData,
     setViewDataStore,
@@ -648,6 +644,27 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       sort_method: sortType(),
     })
   );
+  const GARBAGE_UUID = '00000000-0000-0000-0000-000000000000';
+  const dssQueryPOSTRequestBody = createMemo(
+    (): PostSoupRequest => ({
+      channel_filters: {
+        channel_ids: [GARBAGE_UUID],
+      },
+      document_filters: {
+        document_ids: entityTypeFilter().includes('document')
+          ? []
+          : [GARBAGE_UUID],
+      },
+      chat_filters: {
+        chat_ids: [GARBAGE_UUID],
+      },
+      email_filters: {
+        recipients: [GARBAGE_UUID],
+      },
+      limit: props.defaultDisplayOptions?.limit ?? 100,
+      sort_method: sortType(),
+    })
+  );
   const emailQueryParams = createMemo((): FetchPaginatedEmailsParams => {
     const sort = sortType();
     return {
@@ -703,7 +720,18 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return false;
   });
 
-  const disableDssInfiniteQuery = createMemo(() => {
+  const disableDssInfiniteQueryGET = createMemo(() => {
+    if (view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.folders) return true;
+
+    const typeFilter = entityTypeFilter();
+    if (typeFilter.length === 0) return false;
+    const dssTypes = ['document', 'chat', 'project'];
+    const hasDssTypes = typeFilter.some((t) => dssTypes.includes(t));
+    return !hasDssTypes;
+  });
+  const disableDssInfiniteQueryPost = createMemo(() => {
+    if (view().id !== VIEWCONFIG_DEFAULTS_IDS_ENUM.folders) return true;
+
     const typeFilter = entityTypeFilter();
     if (typeFilter.length === 0) return false;
     const dssTypes = ['document', 'chat', 'project'];
@@ -720,8 +748,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const channelsQuery = createChannelsQuery({
     disabled: disableChannelsQuery,
   });
-  const dssInfiniteQuery = createDssInfiniteQuery(dssQueryParams, {
-    disabled: disableDssInfiniteQuery,
+  const dssInfiniteQueryGET = createDssInfiniteQueryGet(dssQueryParams, {
+    disabled: disableDssInfiniteQueryGET,
+  });
+  const dssInfiniteQueryPOST = createDssInfiniteQueryPost(dssQueryParams, {
+    disabled: disableDssInfiniteQueryPost,
+    requestBody: dssQueryPOSTRequestBody,
   });
   const emailsInfiniteQuery = createEmailsInfiniteQuery(emailQueryParams, {
     refetchInterval: () => emailRefetchInterval(),
@@ -801,7 +833,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     >({
       entityInfiniteQueries: [
         {
-          query: dssInfiniteQuery,
+          query: dssInfiniteQueryGET,
+          operations: { filter: true, search: true },
+        },
+        {
+          query: dssInfiniteQueryPOST,
           operations: { filter: true, search: true },
         },
         {
@@ -831,22 +867,49 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     setIsSearchLoading(loading);
   });
 
-  const documentEntityClickHandler: EntityClickHandler<DocumentEntity> = (
-    { id, fileType },
-    event
-  ) => {
+  const documentEntityClickHandler: EntityClickHandler<
+    DocumentEntity | WithSearch<DocumentEntity>
+  > = async (entity, event) => {
+    const { id, fileType } = entity;
     const blockName = fileTypeToBlockName(fileType);
     const handle = event.altKey
       ? insertSplit({ type: blockName, id })
       : replaceOrInsertSplit({ type: blockName, id });
-    handle?.activate();
+
+    const location =
+      'search' in entity && entity.search.contentHighlights?.at(0)?.location;
+    if (location) {
+      handle?.activate();
+      const blockHandle = await blockOrchestrator.getBlockHandle(id);
+      switch (location.type) {
+        case 'md':
+          await blockHandle?.goToLocationFromParams({
+            [MD_PARAMS.nodeId]: location.nodeId,
+          });
+          break;
+        case 'pdf':
+          console.log('go to pdf location', location);
+          await blockHandle?.goToLocationFromParams({
+            [PDF_PARAMS.searchPage]: location.searchPage.toString(),
+            [PDF_PARAMS.searchRawQuery]: location.searchRawQuery,
+            [PDF_PARAMS.searchHighlightTerms]: JSON.stringify(
+              location.highlightTerms
+            ),
+            [PDF_PARAMS.searchSnippet]: location.searchSnippet,
+          });
+          break;
+      }
+    } else {
+      handle?.activate();
+    }
   };
 
   const entityClickHandler: EntityClickHandler<EntityData> = (
     entity,
-    event
+    event,
+    options
   ) => {
-    if (preview()) {
+    if (preview() && !options?.ignorePreview) {
       setViewDataStore(selectedView(), 'selectedEntity', entity);
       return;
     }
@@ -860,16 +923,17 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     handle?.activate();
   };
 
-  const { mutate: deleteDssItem } = createDeleteDssItemMutation();
-  const { mutate: copyDssItem } = createCopyDssEntityMutation();
-
   const StyledTriggerLabel = (props: ParentProps) => {
     return <span class="text-[0.625rem]">{props.children}</span>;
   };
 
   const highlightedSelector = createSelector(() => view()?.highlightedId);
 
-  const selectedSelector = createSelector(() => selectedEntity()?.id);
+  const focusedSelector = createSelector(() => selectedEntity()?.id);
+  const selectedSelector = createSelector(
+    () => view()?.selectedEntities,
+    (a: string, b: EntityData[]) => b.find((e) => e.id === a) !== undefined
+  );
 
   const saveViewMutation = useUpsertSavedViewMutation();
 
@@ -943,6 +1007,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       setViewDataStore(selectedView(), 'initialConfig', stringifiedConfig);
     }
   });
+
+  let lastClickedEntityId = -1;
+  createEffect(
+    on(view, () => {
+      lastClickedEntityId = -1;
+    })
+  );
 
   return (
     <>
@@ -1162,6 +1233,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         </SplitToolbarRight>
       </Show>
       <ContextMenu
+        forceMount={contextAndModalState.contextMenuOpen}
         onOpenChange={(open) => {
           setContextAndModalState((prev) => {
             if (open) {
@@ -1179,7 +1251,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           });
         }}
       >
-        <ContextMenu.Trigger class="size-full">
+        <ContextMenu.Trigger class="size-full unified-list-root">
           <UnifiedListComponent
             entityListRef={setLocalEntityListRef}
             virtualizerHandle={setVirtualizerHandle}
@@ -1283,8 +1355,81 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   showDoneButton={displayDoneButton()}
                   highlighted={highlightedSelector?.(innerProps.entity.id)}
                   selected={
-                    isPanelActive() && selectedSelector(innerProps.entity.id)
+                    isPanelActive() && focusedSelector(innerProps.entity.id)
                   }
+                  checked={selectedSelector(innerProps.entity.id)}
+                  onChecked={(next, shiftKey) => {
+                    const toggleSingle = () =>
+                      unifiedListContext.setViewDataStore(
+                        selectedView(),
+                        'selectedEntities',
+                        (p) => {
+                          if (!next) {
+                            return p.filter(
+                              (e) => e.id !== innerProps.entity.id
+                            );
+                          }
+                          return p.concat(innerProps.entity);
+                        }
+                      );
+
+                    if (shiftKey) {
+                      const entityList = unifiedListContext.entitiesSignal[0]();
+                      if (!entityList) return;
+
+                      const selectedEntitySet = new Set(
+                        unifiedListContext.viewsDataStore[
+                          unifiedListContext.selectedView()
+                        ].selectedEntities
+                      );
+                      const newEnititiesForSeleciton: EntityData[] = [];
+
+                      // Try to grab the last clicked item and fall back on
+                      // the highest currently selected index.
+                      let anchorIndex = lastClickedEntityId;
+                      if (anchorIndex === -1) {
+                        for (let i = 0; i < entityList.length; i++) {
+                          if (selectedEntitySet.has(entityList[i])) {
+                            anchorIndex = i;
+                          }
+                        }
+                      }
+
+                      if (anchorIndex === -1) {
+                        toggleSingle();
+                        lastClickedEntityId = innerProps.index;
+                        return;
+                      }
+
+                      const targetIndex = innerProps.index;
+                      const sign = Math.sign(targetIndex - anchorIndex);
+                      if (anchorIndex === targetIndex) {
+                        // no_op
+                      } else {
+                        for (
+                          let i = anchorIndex;
+                          sign > 0 ? i <= targetIndex : i >= targetIndex;
+                          i += sign
+                        ) {
+                          const entity = entityList[i];
+                          if (!selectedEntitySet.has(entity)) {
+                            newEnititiesForSeleciton.push(entity);
+                          }
+                        }
+                      }
+                      unifiedListContext.setViewDataStore(
+                        selectedView(),
+                        'selectedEntities',
+                        (p) => {
+                          return p.concat(newEnititiesForSeleciton);
+                        }
+                      );
+                      lastClickedEntityId = innerProps.index;
+                    } else {
+                      toggleSingle();
+                      lastClickedEntityId = innerProps.index;
+                    }
+                  }}
                 />
               );
             }}
@@ -1322,91 +1467,61 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                     />
                     <MenuSeparator />
                   </Show>
-                  <Show when={markEntityAsDone}>
-                    {(fnAccessor) => {
-                      const entityDisabled = (
-                        entity: WithNotification<EntityData>
-                      ) => {
-                        return entity.type === 'email'
-                          ? entity.done
-                          : entity.notifications?.().every(({ done }) => done);
-                      };
-                      return (
-                        <MenuItem
-                          text="Mark as Done"
-                          onClick={() => fnAccessor()(selectedEntity())}
-                          disabled={entityDisabled(selectedEntity())}
-                        />
-                      );
-                    }}
-                  </Show>
-                  <MenuItem
-                    text="Delete"
-                    onClick={() => deleteDssItem(selectedEntity())}
-                    disabled={
-                      selectedEntity().type !== 'document' &&
-                      selectedEntity().type !== 'project' &&
-                      selectedEntity().type !== 'chat'
-                    }
-                  />
-                  <MenuItem
-                    text="Rename"
-                    onClick={() => openEntityModal('rename')}
-                    disabled={
-                      selectedEntity().type !== 'document' &&
-                      selectedEntity().type !== 'chat'
-                    }
-                  />
-                  <MenuItem
-                    text="Move to Project"
-                    onClick={() => {
-                      openEntityModal('moveToProject');
-                    }}
-                    disabled={
-                      selectedEntity().type !== 'document' &&
-                      selectedEntity().type !== 'project' &&
-                      selectedEntity().type !== 'chat'
-                    }
-                  />
-                  <MenuItem
-                    text="Copy"
-                    onClick={() => {
-                      copyDssItem({ entity: selectedEntity() });
-                    }}
-                    disabled={
-                      selectedEntity().type !== 'document' &&
-                      selectedEntity().type !== 'chat'
-                    }
-                  />
-                  <MenuItem
-                    text="Open in new split"
-                    onClick={() => {
-                      const splitManager = globalSplitManager();
-                      if (!splitManager) {
-                        console.error('No split manager available');
-                        return;
-                      }
-                      const entity = selectedEntity();
-                      if (entity.type === 'document') {
-                        const { fileType, id } = entity;
-                        splitManager.createNewSplit({
-                          type: fileTypeToBlockName(fileType),
-                          id,
-                        });
-                      } else {
-                        const { id, type } = entity;
-                        splitManager.createNewSplit({
-                          type,
-                          id,
-                        });
-                      }
-                    }}
+                  <EntityActionsMenuItems
+                    entity={selectedEntity()}
+                    onSelectAction={() => {}}
                   />
                 </ContextMenuContent>
               )}
             </Show>
           </ContextMenu.Portal>
         </ContextMenu.Trigger>
+        <Show when={view()?.selectedEntities.length}>
+          <EntitySelectionToolbarModal
+            selectedEntities={view()?.selectedEntities ?? []}
+            onClose={() =>
+              unifiedListContext.setViewDataStore(
+                selectedView(),
+                'selectedEntities',
+                []
+              )
+            }
+            onAction={() => {
+              const selectedEntities =
+                viewsData[selectedView()].selectedEntities;
+              const hasSelection = selectedEntities.length > 0;
+              if (hasSelection) {
+                setKonsoleMode('SELECTION_MODIFICATION');
+                const selectionIndex =
+                  searchCategories.getCateoryIndex('Selection');
+
+                if (selectionIndex === undefined) return false;
+
+                setCommandCategoryIndex(selectionIndex);
+
+                searchCategories.showCategory('Selection');
+
+                setKonsoleContextInformation({
+                  selectedEntities: selectedEntities.slice(),
+                  clearSelection: () => {
+                    unifiedListContext.setViewDataStore(
+                      selectedView(),
+                      'selectedEntities',
+                      []
+                    );
+                  },
+                });
+
+                toggleKonsoleVisibility();
+                return true;
+              }
+              searchCategories.hideCategory('Selection');
+              resetCommandCategoryIndex();
+              resetKonsoleMode();
+              return false;
+            }}
+          />
+        </Show>{' '}
       </ContextMenu>
     </>
   );
@@ -1463,7 +1578,7 @@ function SearchBar(props: {
     setViewDataStore(selectedView(), 'searchText', text);
   };
 
-  const debouncedSetSearch = debounce(setSearchText, 200);
+  const debouncedSetSearch = debounce(setSearchText, 300);
 
   const isElementInViewport = (element: Element): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -1543,7 +1658,7 @@ function SearchBar(props: {
       keyDownHandler: () => {
         setTimeout(() => {
           const searchInput = document.getElementById(
-            `search-input-${selectedView()}`
+            `search-input-${splitContext.handle.id}-${selectedView()}`
           ) as HTMLInputElement;
           searchInput?.focus();
         }, 0);
@@ -1569,7 +1684,7 @@ function SearchBar(props: {
         </Show>
         <input
           ref={inputRef}
-          id={`search-input-${selectedView()}`}
+          id={`search-input-${splitContext.handle.id}-${selectedView()}`}
           placeholder={`Search in ${viewName()}`}
           value={searchText()}
           onInput={(e) => {

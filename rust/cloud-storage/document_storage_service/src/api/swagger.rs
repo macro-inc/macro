@@ -3,37 +3,9 @@
     reason = "Just to allow GetActivitiesResponse and UserActivitiesResponse"
 )]
 
-use model::{
-    activity::Activity,
-    annotations::AnnotationIncrementalUpdate,
-    chat::Chat,
-    document::{
-        BasicDocument, BomPart, DocumentMetadata, DocumentPermissionsToken, FileType, SaveBomPart,
-        response::{
-            GetDocumentListResult, GetDocumentResponse, GetDocumentResponseData,
-            LocationResponseData,
-        },
-    },
-    item::{CloudStorageItemType, Item, ItemWithUserAccessLevel},
-    pin::{PinnedItem, request::ReorderPinRequest},
-    project::{
-        Project,
-        request::{CreateProjectRequest, GetBatchProjectPreviewRequest, PatchProjectRequestV2},
-        response::{
-            CreateProjectResponse, GetBatchProjectPreviewResponse, GetProjectContentResponse,
-            GetProjectResponse, GetProjectResponseData, GetProjectsResponse,
-        },
-    },
-    response::{
-        GenericErrorResponse, GenericResponse, GenericSuccessResponse, PresignedUrl,
-        SuccessResponse,
-    },
-    sync_service::SyncServiceVersionID,
-    user_document_view_location::UserDocumentViewLocation,
-    version::DocumentStorageServiceApiVersion,
+use crate::api::saved_views::{
+    CreateViewRequest, ExcludeDefaultViewRequest, ExcludedDefaultView, View, ViewPatch,
 };
-use soup::inbound::axum_router::{SoupApiItem, SoupApiSort, SoupPage};
-
 use crate::{
     api::{
         activity, annotations,
@@ -93,22 +65,46 @@ use crate::{
         },
     },
 };
-
-use crate::api::saved_views::{
-    CreateViewRequest, ExcludeDefaultViewRequest, ExcludedDefaultView, View, ViewPatch,
+use model::document::response::{
+    CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
+    DocumentResponseMetadata,
 };
-
+use model::{
+    activity::Activity,
+    annotations::AnnotationIncrementalUpdate,
+    chat::Chat,
+    document::{
+        BasicDocument, BomPart, DocumentMetadata, DocumentPermissionsToken, FileType, SaveBomPart,
+        response::{
+            GetDocumentListResult, GetDocumentResponse, GetDocumentResponseData,
+            LocationResponseData,
+        },
+    },
+    item::{CloudStorageItemType, Item, ItemWithUserAccessLevel},
+    pin::{PinnedItem, request::ReorderPinRequest},
+    project::{
+        Project,
+        request::{CreateProjectRequest, GetBatchProjectPreviewRequest, PatchProjectRequestV2},
+        response::{
+            CreateProjectResponse, GetBatchProjectPreviewResponse, GetProjectContentResponse,
+            GetProjectResponse, GetProjectResponseData, GetProjectsResponse,
+        },
+    },
+    response::{
+        GenericErrorResponse, GenericResponse, GenericSuccessResponse, PresignedUrl,
+        SuccessResponse,
+    },
+    sync_service::SyncServiceVersionID,
+    user_document_view_location::UserDocumentViewLocation,
+    version::DocumentStorageServiceApiVersion,
+};
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
 use models_soup::chat::SoupChat;
 use models_soup::document::SoupDocument;
 use models_soup::item::SoupItem;
 use models_soup::item::SoupItemType;
 use models_soup::project::SoupProject;
-
-use model::document::response::{
-    CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
-    DocumentResponseMetadata,
-};
+use soup::inbound::axum_router::{PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -137,7 +133,6 @@ use utoipa::OpenApi;
         documents::get_document::handler,
         documents::get_document_version::handler,
         documents::create_document::create_document_handler,
-        documents::create_document::create_blank_docx::handler,
         documents::copy_document::copy_document_handler,
         documents::save_document::save_document_handler,
         documents::pre_save::presave_document_handler,
@@ -285,6 +280,7 @@ use utoipa::OpenApi;
             SoupItemType,
             SoupApiSort,
             SoupPage,
+            PostSoupRequest,
 
 
             // Permissions V2

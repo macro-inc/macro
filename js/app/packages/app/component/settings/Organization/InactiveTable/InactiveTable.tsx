@@ -86,7 +86,7 @@ const InactiveTable = () => {
             class="ml-2 px-4 font-semibold text-xs text-md text-accent-ink ring-1 ring-accent/50 bg-accent/10 hover:bg-accent/20 rounded-md transition-none hover:transition ease-in-out"
             style={{
               opacity: !email() || loading() ? '50%' : '100%',
-              cursor: !email() || loading() ? 'not-allowed' : 'pointer',
+              cursor: !email() || loading() ? 'var(--cursor-not-allowed)' : 'var(--cursor-pointer)',
             }}
             disabled={!email() || loading()}
           >

@@ -4,7 +4,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { logger } from '@observability';
-import { createMemo, onCleanup, onMount } from 'solid-js';
+import { createMemo, onCleanup, onMount, untrack } from 'solid-js';
 import {
   EVENT_MODIFIER_KEYS,
   EVENT_MODIFIER_NAME_MAP,
@@ -80,6 +80,8 @@ import {
  * hotkey display UI. 1 is the lowest priority, 10 is the highest.
  * @param args.hide - If true, hotkey command can be hidden from the UI. It
  * will still run, but may not be displayed.
+ * @param args.icon - Optional icon to display in the command palette.
+ * @param args.tags - Optional tags for categorizing in the command palette.
  * @returns An object with a dispose function to clean up the hotkey
  * registration. If `activateCommandScope` is true, it also includes the
  * `commandScopeId`.
@@ -117,8 +119,8 @@ export function registerHotkey(
     displayPriority,
     hide,
     icon,
+    tags,
   } = args;
-  ``;
 
   if (!scopeId) {
     logger.error('Scope ID is required for hotkey registration.', {
@@ -142,7 +144,7 @@ export function registerHotkey(
 
   // Check for duplicate hotkeyToken
   const existingCommand = hotkeyToken
-    ? hotkeyTokenMap().get(hotkeyToken)
+    ? untrack(() => hotkeyTokenMap().get(hotkeyToken))
     : undefined;
   if (existingCommand) {
     const existingHotkeys = new Set(existingCommand.hotkeys);
@@ -189,6 +191,7 @@ export function registerHotkey(
     displayPriority: displayPriority ?? 0,
     hide,
     icon,
+    tags,
   };
 
   // Check for existing hotkeys in the scope

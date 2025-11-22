@@ -34,7 +34,7 @@ export function OpenRefInNewTabIcon(props: IProps) {
             });
           }}
           style={{
-            cursor: 'pointer',
+            cursor: 'var(--cursor-pointer)',
             'margin-left': '5px',
             width: '1.5em',
             height: '1.5em',

@@ -2,11 +2,12 @@
 use crate::domain::{
     models::{
         AggregateFrecency, AggregateId, EventRecord, EventRecordWithId, FrecencyData,
-        TimestampWeight,
+        FrecencyPageRequest, TimestampWeight,
     },
     ports::{AggregateFrecencyStorage, EventRecordStorage, UnprocessedEventsRepo},
 };
 use chrono::{DateTime, Utc};
+use item_filters::ast::EntityFilterAst;
 use macro_user_id::{
     cowlike::CowLike,
     user_id::{MacroUserIdStr, ParseErr},
@@ -16,8 +17,13 @@ use sqlx::{PgPool, Postgres, QueryBuilder, Row, Transaction, prelude::FromRow};
 use std::{borrow::Cow, collections::VecDeque, str::FromStr};
 use thiserror::Error;
 
+mod dynamic;
+
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod dynamic_tests;
 
 /// Concrete implementation of storage ports against a postgres instance
 #[derive(Debug, Clone)]
@@ -25,10 +31,74 @@ pub struct FrecencyPgStorage {
     pool: PgPool,
 }
 
+/// the types of errors that can occur on [FrecencyPgStorage]
+#[derive(Debug, Error)]
+pub enum FrecencyStorageErr {
+    /// there was a sqlx error
+    #[error(transparent)]
+    Db(#[from] sqlx::Error),
+    /// the database contained invalid user id data
+    #[error(transparent)]
+    UserIdErr(#[from] ParseErr),
+    /// encounted an unknown entity type
+    #[error(transparent)]
+    UnknownEntity(#[from] model_entity::ParseError),
+    /// failed to deserialize a type from json
+    #[error(transparent)]
+    Serde(#[from] serde_json::Error),
+}
+
 impl FrecencyPgStorage {
     /// create a new instance of Self
     pub fn new(pool: PgPool) -> Self {
         FrecencyPgStorage { pool }
+    }
+
+    async fn static_get_top_entities(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        from_score: Option<f64>,
+        limit: u32,
+    ) -> Result<Vec<AggregateFrecency>, FrecencyStorageErr> {
+        let rows = sqlx::query!(
+            r#"
+                SELECT *
+                FROM frecency_aggregates
+                WHERE user_id = $1 AND ($2::float8 IS NULL OR frecency_score < $2)
+                ORDER BY frecency_score DESC
+                LIMIT $3
+                "#,
+            user_id.as_ref(),
+            from_score,
+            limit as i64
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|row| {
+                let aggregate_row = AggregateRow {
+                    entity_id: row.entity_id,
+                    entity_type: row.entity_type.parse()?,
+                    user_id: row.user_id,
+                    event_count: row.event_count as usize,
+                    frecency_score: row.frecency_score,
+                    first_event: row.first_event,
+                    recent_events: serde_json::from_value(row.recent_events)?,
+                };
+                Ok(aggregate_row.into_aggregate_frecency()?)
+            })
+            .collect()
+    }
+
+    async fn dynamic_get_top_entities(
+        &self,
+        user_id: MacroUserIdStr<'_>,
+        from_score: Option<f64>,
+        limit: u32,
+        filter: EntityFilterAst,
+    ) -> Result<Vec<AggregateFrecency>, FrecencyStorageErr> {
+        dynamic::dynamic_get_top_entities(&self.pool, user_id, from_score, limit, filter).await
     }
 }
 
@@ -175,43 +245,28 @@ impl AggregateRow {
 }
 
 impl AggregateFrecencyStorage for FrecencyPgStorage {
-    type Err = anyhow::Error;
+    type Err = FrecencyStorageErr;
 
     async fn get_top_entities(
         &self,
-        user_id: MacroUserIdStr<'_>,
-        limit: u32,
-    ) -> Result<Vec<crate::domain::models::AggregateFrecency>, Self::Err> {
-        let rows = sqlx::query!(
-            r#"
-                SELECT *
-                FROM frecency_aggregates
-                WHERE user_id = $1
-                ORDER BY frecency_score DESC
-                LIMIT $2
-                "#,
-            user_id.as_ref(),
-            limit as i64
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        let out: Result<Vec<_>, _> = rows
-            .into_iter()
-            .map(|row| {
-                let aggregate_row = AggregateRow {
-                    entity_id: row.entity_id,
-                    entity_type: row.entity_type.parse().unwrap(),
-                    user_id: row.user_id,
-                    event_count: row.event_count as usize,
-                    frecency_score: row.frecency_score,
-                    first_event: row.first_event,
-                    recent_events: serde_json::from_value(row.recent_events).unwrap(),
-                };
-                aggregate_row.into_aggregate_frecency()
-            })
-            .collect();
-        Ok(out?)
+        req: FrecencyPageRequest<'_>,
+    ) -> Result<Vec<AggregateFrecency>, Self::Err> {
+        let FrecencyPageRequest {
+            user_id,
+            from_score,
+            limit,
+            filters,
+        } = req;
+        match filters {
+            None => {
+                self.static_get_top_entities(user_id, from_score, limit)
+                    .await
+            }
+            Some(filter) => {
+                self.dynamic_get_top_entities(user_id, from_score, limit, filter)
+                    .await
+            }
+        }
     }
 
     async fn set_aggregate(
@@ -255,77 +310,25 @@ impl AggregateFrecencyStorage for FrecencyPgStorage {
         Ok(())
     }
 
-    async fn get_aggregate_for_user_entity_pair(
+    async fn get_aggregate_for_user_entities<'a>(
         &self,
-        user_id: MacroUserIdStr<'_>,
-        entity: Entity<'_>,
-    ) -> Result<Option<crate::domain::models::AggregateFrecency>, Self::Err> {
-        let entity_type = entity.entity_type.to_string();
-        let entity_id = entity.entity_id.into_owned();
-
-        let row = sqlx::query!(
-            r#"
-                SELECT 
-                    entity_id,
-                    entity_type,
-                    user_id,
-                    event_count,
-                    frecency_score,
-                    first_event,
-                    recent_events
-                FROM frecency_aggregates
-                WHERE user_id = $1 AND entity_type = $2 AND entity_id = $3
-                "#,
-            user_id.as_ref(),
-            entity_type,
-            entity_id
-        )
-        .fetch_optional(&self.pool)
-        .await?;
-
-        Ok(row
-            .map(|row| {
-                let aggregate_row = AggregateRow {
-                    entity_id: row.entity_id,
-                    entity_type: row.entity_type.parse().unwrap(),
-                    user_id: row.user_id.to_string(),
-                    event_count: row.event_count as usize,
-                    frecency_score: row.frecency_score,
-                    first_event: row.first_event,
-                    recent_events: serde_json::from_value(row.recent_events).unwrap(),
-                };
-                aggregate_row.into_aggregate_frecency()
-            })
-            .transpose()?)
-    }
-
-    async fn get_aggregate_for_user_entities<T>(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-        entities: T,
-    ) -> Result<Vec<crate::domain::models::AggregateFrecency>, Self::Err>
-    where
-        T: Iterator<Item = Entity<'static>>,
-    {
-        let user_id = user_id.0.as_ref().to_string();
-        let entity_pairs: Vec<(String, String)> = entities
-            .map(|e| (e.entity_type.to_string(), e.entity_id.into_owned()))
-            .collect();
-
+        user_id: MacroUserIdStr<'a>,
+        entities: &'a [Entity<'a>],
+    ) -> Result<Vec<crate::domain::models::AggregateFrecency>, Self::Err> {
         // Build the WHERE conditions for each entity
         let mut conditions = Vec::new();
         let mut params = Vec::new();
 
-        params.push(user_id.clone());
+        params.push(user_id.as_ref());
 
-        for (entity_type, entity_id) in entity_pairs {
+        for entity in entities {
             conditions.push(format!(
                 "(entity_type = ${} AND entity_id = ${})",
                 params.len() + 1,
                 params.len() + 2
             ));
-            params.push(entity_type);
-            params.push(entity_id);
+            params.push(<&'static str>::from(entity.entity_type));
+            params.push(entity.entity_id.as_ref());
         }
 
         if conditions.is_empty() {

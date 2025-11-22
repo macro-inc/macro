@@ -12,8 +12,10 @@ import {
   queryKeys,
   type WithNotification,
 } from '@macro-entity';
-import { markNotificationsForEntityAsDone } from '@notifications/notificationHelpers';
-import type { NotificationSource } from '@notifications/notificationSource';
+import {
+  markNotificationsForEntityAsDone,
+  type NotificationSource,
+} from '@notifications';
 import { emailClient } from '@service-email/client';
 import stringify from 'json-stable-stringify';
 import { queryClient } from '../../macro-entity/src/queries/client';
@@ -32,6 +34,7 @@ export type ViewData = {
   initialConfig: string | undefined;
   hasUserInteractedEntity: boolean;
   searchText: string | undefined;
+  selectedEntities: EntityData[];
 } & ViewConfigBase;
 
 /** maps view id to view data */
@@ -257,6 +260,11 @@ export const VIEWCONFIG_DEFAULTS = Object.fromEntries(
 export const VIEWCONFIG_DEFAULTS_IDS = Object.keys(
   VIEWCONFIG_DEFAULTS
 ) as View[];
+export const VIEWCONFIG_DEFAULTS_IDS_ENUM = Object.fromEntries(
+  Object.entries(VIEWCONFIG_DEFAULTS).map(([key]) => {
+    return [key, key];
+  })
+) as Record<View, string>;
 
 export const VIEWCONFIG_FILTER_SHOW_OPTIONS: readonly FilterOptions['notificationFilter'][] =
   ['all', 'unread', 'notDone'] as const;

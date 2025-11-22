@@ -8,7 +8,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use macro_db_client::document::get_document_history::DocumentHistoryInfo;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::document::{
     DocumentSearchMetadata, DocumentSearchRequest, DocumentSearchResponse,
@@ -20,21 +19,18 @@ use crate::{api::ApiContext, util};
 
 use super::SearchPaginationParams;
 
-/// Performs a search through documents and enriches the results with metadata
-pub async fn search_documents_enriched(
+/// Enriches document search results with metadata
+#[tracing::instrument(skip(ctx, results), err)]
+pub(in crate::api::search) async fn enrich_documents(
     ctx: &ApiContext,
     user_id: &str,
-    query_params: &SearchPaginationParams,
-    req: DocumentSearchRequest,
+    results: Vec<opensearch_client::search::documents::DocumentSearchResponse>,
 ) -> Result<Vec<DocumentSearchResponseItemWithMetadata>, SearchError> {
-    // Use the simple search to get raw OpenSearch results
-    let opensearch_results = search_documents(ctx, user_id, query_params, req).await?;
-
+    if results.is_empty() {
+        return Ok(vec![]);
+    }
     // Extract document IDs from results
-    let document_ids: Vec<String> = opensearch_results
-        .iter()
-        .map(|r| r.document_id.clone())
-        .collect();
+    let document_ids: Vec<String> = results.iter().map(|r| r.document_id.clone()).collect();
 
     // Fetch document metadata from database
     let document_histories =
@@ -47,10 +43,23 @@ pub async fn search_documents_enriched(
         .map_err(SearchError::InternalError)?;
 
     // Construct enriched results
-    let enriched_results = construct_search_result(opensearch_results, document_histories)
-        .map_err(SearchError::InternalError)?;
+    let enriched_results =
+        construct_search_result(results, document_histories).map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
+}
+
+/// Performs a search through documents and enriches the results with metadata
+pub async fn search_documents_enriched(
+    ctx: &ApiContext,
+    user_id: &str,
+    query_params: &SearchPaginationParams,
+    req: DocumentSearchRequest,
+) -> Result<Vec<DocumentSearchResponseItemWithMetadata>, SearchError> {
+    // Use the simple search to get raw OpenSearch results
+    let opensearch_results = search_documents(ctx, user_id, query_params, req).await?;
+
+    enrich_documents(ctx, user_id, opensearch_results).await
 }
 
 /// Perform a search through your documents
@@ -87,7 +96,10 @@ pub async fn handler(
 
 pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::documents::DocumentSearchResponse>,
-    document_histories: HashMap<String, DocumentHistoryInfo>,
+    document_histories: HashMap<
+        String,
+        macro_db_client::document::get_document_history::DocumentHistoryInfo,
+    >,
 ) -> anyhow::Result<Vec<DocumentSearchResponseItemWithMetadata>> {
     let search_results = search_results
         .into_iter()
@@ -105,15 +117,18 @@ pub fn construct_search_result(
     let result: Vec<DocumentSearchResponseItemWithMetadata> = result
         .into_iter()
         .map(|item| {
-            let document_history_info = document_histories
-                .get(&item.document_id)
-                .cloned()
-                .unwrap_or_default();
+            let metadata = document_histories.get(&item.document_id).map(|info| {
+                models_search::document::DocumentMetadata {
+                    created_at: info.created_at.timestamp(),
+                    updated_at: info.updated_at.timestamp(),
+                    viewed_at: info.viewed_at.map(|a| a.timestamp()),
+                    project_id: info.project_id.clone(),
+                    deleted_at: info.deleted_at.map(|a| a.timestamp()),
+                }
+            });
+
             DocumentSearchResponseItemWithMetadata {
-                created_at: document_history_info.created_at.timestamp(),
-                updated_at: document_history_info.updated_at.timestamp(),
-                viewed_at: document_history_info.viewed_at.map(|a| a.timestamp()),
-                project_id: document_history_info.project_id,
+                metadata,
                 extra: item,
             }
         })
