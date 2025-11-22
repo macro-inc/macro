@@ -2,6 +2,7 @@ import { updateUserAuth, useIsAuthenticated } from '@core/auth';
 import { toast } from '@core/component/Toast/Toast';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isErr, ok } from '@core/util/maybeResult';
+import { queryKeys } from '@macro-entity';
 import { logger } from '@observability';
 import { emailClient } from '@service-email/client';
 import { updateUserInfo } from '@service-gql/client';
@@ -13,9 +14,8 @@ import {
   createResource,
   createSignal,
 } from 'solid-js';
-import { broadcastChannels, setBroadcastChannels } from '../broadcastChannels';
-import { queryKeys } from '@macro-entity';
 import { queryClient } from '../../../macro-entity/src/queries/client';
+import { broadcastChannels, setBroadcastChannels } from '../broadcastChannels';
 
 export const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
   number | undefined
