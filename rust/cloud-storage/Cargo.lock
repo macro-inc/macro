@@ -2682,9 +2682,9 @@ dependencies = [
 
 [[package]]
 name = "doppleganger"
-version = "0.1.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4f6e63a190778be95e1805cdb16becc932fbe6caa42150edfdad948242ba75aa"
+checksum = "07082bf0ceb443d51d52cdb522e014d470ad2f1a22be809361b7947bb6dd828f"
 dependencies = [
  "doppleganger-core",
  "doppleganger-macros",
@@ -2692,9 +2692,9 @@ dependencies = [
 
 [[package]]
 name = "doppleganger-core"
-version = "0.1.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "314f5bc3b014813956a5f373d5d310b1cdfa7b2295fbb875e7f4512dd382dd34"
+checksum = "3163e3d866a7e9935810855bce91e1ade21a4ff355cba093451f2a327650e640"
 dependencies = [
  "chrono",
  "uuid",
@@ -2702,9 +2702,9 @@ dependencies = [
 
 [[package]]
 name = "doppleganger-macros"
-version = "0.1.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "abdff597f92f7f4f55ab8dfa59385189b870bb8df39dae33513092986feff984"
+checksum = "f5ef4fbea2d3584cf0547c8587b73ede38972d4e01f050fb41790ef0f664bfbd"
 dependencies = [
  "doppleganger-macros-parse",
  "proc-macro2",
@@ -2714,9 +2714,9 @@ dependencies = [
 
 [[package]]
 name = "doppleganger-macros-parse"
-version = "0.1.0"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "847fd9f860890bb89d4c67838a1be9c0af044fd42ed211d87ac290cf9d53bafd"
+checksum = "d6802888ef9324ea57ef9ea11a6e42a44c9deeeb2d17dc856882713d54428fee"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -2832,6 +2832,7 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
+ "doppleganger",
  "frecency",
  "macro_user_id",
  "model-entity",
