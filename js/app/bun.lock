@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "@coparse/monorepo",
@@ -322,9 +323,6 @@
       "peerDependencies": {
         "solid-js": "^1.9.7",
       },
-    },
-    "packages/macros-prompts": {
-      "name": "macros-prompts",
     },
     "packages/notifications": {
       "name": "notifications",
@@ -2716,8 +2714,6 @@
     "lz-string": ["lz-string@1.5.0", "", { "bin": { "lz-string": "bin/bin.js" } }, "sha512-h5bgJWpxJNswbU7qCrV0tIKQCaS3blPDrqKWx+QxzuzL1zGUzij9XCWLrSLsJPu5t+eWA/ycetzYAO5IOMcWAQ=="],
 
     "macro-entity": ["macro-entity@workspace:packages/macro-entity"],
-
-    "macros-prompts": ["macros-prompts@workspace:packages/macros-prompts"],
 
     "magic-string": ["magic-string@0.30.17", "", { "dependencies": { "@jridgewell/sourcemap-codec": "^1.5.0" } }, "sha512-sNPKHvyjVf7gyjwS4xGTaW/mCnF8wnjtifKBEhxfZ7E/S8tQ0rssrwGNn6q8JH/ohItJfSQp9mBtQYuTlH5QnA=="],
 
