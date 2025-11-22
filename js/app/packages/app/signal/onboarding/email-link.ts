@@ -14,6 +14,8 @@ import {
   createSignal,
 } from 'solid-js';
 import { broadcastChannels, setBroadcastChannels } from '../broadcastChannels';
+import { queryKeys } from '@macro-entity';
+import { queryClient } from '../../../macro-entity/src/queries/client';
 
 export const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
   number | undefined
@@ -178,6 +180,67 @@ async function ensureSuccessfulLink(): Promise<
     return 'no_links';
   }
   return 'success';
+}
+
+/**
+ * Connect email to an already authenticated user.
+ *
+ * NOTE: because of the way this works, if a user selects a different email
+ * than the one they originally signed up with, they will be signed out and
+ * back in with the new email.
+ */
+export async function connectEmail(): Promise<void> {
+  const authResult = await signUpWithEmailPermissions();
+
+  if (authResult === 'authentication_timeout') {
+    toast.failure(
+      'Authentication timed out.',
+      'Please email contact@macro.com'
+    );
+    return;
+  }
+
+  if ((await ensureSuccessfulLink()) !== 'success') {
+    toast.failure(
+      'Failed to connect to Gmail account.',
+      'Please email contact@macro.com'
+    );
+    return;
+  }
+
+  await updateUserAuth();
+  await updateUserInfo();
+  await refetchEmailLinks();
+}
+
+/**
+ * Disconnect email from an already authenticated user.
+ *
+ * NOTE: should only be used in dev for testing purposes.
+ */
+export async function disconnectEmail() {
+  const response = await emailClient.stopSync();
+  if (isErr(response) && !isErr(response, 'NOT_FOUND')) {
+    toast.failure(
+      'Failed to disconnect Gmail account',
+      'Please try again later'
+    );
+    return;
+  }
+
+  toast.success(
+    'Gmail account disconnected. Deleting your email data...',
+    'This may take a little while to complete.'
+  );
+
+  refetchEmailLinks();
+  setEmailRefetchInterval(undefined);
+  await queryClient.cancelQueries({ queryKey: queryKeys.all.email });
+  queryClient.setQueriesData({ queryKey: queryKeys.all.email }, () => ({
+    pages: [],
+    pageParams: [],
+  }));
+  refetchEmailLinks();
 }
 
 /**

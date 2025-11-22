@@ -32,7 +32,7 @@ import {
   connectEmail,
   disconnectEmail,
   useEmailLinksStatus,
-} from '../../signal/emailLink';
+} from '../../signal/onboarding/email-link';
 import { BetaTooltip } from '../BetaTooltip';
 
 // NOTE: solid directives
