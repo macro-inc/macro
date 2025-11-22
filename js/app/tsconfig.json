@@ -154,9 +154,6 @@
       "@macro-icons/*": [
         "./packages/macro-icons/*"
       ],
-      "@macros-prompts/*": [
-        "./packages/macros-prompts/*"
-      ],
       "@observability": [
         "./packages/observability/src/"
       ],
