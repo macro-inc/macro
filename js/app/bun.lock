@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "@coparse/monorepo",
@@ -403,12 +404,6 @@
     "packages/template-package": {
       "name": "template-package",
     },
-    "packages/types": {
-      "name": "@coparse/types",
-      "devDependencies": {
-        "typescript": "^4.9.5",
-      },
-    },
     "packages/websocket": {
       "name": "websocket",
       "devDependencies": {
@@ -702,8 +697,6 @@
     "@coparse/analytics": ["@coparse/analytics@workspace:packages/analytics"],
 
     "@coparse/filesystem": ["@coparse/filesystem@workspace:packages/filesystem"],
-
-    "@coparse/types": ["@coparse/types@workspace:packages/types"],
 
     "@corvu/accordion": ["@corvu/accordion@0.2.5", "", { "dependencies": { "@corvu/disclosure": "~0.2.2", "@corvu/utils": "~0.4.2", "solid-list": "~0.3.0" }, "peerDependencies": { "solid-js": "^1.8" } }, "sha512-oBZKDZZNN5mirmilSzWSrY+7PQGHQbXAlWm1SOvG1AAsIeX5osUdQnKjH0XzlkkAxCLKHb41178W4YNNPqH0PA=="],
 
@@ -4008,8 +4001,6 @@
     "@commander-js/extra-typings/commander": ["commander@14.0.1", "", {}, "sha512-2JkV3gUZUVrbNA+1sjBOYLsMZ5cEEl8GTFP2a4AVz5hvasAMCQ1D2l2le/cX+pV4N6ZU17zjUahLpIXRrnWL8A=="],
 
     "@coparse/analytics/typescript": ["typescript@4.9.5", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-1FXk9E2Hm+QzZQ7z+McJiHL4NW1F2EzMu9Nq9i3zAaGqibafqYwCVU6WyWAuyQRRzOlxou8xZSyXLEN8oKj24g=="],
-
-    "@coparse/types/typescript": ["typescript@4.9.5", "", { "bin": { "tsc": "bin/tsc", "tsserver": "bin/tsserver" } }, "sha512-1FXk9E2Hm+QzZQ7z+McJiHL4NW1F2EzMu9Nq9i3zAaGqibafqYwCVU6WyWAuyQRRzOlxou8xZSyXLEN8oKj24g=="],
 
     "@corvu/tooltip/@floating-ui/dom": ["@floating-ui/dom@1.6.13", "", { "dependencies": { "@floating-ui/core": "^1.6.0", "@floating-ui/utils": "^0.2.9" } }, "sha512-umqzocjDgNRGTuO7Q8CU32dkHkECqI8ZdMZ5Swb6QAM0t5rnlrN3lGo1hdpscRd3WS8T6DKYK4ephgIH9iRh3w=="],
 
