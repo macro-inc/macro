@@ -9,6 +9,7 @@ use sqlx::{Executor, PgPool, Postgres};
 use std::collections::HashMap;
 
 /// inserts a thread and all of its messages into the database
+/// returns the db thread id
 #[tracing::instrument(
     skip(pool, service_thread),
     fields(
@@ -21,7 +22,7 @@ pub async fn insert_thread_and_messages(
     pool: &PgPool,
     service_thread: thread::Thread,
     link_id: Uuid,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Uuid> {
     let mut recipient_map: HashMap<String, UpsertedRecipients> = HashMap::new();
 
     // we have to insert addresses before inserting the messages. these values are shared
@@ -71,7 +72,7 @@ pub async fn insert_thread_and_messages(
                 .context("Failed to update messages replying_to_ids")?;
         }
 
-        Ok::<_, anyhow::Error>(())
+        Ok(thread_id)
     }
     .await;
 
@@ -88,7 +89,7 @@ pub async fn insert_thread_and_messages(
 
     tx.commit().await.context("Failed to commit transaction")?;
 
-    Ok(())
+    Ok(result.unwrap())
 }
 
 /// inserts a thread object into the database using the provided transaction

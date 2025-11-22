@@ -1,7 +1,7 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { withAnalytics } from '@coparse/analytics';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { EmailDebouncedReadMarker } from '@notifications/components/DebouncedNotificationReadMarker';
+import { EmailDebouncedReadMarker } from '@notifications';
 import { createEffect, createMemo, onMount, Show } from 'solid-js';
 import { blockDataSignal } from '../signal/emailBlockData';
 import { createThreadMessagesResource } from '../signal/threadMessages';

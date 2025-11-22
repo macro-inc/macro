@@ -1,13 +1,14 @@
 import { useEmailLinksStatus } from '@app/signal/onboarding/email-link';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 
+import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { fileSelector } from '@core/directive/fileSelector';
 import { folderSelector } from '@core/directive/folderSelector';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import type { ViewId } from '@core/types/view';
 import { handleFolderSelect } from '@core/util/upload';
-import { Match, onMount, Show, Switch } from 'solid-js';
+import { createMemo, Match, onMount, Show, Switch } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 false && fileSelector;
@@ -96,7 +97,16 @@ export interface EmptyStateInnerProps {
 }
 
 export function EmptyStateInner(props: EmptyStateInnerProps) {
-  const handleFileUpload = useHandleFileUpload();
+  const blockName = useMaybeBlockName();
+  const blockId = useMaybeBlockId();
+  const projectId = createMemo(() => {
+    if (blockName === 'project' && blockId) {
+      return blockId;
+    }
+    return undefined;
+  });
+
+  const handleFileUpload = useHandleFileUpload({ projectId: projectId() });
 
   return (
     <div class="size-full flex items-center justify-center p-4 text-ink-muted">

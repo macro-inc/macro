@@ -31,41 +31,18 @@ export const ENABLE_PINS = false;
 
 export const ENABLE_THUMBNAIL_VIEWER = false;
 
-export const EDITOR_TOPBAR_BOOKMARKS = false;
-
 export const ENABLE_PDF_TABS = true;
 
 export const ENABLE_PDF_MARKUP = true;
-
-export const ENABLE_MACROTATIONS = false;
-
-// TODO: rename this, this only applies to writer block at the moment
-export const ENABLE_MACROTATIONS_PANEL = false;
-
-export const ENABLE_INBOX = true;
-
-export const ENABLE_MARKDOWN_BLOCK = true;
-
-export const ENABLE_CANVAS_BLOCK = true;
 
 // NOTE: disabling scripting: event listener needs to be properly unmounted first
 // this is the offending line in our pdfjs repo, which has been fixed in the upstream
 // https://github.com/macro-inc/pdf.js/blob/d22768d78ebaaf038707d3d926992a7aeb88e730/web/pdf_scripting_manager.js?plain=1#L59
 export const ENABLE_SCRIPTING = false;
 
-export const ENABLE_ONBOARDING = true;
-
 export const ENABLE_PDF_MULTISPLIT = true;
 
-export const ENABLE_CHAT_INITIALIZER = true;
-
-export const ENABLE_CITATIONS = true;
-
-export const ENABLE_CONNECTION_POPUP = DEV_MODE_ENV;
-
 export const ENABLE_PROJECT_SHARING = DEV_MODE_ENV;
-
-export const ENABLE_CHAT_CREATE_TYPE_DROPDOWN = DEV_MODE_ENV;
 
 export const ENABLE_CANVAS_IMAGES = true;
 
@@ -75,15 +52,9 @@ export const ENABLE_CANVAS_TEXT = true;
 
 export const ENABLE_ORG_SETTING_DEFAULT_SHARE = false;
 
-export const ENABLE_SEPARATE_NOTIFICATION_STACKS = true;
-
 export const ENABLE_NAME_IN_LOGIN = false;
 
 export const ENABLE_LIVE_INDICATORS = true;
-
-export const EXPERIMENTAL_DARK_MODE = true;
-
-export const ENABLE_MINDMAP = true;
 
 export const ENABLE_CONTACTS = true;
 export const ENABLE_GMAIL_BASED_CONTACTS = DEV_MODE_ENV;
@@ -141,8 +112,6 @@ export const ENABLE_SVG_PREVIEW = true;
 
 export const USE_PIXEL_BLOCK_ICONS = false;
 
-export const ENABLE_RIGHTHAND_SIDEBAR = true;
-
 export const ENABLE_PROPERTIES_METADATA = DEV_MODE_ENV;
 
 export const ENABLE_EMAIL_VIEW = true;
@@ -154,3 +123,11 @@ export const ENABLE_PREVIEW = true;
 
 export const ENABLE_DOCK_NOTITIFCATIONS = DEV_MODE_ENV;
 export const ENABLE_TTFT = DEV_MODE_ENV;
+
+export const ENABLE_SOUND = false;
+export const ENABLE_JACK_IN = false;
+
+// pure css based custom cursor
+export const ENABLE_CUSTOM_CURSOR = true;
+// uses javascript to detect selectable text to switch to "text" cursor type (ibeam)
+export const ENABLE_CUSTOM_CURSOR_TEXT_GLYPH_DETECTION = true;

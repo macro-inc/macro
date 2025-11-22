@@ -164,13 +164,12 @@ export function SplitTabs(props: {
                 tabIndex={-1}
                 class="min-w-12 max-w-[40cqw] shrink-0 text-sm relative h-full flex items-center px-2"
                 classList={{
-                  'z-1 border-y border-edge-muted text-accent text-glow-sm':
-                    isActive(),
-                  'border-y border-edge-muted text-ink-disabled hover:text-accent/70 hover-transition-text':
+                  'z-1 text-accent text-glow-sm': isActive(),
+                  'text-ink-disabled hover:text-accent/70 hover-transition-text':
                     !isActive(),
                 }}
               >
-                <span class="flex items-center gap-1 w-full">
+                <span class="flex items-baseline gap-1 w-full">
                   <span class="text-xs font-mono opacity-70 mr-0.5">
                     {(i() + 1).toString()}
                   </span>

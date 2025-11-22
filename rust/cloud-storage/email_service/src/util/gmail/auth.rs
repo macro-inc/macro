@@ -41,7 +41,7 @@ pub async fn fetch_gmail_token_usercontext_response(
 
 /// Creates a cache key using a link, then fetches access token
 pub async fn fetch_gmail_access_token_from_link(
-    link: Link,
+    link: &Link,
     redis_client: &RedisClient,
     auth_service_client: &AuthServiceClient,
 ) -> anyhow::Result<String> {

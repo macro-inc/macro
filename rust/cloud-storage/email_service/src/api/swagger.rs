@@ -10,23 +10,22 @@ use crate::api::email::labels::list::ListLabelsResponse;
 use crate::api::email::links::list::ListLinksResponse;
 use crate::api::email::messages::labels::{UpdateLabelBatchRequest, UpdateLabelBatchResponse};
 use crate::api::email::messages::send::{SendMessageRequest, SendMessageResponse};
+use crate::api::email::settings::patch::{PatchSettingsRequest, PatchSettingsResponse};
 use crate::api::email::threads::archived::ArchiveThreadRequest;
 use crate::api::email::threads::get::GetThreadResponse;
-use crate::api::email::threads::previews::cursor::{
-    GetPreviewsFrecencyResponse, ThreadPreviewFrecency, ThreadPreviewPagination,
-};
 use crate::api::{email, health};
+use ::email::inbound;
+use ::email::inbound::{ApiPaginatedThreadCursor, ApiSortMethod, GetPreviewsCursorParams};
 use model::response::EmptyResponse;
+use models_email::api::settings::Settings;
 use models_email::email::service;
 use models_email::email::service::address::ContactInfoWithInteraction;
 use models_email::email::service::backfill::BackfillJob;
 use models_email::email::service::link::Link;
-use models_email::email::service::thread::{
-    GetPreviewsCursorParams, GetPreviewsCursorResponse, PreviewView, PreviewViewStandardLabel,
-};
+use models_email::email::service::thread::{PreviewView, PreviewViewStandardLabel};
 use models_email::service::label::Label;
 use models_email::service::message::{MessageToSend, ParsedMessage};
-use models_email::service::thread::{APIThread, ApiSortMethod, ThreadPreviewCursor};
+use models_email::service::thread::{APIThread, ThreadPreviewCursor};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -51,7 +50,7 @@ use utoipa::OpenApi;
         email::threads::get::get_thread_handler,
         email::threads::get::get_thread_messages_handler,
         email::threads::archived::archived_handler,
-        email::threads::previews::cursor::previews_handler,
+        inbound::cursor_handler,
         email::links::list::list_links_handler,
         email::labels::create::handler,
         email::labels::delete::handler,
@@ -59,6 +58,7 @@ use utoipa::OpenApi;
         email::contacts::list::list_contacts_handler,
         email::sync::enable::enable_handler,
         email::sync::disable::disable_handler,
+        email::settings::patch::patch_settings_handler,
     ),
     components(
         schemas(
@@ -92,10 +92,7 @@ use utoipa::OpenApi;
             ThreadPreviewCursor,
             // Preview types
             GetPreviewsCursorParams,
-            GetPreviewsCursorResponse,
-            GetPreviewsFrecencyResponse,
-            ThreadPreviewFrecency,
-            ThreadPreviewPagination,
+            ApiPaginatedThreadCursor,
             PreviewView,
             PreviewViewStandardLabel,
             // Attachment types
@@ -103,6 +100,7 @@ use utoipa::OpenApi;
             // Link types
             ListLinksResponse,
             Link,
+            Settings,
             // Contact types
             ListContactsResponse,
             ContactInfoWithInteraction,
@@ -114,7 +112,9 @@ use utoipa::OpenApi;
             service::label::LabelInfo,
             service::attachment::Attachment,
             service::thread::Thread,
-            service::message::Message
+            service::message::Message,
+            PatchSettingsRequest,
+            PatchSettingsResponse
         ),
     ),
     tags(

@@ -857,6 +857,17 @@
           }
         }
       },
+      "ChannelMetadata": {
+        "type": "object",
+        "description": "Metadata for a channel fetched from the database",
+        "required": ["created_at", "updated_at"],
+        "properties": {
+          "created_at": { "type": "integer", "format": "int64" },
+          "interacted_at": { "type": ["integer", "null"], "format": "int64" },
+          "updated_at": { "type": "integer", "format": "int64" },
+          "viewed_at": { "type": ["integer", "null"], "format": "int64" }
+        }
+      },
       "ChannelSearchRequest": {
         "allOf": [
           {
@@ -875,6 +886,10 @@
               "collapse": {
                 "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
+              },
+              "disable_recency": {
+                "type": "boolean",
+                "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
               },
               "match_type": {
                 "$ref": "#/components/schemas/MatchType",
@@ -930,10 +945,6 @@
             "items": { "$ref": "#/components/schemas/ChannelSearchResult" },
             "description": "The search results for the channel\nThis may be empty if the search result match was not on content"
           },
-          "channel_name": {
-            "type": ["string", "null"],
-            "description": "The name of the channel if present"
-          },
           "channel_type": {
             "type": "string",
             "description": "The type of channel"
@@ -942,7 +953,6 @@
             "type": "string",
             "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
           },
-          "name": { "type": ["string", "null"] },
           "owner_id": {
             "type": ["string", "null"],
             "description": "we don't store this for channels atm but keeping it here for consistency"
@@ -954,15 +964,16 @@
           { "$ref": "#/components/schemas/ChannelSearchResponseItem" },
           {
             "type": "object",
-            "required": ["created_at", "updated_at"],
             "properties": {
-              "created_at": { "type": "integer", "format": "int64" },
-              "interacted_at": {
-                "type": ["integer", "null"],
-                "format": "int64"
-              },
-              "updated_at": { "type": "integer", "format": "int64" },
-              "viewed_at": { "type": ["integer", "null"], "format": "int64" }
+              "metadata": {
+                "oneOf": [
+                  { "type": "null" },
+                  {
+                    "$ref": "#/components/schemas/ChannelMetadata",
+                    "description": "Metadata from the database. None if the channel doesn't exist in the database."
+                  }
+                ]
+              }
             }
           }
         ],
@@ -991,6 +1002,11 @@
           "message_id": {
             "type": "string",
             "description": "The channel message id"
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
           },
           "sender_id": { "type": "string", "description": "The sender id" },
           "thread_id": {
@@ -1053,12 +1069,29 @@
             "type": "string",
             "description": "The role of the chat message"
           },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
+          },
           "title": { "type": "string", "description": "The title of the chat" },
           "updated_at": {
             "type": "integer",
             "format": "int64",
             "description": "When the search chat was last updated"
           }
+        }
+      },
+      "ChatMetadata": {
+        "type": "object",
+        "description": "Metadata for a chat fetched from the database",
+        "required": ["created_at", "updated_at"],
+        "properties": {
+          "created_at": { "type": "integer", "format": "int64" },
+          "deleted_at": { "type": ["integer", "null"], "format": "int64" },
+          "project_id": { "type": ["string", "null"] },
+          "updated_at": { "type": "integer", "format": "int64" },
+          "viewed_at": { "type": ["integer", "null"], "format": "int64" }
         }
       },
       "ChatSearchRequest": {
@@ -1079,6 +1112,10 @@
               "collapse": {
                 "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
+              },
+              "disable_recency": {
+                "type": "boolean",
+                "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
               },
               "match_type": {
                 "$ref": "#/components/schemas/MatchType",
@@ -1150,12 +1187,16 @@
           { "$ref": "#/components/schemas/ChatSearchResponseItem" },
           {
             "type": "object",
-            "required": ["created_at", "updated_at"],
             "properties": {
-              "created_at": { "type": "integer", "format": "int64" },
-              "project_id": { "type": ["string", "null"] },
-              "updated_at": { "type": "integer", "format": "int64" },
-              "viewed_at": { "type": ["integer", "null"], "format": "int64" }
+              "metadata": {
+                "oneOf": [
+                  { "type": "null" },
+                  {
+                    "$ref": "#/components/schemas/ChatMetadata",
+                    "description": "Metadata from the database. None if the chat doesn't exist in the database."
+                  }
+                ]
+              }
             }
           }
         ],
@@ -1187,6 +1228,18 @@
           }
         }
       },
+      "DocumentMetadata": {
+        "type": "object",
+        "description": "Metadata for a document fetched from the database",
+        "required": ["created_at", "updated_at"],
+        "properties": {
+          "created_at": { "type": "integer", "format": "int64" },
+          "deleted_at": { "type": ["integer", "null"], "format": "int64" },
+          "project_id": { "type": ["string", "null"] },
+          "updated_at": { "type": "integer", "format": "int64" },
+          "viewed_at": { "type": ["integer", "null"], "format": "int64" }
+        }
+      },
       "DocumentSearchRequest": {
         "allOf": [
           {
@@ -1205,6 +1258,10 @@
               "collapse": {
                 "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
+              },
+              "disable_recency": {
+                "type": "boolean",
+                "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
               },
               "match_type": {
                 "$ref": "#/components/schemas/MatchType",
@@ -1284,12 +1341,16 @@
           { "$ref": "#/components/schemas/DocumentSearchResponseItem" },
           {
             "type": "object",
-            "required": ["created_at", "updated_at"],
             "properties": {
-              "created_at": { "type": "integer", "format": "int64" },
-              "project_id": { "type": ["string", "null"] },
-              "updated_at": { "type": "integer", "format": "int64" },
-              "viewed_at": { "type": ["integer", "null"], "format": "int64" }
+              "metadata": {
+                "oneOf": [
+                  { "type": "null" },
+                  {
+                    "$ref": "#/components/schemas/DocumentMetadata",
+                    "description": "Metadata from the database. None if the document doesn't exist in the database."
+                  }
+                ]
+              }
             }
           }
         ],
@@ -1311,6 +1372,11 @@
           "raw_content": {
             "type": ["string", "null"],
             "description": "The raw content of the document.\nThis is only included for markdown files and will be the raw json node of the match"
+          },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
           },
           "updated_at": {
             "type": "integer",
@@ -1363,6 +1429,10 @@
               "collapse": {
                 "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
+              },
+              "disable_recency": {
+                "type": "boolean",
+                "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
               },
               "match_type": {
                 "$ref": "#/components/schemas/MatchType",
@@ -1442,6 +1512,7 @@
             "required": ["created_at", "updated_at"],
             "properties": {
               "created_at": { "type": "integer", "format": "int64" },
+              "snippet": { "type": ["string", "null"] },
               "updated_at": { "type": "integer", "format": "int64" },
               "viewed_at": { "type": ["integer", "null"], "format": "int64" }
             }
@@ -1475,6 +1546,11 @@
             "description": "The email message id."
           },
           "recipients": { "type": "array", "items": { "type": "string" } },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
+          },
           "sender": { "type": "string" },
           "sent_at": {
             "type": ["integer", "null"],
@@ -1951,6 +2027,18 @@
           }
         }
       },
+      "ProjectMetadata": {
+        "type": "object",
+        "description": "Metadata for a project fetched from the database",
+        "required": ["created_at", "updated_at"],
+        "properties": {
+          "created_at": { "type": "integer", "format": "int64" },
+          "deleted_at": { "type": ["integer", "null"], "format": "int64" },
+          "parent_project_id": { "type": ["string", "null"] },
+          "updated_at": { "type": "integer", "format": "int64" },
+          "viewed_at": { "type": ["integer", "null"], "format": "int64" }
+        }
+      },
       "ProjectSearchMetadata": {
         "type": "object",
         "description": "Metadata associated with Project Search, to be used with SearchResponseItem",
@@ -1987,6 +2075,10 @@
               "collapse": {
                 "type": ["boolean", "null"],
                 "description": "If true, returns only 1 result per entity. False by default."
+              },
+              "disable_recency": {
+                "type": "boolean",
+                "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
               },
               "match_type": {
                 "$ref": "#/components/schemas/MatchType",
@@ -2040,12 +2132,16 @@
           { "$ref": "#/components/schemas/ProjectSearchResponseItem" },
           {
             "type": "object",
-            "required": ["created_at", "updated_at"],
             "properties": {
-              "created_at": { "type": "integer", "format": "int64" },
-              "parent_project_id": { "type": ["string", "null"] },
-              "updated_at": { "type": "integer", "format": "int64" },
-              "viewed_at": { "type": ["integer", "null"], "format": "int64" }
+              "metadata": {
+                "oneOf": [
+                  { "type": "null" },
+                  {
+                    "$ref": "#/components/schemas/ProjectMetadata",
+                    "description": "Metadata from the database. None if the project doesn't exist in the database."
+                  }
+                ]
+              }
             }
           }
         ],
@@ -2055,7 +2151,12 @@
         "type": "object",
         "required": ["highlight"],
         "properties": {
-          "highlight": { "$ref": "#/components/schemas/SearchHighlight" }
+          "highlight": { "$ref": "#/components/schemas/SearchHighlight" },
+          "score": {
+            "type": ["number", "null"],
+            "format": "double",
+            "description": "The score of the result"
+          }
         }
       },
       "SearchHighlight": {
@@ -2103,10 +2204,6 @@
         ],
         "properties": {
           "channel_id": { "type": "string", "description": "The channel id" },
-          "channel_name": {
-            "type": ["string", "null"],
-            "description": "The channel name"
-          },
           "channel_type": {
             "type": "string",
             "description": "The channel type"
@@ -2155,10 +2252,6 @@
         ],
         "properties": {
           "channel_id": { "type": "string", "description": "The channel id" },
-          "channel_name": {
-            "type": ["string", "null"],
-            "description": "The channel name"
-          },
           "channel_type": {
             "type": "string",
             "description": "The channel type"
@@ -2740,31 +2833,46 @@
           "channel": {
             "oneOf": [
               { "type": "null" },
-              { "$ref": "#/components/schemas/ChannelFilters" }
+              {
+                "$ref": "#/components/schemas/ChannelFilters",
+                "description": "Channel filters. `null` to not filter channels searched over."
+              }
             ]
           },
           "chat": {
             "oneOf": [
               { "type": "null" },
-              { "$ref": "#/components/schemas/ChatFilters" }
+              {
+                "$ref": "#/components/schemas/ChatFilters",
+                "description": "Chat filters. `null` to not filter chats searched over."
+              }
             ]
           },
           "document": {
             "oneOf": [
               { "type": "null" },
-              { "$ref": "#/components/schemas/DocumentFilters" }
+              {
+                "$ref": "#/components/schemas/DocumentFilters",
+                "description": "Document filters. `null` to not filter documents searched over."
+              }
             ]
           },
           "email": {
             "oneOf": [
               { "type": "null" },
-              { "$ref": "#/components/schemas/EmailFilters" }
+              {
+                "$ref": "#/components/schemas/EmailFilters",
+                "description": "Email filters. `null` to not filter emails searched over."
+              }
             ]
           },
           "project": {
             "oneOf": [
               { "type": "null" },
-              { "$ref": "#/components/schemas/ProjectFilters" }
+              {
+                "$ref": "#/components/schemas/ProjectFilters",
+                "description": "Project filters. `null` to not filter projects searched over."
+              }
             ]
           }
         }
@@ -2778,20 +2886,38 @@
         "required": ["match_type"],
         "properties": {
           "collapse": { "type": ["boolean", "null"] },
+          "disable_recency": {
+            "type": "boolean",
+            "description": "If search_on is set to NameContent, you can disable the recency filter\nby setting to true."
+          },
           "filters": {
             "oneOf": [
               { "type": "null" },
-              { "$ref": "#/components/schemas/UnifiedSearchFilters" }
+              {
+                "$ref": "#/components/schemas/UnifiedSearchFilters",
+                "description": "Search filters for various kinds of items. Set the entire filters property as `null` if you do not have specific filters for a given type, e.g. bcc for email filters."
+              }
             ]
           },
           "include": {
             "type": "array",
-            "items": { "$ref": "#/components/schemas/UnifiedSearchIndex" }
+            "items": { "$ref": "#/components/schemas/UnifiedSearchIndex" },
+            "description": "Include specific entity types from search. If empty, all entity types will be searched over. If you are unsure which types to search, use an empty array to search all."
           },
-          "match_type": { "$ref": "#/components/schemas/MatchType" },
+          "match_type": {
+            "$ref": "#/components/schemas/MatchType",
+            "description": "How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field."
+          },
           "query": { "type": ["string", "null"] },
-          "search_on": { "$ref": "#/components/schemas/SearchOn" },
-          "terms": { "type": ["array", "null"], "items": { "type": "string" } }
+          "search_on": {
+            "$ref": "#/components/schemas/SearchOn",
+            "description": "Fields to search on (Name, Content, NameContent). Defaults to Content"
+          },
+          "terms": {
+            "type": ["array", "null"],
+            "items": { "type": "string" },
+            "description": "Multiple distinct search terms as separate strings. Use this for keyword-based searches where you want to find content containing any of these terms. Each term must be at least 3 characters (shorter terms are automatically filtered out). Examples: ['machine', 'learning', 'algorithms'], ['project', 'status', 'update']. `null` this field if searching without text terms to search all. This field matches query string against both name and content."
+          }
         }
       },
       "UnifiedSearchResponse": {

@@ -1,12 +1,15 @@
-import { supportedExtensionSet } from '@block-code/util/languageSupport';
 import type { BlockName } from '@core/block';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import {
+  blockAcceptedFileExtensionSet,
+  fileTypeToBlockName,
+} from '@core/constant/allBlocks';
 import { USE_PIXEL_BLOCK_ICONS } from '@core/constant/featureFlags';
 import Building from '@icon/duotone/building-duotone.svg';
 import Chat from '@icon/duotone/chat-duotone.svg';
 import FileCode from '@icon/duotone/code-duotone.svg';
 import Email from '@icon/duotone/envelope-duotone.svg';
 import EmailRead from '@icon/duotone/envelope-open-duotone.svg';
+import FileArchive from '@icon/duotone/file-archive-duotone.svg';
 import FileDoc from '@icon/duotone/file-doc-duotone.svg';
 import File from '@icon/duotone/file-duotone.svg';
 import FileHtml from '@icon/duotone/file-html-duotone.svg';
@@ -15,14 +18,11 @@ import FilePdf from '@icon/duotone/file-pdf-duotone.svg';
 import FileVideo from '@icon/duotone/file-video-duotone.svg';
 import Channel from '@icon/duotone/hash-duotone.svg';
 import FileImage from '@icon/duotone/image-duotone.svg';
-import Color from '@icon/duotone/palette-duotone.svg';
 import Canvas from '@icon/duotone/pencil-circle-duotone.svg';
-import Plus from '@icon/duotone/plus-circle-duotone.svg';
 import User from '@icon/duotone/user-duotone.svg';
 import Users from '@icon/duotone/users-duotone.svg';
 import Folder from '@icon/fill/folder-simple-fill.svg';
 import FolderUser from '@icon/fill/folder-user-fill.svg';
-import PixelPlus from '@macro-icons/pixel/add.svg';
 import PixelChat from '@macro-icons/pixel/ai.svg';
 import PixelBuilding from '@macro-icons/pixel/building.svg';
 import PixelCanvas from '@macro-icons/pixel/canvas.svg';
@@ -31,7 +31,6 @@ import PixelCode from '@macro-icons/pixel/code.svg';
 import PixelEmail from '@macro-icons/pixel/email.svg';
 import PixelEmailRead from '@macro-icons/pixel/email-read.svg';
 import PixelFile from '@macro-icons/pixel/file.svg';
-import PixelColor from '@macro-icons/pixel/flower.svg';
 import PixelFolder from '@macro-icons/pixel/folder-alt.svg';
 import PixelHtml from '@macro-icons/pixel/html.svg';
 import PixelImage from '@macro-icons/pixel/image.svg';
@@ -42,6 +41,7 @@ import PixelUser from '@macro-icons/pixel/user.svg';
 import PixelUsers from '@macro-icons/pixel/users.svg';
 import PixelVideo from '@macro-icons/pixel/video.svg';
 import PixelWord from '@macro-icons/pixel/write.svg';
+import { FileTypeMap } from '@service-storage/fileTypeMap';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Component, JSX } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -60,7 +60,15 @@ export type EntityWithValidIcon =
   | 'company'
   | 'user'
   | 'directMessage'
-  | 'emailRead';
+  | 'emailRead'
+  | 'archive'
+  | 'html';
+
+const ARCHIVE_EXTENSIONS = new Set(
+  Object.values(FileTypeMap)
+    .filter((ft) => ft.app === 'archive')
+    .map((ft) => ft.extension)
+);
 
 export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   canvas: {
@@ -86,12 +94,6 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-default',
     background: 'bg-default-bg',
     prettyName: 'Company',
-  },
-  color: {
-    icon: Color,
-    foreground: 'text-default',
-    background: 'bg-default-bg',
-    prettyName: 'Color',
   },
   email: {
     icon: Email,
@@ -135,12 +137,6 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-chat-bg',
     prettyName: 'Chat',
   },
-  start: {
-    icon: Plus,
-    foreground: 'text-default',
-    background: 'bg-default-bg',
-    prettyName: 'Start',
-  },
   project: {
     icon: Folder,
     foreground: 'text-folder',
@@ -158,6 +154,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     foreground: 'text-default',
     background: 'bg-default-bg',
     prettyName: 'File',
+  },
+  archive: {
+    icon: FileArchive,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'Archive',
   },
   video: {
     icon: FileVideo,
@@ -197,20 +199,27 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
   },
 };
 
-function isFileType(entity: string): boolean {
-  return supportedExtensionSet.has(entity);
+// this will match fall-through cases like code files which match multiple extensions
+// or docx files which no longer have their own block
+function isFileType(ext: string): boolean {
+  return blockAcceptedFileExtensionSet.has(ext);
+}
+
+// this lets us show a archive icon for certain files which still get mapped to block-unknown
+export function isArchiveType(ext: string): boolean {
+  return ARCHIVE_EXTENSIONS.has(ext as any);
 }
 
 function validateEntity(entity: string): EntityWithValidIcon {
   if (entity in ENTITY_ICON_CONFIGS) {
     return entity as EntityWithValidIcon;
+  } else if (isFileType(entity)) {
+    return fileTypeToBlockName(entity, true);
+  } else if (isArchiveType(entity)) {
+    return 'archive';
   } else {
-    if (isFileType(entity)) {
-      const blockName = fileTypeToBlockName(entity, true);
-      return blockName as EntityWithValidIcon;
-    }
+    return 'default';
   }
-  return 'default';
 }
 
 export const PIXEL_ICONS: Record<EntityWithValidIcon, Component> = {
@@ -218,7 +227,6 @@ export const PIXEL_ICONS: Record<EntityWithValidIcon, Component> = {
   html: PixelHtml,
   channel: PixelChannel,
   company: PixelBuilding,
-  color: PixelColor,
   email: PixelEmail,
   code: PixelCode,
   pdf: PixelPdf,
@@ -226,10 +234,10 @@ export const PIXEL_ICONS: Record<EntityWithValidIcon, Component> = {
   image: PixelImage,
   write: PixelWord,
   chat: PixelChat,
-  start: PixelPlus,
   project: PixelFolder,
   sharedProject: PixelFolder,
   unknown: PixelUnknown,
+  archive: PixelUnknown,
   video: PixelVideo,
   contact: PixelUser,
   default: PixelFile,

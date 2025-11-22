@@ -4,6 +4,9 @@ import * as pulumi from '@pulumi/pulumi';
 import {
   attachFrecencyTablePolicy,
   createFrecencyTablePolicy,
+  DATADOG_API_KEY,
+  datadogAgentContainer,
+  fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
 } from '@resources';
 import { EcrImage } from '@service';
@@ -13,11 +16,6 @@ import {
   SERVICE_DOMAIN_NAME,
   stack,
 } from '@shared';
-import {
-  DATADOG_API_KEY,
-  datadogAgentContainer,
-  fargateLogRouterSidecarContainer,
-} from './datadog';
 
 const BASE_NAME = 'cloud-storage-service';
 const BASE_PATH = '../../../rust/cloud-storage';

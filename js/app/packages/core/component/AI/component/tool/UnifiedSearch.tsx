@@ -56,7 +56,7 @@ const UnifiedSearchToolResponse = (props: {
       case 'email':
         return result.subject || 'Email';
       case 'channel':
-        return result.channel_name || 'Channel';
+        return 'Channel'; // there are no channel names from search results
       case 'project':
         return result.project_name || 'Project';
       default:

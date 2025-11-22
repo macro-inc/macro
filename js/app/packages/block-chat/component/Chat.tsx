@@ -18,7 +18,8 @@ import {
   storeChatState,
 } from '@core/component/AI/util/storage';
 import { usePaywallState } from '@core/constant/PaywallState';
-import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
+import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import { createMethodRegistration } from '@core/orchestrator';
 import {
   blockElementSignal,
@@ -147,29 +148,29 @@ export function Chat(props: { data: ChatData }) {
     },
   });
 
-  createEffect(() => {
-    if (scopeId()) {
-      registerHotkey({
-        hotkey: 'enter',
-        scopeId: scopeId(),
-        description: 'Focus Chat Input',
-        keyDownHandler: () => {
-          const editor = chatEditor();
-          if (editor) {
-            editor.focus(undefined, { defaultSelection: 'rootStart' });
-            return true;
-          }
-          return false;
-        },
-        hide: true,
-      });
-    }
+  registerScopeSignalHotkey(scopeId, {
+    hotkey: 'enter',
+    description: 'Focus Chat Input',
+    keyDownHandler: () => {
+      const editor = chatEditor();
+      if (editor) {
+        editor.focus(undefined, { defaultSelection: 'rootStart' });
+        return true;
+      }
+      return false;
+    },
+    hotkeyToken: TOKENS.block.focus,
+    hide: true,
   });
 
+  // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
+  let hasRun = false;
   createEffect(() => {
+    if (hasRun) return;
     if (!blockElement()) return;
     if (!navigatedFromJK()) return;
     blockElement()?.focus();
+    hasRun = true;
   });
 
   return (

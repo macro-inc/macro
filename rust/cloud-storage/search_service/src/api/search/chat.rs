@@ -7,7 +7,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use macro_db_client::chat::get::ChatHistoryInfo;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::chat::{
     ChatMessageSearchResult, ChatSearchMetadata, ChatSearchRequest, ChatSearchResponse,
@@ -16,6 +15,32 @@ use models_search::chat::{
 use std::collections::HashMap;
 
 use super::SearchPaginationParams;
+
+/// Enriches chat search results with metadata
+#[tracing::instrument(skip(ctx, results), err)]
+pub(in crate::api::search) async fn enrich_chats(
+    ctx: &ApiContext,
+    user_id: &str,
+    results: Vec<opensearch_client::search::chats::ChatSearchResponse>,
+) -> Result<Vec<ChatSearchResponseItemWithMetadata>, SearchError> {
+    if results.is_empty() {
+        return Ok(vec![]);
+    }
+    // Extract chat IDs from results
+    let chat_ids: Vec<String> = results.iter().map(|r| r.chat_id.clone()).collect();
+
+    // Fetch chat metadata from database
+    let chat_histories =
+        macro_db_client::chat::get::get_chat_history_info(&ctx.db, user_id, &chat_ids)
+            .await
+            .map_err(SearchError::InternalError)?;
+
+    // Construct enriched results
+    let enriched_results =
+        construct_search_result(results, chat_histories).map_err(SearchError::InternalError)?;
+
+    Ok(enriched_results)
+}
 
 /// Performs a search through chats and enriches the results with metadata
 pub async fn search_chats_enriched(
@@ -27,23 +52,7 @@ pub async fn search_chats_enriched(
     // Use the simple search to get raw OpenSearch results
     let opensearch_results = search_chats(ctx, user_id, query_params, req).await?;
 
-    // Extract chat IDs from results
-    let chat_ids: Vec<String> = opensearch_results
-        .iter()
-        .map(|r| r.chat_id.clone())
-        .collect();
-
-    // Fetch chat metadata from database
-    let chat_histories =
-        macro_db_client::chat::get::get_chat_history_info(&ctx.db, user_id, &chat_ids)
-            .await
-            .map_err(SearchError::InternalError)?;
-
-    // Construct enriched results
-    let enriched_results = construct_search_result(opensearch_results, chat_histories)
-        .map_err(SearchError::InternalError)?;
-
-    Ok(enriched_results)
+    enrich_chats(ctx, user_id, opensearch_results).await
 }
 
 /// Perform a search through your chats
@@ -81,7 +90,7 @@ pub async fn handler(
 
 pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::chats::ChatSearchResponse>,
-    chat_histories: HashMap<String, ChatHistoryInfo>,
+    chat_histories: HashMap<String, macro_db_client::chat::get::ChatHistoryInfo>,
 ) -> anyhow::Result<Vec<ChatSearchResponseItemWithMetadata>> {
     let search_results = search_results
         .into_iter()
@@ -99,15 +108,19 @@ pub fn construct_search_result(
     let result: Vec<ChatSearchResponseItemWithMetadata> = result
         .into_iter()
         .map(|item| {
-            let chat_history_info = chat_histories
-                .get(&item.chat_id)
-                .cloned()
-                .unwrap_or_default();
+            let metadata =
+                chat_histories
+                    .get(&item.chat_id)
+                    .map(|info| models_search::chat::ChatMetadata {
+                        created_at: info.created_at.timestamp(),
+                        updated_at: info.updated_at.timestamp(),
+                        viewed_at: info.viewed_at.map(|a| a.timestamp()),
+                        project_id: info.project_id.clone(),
+                        deleted_at: info.deleted_at.map(|a| a.timestamp()),
+                    });
+
             ChatSearchResponseItemWithMetadata {
-                created_at: chat_history_info.created_at.timestamp(),
-                updated_at: chat_history_info.updated_at.timestamp(),
-                viewed_at: chat_history_info.viewed_at.map(|a| a.timestamp()),
-                project_id: chat_history_info.project_id,
+                metadata,
                 extra: item,
             }
         })

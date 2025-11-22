@@ -438,7 +438,10 @@ function defaultSourceResolver(
   location?: DefaultLocation
 ): Source {
   const def = BLOCK_REGISTRY[type];
-  if (def.syncServiceEnabled) return { type: 'sync-service', id };
+  if (!def) {
+    console.warn(`Block definition not found for type: ${type} with id: ${id}`);
+  }
+  if (def?.syncServiceEnabled) return { type: 'sync-service', id };
   return {
     type: 'dss',
     id,

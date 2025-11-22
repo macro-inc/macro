@@ -1,16 +1,21 @@
 //! This module exposes a expanded dynamic query builder which is able to build specific soup queries
 //! which filter out content basd on some input ast
 
+use std::str::FromStr;
+
 use chrono::{DateTime, Utc};
 use filter_ast::Expr;
 use item_filters::ast::{
     EntityFilterAst, chat::ChatLiteral, document::DocumentLiteral, project::ProjectLiteral,
 };
-use macro_user_id::user_id::MacroUserIdStr;
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_pagination::{Query, SimpleSortMethod};
 use models_soup::{chat::SoupChat, document::SoupDocument, item::SoupItem, project::SoupProject};
 use recursion::CollapsibleExt;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row, postgres::PgRow, prelude::FromRow};
+use uuid::Uuid;
+
+use crate::outbound::pg_soup_repo::type_err;
 
 static PREFIX: &str = r#"
     WITH RECURSIVE ProjectHierarchy AS (
@@ -173,6 +178,22 @@ static SUFFIX: &str = r#"
     LIMIT $3
 "#;
 
+static SUFFIX_NO_FRECENCY: &str = r#"
+    SELECT Combined.* FROM Combined
+    LEFT JOIN frecency_aggregates fa
+        ON fa.entity_id = Combined."id"
+        AND fa.entity_type = Combined."item_type"
+        AND fa.user_id = $1
+    WHERE fa.id IS NULL
+        AND (
+            ($4::timestamptz IS NULL)
+            OR
+            (Combined."sort_ts", Combined."id") < ($4, $5)
+        )
+    ORDER BY Combined."sort_ts" DESC, Combined."updated_at" DESC
+    LIMIT $3
+"#;
+
 fn build_document_filter(ast: Option<&Expr<DocumentLiteral>>) -> String {
     let Some(expr) = ast else {
         return String::new();
@@ -229,7 +250,7 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
         filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
         filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
         filter_ast::ExprFrame::Literal(ProjectLiteral::ProjectId(p)) => {
-            format!("p.id = '{p}'")
+            format!(r#"p."parentId" = '{p}'"#)
         }
         filter_ast::ExprFrame::Literal(ProjectLiteral::Owner(o)) => format!("p.owner = '{o}'"),
     });
@@ -240,7 +261,7 @@ fn build_project_filter(ast: Option<&Expr<ProjectLiteral>>) -> String {
     }
 }
 
-fn build_query(filter_ast: &EntityFilterAst) -> QueryBuilder<'_, Postgres> {
+fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBuilder<'_, Postgres> {
     let mut builder = sqlx::QueryBuilder::new(PREFIX);
     builder.push("Combined AS (");
 
@@ -265,7 +286,12 @@ fn build_query(filter_ast: &EntityFilterAst) -> QueryBuilder<'_, Postgres> {
     ));
 
     builder.push(") ");
-    builder.push(SUFFIX);
+
+    if exclude_frecency {
+        builder.push(SUFFIX_NO_FRECENCY);
+    } else {
+        builder.push(SUFFIX);
+    }
 
     builder
 }
@@ -350,16 +376,26 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
             }) => SoupItem::Document(SoupDocument {
-                id,
+                id: Uuid::parse_str(&id).map_err(type_err)?,
                 document_version_id: document_version_id
                     .parse()
                     .map_err(|e| sqlx::Error::Decode(Box::new(e)))?,
-                owner_id: user_id,
+                owner_id: MacroUserIdStr::parse_from_str(&user_id)
+                    .map_err(type_err)?
+                    .into_owned(),
                 name,
                 file_type,
                 sha,
-                project_id,
-                branched_from_id,
+                project_id: project_id
+                    .as_deref()
+                    .map(Uuid::from_str)
+                    .transpose()
+                    .map_err(type_err)?,
+                branched_from_id: branched_from_id
+                    .as_deref()
+                    .map(Uuid::from_str)
+                    .transpose()
+                    .map_err(type_err)?,
                 branched_from_version_id,
                 document_family_id,
                 created_at,
@@ -376,10 +412,16 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
             }) => SoupItem::Chat(SoupChat {
-                id,
+                id: Uuid::parse_str(&id).map_err(type_err)?,
                 name,
-                owner_id: user_id,
-                project_id,
+                owner_id: MacroUserIdStr::parse_from_str(&user_id)
+                    .map_err(type_err)?
+                    .into_owned(),
+                project_id: project_id
+                    .as_deref()
+                    .map(Uuid::parse_str)
+                    .transpose()
+                    .map_err(type_err)?,
                 is_persistent,
                 created_at,
                 updated_at,
@@ -394,10 +436,16 @@ impl SoupRow {
                 updated_at,
                 viewed_at,
             }) => SoupItem::Project(SoupProject {
-                id,
+                id: Uuid::parse_str(&id).map_err(type_err)?,
                 name,
-                owner_id: user_id,
-                parent_id: project_id,
+                owner_id: MacroUserIdStr::parse_from_str(&user_id)
+                    .map_err(type_err)?
+                    .into_owned(),
+                parent_id: project_id
+                    .as_deref()
+                    .map(Uuid::from_str)
+                    .transpose()
+                    .map_err(type_err)?,
                 created_at,
                 updated_at,
                 viewed_at,
@@ -406,18 +454,35 @@ impl SoupRow {
     }
 }
 
-#[tracing::instrument(skip(db, limit))]
-pub async fn expanded_dynamic_cursor_soup(
+#[derive(Debug)]
+pub(crate) struct ExpandedDynamicCursorArgs<'a> {
+    /// the user for which we are performing the query
+    pub user_id: MacroUserIdStr<'a>,
+    /// the limit of items we can return
+    pub limit: u16,
+    /// the Query that we are attempting to perform
+    pub cursor: Query<String, SimpleSortMethod, EntityFilterAst>,
+    /// whether or not the query should explicitly remove items that DO have
+    /// frecency records
+    pub exclude_frecency: bool,
+}
+
+#[tracing::instrument(skip(db), err)]
+pub(crate) async fn expanded_dynamic_cursor_soup(
     db: &PgPool,
-    user_id: MacroUserIdStr<'_>,
-    limit: u16,
-    cursor: Query<String, SimpleSortMethod, EntityFilterAst>,
+    args: ExpandedDynamicCursorArgs<'_>,
 ) -> Result<Vec<SoupItem>, sqlx::Error> {
+    let ExpandedDynamicCursorArgs {
+        user_id,
+        limit,
+        cursor,
+        exclude_frecency,
+    } = args;
     let query_limit = limit as i64;
     let sort_method_str = cursor.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = cursor.vals();
 
-    build_query(cursor.filter())
+    build_query(cursor.filter(), exclude_frecency)
         .build()
         .bind(user_id.as_ref())
         .bind(sort_method_str)

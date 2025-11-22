@@ -18,6 +18,7 @@ import {
   type Setter,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { gutterSize } from '../../../block-theme/signals/themeSignals';
 import {
   createNavigationEntityListShortcut,
   createSoupContext,
@@ -311,7 +312,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-      <Resize.Zone direction="horizontal" gutter={8}>
+      <Resize.Zone direction="horizontal" gutter={gutterSize()}>
         <For each={ids()}>
           {(id, index) => (
             <Resize.Panel id={id} minSize={400}>
@@ -416,16 +417,16 @@ function SplitPanel(props: SplitPanelProps) {
   });
 
   const unifiedListContext = createSoupContext();
+
+  const [previewState, setPreviewState] = createSignal(false);
+
   createNavigationEntityListShortcut({
     splitName,
     splitHandle: props.handle,
     splitHotkeyScope,
     unifiedListContext,
+    previewState: [previewState, setPreviewState],
   });
-
-  // Create ephemeral preview state for unified-list component
-  const isUnifiedList = createMemo(() => splitName() === 'unified-list');
-  const [previewState, setPreviewState] = createSignal(false);
 
   return (
     <SplitPanelContext.Provider
@@ -439,9 +440,7 @@ function SplitPanel(props: SplitPanelProps) {
         layoutRefs: {},
         contentOffsetTop,
         setContentOffsetTop,
-        previewState: isUnifiedList()
-          ? [previewState, setPreviewState]
-          : undefined,
+        previewState: [previewState, setPreviewState],
       }}
     >
       <SplitContainer

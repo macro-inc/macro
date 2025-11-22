@@ -11,6 +11,7 @@ pub(crate) mod init;
 pub(crate) mod labels;
 pub(crate) mod links;
 pub(crate) mod messages;
+pub(crate) mod settings;
 pub(crate) mod sync;
 pub(crate) mod threads;
 pub(crate) mod validation;
@@ -25,6 +26,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .nest("/links", links::router())
         .nest("/contacts", contacts::router())
         .nest("/backfill", backfill::router(state.clone()))
+        .nest("/settings", settings::router(state.clone()))
         .nest("/sync", sync::router(state.clone()))
         // deleting all user info from the db can take a long time - prevent connection from dropping
         .layer(axum::middleware::from_fn(

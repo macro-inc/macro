@@ -4,9 +4,15 @@
 @source '../../packages/core/component/LexicalMarkdown/theme.ts';
 @config '../../tailwind.config.ts';
 
-@property --a0l { syntax: "<number>"; inherits: false; initial-value:   0.8854; }
-@property --a0c { syntax: "<number>"; inherits: false; initial-value:   0.2003; }
-@property --a0h { syntax: "<angle>";  inherits: false; initial-value:  145.5deg; }
+/* custom cursor */
+/* must be imported inside base layer to prevent tag element default properties overriding TW cursor utility  */
+@layer base {
+  @import "./component/custom-cursor/custom-cursor.css";
+}
+
+@property --a0l { syntax: "<number>"; inherits: false; initial-value:   0.88; }
+@property --a0c { syntax: "<number>"; inherits: false; initial-value:   0.20; }
+@property --a0h { syntax: "<angle>";  inherits: false; initial-value: 145deg; }
 @property --a1l { syntax: "<number>"; inherits: false; initial-value:   0.61; }
 @property --a1c { syntax: "<number>"; inherits: false; initial-value:   0.37; }
 @property --a1h { syntax: "<angle>";  inherits: false; initial-value:  54deg; }
@@ -93,6 +99,9 @@
   --theme-rss:       oklch(from var(--a0) l c 260deg);
   --theme-pdf:       oklch(from var(--a0) l c  25deg);
   --theme-comment:   oklch(from var(--a0) l c  90deg);
+
+  --gutter-size: 8px;
+  --transition: 0.2s;
 
 /* Semantic Color names, use these when writing tailwind */
 
@@ -692,6 +701,11 @@ html[data-modality="keyboard"] [contenteditable="true"]:focus-visible::after {
 @utility bg-modal-overlay {
     background-color: var(--color-overlay);
     --pattern-color: color-mix(in srgb, var(--color-overlay), var(--color-ink) 2%);
+}
+
+@utility bg-modal-overlay-konsole {
+  background-color: var(--color-overlay);
+  background-image: linear-gradient(rgba(from var(--color-accent) r g b / 0.1) 0%, transparent 25%);
 }
 
 @utility portal-scope {

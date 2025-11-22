@@ -7,6 +7,9 @@ use utoipa::ToSchema;
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ProjectSearchResult {
     pub highlight: SearchHighlight,
+    /// The score of the result
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<f64>,
 }
 
 /// Metadata associated with Project Search, to be used with SearchResponseItem
@@ -34,15 +37,23 @@ pub struct ProjectSearchResponseItem {
     pub project_search_results: Vec<ProjectSearchResult>,
 }
 
+/// Metadata for a project fetched from the database
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ProjectMetadata {
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub viewed_at: Option<i64>,
+    pub parent_project_id: Option<String>,
+    pub deleted_at: Option<i64>,
+}
+
 /// ProjectSearchResponseItem object with project metadata we fetch from macrodb. we don't store these
 /// timestamps in opensearch as they would require us to update the project record
 /// every time the project updates (specifically for updated_at and viewed_at)
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ProjectSearchResponseItemWithMetadata {
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub viewed_at: Option<i64>,
-    pub parent_project_id: Option<String>,
+    /// Metadata from the database. None if the project doesn't exist in the database.
+    pub metadata: Option<ProjectMetadata>,
     #[serde(flatten)]
     pub extra: ProjectSearchResponseItem,
 }

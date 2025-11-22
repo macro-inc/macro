@@ -11,7 +11,7 @@ pub enum GmailError {
     #[error("HTTP Request Error: {0}")]
     HttpRequest(String),
 
-    #[error("API Error")]
+    #[error("API Error: {0}")]
     ApiError(String),
 
     #[error("Multipart Parsing Error: {0}")]

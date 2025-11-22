@@ -8,7 +8,7 @@ use unicode_segmentation::UnicodeSegmentation;
 /// Containing keys for the title and content fields
 pub struct Keys<'a> {
     /// The title field key
-    pub title_key: &'a str,
+    pub title_key: Option<&'a str>,
     /// The content field key
     pub content_key: &'a str,
 }
@@ -43,7 +43,7 @@ impl QueryKey {
     }
 
     /// Creates a query given a field and term
-    pub fn create_query(&self, field: &str, term: &str) -> QueryType {
+    pub fn create_query(&self, field: &str, term: &str) -> QueryType<'static> {
         // Fixes https://linear.app/macro-eng/issue/M-5094/unified-search-match-prefix-on-phrase-should-not-constrain-terms
         // We need to create a more complex combo query if the last word in a term is less than 3 characters.
         let mut terms = term.split(' ').collect::<Vec<_>>();
@@ -57,21 +57,25 @@ impl QueryKey {
 
             let last_part_of_term = terms.pop().unwrap();
             let first_part_of_term = terms.join(" ");
+            let wildcard_pattern = format!("*{}*", last_part_of_term.to_lowercase());
 
             // build the first term query
             let first_term_query = match self {
-                Self::MatchPhrase => {
-                    QueryType::MatchPhrase(MatchPhraseQuery::new(field, &first_part_of_term))
-                }
+                Self::MatchPhrase => QueryType::MatchPhrase(MatchPhraseQuery::new(
+                    field.to_string(),
+                    first_part_of_term,
+                )),
                 Self::MatchPhrasePrefix => QueryType::MatchPhrasePrefix(
-                    MatchPhrasePrefixQuery::new(field, &first_part_of_term),
+                    MatchPhrasePrefixQuery::new(field.to_string(), first_part_of_term),
                 ),
-                Self::Regexp => QueryType::Regexp(RegexpQuery::new(field, &first_part_of_term)),
+                Self::Regexp => {
+                    QueryType::Regexp(RegexpQuery::new(field.to_string(), first_part_of_term))
+                }
             };
 
             let second_term_query = QueryType::WildCard(WildcardQuery::new(
-                field,
-                &format!("*{}*", last_part_of_term.to_lowercase()),
+                field.to_string(),
+                wildcard_pattern,
                 true,
             ));
 
@@ -84,11 +88,16 @@ impl QueryKey {
         }
 
         match self {
-            Self::MatchPhrase => QueryType::MatchPhrase(MatchPhraseQuery::new(field, term)),
-            Self::MatchPhrasePrefix => {
-                QueryType::MatchPhrasePrefix(MatchPhrasePrefixQuery::new(field, term))
+            Self::MatchPhrase => {
+                QueryType::MatchPhrase(MatchPhraseQuery::new(field.to_string(), term.to_string()))
             }
-            Self::Regexp => QueryType::Regexp(RegexpQuery::new(field, term)),
+            Self::MatchPhrasePrefix => QueryType::MatchPhrasePrefix(MatchPhrasePrefixQuery::new(
+                field.to_string(),
+                term.to_string(),
+            )),
+            Self::Regexp => {
+                QueryType::Regexp(RegexpQuery::new(field.to_string(), term.to_string()))
+            }
         }
     }
 }
@@ -98,7 +107,7 @@ pub(crate) fn generate_terms_must_query(
     query_key: QueryKey,
     fields: &[&str],
     terms: &[String],
-) -> QueryType {
+) -> QueryType<'static> {
     let mut terms_must_query = BoolQueryBuilder::new();
 
     terms_must_query.minimum_should_match(1);
@@ -106,7 +115,11 @@ pub(crate) fn generate_terms_must_query(
     // Map terms to queries
     let queries: Vec<_> = fields
         .iter()
-        .flat_map(|field| terms.iter().map(|term| query_key.create_query(field, term)))
+        .flat_map(|field| {
+            terms
+                .iter()
+                .map(|term| query_key.create_query(field, term.as_str()))
+        })
         .collect();
 
     // If we only have 1 query returned, we can just return that singular query
@@ -125,7 +138,7 @@ pub(crate) fn generate_terms_must_query(
 }
 
 /// Generates the term queries SearchOn::NameContent
-pub(crate) fn generate_name_content_query(keys: &Keys, terms: &[String]) -> QueryType {
+pub(crate) fn generate_name_content_query(keys: &Keys, terms: &[String]) -> QueryType<'static> {
     let mut terms_must_query = BoolQueryBuilder::new();
 
     terms_must_query.minimum_should_match(1);
@@ -137,24 +150,29 @@ pub(crate) fn generate_name_content_query(keys: &Keys, terms: &[String]) -> Quer
             let mut bool_query = BoolQueryBuilder::new();
             bool_query.minimum_should_match(1);
 
-            bool_query.should(QueryType::MatchPhrasePrefix(
-                MatchPhrasePrefixQuery::new(keys.title_key, term).boost(1000.0),
-            ));
+            if let Some(title_key) = keys.title_key {
+                bool_query.should(QueryType::MatchPhrasePrefix(
+                    MatchPhrasePrefixQuery::new(title_key.to_string(), term.clone()).boost(1000.0),
+                ));
+            }
 
             bool_query.should(QueryType::MatchPhrasePrefix(
-                MatchPhrasePrefixQuery::new(keys.content_key, term).boost(900.0),
+                MatchPhrasePrefixQuery::new(keys.content_key.to_string(), term.clone())
+                    .boost(900.0),
             ));
 
-            bool_query.should(QueryType::Match(
-                MatchQuery::new(keys.title_key, term)
-                    .boost(0.1)
-                    .minimum_should_match("80%"), // TODO: we may need to play around with this to get the best highlight match
-            ));
+            if let Some(title_key) = keys.title_key {
+                bool_query.should(QueryType::Match(
+                    MatchQuery::new(title_key.to_string(), term.clone())
+                        .boost(0.1)
+                        .minimum_should_match("80%"), // TODO: we may need to play around with this to get the best highlight match
+                ));
+            }
 
             bool_query.should(QueryType::Match(
-                MatchQuery::new(keys.content_key, term)
+                MatchQuery::new(keys.content_key.to_string(), term.clone())
                     .boost(0.09)
-                    .minimum_should_match(&term.split(' ').count().to_string()), // TODO: we may need to play around with this to get the best highlight match
+                    .minimum_should_match(term.split(' ').count().to_string()), // TODO: we may need to play around with this to get the best highlight match
             ));
 
             bool_query.build().into()

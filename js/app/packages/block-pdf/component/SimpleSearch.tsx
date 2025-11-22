@@ -1,3 +1,4 @@
+import { searchLocationPendingSignal } from '@block-pdf/signal/location';
 import { IconButton } from '@core/component/IconButton';
 import { IS_MAC } from '@core/constant/isMac';
 import { blockElementSignal } from '@core/signal/blockElement';
@@ -17,7 +18,7 @@ import {
   isSearchOpenSignal,
   searchSignal,
   useJumpToResult,
-  useSearchReset,
+  useSearchClose,
   useSearchResults,
   useSearchStart,
 } from '../signal/search';
@@ -26,7 +27,8 @@ export function SimpleSearch() {
   const searchStart = useSearchStart();
   const searchResults = useSearchResults();
   const jumpToResult = useJumpToResult();
-  const resetSearch = useSearchReset();
+  const closeSearchBar = useSearchClose();
+  const locationPending = searchLocationPendingSignal.get;
   let inputRef: HTMLInputElement | undefined;
 
   const [isSearching, setIsSearching] = createSignal(false);
@@ -35,13 +37,15 @@ export function SimpleSearch() {
 
   // search on open
   createEffect(() => {
+    if (untrack(locationPending)) return;
     const text = untrack(searchText);
     if (isOpen()) searchStart({ query: text });
   });
 
   createEffect(() => {
     const query = searchResults()?.query;
-    if (query) {
+    if (untrack(locationPending)) return;
+    if (query != null) {
       setSearchText(query);
     }
 
@@ -76,7 +80,7 @@ export function SimpleSearch() {
   };
 
   const closeSearch = () => {
-    resetSearch();
+    closeSearchBar();
     setIsOpen(false);
   };
 
@@ -110,7 +114,7 @@ export function SimpleSearch() {
 
       if (isOpen()) {
         if (inputRef === document.activeElement) {
-          resetSearch();
+          closeSearch();
           setIsOpen(false);
         } else {
           inputRef?.focus();
@@ -154,21 +158,20 @@ export function SimpleSearch() {
           onInput={(e) => setSearchText(e.target.value)}
           onKeyDown={inputKeyDownHandler}
         />
-        <Show when={searchResults()}>
-          {(result) => {
-            const current = () => result().count.current;
-            const total = () => result().count.total;
+        <div class="flex-0 ml-auto mr-3 text-right w-24">
+          <Show when={!!searchText() && searchResults()}>
+            {(result) => {
+              const current = () => result().count.current;
+              const total = () => result().count.total;
 
-            return (
-              <p class="flex-0 ml-auto mr-3 text-right w-24">
-                {current()}/{total()}
-              </p>
-            );
-          }}
-        </Show>
-        <Show when={!searchResults() && isSearching()}>
-          <p class="flex-0 ml-auto mr-3 text-right w-24" />
-        </Show>
+              return (
+                <>
+                  {current()}/{total()}
+                </>
+              );
+            }}
+          </Show>
+        </div>
         <IconButton
           icon={CaretUp}
           theme="clear"

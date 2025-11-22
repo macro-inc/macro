@@ -1,14 +1,14 @@
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
-import { serviceLoadBalancer } from '@resources';
-import { EcrImage } from '@service';
-import { BASE_DOMAIN, CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
 import {
   DATADOG_API_KEY,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
-} from './datadog';
+  serviceLoadBalancer,
+} from '@resources';
+import { EcrImage } from '@service';
+import { BASE_DOMAIN, CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
 
 const BASE_NAME = 'notification-service';
 const BASE_PATH = '../../../rust/cloud-storage';

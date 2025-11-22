@@ -8,7 +8,6 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use macro_db_client::projects::get_project_history::ProjectHistoryInfo;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::project::{
     ProjectSearchMetadata, ProjectSearchRequest, ProjectSearchResponse, ProjectSearchResponseItem,
@@ -20,21 +19,18 @@ use crate::{api::ApiContext, util};
 
 use super::SearchPaginationParams;
 
-/// Performs a search through projects and enriches the results with metadata
-pub async fn search_projects_enriched(
+/// Enriches project search results with metadata
+#[tracing::instrument(skip(ctx, results), err)]
+pub(in crate::api::search) async fn enrich_projects(
     ctx: &ApiContext,
     user_id: &str,
-    query_params: &SearchPaginationParams,
-    req: ProjectSearchRequest,
+    results: Vec<opensearch_client::search::projects::ProjectSearchResponse>,
 ) -> Result<Vec<ProjectSearchResponseItemWithMetadata>, SearchError> {
-    // Use the simple search to get raw OpenSearch results
-    let opensearch_results = search_projects(ctx, user_id, query_params, req).await?;
-
+    if results.is_empty() {
+        return Ok(vec![]);
+    }
     // Extract project IDs from results
-    let project_ids: Vec<String> = opensearch_results
-        .iter()
-        .map(|r| r.project_id.clone())
-        .collect();
+    let project_ids: Vec<String> = results.iter().map(|r| r.project_id.clone()).collect();
 
     // Fetch project metadata from database
     let project_histories =
@@ -47,10 +43,24 @@ pub async fn search_projects_enriched(
         .map_err(SearchError::InternalError)?;
 
     // Construct enriched results
-    let enriched_results = construct_search_result(opensearch_results, project_histories)
-        .map_err(SearchError::InternalError)?;
+    let enriched_results =
+        construct_search_result(results, project_histories).map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
+}
+
+/// Performs a search through projects and enriches the results with metadata
+#[tracing::instrument(skip(ctx, query_params, req), err)]
+pub async fn search_projects_enriched(
+    ctx: &ApiContext,
+    user_id: &str,
+    query_params: &SearchPaginationParams,
+    req: ProjectSearchRequest,
+) -> Result<Vec<ProjectSearchResponseItemWithMetadata>, SearchError> {
+    // Use the simple search to get raw OpenSearch results
+    let opensearch_results = search_projects(ctx, user_id, query_params, req).await?;
+
+    enrich_projects(ctx, user_id, opensearch_results).await
 }
 
 /// Perform a search through your projects
@@ -88,7 +98,10 @@ pub async fn handler(
 
 pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::projects::ProjectSearchResponse>,
-    project_histories: HashMap<String, ProjectHistoryInfo>,
+    project_histories: HashMap<
+        String,
+        macro_db_client::projects::get_project_history::ProjectHistoryInfo,
+    >,
 ) -> anyhow::Result<Vec<ProjectSearchResponseItemWithMetadata>> {
     let search_results = search_results
         .into_iter()
@@ -104,12 +117,18 @@ pub fn construct_search_result(
     let result: Vec<ProjectSearchResponseItemWithMetadata> = result
         .into_iter()
         .map(|item| {
-            let project_history_info = project_histories.get(&item.id).cloned().unwrap_or_default();
+            let metadata = project_histories.get(&item.id).map(|info| {
+                models_search::project::ProjectMetadata {
+                    created_at: info.created_at.timestamp(),
+                    updated_at: info.updated_at.timestamp(),
+                    viewed_at: info.viewed_at.map(|a| a.timestamp()),
+                    parent_project_id: info.parent_project_id.clone(),
+                    deleted_at: info.deleted_at.map(|a| a.timestamp()),
+                }
+            });
+
             ProjectSearchResponseItemWithMetadata {
-                created_at: project_history_info.created_at.timestamp(),
-                updated_at: project_history_info.updated_at.timestamp(),
-                viewed_at: project_history_info.viewed_at.map(|a| a.timestamp()),
-                parent_project_id: project_history_info.parent_project_id,
+                metadata,
                 extra: item,
             }
         })

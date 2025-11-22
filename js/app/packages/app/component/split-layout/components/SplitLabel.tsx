@@ -2,8 +2,10 @@ import { isInBlock, useBlockId, useBlockName } from '@core/block';
 import {
   EntityIcon,
   type EntityIconSelector,
+  isArchiveType,
 } from '@core/component/EntityIcon';
 import { Tooltip } from '@core/component/Tooltip';
+import { blockMetadataSignal } from '@core/signal/load';
 import {
   useCanComment,
   useCanEdit,
@@ -27,7 +29,7 @@ export function StaticSplitLabel(props: {
     panel.handle.setDisplayName(props.label);
   });
   return (
-    <div class="z-3 relative flex items-center gap-2 border-y border-edge-muted w-screen max-w-full h-full shrink">
+    <div class="z-3 relative flex items-center gap-2 w-screen max-w-full h-full shrink">
       <Show when={props.iconType}>
         <EntityIcon
           class="shrink-0"
@@ -136,13 +138,24 @@ export function BlockItemSplitLabel(props: {
   const blockName = useBlockName();
   const isOwner = useIsDocumentOwner();
 
+  const targetType = () => {
+    // archive files have a special icon
+    if (blockName === 'unknown') {
+      const fileType = blockMetadataSignal()?.fileType;
+      if (fileType && isArchiveType(fileType)) {
+        return 'archive';
+      }
+    }
+    return blockName;
+  };
+
   createEffect(() => {
     panel.handle.setDisplayName(fileName());
   });
 
   return (
-    <div class="z-3 relative flex items-center gap-2 border-y border-edge-muted w-screen max-w-full h-full shrink">
-      <EntityIcon class="shrink-0" targetType={blockName} size="xs" />
+    <div class="z-3 relative flex items-center gap-2 w-screen max-w-full h-full shrink">
+      <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
       <Show when={props.badges}>{props.badges}</Show>
       <SplitLabel
         label={fileName()}

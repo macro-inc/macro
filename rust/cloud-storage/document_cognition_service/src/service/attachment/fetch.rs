@@ -31,7 +31,7 @@ pub async fn fetchium(
                     .await
                     .context("failed to fetch image content")?
                     .content
-                    .base64_image_content()?;
+                    .base64_compressed_webp()?;
 
                 Ok(Attachment::ImageUrl(base64_image))
             }
@@ -63,7 +63,7 @@ pub async fn fetchium(
                     .context("failed to fetch document content")?;
                 if document.file_type().is_image() {
                     Ok(Attachment::ImageUrl(
-                        document.content.base64_image_content()?,
+                        document.content.base64_compressed_webp()?,
                     ))
                 } else {
                     Ok(Attachment::Text(PromptAttachment {
