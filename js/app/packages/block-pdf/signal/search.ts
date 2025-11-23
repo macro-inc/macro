@@ -248,9 +248,9 @@ export function useJumpToResult() {
   };
 }
 
-export function useSearchReset() {
+export function useSearchClose() {
   const getRootViewer = useGetRootViewer();
   return () => {
-    getRootViewer()?.resetSearch();
+    getRootViewer()?.findBarClose();
   };
 }

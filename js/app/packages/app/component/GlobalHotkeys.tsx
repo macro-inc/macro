@@ -10,13 +10,16 @@ import { AiInstructionsIcon } from '@service-storage/instructionsMd';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMemo } from 'solid-js';
 import {
+  beveledCorners,
   monochromeIcons,
+  setBeveledCorners,
   setDarkModeTheme,
   setLightModeTheme,
   setMonochromeIcons,
   setThemeShouldMatchSystem,
   themeShouldMatchSystem,
   themes,
+  toggleGutterSize,
 } from '../../block-theme/signals/themeSignals';
 
 import { applyTheme } from '../../block-theme/utils/themeUtils';
@@ -297,6 +300,26 @@ export default function GlobalShortcuts() {
     description: 'Toggle monochrome icons',
     keyDownHandler: () => {
       setMonochromeIcons(!monochromeIcons());
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: 'Toggle beveled corners',
+    keyDownHandler: () => {
+      setBeveledCorners(!beveledCorners());
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: 'Toggle gutter size',
+    keyDownHandler: () => {
+      toggleGutterSize();
       return true;
     },
     runWithInputFocused: true,

@@ -155,7 +155,8 @@ export function Notebook() {
   });
 
   createEffect(() => {
-    if (scopeId()) {
+    if (!scopeId()) return;
+    untrack(() =>
       registerHotkey({
         hotkey: 'enter',
         scopeId: scopeId(),
@@ -176,14 +177,17 @@ export function Notebook() {
           return false;
         },
         hide: true,
-      });
-    }
+      })
+    );
   });
 
+  // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
+  let hasRun = false;
   createEffect(() => {
+    if (hasRun) return;
     if (!blockElement()) return;
-    if (!navigatedFromJK()) return;
     blockElement()?.focus();
+    hasRun = true;
   });
 
   const containerClasses = createMemo(() => {

@@ -4,7 +4,6 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SimpleChannelSearchReponseBaseItemChannelName } from './simpleChannelSearchReponseBaseItemChannelName';
 import type { SearchHighlight } from './searchHighlight';
 import type { SimpleChannelSearchReponseBaseItemOrgId } from './simpleChannelSearchReponseBaseItemOrgId';
 import type { SimpleChannelSearchReponseBaseItemThreadId } from './simpleChannelSearchReponseBaseItemThreadId';
@@ -12,8 +11,6 @@ import type { SimpleChannelSearchReponseBaseItemThreadId } from './simpleChannel
 export interface SimpleChannelSearchReponseBaseItem {
   /** The channel id */
   channel_id: string;
-  /** The channel name */
-  channel_name?: SimpleChannelSearchReponseBaseItemChannelName;
   /** The channel type */
   channel_type: string;
   /** The time the channel message was created */
