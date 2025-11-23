@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            a.id AS attachment_db_id,\n            m.provider_id as \"email_provider_id!\",\n            a.provider_attachment_id as \"provider_attachment_id!\",\n            a.filename as \"filename!\",\n            a.mime_type as \"mime_type!\",\n            m.internal_date_ts as \"internal_date_ts!\"\n        FROM email_attachments a\n        JOIN email_messages m ON a.message_id = m.id\n        JOIN email_threads t ON m.thread_id = t.id\n        WHERE a.id = $1 AND t.link_id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "attachment_db_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email_provider_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider_attachment_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "filename!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "mime_type!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "internal_date_ts!",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "6e4fcdd716bd4ede49c7bdf7c23518c7f030dabda7317a2f1453cd2617629d58"
+}

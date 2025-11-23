@@ -5,6 +5,7 @@ use models_email::service::attachment::AttachmentUploadMetadata;
 use sha2::{Digest, Sha256};
 use sqlx::PgPool;
 use tracing::instrument;
+use uuid::Uuid;
 
 /// A helper struct to manage clients and tokens required for processing.
 pub struct AttachmentProcessor {
@@ -34,12 +35,18 @@ impl AttachmentProcessor {
 
     /// Orchestrates the full upload process for a single attachment.
     #[instrument(skip(self), fields(file_name = %attachment.filename, mime_type = %attachment.mime_type))]
-    pub async fn upload(&self, attachment: &AttachmentUploadMetadata) -> anyhow::Result<()> {
-        let exists = email_db_client::attachments::provider::document_email_record_exists(
+    pub async fn upload(
+        &self,
+        link_id: Uuid,
+        attachment: &AttachmentUploadMetadata,
+    ) -> anyhow::Result<()> {
+        let exists = email_db_client::attachments::provider::get_document_id_by_attachment_id(
             &self.db,
+            link_id,
             attachment.attachment_db_id,
         )
-        .await?;
+        .await?
+        .is_some();
         if exists {
             println!(
                 "Attachment {} already exists in DSS, skipping",
