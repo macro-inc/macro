@@ -52,8 +52,8 @@ async function run(dryRun: boolean = true) {
   try {
     for (const index of MIGRATIONS) {
       const indexExists = await checkIndexExists(opensearchClient, index);
-      if (indexExists) {
-        console.log(`Index ${index} exists, skipping...`);
+      if (!indexExists) {
+        console.log(`Index ${index} does not exists, skipping...`);
       }
 
       await addFieldToIndex(opensearchClient, index, mappingUpdate, dryRun);
