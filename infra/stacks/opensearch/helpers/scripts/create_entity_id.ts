@@ -54,6 +54,7 @@ async function run(dryRun: boolean = true) {
       const indexExists = await checkIndexExists(opensearchClient, index);
       if (!indexExists) {
         console.log(`Index ${index} does not exists, skipping...`);
+        continue;
       }
 
       await addFieldToIndex(opensearchClient, index, mappingUpdate, dryRun);
