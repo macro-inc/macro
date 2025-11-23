@@ -5,8 +5,6 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use model::response::ErrorResponse;
-use models_email::api;
-use models_email::api::attachment::AttachmentDocumentID;
 use models_email::email::service::link::Link;
 use strum_macros::AsRefStr;
 use thiserror::Error;
@@ -40,7 +38,8 @@ impl IntoResponse for GetAttachmentDocumentIdError {
 /// The response returned from the get attachment endpoint
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct GetAttachmentDocumentIDResponse {
-    pub data: api::attachment::AttachmentDocumentID,
+    pub attachment_id: Uuid,
+    pub document_id: String,
 }
 
 /// Get the Macro document id for an email attachment, uploading it if it doesn't already exist.
@@ -79,10 +78,8 @@ pub async fn handler(
 
     if let Some(document_id) = existing_document_id {
         return Ok(Json(GetAttachmentDocumentIDResponse {
-            data: AttachmentDocumentID {
-                attachment_id,
-                document_id,
-            },
+            attachment_id,
+            document_id,
         }));
     }
 
@@ -90,8 +87,8 @@ pub async fn handler(
     let attachment_metadata =
         email_db_client::attachments::provider::upload::fetch_attachment_upload_metadata_by_id(
             &ctx.db,
-            attachment_id,
             link.id,
+            attachment_id,
         )
         .await
         .map_err(GetAttachmentDocumentIdError::DatabaseError)?
@@ -109,9 +106,7 @@ pub async fn handler(
     .map_err(GetAttachmentDocumentIdError::UploadError)?;
 
     Ok(Json(GetAttachmentDocumentIDResponse {
-        data: AttachmentDocumentID {
-            attachment_id,
-            document_id,
-        },
+        attachment_id,
+        document_id,
     }))
 }
