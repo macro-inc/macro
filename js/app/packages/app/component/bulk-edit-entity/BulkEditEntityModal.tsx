@@ -65,7 +65,16 @@ const BulkEditEntityModalContent = (props: {
   };
 
   return (
-    <Dialog open={props.isOpen()} onOpenChange={props.setIsOpen} modal={true}>
+    <Dialog
+      open={props.isOpen()}
+      onOpenChange={(open) => {
+        if (!open) {
+          handleCancel();
+        }
+        props.setIsOpen(open);
+      }}
+      modal={true}
+    >
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay" />
         <div class="fixed inset-0 z-modal">
