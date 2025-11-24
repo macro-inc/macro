@@ -58,13 +58,12 @@ pub async fn delete_message(
     }
     .await;
 
-    match result {
-        Ok(deleted_thread) => {
-            if let Some(thread_id) = deleted_thread {
-                let sqs_client = ctx.sqs_client.clone();
-                tokio::spawn({
-                    async move {
-                        let _ = sqs_client
+    if let Ok(deleted_thread) = result {
+        if let Some(thread_id) = deleted_thread {
+            let sqs_client = ctx.sqs_client.clone();
+            tokio::spawn({
+                async move {
+                    let _ = sqs_client
                         .send_message_to_search_event_queue(SearchQueueMessage::RemoveEntityName(
                             EntityName {
                                 entity_id: thread_id,
@@ -75,11 +74,9 @@ pub async fn delete_message(
                         .inspect_err(|e| {
                             tracing::error!(error=?e, "failed to send message to search extractor queue");
                         });
-                    }
-                });
-            }
+                }
+            });
         }
-        _ => (), // let error bubble from complete_transaction_with_processing_error
     }
 
     complete_transaction_with_processing_error(tx, result).await?;
