@@ -1237,7 +1237,7 @@ export function createNavigationEntityListShortcut({
   });
   registerHotkey({
     hotkey: ['x'],
-    scopeId: entityHotkeyScope,
+    scopeId: splitHotkeyScope,
     description: 'Toggle select item',
     condition: isViewingList,
     keyDownHandler: () => {
