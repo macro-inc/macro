@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
 use utoipa::{IntoParams, ToSchema};
+use uuid::Uuid;
 
 #[cfg(test)]
 mod tests;
@@ -245,8 +246,8 @@ pub struct PostSoupRequest {
 }
 
 type SoupCursor = EitherWrapper<
-    CursorExtractor<String, SimpleSortMethod, Option<EntityFilterAst>>,
-    CursorExtractor<String, Frecency, Option<EntityFilterAst>>,
+    CursorExtractor<Uuid, SimpleSortMethod, Option<EntityFilterAst>>,
+    CursorExtractor<Uuid, Frecency, Option<EntityFilterAst>>,
 >;
 
 /// Gets the items the user has access to

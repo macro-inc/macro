@@ -461,7 +461,7 @@ pub(crate) struct ExpandedDynamicCursorArgs<'a> {
     /// the limit of items we can return
     pub limit: u16,
     /// the Query that we are attempting to perform
-    pub cursor: Query<String, SimpleSortMethod, EntityFilterAst>,
+    pub cursor: Query<Uuid, SimpleSortMethod, EntityFilterAst>,
     /// whether or not the query should explicitly remove items that DO have
     /// frecency records
     pub exclude_frecency: bool,

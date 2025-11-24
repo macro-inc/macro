@@ -18,6 +18,7 @@ use models_pagination::{
 };
 use models_soup::item::SoupItem;
 use std::cmp::Ordering;
+use uuid::Uuid;
 
 #[cfg(test)]
 mod tests;
@@ -87,7 +88,6 @@ where
     ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
         let len = frecency_items.len();
         let remainder_to_fetch = (limit as usize).saturating_sub(len);
-        dbg!(remainder_to_fetch, len);
 
         let updated_at_soup = self
             .handle_simple_request(
@@ -107,7 +107,7 @@ where
 
     async fn handle_advanced_sort(
         &self,
-        cursor: Query<String, Frecency, Option<EntityFilterAst>>,
+        cursor: Query<Uuid, Frecency, Option<EntityFilterAst>>,
         soup_type: SoupType,
         user: MacroUserIdStr<'static>,
         limit: u16,
