@@ -4,6 +4,7 @@ import { isErr } from '@core/util/maybeResult';
 import {
   extractSearchSnippet,
   extractSearchTerms,
+  mergeAdjacentMacroEmTags,
 } from '@core/util/searchHighlight';
 import type { ChannelType } from '@service-comms/generated/models';
 import { type PaginatedSearchArgs, searchClient } from '@service-search/client';
@@ -45,6 +46,7 @@ const getLocationHighlights = (
     const contents = r.highlight.content ?? [];
 
     return contents.map((content) => {
+      const mergedContent = mergeAdjacentMacroEmTags(content);
       let location: SearchLocation | undefined;
       switch (fileType) {
         case 'md':
@@ -56,9 +58,9 @@ const getLocationHighlights = (
             location = {
               type: 'pdf' as const,
               searchPage,
-              searchSnippet: extractSearchSnippet(content),
+              searchSnippet: extractSearchSnippet(mergedContent),
               searchRawQuery: searchQuery,
-              highlightTerms: extractSearchTerms(content),
+              highlightTerms: extractSearchTerms(mergedContent),
             };
           } catch (_e) {
             console.error('Cannot parse pdf serach info', r);
@@ -68,14 +70,18 @@ const getLocationHighlights = (
       }
 
       return {
-        content,
+        content: mergedContent,
         location,
       };
     });
   });
 
+  const nameHighlight = innerResults.at(0)?.highlight.name ?? null;
+
   return {
-    nameHighlight: innerResults.at(0)?.highlight.name ?? null,
+    nameHighlight: nameHighlight
+      ? mergeAdjacentMacroEmTags(nameHighlight)
+      : null,
     contentHighlights: contentHighlights.length > 0 ? contentHighlights : null,
     source: 'service' as const,
   };
@@ -86,13 +92,17 @@ const getHighlights = (innerResults: InnerSearchResult[]) => {
     const contents = r.highlight.content ?? [];
 
     return contents.map((content) => ({
-      content,
+      content: mergeAdjacentMacroEmTags(content),
       location: undefined,
     }));
   });
 
+  const nameHighlight = innerResults.at(0)?.highlight.name ?? null;
+
   return {
-    nameHighlight: innerResults.at(0)?.highlight.name ?? null,
+    nameHighlight: nameHighlight
+      ? mergeAdjacentMacroEmTags(nameHighlight)
+      : null,
     contentHighlights: contentHighlights.length > 0 ? contentHighlights : null,
     source: 'service' as const,
   };

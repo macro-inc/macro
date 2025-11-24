@@ -238,16 +238,9 @@ export interface MarkdownRewriteOutput {
 
 /**
  * Read content by ID(s). Supports reading documents, channels, chats, and emails by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s).
+ *     Channel transcripts only include 300 messages. Use 'messages_since' to see messages in a different time window.
  */
 export interface ReadInput {
-  /**
-   * Number of messages to read after the target message. Only applicable for channel-message content type. Defaults to 0.
-   */
-  after: number | null;
-  /**
-   * Number of messages to read before the target message. Only applicable for channel-message content type. Defaults to 0.
-   */
-  before: number | null;
   /**
    * The type of content to read. Choose based on the type of content you want to retrieve.
    */
@@ -263,6 +256,10 @@ export interface ReadInput {
    * ID(s) of the content to read. IMPORTANT: Currently only chat-message content type supports MULTIPLE ids! For all other content types provide a single id.
    */
   ids: string[];
+  /**
+   * A local datetime of the earliest message to include in a channel transcript ex: 2025-11-25 12:00:09 EST, only applicable to channels
+   */
+  messagesSince: string | null;
 }
 
 
@@ -660,10 +657,6 @@ export interface UnifiedSearchOutput {
            * The channel id
            */
           channel_id: string;
-          /**
-           * The channel name
-           */
-          channel_name?: string | null;
           /**
            * The channel type
            */

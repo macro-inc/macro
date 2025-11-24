@@ -190,7 +190,7 @@ pub async fn create_user_chat_v2(
 
             let _ = sqs_client
                 .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(
-                    sqs_client::search::name::UpdateEntityName {
+                    sqs_client::search::name::EntityName {
                         entity_id: chat_id,
                         entity_type: models_opensearch::SearchEntityType::Chats,
                     },

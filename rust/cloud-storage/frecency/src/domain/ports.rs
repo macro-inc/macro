@@ -3,11 +3,10 @@
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
-use thiserror::Error;
 
 use crate::domain::models::{
     AggregateFrecency, AggregateId, EventAggregationStats, EventRecord, EventRecordWithId,
-    FrecencyByIdsRequest, FrecencyPageRequest, FrecencyPageResponse,
+    FrecencyByIdsRequest, FrecencyPageRequest, FrecencyPageResponse, FrecencyQueryErr,
 };
 
 /// Trait for interacting with the storage of [EventRecord] records
@@ -111,11 +110,6 @@ pub trait PullEventAggregatorService: Send + Sync + 'static {
         &self,
     ) -> impl Future<Output = Result<EventAggregationStats, anyhow::Error>> + Send + '_;
 }
-
-/// The error that is produced by the [FrecencyQueryService]
-#[derive(Debug, Error)]
-#[error(transparent)]
-pub struct FrecencyQueryErr(#[from] anyhow::Error);
 
 /// The service level interface for querying frecency data
 #[cfg_attr(feature = "mock", mockall::automock)]

@@ -90,7 +90,7 @@ function MenuContent(props: { projectId: string }) {
     {
       label: 'Note',
       blockName: 'md' as BlockName,
-      hotkeyToken: TOKENS.global.create.note,
+      hotkeyToken: TOKENS.create.note,
       Icon: () => (
         <EntityIcon targetType="md" size="shrinkFill" theme="monochrome" />
       ),
@@ -112,7 +112,7 @@ function MenuContent(props: { projectId: string }) {
     {
       label: 'AI',
       blockName: 'chat' as BlockName,
-      hotkeyToken: TOKENS.global.create.chat,
+      hotkeyToken: TOKENS.create.chat,
       Icon: () => (
         <EntityIcon targetType="chat" size="shrinkFill" theme="monochrome" />
       ),
@@ -132,7 +132,7 @@ function MenuContent(props: { projectId: string }) {
     {
       label: 'Canvas',
       blockName: 'canvas' as BlockName,
-      hotkeyToken: TOKENS.global.create.canvas,
+      hotkeyToken: TOKENS.create.canvas,
       Icon: () => (
         <EntityIcon targetType="canvas" size="shrinkFill" theme="monochrome" />
       ),
@@ -157,7 +157,7 @@ function MenuContent(props: { projectId: string }) {
     {
       label: 'Project',
       blockName: 'project' as BlockName,
-      hotkeyToken: TOKENS.global.create.project,
+      hotkeyToken: TOKENS.create.project,
       Icon: () => (
         <EntityIcon targetType="project" size="shrinkFill" theme="monochrome" />
       ),

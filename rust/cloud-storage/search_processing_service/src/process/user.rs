@@ -9,9 +9,6 @@ pub async fn remove_user_profile(
         anyhow::bail!("user id must start with `macro|`");
     }
 
-    // NOTE: we do not delete channel messages from user as channel messages are preserved after a
-    // user profile has been removed.
-
     // Delete documents of user
     opensearch_client
         .delete_documents_by_owner_id(user_profile_id)
@@ -32,6 +29,9 @@ pub async fn remove_user_profile(
         .delete_projects_by_user_id(user_profile_id)
         .await?;
 
-    // Validate the user id is `macro|${email}`
+    opensearch_client
+        .delete_entities_for_user(user_profile_id)
+        .await?;
+
     Ok(())
 }

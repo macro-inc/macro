@@ -2,3 +2,4 @@
 .envrc
 **/.env
 .idea/
+**/.DS_Store

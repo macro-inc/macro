@@ -14,11 +14,15 @@ axum = [
   "model_user/axum",
   "models_pagination/axum",
 ]
+inbound = ["ports"]
+outbound = ["dep:sqlx", "ports"]
+ports = ["dep:tokio", "frecency/ports"]
 
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
+doppleganger = { workspace = true }
 frecency = { path = "../frecency" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
@@ -28,10 +32,10 @@ models_pagination = { path = "../models_pagination" }
 schemars = { workspace = true, optional = true, features = ["uuid1"] }
 serde = { workspace = true }
 serde_with = { workspace = true }
-sqlx = { workspace = true }
+sqlx = { workspace = true, optional = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
-tokio = { workspace = true, features = ["macros"] }
+tokio = { workspace = true, features = ["macros"], optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }

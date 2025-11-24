@@ -264,7 +264,7 @@ let scopeActivatedByFocusIn = false;
  * Attaches hotkeys to a DOM element. Manages scope activation and deactivation based on focus events.
  * This is the correct way to attach hotkeys to a block.
  * @param {string} scopePrefix - Optional scope prefix for debugging purposes.
- * @param {boolean} detachedScope - If true, the scope will not be attached to any parent scopes except for global.
+ * @param {boolean} detachedScope - If true, the scope will be attached directly to global scope.
  * @returns {[attachFn: (el: Element) => void, scopeId: string]} A tuple containing:
  *   - attachFn: Function to attach hotkey handlers to a DOM element
  *   - scopeId: The unique scope identifier that can be used with registerHotkey
@@ -513,15 +513,40 @@ export function useHotKeyRoot() {
         (command.runWithInputFocused || !isEditableFocused) &&
         (!command.condition || command.condition())
       ) {
+        if (command.activateCommandScopeId) {
+          const newScope = hotkeyScopeTree.get(command.activateCommandScopeId);
+          if (newScope) {
+            setPressedKeys(new Set<string>());
+            setActiveScope(newScope.id);
+            if (!transitionOrCommandFound) {
+              setExecutedTokens((prev) => {
+                if (command.hotkeyToken) {
+                  return prev.includes(command.hotkeyToken)
+                    ? prev
+                    : [...prev, command.hotkeyToken];
+                }
+                return prev;
+              });
+            }
+            transitionOrCommandFound = true;
+            e.preventDefault();
+            e.stopPropagation();
+          }
+        }
         const captured = command.keyDownHandler?.(e);
         if (captured) {
           setPressedKeys(new Set<string>());
+          if (!transitionOrCommandFound) {
+            setExecutedTokens((prev) => {
+              if (command.hotkeyToken) {
+                return prev.includes(command.hotkeyToken)
+                  ? prev
+                  : [...prev, command.hotkeyToken];
+              }
+              return prev;
+            });
+          }
           transitionOrCommandFound = true;
-          setExecutedTokens((prev) =>
-            prev.includes(command.hotkeyToken ?? '')
-              ? prev
-              : [...prev, command.hotkeyToken ?? '']
-          );
           e.preventDefault();
           e.stopPropagation();
         }
@@ -538,23 +563,6 @@ export function useHotKeyRoot() {
             scopeId: scopeNode.id,
             command: () => command.keyUpHandler?.(e),
           });
-        }
-        if (command.activateCommandScopeId) {
-          const newScope = hotkeyScopeTree.get(command.activateCommandScopeId);
-          if (newScope) {
-            setPressedKeys(new Set<string>());
-            setActiveScope(newScope.id);
-            if (!transitionOrCommandFound) {
-              setExecutedTokens((prev) =>
-                prev.includes(command.hotkeyToken ?? '')
-                  ? prev
-                  : [...prev, command.hotkeyToken ?? '']
-              );
-            }
-            transitionOrCommandFound = true;
-            e.preventDefault();
-            e.stopPropagation();
-          }
         }
       }
 
