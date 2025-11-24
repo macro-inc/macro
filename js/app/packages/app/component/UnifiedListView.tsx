@@ -6,6 +6,7 @@ import {
   emailRefetchInterval,
   useEmailLinksStatus,
 } from '@app/signal/emailAuth';
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import { Button } from '@core/component/FormControls/Button';
@@ -49,6 +50,7 @@ import {
   type EntityFilter,
   type EntityType,
   importantFilterFn,
+  isSearchEntity,
   notDoneFilterFn,
   type SortOption,
   sortByCreatedAt,
@@ -876,35 +878,34 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       ? insertSplit({ type: blockName, id })
       : replaceOrInsertSplit({ type: blockName, id });
 
-    const location =
-      'search' in entity && entity.search.contentHitData?.at(0)?.location;
-    if (location) {
-      handle?.activate();
-      const blockHandle = await blockOrchestrator.getBlockHandle(id);
-      switch (location.type) {
-        case 'md':
-          await blockHandle?.goToLocationFromParams({
-            [MD_PARAMS.nodeId]: location.nodeId,
-          });
-          break;
-        case 'pdf':
-          console.log('go to pdf location', location);
-          await blockHandle?.goToLocationFromParams({
-            [PDF_PARAMS.searchPage]: location.searchPage.toString(),
-            [PDF_PARAMS.searchRawQuery]: location.searchRawQuery,
-            [PDF_PARAMS.searchHighlightTerms]: JSON.stringify(
-              location.highlightTerms
-            ),
-            [PDF_PARAMS.searchSnippet]: location.searchSnippet,
-          });
-          break;
-      }
-    } else {
-      handle?.activate();
+    handle?.activate();
+
+    if (!isSearchEntity(entity)) return;
+
+    const location = entity.search.contentHitData?.at(0)?.location;
+    if (!location) return;
+
+    const blockHandle = await blockOrchestrator.getBlockHandle(id);
+    switch (location.type) {
+      case 'md':
+        await blockHandle?.goToLocationFromParams({
+          [MD_PARAMS.nodeId]: location.nodeId,
+        });
+        break;
+      case 'pdf':
+        await blockHandle?.goToLocationFromParams({
+          [PDF_PARAMS.searchPage]: location.searchPage.toString(),
+          [PDF_PARAMS.searchRawQuery]: location.searchRawQuery,
+          [PDF_PARAMS.searchHighlightTerms]: JSON.stringify(
+            location.highlightTerms
+          ),
+          [PDF_PARAMS.searchSnippet]: location.searchSnippet,
+        });
+        break;
     }
   };
 
-  const entityClickHandler: EntityClickHandler<EntityData> = (
+  const entityClickHandler: EntityClickHandler<EntityData> = async (
     entity,
     event,
     options
@@ -920,6 +921,19 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const handle = event.altKey
       ? insertSplit({ type: entity.type, id: entity.id })
       : replaceOrInsertSplit({ type: entity.type, id: entity.id });
+
+    if (entity.type === 'channel' && isSearchEntity(entity)) {
+      const contentHit = entity.search.contentHitData?.at(0);
+      if (contentHit && contentHit.type === 'channel') {
+        handle?.activate();
+        const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
+        await blockHandle?.goToLocationFromParams({
+          [CHANNEL_PARAMS.message]: contentHit.location.messageId,
+        });
+        return;
+      }
+    }
+
     handle?.activate();
   };
 

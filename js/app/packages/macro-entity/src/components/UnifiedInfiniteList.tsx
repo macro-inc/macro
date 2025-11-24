@@ -26,6 +26,7 @@ import type {
   EntityQueryOperations,
   EntityQueryWithOperations,
 } from '../queries/entity';
+import { isSearchEntity } from '../queries/search';
 import type {
   EntitiesFilter,
   EntityComparator,
@@ -38,9 +39,6 @@ import type { WithSearch } from '../types/search';
 import { CustomScrollbar } from './CustomScrollbar';
 import { Entity } from './Entity';
 
-const isSearchEntity = (entity: EntityData): entity is WithSearch<EntityData> =>
-  'search' in entity;
-
 /**
  * Merges search data from two entities, preferring service source with local as fallback.
  * - Uses service entity as base
@@ -48,9 +46,9 @@ const isSearchEntity = (entity: EntityData): entity is WithSearch<EntityData> =>
  * - Falls back to local contentHighlights if service doesn't have any
  */
 const mergeSearchEntities = <T extends EntityData>(
-  first: T & WithSearch<EntityData>,
-  second: T & WithSearch<EntityData>
-): T => {
+  first: WithSearch<T>,
+  second: WithSearch<T>
+): WithSearch<T> => {
   const serviceEntity = first.search.source === 'service' ? first : second;
   const localEntity = first.search.source === 'local' ? first : second;
 
@@ -60,11 +58,11 @@ const mergeSearchEntities = <T extends EntityData>(
       ...serviceEntity.search,
       nameHighlight:
         serviceEntity.search.nameHighlight || localEntity.search.nameHighlight,
-      contentHighlights: serviceEntity.search.contentHitData?.length
+      contentHitData: serviceEntity.search.contentHitData?.length
         ? serviceEntity.search.contentHitData
         : localEntity.search.contentHitData,
     },
-  } as T;
+  };
 };
 
 /**

@@ -30,6 +30,7 @@ import {
   isProjectContainedEntity,
   type ProjectContainedEntity,
 } from '../queries/project';
+import { isSearchEntity } from '../queries/search';
 import type { EntityData, ProjectEntity } from '../types/entity';
 import type { Notification, WithNotification } from '../types/notification';
 import type {
@@ -205,10 +206,10 @@ export function EntityWithEverything(
   };
 
   const searchHighlightName = () =>
-    'search' in props.entity && props.entity.search.nameHighlight;
+    isSearchEntity(props.entity) && props.entity.search.nameHighlight;
 
   const contentHitData = () => {
-    if (!('search' in props.entity)) return [];
+    if (!isSearchEntity(props.entity)) return [];
     return props.entity.search.contentHitData ?? [];
   };
 

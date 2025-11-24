@@ -39,6 +39,10 @@ type TypedInnerSearchResult =
   | { results: DocumentSearchResult[]; type: 'md' }
   | { results: ChannelSearchResult[]; type: 'channel' };
 
+export const isSearchEntity = <T extends EntityData>(
+  entity: T
+): entity is WithSearch<T> => 'search' in entity;
+
 const getSearchData = (data: TypedInnerSearchResult): SearchData => {
   let contentHitData: ContentHitData[] = [];
 
@@ -52,7 +56,10 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           content: mergeAdjacentMacroEmTags(content),
           senderId: r.sender_id,
           sentAt: r.created_at,
-          location: undefined,
+          location: {
+            type: 'channel' as const,
+            messageId: r.message_id,
+          },
         }));
       });
       break;

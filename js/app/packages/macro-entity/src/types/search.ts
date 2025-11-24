@@ -11,7 +11,15 @@ type PdfHighlightLocation = {
   searchRawQuery: string;
 };
 
-export type SearchLocation = MarkdownHighlightLocation | PdfHighlightLocation;
+type ChannelMessageHighlightLocation = {
+  type: 'channel';
+  messageId: string;
+};
+
+export type SearchLocation =
+  | MarkdownHighlightLocation
+  | PdfHighlightLocation
+  | ChannelMessageHighlightLocation;
 
 export type ChannelContentHitData = {
   type: 'channel';
@@ -19,7 +27,7 @@ export type ChannelContentHitData = {
   content: string;
   senderId: string;
   sentAt: number;
-  location?: SearchLocation;
+  location: ChannelMessageHighlightLocation;
 };
 
 type GenericContentHitData = {
