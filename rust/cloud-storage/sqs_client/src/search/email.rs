@@ -18,4 +18,6 @@ pub struct EmailThreadMessage {
 pub struct EmailLinkMessage {
     /// The link id
     pub link_id: String,
+    /// The macro user id associated with the link
+    pub macro_user_id: String,
 }

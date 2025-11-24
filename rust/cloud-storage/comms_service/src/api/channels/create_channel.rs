@@ -10,7 +10,7 @@ use model::comms::ChannelType;
 use model::user::UserContext;
 use models_opensearch::SearchEntityType;
 use serde::{Deserialize, Serialize};
-use sqs_client::search::{SearchQueueMessage, name::UpdateEntityName};
+use sqs_client::search::{SearchQueueMessage, name::EntityName};
 use tracing::Instrument;
 use utoipa::ToSchema;
 
@@ -123,7 +123,7 @@ pub async fn create_channel_handler(
 
                 let _ = sqs_client
                     .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(
-                        UpdateEntityName {
+                        EntityName {
                             entity_id: channel_id,
                             entity_type: SearchEntityType::Channels,
                         },

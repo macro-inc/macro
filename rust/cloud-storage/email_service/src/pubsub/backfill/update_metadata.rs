@@ -6,7 +6,7 @@ use models_email::email::service::pubsub::{DetailedError, FailureReason, Process
 use models_opensearch::SearchEntityType;
 use sqs_client::search::SearchQueueMessage;
 use sqs_client::search::email::EmailThreadMessage;
-use sqs_client::search::name::UpdateEntityName;
+use sqs_client::search::name::EntityName;
 
 /// This step is invoked by BackfillMessage once all messages in a thread have been backfilled.
 /// Updates the thread metadata in the database, the replying_to_id values of its messages, and
@@ -100,12 +100,10 @@ pub async fn update_thread_metadata(
 
     // notify search about new entity
     ctx.sqs_client
-        .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(
-            UpdateEntityName {
-                entity_id: p.thread_db_id,
-                entity_type: SearchEntityType::Emails,
-            },
-        ))
+        .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(EntityName {
+            entity_id: p.thread_db_id,
+            entity_type: SearchEntityType::Emails,
+        }))
         .await
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {

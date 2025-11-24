@@ -61,7 +61,7 @@ pub async fn patch_channel_handler(
                 let _ = sqs_client
                     .send_message_to_search_event_queue(
                         sqs_client::search::SearchQueueMessage::UpdateEntityName(
-                            sqs_client::search::name::UpdateEntityName {
+                            sqs_client::search::name::EntityName {
                                 entity_id: channel_id,
                                 entity_type: SearchEntityType::Channels,
                             },

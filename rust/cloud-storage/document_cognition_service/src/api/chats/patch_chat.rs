@@ -124,7 +124,7 @@ async fn patch_chat_v2(
                     .sqs_client
                     .send_message_to_search_event_queue(
                         sqs_client::search::SearchQueueMessage::UpdateEntityName(
-                            sqs_client::search::name::UpdateEntityName {
+                            sqs_client::search::name::EntityName {
                                 entity_id: chat_id,
                                 entity_type: models_opensearch::SearchEntityType::Chats,
                             },

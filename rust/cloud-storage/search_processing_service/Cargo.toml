@@ -70,3 +70,4 @@ tracing = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
+models_opensearch = { path = "../models_opensearch" }
