@@ -158,7 +158,7 @@ export function useCreateProject() {
     sharePermission?: null;
   }) => {
     const [err, result] = resource.latest;
-    if (err) return false;
+    if (err) return;
 
     // Create temporary project for optimistic update
     // TODO: this should optimistically update the file tree, not the projectsResource
@@ -189,8 +189,6 @@ export function useCreateProject() {
       postNewHistoryItem('project', maybeResult[1].id);
       return maybeResult[1].id;
     }
-
-    return false;
   };
 }
 
