@@ -43,7 +43,7 @@ cloudfront_sign = { workspace = true }
 connection_gateway = { path = "../connection_gateway" }
 document_storage_service_client = { path = "../document_storage_service_client" }
 ego-tree = { workspace = true }
-email = { path = "../email", features = ["axum"] }
+email = { path = "../email", features = ["axum", "inbound", "outbound"] }
 email_db_client = { path = "../email_db_client" }
 email_utils = { path = "../email_utils"}
 frecency = { path = "../frecency", features = ["postgres"] }

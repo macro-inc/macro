@@ -67,6 +67,8 @@ where
 #[serde(try_from = "String", into = "String")]
 pub struct MacroUserIdStr<'a>(pub MacroUserId<ArcCowStr<'a>>);
 
+impl<'a> doppleganger::Primitive for MacroUserIdStr<'a> {}
+
 impl<'a> std::fmt::Display for MacroUserIdStr<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.0.as_ref())

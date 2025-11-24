@@ -11,6 +11,8 @@ schema = ["dep:utoipa"]
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true }
+doppleganger = { workspace = true, features = ["chrono", "uuid"] }
+email = { path = "../email" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 models_pagination = { path = "../models_pagination" }

@@ -44,6 +44,8 @@ pub enum EntityType {
     Project,
     /// The entity is an email
     Email,
+    /// The entity is an email thread
+    EmailThread,
     /// The entity is a team
     Team,
 }

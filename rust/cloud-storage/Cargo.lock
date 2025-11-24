@@ -153,12 +153,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "android-tzdata"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e999941b234f3131b00bc13c22d06e8c5ff726d1b6318ac7eb276997bbb4fef0"
-
-[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1578,17 +1572,16 @@ dependencies = [
 
 [[package]]
 name = "chrono"
-version = "0.4.41"
+version = "0.4.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c469d952047f47f91b68d1cba3f10d63c11d73e4636f24f08daf0278abf01c4d"
+checksum = "145052bdd345b87320e369255277e3fb5152762ad123a901ef5c262dd38fe8d2"
 dependencies = [
- "android-tzdata",
  "iana-time-zone",
  "js-sys",
  "num-traits",
  "serde",
  "wasm-bindgen",
- "windows-link 0.1.1",
+ "windows-link 0.2.1",
 ]
 
 [[package]]
@@ -2688,6 +2681,49 @@ dependencies = [
 ]
 
 [[package]]
+name = "doppleganger"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "4f6e63a190778be95e1805cdb16becc932fbe6caa42150edfdad948242ba75aa"
+dependencies = [
+ "doppleganger-core",
+ "doppleganger-macros",
+]
+
+[[package]]
+name = "doppleganger-core"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "314f5bc3b014813956a5f373d5d310b1cdfa7b2295fbb875e7f4512dd382dd34"
+dependencies = [
+ "chrono",
+ "uuid",
+]
+
+[[package]]
+name = "doppleganger-macros"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "abdff597f92f7f4f55ab8dfa59385189b870bb8df39dae33513092986feff984"
+dependencies = [
+ "doppleganger-macros-parse",
+ "proc-macro2",
+ "quote",
+ "unsynn",
+]
+
+[[package]]
+name = "doppleganger-macros-parse"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "847fd9f860890bb89d4c67838a1be9c0af044fd42ed211d87ac290cf9d53bafd"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unsynn",
+]
+
+[[package]]
 name = "dotenv"
 version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3276,15 +3312,12 @@ dependencies = [
  "chrono",
  "cool_asserts",
  "filter_ast",
- "futures",
  "item_filters",
  "macro_db_migrator",
- "macro_env",
  "macro_env_var",
  "macro_user_id",
  "mockall",
  "model-entity",
- "models_pagination",
  "num-traits",
  "ordered-float",
  "rand 0.9.0",
@@ -4750,7 +4783,6 @@ dependencies = [
  "models_pagination",
  "models_permissions",
  "models_search",
- "models_soup",
  "models_team",
  "rand 0.9.0",
  "serde",
@@ -4913,6 +4945,7 @@ dependencies = [
 name = "macro_user_id"
 version = "0.1.0"
 dependencies = [
+ "doppleganger",
  "nom 8.0.0",
  "serde",
  "thiserror 2.0.17",
@@ -5476,6 +5509,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "doppleganger",
+ "email",
  "macro_user_id",
  "model-entity",
  "models_pagination",
@@ -5524,6 +5559,12 @@ dependencies = [
  "spin",
  "version_check",
 ]
+
+[[package]]
+name = "mutants"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc0287524726960e07b119cebd01678f852f147742ae0d925e6a520dca956126"
 
 [[package]]
 name = "native-tls"
@@ -7933,6 +7974,7 @@ dependencies = [
  "axum",
  "chrono",
  "cool_asserts",
+ "doppleganger",
  "either",
  "filter_ast",
  "frecency",
@@ -9029,6 +9071,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
+name = "unsynn"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "501a7adf1a4bd9951501e5c66621e972ef8874d787628b7f90e64f936ef7ec0a"
+dependencies = [
+ "mutants",
+ "proc-macro2",
+ "rustc-hash 2.1.1",
+]
+
+[[package]]
 name = "untrusted"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9215,13 +9268,15 @@ dependencies = [
 
 [[package]]
 name = "uuid"
-version = "1.15.1"
+version = "1.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0f540e3240398cce6128b64ba83fdbdd86129c16a3aa1a3a252efd66eb3d587"
+checksum = "2f87b8aa10b915a06587d0dec516c282ff295b475d94abf425d62b57710070a2"
 dependencies = [
  "getrandom 0.3.1",
+ "js-sys",
  "rand 0.9.0",
  "serde",
+ "wasm-bindgen",
 ]
 
 [[package]]
