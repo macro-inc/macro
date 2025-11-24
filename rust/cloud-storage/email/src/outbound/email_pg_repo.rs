@@ -6,6 +6,7 @@ use crate::domain::{
     ports::EmailRepo,
 };
 use db_types::*;
+use doppleganger::{Doppleganger, Mirror};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use sqlx::PgPool;
 use uuid::Uuid;
@@ -122,7 +123,7 @@ impl EmailRepo for EmailPgRepo {
         .fetch_all(&self.pool)
         .await?
         .into_iter()
-        .map(AttachmentDbRow::into_model)
+        .map(AttachmentDbRow::mirror)
         .collect())
     }
 
@@ -156,13 +157,14 @@ impl EmailRepo for EmailPgRepo {
         .fetch_all(&self.pool)
         .await?
         .into_iter()
-        .map(AttachmentMacroDbRow::into_model)
+        .map(AttachmentMacroDbRow::mirror)
         .collect())
     }
 
     async fn contacts_by_thread_ids(&self, thread_ids: &[Uuid]) -> Result<Vec<Contact>, Self::Err> {
         // Define a struct to hold the joined results
-        #[derive(Debug)]
+        #[derive(Debug, Doppleganger)]
+        #[dg(forward = Contact)]
         struct ThreadContactResult {
             thread_id: Uuid,
             id: Uuid,
@@ -170,27 +172,6 @@ impl EmailRepo for EmailPgRepo {
             email_address: Option<String>,
             name: Option<String>,
             sfs_photo_url: Option<String>,
-        }
-
-        impl ThreadContactResult {
-            fn into_model(self) -> Contact {
-                let ThreadContactResult {
-                    thread_id,
-                    id,
-                    link_id,
-                    email_address,
-                    name,
-                    sfs_photo_url,
-                } = self;
-                Contact {
-                    id,
-                    link_id,
-                    thread_id,
-                    name,
-                    email_address,
-                    sfs_photo_url,
-                }
-            }
         }
 
         Ok(sqlx::query_as!(
@@ -209,7 +190,7 @@ impl EmailRepo for EmailPgRepo {
         .fetch_all(&self.pool)
         .await?
         .into_iter()
-        .map(ThreadContactResult::into_model)
+        .map(ThreadContactResult::mirror)
         .collect())
     }
 }
