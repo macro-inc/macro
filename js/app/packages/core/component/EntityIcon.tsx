@@ -5,7 +5,7 @@ import {
 } from '@core/constant/allBlocks';
 import {
   USE_PIXEL_BLOCK_ICONS,
-  USE_WIDE_ICONS
+  USE_WIDE_ICONS,
 } from '@core/constant/featureFlags';
 import Building from '@icon/duotone/building-duotone.svg';
 import Chat from '@icon/duotone/chat-duotone.svg';
@@ -348,11 +348,11 @@ export function EntityIcon(props: EntityIconProps) {
   const config = () => ENTITY_ICON_CONFIGS[getName()];
   const icon = () => {
     if (USE_PIXEL_BLOCK_ICONS) {
-      return PIXEL_ICONS[getName()]
+      return PIXEL_ICONS[getName()];
     } else if (USE_WIDE_ICONS) {
-      return WIDE_ICONS[getName()]
+      return WIDE_ICONS[getName()];
     } else {
-      config().icon
+      return config().icon;
     };
   };
   const sizeClass = () => ICON_SIZE_CLASSES[props.size ?? 'xs'];
