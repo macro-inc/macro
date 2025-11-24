@@ -11,7 +11,6 @@ import type { SoupDocumentFileType } from './soupDocumentFileType';
 import type { SoupDocumentProjectId } from './soupDocumentProjectId';
 import type { SoupDocumentSha } from './soupDocumentSha';
 import type { SoupDocumentViewedAt } from './soupDocumentViewedAt';
-import type { SoupDocumentType } from './soupDocumentType';
 
 export interface SoupDocument {
   /** The id of the document this document branched from */
@@ -43,5 +42,4 @@ If the document is a DOCX, this will not be present */
   updatedAt: number;
   /** The time the document was last viewed */
   viewedAt: SoupDocumentViewedAt;
-  type: SoupDocumentType;
 }

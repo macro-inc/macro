@@ -1,5 +1,5 @@
 use crate::domain::{
-    models::{EmailErr, EnrichedThreadPreviewCursor, GetEmailsRequest, PreviewCursorQuery},
+    models::{EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorQuery},
     ports::{EmailRepo, EmailService},
 };
 use frecency::domain::{models::FrecencyByIdsRequest, ports::FrecencyQueryService};
@@ -36,7 +36,7 @@ where
     async fn get_email_thread_previews(
         &self,
         req: GetEmailsRequest,
-    ) -> Result<PaginatedCursor<EnrichedThreadPreviewCursor, Uuid, SimpleSortMethod, ()>, EmailErr>
+    ) -> Result<PaginatedCursor<EnrichedEmailThreadPreview, Uuid, SimpleSortMethod, ()>, EmailErr>
     {
         let GetEmailsRequest {
             view,
@@ -69,7 +69,7 @@ where
 
         let ids: Vec<_> = thread_ids
             .iter()
-            .map(|id| EntityType::Email.with_entity_string(id.to_string()))
+            .map(|id| EntityType::EmailThread.with_entity_string(id.to_string()))
             .collect();
 
         let frecency_request = FrecencyByIdsRequest {
@@ -116,7 +116,7 @@ where
 
         Ok(previews
             .into_iter()
-            .map(|thread| EnrichedThreadPreviewCursor {
+            .map(|thread| EnrichedEmailThreadPreview {
                 attachments: attachment_map.remove(&thread.id).unwrap_or_default(),
                 attachments_macro: macro_attachment_map.remove(&thread.id).unwrap_or_default(),
                 participants: participant_map.remove(&thread.id).unwrap_or_default(),

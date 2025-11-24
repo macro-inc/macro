@@ -6,7 +6,6 @@
  */
 import type { SoupProjectParentId } from './soupProjectParentId';
 import type { SoupProjectViewedAt } from './soupProjectViewedAt';
-import type { SoupProjectType } from './soupProjectType';
 
 export interface SoupProject {
   /** The time the project was created */
@@ -23,5 +22,4 @@ export interface SoupProject {
   updatedAt: number;
   /** The time the document was last viewed */
   viewedAt: SoupProjectViewedAt;
-  type: SoupProjectType;
 }

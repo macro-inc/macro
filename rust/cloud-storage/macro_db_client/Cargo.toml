@@ -17,15 +17,16 @@ async-trait = { workspace = true }
 cached = { workspace = true }
 chrono = { workspace = true }
 futures = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 mockall = { workspace = true }
 model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 models_dcs = { path = "../models_dcs" }
+models_opensearch = { path = "../models_opensearch" }
 models_pagination = { path = "../models_pagination" }
 models_permissions = { path = "../models_permissions" }
 models_search = { path = "../models_search" }
-models_soup = { path = "../models_soup" }
 models_team = { path = "../models_team", optional = true }
 rand = { workspace = true, optional = true }
 serde = { workspace = true }
@@ -34,7 +35,5 @@ sqlx = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tracing = { workspace = true }
-uuid = { workspace = true }
 user_quota = { path = "../user_quota" }
-macro_user_id = { path = "../macro_user_id" }
-models_opensearch = { path = "../models_opensearch" }
+uuid = { workspace = true }

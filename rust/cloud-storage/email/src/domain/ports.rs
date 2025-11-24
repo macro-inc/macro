@@ -1,6 +1,6 @@
 use crate::domain::models::{
-    Attachment, AttachmentMacro, Contact, EmailErr, EnrichedThreadPreviewCursor, GetEmailsRequest,
-    PreviewCursorQuery, ThreadPreviewCursor,
+    Attachment, AttachmentMacro, Contact, EmailErr, EmailThreadPreview, EnrichedEmailThreadPreview,
+    GetEmailsRequest, PreviewCursorQuery,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
@@ -12,7 +12,7 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         query: PreviewCursorQuery,
         user_id: MacroUserIdStr<'static>,
-    ) -> impl Future<Output = Result<Vec<ThreadPreviewCursor>, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Vec<EmailThreadPreview>, Self::Err>> + Send;
 
     fn attachments_by_thread_ids(
         &self,
@@ -36,7 +36,7 @@ pub trait EmailService: Send + Sync + 'static {
         req: GetEmailsRequest,
     ) -> impl Future<
         Output = Result<
-            PaginatedCursor<EnrichedThreadPreviewCursor, Uuid, SimpleSortMethod, ()>,
+            PaginatedCursor<EnrichedEmailThreadPreview, Uuid, SimpleSortMethod, ()>,
             EmailErr,
         >,
     > + Send;

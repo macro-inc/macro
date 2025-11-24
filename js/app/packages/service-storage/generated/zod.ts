@@ -1161,6 +1161,7 @@ export const getItemsSoupQueryParams = zod.object({
 
 export const getItemsSoupResponse = zod.object({
   "items": zod.array(zod.union([zod.object({
+  "data": zod.object({
   "branchedFromId": zod.string().uuid().nullish().describe('The id of the document this document branched from'),
   "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'),
   "createdAt": zod.number().describe('The time the document was created'),
@@ -1173,9 +1174,11 @@ export const getItemsSoupResponse = zod.object({
   "projectId": zod.string().uuid().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
-  "viewedAt": zod.number().nullable().describe('The time the document was last viewed'),
-  "type": zod.enum(['document'])
+  "viewedAt": zod.number().nullable().describe('The time the document was last viewed')
+}),
+  "tag": zod.enum(['document'])
 }),zod.object({
+  "data": zod.object({
   "createdAt": zod.number().describe('The time the chat was created'),
   "id": zod.string().uuid().describe('The chat uuid'),
   "isPersistent": zod.boolean().describe('Whether the chat is persistent or not'),
@@ -1183,17 +1186,65 @@ export const getItemsSoupResponse = zod.object({
   "ownerId": zod.string().describe('Who the chat belongs to'),
   "projectId": zod.string().uuid().nullish().describe('The project id of the chat'),
   "updatedAt": zod.number().describe('The time the chat was last updated'),
-  "viewedAt": zod.number().nullable().describe('The time the chat was last viewed'),
-  "type": zod.enum(['chat'])
+  "viewedAt": zod.number().nullable().describe('The time the chat was last viewed')
+}),
+  "tag": zod.enum(['chat'])
 }),zod.object({
+  "data": zod.object({
   "createdAt": zod.number().describe('The time the project was created'),
   "id": zod.string().uuid().describe('The id of the project'),
   "name": zod.string().describe('The name of the project'),
   "ownerId": zod.string().describe('The user id of who created the project'),
   "parentId": zod.string().uuid().nullish().describe('The parent project id'),
   "updatedAt": zod.number().describe('The time the project was updated'),
-  "viewedAt": zod.number().nullable().describe('The time the document was last viewed'),
-  "type": zod.enum(['project'])
+  "viewedAt": zod.number().nullable().describe('The time the document was last viewed')
+}),
+  "tag": zod.enum(['project'])
+}),zod.object({
+  "data": zod.object({
+  "createdAt": zod.number(),
+  "id": zod.string().uuid(),
+  "inboxVisible": zod.boolean(),
+  "isDraft": zod.boolean(),
+  "isImportant": zod.boolean(),
+  "isRead": zod.boolean(),
+  "name": zod.string().nullish(),
+  "ownerId": zod.string(),
+  "providerId": zod.string().nullish(),
+  "senderEmail": zod.string().nullish(),
+  "senderName": zod.string().nullish(),
+  "senderPhotoUrl": zod.string().nullish(),
+  "snippet": zod.string().nullish(),
+  "sortTs": zod.number(),
+  "updatedAt": zod.number(),
+  "viewedAt": zod.number().nullable()
+}).and(zod.object({
+  "attachments": zod.array(zod.object({
+  "contentId": zod.string().nullish(),
+  "createdAt": zod.number(),
+  "filename": zod.string().nullish(),
+  "id": zod.string().uuid(),
+  "messageId": zod.string().uuid(),
+  "mimeType": zod.string().nullish(),
+  "providerAttachmentId": zod.string().nullish(),
+  "sizeBytes": zod.number().nullish()
+})),
+  "attachmentsMacro": zod.array(zod.object({
+  "dbId": zod.string().uuid(),
+  "itemId": zod.string().uuid(),
+  "itemType": zod.string(),
+  "messageId": zod.string().uuid(),
+  "threadId": zod.string().uuid()
+})),
+  "participants": zod.array(zod.object({
+  "emailAddress": zod.string().nullish(),
+  "id": zod.string().uuid(),
+  "linkId": zod.string().uuid(),
+  "name": zod.string().nullish(),
+  "sfsPhotoUrl": zod.string().nullish()
+}))
+})),
+  "tag": zod.enum(['emailThread'])
 })]).and(zod.object({
   "frecency_score": zod.number()
 }))),
@@ -1249,6 +1300,7 @@ export const postItemsSoupBody = zod.object({
 
 export const postItemsSoupResponse = zod.object({
   "items": zod.array(zod.union([zod.object({
+  "data": zod.object({
   "branchedFromId": zod.string().uuid().nullish().describe('The id of the document this document branched from'),
   "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'),
   "createdAt": zod.number().describe('The time the document was created'),
@@ -1261,9 +1313,11 @@ export const postItemsSoupResponse = zod.object({
   "projectId": zod.string().uuid().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
-  "viewedAt": zod.number().nullable().describe('The time the document was last viewed'),
-  "type": zod.enum(['document'])
+  "viewedAt": zod.number().nullable().describe('The time the document was last viewed')
+}),
+  "tag": zod.enum(['document'])
 }),zod.object({
+  "data": zod.object({
   "createdAt": zod.number().describe('The time the chat was created'),
   "id": zod.string().uuid().describe('The chat uuid'),
   "isPersistent": zod.boolean().describe('Whether the chat is persistent or not'),
@@ -1271,17 +1325,65 @@ export const postItemsSoupResponse = zod.object({
   "ownerId": zod.string().describe('Who the chat belongs to'),
   "projectId": zod.string().uuid().nullish().describe('The project id of the chat'),
   "updatedAt": zod.number().describe('The time the chat was last updated'),
-  "viewedAt": zod.number().nullable().describe('The time the chat was last viewed'),
-  "type": zod.enum(['chat'])
+  "viewedAt": zod.number().nullable().describe('The time the chat was last viewed')
+}),
+  "tag": zod.enum(['chat'])
 }),zod.object({
+  "data": zod.object({
   "createdAt": zod.number().describe('The time the project was created'),
   "id": zod.string().uuid().describe('The id of the project'),
   "name": zod.string().describe('The name of the project'),
   "ownerId": zod.string().describe('The user id of who created the project'),
   "parentId": zod.string().uuid().nullish().describe('The parent project id'),
   "updatedAt": zod.number().describe('The time the project was updated'),
-  "viewedAt": zod.number().nullable().describe('The time the document was last viewed'),
-  "type": zod.enum(['project'])
+  "viewedAt": zod.number().nullable().describe('The time the document was last viewed')
+}),
+  "tag": zod.enum(['project'])
+}),zod.object({
+  "data": zod.object({
+  "createdAt": zod.number(),
+  "id": zod.string().uuid(),
+  "inboxVisible": zod.boolean(),
+  "isDraft": zod.boolean(),
+  "isImportant": zod.boolean(),
+  "isRead": zod.boolean(),
+  "name": zod.string().nullish(),
+  "ownerId": zod.string(),
+  "providerId": zod.string().nullish(),
+  "senderEmail": zod.string().nullish(),
+  "senderName": zod.string().nullish(),
+  "senderPhotoUrl": zod.string().nullish(),
+  "snippet": zod.string().nullish(),
+  "sortTs": zod.number(),
+  "updatedAt": zod.number(),
+  "viewedAt": zod.number().nullable()
+}).and(zod.object({
+  "attachments": zod.array(zod.object({
+  "contentId": zod.string().nullish(),
+  "createdAt": zod.number(),
+  "filename": zod.string().nullish(),
+  "id": zod.string().uuid(),
+  "messageId": zod.string().uuid(),
+  "mimeType": zod.string().nullish(),
+  "providerAttachmentId": zod.string().nullish(),
+  "sizeBytes": zod.number().nullish()
+})),
+  "attachmentsMacro": zod.array(zod.object({
+  "dbId": zod.string().uuid(),
+  "itemId": zod.string().uuid(),
+  "itemType": zod.string(),
+  "messageId": zod.string().uuid(),
+  "threadId": zod.string().uuid()
+})),
+  "participants": zod.array(zod.object({
+  "emailAddress": zod.string().nullish(),
+  "id": zod.string().uuid(),
+  "linkId": zod.string().uuid(),
+  "name": zod.string().nullish(),
+  "sfsPhotoUrl": zod.string().nullish()
+}))
+})),
+  "tag": zod.enum(['emailThread'])
 })]).and(zod.object({
   "frecency_score": zod.number()
 }))),

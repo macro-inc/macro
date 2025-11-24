@@ -1,7 +1,7 @@
 use crate::domain::{
     models::{
-        Attachment, AttachmentMacro, Contact, PreviewCursorQuery, PreviewView,
-        PreviewViewStandardLabel, ThreadPreviewCursor,
+        Attachment, AttachmentMacro, Contact, EmailThreadPreview, PreviewCursorQuery, PreviewView,
+        PreviewViewStandardLabel,
     },
     ports::EmailRepo,
 };
@@ -31,7 +31,7 @@ impl EmailRepo for EmailPgRepo {
         &self,
         query: PreviewCursorQuery,
         user_id: MacroUserIdStr<'static>,
-    ) -> Result<Vec<ThreadPreviewCursor>, Self::Err> {
+    ) -> Result<Vec<EmailThreadPreview>, Self::Err> {
         Ok(match query.view {
             PreviewView::StandardLabel(ref label) => match label {
                 PreviewViewStandardLabel::Inbox => {
