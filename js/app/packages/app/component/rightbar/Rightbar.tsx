@@ -21,16 +21,12 @@ import {
 import { IconButton } from '@core/component/IconButton';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { ReferencesModal } from '@core/component/ReferencesModal';
-import { Resize } from '@core/component/Resize';
+
 import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
-import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { useBigChat } from '@core/signal/layout';
+import { setOpenPanel, isRightPanelOpen } from '@core/signal/layout/unifiedPanel';
 import { TOKENS } from '@core/hotkey/tokens';
-import {
-  isRightPanelOpen,
-  useBigChat,
-  useToggleRightPanel,
-} from '@core/signal/layout';
 import { rightbarChatId, setRightbarChatId } from '@core/signal/rightbar';
 import { isErr } from '@core/util/maybeResult';
 import ContractIcon from '@icon/regular/arrows-in.svg';
@@ -62,7 +58,7 @@ import {
   Show,
   untrack,
 } from 'solid-js';
-import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
+
 
 type ChatData = {
   messages: ChatMessageWithAttachments[];
@@ -169,7 +165,7 @@ function TopBar(props: {
   };
   const openInstructions = useOpenInstructionsMd();
   const [bigChatOpen, setBigChatOpen] = useBigChat();
-  const toggleRightPanel = useToggleRightPanel();
+  const toggleRightPanel = () => setOpenPanel(null);
 
   return (
     <div
@@ -432,9 +428,9 @@ export function Rightbar(props: {
 }
 
 /** Owns rightbar chat state to prevent data loss on panel close */
-export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
+export function RightbarContent() {
   const [bigChatOpen, setBigChatOpen] = useBigChat();
-  const isAuthenticated = useIsAuthenticated();
+
   const [text, setText] = createSignal<string>();
   const [chatName, setChatName] = createSignal<string | undefined>();
   const [chatId, setChatId] = [rightbarChatId, setRightbarChatId];
@@ -454,7 +450,7 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
     | undefined
   >();
 
-  const [attachHotkeys, scopeId] = useHotkeyDOMScope('ai-right-panel');
+
 
   const clearChatState = () => {
     setStream(undefined);
@@ -623,67 +619,24 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
     })
   );
 
-  const toggleRightPanel = useToggleRightPanel();
-
-  registerHotkey({
-    scopeId,
-    hotkey: 'escape',
-    hotkeyToken: TOKENS.chat.spotlight.close,
-    condition: () => Boolean(bigChatOpen() || isRightPanelOpen()),
-    description: 'Close chat',
-    keyDownHandler: () => {
-      if (bigChatOpen()) {
-        setBigChatOpen(false);
-      } else {
-        toggleRightPanel(false);
-      }
-      return true;
-    },
-  });
-
   return (
-    <Show when={isAuthenticated()}>
-      <Resize.Panel
-        id="sidebar-chat"
-        minSize={324}
-        maxSize={1000}
-        hidden={() => !isRightPanelOpen()}
-      >
-        <div
-          class="size-full invisible"
-          classList={{
-            visible: isRightPanelOpen() || bigChatOpen(),
-          }}
-          ref={(r) => {
-            attachHotkeys(r);
-          }}
-        >
-          <SplitlikeContainer
-            spotlight={bigChatOpen}
-            setSpotlight={setBigChatOpen}
-            tr={!bigChatOpen()}
-          >
-            <Rightbar
-              chatId={chatId()}
-              chatName={chatName()}
-              messages={messages}
-              onUnmount={getChatInputState}
-              initialState={initialChatState()}
-              onSend={onSend}
-              stream={stream}
-              setState={{
-                setChatId,
-                setModel,
-                setAttachments,
-                setText,
-                setMessages,
-                setStream,
-              }}
-              isBig={bigChatOpen()}
-            />
-          </SplitlikeContainer>
-        </div>
-      </Resize.Panel>
-    </Show>
+    <Rightbar
+      chatId={chatId()}
+      chatName={chatName()}
+      messages={messages}
+      onUnmount={getChatInputState}
+      initialState={initialChatState()}
+      onSend={onSend}
+      stream={stream}
+      setState={{
+        setChatId,
+        setModel,
+        setAttachments,
+        setText,
+        setMessages,
+        setStream,
+      }}
+      isBig={bigChatOpen()}
+    />
   );
-};
+}

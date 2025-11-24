@@ -1,20 +1,14 @@
 import { type SettingsTab, useSettingsState, settingsSpotlight, setSettingsSpotlight } from '@core/constant/SettingsState';
 import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
-import { isSettingsPanelOpen, useToggleSettingsPanel } from '@core/signal/layout';
-import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { DEV_MODE_ENV, ENABLE_AI_MEMORY } from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { MacroPermissions, usePermissions } from '@service-gql/client';
 import Organization from './Organization/Organization';
-import { registerHotkey } from 'core/hotkey/hotkeys';
 import { withAnalytics } from '@coparse/analytics';
 import { useOrganizationName } from '@core/user';
-import { useIsAuthenticated } from '@core/auth';
-import { Resize } from '@core/component/Resize';
 import { AiMemory } from './AiMemory/AiMemory';
 import { Notification } from './Notification';
 import { Subscription } from './Subscription';
-import { TOKENS } from '@core/hotkey/tokens';
 import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
 import { Account } from './Account';
@@ -25,7 +19,7 @@ const SCROLL_THRESHOLD = 10;
 
 const { track, TrackingEvents } = withAnalytics();
 
-function SettingsContent() {
+export function SettingsContent() {
   const { activeTabId, setActiveTabId } = useSettingsState();
   const permissions = usePermissions();
   const orgName = useOrganizationName();
@@ -225,72 +219,6 @@ function SettingsContent() {
         </div>
       </Tabs>
     </div>
-  );
-}
-
-export function SettingsWrapper() {
-  const isAuthenticated = useIsAuthenticated();
-  const toggleSettingsPanel = useToggleSettingsPanel();
-  const { toggleSettings } = useSettingsState();
-
-  const attachHotkeys = (element: HTMLElement) => {
-    const scopeId = 'settings-panel';
-
-    registerHotkey({
-      scopeId,
-      hotkey: 'escape',
-      hotkeyToken: TOKENS.global.toggleSettings,
-      condition: () => Boolean(settingsSpotlight() || isSettingsPanelOpen()),
-      description: 'Close settings',
-      keyDownHandler: () => {
-        if (settingsSpotlight()) {
-          setSettingsSpotlight(false);
-        } else {
-          toggleSettingsPanel(false);
-        }
-        return true;
-      },
-      runWithInputFocused: true,
-    });
-
-    registerHotkey({
-      hotkeyToken: TOKENS.global.toggleSettings,
-      hotkey: 'cmd+;',
-      scopeId: 'global',
-      description: () => {
-        return isSettingsPanelOpen() ? 'Close Settings Panel' : 'Open Settings Panel';
-      },
-      keyDownHandler: () => {
-        toggleSettings();
-        return true;
-      },
-      runWithInputFocused: true,
-    });
-  };
-
-  return (
-    <Show when={isAuthenticated()}>
-      <Resize.Panel
-        hidden={() => !isSettingsPanelOpen()}
-        id="settings-panel"
-        maxSize={1200}
-        minSize={400}
-      >
-        <div
-          classList={{visible: isSettingsPanelOpen() || settingsSpotlight()}}
-          class="size-full invisible"
-          ref={(r) => {attachHotkeys(r)}}
-        >
-          <SplitlikeContainer
-            setSpotlight={setSettingsSpotlight}
-            spotlight={settingsSpotlight}
-            tr={!settingsSpotlight()}
-          >
-            <SettingsContent />
-          </SplitlikeContainer>
-        </div>
-      </Resize.Panel>
-    </Show>
   );
 }
 

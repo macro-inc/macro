@@ -1,6 +1,5 @@
 import { createEffect, createSignal } from 'solid-js';
-import { setIsRightPanelOpen } from '@core/signal/layout';
-import { setIsSettingsPanelOpen, isSettingsPanelOpen } from '@core/signal/layout';
+import { isSettingsPanelOpen, useToggleSettingsPanel } from '@core/signal/layout/unifiedPanel';
 
 export type SettingsTab =
   | 'Account'
@@ -16,25 +15,20 @@ export const [activeTabId, setActiveTabId] =
 export const [settingsSpotlight, setSettingsSpotlight] = createSignal(false);
 
 export const useSettingsState = () => {
+  const toggleSettingsPanel = useToggleSettingsPanel();
+  
   const openSettings = (activeTabId?: SettingsTab) => {
-    // Close right panel when opening settings
-    setIsRightPanelOpen(false);
-    setIsSettingsPanelOpen(true);
+    toggleSettingsPanel(true);
     if (activeTabId) setActiveTabId(activeTabId);
   };
   
   const closeSettings = () => {
-    setIsSettingsPanelOpen(false);
+    toggleSettingsPanel(false);
     setSettingsSpotlight(false);
   };
   
   const toggleSettings = () => {
-    const newState = !isSettingsPanelOpen();
-    if (newState) {
-      // Close right panel when opening settings
-      setIsRightPanelOpen(false);
-    }
-    setIsSettingsPanelOpen(newState);
+    toggleSettingsPanel();
   };
 
   createEffect(() => {

@@ -21,8 +21,8 @@ import { ItemDndProvider } from './ItemDragAndDrop';
 import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { Paywall } from './paywall/Paywall';
 import { QuickCreateMenu } from './QuickCreateMenu';
-import { RightbarWrapper } from './rightbar/Rightbar';
-import { SettingsWrapper, setViewportOffset } from './settings/Settings';
+import { UnifiedPanelWrapper } from './UnifiedPanelWrapper';
+import { setViewportOffset } from './settings/Settings';
 
 export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
@@ -137,8 +137,7 @@ export function Layout(props: RouteSectionProps) {
             <Resize.Panel id={LAYOUT_CONTEXT_ID} minSize={250}>
               {props.children}
             </Resize.Panel>
-            <SettingsWrapper />
-            <RightbarWrapper />
+            <UnifiedPanelWrapper />
           </ItemDndProvider>
         </Resize.Zone>
       </div>
