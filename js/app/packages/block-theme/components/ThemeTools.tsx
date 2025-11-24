@@ -75,6 +75,7 @@ export function ThemeTools() {
           // tooltip={{label: "Delete Theme"}}
           icon={IconTrash}
           theme="base"
+          size="sm"
         />
       </Show>
 
@@ -86,6 +87,7 @@ export function ThemeTools() {
           // tooltip={{label: "Save Theme"}}
           icon={IconSave}
           theme="base"
+          size="sm"
         />
       </Show>
 
@@ -95,6 +97,7 @@ export function ThemeTools() {
           onPointerDown={copyTokens}
           icon={IconFigma}
           theme="base"
+          size="sm"
         />
       </Show>*/}
 
