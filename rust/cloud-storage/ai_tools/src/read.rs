@@ -7,6 +7,8 @@ use models_email::email::service::message::ParsedMessage;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
+pub const MAX_MESSAGES: i64 = 300;
+
 #[derive(Debug, JsonSchema, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct ReadResponse {
@@ -88,7 +90,8 @@ impl From<ParsedMessage> for EmailMessage {
 #[derive(Debug, JsonSchema, Deserialize, Clone)]
 #[serde(rename_all = "camelCase")]
 #[schemars(
-    description = "Read content by ID(s). Supports reading documents, channels, chats, and emails by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s).",
+    description = "Read content by ID(s). Supports reading documents, channels, chats, and emails by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s).
+    Channel transcripts only include 300 messages. Use 'messages_since' to see messages in a different time window.",
     title = "Read"
 )]
 pub struct Read {
@@ -100,16 +103,10 @@ pub struct Read {
         description = "ID(s) of the content to read. IMPORTANT: Currently only chat-message content type supports MULTIPLE ids! For all other content types provide a single id."
     )]
     pub ids: Vec<String>,
-    #[serde(default)]
     #[schemars(
-        description = "Number of messages to read before the target message. Only applicable for channel-message content type. Defaults to 0."
+        description = "A local datetime of the earliest message to include in a channel transcript ex: 2025-11-25 12:00:09 EST, only applicable to channels"
     )]
-    pub before: Option<i64>,
-    #[serde(default)]
-    #[schemars(
-        description = "Number of messages to read after the target message. Only applicable for channel-message content type. Defaults to 0."
-    )]
-    pub after: Option<i64>,
+    pub messages_since: Option<chrono::DateTime<chrono::Local>>,
 }
 
 #[derive(Debug, JsonSchema, Deserialize, Clone, strum::EnumString, strum::Display)]
@@ -232,6 +229,10 @@ impl Read {
     ) -> Result<ReadContent, ToolCallError> {
         let id = self.provide_single_id()?;
 
+        let since = self
+            .messages_since
+            .map(DateTime::<Utc>::from)
+            .unwrap_or_else(|| chrono::Utc::now() - chrono::Duration::days(7));
         // Get channel metadata
         let metadata = context
             .scribe
@@ -247,7 +248,12 @@ impl Read {
         let transcript = context
             .scribe
             .channel
-            .get_channel_transcript(id.as_str(), Some(&request_context.jwt_token), None, None)
+            .get_channel_transcript(
+                id.as_str(),
+                Some(&request_context.jwt_token),
+                Some(since),
+                Some(MAX_MESSAGES),
+            )
             .await
             .map_err(|e| ToolCallError {
                 description: format!("failed to fetch channel transcript: {}", e),
@@ -268,14 +274,11 @@ impl Read {
     ) -> Result<ReadContent, ToolCallError> {
         let id = self.provide_single_id()?;
 
-        let before = self.before.unwrap_or(0);
-        let after = self.after.unwrap_or(0);
-
         // Get messages with context
         let transcript = context
             .scribe
             .channel
-            .get_message_with_context(id.as_str(), before, after, &request_context.jwt_token)
+            .get_message_with_context(id.as_str(), 0, 0, &request_context.jwt_token)
             .await
             .map_err(|e| ToolCallError {
                 description: format!("failed to fetch channel message with context: {}", e),
