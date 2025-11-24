@@ -1,20 +1,23 @@
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
+import type { ValidHotkey } from '@core/hotkey/types';
 import { useBigChat } from '@core/signal/layout';
 import { AiInstructionsIcon } from '@service-storage/instructionsMd';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMemo } from 'solid-js';
 import {
+  beveledCorners,
   monochromeIcons,
+  setBeveledCorners,
   setDarkModeTheme,
   setLightModeTheme,
   setMonochromeIcons,
   setThemeShouldMatchSystem,
   themeShouldMatchSystem,
   themes,
+  toggleGutterSize,
 } from '../../block-theme/signals/themeSignals';
-
 import { applyTheme } from '../../block-theme/utils/themeUtils';
 import { playSound } from '../util/sound';
 import {
@@ -23,7 +26,7 @@ import {
   setKonsoleMode,
   toggleKonsoleVisibility,
 } from './command/state';
-import { toggleCreateMenu } from './Launcher';
+import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
 import { fireVisor, resetVisor } from './Visor';
 import { openWhichKey, setOpenWhichKey } from './WhichKey';
 
@@ -47,16 +50,53 @@ export default function GlobalShortcuts() {
     return;
   };
 
-  registerHotkey({
+  const createCommandScope = registerHotkey({
     hotkeyToken: TOKENS.global.createCommand,
     hotkey: 'c',
     scopeId: 'global',
     description: 'Create',
     keyDownHandler: () => {
-      toggleCreateMenu();
+      setCreateMenuOpen((prev) => !prev);
       return true;
     },
     displayPriority: 10,
+    activateCommandScope: true,
+  });
+
+  for (const block of CREATABLE_BLOCKS) {
+    registerHotkey({
+      hotkeyToken: block.hotkeyToken,
+      hotkey: block.hotkey,
+      scopeId: createCommandScope.commandScopeId,
+      description: block.description,
+      keyDownHandler: () => {
+        block.keyDownHandler();
+        return true;
+      },
+      runWithInputFocused: true,
+    });
+
+    registerHotkey({
+      hotkeyToken: block.altHotkeyToken,
+      hotkey: `opt+${block.hotkey}` as ValidHotkey,
+      scopeId: createCommandScope.commandScopeId,
+      description: `${block.description} in new split`,
+      keyDownHandler: () => {
+        block.keyDownHandler();
+        return true;
+      },
+      runWithInputFocused: true,
+    });
+  }
+
+  const quickCreateScope = registerHotkey({
+    hotkeyToken: TOKENS.global.quickCreateCommand,
+    hotkey: 'q',
+    scopeId: 'global',
+    description: 'Quick send',
+    keyDownHandler: () => {
+      return true;
+    },
     activateCommandScope: true,
     // TODO: temporarily hiding this from the command menu, because we need to wire up the create options
     hide: konsoleOpen,
@@ -223,6 +263,26 @@ export default function GlobalShortcuts() {
         setOpenWhichKey(false);
         return false;
       }
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: 'Toggle beveled corners',
+    keyDownHandler: () => {
+      setBeveledCorners(!beveledCorners());
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: 'Toggle gutter size',
+    keyDownHandler: () => {
+      toggleGutterSize();
+      return true;
     },
     runWithInputFocused: true,
   });

@@ -130,7 +130,7 @@ export function Layout(props: RouteSectionProps) {
       <Show when={paywallOpen()}>
         <Paywall />
       </Show>
-      <div class="p-2 grow-1">
+      <div class="p-[var(--gutter-size)] grow-1">
         <Resize.Zone
           gutter={8}
           direction="horizontal"

@@ -59,7 +59,7 @@ pub struct UnifiedSearchRequest {
     pub include: Vec<UnifiedSearchIndex>,
 }
 
-impl From<UnifiedSearchIndex> for opensearch_client::search::model::SearchIndex {
+impl From<UnifiedSearchIndex> for models_opensearch::SearchEntityType {
     fn from(index: UnifiedSearchIndex) -> Self {
         match index {
             UnifiedSearchIndex::Channels => Self::Channels,
@@ -74,9 +74,9 @@ impl From<UnifiedSearchIndex> for opensearch_client::search::model::SearchIndex 
 /// Generates the search indices to search over for unified search
 pub fn generate_unified_search_indices(
     include: Vec<UnifiedSearchIndex>,
-) -> HashSet<opensearch_client::search::model::SearchIndex> {
+) -> HashSet<models_opensearch::SearchEntityType> {
     if include.is_empty() {
-        let include: Vec<opensearch_client::search::model::SearchIndex> = [
+        let include: Vec<models_opensearch::SearchEntityType> = [
             UnifiedSearchIndex::Channels,
             UnifiedSearchIndex::Chats,
             UnifiedSearchIndex::Documents,
@@ -210,7 +210,6 @@ impl From<opensearch_client::search::unified::UnifiedSearchResponse>
             opensearch_client::search::unified::UnifiedSearchResponse::ChannelMessage(a) => {
                 SimpleUnifiedSearchResponseItem::Channel(SimpleChannelSearchReponseBaseItem {
                     channel_id: a.channel_id,
-                    channel_name: a.channel_name,
                     channel_type: a.channel_type,
                     org_id: a.org_id,
                     message_id: a.message_id,

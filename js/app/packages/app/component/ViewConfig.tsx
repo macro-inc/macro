@@ -260,6 +260,11 @@ export const VIEWCONFIG_DEFAULTS = Object.fromEntries(
 export const VIEWCONFIG_DEFAULTS_IDS = Object.keys(
   VIEWCONFIG_DEFAULTS
 ) as View[];
+export const VIEWCONFIG_DEFAULTS_IDS_ENUM = Object.fromEntries(
+  Object.entries(VIEWCONFIG_DEFAULTS).map(([key]) => {
+    return [key, key];
+  })
+) as Record<View, string>;
 
 export const VIEWCONFIG_FILTER_SHOW_OPTIONS: readonly FilterOptions['notificationFilter'][] =
   ['all', 'unread', 'notDone'] as const;

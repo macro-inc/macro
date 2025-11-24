@@ -153,12 +153,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "android-tzdata"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e999941b234f3131b00bc13c22d06e8c5ff726d1b6318ac7eb276997bbb4fef0"
-
-[[package]]
 name = "android_system_properties"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1578,17 +1572,16 @@ dependencies = [
 
 [[package]]
 name = "chrono"
-version = "0.4.41"
+version = "0.4.42"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c469d952047f47f91b68d1cba3f10d63c11d73e4636f24f08daf0278abf01c4d"
+checksum = "145052bdd345b87320e369255277e3fb5152762ad123a901ef5c262dd38fe8d2"
 dependencies = [
- "android-tzdata",
  "iana-time-zone",
  "js-sys",
  "num-traits",
  "serde",
  "wasm-bindgen",
- "windows-link 0.1.1",
+ "windows-link 0.2.1",
 ]
 
 [[package]]
@@ -1745,6 +1738,7 @@ dependencies = [
  "model-entity",
  "model_notifications",
  "models_comms",
+ "models_opensearch",
  "models_permissions",
  "reqwest",
  "secretsmanager_client",
@@ -2492,6 +2486,7 @@ dependencies = [
  "metering_service_client",
  "model",
  "models_dcs",
+ "models_opensearch",
  "models_permissions",
  "regex",
  "reqwest",
@@ -2581,6 +2576,7 @@ dependencies = [
  "model-entity",
  "model_notifications",
  "models_bulk_upload",
+ "models_opensearch",
  "models_pagination",
  "models_permissions",
  "models_soup",
@@ -2682,6 +2678,49 @@ dependencies = [
  "tokio",
  "urlencoding",
  "zip",
+]
+
+[[package]]
+name = "doppleganger"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "07082bf0ceb443d51d52cdb522e014d470ad2f1a22be809361b7947bb6dd828f"
+dependencies = [
+ "doppleganger-core",
+ "doppleganger-macros",
+]
+
+[[package]]
+name = "doppleganger-core"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3163e3d866a7e9935810855bce91e1ade21a4ff355cba093451f2a327650e640"
+dependencies = [
+ "chrono",
+ "uuid",
+]
+
+[[package]]
+name = "doppleganger-macros"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f5ef4fbea2d3584cf0547c8587b73ede38972d4e01f050fb41790ef0f664bfbd"
+dependencies = [
+ "doppleganger-macros-parse",
+ "proc-macro2",
+ "quote",
+ "unsynn",
+]
+
+[[package]]
+name = "doppleganger-macros-parse"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d6802888ef9324ea57ef9ea11a6e42a44c9deeeb2d17dc856882713d54428fee"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unsynn",
 ]
 
 [[package]]
@@ -2793,6 +2832,7 @@ dependencies = [
  "anyhow",
  "axum",
  "chrono",
+ "doppleganger",
  "frecency",
  "macro_user_id",
  "model-entity",
@@ -2818,6 +2858,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "email_utils",
  "futures",
  "macro_db_migrator",
  "macro_uuid",
@@ -2887,6 +2928,7 @@ dependencies = [
  "ego-tree",
  "email",
  "email_db_client",
+ "email_utils",
  "frecency",
  "futures",
  "gmail_client",
@@ -2909,6 +2951,7 @@ dependencies = [
  "model-entity",
  "model_notifications",
  "models_email",
+ "models_opensearch",
  "models_pagination",
  "redis",
  "reqwest",
@@ -2969,6 +3012,10 @@ dependencies = [
  "strum",
  "tokio",
 ]
+
+[[package]]
+name = "email_utils"
+version = "0.1.0"
 
 [[package]]
 name = "email_validator"
@@ -3266,15 +3313,12 @@ dependencies = [
  "chrono",
  "cool_asserts",
  "filter_ast",
- "futures",
  "item_filters",
  "macro_db_migrator",
- "macro_env",
  "macro_env_var",
  "macro_user_id",
  "mockall",
  "model-entity",
- "models_pagination",
  "num-traits",
  "ordered-float",
  "rand 0.9.0",
@@ -4736,10 +4780,10 @@ dependencies = [
  "model",
  "model-entity",
  "models_dcs",
+ "models_opensearch",
  "models_pagination",
  "models_permissions",
  "models_search",
- "models_soup",
  "models_team",
  "rand 0.9.0",
  "serde",
@@ -4902,6 +4946,7 @@ dependencies = [
 name = "macro_user_id"
 version = "0.1.0"
 dependencies = [
+ "doppleganger",
  "nom 8.0.0",
  "serde",
  "thiserror 2.0.17",
@@ -5384,6 +5429,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "models_opensearch"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "strum",
+]
+
+[[package]]
 name = "models_pagination"
 version = "0.1.0"
 dependencies = [
@@ -5432,6 +5486,7 @@ version = "0.1.0"
 dependencies = [
  "chrono",
  "item_filters",
+ "models_opensearch",
  "opensearch_client",
  "schemars",
  "serde",
@@ -5455,6 +5510,8 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "doppleganger",
+ "email",
  "macro_user_id",
  "model-entity",
  "models_pagination",
@@ -5503,6 +5560,12 @@ dependencies = [
  "spin",
  "version_check",
 ]
+
+[[package]]
+name = "mutants"
+version = "0.0.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "bc0287524726960e07b119cebd01678f852f147742ae0d925e6a520dca956126"
 
 [[package]]
 name = "native-tls"
@@ -5773,6 +5836,7 @@ dependencies = [
  "anyhow",
  "chrono",
  "macro_entrypoint",
+ "models_opensearch",
  "opensearch",
  "opensearch_query_builder",
  "serde",
@@ -7289,6 +7353,7 @@ dependencies = [
  "macro_uuid",
  "mention_utils",
  "model",
+ "models_opensearch",
  "models_search",
  "nom 8.0.0",
  "opensearch_client",
@@ -7911,6 +7976,7 @@ dependencies = [
  "axum",
  "chrono",
  "cool_asserts",
+ "doppleganger",
  "either",
  "filter_ast",
  "frecency",
@@ -8176,6 +8242,7 @@ dependencies = [
  "chrono",
  "model",
  "models_email",
+ "models_opensearch",
  "serde",
  "serde_json",
  "strum",
@@ -9006,6 +9073,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
+name = "unsynn"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "501a7adf1a4bd9951501e5c66621e972ef8874d787628b7f90e64f936ef7ec0a"
+dependencies = [
+ "mutants",
+ "proc-macro2",
+ "rustc-hash 2.1.1",
+]
+
+[[package]]
 name = "untrusted"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9192,13 +9270,15 @@ dependencies = [
 
 [[package]]
 name = "uuid"
-version = "1.15.1"
+version = "1.18.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0f540e3240398cce6128b64ba83fdbdd86129c16a3aa1a3a252efd66eb3d587"
+checksum = "2f87b8aa10b915a06587d0dec516c282ff295b475d94abf425d62b57710070a2"
 dependencies = [
  "getrandom 0.3.1",
+ "js-sys",
  "rand 0.9.0",
  "serde",
+ "wasm-bindgen",
 ]
 
 [[package]]

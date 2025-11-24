@@ -6,12 +6,18 @@ import {
 } from '@macro-entity';
 import { useSplitLayout } from '../component/split-layout/layout';
 
-export function useHandleFileUpload() {
+export function useHandleFileUpload({
+  projectId,
+}: {
+  projectId?: string;
+} = {}) {
   const { replaceOrInsertSplit } = useSplitLayout();
   const entityQueryClient = useEntityQueryClient();
 
   return async (files: UploadInput[]) => {
-    const results = await uploadFiles(files, 'dss');
+    const results = await uploadFiles(files, 'dss', {
+      projectId,
+    });
 
     const notFailedUploads = results.filter((result) => !result.failed);
     const failedUploads = results.filter((result) => result.failed);

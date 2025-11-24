@@ -5,9 +5,8 @@ use opensearch_query_builder::ToOpenSearchJson;
 struct TestSearchConfig;
 
 impl SearchQueryConfig for TestSearchConfig {
-    const INDEX: &'static str = "test_index";
     const USER_ID_KEY: &'static str = "test_user_id";
-    const TITLE_KEY: &'static str = "test_title";
+    const TITLE_KEY: Option<&'static str> = Some("test_title");
 }
 
 #[test]

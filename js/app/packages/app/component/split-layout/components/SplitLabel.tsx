@@ -29,7 +29,7 @@ export function StaticSplitLabel(props: {
     panel.handle.setDisplayName(props.label);
   });
   return (
-    <div class="z-3 relative flex items-center gap-2 border-y border-edge-muted w-screen max-w-full h-full shrink">
+    <div class="z-3 relative flex items-center gap-2 w-screen max-w-full h-full shrink">
       <Show when={props.iconType}>
         <EntityIcon
           class="shrink-0"
@@ -154,7 +154,7 @@ export function BlockItemSplitLabel(props: {
   });
 
   return (
-    <div class="z-3 relative flex items-center gap-2 border-y border-edge-muted w-screen max-w-full h-full shrink">
+    <div class="z-3 relative flex items-center gap-2 w-screen max-w-full h-full shrink">
       <EntityIcon class="shrink-0" targetType={targetType()} size="xs" />
       <Show when={props.badges}>{props.badges}</Show>
       <SplitLabel

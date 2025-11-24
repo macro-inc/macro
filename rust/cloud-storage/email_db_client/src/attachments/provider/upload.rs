@@ -355,5 +355,34 @@ pub async fn fetch_insertable_attachments_for_new_email(
     Ok(attachments)
 }
 
+pub async fn fetch_attachment_upload_metadata_by_id(
+    db: &Pool<Postgres>,
+    link_id: Uuid,
+    attachment_id: Uuid,
+) -> anyhow::Result<Option<AttachmentUploadMetadata>> {
+    let row = sqlx::query_as!(
+        AttachmentUploadMetadata,
+        r#"
+        SELECT
+            a.id AS attachment_db_id,
+            m.provider_id as "email_provider_id!",
+            a.provider_attachment_id as "provider_attachment_id!",
+            a.filename as "filename!",
+            a.mime_type as "mime_type!",
+            m.internal_date_ts as "internal_date_ts!"
+        FROM email_attachments a
+        JOIN email_messages m ON a.message_id = m.id
+        JOIN email_threads t ON m.thread_id = t.id
+        WHERE a.id = $1 AND t.link_id = $2
+        "#,
+        attachment_id,
+        link_id
+    )
+    .fetch_optional(db)
+    .await?;
+
+    Ok(row)
+}
+
 #[cfg(test)]
 mod test;

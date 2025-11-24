@@ -47,12 +47,6 @@ export const TOKENS = {
   // global
   global: {
     createCommand: 'global.createCommand',
-    create: {
-      note: 'global.create.note',
-      chat: 'global.create.chat',
-      canvas: 'global.create.canvas',
-      project: 'global.create.project',
-    },
     quickCreateCommand: 'global.quickCreateCommand',
     quickCreate: {
       note: 'global.quickCreate.note',
@@ -164,6 +158,8 @@ export const TOKENS = {
     canvasNewSplit: 'create.canvasNewSplit',
     project: 'create.project',
     projectNewSplit: 'create.projectNewSplit',
+    code: 'create.code',
+    codeNewSplit: 'create.codeNewSplit',
     close_menu: 'create.close_menu',
   },
 

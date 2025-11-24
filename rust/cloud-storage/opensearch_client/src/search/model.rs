@@ -2,16 +2,6 @@ use std::{collections::HashMap, fmt::Display};
 
 use crate::search::query::Keys;
 
-#[derive(Debug, Clone, Hash, Eq, PartialEq, strum::Display, strum::EnumString, strum::AsRefStr)]
-#[strum(serialize_all = "lowercase")]
-pub enum SearchIndex {
-    Channels,
-    Chats,
-    Documents,
-    Emails,
-    Projects,
-}
-
 /// macro open/close tags for highlight matches
 #[derive(Debug, PartialEq)]
 pub(crate) enum MacroEm {
@@ -56,10 +46,14 @@ pub(crate) fn parse_highlight_hit(
     highlight: HashMap<String, Vec<String>>,
     keys: Keys,
 ) -> Highlight {
-    let name = highlight
-        .get(keys.title_key)
-        .and_then(|v| v.first())
-        .map(|v| v.to_string());
+    let name = if let Some(title_key) = keys.title_key {
+        highlight
+            .get(title_key)
+            .and_then(|v| v.first())
+            .map(|v| v.to_string())
+    } else {
+        None
+    };
 
     Highlight {
         name,

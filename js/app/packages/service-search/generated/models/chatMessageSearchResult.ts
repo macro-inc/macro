@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SearchHighlight } from './searchHighlight';
+import type { ChatMessageSearchResultScore } from './chatMessageSearchResultScore';
 
 /**
  * A chat match for a given message id
@@ -16,6 +17,8 @@ export interface ChatMessageSearchResult {
   highlight: SearchHighlight;
   /** The role of the chat message */
   role: string;
+  /** The score of the result */
+  score?: ChatMessageSearchResultScore;
   /** The title of the chat */
   title: string;
   /** When the search chat was last updated */

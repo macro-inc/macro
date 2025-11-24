@@ -1,17 +1,13 @@
 //! This module defines the services that are exposed by this crate
-
-use crate::{
-    domain::{
-        models::{
-            AggregateFrecency, AggregateId, EventAggregationStats, EventRecordWithId,
-            FrecencyByIdsRequest, FrecencyPageRequest, FrecencyPageResponse,
-        },
-        ports::{
-            AggregateFrecencyStorage, EventIngestorService, EventRecordStorage, FrecencyQueryErr,
-            FrecencyQueryService, PullEventAggregatorService, TimeGetter, UnprocessedEventsRepo,
-        },
+use crate::domain::{
+    models::{
+        AggregateFrecency, AggregateId, EventAggregationStats, EventRecordWithId,
+        FrecencyByIdsRequest, FrecencyPageRequest, FrecencyPageResponse, FrecencyQueryErr,
     },
-    outbound::time::DefaultTime,
+    ports::{
+        AggregateFrecencyStorage, EventIngestorService, EventRecordStorage, FrecencyQueryService,
+        PullEventAggregatorService, TimeGetter, UnprocessedEventsRepo,
+    },
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::cowlike::CowLike;
@@ -168,17 +164,6 @@ where
             time,
             sync_worker: Arc::new(SyncWorker::new()),
         }
-    }
-}
-
-impl<S> PullAggregatorImpl<S, DefaultTime>
-where
-    S: UnprocessedEventsRepo,
-    anyhow::Error: From<S::Err>,
-{
-    /// create an instance of self passing the default impl for [TimeGetter]
-    pub fn new_with_default_time(event_storage: S) -> Self {
-        Self::new(event_storage, DefaultTime)
     }
 }
 

@@ -169,7 +169,6 @@ impl Metadata<ChannelSearchMetadata> for ChannelOpenSearchResponse {
     fn metadata(&self, id: &str) -> ChannelSearchMetadata {
         ChannelSearchMetadata {
             channel_id: id.to_string(),
-            channel_name: self.inner.channel_name.clone(),
             channel_type: self.inner.channel_type.clone(),
         }
     }

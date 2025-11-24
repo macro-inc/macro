@@ -1,5 +1,5 @@
 use crate::{
-    PROJECT_INDEX, Result, delegate_methods,
+    Result, delegate_methods,
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
@@ -9,6 +9,7 @@ use crate::{
 };
 
 use crate::SearchOn;
+use models_opensearch::SearchIndex;
 use opensearch_query_builder::{BoolQueryBuilder, HighlightField, SearchRequest, ToOpenSearchJson};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -17,16 +18,16 @@ use serde_json::Value;
 pub(crate) struct ProjectSearchConfig;
 
 impl SearchQueryConfig for ProjectSearchConfig {
-    const INDEX: &'static str = PROJECT_INDEX;
     const USER_ID_KEY: &'static str = "user_id";
-    const TITLE_KEY: &'static str = "project_name";
+    const TITLE_KEY: Option<&'static str> = Some("project_name");
 
     // Projects have no "content" to highlight match on, so match on the TITLE_KEY instead
     fn default_highlight() -> opensearch_query_builder::Highlight<'static> {
         opensearch_query_builder::Highlight::new()
             .require_field_match(true)
             .field(
-                Self::TITLE_KEY,
+                // we know the title key exists because it's implemented right above
+                Self::TITLE_KEY.unwrap(),
                 HighlightField::new()
                     .highlight_type("plain")
                     .number_of_fragments(1)
@@ -142,7 +143,9 @@ pub(crate) async fn search_projects(
     let query_body = args.build()?;
 
     let response = client
-        .search(opensearch::SearchParts::Index(&[PROJECT_INDEX]))
+        .search(opensearch::SearchParts::Index(&[
+            SearchIndex::Projects.as_ref()
+        ]))
         .body(query_body)
         .send()
         .await

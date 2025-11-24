@@ -154,34 +154,40 @@ export function Notebook() {
     }
   });
 
-  onMount(() => {
-    registerHotkey({
-      hotkey: 'enter',
-      scopeId: scopeId(),
-      hotkeyToken: TOKENS.block.focus,
-      description: 'Focus Title or Markdown Editor',
-      keyDownHandler: () => {
-        const titleEditor = md.titleEditor;
-        const markdownEditor = md.editor;
-        const docName = untrack(documentName);
+  createEffect(() => {
+    if (!scopeId()) return;
+    untrack(() =>
+      registerHotkey({
+        hotkey: 'enter',
+        scopeId: scopeId(),
+        hotkeyToken: TOKENS.block.focus,
+        description: 'Focus Title or Markdown Editor',
+        keyDownHandler: () => {
+          const titleEditor = md.titleEditor;
+          const markdownEditor = md.editor;
+          const docName = untrack(documentName);
 
-        if (titleEditor && docName === '') {
-          titleEditor.focus();
-          return true;
-        } else if (markdownEditor) {
-          markdownEditor.focus(undefined, { defaultSelection: 'rootStart' });
-          return true;
-        }
-        return false;
-      },
-      hide: true,
-    });
+          if (titleEditor && docName === '') {
+            titleEditor.focus();
+            return true;
+          } else if (markdownEditor) {
+            markdownEditor.focus(undefined, { defaultSelection: 'rootStart' });
+            return true;
+          }
+          return false;
+        },
+        hide: true,
+      })
+    );
   });
 
+  // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
+  let hasRun = false;
   createEffect(() => {
+    if (hasRun) return;
     if (!blockElement()) return;
-    if (!navigatedFromJK()) return;
     blockElement()?.focus();
+    hasRun = true;
   });
 
   const containerClasses = createMemo(() => {

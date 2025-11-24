@@ -121,7 +121,7 @@ function NotificationItem(props: {
     >
       <div class="flex items-start gap-3">
         <div
-          class={`size-2 mt-1 shrink-0 rounded-full ${
+          class={`size-2 mt-1 shrink-0 ${
             isUnread() ? 'bg-accent' : 'bg-ink-extra-muted'
           }`}
         />
@@ -376,7 +376,7 @@ function NotificationDetail(props: {
         <div class="p-4 bg-menu rounded-xl border border-edge-muted">
           <div class="flex items-start gap-3">
             <div
-              class={`size-2 mt-1 shrink-0 rounded-full ${
+              class={`size-2 mt-1 shrink-0  ${
                 !props.notification.viewedAt
                   ? 'bg-accent'
                   : 'bg-ink-extra-muted'
@@ -401,7 +401,7 @@ function NotificationDetail(props: {
         >
           <div class="flex justify-start items-center gap-3 mb-4 font-mono text-ink-muted text-xs uppercase">
             <div
-              class={`size-2 rounded-full ${
+              class={`size-2 ${
                 !props.notification.viewedAt
                   ? 'bg-accent'
                   : 'bg-ink-extra-muted'

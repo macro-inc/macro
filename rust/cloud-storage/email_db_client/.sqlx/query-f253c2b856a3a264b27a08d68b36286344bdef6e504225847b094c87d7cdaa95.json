@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT document_id\n        FROM document_email de\n        INNER JOIN email_attachments ea on de.email_attachment_id = ea.id\n        INNER JOIN email_messages em on ea.message_id = em.id\n        WHERE em.link_id = $1 AND email_attachment_id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "document_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "f253c2b856a3a264b27a08d68b36286344bdef6e504225847b094c87d7cdaa95"
+}

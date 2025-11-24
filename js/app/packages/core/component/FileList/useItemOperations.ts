@@ -249,8 +249,9 @@ export const useItemOperations = createSingletonRoot(() => {
           }
           return `Successfully renamed ${items.length} ${items.length === 1 ? 'item' : 'items'}`;
         },
-        error: (error) =>
-          `Failed to rename items: ${error.message || 'Unknown error'}`,
+        error: (error) => {
+          return `Failed to rename items: ${error.message || 'Unknown error'}`;
+        },
         toastTypeDeterminer: (result) =>
           result.failedItems.length > 0 ? ToastType.FAILURE : ToastType.SUCCESS,
       });

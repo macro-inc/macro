@@ -15,6 +15,7 @@ import { isErr } from '@core/util/maybeResult';
 import { getScrollParent } from '@core/util/scrollParent';
 import { waitForFrames } from '@core/util/sleep';
 import type { EntityData } from '@macro-entity';
+import { entityHasUnreadNotifications } from '@notifications';
 import { useTutorialCompleted } from '@service-gql/client';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -38,6 +39,7 @@ import {
 } from 'solid-js/store';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { useUserId } from '../../macro-entity/src/queries/auth';
+import { createBulkCopyDssEntityMutation } from '../../macro-entity/src/queries/dss';
 import { playSound } from '../util/sound';
 import { openBulkEditModal } from './bulk-edit-entity/BulkEditEntityModal';
 import {
@@ -221,78 +223,150 @@ export function createNavigationEntityListShortcut({
   const viewData = createMemo(() => viewsData[selectedView()]);
   const viewIds = createMemo<ViewId[]>(() => Object.keys(viewsData));
 
+  const [attachEntityHotkeys, entityHotkeyScope] = useHotkeyDOMScope('entity');
   const selectedEntity = () => viewData().selectedEntity;
-  const userId = useUserId();
 
   const notificationSource = useGlobalNotificationSource();
+  const userId = useUserId();
 
   const isViewingList = createMemo(() => {
     return splitHandle.content().id === 'unified-list';
   });
 
-  actionRegistry.register('mark_as_done', async (entities) => {
-    const handler =
-      VIEWCONFIG_DEFAULTS[selectedView() as View]?.hotkeyOptions?.e;
-    if (handler) {
-      for (const entity of entities) {
-        handler(entity, {
-          soupContext: unifiedListContext,
-          notificationSource,
-        });
+  /**
+   * From the current selection, get the entity to try to select after a modal
+   * edit operation.
+   */
+  const getNextEntity = (
+    entitiesForAction: EntityData[]
+  ): EntityData | null => {
+    const entityList = entities();
+    if (!entityList) return null;
+    const idToIndexMap = new Map(entityList.map(({ id }, i) => [id, i]));
+    let maxIndex = 0;
+    for (const entity of entitiesForAction) {
+      const ndx = idToIndexMap.get(entity.id);
+      if (ndx && ndx > maxIndex) {
+        maxIndex = ndx;
       }
     }
-    return { success: true };
+    return maxIndex < entityList.length - 1 ? entityList[maxIndex + 1] : null;
+  };
+
+  /**
+   * Return to list after entity modal edit action.
+   */
+  const afterEntityAction = (
+    entity: EntityData | null | undefined,
+    clearSelection?: boolean
+  ) => {
+    if (clearSelection) {
+      setViewDataStore(selectedView(), 'selectedEntities', []);
+    }
+    if (entity) {
+      setViewDataStore(selectedView(), 'selectedEntity', entity);
+      setViewDataStore(selectedView(), 'highlightedId', entity.id);
+      const nextIndex = entities()?.findIndex(({ id }) => id === entity.id);
+      if (nextIndex !== undefined && nextIndex > -1) {
+        virtualizerHandle()?.scrollToIndex(nextIndex, {
+          align: 'nearest',
+        });
+        waitForFrames(2).then(() => {
+          const elem = getEntityElAtIndex(nextIndex);
+          if (elem instanceof HTMLElement) {
+            elem.focus();
+            return;
+            // TODO: cooked state (no focus returned - have not yet seen tho)
+          }
+        });
+      } else {
+        const firstIndex = virtualizerHandle()?.findStartIndex();
+        if (!firstIndex) return;
+        const elem = getEntityElAtIndex(firstIndex);
+        if (elem instanceof HTMLElement) elem.focus();
+        // TODO: cooked state (no focus returned - have not yet seen tho)
+      }
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // MARK AS DONE
+  // ---------------------------------------------------------------------------
+  actionRegistry.register(
+    'mark_as_done',
+    async (entities) => {
+      const handler =
+        VIEWCONFIG_DEFAULTS[selectedView() as View]?.hotkeyOptions?.e;
+      if (handler) {
+        if (isEntityLastItem()) {
+          navigateThroughList({ axis: 'start', mode: 'step' });
+        } else {
+          navigateThroughList({ axis: 'end', mode: 'step' });
+        }
+
+        for (const entity of entities) {
+          handler(entity, {
+            soupContext: unifiedListContext,
+            notificationSource,
+          });
+        }
+
+        setViewDataStore(selectedView(), 'selectedEntities', []);
+      }
+
+      return { success: true };
+    },
+    {
+      testEnabled: (entity) => {
+        if (entity.type === 'email') return true;
+        if (entityHasUnreadNotifications(notificationSource, entity))
+          return true;
+        return false;
+      },
+    }
+  );
+
+  registerHotkey({
+    hotkey: ['e'],
+    scopeId: entityHotkeyScope,
+    description: 'Mark done',
+    condition: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled('mark_as_done', plainSelectedEntities()),
+    keyDownHandler: () => {
+      const entitiesForAction = getEntitiesForAction();
+      if (entitiesForAction.entities.length === 0) {
+        return false;
+      }
+
+      actionRegistry.execute(
+        'mark_as_done',
+        entitiesForAction.entities.map(({ entity }) => entity)
+      );
+
+      return true;
+    },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
   });
 
+  // ---------------------------------------------------------------------------
+  // DELETE
+  // ---------------------------------------------------------------------------
   actionRegistry.register(
     'delete',
     async (entitiesToDelete) => {
-      const entityList = entities();
-      if (!entityList) return { success: false };
-
-      const idToIndexMap = new Map(entityList.map(({ id }, i) => [id, i]));
-      let maxIndex = 0;
-      for (const entity of entitiesToDelete) {
-        const ndx = idToIndexMap.get(entity.id);
-        if (ndx && ndx > maxIndex) {
-          maxIndex = ndx;
-        }
-      }
-      const next =
-        maxIndex < entityList.length - 1 ? entityList[maxIndex + 1] : null;
-
+      const prev = selectedEntity();
+      const next = getNextEntity(entitiesToDelete);
       try {
         openBulkEditModal({
           view: 'delete',
           entities: entitiesToDelete,
           onFinish: () => {
-            setViewDataStore(selectedView(), 'selectedEntities', []);
-            if (next !== null) {
-              setViewDataStore(selectedView(), 'selectedEntity', next);
-              setViewDataStore(selectedView(), 'highlightedId', next.id);
-              const nextIndex = entities()?.findIndex(
-                ({ id }) => id === next.id
-              );
-              if (nextIndex !== undefined && nextIndex > -1) {
-                virtualizerHandle()?.scrollToIndex(nextIndex, {
-                  align: 'nearest',
-                });
-                waitForFrames(2).then(() => {
-                  const elem = getEntityElAtIndex(nextIndex);
-                  if (elem instanceof HTMLElement) {
-                    elem.focus();
-                    return;
-                    // cooked state (no focus returned)
-                  }
-                });
-              } else {
-                const firstIndex = virtualizerHandle()?.findStartIndex();
-                if (!firstIndex) return;
-                const elem = getEntityElAtIndex(firstIndex);
-                if (elem instanceof HTMLElement) elem.focus();
-                // cooked state (no focus returned)
-              }
-            }
+            afterEntityAction(next, true);
+          },
+          onCancel: () => {
+            afterEntityAction(prev);
           },
         });
       } catch (err) {
@@ -301,13 +375,207 @@ export function createNavigationEntityListShortcut({
       return { success: true };
     },
     {
-      disabled: (entity) => {
-        if (entity.type === 'channel' || entity.type === 'email') return true;
-        if (entity.ownerId !== userId()) return true;
+      testEnabled: (entity) => {
+        // can't delete these bad boys yet.
+        if (entity.type === 'channel' || entity.type === 'email') return false;
+        // only delete what you own.
+        return entity.ownerId === userId();
+      },
+      // TODO (seamus): fix the handler from the modal so that we can delete
+      // some of the items. Then switch this to some.
+      enabledMode: 'every',
+    }
+  );
+
+  registerHotkey({
+    hotkey: ['delete', 'backspace'],
+    scopeId: splitHotkeyScope,
+    description: () =>
+      viewData().selectedEntities.length > 1 ? 'Delete items' : 'Delete item',
+    condition: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled('delete', plainSelectedEntities()),
+    keyDownHandler: () => {
+      const entitiesForAction = getEntitiesForAction();
+      if (entitiesForAction.entities.length === 0) {
         return false;
+      }
+      actionRegistry.execute(
+        'delete',
+        entitiesForAction.entities.map(({ entity }) => entity)
+      );
+      return true;
+    },
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+  });
+
+  createEffect(() => {
+    const ref = entityListRef();
+    if (!ref) return;
+
+    attachEntityHotkeys(ref);
+  });
+
+  // ---------------------------------------------------------------------------
+  // RENAME
+  // ---------------------------------------------------------------------------
+  actionRegistry.register(
+    'rename',
+    async (entitiesToRename) => {
+      const prev = selectedEntity();
+      const next = getNextEntity(entitiesToRename);
+      try {
+        openBulkEditModal({
+          view: 'rename',
+          entities: entitiesToRename,
+          onFinish: () => {
+            afterEntityAction(next);
+          },
+          onCancel: () => {
+            afterEntityAction(prev);
+          },
+        });
+      } catch (err) {
+        console.error('Failed to open bulk rename modal', err);
+      }
+      return { success: true };
+    },
+    {
+      testEnabled: (entity) => {
+        // can't rename these bad boys yet.
+        if (entity.type === 'channel' || entity.type === 'email') return false;
+        // only rename what you own.
+        return entity.ownerId === userId();
       },
     }
   );
+
+  registerHotkey({
+    scopeId: splitHotkeyScope,
+    description: () =>
+      viewData().selectedEntities.length > 1 ? 'Rename items' : 'Rename item',
+    condition: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled('rename', plainSelectedEntities()),
+    keyDownHandler: () => {
+      const entitiesForAction = getEntitiesForAction();
+      if (entitiesForAction.entities.length === 0) {
+        return false;
+      }
+      actionRegistry.execute(
+        'rename',
+        entitiesForAction.entities.map(({ entity }) => entity)
+      );
+      return true;
+    },
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+  });
+
+  // ---------------------------------------------------------------------------
+  // COPY
+  // ---------------------------------------------------------------------------
+  const bulkCopyMutation = createBulkCopyDssEntityMutation();
+  actionRegistry.register(
+    'copy',
+    async (entitiesToCopy) => {
+      try {
+        await bulkCopyMutation.mutateAsync({
+          entities: entitiesToCopy,
+          name: (name) => name,
+        });
+      } catch (_) {}
+      return { success: true };
+    },
+    {
+      testEnabled: (entity) => {
+        if (entity.type === 'channel' || entity.type === 'email') return false;
+        return true;
+      },
+    }
+  );
+
+  registerHotkey({
+    scopeId: splitHotkeyScope,
+    description: () =>
+      viewData().selectedEntities.length > 1 ? 'Copy items' : 'Copy item',
+    condition: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled('copy', plainSelectedEntities()),
+    keyDownHandler: () => {
+      const entitiesForAction = getEntitiesForAction();
+      if (entitiesForAction.entities.length === 0) {
+        return false;
+      }
+      actionRegistry.execute(
+        'copy',
+        entitiesForAction.entities.map(({ entity }) => entity)
+      );
+      return true;
+    },
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+  });
+
+  // ---------------------------------------------------------------------------
+  // MOVE TO PROJECT
+  // ---------------------------------------------------------------------------
+  actionRegistry.register(
+    'move_to_project',
+    async (entitiesToMove) => {
+      const prev = selectedEntity();
+      const next = getNextEntity(entitiesToMove);
+      try {
+        openBulkEditModal({
+          view: 'moveToProject',
+          entities: entitiesToMove,
+          onFinish: () => {
+            afterEntityAction(next, true);
+          },
+          onCancel: () => {
+            afterEntityAction(prev);
+          },
+        });
+      } catch (err) {
+        console.error('Failed to open bulk move modal', err);
+      }
+      return { success: true };
+    },
+    {
+      testEnabled: (entity) => {
+        if (entity.type === 'channel' || entity.type === 'email') return false;
+        return true;
+      },
+    }
+  );
+
+  registerHotkey({
+    scopeId: splitHotkeyScope,
+    description: () =>
+      viewData().selectedEntities.length > 1
+        ? 'Move items to project'
+        : 'Move item to project',
+    condition: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled(
+        'move_to_project',
+        plainSelectedEntities()
+      ),
+    keyDownHandler: () => {
+      const entitiesForAction = getEntitiesForAction();
+      if (entitiesForAction.entities.length === 0) {
+        return false;
+      }
+      actionRegistry.execute(
+        'move_to_project',
+        entitiesForAction.entities.map(({ entity }) => entity)
+      );
+      return true;
+    },
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+  });
 
   const openEntity = (entity: EntityData) => {
     const { type, id } = entity;
@@ -907,7 +1175,6 @@ export function createNavigationEntityListShortcut({
     hide: true,
   });
 
-  const [attachEntityHotkeys, entityHotkeyScope] = useHotkeyDOMScope('entity');
   registerHotkey({
     hotkey: ['enter'],
     hotkeyToken: TOKENS.entity.open,
@@ -973,38 +1240,8 @@ export function createNavigationEntityListShortcut({
     displayPriority: 4,
   });
   registerHotkey({
-    hotkey: ['e'],
-    scopeId: entityHotkeyScope,
-    description: 'Mark done',
-    condition: () =>
-      isViewingList() &&
-      !actionRegistry.isActionDisabled('mark_as_done', plainSelectedEntities()),
-    keyDownHandler: () => {
-      const entitiesForAction = getEntitiesForAction();
-      if (entitiesForAction.entities.length === 0) {
-        return false;
-      }
-
-      if (isEntityLastItem()) {
-        navigateThroughList({ axis: 'start', mode: 'step' });
-      } else {
-        navigateThroughList({ axis: 'end', mode: 'step' });
-      }
-
-      actionRegistry.execute(
-        'mark_as_done',
-        entitiesForAction.entities.map(({ entity }) => entity)
-      );
-
-      setViewDataStore(selectedView(), 'selectedEntities', []);
-      return true;
-    },
-    displayPriority: 10,
-    tags: [HotkeyTags.SelectionModification],
-  });
-  registerHotkey({
     hotkey: ['x'],
-    scopeId: entityHotkeyScope,
+    scopeId: splitHotkeyScope,
     description: 'Toggle select item',
     condition: isViewingList,
     keyDownHandler: () => {
@@ -1044,35 +1281,6 @@ export function createNavigationEntityListShortcut({
       }
       return false;
     }
-  });
-  registerHotkey({
-    hotkey: ['delete', 'backspace'],
-    scopeId: splitHotkeyScope,
-    description: () =>
-      viewData().selectedEntities.length > 1 ? 'Delete items' : 'Delete item',
-    condition: () =>
-      isViewingList() &&
-      !actionRegistry.isActionDisabled('delete', plainSelectedEntities()),
-    keyDownHandler: () => {
-      const entitiesForAction = getEntitiesForAction();
-      if (entitiesForAction.entities.length === 0) {
-        return false;
-      }
-      actionRegistry.execute(
-        'delete',
-        entitiesForAction.entities.map(({ entity }) => entity)
-      );
-      return true;
-    },
-    tags: [HotkeyTags.SelectionModification],
-    displayPriority: 10,
-  });
-
-  createEffect(() => {
-    const ref = entityListRef();
-    if (!ref) return;
-
-    attachEntityHotkeys(ref);
   });
 }
 

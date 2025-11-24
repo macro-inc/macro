@@ -32,6 +32,7 @@ members = [
   "email_service",
   "email_service_client",
   "email_suppression_handler",
+  "email_utils",
   "email_validator",
   "experiment_service",
   "frecency",
@@ -66,6 +67,7 @@ members = [
   "models_dcs",
   "models_email",
   "models_metering",
+  "models_opensearch",
   "models_pagination",
   "models_permissions",
   "models_properties",
@@ -208,6 +210,7 @@ bzip2 = { version = "0.5.1", default-features = false, features = [
   "libbz2-rs-sys",
 ] }
 derive_builder = "0.20.2"
+doppleganger = "0.3"
 once_cell = "1.21.3"
 scraper = "0.18"
 strum_macros = "0.27.1"

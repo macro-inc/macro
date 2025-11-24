@@ -1,4 +1,5 @@
-import type { EntityData } from '@macro-entity';
+import { type EntityData, isEntityData } from '@macro-entity';
+import type { Component } from 'solid-js';
 
 export type EntityActionType =
   | 'mark_as_done'
@@ -18,9 +19,22 @@ export type EntityActionHandler = (
 ) => Promise<EntityActionResult>;
 
 export type EntityActionConfig = {
+  /** Optional label for the action */
   label?: string;
-  icon?: string;
-  disabled?: (entity: EntityData) => boolean;
+  /** Optional icon component */
+  icon?: Component;
+  /**
+   * Optional test to run over an entity to see if the action can be performed
+   * on that entity.
+   */
+  testEnabled?: (entity: EntityData) => boolean;
+  /**
+   * Enabled mode for bulk version of action. If 'every' then all entities must pass
+   * for the action to register as enabled. If 'some' then the action can be
+   * enabled if a single entity passes the test. Only meaningful if testEnabled
+   * is also provided. Default is 'every'
+   */
+  enabledMode?: 'some' | 'every';
 };
 
 export type EntityActionRegistry = {
@@ -35,7 +49,7 @@ export type EntityActionRegistry = {
     type: EntityActionType,
     entities: EntityData | EntityData[]
   ) => Promise<EntityActionResult>;
-  isActionDisabled: (
+  isActionEnabled: (
     type: EntityActionType,
     entities: EntityData | EntityData[]
   ) => boolean;
@@ -43,9 +57,6 @@ export type EntityActionRegistry = {
   has: (action: EntityActionType) => boolean;
 };
 
-/**
- * Creates a registry for entity actions that supports both individual and bulk operations
- */
 export function createEntityActionRegistry(): EntityActionRegistry {
   const actions = new Map<EntityActionType, EntityActionHandler>();
   const configs = new Map<EntityActionType, EntityActionConfig>();
@@ -94,16 +105,22 @@ export function createEntityActionRegistry(): EntityActionRegistry {
     return { success: true };
   };
 
-  const isActionDisabled = (
+  const isActionEnabled = (
     type: EntityActionType,
     entities: EntityData | EntityData[]
   ): boolean => {
-    const config = configs.get(type);
-    if (!config) return false;
+    const { testEnabled, enabledMode } = configs.get(type) ?? {};
+    if (!testEnabled) return true;
     if (Array.isArray(entities)) {
-      return entities.some((e) => config.disabled?.(e));
+      if (enabledMode === 'some') {
+        return entities.some(testEnabled);
+      } else {
+        return entities.every(testEnabled);
+      }
+    } else if (isEntityData(entities)) {
+      return testEnabled(entities);
     }
-    return config.disabled?.(entities) ?? false;
+    return false;
   };
 
   const getAvailableActions = (): EntityActionType[] => {
@@ -115,7 +132,7 @@ export function createEntityActionRegistry(): EntityActionRegistry {
     getHandler,
     getConfig,
     execute,
-    isActionDisabled,
+    isActionEnabled: isActionEnabled,
     getAvailableActions,
     has: (action) => actions.has(action),
   };

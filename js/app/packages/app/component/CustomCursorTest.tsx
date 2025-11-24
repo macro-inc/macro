@@ -35,10 +35,10 @@ const ShadowDOMTest = () => {
           margin: 0 0.25rem;
         }
         button.cursor-pointer {
-          cursor: pointer;
+          cursor: var(--cursor-pointer);
         }
       </style>
-      <div class="pt-16">
+      <div class="" style="padding: 0px;">
         <p>
           By creating a 
           <a href="/en-US/docs/Web/API/BroadcastChannel" class="text-accent underline">
@@ -157,7 +157,7 @@ const CustomCursorTest = () => {
         <button
           class={`px-4 py-2 rounded border transition-colors ${
             useClass() && !useStyle()
-              ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)]'
+              ? 'bg-[var(--color-accent)] text-page border-[var(--color-accent)]'
               : 'bg-transparent border-[var(--color-edge)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
           }`}
           onClick={() => {
@@ -170,7 +170,7 @@ const CustomCursorTest = () => {
         <button
           class={`px-4 py-2 rounded border transition-colors ${
             !useClass() && useStyle()
-              ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)]'
+              ? 'bg-[var(--color-accent)] text-page border-[var(--color-accent)]'
               : 'bg-transparent border-[var(--color-edge)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
           }`}
           onClick={() => {
@@ -179,11 +179,12 @@ const CustomCursorTest = () => {
           }}
         >
           Style Only
+          <div>*by using css variable `--cursor-*`</div>
         </button>
         <button
           class={`px-4 py-2 rounded border transition-colors ${
             useClass() && useStyle()
-              ? 'bg-[var(--color-accent)] text-white border-[var(--color-accent)]'
+              ? 'bg-[var(--color-accent)] text-page border-[var(--color-accent)]'
               : 'bg-transparent border-[var(--color-edge)] text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]'
           }`}
           onClick={() => {
@@ -198,13 +199,13 @@ const CustomCursorTest = () => {
         <For each={cursorTypes}>
           {({ name, cursor, tw }) => (
             <div
-              class="border border-[var(--color-edge)] p-4 rounded hover:bg-[var(--color-surface-hover)] transition-colors"
+              class="flex items-center justify-center border border-[var(--color-edge)] p-2 rounded hover:bg-[var(--color-surface-hover)] transition-colors"
               classList={{ [`${tw}`]: !!tw && useClass() }}
               style={{
-                cursor: useStyle() ? cursor : undefined,
+                cursor: useStyle() ? `var(--cursor-${cursor})` : undefined,
               }}
             >
-              {name}
+              <div class="py-2">{name}</div>
             </div>
           )}
         </For>
@@ -254,22 +255,25 @@ const CustomCursorTest = () => {
           with the same name, and have bi-directional communication between all
           of them.
         </p>
-        <p>
+        <div>
+          <div />
           The API doesn't associate any semantics to messages,
-          <button class="text-accent p-2 border-accent border">
-            clicky button
-          </button>
-          bar
-          <button class="text-accent p-2 border-accent border">
-            <span>clicky button 2</span>
-          </button>
-          foo
-          <button class="text-accent p-2 border-accent border cursor-pointer">
-            <span>clicky button 3</span>
-          </button>
-          so it is up to the code to know what kind of messages to expect and
-          what to do with them.
-        </p>
+          <span>
+            <button class="text-accent p-2 border-accent border">
+              clicky button
+            </button>
+            bar
+            <button class="text-accent p-2 border-accent border">
+              <span>clicky button 2</span>
+            </button>
+            foo
+            <button class="text-accent p-2 border-accent border cursor-pointer">
+              <span>clicky button 3</span>
+            </button>
+            so it is up to the code to know what kind of messages to expect and
+            what to do with them.
+          </span>
+        </div>
       </div>
 
       <h2 class="pt-16 text-2xl font-bold">Shadow DOM Demo</h2>
