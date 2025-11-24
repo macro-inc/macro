@@ -10,7 +10,7 @@ use crate::{
 };
 
 use crate::SearchOn;
-use models_opensearch::SearchIndex;
+use models_opensearch::{SearchEntityType, SearchIndex};
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
     ToOpenSearchJson,
@@ -45,6 +45,7 @@ pub(crate) struct ChatSearchConfig;
 impl SearchQueryConfig for ChatSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "name";
+    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Chats;
 
     fn default_sort_types() -> Vec<SortType<'static>> {
         vec![
@@ -88,17 +89,27 @@ impl ChatQueryBuilder {
     }
 
     pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
-        let mut bool_query = self.inner.build_bool_query()?;
+        let mut content_and_name_bool_queries = self.inner.build_content_and_name_bool_query()?;
 
         // CUSTOM ATTRIBUTES SECTION
+        if self.inner.search_on == SearchOn::Content
+            || self.inner.search_on == SearchOn::NameContent
+        {
+            let mut bool_query = content_and_name_bool_queries
+                .content_bool_query
+                .ok_or(OpensearchClientError::BoolQueryNotBuilt)?;
 
-        // If role is provided, add them to the must query
-        if !self.role.is_empty() {
-            let should_query = should_wildcard_field_query_builder("role", &self.role);
-            bool_query.must(should_query);
+            // Add role to must clause if provided
+            if !self.role.is_empty() {
+                let should_query = should_wildcard_field_query_builder("role", &self.role);
+                bool_query.must(should_query);
+            }
+
+            content_and_name_bool_queries.content_bool_query = Some(bool_query);
         }
-
         // END CUSTOM ATTRIBUTES SECTION
+
+        let bool_query = self.inner.build_bool_query(content_and_name_bool_queries)?;
 
         Ok(bool_query)
     }

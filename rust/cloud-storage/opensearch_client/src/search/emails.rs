@@ -10,7 +10,7 @@ use crate::{
 };
 
 use crate::SearchOn;
-use models_opensearch::SearchIndex;
+use models_opensearch::{SearchEntityType, SearchIndex};
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, QueryType, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
     ToOpenSearchJson,
@@ -24,6 +24,7 @@ pub(crate) struct EmailSearchConfig;
 impl SearchQueryConfig for EmailSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "name";
+    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Emails;
 
     fn default_sort_types() -> Vec<SortType<'static>> {
         vec![
@@ -98,41 +99,50 @@ impl EmailQueryBuilder {
     }
 
     pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
-        // Build the main bool query containing all terms and any other filters
-        let mut bool_query = self.inner.build_bool_query()?;
+        let mut content_and_name_bool_queries = self.inner.build_content_and_name_bool_query()?;
 
         // CUSTOM ATTRIBUTES SECTION
+        if self.inner.search_on == SearchOn::Content
+            || self.inner.search_on == SearchOn::NameContent
+        {
+            let mut bool_query = content_and_name_bool_queries
+                .content_bool_query
+                .ok_or(OpensearchClientError::BoolQueryNotBuilt)?;
 
-        // If link_ids are provided, add them to the query
-        if !self.link_ids.is_empty() {
-            bool_query.must(QueryType::terms("link_id", self.link_ids.clone()));
-        }
+            // If link_ids are provided, add them to the query
+            if !self.link_ids.is_empty() {
+                bool_query.must(QueryType::terms("link_id", self.link_ids.clone()));
+            }
 
-        if !self.sender.is_empty() {
-            // Create new query for senders
-            let senders_query = should_wildcard_field_query_builder("sender", &self.sender);
-            bool_query.must(senders_query);
-        }
+            if !self.sender.is_empty() {
+                // Create new query for senders
+                let senders_query = should_wildcard_field_query_builder("sender", &self.sender);
+                bool_query.must(senders_query);
+            }
 
-        if !self.cc.is_empty() {
-            let ccs_query = should_wildcard_field_query_builder("cc", &self.cc);
-            bool_query.must(ccs_query);
-        }
+            if !self.cc.is_empty() {
+                let ccs_query = should_wildcard_field_query_builder("cc", &self.cc);
+                bool_query.must(ccs_query);
+            }
 
-        if !self.bcc.is_empty() {
-            // Create new query for bccs
-            let bccs_query = should_wildcard_field_query_builder("bcc", &self.bcc);
-            bool_query.must(bccs_query);
-        }
+            if !self.bcc.is_empty() {
+                // Create new query for bccs
+                let bccs_query = should_wildcard_field_query_builder("bcc", &self.bcc);
+                bool_query.must(bccs_query);
+            }
 
-        if !self.recipients.is_empty() {
-            // Create new query for recipients
-            let recipients_query =
-                should_wildcard_field_query_builder("recipients", &self.recipients);
-            bool_query.must(recipients_query);
+            if !self.recipients.is_empty() {
+                // Create new query for recipients
+                let recipients_query =
+                    should_wildcard_field_query_builder("recipients", &self.recipients);
+                bool_query.must(recipients_query);
+            }
+
+            content_and_name_bool_queries.content_bool_query = Some(bool_query);
         }
 
         // END CUSTOM ATTRIBUTES SECTION
+        let bool_query = self.inner.build_bool_query(content_and_name_bool_queries)?;
         Ok(bool_query)
     }
 

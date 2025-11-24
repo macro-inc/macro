@@ -9,7 +9,7 @@ use crate::{
 };
 
 use crate::SearchOn;
-use models_opensearch::SearchIndex;
+use models_opensearch::{SearchEntityType, SearchIndex};
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
     ToOpenSearchJson,
@@ -22,6 +22,7 @@ pub(crate) struct DocumentSearchConfig;
 impl SearchQueryConfig for DocumentSearchConfig {
     const USER_ID_KEY: &'static str = "owner_id";
     const TITLE_KEY: &'static str = "name";
+    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Documents;
 
     fn default_sort_types() -> Vec<SortType<'static>> {
         vec![
@@ -57,7 +58,8 @@ impl DocumentQueryBuilder {
     }
 
     pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
-        self.inner.build_bool_query()
+        self.inner
+            .build_bool_query(self.inner.build_content_and_name_bool_query()?)
     }
 
     fn build_search_request(self) -> Result<SearchRequest<'static>> {

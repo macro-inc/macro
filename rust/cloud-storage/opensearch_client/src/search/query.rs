@@ -1,6 +1,6 @@
 //! This module contains the logic for generating queries using terms
 
-use crate::{Result, error::OpensearchClientError};
+use crate::{Result, SearchOn, error::OpensearchClientError, search_on::NameOrContent};
 
 use opensearch_query_builder::*;
 use unicode_segmentation::UnicodeSegmentation;
@@ -27,6 +27,45 @@ pub enum QueryKey {
 /// Validates that the last term lenght is >= 3 graphemes
 fn validate_last_term_length(term: &str) -> bool {
     UnicodeSegmentation::graphemes(term, true).count() >= 3
+}
+
+/// Creates a query for a given term
+pub(crate) fn create_query<'a>(
+    query_key: &QueryKey,
+    field: &'a str,
+    term: &'a str,
+    name_or_content: NameOrContent,
+    is_unified: bool,
+) -> QueryType<'static> {
+    if is_unified {
+        // base bool query
+        let mut bool_query = BoolQueryBuilder::new();
+        bool_query.minimum_should_match(1);
+
+        let mut match_phrase_prefix_query =
+            MatchPhrasePrefixQuery::new(field.to_string(), term.clone());
+        let mut match_query = MatchQuery::new(field.to_string(), term.clone());
+
+        match name_or_content {
+            NameOrContent::Name => {
+                match_phrase_prefix_query = match_phrase_prefix_query.boost(1000.0);
+                match_query = match_query.boost(0.1).minimum_should_match("80%");
+            }
+            NameOrContent::Content => {
+                match_phrase_prefix_query = match_phrase_prefix_query.boost(900.0);
+                match_query = match_query
+                    .boost(0.09)
+                    .minimum_should_match(term.split(' ').count().to_string());
+            }
+        }
+
+        bool_query.should(match_phrase_prefix_query.into());
+        bool_query.should(match_query.into());
+
+        bool_query.build().into()
+    } else {
+        query_key.create_query(field, term)
+    }
 }
 
 impl QueryKey {
@@ -105,7 +144,7 @@ impl QueryKey {
 /// Generate the terms for the "must" query
 pub(crate) fn generate_terms_must_query(
     query_key: QueryKey,
-    fields: &[&str],
+    field: &str,
     terms: &[String],
 ) -> QueryType<'static> {
     let mut terms_must_query = BoolQueryBuilder::new();
@@ -113,13 +152,9 @@ pub(crate) fn generate_terms_must_query(
     terms_must_query.minimum_should_match(1);
 
     // Map terms to queries
-    let queries: Vec<_> = fields
+    let queries: Vec<_> = terms
         .iter()
-        .flat_map(|field| {
-            terms
-                .iter()
-                .map(|term| query_key.create_query(field, term.as_str()))
-        })
+        .map(|term| query_key.create_query(field, term.as_str()))
         .collect();
 
     // If we only have 1 query returned, we can just return that singular query

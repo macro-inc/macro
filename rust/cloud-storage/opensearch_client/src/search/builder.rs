@@ -6,6 +6,8 @@ use crate::search::query::Keys;
 use crate::search::query::QueryKey;
 use crate::search::query::generate_name_content_query;
 use crate::search::query::generate_terms_must_query;
+use models_opensearch::SearchEntityType;
+use models_opensearch::SearchIndex;
 use opensearch_query_builder::*;
 
 /// A macro for generating delegation methods that forward calls to an inner field
@@ -52,6 +54,8 @@ pub trait SearchQueryConfig {
     const TITLE_KEY: &'static str;
     /// Content field
     const CONTENT_KEY: &'static str = "content";
+    /// The entity index for the search query
+    const ENTITY_INDEX: SearchEntityType;
 
     /// Returns the default sort types that are used on the search query.
     /// Override this method if you need custom sort logic
@@ -105,6 +109,11 @@ pub struct SearchQueryBuilder<T: SearchQueryConfig> {
     pub disable_recency: bool,
 
     _phantom: std::marker::PhantomData<T>,
+}
+
+pub struct ContentAndNameBoolQueries {
+    pub content_bool_query: Option<BoolQueryBuilder<'static>>,
+    pub name_bool_query: Option<BoolQueryBuilder<'static>>,
 }
 
 impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
@@ -169,37 +178,132 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         self
     }
 
-    /// Builds the core bool query which contains all core "should" and "must" clauses
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
-        let mut bool_query = BoolQueryBuilder::new();
+    /// Builds a content and name bool query
+    pub fn build_content_and_name_bool_query(&self) -> Result<ContentAndNameBoolQueries> {
+        let content_bool_query = match self.search_on {
+            SearchOn::Name => None,
+            SearchOn::NameContent | SearchOn::Content => {
+                let mut bool_query = BoolQueryBuilder::new();
 
-        // Currently, the minimum should match is always one.
-        // This should of the bool query contains the ids and potentially the user_id
-        bool_query.minimum_should_match(1);
+                // Currently, the minimum should match is always one.
+                // This should of the bool query contains the ids and potentially the user_id
+                bool_query.minimum_should_match(1);
 
-        let term_must_array: Vec<QueryType<'static>> = self.build_must_term_query()?;
+                // For name OR content queries, we can build a much more simple bool query
+                let term_must_array: Vec<QueryType<'static>> =
+                    self.build_must_term_query(SearchOn::Content)?;
 
-        tracing::trace!("term_must_array: {:?}", term_must_array);
+                // For each item in term must array, add to bool must query
+                for must in term_must_array {
+                    bool_query.must(must);
+                }
 
-        // For each item in term must array, add to bool must query
-        for must in term_must_array {
-            bool_query.must(must);
+                // Add any ids to the should array if provided
+                if !self.ids.is_empty() {
+                    bool_query.should(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()));
+                }
+
+                // If we are not searching over the ids, we need to add the user_id to the should array
+                if !self.ids_only {
+                    bool_query.should(QueryType::term(
+                        T::USER_ID_KEY.to_string(),
+                        self.user_id.clone(),
+                    ));
+                }
+
+                bool_query.must(QueryType::term("_index", T::ENTITY_INDEX.as_ref()));
+
+                Some(bool_query)
+            }
+        };
+
+        let name_bool_query = match self.search_on {
+            SearchOn::Content => None,
+            SearchOn::Name | SearchOn::NameContent => {
+                let mut bool_query = BoolQueryBuilder::new();
+
+                // Currently, the minimum should match is always one.
+                // This should of the bool query contains the ids and potentially the user_id
+                bool_query.minimum_should_match(1);
+
+                // For name OR content queries, we can build a much more simple bool query
+                let term_must_array: Vec<QueryType<'static>> =
+                    self.build_must_term_query(SearchOn::Name)?;
+
+                // For each item in term must array, add to bool must query
+                for must in term_must_array {
+                    bool_query.must(must);
+                }
+
+                // Add any ids to the should array if provided
+                if !self.ids.is_empty() {
+                    bool_query.should(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()));
+                }
+
+                // If we are not searching over the ids, we need to add the user_id to the should array
+                if !self.ids_only {
+                    bool_query.should(QueryType::term(
+                        "user_id", // the names index only has user_id
+                        self.user_id.clone(),
+                    ));
+                }
+
+                match T::ENTITY_INDEX {
+                    SearchEntityType::Projects => {
+                        bool_query.must(QueryType::term("_index", SearchIndex::Projects.as_ref()));
+                    }
+                    _ => {
+                        bool_query.must(QueryType::term("_index", SearchIndex::Names.as_ref()));
+                    }
+                }
+
+                Some(bool_query)
+            }
+        };
+
+        Ok(ContentAndNameBoolQueries {
+            content_bool_query,
+            name_bool_query,
+        })
+    }
+
+    /// Builds the core bool query using the content_and_name_bool_queries
+    /// generated from self.build_content_and_name_bool_query().
+    /// They must be geneated separately as they could be modified after initially
+    /// being built.
+    pub fn build_bool_query(
+        &self,
+        content_and_name_bool_queries: ContentAndNameBoolQueries,
+    ) -> Result<BoolQueryBuilder<'static>> {
+        // If we have name content search, we need to combine the content and name bool queries
+        // under a single root bool query
+        match self.search_on {
+            SearchOn::Name => Ok(content_and_name_bool_queries
+                .name_bool_query
+                .ok_or(OpensearchClientError::BoolQueryNotBuilt)?),
+            SearchOn::Content => Ok(content_and_name_bool_queries
+                .content_bool_query
+                .ok_or(OpensearchClientError::BoolQueryNotBuilt)?),
+            SearchOn::NameContent => {
+                let mut bool_query = BoolQueryBuilder::new();
+
+                // Currently, the minimum should match is always one.
+                // This should of the bool query contains the ids and potentially the user_id
+                bool_query.minimum_should_match(1);
+
+                let content_bool_query = content_and_name_bool_queries
+                    .content_bool_query
+                    .ok_or(OpensearchClientError::BoolQueryNotBuilt)?;
+                let name_bool_query = content_and_name_bool_queries
+                    .name_bool_query
+                    .ok_or(OpensearchClientError::BoolQueryNotBuilt)?;
+
+                bool_query.should(content_bool_query.build().into());
+                bool_query.should(name_bool_query.build().into());
+
+                Ok(bool_query)
+            }
         }
-
-        // Add any ids to the should array if provided
-        if !self.ids.is_empty() {
-            bool_query.should(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()));
-        }
-
-        // If we are not searching over the ids, we need to add the user_id to the should array
-        if !self.ids_only {
-            bool_query.should(QueryType::term(
-                T::USER_ID_KEY.to_string(),
-                self.user_id.clone(),
-            ));
-        }
-
-        Ok(bool_query)
     }
 
     /// Builds the search request with the provided main bool query
@@ -301,7 +405,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
     }
 
     /// Generates a vec of term queries to be put inside of the bool must query
-    pub fn build_must_term_query(&self) -> Result<Vec<QueryType<'static>>> {
+    pub fn build_must_term_query(&self, search_on: SearchOn) -> Result<Vec<QueryType<'static>>> {
         let keys = Keys {
             title_key: T::TITLE_KEY,
             content_key: T::CONTENT_KEY,
@@ -315,11 +419,11 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
         let mut must_array = Vec::new();
 
-        match self.search_on {
+        match search_on {
             SearchOn::Name => {
                 must_array.push(generate_terms_must_query(
                     query_key,
-                    &[keys.title_key],
+                    keys.title_key,
                     &self.terms,
                 ));
             }
@@ -327,13 +431,14 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                 // map all terms over content key
                 must_array.push(generate_terms_must_query(
                     query_key,
-                    &[keys.content_key],
+                    keys.content_key,
                     &self.terms,
                 ));
             }
-            SearchOn::NameContent => {
-                must_array.push(generate_name_content_query(&keys, &self.terms));
-            }
+            SearchOn::NameContent => unreachable!(),
+            // SearchOn::NameContent => {
+            //     must_array.push(generate_name_content_query(&keys, &self.terms));
+            // }
         };
 
         Ok(must_array)

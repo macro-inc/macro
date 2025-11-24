@@ -9,7 +9,7 @@ use crate::{
 };
 
 use crate::SearchOn;
-use models_opensearch::SearchIndex;
+use models_opensearch::{SearchEntityType, SearchIndex};
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, QueryType, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
     ToOpenSearchJson,
@@ -53,6 +53,7 @@ pub(crate) struct ChannelMessageSearchConfig;
 impl SearchQueryConfig for ChannelMessageSearchConfig {
     const USER_ID_KEY: &'static str = "sender_id";
     const TITLE_KEY: &'static str = "name";
+    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Channels;
 
     fn default_sort_types() -> Vec<SortType<'static>> {
         vec![
@@ -109,26 +110,36 @@ impl ChannelMessageQueryBuilder {
 
     /// Builds the main bool query for the index
     pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
-        // Build the main bool query containing all terms and any other filters
-        let mut bool_query = self.inner.build_bool_query()?;
+        let mut content_and_name_bool_queries = self.inner.build_content_and_name_bool_query()?;
 
         // CUSTOM ATTRIBUTES SECTION
+        if self.inner.search_on == SearchOn::Content
+            || self.inner.search_on == SearchOn::NameContent
+        {
+            let mut bool_query = content_and_name_bool_queries
+                .content_bool_query
+                .ok_or(OpensearchClientError::BoolQueryNotBuilt)?;
 
-        // Add thread_ids to must clause if provided
-        if !self.thread_ids.is_empty() {
-            bool_query.must(QueryType::terms("thread_id", self.thread_ids.clone()));
-        }
+            // Add thread_ids to must clause if provided
+            if !self.thread_ids.is_empty() {
+                bool_query.must(QueryType::terms("thread_id", self.thread_ids.clone()));
+            }
 
-        // Add mentions to must clause if provided
-        if !self.mentions.is_empty() {
-            bool_query.must(QueryType::terms("mentions", self.mentions.clone()));
-        }
+            // Add mentions to must clause if provided
+            if !self.mentions.is_empty() {
+                bool_query.must(QueryType::terms("mentions", self.mentions.clone()));
+            }
 
-        // Add sender_ids to must clause if provided
-        if !self.sender_ids.is_empty() {
-            bool_query.must(QueryType::terms("sender_id", self.sender_ids.clone()));
+            // Add sender_ids to must clause if provided
+            if !self.sender_ids.is_empty() {
+                bool_query.must(QueryType::terms("sender_id", self.sender_ids.clone()));
+            }
+
+            content_and_name_bool_queries.content_bool_query = Some(bool_query);
         }
         // END CUSTOM ATTRIBUTES SECTION
+
+        let bool_query = self.inner.build_bool_query(content_and_name_bool_queries)?;
 
         Ok(bool_query)
     }

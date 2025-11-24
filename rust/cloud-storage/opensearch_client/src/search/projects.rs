@@ -9,7 +9,7 @@ use crate::{
 };
 
 use crate::SearchOn;
-use models_opensearch::SearchIndex;
+use models_opensearch::{SearchEntityType, SearchIndex};
 use opensearch_query_builder::{BoolQueryBuilder, HighlightField, SearchRequest, ToOpenSearchJson};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -20,6 +20,7 @@ pub(crate) struct ProjectSearchConfig;
 impl SearchQueryConfig for ProjectSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
     const TITLE_KEY: &'static str = "project_name";
+    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Projects;
 
     // Projects have no "content" to highlight match on, so match on the TITLE_KEY instead
     fn default_highlight() -> opensearch_query_builder::Highlight<'static> {
@@ -63,7 +64,8 @@ impl ProjectQueryBuilder {
     }
 
     pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
-        self.inner.build_bool_query()
+        self.inner
+            .build_bool_query(self.inner.build_content_and_name_bool_query()?)
     }
 
     fn build_search_request(&self) -> Result<SearchRequest<'static>> {

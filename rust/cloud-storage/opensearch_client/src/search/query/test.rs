@@ -80,7 +80,7 @@ fn test_query_key_short_last_word() -> anyhow::Result<()> {
 
 #[test]
 fn test_generate_terms_must_query() -> anyhow::Result<()> {
-    let result = generate_terms_must_query(QueryKey::MatchPhrase, &["test"], &["test".to_string()]);
+    let result = generate_terms_must_query(QueryKey::MatchPhrase, "test", &["test".to_string()]);
 
     let expected = serde_json::json!({
         "match_phrase": {
@@ -92,7 +92,7 @@ fn test_generate_terms_must_query() -> anyhow::Result<()> {
 
     let result = generate_terms_must_query(
         QueryKey::MatchPhrasePrefix,
-        &["test"],
+        "test",
         &["test".to_string(), "test2".to_string()],
     );
 
