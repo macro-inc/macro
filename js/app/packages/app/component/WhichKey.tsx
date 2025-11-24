@@ -52,7 +52,7 @@ function WhichKeyContent(props: WhichKeyContentProps) {
                           )}
                         />
                       </div>
-                      <div>
+                      <div class="truncate min-w-0">
                         {typeof command.description === 'function'
                           ? command.description()
                           : command.description}{' '}
@@ -74,7 +74,7 @@ function WhichKeyContent(props: WhichKeyContentProps) {
                       )}
                     />
                   </div>
-                  <div>
+                  <div class="truncate min-w-0">
                     {typeof command.description === 'function'
                       ? command.description()
                       : command.description}{' '}
