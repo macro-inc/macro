@@ -508,7 +508,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   // NOTE: these filters are required because the backend doesn't support these filters yet
   createEffect(() => {
-    let filterFns: EntityFilter<EntityData>[] = [];
+    const filterFns: EntityFilter<EntityData>[] = [];
 
     if (importantFilter()) filterFns.push(importantFilterFn);
 
@@ -520,7 +520,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   });
 
   createEffect(() => {
-    let filterFns: EntityFilter<EntityData>[] = [];
+    const filterFns: EntityFilter<EntityData>[] = [];
 
     const projectFilter_ = projectFilter();
     if (projectFilter_) {
