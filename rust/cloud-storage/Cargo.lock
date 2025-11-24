@@ -2916,6 +2916,7 @@ dependencies = [
  "models_email",
  "models_opensearch",
  "models_pagination",
+ "models_permissions",
  "redis",
  "reqwest",
  "s3_client",
