@@ -922,19 +922,17 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       ? insertSplit({ type: entity.type, id: entity.id })
       : replaceOrInsertSplit({ type: entity.type, id: entity.id });
 
-    if (entity.type === 'channel' && isSearchEntity(entity)) {
-      const contentHit = entity.search.contentHitData?.at(0);
-      if (contentHit && contentHit.type === 'channel') {
-        handle?.activate();
-        const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
-        await blockHandle?.goToLocationFromParams({
-          [CHANNEL_PARAMS.message]: contentHit.location.messageId,
-        });
-        return;
-      }
-    }
-
     handle?.activate();
+
+    if (entity.type === 'channel' && isSearchEntity(entity)) {
+      const location = entity.search.contentHitData?.at(0)?.location;
+      if (!location || location.type !== 'channel') return;
+
+      const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
+      await blockHandle?.goToLocationFromParams({
+        [CHANNEL_PARAMS.message]: location.messageId,
+      });
+    }
   };
 
   const StyledTriggerLabel = (props: ParentProps) => {
