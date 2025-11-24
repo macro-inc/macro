@@ -3,9 +3,12 @@ use crate::pubsub::util::{cg_refresh_email, complete_transaction_with_processing
 use models_email::email::service::link;
 use models_email::gmail::webhook::DeleteMessagePayload;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use models_opensearch::SearchEntityType;
 use sqs_client::search::SearchQueueMessage;
 use sqs_client::search::email::EmailMessage;
+use sqs_client::search::name::EntityName;
 use std::result;
+use uuid::Uuid;
 
 // delete user's message from the db
 #[tracing::instrument(skip(ctx))]
@@ -42,17 +45,42 @@ pub async fn delete_message(
     })?;
 
     let result = async {
-        email_db_client::messages::delete::delete_message_with_tx(&mut tx, &message, true)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to delete message with transaction".to_string()),
-                })
-            })?;
-        Ok::<(), ProcessingError>(())
+        let result =
+            email_db_client::messages::delete::delete_message_with_tx(&mut tx, &message, true)
+                .await
+                .map_err(|e| {
+                    ProcessingError::Retryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: e.context("Failed to delete message with transaction".to_string()),
+                    })
+                })?;
+        Ok::<Option<Uuid>, ProcessingError>(result)
     }
     .await;
+
+    match result {
+        Ok(deleted_thread) => {
+            if let Some(thread_id) = deleted_thread {
+                let sqs_client = ctx.sqs_client.clone();
+                tokio::spawn({
+                    async move {
+                        let _ = sqs_client
+                        .send_message_to_search_event_queue(SearchQueueMessage::RemoveEntityName(
+                            EntityName {
+                                entity_id: thread_id,
+                                entity_type: SearchEntityType::Emails,
+                            },
+                        ))
+                        .await
+                        .inspect_err(|e| {
+                            tracing::error!(error=?e, "failed to send message to search extractor queue");
+                        });
+                    }
+                });
+            }
+        }
+        _ => (), // let error bubble from complete_transaction_with_processing_error
+    }
 
     complete_transaction_with_processing_error(tx, result).await?;
 

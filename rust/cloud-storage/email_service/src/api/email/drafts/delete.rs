@@ -5,6 +5,9 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use model::response::{EmptyResponse, ErrorResponse};
 use models_email::service::link::Link;
+use models_opensearch::SearchEntityType;
+use sqs_client::search::SearchQueueMessage;
+use sqs_client::search::name::EntityName;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use uuid::Uuid;
@@ -91,8 +94,26 @@ pub async fn handler(
     .await;
 
     match result {
-        Ok(_) => {
+        Ok(deleted_thread) => {
             tx.commit().await?;
+
+            if let Some(thread_id) = deleted_thread {
+                tokio::spawn(async move {
+                    let _ = ctx
+                        .sqs_client
+                        .send_message_to_search_event_queue(SearchQueueMessage::RemoveEntityName(
+                            EntityName {
+                                entity_id: thread_id,
+                                entity_type: SearchEntityType::Emails,
+                            },
+                        ))
+                        .await
+                        .inspect_err(|e| {
+                            tracing::error!(error=?e, "failed to send message to search extractor queue");
+                        });
+                });
+            }
+
             Ok(StatusCode::NO_CONTENT.into_response())
         }
         Err(e) => {
