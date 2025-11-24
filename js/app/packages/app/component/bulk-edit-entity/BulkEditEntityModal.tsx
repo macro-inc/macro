@@ -24,7 +24,6 @@ export const BulkEditEntityModalActionFooter = (props: {
 }) => {
   return (
     <div class="flex w-full justify-end items-stretch tex-sm gap-1">
-      <div class="wi-dill w-20 h-full bg-yellow-400"> </div>
       <button
         class="py-1 px-3 text-sm border-edge-muted border bg-panel"
         onClick={props.onCancel}
@@ -32,12 +31,11 @@ export const BulkEditEntityModalActionFooter = (props: {
         Cancel
       </button>
       <button
-        // class={`uppercase py-1 px-3 font-mono text-sm ${
-        //   props.isDisabled
-        //     ? 'bg-edge/20 text-ink-placeholder cursor-not-allowed'
-        //     : 'bg-accent text-menu'
-        // }`}
-        class="uppercase py1 px-3 text-sm font-semibold bg-accent/10 text-accent border border-accent/20"
+        class="uppercase py-1 px-3 text-sm font-semibold border"
+        classList={{
+          'text-accent bg-accent/10 border-accent/20': !props.isDisabled,
+          'text-ink-disabled bg-egde/10 border-edge-muted': props.isDisabled,
+        }}
         onClick={props.onConfirm}
         disabled={props.isDisabled}
       >
