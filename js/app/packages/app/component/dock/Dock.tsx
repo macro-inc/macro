@@ -1,4 +1,3 @@
-import { setSettingsOpen, useSettingsState } from '@core/constant/SettingsState';
 import { GlobalNotificationBell } from '@core/component/GlobalNotificationBell';
 import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
@@ -6,10 +5,12 @@ import { ENABLE_DOCK_NOTITIFCATIONS, ENABLE_JACK_IN } from '@core/constant/featu
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import SplitIcon from '@icon/regular/square-split-horizontal.svg';
 import { useGlobalNotificationSource } from '../GlobalAppState';
+import { useSettingsState } from '@core/constant/SettingsState';
 import IconPower from '@phosphor-icons/core/regular/power.svg';
 import MacroCreateIcon from '@macro-icons/macro-create-b.svg';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { ClippedPanel } from '@core/component/ClippedPanel';
+import { isSettingsPanelOpen } from '@core/signal/layout';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { PresentModeGlitch } from './PresentModeGlitch';
 import { IconButton } from '@core/component/IconButton';
@@ -40,7 +41,7 @@ export function Dock() {
   // const [debugOpen, setDebugOpen] = createSignal(false);
   const { track, TrackingEvents } = withAnalytics();
   const toggleRightPanel = useToggleRightPanel();
-  const { settingsOpen } = useSettingsState();
+  const { toggleSettings } = useSettingsState();
   const hasPaid = useHasPaidAccess();
 
   const isSoupActive = createMemo(() => {
@@ -359,11 +360,11 @@ export function Dock() {
 
               <IconButton
                 tooltip={{
-                  label: settingsOpen() ? 'Close Settings' : 'Open Settings',
+                  label: isSettingsPanelOpen() ? 'Close Settings' : 'Open Settings',
                   hotkeyToken: TOKENS.global.toggleSettings,
                 }}
-                theme={settingsOpen() ? 'accent' : 'clear'}
-                onDeepClick={() => { setSettingsOpen(true) }}
+                theme={isSettingsPanelOpen() ? 'accent' : 'clear'}
+                onDeepClick={() => { toggleSettings() }}
                 icon={IconGear}
                 size="sm"
               />

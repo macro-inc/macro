@@ -1,5 +1,6 @@
 import { createCallback } from '@solid-primitives/rootless';
 import { createSignal } from 'solid-js';
+import { setIsSettingsPanelOpen } from './settings';
 
 const DEFAULT_RIGHT_PANEL_SIZE = 600;
 
@@ -17,14 +18,12 @@ export const [persistedLayoutSizes, setPersistedLayoutSizes] = createSignal<
   [number, number]
 >([1, 0]);
 
-// Legacy exports for backward compatibility (unused)
-export const setResizableContext = () => {};
-
 export function useToggleRightPanel() {
   return createCallback((next?: boolean) => {
     setIsRightPanelOpen((prev) => {
-      if (next !== undefined) return next;
-      return !prev;
+      const newState = next !== undefined ? next : !prev;
+      if(newState){setIsSettingsPanelOpen(false)}
+      return newState;
     });
   });
 }

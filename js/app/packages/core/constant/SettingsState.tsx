@@ -1,4 +1,6 @@
 import { createEffect, createSignal } from 'solid-js';
+import { setIsRightPanelOpen } from '@core/signal/layout';
+import { setIsSettingsPanelOpen, isSettingsPanelOpen } from '@core/signal/layout';
 
 export type SettingsTab =
   | 'Account'
@@ -9,27 +11,41 @@ export type SettingsTab =
   | 'Mobile'
   | 'AI Memory';
 
-export const [settingsOpen, setSettingsOpen] = createSignal(false);
 export const [activeTabId, setActiveTabId] =
   createSignal<SettingsTab>('Appearance');
+export const [settingsSpotlight, setSettingsSpotlight] = createSignal(false);
 
 export const useSettingsState = () => {
   const openSettings = (activeTabId?: SettingsTab) => {
-    setSettingsOpen(true);
+    // Close right panel when opening settings
+    setIsRightPanelOpen(false);
+    setIsSettingsPanelOpen(true);
     if (activeTabId) setActiveTabId(activeTabId);
   };
-  const closeSettings = () => setSettingsOpen(false);
+  
+  const closeSettings = () => {
+    setIsSettingsPanelOpen(false);
+    setSettingsSpotlight(false);
+  };
+  
   const toggleSettings = () => {
-    const newState = !settingsOpen();
-    setSettingsOpen(newState);
+    const newState = !isSettingsPanelOpen();
+    if (newState) {
+      // Close right panel when opening settings
+      setIsRightPanelOpen(false);
+    }
+    setIsSettingsPanelOpen(newState);
   };
 
   createEffect(() => {
-    if (!settingsOpen()) setActiveTabId('Appearance');
+    if (!isSettingsPanelOpen()) {
+      setActiveTabId('Appearance');
+      setSettingsSpotlight(false);
+    }
   });
 
   return {
-    settingsOpen,
+    settingsOpen: isSettingsPanelOpen,
     openSettings,
     closeSettings,
     activeTabId,

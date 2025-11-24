@@ -22,7 +22,7 @@ import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { Paywall } from './paywall/Paywall';
 import { QuickCreateMenu } from './QuickCreateMenu';
 import { RightbarWrapper } from './rightbar/Rightbar';
-import { Settings, setViewportOffset } from './settings/Settings';
+import { SettingsWrapper, setViewportOffset } from './settings/Settings';
 
 export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
@@ -47,19 +47,16 @@ export function Layout(props: RouteSectionProps) {
 
   // We are tracking viewport height, and using that to set a CSS variable and the viewport offset, so that we can properly constrain the viewport-height for mobile in response to changes such as the virtual keyboard appearing
   const handleResize = () => {
-    if (window.visualViewport) {
-      // Set the CSS variable with the calculated height
-      document.documentElement.style.setProperty(
-        '--viewport-height',
-        `${window.visualViewport.height}px`
-      );
+    if(window.visualViewport){
+      document.documentElement.style.setProperty('--viewport-height', `${window.visualViewport.height}px`
+    );
 
-      setViewportOffset(window.visualViewport.offsetTop);
+     setViewportOffset(window.visualViewport.offsetTop);
     }
   };
 
   onMount(() => {
-    if (window.visualViewport) {
+    if(window.visualViewport){
       window.visualViewport.addEventListener('resize', handleResize);
       window.visualViewport.addEventListener('scroll', handleResize);
       handleResize();
@@ -108,7 +105,6 @@ export function Layout(props: RouteSectionProps) {
     <div class="relative pb-[max(env(safe-area-inset-bottom),var(--tauri-inset-bottom))] pt-[max(env(safe-area-inset-top),var(--tauri-inset-top))] flex flex-col justify-between w-dvw h-dvh">
       <Show when={isAuthenticated()}>
         <GlobalShortcuts />
-        <Settings />
         <Suspense>
           <KommandMenu />
         </Suspense>
@@ -141,6 +137,7 @@ export function Layout(props: RouteSectionProps) {
             <Resize.Panel id={LAYOUT_CONTEXT_ID} minSize={250}>
               {props.children}
             </Resize.Panel>
+            <SettingsWrapper />
             <RightbarWrapper />
           </ItemDndProvider>
         </Resize.Zone>
