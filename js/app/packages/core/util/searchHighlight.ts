@@ -60,8 +60,5 @@ export function extractSearchSnippet(highlightedContent: string): string {
  * // Returns: "<macro_em>Hello world</macro_em>, <macro_em>goodbye</macro_em>"
  */
 export function mergeAdjacentMacroEmTags(highlightedContent: string): string {
-  return highlightedContent.replace(
-    /<\/macro_em>(\s+)<macro_em>/g,
-    '$1'
-  );
+  return highlightedContent.replace(/<\/macro_em>(\s+)<macro_em>/g, '$1');
 }

@@ -79,7 +79,9 @@ const getLocationHighlights = (
   const nameHighlight = innerResults.at(0)?.highlight.name ?? null;
 
   return {
-    nameHighlight: nameHighlight ? mergeAdjacentMacroEmTags(nameHighlight) : null,
+    nameHighlight: nameHighlight
+      ? mergeAdjacentMacroEmTags(nameHighlight)
+      : null,
     contentHighlights: contentHighlights.length > 0 ? contentHighlights : null,
     source: 'service' as const,
   };
@@ -98,7 +100,9 @@ const getHighlights = (innerResults: InnerSearchResult[]) => {
   const nameHighlight = innerResults.at(0)?.highlight.name ?? null;
 
   return {
-    nameHighlight: nameHighlight ? mergeAdjacentMacroEmTags(nameHighlight) : null,
+    nameHighlight: nameHighlight
+      ? mergeAdjacentMacroEmTags(nameHighlight)
+      : null,
     contentHighlights: contentHighlights.length > 0 ? contentHighlights : null,
     source: 'service' as const,
   };
