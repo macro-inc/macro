@@ -3,8 +3,12 @@ import { getIconConfig } from '@core/component/EntityIcon';
 import { Hotkey } from '@core/component/Hotkey';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import type { HotkeyToken } from '@core/hotkey/tokens';
-import type { CommandDisplayPriority, ValidHotkey } from '@core/hotkey/types';
+import { pressedKeys } from '@core/hotkey/state';
+import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
+import type {
+  HotkeyRegistrationOptions,
+  ValidHotkey,
+} from '@core/hotkey/types';
 import {
   createCanvasFileFromJsonString,
   createChat,
@@ -12,7 +16,7 @@ import {
   createMarkdownFile,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { isErr } from '@core/util/maybeResult';
+import { isErr, ok } from '@core/util/maybeResult';
 import { Dialog } from '@kobalte/core/dialog';
 import PixelChat from '@macro-icons/pixel/ai.svg';
 import PixelArrowRight from '@macro-icons/pixel/arrow-right.svg';
@@ -20,42 +24,228 @@ import PixelCanvas from '@macro-icons/pixel/canvas.svg';
 import PixelChannel from '@macro-icons/pixel/channel.svg';
 import PixelCode from '@macro-icons/pixel/code.svg';
 import PixelEmail from '@macro-icons/pixel/email.svg';
+import PixelProject from '@macro-icons/pixel/folder-alt.svg';
 import PixelMd from '@macro-icons/pixel/notes.svg';
-
-import {
-  type Component,
-  createEffect,
-  createSignal,
-  For,
-  onMount,
-  Show,
-} from 'solid-js';
-
+import { useCreateProject } from '@service-storage/projects';
+import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
-
 import { useSplitLayout } from './split-layout/layout';
 
-type LauncherMenuItemProps = {
+const createBlock = async (spec: {
+  blockName: BlockName;
+  createFn: () => Promise<string | undefined>;
+  loading?: boolean;
+  shouldInsert?: boolean;
+}) => {
+  const { replaceSplit, insertSplit } = useSplitLayout();
+  const { blockName, createFn, loading } = spec;
+
+  setCreateMenuOpen(false);
+
+  if (!loading) {
+    const id = await createFn();
+    if (!id) return;
+
+    const block = { type: blockName, id };
+
+    spec.shouldInsert ? insertSplit(block) : replaceSplit(block);
+  } else {
+    const split = spec.shouldInsert
+      ? insertSplit({ type: 'component', id: 'loading' })
+      : replaceSplit({ type: 'component', id: 'loading' });
+
+    const id = await createFn();
+    if (!id) {
+      split?.goBack();
+      return;
+    }
+
+    if (split) split.replace({ type: blockName, id }, true);
+  }
+};
+
+const createComponent = async (spec: {
+  componentId: string;
+  shouldInsert?: boolean;
+}) => {
+  setCreateMenuOpen(false);
+  const { replaceSplit, insertSplit } = useSplitLayout();
+  if (spec.shouldInsert) {
+    insertSplit({ type: 'component', id: spec.componentId });
+  } else {
+    replaceSplit({ type: 'component', id: spec.componentId });
+  }
+};
+
+type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
   label: string;
   blockName: BlockName;
-  hotkeyLetter?: string;
-  hotkeyToken: string;
-  hotkey: ValidHotkey;
-  onClick: (e?: MouseEvent) => void | Promise<void>;
-  Icon: Component;
-  displayPriority: 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10;
-  onMouseEnter?: () => void;
-  onFocus?: () => void;
-  focused?: boolean;
+  altHotkeyToken?: HotkeyToken;
 };
+
+export const CREATABLE_BLOCKS: CreatableBlock[] = [
+  {
+    label: 'Note',
+    icon: () => <PixelMd />,
+    description: 'Create note',
+    blockName: 'md',
+    hotkeyToken: TOKENS.create.note,
+    altHotkeyToken: TOKENS.create.noteNewSplit,
+    hotkey: 'n',
+    keyDownHandler: () => {
+      createBlock({
+        blockName: 'md',
+        loading: true,
+        createFn: () =>
+          createMarkdownFile({
+            title: '',
+            content: '',
+            projectId: undefined,
+          }),
+        shouldInsert: pressedKeys().has('opt'),
+      });
+      return true;
+    },
+  },
+  {
+    label: 'Email',
+    icon: () => <PixelEmail />,
+    description: 'Create email',
+    blockName: 'email',
+    hotkeyToken: TOKENS.create.email,
+    altHotkeyToken: TOKENS.create.emailNewSplit,
+    hotkey: 'e',
+    keyDownHandler: () => {
+      createComponent({
+        componentId: 'email-compose',
+        shouldInsert: pressedKeys().has('opt'),
+      });
+      return true;
+    },
+  },
+  {
+    label: 'Message',
+    icon: () => <PixelChannel />,
+    description: 'Create message',
+    blockName: 'channel',
+    hotkeyToken: TOKENS.create.message,
+    altHotkeyToken: TOKENS.create.messageNewSplit,
+    hotkey: 'm',
+    keyDownHandler: () => {
+      createComponent({
+        componentId: 'channel-compose',
+        shouldInsert: pressedKeys().has('opt'),
+      });
+      return true;
+    },
+  },
+  {
+    label: 'AI',
+    icon: () => <PixelChat />,
+    description: 'Create AI chat',
+    blockName: 'chat' as BlockName,
+    hotkeyToken: TOKENS.create.chat,
+    altHotkeyToken: TOKENS.create.chatNewSplit,
+    hotkey: 'a',
+    keyDownHandler: () => {
+      createBlock({
+        blockName: 'chat',
+        createFn: async () => {
+          const result = await createChat();
+          if ('error' in result) {
+            return;
+          }
+          return result.chatId;
+        },
+        shouldInsert: pressedKeys().has('opt'),
+      });
+      return true;
+    },
+  },
+  {
+    label: 'Canvas',
+    icon: () => <PixelCanvas />,
+    description: 'Create canvas',
+    blockName: 'canvas',
+    hotkeyToken: TOKENS.create.canvas,
+    altHotkeyToken: TOKENS.create.canvasNewSplit,
+    hotkey: 'd',
+    keyDownHandler: () => {
+      createBlock({
+        blockName: 'canvas',
+        loading: true,
+        createFn: async () => {
+          const result = await createCanvasFileFromJsonString({
+            json: JSON.stringify({ nodes: [], edges: [] }),
+            title: 'New Canvas',
+          });
+          if ('error' in result) return;
+          const [_, id] = ok(result.documentId);
+          return id;
+        },
+        shouldInsert: pressedKeys().has('opt'),
+      });
+      return true;
+    },
+  },
+  {
+    label: 'Project',
+    icon: () => <PixelProject />,
+    description: 'Create project',
+    blockName: 'project',
+    hotkeyToken: TOKENS.create.project,
+    altHotkeyToken: TOKENS.create.projectNewSplit,
+    hotkey: 'p',
+    keyDownHandler: () => {
+      createBlock({
+        blockName: 'project',
+        createFn: () => {
+          const createProject = useCreateProject();
+          return createProject({ name: 'New Project' });
+        },
+        shouldInsert: pressedKeys().has('opt'),
+      });
+      return true;
+    },
+  },
+  {
+    label: 'Code',
+    icon: () => <PixelCode />,
+    description: 'Create code file',
+    blockName: 'code',
+    hotkeyToken: TOKENS.create.code,
+    altHotkeyToken: TOKENS.create.codeNewSplit,
+    hotkey: 'o',
+    keyDownHandler: () => {
+      createBlock({
+        blockName: 'code',
+        loading: true,
+        createFn: async () => {
+          const result = await createCodeFileFromText({
+            code: 'print("Hello, World!")',
+            extension: 'py',
+            title: 'New Code File',
+          });
+          if (isErr(result)) return;
+          const [, id] = ok(result[1]?.documentId);
+          return id;
+        },
+        shouldInsert: pressedKeys().has('opt'),
+      });
+      return true;
+    },
+  },
+];
 
 const USE_ENTITY_COLORS = true;
 
 export const [createMenuOpen, setCreateMenuOpen] = createControlledOpenSignal();
 
-export const toggleCreateMenu = () => {
-  const isOpen = createMenuOpen();
-  setCreateMenuOpen(!isOpen);
+type LauncherMenuItemProps = {
+  creatableBlock: CreatableBlock;
+  onMouseEnter?: () => void;
+  onFocus?: () => void;
+  focused?: boolean;
 };
 
 const LauncherMenuItem = (props: LauncherMenuItemProps) => {
@@ -69,17 +259,19 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
   const textFg = () =>
     USE_ENTITY_COLORS
-      ? getIconConfig(props.blockName ?? 'pdf').foreground
+      ? getIconConfig(props.creatableBlock.blockName ?? 'pdf').foreground
       : 'text-accent';
+
+  const Icon = props.creatableBlock.icon;
 
   return (
     <button
-      class={`create-menu-${props.label.toLowerCase()} size-32 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200`}
+      class={`create-menu-${props.creatableBlock.label.toLowerCase()} size-32 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200`}
       classList={{
         '-translate-y-2 text-ink bracket-offset-1': props.focused,
         'text-ink-extra-muted': !props.focused,
       }}
-      onClick={props.onClick}
+      onClick={() => props.creatableBlock.keyDownHandler()}
       onFocus={props.onFocus}
       onMouseEnter={props.onMouseEnter}
       tabindex={0}
@@ -111,14 +303,15 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       <div
         class="absolute size-full inset-0 transition-transform origin-top opacity-20 ease duration-200 mix-blend-color"
         classList={{
-          [getIconConfig(props.blockName ?? 'pdf').background]: true,
+          [getIconConfig(props.creatableBlock.blockName ?? 'pdf').background]:
+            true,
           'scale-y-0': !props.focused,
           'scale-y-100': props.focused,
         }}
       ></div>
 
       <div class="absolute top-1.5 left-2 z-1 p-1 px-1.5 bg-panel text-ink border border-edge-muted rounded-xs text-xs">
-        <Hotkey shortcut={props.hotkeyLetter} />
+        <Hotkey token={props.creatableBlock.hotkeyToken} />
       </div>
 
       <div
@@ -131,7 +324,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
       <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-1">
         <div class="text-sm font-bold uppercase font-stretch-condensed">
-          {props.label}
+          {props.creatableBlock.label}
         </div>
         <div class="size-3">
           <PixelArrowRight />
@@ -146,7 +339,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
           'scale-110': props.focused,
         }}
       >
-        <props.Icon />
+        {Icon && <Icon />}
       </div>
     </button>
   );
@@ -157,217 +350,11 @@ type LauncherInnerProps = {
 };
 
 const LauncherInner = (props: LauncherInnerProps) => {
-  const { replaceSplit, insertSplit } = useSplitLayout();
-
-  const [attachHotkeys, launcherScope] = useHotkeyDOMScope(
-    'create-menu.type',
-    true
-  );
+  const [attachHotkeys, launcherScope] = useHotkeyDOMScope('create-menu', true);
 
   let ref!: HTMLDivElement;
 
   const [focusedIndex, setFocusedIndex] = createSignal(0);
-
-  const openInSplit = (
-    type: BlockName,
-    id: string,
-    mode: 'current' | 'new'
-  ) => {
-    if (mode === 'new') {
-      insertSplit({
-        type: type,
-        id: id,
-      });
-    } else {
-      replaceSplit({
-        type: type,
-        id: id,
-      });
-    }
-
-    props.onClose();
-  };
-
-  const handleNewCode = async (mode: 'current' | 'new' = 'current') => {
-    const maybeDoc = await createCodeFileFromText({
-      code: 'print("Hello, World!")',
-      extension: 'py',
-      title: 'New Code File',
-    });
-
-    if (isErr(maybeDoc)) {
-      console.error('Failed to create new code:', maybeDoc);
-      return;
-    }
-
-    const [, result] = maybeDoc;
-    if (result?.documentId) {
-      openInSplit('code', result.documentId, mode);
-    }
-  };
-
-  const handleNewNote = async (mode: 'current' | 'new' = 'current') => {
-    const documentId = await createMarkdownFile({
-      title: '',
-      content: '',
-      projectId: undefined,
-    });
-
-    if (documentId) {
-      openInSplit('md', documentId, mode);
-    }
-  };
-
-  const handleNewCanvas = async (mode: 'current' | 'new' = 'current') => {
-    const emptyCanvasJson = JSON.stringify({
-      nodes: [],
-      edges: [],
-    });
-
-    const result = await createCanvasFileFromJsonString({
-      json: emptyCanvasJson,
-      title: 'New Canvas',
-    });
-
-    if ('error' in result) {
-      console.error('Failed to create new canvas:', result.error);
-      return;
-    }
-
-    if (result.documentId) {
-      openInSplit('canvas', result.documentId, mode);
-    }
-  };
-
-  const handleNewChat = async (mode: 'current' | 'new' = 'current') => {
-    const maybeChat = await createChat();
-
-    if (!maybeChat.chatId) {
-      console.error('Failed to create new chat:', maybeChat);
-      return;
-    }
-
-    const { chatId } = maybeChat;
-
-    if (!chatId) return;
-
-    openInSplit('chat', chatId, mode);
-  };
-
-  const handleNewEmail = (mode: 'current' | 'new' = 'current') => {
-    if (mode === 'new') {
-      insertSplit({
-        type: 'component',
-        id: 'email-compose',
-      });
-    } else {
-      replaceSplit({
-        type: 'component',
-        id: 'email-compose',
-      });
-    }
-    props.onClose();
-  };
-
-  const handleNewMessage = (mode: 'current' | 'new' = 'current') => {
-    if (mode === 'new') {
-      insertSplit({
-        type: 'component',
-        id: 'channel-compose',
-      });
-    } else {
-      replaceSplit({
-        type: 'component',
-        id: 'channel-compose',
-      });
-    }
-    props.onClose();
-  };
-
-  const actionHandlers = {
-    note: handleNewNote,
-    email: handleNewEmail,
-    message: handleNewMessage,
-    ai: handleNewChat,
-    canvas: handleNewCanvas,
-    code: handleNewCode,
-  };
-
-  const executeCurrentItem = (mode: 'current' | 'new') => {
-    const currentItem = launcherMenuItems[focusedIndex()];
-
-    if (currentItem) {
-      const handlerKey =
-        currentItem.label.toLowerCase() as keyof typeof actionHandlers;
-
-      if (actionHandlers[handlerKey]) {
-        actionHandlers[handlerKey](mode);
-      }
-    }
-  };
-
-  const launcherMenuItems: LauncherMenuItemProps[] = [
-    {
-      label: 'Note',
-      blockName: 'md',
-      hotkeyLetter: 'n',
-      hotkeyToken: 'global.create.note',
-      hotkey: 'n',
-      onClick: (e) => handleNewNote(e?.altKey ? 'new' : 'current'),
-      Icon: () => <PixelMd class="w-full h-full" />,
-      displayPriority: 5,
-    },
-    {
-      label: 'Email',
-      blockName: 'email',
-      hotkeyLetter: 'e',
-      hotkeyToken: 'global.create.email',
-      hotkey: 'e',
-      onClick: (e) => handleNewEmail(e?.altKey ? 'new' : 'current'),
-      Icon: () => <PixelEmail class="w-full h-full" />,
-      displayPriority: 4,
-    },
-    {
-      label: 'Message',
-      blockName: 'channel',
-      hotkeyLetter: 'm',
-      hotkeyToken: 'global.create.message',
-      hotkey: 'm',
-      onClick: (e) => handleNewMessage(e?.altKey ? 'new' : 'current'),
-      Icon: () => <PixelChannel class="w-full h-full" />,
-      displayPriority: 3,
-    },
-    {
-      label: 'AI',
-      blockName: 'chat',
-      hotkeyLetter: 'a',
-      hotkeyToken: 'global.create.chat',
-      hotkey: 'a',
-      onClick: (e) => handleNewChat(e?.altKey ? 'new' : 'current'),
-      Icon: () => <PixelChat class="w-full h-full" />,
-      displayPriority: 2,
-    },
-    {
-      label: 'Canvas',
-      blockName: 'canvas',
-      hotkeyLetter: 'd',
-      hotkeyToken: 'global.create.canvas',
-      hotkey: 'd',
-      onClick: (e) => handleNewCanvas(e?.altKey ? 'new' : 'current'),
-      Icon: () => <PixelCanvas class="w-full h-full" />,
-      displayPriority: 1,
-    },
-    {
-      label: 'Code',
-      blockName: 'code',
-      hotkeyLetter: 'o',
-      hotkeyToken: 'global.create.code',
-      hotkey: 'o',
-      onClick: (e) => handleNewCode(e?.altKey ? 'new' : 'current'),
-      Icon: () => <PixelCode class="w-full h-full" />,
-      displayPriority: 0,
-    },
-  ];
 
   const focusMenuItem = (label: string) => {
     const menuItem = document.querySelector<HTMLElement>(
@@ -404,46 +391,32 @@ const LauncherInner = (props: LauncherInnerProps) => {
     return true;
   };
 
-  launcherMenuItems.forEach((item, index) => {
-    const displayPriority: CommandDisplayPriority | undefined =
-      item.displayPriority === 0
-        ? undefined
-        : (item.displayPriority as CommandDisplayPriority);
-
-    const hotkeyConfig: {
-      hotkeyToken?: HotkeyToken;
-      hotkey: ValidHotkey[];
-      scopeId: string;
-      description: string;
-      keyDownHandler: () => boolean;
-      displayPriority: CommandDisplayPriority | undefined;
-    } = {
-      hotkeyToken: item.hotkeyToken as HotkeyToken,
-      hotkey: [item.hotkey],
-      scopeId: launcherScope,
-      description: `Create ${item.label.charAt(0).toUpperCase() + item.label.slice(1).toLowerCase()}`,
-      keyDownHandler: () => {
-        setFocusedIndex(index);
-        item.onClick();
-        return true;
-      },
-      displayPriority,
-    };
-
-    registerHotkey(hotkeyConfig);
-
-    // Register option+letter hotkeys to open in new split
+  CREATABLE_BLOCKS.forEach((item) => {
     registerHotkey({
-      hotkey: `opt+${item.hotkey}` as ValidHotkey,
+      hotkeyToken: item.hotkeyToken,
+      hotkey: item.hotkey,
       scopeId: launcherScope,
-      description: `Create ${item.label.charAt(0).toUpperCase() + item.label.slice(1).toLowerCase()} in new split`,
+      description: item.description,
       keyDownHandler: () => {
-        setFocusedIndex(index);
-        item.onClick({ altKey: true } as MouseEvent);
+        item.keyDownHandler();
+        props.onClose();
         return true;
       },
-      displayPriority,
     });
+
+    if (item.altHotkeyToken) {
+      registerHotkey({
+        hotkeyToken: item.altHotkeyToken,
+        hotkey: `opt+${item.hotkey}` as ValidHotkey,
+        scopeId: launcherScope,
+        description: `${item.description} in new split`,
+        keyDownHandler: () => {
+          item.keyDownHandler();
+          props.onClose();
+          return true;
+        },
+      });
+    }
   });
 
   registerHotkey({
@@ -452,7 +425,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
     description: 'Close Launcher',
     condition: createMenuOpen,
     keyDownHandler: () => {
-      toggleCreateMenu();
+      setCreateMenuOpen(false);
       return true;
     },
   });
@@ -485,7 +458,8 @@ const LauncherInner = (props: LauncherInnerProps) => {
     scopeId: launcherScope,
     description: 'Open in current split',
     keyDownHandler: () => {
-      executeCurrentItem('current');
+      CREATABLE_BLOCKS[focusedIndex()].keyDownHandler();
+      props.onClose();
       return true;
     },
     runWithInputFocused: true,
@@ -497,7 +471,8 @@ const LauncherInner = (props: LauncherInnerProps) => {
     scopeId: launcherScope,
     description: 'Open in new split',
     keyDownHandler: () => {
-      executeCurrentItem('new');
+      CREATABLE_BLOCKS[focusedIndex()].keyDownHandler();
+      props.onClose();
       return true;
     },
     runWithInputFocused: true,
@@ -510,7 +485,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
     attachHotkeys(ref);
 
     setTimeout(() => {
-      const firstItem = launcherMenuItems[0];
+      const firstItem = CREATABLE_BLOCKS[0];
 
       if (firstItem) {
         focusMenuItem(firstItem.label);
@@ -521,15 +496,15 @@ const LauncherInner = (props: LauncherInnerProps) => {
   return (
     <div>
       <div
-        class="relative grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-6 gap-3 p-6 isolate bg-menu border border-edge-muted suppress-css-brackets"
+        class="relative grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3 p-6 isolate bg-menu border border-edge-muted suppress-css-brackets"
         ref={ref}
       >
         <div class="absolute pointer-events-none size-full inset-0"></div>
 
-        <For each={launcherMenuItems}>
+        <For each={CREATABLE_BLOCKS}>
           {(item, index) => (
             <LauncherMenuItem
-              {...item}
+              creatableBlock={item}
               onMouseEnter={() => setFocusedIndex(index())}
               onFocus={() => setFocusedIndex(index())}
               focused={focusedIndex() === index()}
