@@ -45,6 +45,12 @@ async function createNamesIndex(opensearchClient: Client) {
             entity_type: {
               type: 'keyword',
             },
+            // The user id of who created the entity
+            user_id: {
+              type: 'keyword',
+              index: true,
+              doc_values: true,
+            },
           },
         },
       },

@@ -27,6 +27,7 @@ import type { Accessor } from 'solid-js';
 import type {
   ChatEntity,
   DocumentEntity,
+  EmailEntity,
   EntityData,
   ProjectEntity,
 } from '../types/entity';
@@ -54,8 +55,8 @@ const fetchPaginatedDocumentsGet = async ({
 
   const result: SoupPage = await response.json();
   result.items.forEach((item) => {
-    if (item.type === 'document' && item.fileType === 'md') {
-      syncServiceClient.wakeup({ documentId: item.id });
+    if (item.tag === 'document' && item.data.fileType === 'md') {
+      syncServiceClient.wakeup({ documentId: item.data.id });
     }
   });
   return result;
@@ -90,8 +91,8 @@ const fetchPaginatedDocumentsPost = async ({
 
   const result: SoupPage = await response.json();
   result.items.forEach((item) => {
-    if (item.type === 'document' && item.fileType === 'md') {
-      syncServiceClient.wakeup({ documentId: item.id });
+    if (item.tag === 'document' && item.data.fileType === 'md') {
+      syncServiceClient.wakeup({ documentId: item.data.id });
     }
   });
   return result;
@@ -215,49 +216,70 @@ const selectData: (
   options: {
     instructionsIdQuery: UseQueryResult<string | null | undefined, Error>;
   }
-) => (DocumentEntity | ChatEntity | ProjectEntity)[] = (data, options) => {
+) => (DocumentEntity | ChatEntity | ProjectEntity | EmailEntity)[] = (
+  data,
+  options
+) => {
   return data.pages.flatMap(({ items }) =>
     items
       .filter(
         (item) =>
-          item.type !== 'document' ||
+          item.tag !== 'document' ||
           !options.instructionsIdQuery.isSuccess ||
-          item.id !== options.instructionsIdQuery.data
+          item.data.id !== options.instructionsIdQuery.data
       )
-      .map((item): DocumentEntity | ChatEntity | ProjectEntity => {
-        if (item.type === 'chat') {
+      .map(
+        (item): DocumentEntity | ChatEntity | ProjectEntity | EmailEntity => {
+          if (item.tag === 'chat') {
+            return {
+              ...item.data,
+              type: item.tag,
+              name: item.data.name || 'New Chat',
+              frecencyScore: item.frecency_score,
+              viewedAt: item.data.viewedAt ?? undefined,
+              projectId: item.data.projectId ?? undefined,
+            };
+          }
+
+          if (item.tag === 'project') {
+            return {
+              createdAt: item.data.createdAt,
+              updatedAt: item.data.updatedAt,
+              id: item.data.id,
+              ownerId: item.data.ownerId,
+              frecencyScore: item.frecency_score,
+              viewedAt: item.data.viewedAt ?? undefined,
+              parentId: item.data.parentId ?? undefined,
+              type: item.tag,
+              name: item.data.name || 'New Project',
+            };
+          }
+
+          if (item.tag === 'emailThread') {
+            return {
+              ...item.data,
+              senderEmail: item.data.senderEmail ?? undefined,
+              senderName: item.data.senderName ?? undefined,
+              snippet: item.data.snippet ?? undefined,
+              done: !item.data.inboxVisible,
+              type: 'email',
+              name: item.data.name || 'Email Thread',
+              frecencyScore: item.frecency_score,
+              viewedAt: item.data.viewedAt ?? undefined,
+            };
+          }
+
           return {
-            ...item,
-            name: item.name || 'New Chat',
+            ...item.data,
+            name: item.data.name || 'New Note',
+            type: item.tag,
             frecencyScore: item.frecency_score,
-            viewedAt: item.viewedAt ?? undefined,
-            projectId: item.projectId ?? undefined,
+            viewedAt: item.data.viewedAt ?? undefined,
+            fileType: item.data.fileType ?? undefined,
+            projectId: item.data.projectId ?? undefined,
           };
         }
-
-        if (item.type === 'project') {
-          return {
-            createdAt: item.createdAt,
-            updatedAt: item.updatedAt,
-            id: item.id,
-            ownerId: item.ownerId,
-            frecencyScore: item.frecency_score,
-            viewedAt: item.viewedAt ?? undefined,
-            parentId: item.parentId ?? undefined,
-            type: item.type,
-            name: item.name || 'New Project',
-          };
-        }
-
-        return {
-          ...item,
-          name: item.name || 'New Note',
-          frecencyScore: item.frecency_score,
-          viewedAt: item.viewedAt ?? undefined,
-          fileType: item.fileType ?? undefined,
-          projectId: item.projectId ?? undefined,
-        };
-      })
+      )
   );
 };
 
@@ -298,16 +320,17 @@ export function createDocumentsInfiniteQuery(
     select: (data) =>
       data.pages.flatMap(({ items }) =>
         items
-          .filter((item) => item.type === 'document')
-          .filter((item) => item.id !== instructionsIdQuery.data)
+          .filter((item) => item.tag === 'document')
+          .filter((item) => item.data.id !== instructionsIdQuery.data)
           .map(
             (item): DocumentEntity => ({
-              ...item,
-              name: item.name || 'New Note',
+              ...item.data,
+              type: item.tag,
+              name: item.data.name || 'New Note',
               frecencyScore: item.frecency_score,
-              viewedAt: item.viewedAt ?? undefined,
-              fileType: item.fileType ?? undefined,
-              projectId: item.projectId ?? undefined,
+              viewedAt: item.data.viewedAt ?? undefined,
+              fileType: item.data.fileType ?? undefined,
+              projectId: item.data.projectId ?? undefined,
             })
           )
       ),
@@ -344,14 +367,15 @@ export function createChatsInfiniteQuery(
     select: (data) =>
       data.pages.flatMap(({ items }) =>
         items
-          .filter((item) => item.type === 'chat')
-          .filter((item) => !item.isPersistent)
+          .filter((item) => item.tag === 'chat')
+          .filter((item) => !item.data.isPersistent)
           .map(
             (item): ChatEntity => ({
-              ...item,
+              ...item.data,
+              type: item.tag,
               frecencyScore: item.frecency_score,
-              viewedAt: item.viewedAt ?? undefined,
-              projectId: item.projectId ?? undefined,
+              viewedAt: item.data.viewedAt ?? undefined,
+              projectId: item.data.projectId ?? undefined,
             })
           )
       ),

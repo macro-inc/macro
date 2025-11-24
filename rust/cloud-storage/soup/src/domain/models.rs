@@ -1,4 +1,4 @@
-use frecency::domain::{models::AggregateFrecency, ports::FrecencyQueryErr};
+use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;

@@ -27,7 +27,7 @@ mod attachments;
 mod chats;
 mod macros;
 mod notification;
-mod tools;
+pub mod tools;
 
 #[tracing::instrument(err, skip(state))]
 pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {

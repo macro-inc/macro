@@ -5,7 +5,7 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    Attachment, AttachmentMacro, Contact, EnrichedThreadPreviewCursor, ThreadPreviewCursor,
+    Attachment, AttachmentMacro, Contact, EmailThreadPreview, EnrichedEmailThreadPreview,
 };
 
 /// common types of sorts based on timestamps
@@ -47,8 +47,8 @@ struct ApiThreadPreviewCursor {
 
 impl ApiThreadPreviewCursor {
     #[inline]
-    fn new(model: EnrichedThreadPreviewCursor) -> Self {
-        let EnrichedThreadPreviewCursor {
+    fn new(model: EnrichedEmailThreadPreview) -> Self {
+        let EnrichedEmailThreadPreview {
             thread,
             attachments,
             attachments_macro,
@@ -106,8 +106,8 @@ pub struct ApiThreadPreviewCursorInner {
 
 impl ApiThreadPreviewCursorInner {
     #[inline]
-    fn new(thread: ThreadPreviewCursor) -> Self {
-        let ThreadPreviewCursor {
+    fn new(thread: EmailThreadPreview) -> Self {
+        let EmailThreadPreview {
             id,
             provider_id,
             owner_id,
@@ -266,7 +266,7 @@ pub struct ApiPaginatedThreadCursor {
 
 impl ApiPaginatedThreadCursor {
     #[inline]
-    pub(crate) fn new(model: PaginatedOpaqueCursor<EnrichedThreadPreviewCursor>) -> Self {
+    pub(crate) fn new(model: PaginatedOpaqueCursor<EnrichedEmailThreadPreview>) -> Self {
         let PaginatedOpaqueCursor {
             items, next_cursor, ..
         } = model;

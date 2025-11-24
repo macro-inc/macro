@@ -16,6 +16,21 @@ pub struct ToolSchema {
     pub output_schema: serde_json::Value,
 }
 
+pub fn tool_schemas() -> ToolSchemasResponse {
+    ToolSchemasResponse {
+        schemas: ai_tools::all_tools()
+            .toolset
+            .tools
+            .iter()
+            .map(|(name, tool_object)| ToolSchema {
+                name: name.clone(),
+                input_schema: tool_object.input_schema.clone(),
+                output_schema: tool_object.output_schema.clone(),
+            })
+            .collect(),
+    }
+}
+
 /// Get all available tool schemas as JSON Schema definitions
 #[utoipa::path(
     get,
@@ -26,19 +41,10 @@ pub struct ToolSchema {
     ),
     tag = "tools"
 )]
-pub async fn get_tool_schemas() -> Result<Json<ToolSchemasResponse>, StatusCode> {
-    let schemas = ai_tools::all_tools()
-        .toolset
-        .tools
-        .iter()
-        .map(|(name, tool_object)| ToolSchema {
-            name: name.clone(),
-            input_schema: tool_object.input_schema.clone(),
-            output_schema: tool_object.output_schema.clone(),
-        })
-        .collect();
 
-    Ok(Json(ToolSchemasResponse { schemas }))
+pub async fn get_tool_schemas() -> Result<Json<ToolSchemasResponse>, StatusCode> {
+    let schemas = tool_schemas();
+    Ok(Json(schemas))
 }
 
 pub fn router() -> Router {
