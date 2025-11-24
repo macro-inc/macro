@@ -353,7 +353,7 @@ export function EntityIcon(props: EntityIconProps) {
       return WIDE_ICONS[getName()];
     } else {
       return config().icon;
-    };
+    }
   };
   const sizeClass = () => ICON_SIZE_CLASSES[props.size ?? 'xs'];
   const isMonochrome = () => props.theme === 'monochrome';
