@@ -9,10 +9,11 @@ import {
   Show,
 } from 'solid-js';
 import { BulkDeleteView } from './BulkDeleteView';
+import { BulkMoveToProjectView } from './BulkMoveToProjectView';
 import { BulkRenameEntitiesView } from './BulkRenameEntitiesView';
 
 export const BulkEditEntityModalTitle = (props: { title: string }) => {
-  return <h2 class="text-xl mb-3">{props.title}</h2>;
+  return <h2 class="text-xl mb-4">{props.title}</h2>;
 };
 
 export const BulkEditEntityModalActionFooter = (props: {
@@ -72,12 +73,11 @@ const BulkEditEntityModalContent = (props: {
                   />
                 </Show>
                 <Show when={props.view === 'moveToProject'}>
-                  {/* <MoveToProjectView */}
-                  {/*   entity={props.entity!} */}
-                  {/*   onFinish={handleFinish} */}
-                  {/*   onCancel={handleCancel} */}
-                  {/* /> */}
-                  <div />
+                  <BulkMoveToProjectView
+                    entities={props.entities}
+                    onFinish={handleFinish}
+                    onCancel={handleCancel}
+                  />
                 </Show>
                 <Show when={props.view === 'delete'}>
                   <BulkDeleteView
@@ -117,7 +117,6 @@ export const BulkEditEntityModal: ParentComponent<BulkEditEntityModalProps> = (
   );
 };
 
-// Global modal state
 const [globalModalProps, setGlobalModalProps] = createSignal<{
   view: 'rename' | 'moveToProject' | 'delete';
   entities: EntityData[];
@@ -125,7 +124,6 @@ const [globalModalProps, setGlobalModalProps] = createSignal<{
 } | null>(null);
 const [modalOpen, setModalOpen] = createControlledOpenSignal();
 
-// Global modal open function
 export const openBulkEditModal = (props: {
   view: 'rename' | 'moveToProject' | 'delete';
   entities: EntityData[];

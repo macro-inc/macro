@@ -842,3 +842,104 @@ export function createBulkCopyDssEntityMutation() {
     },
   }));
 }
+
+export function createBulkMoveToProjectDssEntityMutation() {
+  const isUnsupportedEntity = (entity: EntityData) => {
+    const type = entity.type;
+    return type !== 'chat' && type !== 'document' && type !== 'project';
+  };
+
+  return useMutation(() => ({
+    mutationFn: async ({
+      entities,
+      project,
+    }: {
+      entities: (EntityData & { name: string })[];
+      project: { id: string; name: string };
+    }) => {
+      if (entities.some(isUnsupportedEntity)) {
+        throw new Error(`Unsupported entity type provided`);
+      }
+
+      const results = await Promise.all(
+        entities.map((entity) =>
+          moveToFolder({
+            itemType: entity.type as 'document' | 'chat' | 'project',
+            id: entity.id,
+            folderId: project.id,
+          })
+        )
+      );
+
+      if (results.some((r) => !r)) {
+        throw new Error(`One or more DSS items failed to move`);
+      }
+
+      return { success: true };
+    },
+
+    onMutate: async ({
+      entities,
+      project,
+    }: {
+      entities: (EntityData & { name: string })[];
+      project: { id: string; name: string };
+    }) => {
+      await Promise.all([
+        queryClient.cancelQueries({
+          queryKey: queryKeys.dss({ infinite: true }),
+        }),
+        queryClient.cancelQueries({
+          queryKey: queryKeys.dssPost({ infinite: true }),
+        }),
+      ]);
+
+      function updateEntityProjectIdInQueryData(
+        prev: { pages: { items: EntityData[] }[] } | undefined
+      ): { pages: { items: EntityData[] }[] } | undefined {
+        if (!prev) return prev;
+        const entityIds = entities.map((e) => e.id);
+        const pages = prev.pages.map((page) => ({
+          ...page,
+          items: page.items.map((item) =>
+            entityIds.includes(item.id)
+              ? { ...item, projectId: project.id }
+              : item
+          ),
+        }));
+        return {
+          ...prev,
+          pages,
+        };
+      }
+
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.dss({ infinite: true }) },
+        (prev) =>
+          updateEntityProjectIdInQueryData(
+            prev as { pages: { items: EntityData[] }[] } | undefined
+          )
+      );
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.dssPost({ infinite: true }) },
+        (prev) =>
+          updateEntityProjectIdInQueryData(
+            prev as { pages: { items: EntityData[] }[] } | undefined
+          )
+      );
+    },
+
+    onSettled: (data, error, { entities }) => {
+      if (data?.success === false || error)
+        console.error(`Failed to bulk move dss items`, entities, data, error);
+
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dss({ infinite: true }),
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dssPost({ infinite: true }),
+      });
+    },
+  }));
+}

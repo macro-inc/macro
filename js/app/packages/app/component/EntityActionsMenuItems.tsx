@@ -76,6 +76,7 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
     <>
       <MenuItemInner action="mark_as_done" label="Mark Done" />
       <MenuItemInner action="rename" label="Rename" />
+      <MenuItemInner action="move_to_project" label="Move to Project" />
       <MenuItemInner action="copy" label="Copy" />
       <MenuItem
         text="Open in new split"
@@ -101,7 +102,9 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
           }
         }}
       />
-      <MenuItemInner action="delete" label="Delete" />
+      <div class="text-failure-ink w-full">
+        <MenuItemInner action="delete" label="Delete" />
+      </div>
     </>
   );
 };

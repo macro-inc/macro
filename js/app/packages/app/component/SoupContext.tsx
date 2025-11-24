@@ -510,6 +510,62 @@ export function createNavigationEntityListShortcut({
     displayPriority: 10,
   });
 
+  // ---------------------------------------------------------------------------
+  // MOVE TO PROJECT
+  // ---------------------------------------------------------------------------
+  actionRegistry.register(
+    'move_to_project',
+    async (entitiesToMove) => {
+      const next = getNextEntity(entitiesToMove);
+      try {
+        openBulkEditModal({
+          view: 'moveToProject',
+          entities: entitiesToMove,
+          onFinish: () => {
+            afterEntityAction(next);
+          },
+        });
+      } catch (err) {
+        console.error('Failed to open bulk move modal', err);
+      }
+      return { success: true };
+    },
+    {
+      testEnabled: (entity) => {
+        // can't move these bad boys yet.
+        if (entity.type === 'channel' || entity.type === 'email') return false;
+        return true;
+      },
+    }
+  );
+
+  registerHotkey({
+    scopeId: splitHotkeyScope,
+    description: () =>
+      viewData().selectedEntities.length > 1
+        ? 'Move items to project'
+        : 'Move item to project',
+    condition: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled(
+        'move_to_project',
+        plainSelectedEntities()
+      ),
+    keyDownHandler: () => {
+      const entitiesForAction = getEntitiesForAction();
+      if (entitiesForAction.entities.length === 0) {
+        return false;
+      }
+      actionRegistry.execute(
+        'move_to_project',
+        entitiesForAction.entities.map(({ entity }) => entity)
+      );
+      return true;
+    },
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+  });
+
   const openEntity = (entity: EntityData) => {
     const { type, id } = entity;
     if (type === 'document') {
