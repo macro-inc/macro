@@ -64,6 +64,8 @@ import { Layout } from './Layout';
 import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
+import { EmailSignUp } from './email-auth/EmailSignUp';
+import { EmailCallback } from './email-auth/EmailCallback';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -178,6 +180,14 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/',
     component: BasePathComponent,
+  },
+  {
+    path: '/signup',
+    component: EmailSignUp,
+  },
+  {
+    path: '/email-signup-callback',
+    component: EmailCallback,
   },
   {
     path: '/login/popup/success',
