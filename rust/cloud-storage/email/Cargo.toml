@@ -22,7 +22,7 @@ ports = ["dep:tokio", "frecency/ports"]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
-doppleganger = { workspace = true }
+doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 frecency = { path = "../frecency" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
