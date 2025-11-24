@@ -28,7 +28,11 @@ axum = { workspace = true, features = ["macros", "tower-log", "ws"] }
 chrono = { workspace = true }
 dashmap = { workspace = true }
 ensure_exists = { path = "../ensure_exists", features = ["dynamodb"] }
-frecency = { path = "../frecency", features = ["postgres"] }
+frecency = { path = "../frecency", features = [
+  "inbound",
+  "outbound",
+  "postgres",
+] }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 itertools = "0.14.0"

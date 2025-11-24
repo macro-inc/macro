@@ -5,6 +5,7 @@ use crate::outbound::pg_soup_repo::unexpanded::{
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
+use models_pagination::Identify;
 use models_pagination::{PaginateOn, Query, SimpleSortMethod};
 use models_soup::item::SoupItem;
 use sqlx::{Pool, Postgres};
@@ -22,16 +23,8 @@ use uuid::Uuid;
 async fn test_unexpanded_generic_sorting_methods(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
 
-    let get_item_ids = |items: &[SoupItem]| -> Vec<Uuid> {
-        items
-            .iter()
-            .map(|item| match item {
-                SoupItem::Document(d) => d.id,
-                SoupItem::Chat(c) => c.id,
-                SoupItem::Project(p) => p.id,
-            })
-            .collect()
-    };
+    let get_item_ids =
+        |items: &[SoupItem]| -> Vec<Uuid> { items.iter().map(|item| item.id()).collect() };
 
     {
         let result = unexpanded_generic_cursor_soup(
@@ -114,16 +107,8 @@ async fn test_unexpanded_generic_mixed_types_sorting(pool: Pool<Postgres>) -> an
     let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
 
     // --- Helper to extract IDs for easy comparison ---
-    let get_item_ids = |items: &[SoupItem]| -> Vec<Uuid> {
-        items
-            .iter()
-            .map(|item| match item {
-                SoupItem::Document(d) => d.id,
-                SoupItem::Chat(c) => c.id,
-                SoupItem::Project(p) => p.id,
-            })
-            .collect()
-    };
+    let get_item_ids =
+        |items: &[SoupItem]| -> Vec<Uuid> { items.iter().map(|item| item.id()).collect() };
 
     // --- Case 1: Test SortMethod::LastViewed ---
     {
@@ -151,11 +136,7 @@ async fn test_unexpanded_generic_mixed_types_sorting(pool: Pool<Postgres>) -> an
         let items_map: std::collections::HashMap<Uuid, &SoupItem> = result
             .iter()
             .map(|item| {
-                let id = match item {
-                    SoupItem::Document(d) => d.id,
-                    SoupItem::Chat(c) => c.id,
-                    SoupItem::Project(p) => p.id,
-                };
+                let id = item.id();
                 (id, item)
             })
             .collect();
@@ -488,14 +469,7 @@ async fn test_no_frecency_unexpanded_filters_out_frecency_items(
     );
 
     // Verify the returned items are the ones WITHOUT frecency
-    let returned_ids: HashSet<Uuid> = items
-        .iter()
-        .map(|item| match item {
-            SoupItem::Chat(c) => c.id,
-            SoupItem::Document(d) => d.id,
-            SoupItem::Project(p) => p.id,
-        })
-        .collect();
+    let returned_ids: HashSet<Uuid> = items.iter().map(|item| item.id()).collect();
 
     let expected_ids: HashSet<Uuid> = [
         "44444444-4444-4444-4444-444444444444", // doc-no-frecency-1
@@ -542,16 +516,8 @@ async fn test_no_frecency_unexpanded_filters_out_frecency_items(
 async fn test_no_frecency_unexpanded_sorting_methods(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let user_id = MacroUserIdStr::parse_from_str("macro|user@user.com").unwrap();
 
-    let get_item_ids = |items: &[SoupItem]| -> Vec<Uuid> {
-        items
-            .iter()
-            .map(|item| match item {
-                SoupItem::Document(d) => d.id,
-                SoupItem::Chat(c) => c.id,
-                SoupItem::Project(p) => p.id,
-            })
-            .collect()
-    };
+    let get_item_ids =
+        |items: &[SoupItem]| -> Vec<Uuid> { items.iter().map(|item| item.id()).collect() };
 
     // Test UpdatedAt sorting
     {

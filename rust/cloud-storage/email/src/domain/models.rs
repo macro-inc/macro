@@ -1,8 +1,8 @@
-use frecency::domain::ports::FrecencyQueryErr;
+use chrono::{DateTime, Utc};
+use frecency::domain::models::FrecencyQueryErr;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Identify, Query, SimpleSortMethod, SortOn};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
-use sqlx::types::chrono::{DateTime, Utc};
 use std::str::FromStr;
 use strum::{Display, EnumString};
 use thiserror::Error;
@@ -62,7 +62,7 @@ impl FromStr for PreviewView {
 
 #[derive(Debug, Clone)]
 #[non_exhaustive]
-pub struct ThreadPreviewCursor {
+pub struct EmailThreadPreview {
     pub id: Uuid,
     pub provider_id: Option<String>,
     pub owner_id: MacroUserIdStr<'static>,
@@ -82,15 +82,15 @@ pub struct ThreadPreviewCursor {
 }
 
 #[non_exhaustive]
-pub struct EnrichedThreadPreviewCursor {
-    pub thread: ThreadPreviewCursor,
+pub struct EnrichedEmailThreadPreview {
+    pub thread: EmailThreadPreview,
     pub attachments: Vec<Attachment>,
     pub attachments_macro: Vec<AttachmentMacro>,
     pub frecency_score: Option<f64>,
     pub participants: Vec<Contact>,
 }
 
-impl Identify for EnrichedThreadPreviewCursor {
+impl Identify for EnrichedEmailThreadPreview {
     type Id = Uuid;
 
     fn id(&self) -> Self::Id {
@@ -98,7 +98,7 @@ impl Identify for EnrichedThreadPreviewCursor {
     }
 }
 
-impl SortOn<SimpleSortMethod> for EnrichedThreadPreviewCursor {
+impl SortOn<SimpleSortMethod> for EnrichedEmailThreadPreview {
     fn sort_on(
         sort: SimpleSortMethod,
     ) -> impl FnOnce(&Self) -> models_pagination::CursorVal<SimpleSortMethod> {

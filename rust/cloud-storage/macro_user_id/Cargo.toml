@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+doppleganger = { workspace = true }
 nom = { workspace = true }
 serde = { workspace = true }
 thiserror = { workspace = true }
