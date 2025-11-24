@@ -27,7 +27,7 @@ use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingErro
 use models_opensearch::SearchEntityType;
 use sqs_client::search::SearchQueueMessage;
 use sqs_client::search::email::EmailMessage;
-use sqs_client::search::name::UpdateEntityName;
+use sqs_client::search::name::EntityName;
 use std::collections::{HashMap, HashSet};
 use std::result;
 use uuid::Uuid;
@@ -428,12 +428,10 @@ async fn fetch_and_insert_thread(
 
         // notify search about new entity
         ctx.sqs_client
-            .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(
-                UpdateEntityName {
-                    entity_id: thread_id,
-                    entity_type: SearchEntityType::Emails,
-                },
-            ))
+            .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(EntityName {
+                entity_id: thread_id,
+                entity_type: SearchEntityType::Emails,
+            }))
             .await
             .map_err(|e| {
                 ProcessingError::NonRetryable(DetailedError {

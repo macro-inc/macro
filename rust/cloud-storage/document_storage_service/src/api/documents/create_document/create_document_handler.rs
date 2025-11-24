@@ -5,7 +5,7 @@ use macro_middleware::cloud_storage::ensure_access::project::ProjectBodyAccessLe
 use models_opensearch::SearchEntityType;
 use models_permissions::share_permission::access_level::EditAccessLevel;
 use sqs_client::search::SearchQueueMessage;
-use sqs_client::search::name::UpdateEntityName;
+use sqs_client::search::name::EntityName;
 use tracing::Instrument;
 
 use crate::api::middleware::internal_access::InternalUser;
@@ -137,7 +137,7 @@ pub(in crate::api) async fn create_document_handler(
 
             let _ = sqs_client
                 .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(
-                    UpdateEntityName {
+                    EntityName {
                         entity_id: document_id,
                         entity_type: SearchEntityType::Documents,
                     },

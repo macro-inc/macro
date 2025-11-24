@@ -45,6 +45,11 @@ pub async fn delete_channel_handler(
         None::<&str>,
     );
 
+    service::search::send_remove_channel_name_to_search_extractor_queue(
+        &ctx.sqs_client,
+        &channel_id,
+    );
+
     Ok((
         StatusCode::NOT_FOUND,
         "channel successfully deleted".to_string(),

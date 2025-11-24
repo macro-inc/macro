@@ -13,7 +13,7 @@ use model::{
 use models_opensearch::SearchEntityType;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
-use sqs_client::search::{SearchQueueMessage, document::DocumentId, name::UpdateEntityName};
+use sqs_client::search::{SearchQueueMessage, document::DocumentId, name::EntityName};
 use tracing::Instrument;
 
 pub async fn edit_document(
@@ -99,7 +99,7 @@ pub async fn edit_document(
 
                 let _ = sqs_client
                     .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(
-                        UpdateEntityName {
+                        EntityName {
                             entity_id: document_id,
                             entity_type: SearchEntityType::Documents,
                         },
