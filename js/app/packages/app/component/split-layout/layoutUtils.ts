@@ -1,7 +1,7 @@
 import { createCallback } from '@solid-primitives/rootless';
 import { useContext } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from './context';
-import type { SplitContent } from './layoutManager';
+import type { SplitContent, SplitManager } from './layoutManager';
 
 export function decodePairs(segments: string[]): SplitContent[] {
   const pairs: SplitContent[] = [];
@@ -60,4 +60,14 @@ export function useSplitPanelOrThrow() {
  */
 export function useSplitPanel() {
   return useContext(SplitPanelContext);
+}
+
+export function globalRemoveFromSplitHistory(
+  manager: SplitManager,
+  test: (item: SplitContent) => boolean
+) {
+  for (const split of manager.splits()) {
+    const handle = manager.getSplit(split.id);
+    handle?.removeFromHistory(test);
+  }
 }

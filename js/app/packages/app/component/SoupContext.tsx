@@ -1,3 +1,4 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
@@ -59,6 +60,7 @@ import {
 } from './command/state';
 import { useGlobalNotificationSource } from './GlobalAppState';
 import type { SplitHandle } from './split-layout/layoutManager';
+import { globalRemoveFromSplitHistory } from './split-layout/layoutUtils';
 import {
   createEntityActionRegistry,
   type EntityActionRegistry,
@@ -367,6 +369,13 @@ export function createNavigationEntityListShortcut({
           entities: entitiesToDelete,
           onFinish: () => {
             afterEntityAction(next, true);
+            const splitManager = globalSplitManager();
+            if (splitManager) {
+              const entityIdSet = new Set(entitiesToDelete.map(({ id }) => id));
+              globalRemoveFromSplitHistory(splitManager, (entry) =>
+                entityIdSet.has(entry.id)
+              );
+            }
           },
           onCancel: () => {
             afterEntityAction(prev);
