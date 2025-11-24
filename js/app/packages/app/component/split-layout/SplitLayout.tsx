@@ -170,14 +170,10 @@ function createSplitFocusTracker(props: {
   };
 
   const findNextSplitToActivate = (splitIndex: number): SplitId | undefined => {
-    const wasOnlySplit = splitIndex === 0;
-
-    // If the removed split was the only split,
-    // we automatically insert and activate a new one
-    // Don't need to handle anything here
-    if (wasOnlySplit) return undefined;
-
-    const nextSplitId = props.splits()[splitIndex - 1].id;
+    const nextSplitId =
+      splitIndex === 0
+        ? props.splits()[0].id
+        : props.splits()[splitIndex - 1].id;
 
     return nextSplitId;
   };
