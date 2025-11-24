@@ -9,6 +9,8 @@ use crate::{Result, error::ResponseExt};
 pub struct UpsertEntityNameArgs {
     /// The entity id
     pub entity_id: String,
+    /// The macro user id who created the entity
+    pub user_id: String,
     /// The entity name
     pub name: String,
     /// The entity type

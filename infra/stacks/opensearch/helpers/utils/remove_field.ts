@@ -1,20 +1,5 @@
 import type { Client } from '@opensearch-project/opensearch';
-
-/**
- * Checks if an index exists.
- * @param opensearchClient The OpenSearch client.
- * @param indexName The name of the index.
- * @returns Whether the index exists.
- */
-async function checkIndexExists(
-  opensearchClient: Client,
-  indexName: string
-): Promise<boolean> {
-  const response = await opensearchClient.indices.exists({
-    index: indexName,
-  });
-  return response.body;
-}
+import { checkIndexExists } from './check_index_exists';
 
 /**
  * Checks if a field exists in an index.

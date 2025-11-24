@@ -10,10 +10,12 @@ pub async fn upsert_name(
     db: &sqlx::Pool<sqlx::Postgres>,
     message: &UpdateEntityName,
 ) -> anyhow::Result<()> {
-    // Get entity name from db
-    let entity_name =
-        macro_db_client::entity_name::get_entity_name(db, &message.entity_id, &message.entity_type)
-            .await?;
+    let (entity_name, user_id) = macro_db_client::entity_name::get_entity_name_and_owner(
+        db,
+        &message.entity_id,
+        &message.entity_type,
+    )
+    .await?;
 
     let name = if let Some(entity_name) = entity_name {
         entity_name
@@ -30,6 +32,7 @@ pub async fn upsert_name(
         .upsert_entity_name(&UpsertEntityNameArgs {
             entity_id: message.entity_id.to_string(),
             name,
+            user_id,
             entity_type: message.entity_type.clone(),
         })
         .await?;
