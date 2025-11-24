@@ -126,8 +126,9 @@ import { bufToString } from '@core/util/string';
 import {
   forceDssRuleset,
   handleFileFolderDrop,
-  type UploadFileEntry,
-  uploadFile,
+  isFileUploadEntry,
+  type UploadInput,
+  uploadFiles,
 } from '@core/util/upload';
 import WarningIcon from '@icon/regular/warning.svg';
 import {
@@ -336,7 +337,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       const mention = $createDocumentMentionNode({
         documentId,
         documentName,
-        blockName: blockName as any,
+        blockName: blockName,
         mentionUuid: mentionId,
       });
       const selection = $getSelection();
@@ -350,17 +351,16 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   }
 
   async function handleUploadEntriesForEditor(
-    uploadEntries: UploadFileEntry[]
+    uploadEntries: UploadInput[]
   ): Promise<void> {
     const mediaFiles: File[] = [];
-    const nonMediaFiles: File[] = [];
-    const folderZips: File[] = [];
+    const filesToUpload: UploadInput[] = [];
 
     for (const entry of uploadEntries) {
-      if (entry.isFolder) {
-        folderZips.push(entry.file);
+      if (isFileUploadEntry(entry) && entry.isFolder) {
+        filesToUpload.push(entry);
       } else {
-        const file = entry.file;
+        const file = isFileUploadEntry(entry) ? entry.file : entry;
         const ext = fileExtension(file.name);
         if (
           ext != null &&
@@ -369,46 +369,61 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         ) {
           mediaFiles.push(file);
         } else {
-          nonMediaFiles.push(file);
+          filesToUpload.push(entry);
         }
       }
     }
 
     await processInlineMediaFiles(mediaFiles);
 
-    for (const file of nonMediaFiles) {
-      const result = await uploadFile(file, forceDssRuleset);
-      if (
-        !result.failed &&
-        result.destination === 'dss' &&
-        result.type === 'document'
-      ) {
-        const blockName = fileTypeToBlockName(result.fileType, true);
-        if (blockName) {
-          await insertMention(result.documentId, file.name, blockName);
-        }
-      } else {
-        toast.failure('Upload failed. Please try again.');
-      }
+    if (filesToUpload.length === 0) {
+      return;
     }
 
-    // upload folders as projects
-    for (const zip of folderZips) {
-      const result = await uploadFile(zip, forceDssRuleset, {
-        unzipFolder: true,
-      });
-      if (
-        !result.failed &&
-        result.destination === 'dss' &&
-        result.type === 'folder'
-      ) {
+    const results = await uploadFiles(filesToUpload, forceDssRuleset);
+
+    const failedUploads: string[] = [];
+    const failedFolders: string[] = [];
+
+    for (const result of results) {
+      if (result.failed) {
+        failedUploads.push(result.name);
+        continue;
+      }
+
+      if (result.destination !== 'dss') {
+        continue;
+      }
+
+      if (result.type === 'document') {
+        const blockName = fileTypeToBlockName(result.fileType, true);
+        if (blockName) {
+          await insertMention(result.documentId, result.name, blockName);
+        }
+      } else if (result.type === 'folder') {
         const projectId = await waitBulkUploadStatus(result.requestId);
         if (projectId) {
           await insertMention(projectId, result.name, 'project');
         } else {
-          toast.failure('Folder upload failed or timed out');
+          failedFolders.push(result.name);
         }
       }
+    }
+
+    // Aggregate and show failure toasts
+    if (failedUploads.length > 0 || failedFolders.length > 0) {
+      const failures: string[] = [];
+      if (failedUploads.length > 0) {
+        failures.push(
+          `${failedUploads.length} file${failedUploads.length > 1 ? 's' : ''} failed to upload`
+        );
+      }
+      if (failedFolders.length > 0) {
+        failures.push(
+          `${failedFolders.length} folder${failedFolders.length > 1 ? 's' : ''} failed to upload`
+        );
+      }
+      toast.failure(failures.join('. '));
     }
   }
 
@@ -433,7 +448,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       const zipped = await Promise.all(zipPromises);
       const zipFiles = zipped.filter((f): f is File => !!f);
 
-      const entries: UploadFileEntry[] = [
+      const entries: UploadInput[] = [
         ...files.map((f) => ({ file: f, isFolder: false })),
         ...zipFiles.map((f) => ({ file: f, isFolder: true })),
       ];
@@ -441,7 +456,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       return;
     }
 
-    const entries: UploadFileEntry[] = files.map((f) => ({
+    const entries: UploadInput[] = files.map((f) => ({
       file: f,
       isFolder: false,
     }));
@@ -1019,7 +1034,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
             handleFileFolderDrop(
               fileEntries,
               folderEntries,
-              async (uploadEntries: UploadFileEntry[]) => {
+              async (uploadEntries: UploadInput[]) => {
                 await handleUploadEntriesForEditor(uploadEntries);
               }
             );

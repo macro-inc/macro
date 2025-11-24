@@ -71,7 +71,7 @@ type UploadFileResult<D extends UploadDestination> = D extends 'dss'
 type DssUploadFilesOptions = Omit<DssUploadFileOptions, 'unzipFolder'>;
 
 /** regular file or a directory that was zipped */
-export type UploadFileEntry = {
+type UploadFileEntry = {
   file: File;
   isFolder: boolean;
 };
@@ -81,7 +81,7 @@ export type UploadInput = File | UploadFileEntry;
 const getFileName = (file: File) =>
   filenameWithoutExtension(file.name) ?? file.name;
 
-const isFileUploadEntry = (
+export const isFileUploadEntry = (
   file: File | UploadFileEntry
 ): file is UploadFileEntry => 'isFolder' in file;
 

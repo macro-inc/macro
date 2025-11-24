@@ -21,7 +21,7 @@ import {
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
 import type { IUser } from '@core/user';
-import type { UploadFileEntry } from '@core/util/upload';
+import type { UploadInput } from '@core/util/upload';
 import { handleFileFolderDrop } from '@core/util/upload';
 import PlusIcon from '@icon/regular/plus.svg';
 import FormatIcon from '@icon/regular/text-aa.svg';
@@ -360,7 +360,7 @@ export function BaseInput(props: BaseInputProps) {
 
     const zippedPromises = handleFoldersInput(directories);
     const zipped = await Promise.all(zippedPromises);
-    const dirEntries: UploadFileEntry[] = zipped
+    const dirEntries: UploadInput[] = zipped
       .filter((f): f is File => !!f)
       .map((file) => ({ file, isFolder: true }));
     const fileEntryPromises = filesToUse.map(
@@ -373,11 +373,11 @@ export function BaseInput(props: BaseInputProps) {
         })
     );
     const plainFiles = await Promise.all(fileEntryPromises);
-    const fileEntries: UploadFileEntry[] = plainFiles.map((file) => ({
+    const fileEntries: UploadInput[] = plainFiles.map((file) => ({
       file,
       isFolder: false,
     }));
-    const entries: UploadFileEntry[] = [...fileEntries, ...dirEntries];
+    const entries: UploadInput[] = [...fileEntries, ...dirEntries];
     let uploadedCount = 0;
     handleFileUpload(entries, props.inputAttachments, () => {
       uploadedCount++;
