@@ -157,7 +157,7 @@ export type SplitHandle = {
     cb: (payload: SplitEventPayload[SplitEvent.ContentChange]) => void
   ) => void;
   replace: (next: SplitContent, mergeHistory?: boolean) => void;
-  removeFromHistory: (fn: (content: SplitContent) => boolean) => void;
+  removeFromHistory: (predicate: (content: SplitContent) => boolean) => void;
   toggleSpotlight: (force?: boolean) => void;
   setDisplayName: (name: string) => void;
   canGoForward: () => boolean;
@@ -356,13 +356,13 @@ export function createSplitLayout(
 
   function removeFromHistory(
     id: SplitId,
-    test: (content: SplitContent) => boolean
+    predicate: (content: SplitContent) => boolean
   ) {
     const i = state.splits.findIndex((s) => s.id === id);
     if (i < 0) return console.error(`Split with id ${id} not found`);
 
     const split = state.splits[i];
-    const next = split.history.remove(test);
+    const next = split.history.remove(predicate);
     if (!next) return;
 
     reattach(split, next);
@@ -475,8 +475,8 @@ export function createSplitLayout(
       goForward: () => forward(currentSplit.id),
       replace: (next, mergeHistory = false) =>
         replace(currentSplit.id, next, mergeHistory),
-      removeFromHistory: (test: (content: SplitContent) => boolean) => {
-        removeFromHistory(currentSplit.id, test);
+      removeFromHistory: (predicate: (content: SplitContent) => boolean) => {
+        removeFromHistory(currentSplit.id, predicate);
       },
       close: () => {
         // If there's only one split and it's the default split, then no-op

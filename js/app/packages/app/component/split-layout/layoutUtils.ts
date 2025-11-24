@@ -62,12 +62,17 @@ export function useSplitPanel() {
   return useContext(SplitPanelContext);
 }
 
+/**
+ * Remove all the items from all split histories that meet a certain criteria.
+ * @param manager
+ * @param test
+ */
 export function globalRemoveFromSplitHistory(
   manager: SplitManager,
-  test: (item: SplitContent) => boolean
+  predicate: (item: SplitContent) => boolean
 ) {
   for (const split of manager.splits()) {
     const handle = manager.getSplit(split.id);
-    handle?.removeFromHistory(test);
+    handle?.removeFromHistory(predicate);
   }
 }
