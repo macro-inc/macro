@@ -20,14 +20,10 @@ pub enum SoupItemType {
     EmailThread,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
-#[serde(untagged)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema), schema(discriminator(property_name = "type", mapping(
-     ("document" = "#/components/schemas/SoupDocument"),
-     ("chat" = "#/components/schemas/SoupChat"),
-     ("project" = "#/components/schemas/SoupProject"),
-))))]
+#[serde(rename_all = "camelCase", tag = "tag", content = "data")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum SoupItem {
     Document(SoupDocument),
     Chat(SoupChat),
@@ -60,47 +56,6 @@ impl SoupItem {
             SoupItem::Chat(soup_chat) => soup_chat.updated_at,
             SoupItem::Project(soup_project) => soup_project.updated_at,
             SoupItem::EmailThread(soup_thread) => soup_thread.thread.updated_at,
-        }
-    }
-}
-
-impl Serialize for SoupItem {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        macro_rules! flatten_variant {
-            ($tag:expr, $inner_ty:ty, $inner_val:expr) => {{
-                #[derive(Serialize)]
-                struct Inline<'a> {
-                    #[serde(rename = "type")]
-                    tag: &'a SoupItemType,
-                    #[serde(flatten)]
-                    data: &'a $inner_ty,
-                }
-                let tmp = Inline {
-                    tag: $tag,
-                    data: $inner_val,
-                };
-                tmp.serialize(serializer)
-            }};
-        }
-
-        match self {
-            SoupItem::Document(doc) => {
-                flatten_variant!(&SoupItemType::Document, SoupDocument, doc)
-            }
-            SoupItem::Chat(chat) => {
-                flatten_variant!(&SoupItemType::Chat, SoupChat, chat)
-            }
-            SoupItem::Project(project) => {
-                flatten_variant!(&SoupItemType::Project, SoupProject, project)
-            }
-            SoupItem::EmailThread(thread) => flatten_variant!(
-                &SoupItemType::EmailThread,
-                SoupEnrichedEmailThreadPreview,
-                thread
-            ),
         }
     }
 }

@@ -1,5 +1,5 @@
 pub mod domain;
-#[cfg(feature = "ports")]
+#[cfg(feature = "inbound")]
 pub mod inbound;
-#[cfg(feature = "ports")]
+#[cfg(feature = "outbound")]
 pub mod outbound;
