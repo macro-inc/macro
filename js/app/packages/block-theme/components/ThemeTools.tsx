@@ -104,6 +104,7 @@ export function ThemeTools() {
           onPointerDown={exportTheme}
           icon={IconClipboard}
           theme="base"
+          size="sm"
         />
       </Show>
 
@@ -112,6 +113,7 @@ export function ThemeTools() {
         onPointerDown={invertTheme}
         icon={IconLightDark}
         theme="base"
+        size="sm"
       />
 
       <IconButton
@@ -119,6 +121,7 @@ export function ThemeTools() {
         onPointerDown={randomizeTheme}
         icon={IconDice}
         theme="base"
+        size="sm"
       />
     </div>
   );

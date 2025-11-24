@@ -107,7 +107,7 @@ export function SettingsContent() {
   });
 
   return (
-    <div class="h-full flex flex-col bg-dialog text-ink">
+    <div class="h-full flex flex-col bg-panel text-ink">
       <Tabs
         value={activeTabId()}
         onChange={(value: string | undefined) => {
@@ -218,5 +218,3 @@ export function SettingsContent() {
     </div>
   );
 }
-
-

@@ -173,7 +173,7 @@ export function Appearance() {
             appearance: none;
             width: 18px;
             height: 18px;
-            background-color: var(--b0);
+            background-color: var(--b1);
             border: 1px solid var(--b4);
             border-radius: 0px;
             cursor: var(--cursor-pointer);
@@ -181,7 +181,7 @@ export function Appearance() {
           .sound-volume-slider::-moz-range-thumb {
             width: 18px;
             height: 18px;
-            background-color: var(--b0);
+            background-color: var(--b1);
             border: 1px solid var(--b4);
             border-radius: 0px;
             cursor: var(--cursor-pointer);

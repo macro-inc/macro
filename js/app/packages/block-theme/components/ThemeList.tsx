@@ -77,10 +77,10 @@ export function ThemeList() {
                 onPointerDown={() => {applyTheme(theme.id)}}
                 style="
                   grid-template-columns: min-content 1fr min-content;
-                  background-color: var(--b0);
+                  cursor: var(--cursor-pointer);
+                  background-color: var(--b1);
                   align-items: center;
                   padding: 10px 20px;
-                  cursor: var(--cursor-pointer);
                   display: grid;
                   gap: 20px;
                 "
