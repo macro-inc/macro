@@ -204,8 +204,6 @@ interface UnifiedInfiniteListContext<T extends EntityData> {
   entitySort?: Accessor<EntityComparator<T>>;
   searchFilter?: Accessor<EntitiesFilter<T> | undefined>;
   isSearchActive?: Accessor<boolean>;
-  // TODO: deduplicate entities for same match
-  deduplicate?: Accessor<(prev: T, next: T) => boolean>;
 }
 
 export function createUnifiedInfiniteList<T extends EntityData>({
