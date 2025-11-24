@@ -439,6 +439,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           return matchResults.map((result) => {
             return {
               ...result.item,
+              latestMessage: undefined,
               search: {
                 nameHighlight: result.nameHighlight,
                 contentHitData: null,
