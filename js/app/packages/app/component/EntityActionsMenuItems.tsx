@@ -44,6 +44,9 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
       entities
     );
   };
+  const Divider = () => (
+    <div class="border-b border-edge-muted w-full my-1"></div>
+  );
 
   const MenuItemInner = (props: {
     action: EntityActionType;
@@ -75,9 +78,6 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
   return (
     <>
       <MenuItemInner action="mark_as_done" label="Mark Done" />
-      <MenuItemInner action="rename" label="Rename" />
-      <MenuItemInner action="move_to_project" label="Move to Project" />
-      <MenuItemInner action="copy" label="Copy" />
       <MenuItem
         text="Open in new split"
         disabled={entities().length > 1 || !canOpenEntityInSplit()}
@@ -102,6 +102,11 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
           }
         }}
       />
+      <Divider />
+      <MenuItemInner action="rename" label="Rename" />
+      <MenuItemInner action="move_to_project" label="Move to Project" />
+      <MenuItemInner action="copy" label="Copy" />
+      <Divider />
       <div class="text-failure-ink w-full">
         <MenuItemInner action="delete" label="Delete" />
       </div>

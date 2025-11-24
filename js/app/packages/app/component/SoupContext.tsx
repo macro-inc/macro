@@ -24,6 +24,7 @@ import {
   runCommand,
   useHotkeyDOMScope,
 } from 'core/hotkey/hotkeys';
+import { clear } from 'mermaid/dist/rendering-util/rendering-elements/nodes.js';
 import {
   type Accessor,
   batch,
@@ -259,12 +260,17 @@ export function createNavigationEntityListShortcut({
   /**
    * Return to list after entity modal edit action.
    */
-  const afterEntityAction = (next: EntityData | null) => {
-    setViewDataStore(selectedView(), 'selectedEntities', []);
-    if (next !== null) {
-      setViewDataStore(selectedView(), 'selectedEntity', next);
-      setViewDataStore(selectedView(), 'highlightedId', next.id);
-      const nextIndex = entities()?.findIndex(({ id }) => id === next.id);
+  const afterEntityAction = (
+    entity: EntityData | null | undefined,
+    clearSelection?: boolean
+  ) => {
+    if (clearSelection) {
+      setViewDataStore(selectedView(), 'selectedEntities', []);
+    }
+    if (entity) {
+      setViewDataStore(selectedView(), 'selectedEntity', entity);
+      setViewDataStore(selectedView(), 'highlightedId', entity.id);
+      const nextIndex = entities()?.findIndex(({ id }) => id === entity.id);
       if (nextIndex !== undefined && nextIndex > -1) {
         virtualizerHandle()?.scrollToIndex(nextIndex, {
           align: 'nearest',
@@ -354,13 +360,17 @@ export function createNavigationEntityListShortcut({
   actionRegistry.register(
     'delete',
     async (entitiesToDelete) => {
+      const prev = selectedEntity();
       const next = getNextEntity(entitiesToDelete);
       try {
         openBulkEditModal({
           view: 'delete',
           entities: entitiesToDelete,
           onFinish: () => {
-            afterEntityAction(next);
+            afterEntityAction(next, true);
+          },
+          onCancel: () => {
+            afterEntityAction(prev);
           },
         });
       } catch (err) {
@@ -417,6 +427,7 @@ export function createNavigationEntityListShortcut({
   actionRegistry.register(
     'rename',
     async (entitiesToRename) => {
+      const prev = selectedEntity();
       const next = getNextEntity(entitiesToRename);
       try {
         openBulkEditModal({
@@ -424,6 +435,9 @@ export function createNavigationEntityListShortcut({
           entities: entitiesToRename,
           onFinish: () => {
             afterEntityAction(next);
+          },
+          onCancel: () => {
+            afterEntityAction(prev);
           },
         });
       } catch (err) {
@@ -470,7 +484,6 @@ export function createNavigationEntityListShortcut({
   actionRegistry.register(
     'copy',
     async (entitiesToCopy) => {
-      const next = getNextEntity(entitiesToCopy);
       try {
         await bulkCopyMutation.mutateAsync({
           entities: entitiesToCopy,
@@ -481,7 +494,6 @@ export function createNavigationEntityListShortcut({
     },
     {
       testEnabled: (entity) => {
-        // can't copy these bad boys yet.
         if (entity.type === 'channel' || entity.type === 'email') return false;
         return true;
       },
@@ -516,13 +528,17 @@ export function createNavigationEntityListShortcut({
   actionRegistry.register(
     'move_to_project',
     async (entitiesToMove) => {
+      const prev = selectedEntity();
       const next = getNextEntity(entitiesToMove);
       try {
         openBulkEditModal({
           view: 'moveToProject',
           entities: entitiesToMove,
           onFinish: () => {
-            afterEntityAction(next);
+            afterEntityAction(next, true);
+          },
+          onCancel: () => {
+            afterEntityAction(prev);
           },
         });
       } catch (err) {
@@ -532,7 +548,6 @@ export function createNavigationEntityListShortcut({
     },
     {
       testEnabled: (entity) => {
-        // can't move these bad boys yet.
         if (entity.type === 'channel' || entity.type === 'email') return false;
         return true;
       },

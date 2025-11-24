@@ -48,6 +48,7 @@ const BulkEditEntityModalContent = (props: {
   view: 'rename' | 'moveToProject' | 'delete' | null;
   entities: EntityData[];
   onFinish?: () => void;
+  onCancel?: () => void;
 }) => {
   const handleFinish = () => {
     props.setIsOpen(false);
@@ -55,6 +56,7 @@ const BulkEditEntityModalContent = (props: {
   };
   const handleCancel = () => {
     props.setIsOpen(false);
+    props.onCancel?.();
   };
 
   return (
@@ -121,6 +123,7 @@ const [globalModalProps, setGlobalModalProps] = createSignal<{
   view: 'rename' | 'moveToProject' | 'delete';
   entities: EntityData[];
   onFinish?: () => void;
+  onCancel?: () => void;
 } | null>(null);
 const [modalOpen, setModalOpen] = createControlledOpenSignal();
 
@@ -128,6 +131,7 @@ export const openBulkEditModal = (props: {
   view: 'rename' | 'moveToProject' | 'delete';
   entities: EntityData[];
   onFinish?: () => void;
+  onCancel?: () => void;
 }) => {
   setModalOpen(true);
   setGlobalModalProps(props);
@@ -144,6 +148,14 @@ export const GlobalBulkEditEntityModal = () => {
     }
   };
 
+  const handleCancel = () => {
+    const props = globalModalProps();
+    setGlobalModalProps(null);
+    if (props?.onCancel) {
+      props.onCancel();
+    }
+  };
+
   return (
     <Show when={modalProps()}>
       {(props) => (
@@ -153,6 +165,7 @@ export const GlobalBulkEditEntityModal = () => {
           view={props().view}
           entities={props().entities}
           onFinish={handleFinish}
+          onCancel={handleCancel}
         />
       )}
     </Show>
