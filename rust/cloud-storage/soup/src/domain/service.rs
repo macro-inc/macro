@@ -6,6 +6,7 @@ use crate::domain::{
     ports::{SoupOutput, SoupRepo, SoupService},
 };
 use either::Either;
+use email::domain::ports::EmailService;
 use frecency::domain::{
     models::{AggregateId, FrecencyPageRequest, JoinFrecency},
     ports::FrecencyQueryService,
@@ -24,23 +25,27 @@ use uuid::Uuid;
 mod tests;
 
 /// struct which handles the actual implementation of soup with abstracted interfaces for mocking
-pub struct SoupImpl<T, U> {
+pub struct SoupImpl<T, U, V> {
     /// the interface for interacting with the db
     soup_storage: T,
     /// the interface for interacting with frecency
     frecency: U,
+    /// the interface for interacting with email
+    email_service: V,
 }
 
-impl<T, U> SoupImpl<T, U>
+impl<T, U, V> SoupImpl<T, U, V>
 where
     T: SoupRepo,
     anyhow::Error: From<T::Err>,
     U: FrecencyQueryService,
+    V: EmailService,
 {
-    pub fn new(soup_storage: T, frecency: U) -> Self {
+    pub fn new(soup_storage: T, frecency: U, email_service: V) -> Self {
         SoupImpl {
             soup_storage,
             frecency,
+            email_service,
         }
     }
 
@@ -61,6 +66,7 @@ where
                 .await
                 .map_err(anyhow::Error::from)?,
         };
+
         Ok(res.into_iter().map(|item| FrecencySoupItem {
             item,
             frecency_score: None,
@@ -232,11 +238,12 @@ where
     }
 }
 
-impl<T, U> SoupService for SoupImpl<T, U>
+impl<T, U, V> SoupService for SoupImpl<T, U, V>
 where
     T: SoupRepo,
     anyhow::Error: From<T::Err>,
     U: FrecencyQueryService,
+    V: EmailService,
 {
     async fn get_user_soup(&self, req: SoupRequest) -> Result<SoupOutput, SoupErr> {
         let limit = req.limit.clamp(20, 500);

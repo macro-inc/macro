@@ -24,6 +24,7 @@ use soup::{
 };
 use sqlx::postgres::PgPoolOptions;
 use sync_service_client::SyncServiceClient;
+use uuid::Uuid;
 
 mod api;
 mod config;
@@ -185,6 +186,7 @@ async fn main() -> anyhow::Result<()> {
         soup_router_state: SoupRouterState::new(SoupImpl::new(
             PgSoupRepo::new(db.clone()),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
+            TempNoopEmailService,
         )),
         db,
         redis_client: Arc::new(Redis::new(redis_client)),
@@ -210,4 +212,30 @@ async fn main() -> anyhow::Result<()> {
     api::setup_and_serve(api_context).await?;
 
     Ok(())
+}
+
+/// Temporary email service implementation which returns nothing
+struct TempNoopEmailService;
+
+impl email::domain::ports::EmailService for TempNoopEmailService {
+    async fn get_email_thread_previews(
+        &self,
+        _req: email::domain::models::GetEmailsRequest,
+    ) -> Result<
+        models_pagination::PaginatedCursor<
+            email::domain::models::EnrichedEmailThreadPreview,
+            Uuid,
+            models_pagination::SimpleSortMethod,
+            (),
+        >,
+        email::domain::models::EmailErr,
+    > {
+        use models_pagination::PaginateOn;
+        Ok(
+            Option::<email::domain::models::EnrichedEmailThreadPreview>::None
+                .into_iter()
+                .paginate_on(0, models_pagination::SimpleSortMethod::CreatedAt)
+                .into_page(),
+        )
+    }
 }

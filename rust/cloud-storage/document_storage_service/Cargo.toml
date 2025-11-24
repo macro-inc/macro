@@ -42,6 +42,7 @@ cloudfront_sign = { workspace = true }
 comms_service_client = { path = "../comms_service_client" }
 connection_gateway = { path = "../connection_gateway" }
 dynamodb_client = { path = "../dynamodb_client" }
+email = { path = "../email", features = ["ports"] }
 email_service_client = { path = "../email_service_client" }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
@@ -72,6 +73,7 @@ model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
 models_bulk_upload = { path = "../models_bulk_upload" }
+models_opensearch = { path = "../models_opensearch" }
 models_pagination = { path = "../models_pagination", features = ["axum"] }
 models_permissions = { path = "../models_permissions" }
 models_soup = { path = "../models_soup", features = ["schema"] }
@@ -105,7 +107,6 @@ utoipa = { workspace = true, features = ["axum_extras"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 zip = { workspace = true }
-models_opensearch = { path = "../models_opensearch" }
 
 [dev-dependencies]
 cool_asserts = "2"

@@ -1,4 +1,4 @@
-use crate::{config::Config, service::s3::S3};
+use crate::{TempNoopEmailService, config::Config, service::s3::S3};
 use axum::extract::FromRef;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use dynamodb_client::DynamodbClient;
@@ -20,8 +20,9 @@ pub struct InternalFlag {
     pub internal: bool,
 }
 
-type DssSoupState =
-    SoupRouterState<SoupImpl<PgSoupRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>>>;
+type DssSoupState = SoupRouterState<
+    SoupImpl<PgSoupRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>, TempNoopEmailService>,
+>;
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {

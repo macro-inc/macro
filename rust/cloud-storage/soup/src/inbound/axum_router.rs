@@ -9,6 +9,7 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
+use email::domain::models::PreviewView;
 use item_filters::{
     EntityFilters,
     ast::{EntityFilterAst, ExpandErr},
@@ -140,6 +141,10 @@ where
                 limit: params.limit.unwrap_or(20),
                 cursor,
                 user: macro_user_id,
+                preview_view: PreviewView::StandardLabel(
+                    email::domain::models::PreviewViewStandardLabel::Inbox,
+                ),
+                link_id: Uuid::nil(),
             })
             .await?;
 

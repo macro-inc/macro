@@ -24,6 +24,7 @@ axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 either = { workspace = true }
+email = { path = "../email", features = ["ports"] }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
 item_filters = { path = "../item_filters" }
