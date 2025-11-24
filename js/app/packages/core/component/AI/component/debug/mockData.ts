@@ -76,8 +76,7 @@ export function toolCall(_delay: NetworkDelay = noDelay) {
         data: {
           contentType: 'document',
           ids: ['this-is-not-a-real-id'],
-          after: 0,
-          before: 0,
+          messagesSince: null,
         },
         name: 'Read',
       },
