@@ -145,12 +145,21 @@ const deduplicateEntities = <T extends EntityData>(entities: T[]): T[] => {
 /**
  * Sorts entities for search mode
  */
-const _sortEntitiesForSearch = <T extends EntityData>(a: T, b: T): number => {
-  const aHasSearch = isSearchEntity(a);
-  const bHasSearch = isSearchEntity(b);
+const sortEntitiesForSearch = <T extends EntityData>(a: T, b: T): number => {
+  const channelsFirst = (a: WithSearch<T>, b: WithSearch<T>) => {
+    if (a.type === 'channel' && b.type !== 'channel') return -1;
+    if (a.type !== 'channel' && b.type === 'channel') return 1;
+    return 0;
+  };
 
-  if (aHasSearch && bHasSearch) {
-    // custom sort here
+  const localFirst = (a: WithSearch<T>, b: WithSearch<T>) => {
+    if (a.search.source === 'local' && b.search.source !== 'local') return -1;
+    if (a.search.source !== 'local' && b.search.source === 'local') return 1;
+    return 0;
+  };
+
+  if (isSearchEntity(a) && isSearchEntity(b)) {
+    return channelsFirst(a, b) || localFirst(a, b);
   }
 
   return 0;
@@ -304,8 +313,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     if (searching) {
       // NOTE: the default sort will be channels, then local fuzzy name, then serach service
       // avoiding doing an extra sort as a speed optimization
-      return entities;
-      // return entities.toSorted(sortEntitiesForSearch);
+      return entities.toSorted(sortEntitiesForSearch);
     }
 
     if (!sortFn) return entities;
