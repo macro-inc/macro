@@ -65,7 +65,8 @@ export function useSplitPanel() {
 /**
  * Remove all the items from all split histories that meet a certain criteria.
  * @param manager
- * @param test
+ * @param predicate A function that returns true to remove a SplitContent entry
+ *     from all splits' histories.
  */
 export function globalRemoveFromSplitHistory(
   manager: SplitManager,
