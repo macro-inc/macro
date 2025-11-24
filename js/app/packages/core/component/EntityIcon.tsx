@@ -53,7 +53,7 @@ import WideFileCode from '@macro-icons/wide/file-code.svg';
 import WideFileImage from '@macro-icons/wide/file-image.svg';
 import WideFileMd from '@macro-icons/wide/file-md.svg';
 import WideFolder from '@macro-icons/wide/folder.svg';
-import WideStar from '@macro-icons/wide/Star.svg';
+import WideStar from '@macro-icons/wide/star.svg';
 import WideUnknown from '@macro-icons/wide/unknown.svg';
 import WideUser from '@macro-icons/wide/user.svg';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
