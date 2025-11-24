@@ -41,3 +41,41 @@ pub async fn delete_entity_name(
     Ok(())
 }
 
+/// Deletes all names for a specified set of entity_ids and an entity_type
+pub async fn delete_entity_name_bulk(
+    client: &opensearch::OpenSearch,
+    entity_ids: &[String],
+    entity_type: &SearchEntityType,
+) -> Result<()> {
+    let query = serde_json::json!({
+        "query": {
+            "bool": {
+                "must": [
+                    {
+                        "terms": {
+                            "entity_id": entity_ids
+                        }
+                    },
+                    {
+                        "term": {
+                            "entity_type": entity_type.as_ref()
+                        }
+                    }
+                ]
+            }
+        }
+    });
+
+    client
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
+            SearchIndex::Names.as_ref()
+        ]))
+        .body(query)
+        .refresh(true) // Ensure the index reflects changes immediately
+        .send()
+        .await
+        .map_client_error()
+        .await?;
+
+    Ok(())
+}

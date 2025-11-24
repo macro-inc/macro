@@ -32,6 +32,8 @@ pub async fn remove_user_profile(
         .delete_projects_by_user_id(user_profile_id)
         .await?;
 
+    // TODO: we need to correctly handle deleting items that the user owns for entity names index
+
     // Validate the user id is `macro|${email}`
     Ok(())
 }
