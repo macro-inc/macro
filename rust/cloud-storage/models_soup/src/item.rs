@@ -5,7 +5,7 @@ use crate::project::SoupProject;
 use chrono::{DateTime, Utc};
 use model_entity::{Entity, EntityType};
 use models_pagination::{Identify, SimpleSortMethod, SortOn};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use strum::EnumString;
 use uuid::Uuid;
 
