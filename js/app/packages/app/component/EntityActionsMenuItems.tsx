@@ -12,9 +12,6 @@ interface EntityActionsMenuItemsProps {
   onSelectAction: (action: EntityActionType) => void;
 }
 
-// TODO (seamus): this does not handle restoring the previous soup selection
-//     very gracefully.
-
 export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
   const { unifiedListContext } = useSplitPanelOrThrow();
   const { actionRegistry, viewsDataStore, selectedView } = unifiedListContext;
@@ -29,6 +26,17 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
     return [props.entity];
   };
 
+  const canOpenEntityInSplit = () => {
+    const splits = globalSplitManager()?.splits;
+    if (!splits) return false;
+    for (const split of splits()) {
+      if (split.content.id === props.entity.id) {
+        return false;
+      }
+    }
+    return true;
+  };
+
   const setSelection: Setter<EntityData[]> = (entities) => {
     return unifiedListContext.setViewDataStore(
       selectedView(),
@@ -36,6 +44,9 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
       entities
     );
   };
+  const Divider = () => (
+    <div class="border-b border-edge-muted w-full my-1"></div>
+  );
 
   const MenuItemInner = (props: {
     action: EntityActionType;
@@ -45,13 +56,12 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
       <Show when={actionRegistry.has(props.action)}>
         <MenuItem
           text={props.label}
-          disabled={actionRegistry.isActionDisabled(props.action, entities())}
+          disabled={!actionRegistry.isActionEnabled(props.action, entities())}
           onClick={async () => {
             const { success, failedEntities } = await actionRegistry.execute(
               props.action,
               entities()
             );
-            console.log({ success, failedEntities });
             if (success) {
               setSelection([]);
             } else if (failedEntities) {
@@ -68,10 +78,9 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
   return (
     <>
       <MenuItemInner action="mark_as_done" label="Mark Done" />
-      <MenuItemInner action="delete" label="Delete" />
       <MenuItem
         text="Open in new split"
-        disabled={entities().length > 1}
+        disabled={entities().length > 1 || !canOpenEntityInSplit()}
         onClick={() => {
           const splitManager = globalSplitManager();
           if (!splitManager) {
@@ -93,6 +102,14 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
           }
         }}
       />
+      <Divider />
+      <MenuItemInner action="rename" label="Rename" />
+      <MenuItemInner action="move_to_project" label="Move to Project" />
+      <MenuItemInner action="copy" label="Copy" />
+      <Divider />
+      <div class="text-failure-ink w-full">
+        <MenuItemInner action="delete" label="Delete" />
+      </div>
     </>
   );
 };
