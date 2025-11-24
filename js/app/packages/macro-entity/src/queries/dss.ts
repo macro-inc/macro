@@ -1,10 +1,11 @@
 import {
+  copyItem,
   deleteItem,
+  moveToFolder,
   renameItem,
 } from '@core/component/FileList/itemOperations';
 import type { ItemType } from '@service-storage/client';
 import type {
-  Item,
   PostItemsSoupParams,
   PostSoupRequest,
   SoupApiSort,
@@ -659,21 +660,18 @@ export function createBulkRenameDssEntityMutation() {
 }
 
 export function createMoveToProjectDssEntityMutation() {
-  const itemOperations = useItemOperations();
   return useMutation(() => ({
     mutationFn: async ({
-      entity: { id, type, name },
-      project: { id: projectId, name: projectName },
+      entity: { id, type },
+      project: { id: projectId },
     }: {
       entity: EntityData & { name: string };
       project: { id: string; name: string };
     }) => {
-      const success = await itemOperations.moveToFolder({
+      const success = await moveToFolder({
         itemType: type as 'document' | 'chat' | 'project',
         id: id,
-        itemName: name,
         folderId: projectId,
-        folderName: projectName,
       });
 
       return { success };
@@ -735,7 +733,6 @@ export function createMoveToProjectDssEntityMutation() {
 }
 
 export function createCopyDssEntityMutation() {
-  const itemOperations = useItemOperations();
   return useMutation(() => ({
     mutationFn: async ({
       entity: { id, type, name },
@@ -747,7 +744,7 @@ export function createCopyDssEntityMutation() {
           `Unsupported entity type: ${type} for id ${id}. Projects cannot be copied.`
         );
 
-      const success = await itemOperations.copyItem({
+      const success = await copyItem({
         itemType: type as 'document' | 'chat',
         id,
         name,
@@ -776,6 +773,71 @@ export function createCopyDssEntityMutation() {
 
       queryClient.invalidateQueries({
         queryKey: queryKeys.dss({ infinite: true }),
+      });
+    },
+  }));
+}
+
+export function createBulkCopyDssEntityMutation() {
+  // Only support chat + document, same as single-copy version
+  const isUnsupportedEntity = (entity: EntityData) => {
+    const type = entity.type;
+    return type !== 'chat' && type !== 'document';
+  };
+
+  return useMutation(() => ({
+    mutationFn: async ({
+      entities,
+      name,
+    }: {
+      entities: (EntityData & { name: string })[];
+      name: string | ((oldName: string) => string);
+    }) => {
+      if (entities.some(isUnsupportedEntity)) {
+        throw new Error(`Unsupported entity type provided`);
+      }
+
+      const results = await Promise.all(
+        entities.map((e) =>
+          copyItem({
+            itemType: e.type as 'document' | 'chat',
+            id: e.id,
+            name: typeof name === 'function' ? name(e.name) : name,
+          })
+        )
+      );
+
+      if (results.some((r) => !r)) {
+        throw new Error(`One or more DSS items failed to copy`);
+      }
+
+      return { success: true };
+    },
+
+    onMutate: async () => {
+      // For copy, no optimistic update — new IDs unknown until server
+      await Promise.all([
+        queryClient.cancelQueries({
+          queryKey: queryKeys.dss({ infinite: true }),
+        }),
+        queryClient.cancelQueries({
+          queryKey: queryKeys.dssPost({ infinite: true }),
+        }),
+      ]);
+    },
+
+    onSettled: (data, error, { entities }) => {
+      if (error) {
+        console.error(`Failed bulk copy`, entities, data, error);
+      }
+
+      // Trigger refetch so new items appear
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dss({ infinite: true }),
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dssPost({ infinite: true }),
       });
     },
   }));

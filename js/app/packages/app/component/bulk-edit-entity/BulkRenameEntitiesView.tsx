@@ -1,3 +1,4 @@
+import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { createMemo, createSignal, onMount, Show } from 'solid-js';
 import { createBulkRenameDssEntityMutation } from '../../../macro-entity/src/queries/dss';
 import type { EntityData } from '../../../macro-entity/src/types/entity';
@@ -29,6 +30,13 @@ export const BulkRenameEntitiesView = (props: {
     multi() ? 'append' : 'total'
   );
 
+  const modeOptions = [
+    { value: 'prepend', label: 'Prepend' },
+    { value: 'append', label: 'Append' },
+    { value: 'replace', label: 'Replace' },
+    { value: 'total', label: 'Total' },
+  ];
+
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
@@ -38,8 +46,6 @@ export const BulkRenameEntitiesView = (props: {
       props.onCancel();
     }
   };
-
-  // --- Preview logic ---------------------------------------------------------
 
   const previewName = createMemo(() => {
     const base = primaryEntity()?.name ?? '';
@@ -64,10 +70,8 @@ export const BulkRenameEntitiesView = (props: {
     }
   });
 
-  // --- Finish Editing --------------------------------------------------------
-
   const finishEditing = async () => {
-    const newValue = editValue().trim();
+    const newValue = editValue();
 
     let renameFn: (old?: string) => string = () => newValue;
     switch (mode()) {
@@ -84,7 +88,6 @@ export const BulkRenameEntitiesView = (props: {
       default:
     }
 
-    // send mutation
     await renameMutation.mutateAsync({
       entities: props.entities,
       name: renameFn,
@@ -93,25 +96,19 @@ export const BulkRenameEntitiesView = (props: {
     props.onFinish();
   };
 
-  // --------------------------------------------------------------------------
-
   return (
     <div class="w-full">
       <BulkEditEntityModalTitle title="Rename" />
 
       <Show when={multi()}>
-        <div class="mb-3 text-sm flex gap-2 items-center">
-          <span class="opacity-70">Mode:</span>
-          <select
-            class="bg-menu border border-edge/20 p-1 rounded"
+        <div class="mb-3">
+          <SegmentedControl
+            label="Mode"
             value={mode()}
-            onInput={(e) => setMode(e.currentTarget.value as RenameMode)}
-          >
-            <option value="prepend">Prepend</option>
-            <option value="append">Append</option>
-            <option value="replace">Replace</option>
-            <option value="total">Total</option>
-          </select>
+            list={modeOptions}
+            onChange={(value) => setMode(value as RenameMode)}
+            size="SM"
+          />
         </div>
       </Show>
 

@@ -59,7 +59,6 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
               props.action,
               entities()
             );
-            console.log({ success, failedEntities });
             if (success) {
               setSelection([]);
             } else if (failedEntities) {
@@ -76,8 +75,8 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
   return (
     <>
       <MenuItemInner action="mark_as_done" label="Mark Done" />
-      <MenuItemInner action="delete" label="Delete" />
       <MenuItemInner action="rename" label="Rename" />
+      <MenuItemInner action="copy" label="Copy" />
       <MenuItem
         text="Open in new split"
         disabled={entities().length > 1 || !canOpenEntityInSplit()}
@@ -102,6 +101,7 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
           }
         }}
       />
+      <MenuItemInner action="delete" label="Delete" />
     </>
   );
 };
