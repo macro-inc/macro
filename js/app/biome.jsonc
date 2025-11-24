@@ -4,7 +4,7 @@
     "clientKind": "git",
     "enabled": true,
     "useIgnoreFile": true,
-    "defaultBranch": "main"
+    "defaultBranch": "origin/main"
   },
   "files": {
     "includes": [
@@ -122,6 +122,23 @@
       "includes": ["scripts/**", "packages/block-code/scripts/**"],
       "javascript": {
         "globals": ["Bun"]
+      }
+    },
+    {
+      "includes": [
+        "packages/block-theme/**",
+        "packages/app/component/dock/Dock.tsx",
+        "packages/app/component/settings/**"
+      ],
+      "formatter": {
+        "enabled": false
+      },
+      "assist": {
+        "actions": {
+          "source": {
+            "organizeImports": "off"
+          }
+        }
       }
     }
   ]

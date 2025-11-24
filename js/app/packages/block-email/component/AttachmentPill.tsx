@@ -11,6 +11,10 @@ import { platformFetch } from 'core/util/platformFetch';
 import { Show } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
 
+const mimeToFileExtTypeMap = new Map<string, string>(
+  Object.values(FileTypeMap).map((value) => [value.mime, value.extension])
+);
+
 export function EmailAttachmentPill(props: {
   attachment: Attachment;
   removable?: boolean;
@@ -20,9 +24,6 @@ export function EmailAttachmentPill(props: {
 
   const { replaceOrInsertSplit } = useSplitLayout();
 
-  const mimeToFileExtTypeMap = new Map<string, string>(
-    Object.values(FileTypeMap).map((value) => [value.mime, value.extension])
-  );
   const fileType = props.attachment.mime_type
     ? (mimeToFileExtTypeMap.get(props.attachment.mime_type) as FileType)
     : undefined;

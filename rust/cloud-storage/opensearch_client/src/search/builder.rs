@@ -1,8 +1,12 @@
+use crate::Result;
 use crate::SearchOn;
-use crate::{Result, search::query::Keys, search::query::build_top_level_bool};
+use crate::error::OpensearchClientError;
+use crate::search::model::MacroEm;
+use crate::search::query::Keys;
+use crate::search::query::QueryKey;
+use crate::search::query::generate_name_content_query;
+use crate::search::query::generate_terms_must_query;
 use opensearch_query_builder::*;
-
-use serde_json::{Map, Value};
 
 /// A macro for generating delegation methods that forward calls to an inner field
 /// and return Self to maintain builder pattern chainability.
@@ -41,69 +45,64 @@ macro_rules! delegate_methods {
 
 pub trait SearchQueryConfig {
     /// Key for item id
-    const ID_KEY: &'static str;
-    /// Index name
-    #[allow(dead_code)]
-    const INDEX: &'static str;
+    const ID_KEY: &'static str = "entity_id";
     /// Key for user id
     const USER_ID_KEY: &'static str;
-    /// Key for title
-    const TITLE_KEY: &'static str;
+    /// Key for title (there may not be a title key for things like channels index)
+    const TITLE_KEY: Option<&'static str>;
     /// Content field
     const CONTENT_KEY: &'static str = "content";
 
-    /// Override this method if you need custom sorting logic
-    fn default_sort() -> Value {
-        serde_json::json!([
-            {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
-            },
-        ])
+    /// Returns the default sort types that are used on the search query.
+    /// Override this method if you need custom sort logic
+    fn default_sort_types() -> Vec<SortType<'static>> {
+        vec![
+            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
+            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
+        ]
     }
 
     /// Override this method if you need custom highlight logic
-    fn default_highlight() -> Value {
-        serde_json::json!({
-            "fields": {
-                "content": {
-                    "type": "unified",
-                    "number_of_fragments": 500,
-                    "pre_tags": ["<macro_em>"],
-                    "post_tags": ["</macro_em>"],
-                    "require_field_match": true,
-        }
-            }
-        })
+    fn default_highlight() -> Highlight<'static> {
+        Highlight::new().require_field_match(true).field(
+            "content",
+            HighlightField::new()
+                .highlight_type("plain")
+                .pre_tags(vec![MacroEm::Open.to_string()])
+                .post_tags(vec![MacroEm::Close.to_string()])
+                .number_of_fragments(500),
+        )
     }
 }
 
 #[derive(Default)]
 pub struct SearchQueryBuilder<T: SearchQueryConfig> {
     /// The terms to search for
-    terms: Vec<String>,
+    pub terms: Vec<String>,
     /// The match type to use when searching
     /// Defaults to "exact"
-    match_type: String,
+    pub match_type: String,
     /// The page number to start at
     /// Defaults to 0
-    page: i64,
+    pub page: u32,
     /// The page size to use
     /// Defaults to 10
-    page_size: i64,
+    pub page_size: u32,
     /// The user id to search for
-    user_id: String,
+    pub user_id: String,
     /// Fields to search on (Name, Content, NameContent). Defaults to Content
-    search_on: SearchOn,
+    pub search_on: SearchOn,
     /// Whether to collapse the results to be a single result per ID_KEY
     /// Defaults to false.
-    collapse: bool,
+    pub collapse: bool,
     /// If true, only search over the set of ids instead of ids + user_id.
     /// Defaults to false.
-    ids_only: bool,
+    pub ids_only: bool,
     /// The ids to search for defaults to an empty vector
-    ids: Vec<String>,
+    pub ids: Vec<String>,
+    /// If true, disable the recency filter.
+    /// This only applies to the NameContent search_on
+    pub disable_recency: bool,
 
     _phantom: std::marker::PhantomData<T>,
 }
@@ -120,6 +119,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             collapse: false,
             ids_only: false,
             ids: Vec::new(),
+            disable_recency: false,
             _phantom: std::marker::PhantomData,
         }
     }
@@ -129,12 +129,12 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         self
     }
 
-    pub fn page(mut self, page: i64) -> Self {
+    pub fn page(mut self, page: u32) -> Self {
         self.page = page;
         self
     }
 
-    pub fn page_size(mut self, page_size: i64) -> Self {
+    pub fn page_size(mut self, page_size: u32) -> Self {
         self.page_size = page_size;
         self
     }
@@ -164,142 +164,199 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
         self
     }
 
-    pub fn query_builder(&self) -> Result<BoolQueryBuilder> {
+    pub fn disable_recency(mut self, disable_recency: bool) -> Self {
+        self.disable_recency = disable_recency;
+        self
+    }
+
+    /// Builds the core bool query which contains all core "should" and "must" clauses
+    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
+        let mut bool_query = BoolQueryBuilder::new();
+
+        // Currently, the minimum should match is always one.
+        // This should of the bool query contains the ids and potentially the user_id
+        bool_query.minimum_should_match(1);
+
+        let term_must_array: Vec<QueryType<'static>> = self.build_must_term_query()?;
+
+        tracing::trace!("term_must_array: {:?}", term_must_array);
+
+        // For each item in term must array, add to bool must query
+        for must in term_must_array {
+            bool_query.must(must);
+        }
+
+        // Add any ids to the should array if provided
+        if !self.ids.is_empty() {
+            bool_query.should(QueryType::terms(T::ID_KEY.to_string(), self.ids.to_vec()));
+        }
+
+        // If we are not searching over the ids, we need to add the user_id to the should array
+        if !self.ids_only {
+            bool_query.should(QueryType::term(
+                T::USER_ID_KEY.to_string(),
+                self.user_id.clone(),
+            ));
+        }
+
+        Ok(bool_query)
+    }
+
+    /// Builds the search request with the provided main bool query
+    /// This will automatically wrap the bool query in a function score if
+    /// SearchOn::NameContent is used
+    pub fn build_search_request(
+        &self,
+        query_object: BoolQuery<'static>,
+    ) -> Result<SearchRequest<'static>> {
+        let mut search_request = SearchRequestBuilder::new();
+
+        // Collapse on the ID_KEY if collapse is true
+        // or if we are searchign on Name or NameContent
+        if self.collapse
+            || self.search_on == SearchOn::Name
+            || self.search_on == SearchOn::NameContent
+        {
+            search_request.collapse(Collapse::new(T::ID_KEY));
+        }
+
+        let highlight = match self.search_on {
+            SearchOn::Content => T::default_highlight(),
+            SearchOn::Name => {
+                if let Some(title_key) = T::TITLE_KEY {
+                    Highlight::new().require_field_match(true).field(
+                        title_key,
+                        HighlightField::new()
+                            .highlight_type("plain")
+                            .pre_tags(vec![MacroEm::Open.to_string()])
+                            .post_tags(vec![MacroEm::Close.to_string()])
+                            .number_of_fragments(1),
+                    )
+                } else {
+                    return Err(OpensearchClientError::NoTitleKeyForNameSearch);
+                }
+            }
+            SearchOn::NameContent => {
+                let mut highlight = Highlight::new();
+                highlight = highlight.require_field_match(false);
+                if let Some(title_key) = T::TITLE_KEY {
+                    highlight = highlight.field(
+                        title_key,
+                        HighlightField::new()
+                            .highlight_type("plain")
+                            .pre_tags(vec![MacroEm::Open.to_string()])
+                            .post_tags(vec![MacroEm::Close.to_string()])
+                            .number_of_fragments(1),
+                    );
+                }
+
+                highlight = highlight.field(
+                    "content",
+                    HighlightField::new()
+                        .highlight_type("plain")
+                        .pre_tags(vec![MacroEm::Open.to_string()])
+                        .post_tags(vec![MacroEm::Close.to_string()])
+                        .number_of_fragments(1),
+                );
+
+                highlight
+            }
+        };
+
+        search_request.highlight(highlight);
+        search_request.set_sorts(T::default_sort_types().into());
+
+        search_request.from(self.page * self.page_size);
+        search_request.size(self.page_size);
+
+        let built_query: QueryType = match self.search_on {
+            SearchOn::Name | SearchOn::Content => query_object.into(),
+            SearchOn::NameContent => {
+                if self.disable_recency {
+                    query_object.into()
+                } else {
+                    let mut function_score_query = FunctionScoreQueryBuilder::new();
+
+                    function_score_query.query(query_object.into());
+
+                    function_score_query.function(ScoreFunction {
+                        function: ScoreFunctionType::Gauss(DecayFunction {
+                            field: "updated_at_seconds".into(),
+                            origin: Some("now".into()),
+                            scale: "21d".into(),
+                            offset: Some("3d".into()),
+                            decay: Some(0.5),
+                        }),
+                        filter: None,
+                        weight: Some(1.3),
+                    });
+
+                    function_score_query.boost_mode(BoostMode::Multiply);
+                    function_score_query.score_mode(ScoreMode::Multiply);
+
+                    function_score_query.build().into()
+                }
+            }
+        };
+
+        // We need to add aggregration and tracking to the query if we are searching on NameContent
+        if self.search_on == SearchOn::NameContent && !self.disable_recency {
+            search_request.track_total_hits(true);
+            search_request.add_agg(
+                "total_uniques".to_string(),
+                AggregationType::Cardinality(CardinalityAggregation::new(T::ID_KEY)),
+            );
+        }
+
+        search_request.query(built_query);
+
+        Ok(search_request.build())
+    }
+
+    /// Generates a vec of term queries to be put inside of the bool must query
+    pub fn build_must_term_query(&self) -> Result<Vec<QueryType<'static>>> {
         let keys = Keys {
-            id_key: T::ID_KEY,
-            user_id_key: T::USER_ID_KEY,
             title_key: T::TITLE_KEY,
             content_key: T::CONTENT_KEY,
         };
 
-        build_top_level_bool(
-            &self.terms,
-            &self.match_type,
-            keys,
-            &self.ids,
-            &self.user_id,
-            self.search_on,
-            self.ids_only,
-        )
-    }
-
-    pub fn build_with_query(self, query_object: QueryType) -> Result<Value> {
-        let query_object = query_object.to_json();
-        let from = self.page * self.page_size;
-
-        let mut query_map = Map::new();
-        query_map.insert("query".to_string(), query_object);
-        query_map.insert("from".to_string(), serde_json::json!(from));
-        query_map.insert("size".to_string(), serde_json::json!(self.page_size));
-        query_map.insert("sort".to_string(), T::default_sort());
-        query_map.insert("highlight".to_string(), T::default_highlight());
-
-        // If collapse is true or searching only on Name, collapse the id field to remove duplicate
-        // results for pagination
-        if self.collapse || self.search_on == SearchOn::Name {
-            query_map.insert(
-                "collapse".to_string(),
-                serde_json::json!({ "field": T::ID_KEY }),
-            );
+        if self.terms.is_empty() {
+            return Err(OpensearchClientError::NoTermsProvided);
         }
 
-        Ok(Value::Object(query_map))
+        let query_key = QueryKey::from_match_type(&self.match_type)?;
+
+        let mut must_array = Vec::new();
+
+        match self.search_on {
+            SearchOn::Name => {
+                if let Some(title_key) = keys.title_key {
+                    // map all terms over title key
+                    must_array.push(generate_terms_must_query(
+                        query_key,
+                        &[title_key],
+                        &self.terms,
+                    ));
+                } else {
+                    return Err(OpensearchClientError::NoTitleKeyForNameSearch);
+                }
+            }
+            SearchOn::Content => {
+                // map all terms over content key
+                must_array.push(generate_terms_must_query(
+                    query_key,
+                    &[keys.content_key],
+                    &self.terms,
+                ));
+            }
+            SearchOn::NameContent => {
+                must_array.push(generate_name_content_query(&keys, &self.terms));
+            }
+        };
+
+        Ok(must_array)
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    struct TestSearchConfig;
-
-    impl SearchQueryConfig for TestSearchConfig {
-        const ID_KEY: &'static str = "test_id";
-        const INDEX: &'static str = "test_index";
-        const USER_ID_KEY: &'static str = "test_user_id";
-        const TITLE_KEY: &'static str = "test_title";
-    }
-
-    #[test]
-    fn test_search_query_builder_build() {
-        let terms = vec!["search".to_string(), "term".to_string()];
-        let ids = vec!["id1".to_string(), "id2".to_string()];
-        let user_id = "user123";
-        let page = 1;
-        let page_size = 20;
-
-        let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms.clone())
-            .match_type("exact")
-            .page(page)
-            .page_size(page_size)
-            .user_id(user_id)
-            .ids(ids.clone());
-
-        let query = builder.query_builder().unwrap().build();
-        let result = builder.build_with_query(query).unwrap();
-
-        // Verify the structure contains expected keys
-        assert!(result.get("query").is_some());
-        assert!(result.get("from").is_some());
-        assert!(result.get("size").is_some());
-        assert!(result.get("sort").is_some());
-        assert!(result.get("highlight").is_some());
-
-        // Verify pagination values
-        assert_eq!(result["from"], serde_json::json!(page * page_size));
-        assert_eq!(result["size"], serde_json::json!(page_size));
-
-        // Verify sort structure (using default)
-        let expected_sort = serde_json::json!([
-            {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
-            },
-        ]);
-        assert_eq!(result["sort"], expected_sort);
-
-        // Verify highlight structure (using default)
-        let expected_highlight = serde_json::json!({
-            "fields": {
-                "content": {
-                    "type": "unified",
-                    "number_of_fragments": 500,
-                    "pre_tags": ["<macro_em>"],
-                    "post_tags": ["</macro_em>"],
-                    "require_field_match": true,
-                }
-            }
-        });
-        assert_eq!(result["highlight"], expected_highlight);
-
-        // Verify query structure contains bool query
-        assert!(result["query"]["bool"].is_object());
-
-        // Verify should clause contains user_id and ids terms
-        let should_clause = &result["query"]["bool"]["should"];
-        assert!(should_clause.is_array());
-
-        let should_array = should_clause.as_array().unwrap();
-        assert_eq!(should_array.len(), 2);
-
-        // Check for user_id term
-        let user_term_found = should_array.iter().any(|item| {
-            item.get("term")
-                .and_then(|t| t.get("test_user_id"))
-                .map(|v| v == user_id)
-                .unwrap_or(false)
-        });
-        assert!(user_term_found);
-
-        // Check for ids terms
-        let ids_term_found = should_array.iter().any(|item| {
-            item.get("terms")
-                .and_then(|t| t.get("test_id"))
-                .and_then(|v| v.as_array())
-                .map(|arr| arr.len() == 2)
-                .unwrap_or(false)
-        });
-        assert!(ids_term_found);
-    }
-}
+mod test;

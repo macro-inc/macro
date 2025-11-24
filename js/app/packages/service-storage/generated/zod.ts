@@ -60,40 +60,6 @@ export const getRecentActivityHandlerResponse = zod.object({
 
 
 /**
- * @summary Gets the users that have been affiliated with your code
- */
-export const getAffiliateUsersResponse = zod.object({
-  "users": zod.array(zod.object({
-  "createdAt": zod.number(),
-  "email": zod.string()
-}))
-})
-
-
-/**
- * @summary Gets who the affiliate code the user was referred by
- */
-export const getAffiliateReferredByResponse = zod.object({
-  "affiliate": zod.union([zod.null(),zod.object({
-  "createdAt": zod.number(),
-  "email": zod.string()
-})]).optional()
-})
-
-
-/**
- * @summary Affiliates a user with a given affiliate code
- */
-export const affiliateUserParams = zod.object({
-  "affiliate_code": zod.string().describe('Affiliate code')
-})
-
-export const affiliateUserResponse = zod.object({
-
-}).describe('Empty response is required due to custom fetch forcing `response.json()`')
-
-
-/**
  * @summary Deletes a single unthreaded anchor for a document
 If you need to delete a threaded anchor, see the delete comment handler
  */
@@ -604,8 +570,10 @@ export const getUserDocumentsHandlerResponse = zod.object({
 export const createDocumentHandlerBody = zod.object({
   "branchedFromId": zod.string().nullish().describe('The document id if the document is being branched.'),
   "branchedFromVersionId": zod.number().nullish().describe('The version id if the document is being branched.'),
+  "createdAt": zod.string().datetime({}).nullish().describe('Optional time to set the document\'s created_at to. Set when backfilling email attachments.'),
   "documentFamilyId": zod.number().nullish().describe('The document family id if the document is being branched.'),
   "documentName": zod.string().describe('The name of the document without extension.'),
+  "emailAttachmentId": zod.string().uuid().nullish().describe('Internal only field that links the document created to the specified email attachment by\ncreating a row in the document_email table.'),
   "fileType": zod.string().nullish().describe('Optional file type of the document.'),
   "id": zod.string().nullish().describe('The id of the document in the database'),
   "jobId": zod.string().nullish().describe('Optional job id to be used to track an upload job for the newly created document.\nWill need to have a corresponding job initiated for the file beforehand.'),
@@ -641,36 +609,6 @@ export const createDocumentHandlerResponse = zod.object({
   "fileType": zod.string().nullish().describe('The file type of the document')
 })).describe('Data to be returned'),
   "error": zod.boolean().describe('Indicates if an error occurred')
-})
-
-
-/**
- * @summary Creates a new blank docx file for the user
- */
-export const createBlankDocxBody = zod.object({
-  "projectId": zod.string().nullish()
-})
-
-export const createBlankDocxResponse = zod.object({
-  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
-  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
-  "createdAt": zod.number().describe('The time the document was created'),
-  "documentBom": zod.array(zod.object({
-  "id": zod.string().describe('The uuid of the bom part'),
-  "path": zod.string().describe('The file path of the bom part content'),
-  "sha": zod.string().describe('The sha of the bom part content\nThere is an index on sha for more performant queries based on it.')
-})).nullish().describe('If the document is a DOCX document and unzipped, the document_bom will be present'),
-  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
-  "documentId": zod.string().describe('The document id'),
-  "documentName": zod.string().describe('The name of the document'),
-  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
-  "fileType": zod.string().nullish().describe('The file type of the document (file extension)'),
-  "modificationData": zod.any().optional().describe('The modification data for the document instance.\nThis is only used for PDF documents.'),
-  "owner": zod.string().describe('The owner of the document'),
-  "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
-  "projectName": zod.string().nullish().describe('The name of the project that this document belongs to'),
-  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
-  "updatedAt": zod.number().describe('The time the document instance / document BOM was updated')
 })
 
 
@@ -1215,7 +1153,7 @@ export const getItemsSoupQueryLimitMin = 0;
 
 
 export const getItemsSoupQueryParams = zod.object({
-  "expand": zod.boolean().optional().describe('Whether to expand projects. Defaults to false.'),
+  "expand": zod.boolean().optional().describe('Whether to expand projects. Defaults to true.'),
   "limit": zod.number().min(getItemsSoupQueryLimitMin).optional().describe('Limit the number of items returned. Defaults to 20. Max 500.'),
   "sort_method": zod.enum(['viewed_at', 'created_at', 'updated_at', 'viewed_updated', 'frecency']).optional().describe('Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_at.'),
   "cursor": zod.string().optional().describe('Base64 encoded cursor value.')
@@ -1223,39 +1161,229 @@ export const getItemsSoupQueryParams = zod.object({
 
 export const getItemsSoupResponse = zod.object({
   "items": zod.array(zod.union([zod.object({
-  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
+  "data": zod.object({
+  "branchedFromId": zod.string().uuid().nullish().describe('The id of the document this document branched from'),
   "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'),
   "createdAt": zod.number().describe('The time the document was created'),
   "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on the file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
-  "id": zod.string().describe('The document id'),
+  "id": zod.string().uuid().describe('The document id'),
   "name": zod.string().describe('The name of the document'),
   "ownerId": zod.string().describe('The owner of the document'),
-  "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
+  "projectId": zod.string().uuid().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
-  "viewedAt": zod.number().nullable().describe('The time the document was last viewed'),
-  "type": zod.enum(['document'])
+  "viewedAt": zod.number().nullable().describe('The time the document was last viewed')
+}),
+  "tag": zod.enum(['document'])
 }),zod.object({
+  "data": zod.object({
   "createdAt": zod.number().describe('The time the chat was created'),
-  "id": zod.string().describe('The chat uuid'),
+  "id": zod.string().uuid().describe('The chat uuid'),
   "isPersistent": zod.boolean().describe('Whether the chat is persistent or not'),
   "name": zod.string().describe('The name of the chat'),
   "ownerId": zod.string().describe('Who the chat belongs to'),
-  "projectId": zod.string().nullish().describe('The project id of the chat'),
+  "projectId": zod.string().uuid().nullish().describe('The project id of the chat'),
   "updatedAt": zod.number().describe('The time the chat was last updated'),
-  "viewedAt": zod.number().nullable().describe('The time the chat was last viewed'),
-  "type": zod.enum(['chat'])
+  "viewedAt": zod.number().nullable().describe('The time the chat was last viewed')
+}),
+  "tag": zod.enum(['chat'])
 }),zod.object({
+  "data": zod.object({
   "createdAt": zod.number().describe('The time the project was created'),
-  "id": zod.string().describe('The id of the project'),
+  "id": zod.string().uuid().describe('The id of the project'),
   "name": zod.string().describe('The name of the project'),
   "ownerId": zod.string().describe('The user id of who created the project'),
-  "parentId": zod.string().nullish().describe('The parent project id'),
+  "parentId": zod.string().uuid().nullish().describe('The parent project id'),
   "updatedAt": zod.number().describe('The time the project was updated'),
-  "viewedAt": zod.number().nullable().describe('The time the document was last viewed'),
-  "type": zod.enum(['project'])
+  "viewedAt": zod.number().nullable().describe('The time the document was last viewed')
+}),
+  "tag": zod.enum(['project'])
+}),zod.object({
+  "data": zod.object({
+  "createdAt": zod.number(),
+  "id": zod.string().uuid(),
+  "inboxVisible": zod.boolean(),
+  "isDraft": zod.boolean(),
+  "isImportant": zod.boolean(),
+  "isRead": zod.boolean(),
+  "name": zod.string().nullish(),
+  "ownerId": zod.string(),
+  "providerId": zod.string().nullish(),
+  "senderEmail": zod.string().nullish(),
+  "senderName": zod.string().nullish(),
+  "senderPhotoUrl": zod.string().nullish(),
+  "snippet": zod.string().nullish(),
+  "sortTs": zod.number(),
+  "updatedAt": zod.number(),
+  "viewedAt": zod.number().nullable()
+}).and(zod.object({
+  "attachments": zod.array(zod.object({
+  "contentId": zod.string().nullish(),
+  "createdAt": zod.number(),
+  "filename": zod.string().nullish(),
+  "id": zod.string().uuid(),
+  "messageId": zod.string().uuid(),
+  "mimeType": zod.string().nullish(),
+  "providerAttachmentId": zod.string().nullish(),
+  "sizeBytes": zod.number().nullish()
+})),
+  "attachmentsMacro": zod.array(zod.object({
+  "dbId": zod.string().uuid(),
+  "itemId": zod.string().uuid(),
+  "itemType": zod.string(),
+  "messageId": zod.string().uuid(),
+  "threadId": zod.string().uuid()
+})),
+  "participants": zod.array(zod.object({
+  "emailAddress": zod.string().nullish(),
+  "id": zod.string().uuid(),
+  "linkId": zod.string().uuid(),
+  "name": zod.string().nullish(),
+  "sfsPhotoUrl": zod.string().nullish()
+}))
+})),
+  "tag": zod.enum(['emailThread'])
+})]).and(zod.object({
+  "frecency_score": zod.number()
+}))),
+  "next_cursor": zod.string().nullish()
+})
+
+
+/**
+ * @summary Gets the items the user has access to
+ */
+export const postItemsSoupQueryParams = zod.object({
+  "cursor": zod.string().optional().describe('Base64 encoded cursor value.')
+})
+
+export const postItemsSoupBodyLimitMin = 0;
+
+
+export const postItemsSoupBody = zod.object({
+  "channel_filters": zod.object({
+  "channel_ids": zod.array(zod.string()).optional().describe('Channel IDs to search within. Examples: [\'general\']. Empty to search all accessible channels.'),
+  "mentions": zod.array(zod.string()).optional().describe('Channel user mentions to search for. Examples: [\'@username\']. Empty if not filtering by mentions.'),
+  "org_id": zod.number().nullish().describe('Channel organization ID to search within. Empty to ignore organization filtering.'),
+  "sender_ids": zod.array(zod.string()).optional().describe('Sender IDs to search within. Examples: [\'user1\']. Empty to search all accessible senders.'),
+  "thread_ids": zod.array(zod.string()).optional().describe('Channel thread IDs to search within. Examples: [\'thread123\']. Empty to search all threads.')
+}).optional().describe('The channel message filters used to filter down what channel messages you search over.'),
+  "chat_filters": zod.object({
+  "chat_ids": zod.array(zod.string()).optional().describe('Chat ids to search over. Examples: [\'chat1\'], [\'chat1\', \'chat2\']. When provided, chat search will only match results on these chats. Empty to search all accessible chats.'),
+  "owners": zod.array(zod.string()).optional().describe('Filter by chat owner. Examples: [\'macro|user1@user.com\'], [\'macro|user1@user.com\', \'macro|user2@user.com\']. Empty to search all owners.'),
+  "project_ids": zod.array(zod.string()).optional().describe('A list of project ids to search within. Examples: [\'project1\']. Empty to ignore project filtering.'),
+  "role": zod.array(zod.string()).optional().describe('Chat message roles to search. Examples: [\'user\'], [\'assistant\']. Empty to search all roles.')
+}).optional().describe('The chat filters used to filter down what chats you search over.'),
+  "document_filters": zod.object({
+  "document_ids": zod.array(zod.string()).optional().describe('Document ids to search over. Examples: [\'doc1\'], [\'doc1\', \'doc2\']. Empty to search all accessible documents.'),
+  "file_types": zod.array(zod.string()).optional().describe('Document file types to search. Examples: [\'pdf\'], [\'md\', \'txt\']. Empty to search all file types.'),
+  "owners": zod.array(zod.string()).optional().describe('Filter by document owner. Examples: [\'macro|user1@user.com\'], [\'macro|user1@user.com\', \'macro|user2@user.com\']. Empty to search all owners.'),
+  "project_ids": zod.array(zod.string()).optional().describe('A list of project ids to search within. Examples: [\'project1\'].\nfiltering. Empty to ignore project filtering.')
+}).optional().describe('The document filters used to filter down what documents you search over.'),
+  "email_filters": zod.object({
+  "bcc": zod.array(zod.string()).optional().describe('Email BCC addresses to filter by. Examples: [\'user@example.com\']. Empty if not filtering by BCC.'),
+  "cc": zod.array(zod.string()).optional().describe('Email CC addresses to filter by. Examples: [\'user@example.com\']. Empty if not filtering by CC.'),
+  "recipients": zod.array(zod.string()).optional().describe('Email Recipient addresses to filter by. Examples: [\'user@example.com\']. Empty if not filtering by Recipient.'),
+  "senders": zod.array(zod.string()).optional().describe('Email sender addresses to filter by. Examples: [\'user@example.com\']. Empty to search all senders.')
+}).optional().describe('The email filters used to filter down what emails you search over.'),
+  "project_filters": zod.object({
+  "owners": zod.array(zod.string()).optional().describe('Filter by project owner. Examples: [\'macro|user1@user.com\'], [\'macro|user1@user.com\', \'macro|user2@user.com\']. Empty to search all owners.'),
+  "project_ids": zod.array(zod.string()).optional().describe('Project IDs to search within. Examples: [\'project1\']. Empty to search all accessible projects.')
+}).optional().describe('The project filters used to filter down what projects you search over.')
+}).describe('a bundle of all of the filters for each entity type').and(zod.object({
+  "expand": zod.boolean().nullish().describe('Whether to expand projects. Defaults to true.'),
+  "limit": zod.number().min(postItemsSoupBodyLimitMin).nullish().describe('Limit the number of items returned. Defaults to 20. Max 500.'),
+  "sort_method": zod.union([zod.null(),zod.enum(['viewed_at', 'created_at', 'updated_at', 'viewed_updated', 'frecency'])]).optional()
+}))
+
+export const postItemsSoupResponse = zod.object({
+  "items": zod.array(zod.union([zod.object({
+  "data": zod.object({
+  "branchedFromId": zod.string().uuid().nullish().describe('The id of the document this document branched from'),
+  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'),
+  "createdAt": zod.number().describe('The time the document was created'),
+  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
+  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on the file type'),
+  "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
+  "id": zod.string().uuid().describe('The document id'),
+  "name": zod.string().describe('The name of the document'),
+  "ownerId": zod.string().describe('The owner of the document'),
+  "projectId": zod.string().uuid().nullish().describe('The id of the project that this document belongs to'),
+  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
+  "viewedAt": zod.number().nullable().describe('The time the document was last viewed')
+}),
+  "tag": zod.enum(['document'])
+}),zod.object({
+  "data": zod.object({
+  "createdAt": zod.number().describe('The time the chat was created'),
+  "id": zod.string().uuid().describe('The chat uuid'),
+  "isPersistent": zod.boolean().describe('Whether the chat is persistent or not'),
+  "name": zod.string().describe('The name of the chat'),
+  "ownerId": zod.string().describe('Who the chat belongs to'),
+  "projectId": zod.string().uuid().nullish().describe('The project id of the chat'),
+  "updatedAt": zod.number().describe('The time the chat was last updated'),
+  "viewedAt": zod.number().nullable().describe('The time the chat was last viewed')
+}),
+  "tag": zod.enum(['chat'])
+}),zod.object({
+  "data": zod.object({
+  "createdAt": zod.number().describe('The time the project was created'),
+  "id": zod.string().uuid().describe('The id of the project'),
+  "name": zod.string().describe('The name of the project'),
+  "ownerId": zod.string().describe('The user id of who created the project'),
+  "parentId": zod.string().uuid().nullish().describe('The parent project id'),
+  "updatedAt": zod.number().describe('The time the project was updated'),
+  "viewedAt": zod.number().nullable().describe('The time the document was last viewed')
+}),
+  "tag": zod.enum(['project'])
+}),zod.object({
+  "data": zod.object({
+  "createdAt": zod.number(),
+  "id": zod.string().uuid(),
+  "inboxVisible": zod.boolean(),
+  "isDraft": zod.boolean(),
+  "isImportant": zod.boolean(),
+  "isRead": zod.boolean(),
+  "name": zod.string().nullish(),
+  "ownerId": zod.string(),
+  "providerId": zod.string().nullish(),
+  "senderEmail": zod.string().nullish(),
+  "senderName": zod.string().nullish(),
+  "senderPhotoUrl": zod.string().nullish(),
+  "snippet": zod.string().nullish(),
+  "sortTs": zod.number(),
+  "updatedAt": zod.number(),
+  "viewedAt": zod.number().nullable()
+}).and(zod.object({
+  "attachments": zod.array(zod.object({
+  "contentId": zod.string().nullish(),
+  "createdAt": zod.number(),
+  "filename": zod.string().nullish(),
+  "id": zod.string().uuid(),
+  "messageId": zod.string().uuid(),
+  "mimeType": zod.string().nullish(),
+  "providerAttachmentId": zod.string().nullish(),
+  "sizeBytes": zod.number().nullish()
+})),
+  "attachmentsMacro": zod.array(zod.object({
+  "dbId": zod.string().uuid(),
+  "itemId": zod.string().uuid(),
+  "itemType": zod.string(),
+  "messageId": zod.string().uuid(),
+  "threadId": zod.string().uuid()
+})),
+  "participants": zod.array(zod.object({
+  "emailAddress": zod.string().nullish(),
+  "id": zod.string().uuid(),
+  "linkId": zod.string().uuid(),
+  "name": zod.string().nullish(),
+  "sfsPhotoUrl": zod.string().nullish()
+}))
+})),
+  "tag": zod.enum(['emailThread'])
 })]).and(zod.object({
   "frecency_score": zod.number()
 }))),
@@ -1495,6 +1623,7 @@ export const getBatchProjectPreviewResponse = zod.object({
   "id": zod.string(),
   "name": zod.string(),
   "owner": zod.string(),
+  "path": zod.array(zod.string()),
   "updatedAt": zod.number()
 }).and(zod.object({
   "access": zod.enum(['access'])
@@ -1517,6 +1646,7 @@ with projects and placing all documents in the correct location.
 export const uploadFolderHandlerBody = zod.object({
   "content": zod.array(zod.object({
   "fileType": zod.union([zod.null(),zod.enum(['docx', 'pdf', 'md', 'canvas', 'coffee', 'cson', 'iced', 'c', 'i', 'cpp', 'cppm', 'cc', 'ccm', 'cxx', 'cxxm', 'cplusplus', 'cplusplusm', 'hpp', 'hh', 'hxx', 'hplusplus', 'h', 'ii', 'ino', 'inl', 'ipp', 'ixx', 'tpp', 'txx', 'hppin', 'hin', 'cu', 'cuh', 'cs', 'csx', 'cake', 'css', 'dart', 'diff', 'patch', 'rej', 'dockerfile', 'containerfile', 'go', 'handlebars', 'hbs', 'hjs', 'hlsl', 'hlsli', 'fx', 'fxh', 'vsh', 'psh', 'cginc', 'compute', 'html', 'htm', 'shtml', 'xhtml', 'xht', 'mdoc', 'jsp', 'asp', 'aspx', 'jshtm', 'volt', 'ejs', 'rhtml', 'ini', 'conf', 'properties', 'cfg', 'directory', 'gitattributes', 'gitconfig', 'gitmodules', 'editorconfig', 'repo', 'java', 'jav', 'jsx', 'js', 'es6', 'mjs', 'cjs', 'pac', 'json', 'bowerrc', 'jscsrc', 'webmanifest', 'jsmap', 'cssmap', 'tsmap', 'har', 'jslintrc', 'jsonld', 'geojson', 'ipynb', 'vuerc', 'jsonc', 'eslintrc', 'eslintrcjson', 'jsfmtrc', 'jshintrc', 'swcrc', 'hintrc', 'babelrc', 'jsonl', 'ndjson', 'codesnippets', 'jl', 'jmd', 'sty', 'cls', 'bbx', 'cbx', 'tex', 'ltx', 'ctx', 'bib', 'less', 'log', 'lua', 'mak', 'mk', 'mkd', 'mdwn', 'mdown', 'markdown', 'markdn', 'mdtxt', 'mdtext', 'workbook', 'm', 'mm', 'pl', 'pm', 'pod', 't', 'psgi', 'raku', 'rakumod', 'rakutest', 'rakudoc', 'nqp', 'p6', 'pl6', 'pm6', 'php', 'php4', 'php5', 'phtml', 'ctp', 'ps1', 'psm1', 'psd1', 'pssc', 'psrc', 'py', 'rpy', 'pyw', 'cpy', 'gyp', 'gypi', 'pyi', 'ipy', 'pyt', 'r', 'rhistory', 'rprofile', 'rt', 'cshtml', 'razor', 'rb', 'rbx', 'rjs', 'gemspec', 'rake', 'ru', 'erb', 'podspec', 'rbi', 'rs', 'scss', 'shader', 'sh', 'bash', 'bashrc', 'bashaliases', 'bashprofile', 'bashlogin', 'ebuild', 'eclass', 'profile', 'bashlogout', 'xprofile', 'xsession', 'xsessionrc', 'zsh', 'zshrc', 'zprofile', 'zlogin', 'zlogout', 'zshenv', 'zshtheme', 'fish', 'ksh', 'csh', 'cshrc', 'tcshrc', 'yashrc', 'yashprofile', 'sql', 'dsql', 'swift', 'ts', 'cts', 'mts', 'tsx', 'tsbuildinfo', 'xml', 'xsd', 'ascx', 'atom', 'axml', 'axaml', 'bpmn', 'cpt', 'csl', 'csproj', 'csprojuser', 'dita', 'ditamap', 'dtd', 'ent', 'mod', 'dtml', 'fsproj', 'fxml', 'iml', 'isml', 'jmx', 'launch', 'menu', 'mxml', 'nuspec', 'opml', 'owl', 'proj', 'props', 'pt', 'publishsettings', 'pubxml', 'pubxmluser', 'rbxlx', 'rbxmx', 'rdf', 'rng', 'rss', 'shproj', 'storyboard', 'targets', 'tld', 'tmx', 'vbproj', 'vbprojuser', 'vcxproj', 'vcxprojfilters', 'wsdl', 'wxi', 'wxl', 'wxs', 'xaml', 'xbl', 'xib', 'xlf', 'xliff', 'xpdl', 'xul', 'xoml', 'xsl', 'xslt', 'yaml', 'yml', 'eyaml', 'eyml', 'cff', 'yamltmlanguage', 'yamltmpreferences', 'yamltmtheme', 'winget', 'txt', 'csv', 'tsv', 'jpeg', 'jpg', 'png', 'gif', 'svg', 'webp', 'avif', 'bmp', 'ico', 'tiff', 'tif', 'heic', 'heif', 'tar', 'targz', 'tgz', 'gz', 'bz2', 'tarbz2', 'tbz2', 'z', 'tarz', 'lz', 'tarlz', 'xz', 'tarxz', 'txz', 'lzma', 'tarlzma', 'rar', 'sevenz', 'zst', 'tarzst', 'tzst', 'zip', 'exe', 'msi', 'dll', 'bat', 'cmd', 'com', 'appimage', 'app', 'bin', 'deb', 'rpm', 'apk', 'dmg', 'pkg', 'crx', 'xpi', 'mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'mid', 'midi', 'mp4', 'mkv', 'webm', 'avi', 'mov', 'wmv', 'mpg', 'mpeg', 'm4v', 'flv', 'f4v', 'threegp', 'ttf', 'otf', 'woff', 'woff2', 'eot', 'rtf', 'odt', 'ods', 'odp', 'odg', 'odf', 'epub', 'mobi', 'azw', 'azw3', 'djvu', 'xls', 'ppt', 'pptx', 'xlsx', 'db', 'sqlite', 'sqlite3', 'mdb', 'accdb', 'dbf', 'plist', 'toml', 'env', 'dot', 'gv', 'torrent', 'ics', 'vcf', 'ai', 'eps', 'ps', 'dxf', 'dwg', 'stl', 'obj', 'fbx', 'blend', 'dae', 'threeds', 'gltf', 'glb', 'vhd', 'vhdx', 'vmdk', 'ova', 'ovf', 'iso', 'img', 'swf']).describe('Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n')]).optional(),
+  "fullName": zod.string().describe('The full OS name of the file for deduplication'),
   "name": zod.string().describe('The name of the file, without the extension'),
   "relativePath": zod.string().describe('The relative path of the file.\n\nThis is the `webkitRelativePath` with the name of the file stripped at the end.'),
   "sha": zod.string().describe('The sha of the file.')
@@ -1543,6 +1673,7 @@ export const uploadFolderHandlerResponse = zod.object({
   "document_id": zod.string(),
   "item": zod.object({
   "fileType": zod.union([zod.null(),zod.enum(['docx', 'pdf', 'md', 'canvas', 'coffee', 'cson', 'iced', 'c', 'i', 'cpp', 'cppm', 'cc', 'ccm', 'cxx', 'cxxm', 'cplusplus', 'cplusplusm', 'hpp', 'hh', 'hxx', 'hplusplus', 'h', 'ii', 'ino', 'inl', 'ipp', 'ixx', 'tpp', 'txx', 'hppin', 'hin', 'cu', 'cuh', 'cs', 'csx', 'cake', 'css', 'dart', 'diff', 'patch', 'rej', 'dockerfile', 'containerfile', 'go', 'handlebars', 'hbs', 'hjs', 'hlsl', 'hlsli', 'fx', 'fxh', 'vsh', 'psh', 'cginc', 'compute', 'html', 'htm', 'shtml', 'xhtml', 'xht', 'mdoc', 'jsp', 'asp', 'aspx', 'jshtm', 'volt', 'ejs', 'rhtml', 'ini', 'conf', 'properties', 'cfg', 'directory', 'gitattributes', 'gitconfig', 'gitmodules', 'editorconfig', 'repo', 'java', 'jav', 'jsx', 'js', 'es6', 'mjs', 'cjs', 'pac', 'json', 'bowerrc', 'jscsrc', 'webmanifest', 'jsmap', 'cssmap', 'tsmap', 'har', 'jslintrc', 'jsonld', 'geojson', 'ipynb', 'vuerc', 'jsonc', 'eslintrc', 'eslintrcjson', 'jsfmtrc', 'jshintrc', 'swcrc', 'hintrc', 'babelrc', 'jsonl', 'ndjson', 'codesnippets', 'jl', 'jmd', 'sty', 'cls', 'bbx', 'cbx', 'tex', 'ltx', 'ctx', 'bib', 'less', 'log', 'lua', 'mak', 'mk', 'mkd', 'mdwn', 'mdown', 'markdown', 'markdn', 'mdtxt', 'mdtext', 'workbook', 'm', 'mm', 'pl', 'pm', 'pod', 't', 'psgi', 'raku', 'rakumod', 'rakutest', 'rakudoc', 'nqp', 'p6', 'pl6', 'pm6', 'php', 'php4', 'php5', 'phtml', 'ctp', 'ps1', 'psm1', 'psd1', 'pssc', 'psrc', 'py', 'rpy', 'pyw', 'cpy', 'gyp', 'gypi', 'pyi', 'ipy', 'pyt', 'r', 'rhistory', 'rprofile', 'rt', 'cshtml', 'razor', 'rb', 'rbx', 'rjs', 'gemspec', 'rake', 'ru', 'erb', 'podspec', 'rbi', 'rs', 'scss', 'shader', 'sh', 'bash', 'bashrc', 'bashaliases', 'bashprofile', 'bashlogin', 'ebuild', 'eclass', 'profile', 'bashlogout', 'xprofile', 'xsession', 'xsessionrc', 'zsh', 'zshrc', 'zprofile', 'zlogin', 'zlogout', 'zshenv', 'zshtheme', 'fish', 'ksh', 'csh', 'cshrc', 'tcshrc', 'yashrc', 'yashprofile', 'sql', 'dsql', 'swift', 'ts', 'cts', 'mts', 'tsx', 'tsbuildinfo', 'xml', 'xsd', 'ascx', 'atom', 'axml', 'axaml', 'bpmn', 'cpt', 'csl', 'csproj', 'csprojuser', 'dita', 'ditamap', 'dtd', 'ent', 'mod', 'dtml', 'fsproj', 'fxml', 'iml', 'isml', 'jmx', 'launch', 'menu', 'mxml', 'nuspec', 'opml', 'owl', 'proj', 'props', 'pt', 'publishsettings', 'pubxml', 'pubxmluser', 'rbxlx', 'rbxmx', 'rdf', 'rng', 'rss', 'shproj', 'storyboard', 'targets', 'tld', 'tmx', 'vbproj', 'vbprojuser', 'vcxproj', 'vcxprojfilters', 'wsdl', 'wxi', 'wxl', 'wxs', 'xaml', 'xbl', 'xib', 'xlf', 'xliff', 'xpdl', 'xul', 'xoml', 'xsl', 'xslt', 'yaml', 'yml', 'eyaml', 'eyml', 'cff', 'yamltmlanguage', 'yamltmpreferences', 'yamltmtheme', 'winget', 'txt', 'csv', 'tsv', 'jpeg', 'jpg', 'png', 'gif', 'svg', 'webp', 'avif', 'bmp', 'ico', 'tiff', 'tif', 'heic', 'heif', 'tar', 'targz', 'tgz', 'gz', 'bz2', 'tarbz2', 'tbz2', 'z', 'tarz', 'lz', 'tarlz', 'xz', 'tarxz', 'txz', 'lzma', 'tarlzma', 'rar', 'sevenz', 'zst', 'tarzst', 'tzst', 'zip', 'exe', 'msi', 'dll', 'bat', 'cmd', 'com', 'appimage', 'app', 'bin', 'deb', 'rpm', 'apk', 'dmg', 'pkg', 'crx', 'xpi', 'mp3', 'wav', 'ogg', 'flac', 'aac', 'm4a', 'wma', 'mid', 'midi', 'mp4', 'mkv', 'webm', 'avi', 'mov', 'wmv', 'mpg', 'mpeg', 'm4v', 'flv', 'f4v', 'threegp', 'ttf', 'otf', 'woff', 'woff2', 'eot', 'rtf', 'odt', 'ods', 'odp', 'odg', 'odf', 'epub', 'mobi', 'azw', 'azw3', 'djvu', 'xls', 'ppt', 'pptx', 'xlsx', 'db', 'sqlite', 'sqlite3', 'mdb', 'accdb', 'dbf', 'plist', 'toml', 'env', 'dot', 'gv', 'torrent', 'ics', 'vcf', 'ai', 'eps', 'ps', 'dxf', 'dwg', 'stl', 'obj', 'fbx', 'blend', 'dae', 'threeds', 'gltf', 'glb', 'vhd', 'vhdx', 'vmdk', 'ova', 'ovf', 'iso', 'img', 'swf']).describe('Generates a FileType enum and associated ContentType enum with their implementations.\n\nThis macro takes a list of tuples in the format:\n(Variant, \"extension\", \"mime_type\", CONTENT_TYPE_VARIANT)\n\nFor each tuple it generates:\n- A variant in the FileType enum\n- A variant in the ContentType enum\n- Implementations for:\n  - FileType::to_str() - Converts FileType to extension string\n  - FileType::from_str() - Converts extension string to FileType\n  - From<FileType> for ContentType - Maps FileType to ContentType\n  - ContentType::mime_type() - Gets MIME type for ContentType\n')]).optional(),
+  "fullName": zod.string().describe('The full OS name of the file for deduplication'),
   "name": zod.string().describe('The name of the file, without the extension'),
   "relativePath": zod.string().describe('The relative path of the file.\n\nThis is the `webkitRelativePath` with the name of the file stripped at the end.'),
   "sha": zod.string().describe('The sha of the file.')

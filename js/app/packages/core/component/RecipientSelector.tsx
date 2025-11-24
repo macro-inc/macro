@@ -170,9 +170,9 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
             const iconId = props.disabled ? '?' : option.id;
 
             return (
-              <Combobox.ItemLabel class="flex flex-row items-center gap-1.5 text-ink-muted select-none text-sm">
+              <Combobox.ItemLabel class="flex flex-row w-full items-center gap-1.5 text-ink-muted select-none text-sm">
                 <UserIcon id={iconId ?? ''} size="sm" isDeleted={false} />
-                <p class={`my-auto ${props.disabled ? 'italic' : ''}`}>
+                <p class={`truncate my-auto ${props.disabled ? 'italic' : ''}`}>
                   {contactInfo}
                 </p>
               </Combobox.ItemLabel>
@@ -182,14 +182,14 @@ function RecipientComboboxItem(props: RecipientComboboxItemProps): JSX.Element {
         <Match when={matches(props.rawValue, (i) => i.kind === 'channel')}>
           {(item) => {
             return (
-              <Combobox.ItemLabel class="flex flex-row gap-1.5 text-ink-muted select-none text-sm">
+              <Combobox.ItemLabel class="flex flex-row w-full gap-1.5 text-ink-muted select-none text-sm">
                 <div class="flex flex-col items-center justify-center p-1">
                   <CustomEntityIcon
                     icon={channelTypeIcon(item().data)}
                     size="xs"
                   />
                 </div>
-                <p class={'my-auto'}>{item().data.name}</p>
+                <p class={'truncate my-auto'}>{item().data.name}</p>
               </Combobox.ItemLabel>
             );
           }}
@@ -424,7 +424,6 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                       )}
                     >
                       {(userOrContactOption) => {
-                        console.log('OPT', userOrContactOption());
                         const opt = userOrContactOption();
                         const name = getRecipientOptionName(opt);
                         const email = getRecipientOptionEmail(opt);
@@ -499,6 +498,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                   setDisabled(true);
                   queueMicrotask(() => setDisabled(false));
                 }
+                if (e.key === 'Escape') {
+                  if (inputValue().length === 0) {
+                    inputRef()?.blur();
+                  }
+                }
               }}
             />
           </div>
@@ -506,9 +510,9 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       </Combobox.Control>
 
       <Combobox.Portal>
-        <Combobox.Content class="z-modal-content bg-menu border translate-y-1 border-edge overflow-y-auto p-1 w-full">
+        <Combobox.Content class="z-modal-content bg-menu border translate-y-1 border-edge p-1">
           <Combobox.Listbox
-            class="flex flex-col gap-1 overflow-x-hidden"
+            class="flex flex-col gap-1"
             scrollToItem={scrollToItem()}
           >
             {(items) => {

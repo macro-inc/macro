@@ -1,14 +1,19 @@
-import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
+import { Tooltip } from '@core/component/Tooltip';
+import { matches } from '@core/util/match';
+import CheckIcon from '@icon/regular/check.svg';
+import { notificationWithMetadata } from '@notifications';
+import { useEmail, useUserId } from '@service-gql/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
 import { getIconConfig } from 'core/component/EntityIcon';
 import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
-import { useDisplayName } from 'core/user';
+import { UserIcon } from 'core/component/UserIcon';
+import { emailToId, useDisplayName } from 'core/user';
 import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
-import { notificationWithMetadata } from 'notifications/notificationMetadata';
 import type { ParentProps, Ref } from 'solid-js';
 import {
+  createDeferred,
   createEffect,
   createMemo,
   createSignal,
@@ -19,23 +24,29 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { ITEM_WRAPPER } from '../constants/classStrings';
 import { createProfilePictureQuery } from '../queries/auth';
-import { createProjectQuery } from '../queries/project';
-import type { EntityData } from '../types/entity';
+import {
+  createProjectQuery,
+  isProjectContainedEntity,
+  type ProjectContainedEntity,
+} from '../queries/project';
+import type { EntityData, ProjectEntity } from '../types/entity';
 import type { Notification, WithNotification } from '../types/notification';
-import type { EntityClickHandler } from './Entity';
+import type { WithSearch } from '../types/search';
+import type { EntityClickEvent, EntityClickHandler } from './Entity';
 
 function UnreadIndicator(props: { active?: boolean }) {
   return (
-    <div class="flex min-w-5 items-center justify-center">
+    <div class="flex size-4 items-center justify-center">
       <svg
         xmlns="http://www.w3.org/2000/svg"
         classList={{
-          'flex size-[10px] fill-accent': true,
+          'fill-accent': true,
           'opacity-0': !props.active,
         }}
         viewBox="0 0 8 8"
+        width="75%"
+        height="75%"
         fill="none"
       >
         <path d="M3.39622 8C3.29136 8 3.23894 7.94953 3.23894 7.84858L3.33068 5.13565L0.932129 6.58675C0.836012 6.63722 0.76174 6.6204 0.709312 6.53628L0.0801831 5.56467C0.0190178 5.47213 0.0364936 5.40063 0.132611 5.35016L2.58359 4.07571L0.09329 2.88959C-0.00282696 2.83912 -0.0246717 2.77182 0.0277557 2.6877L0.59135 1.58991C0.643778 1.49737 0.71805 1.47634 0.814167 1.52681L3.31758 2.95268L3.21272 0.151421C3.21272 0.0504735 3.26515 0 3.37 0H4.57583C4.68069 0 4.73312 0.0504735 4.73312 0.151421L4.64137 2.94006L7.14478 1.40063C7.2409 1.34175 7.3108 1.35857 7.35449 1.4511L7.97051 2.46057C8.02294 2.5531 8.00546 2.6204 7.91808 2.66246L5.40157 4L7.82633 5.18612C7.91371 5.23659 7.93556 5.30389 7.89187 5.38801L7.36759 6.4858C7.32391 6.58675 7.25837 6.60778 7.17099 6.54889L4.6938 5.13565L4.78554 7.84858C4.79428 7.94953 4.74185 8 4.62826 8H3.39622Z" />
@@ -44,16 +55,25 @@ function UnreadIndicator(props: { active?: boolean }) {
   );
 }
 
-function ImportantBadge(props: { active?: boolean }) {
+function SharedBadge(props: { ownerId: string }) {
   return (
-    <Show when={props.active}>
-      <div class="font-mono user-select-none uppercase flex items-center text-accent bg-accent/10 p-0.5 px-2 text-[0.625rem] rounded-full border border-accent/10">
-        <span class="@max-xl/split:hidden">Important</span>
-        <span class="hidden @max-xl/split:block font-bold">!</span>
-      </div>
-    </Show>
+    <div class="font-mono font-medium user-select-none uppercase flex items-center text-ink-extra-muted p-0.5 gap-1 text-[0.625rem] rounded-full border border-edge-muted pr-2">
+      <UserIcon id={props.ownerId} size="xs" />
+      shared
+    </div>
   );
 }
+
+// function ImportantBadge(props: { active?: boolean }) {
+//   return (
+//     <Show when={props.active}>
+//       <div class="font-mono font-medium user-select-none uppercase flex items-center text-accent bg-accent/10 p-0.5 px-2 text-[0.625rem] rounded-full border border-accent/10">
+//         <span class="@max-xl/split:hidden">Important</span>
+//         <span class="hidden @max-xl/split:block font-bold">!</span>
+//       </div>
+//     </Show>
+//   );
+// }
 
 interface EntityProps<T extends WithNotification<EntityData>>
   extends ParentProps {
@@ -78,29 +98,24 @@ interface EntityProps<T extends WithNotification<EntityData>>
   highlighted?: boolean;
   selected?: boolean;
   ref?: Ref<HTMLDivElement>;
+  onChecked?: (checked: boolean, shiftKey?: boolean) => void;
+  checked?: boolean;
 }
 
-export function EntityWithEverything<
-  T extends WithNotification<EntityData> = WithNotification<EntityData>,
->(props: EntityProps<T>) {
-  const [showActionList, setShowActionList] = createSignal(false);
+export function EntityWithEverything(
+  props: EntityProps<WithNotification<EntityData | WithSearch<EntityData>>>
+) {
   const [actionButtonRef, setActionButtonRef] =
     createSignal<HTMLButtonElement | null>(null);
+  const [entityDivRef, setEntityDivRef] = createSignal<HTMLDivElement | null>(
+    null
+  );
   const [showRestOfNotifications, setShowRestOfNotifications] =
     createSignal(false);
 
   const { keydownDataDuringTask } = trackKeydownDuringTask();
-  let tabbableEl!: HTMLDivElement;
+  const userEmail = useEmail();
 
-  // onMount(() => {
-  //   if (document.activeElement === document.body) {
-  //     if (props.selected && props.highlighted) {
-  //       tabbableEl.focus();
-  //     }
-  //   }
-  // });
-
-  let focusId = 0;
   const getIcon = createMemo(() => {
     switch (props.entity.type) {
       case 'channel':
@@ -126,10 +141,10 @@ export function EntityWithEverything<
   const hasNotifications = () =>
     !!props.entity.notifications && props.entity.notifications().length > 0;
 
-  const threadGap = 10;
+  const threadGap = 6;
   const ThreadBorder = () => (
     <div
-      class="absolute left-[9.5px] border-[0.5px] border-edge -top-1/2 "
+      class="absolute left-[calc(0.5rem+1px)] w-[1px] border-l border-edge-muted -top-0.75"
       style={{ height: `${threadGap}px` }}
     />
   );
@@ -145,14 +160,66 @@ export function EntityWithEverything<
     return notifications.filter(({ done }) => !done);
   };
 
+  const searchHighlightName = () =>
+    'search' in props.entity && props.entity.search.nameHighlight;
+
+  const contentHighlights = () => {
+    if (!('search' in props.entity)) return [];
+    return props.entity.search.contentHighlights ?? [];
+  };
+
   const EntityTitle = () => {
     if (props.entity.type === 'email') {
+      const macroDisplayNames =
+        props.entity.participantEmails?.map((email) => {
+          return useDisplayName(emailToId(email))[0];
+        }) ?? [];
+      const isLikelyEmail = (value?: string) =>
+        typeof value === 'string' && value.includes('@');
+      const combinedParticipantFirstNames = createMemo(() => {
+        if (props.entity.type !== 'email') return [];
+        const me = userEmail();
+        const participantNames = props.entity.participantNames ?? [];
+        return (
+          props.entity.participantEmails?.reduce<string[]>(
+            (acc, email, idx) => {
+              if (me && email === me) return acc;
+              const macroFirstName = macroDisplayNames[idx]?.().split(' ')[0];
+              const participantFirstName = participantNames[idx].split(' ')[0];
+              if (macroFirstName && !isLikelyEmail(macroFirstName)) {
+                acc.push(macroFirstName);
+              } else if (
+                isLikelyEmail(macroFirstName) &&
+                participantFirstName &&
+                !isLikelyEmail(participantFirstName)
+              ) {
+                acc.push(participantFirstName);
+              } else {
+                acc.push(email.split('@')[0]);
+              }
+              return acc;
+            },
+            []
+          ) ?? []
+        );
+      });
+
+      const displayedNames = () => {
+        const names = combinedParticipantFirstNames();
+        if (names.length <= 3 && names.length > 0) return names.join(', ');
+        if (names.length > 3)
+          return `${names[0]} .. ${names[names.length - 2]}, ${names[names.length - 1]}`;
+        return undefined;
+      };
+
       return (
-        <div class="flex gap-2 items-center text-sm min-w-0 w-full truncate overflow-hidden">
+        <div class="flex gap-1 items-center text-sm min-w-0 w-full truncate overflow-hidden">
           {/* sometimes senderName and senderEmail are the same */}
           <div class="flex w-[20cqw] gap-2 font-semibold shrink-0">
             {/* Sender Name */}
-            <div class="truncate">{props.entity.senderName}</div>
+            <div class="truncate">
+              {displayedNames() ?? props.entity.senderName}
+            </div>
             {/* Sender Email Address */}
             {/* <Show
               when={
@@ -165,127 +232,140 @@ export function EntityWithEverything<
             </Show> */}
           </div>
           {/* Subject */}
-          <ImportantBadge active={props.importantIndicatorActive} />
-          <div class="font-semibold shrink-0 truncate opacity-70">
-            {props.entity.name}
-          </div>
-          {/* Body  */}
-          <div class="truncate shrink grow opacity-70">
-            {props.entity.snippet}
+          {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
+          <div class="flex items-center w-full gap-4 flex-1 min-w-0">
+            <div class="font-medium shrink-0 truncate">
+              <Show when={searchHighlightName()} fallback={props.entity.name}>
+                {(name) => (
+                  <StaticMarkdown
+                    markdown={name()}
+                    theme={unifiedListMarkdownTheme}
+                    singleLine={true}
+                  />
+                )}
+              </Show>
+            </div>
+            {/* Body  */}
+            <div class="truncate shrink grow opacity-60">
+              {props.entity.snippet}
+            </div>
           </div>
         </div>
       );
     }
-    const isDirectMessage = () =>
-      props.entity.type === 'channel' &&
-      props.entity.channelType === 'direct_message';
-    const notification = createMemo(() => {
-      const maybeNotification = props.entity.notifications?.().at(0);
-      if (!maybeNotification) return;
 
-      const withMetadata = notificationWithMetadata(maybeNotification);
-      if (!withMetadata) return;
+    const channelEntity = createMemo(() =>
+      props.entity.type === 'channel' ? props.entity : null
+    );
 
-      return withMetadata;
-    });
-    const notificationMessageContent = createMemo(() => {
-      const metadata = notification()?.notificationMetadata;
-      if (!metadata || !('messageContent' in metadata)) return;
+    const lastMessageContent = createMemo(
+      () => channelEntity()?.latestMessage?.content
+    );
 
-      return metadata.messageContent;
-    });
-
-    const userName = createMemo(() => {
-      const [userName] = useDisplayName(notification()?.senderId!);
+    const userNameFromSender = createMemo(() => {
+      const senderId = channelEntity()?.latestMessage?.senderId;
+      if (!senderId) return;
+      const [userName] = useDisplayName(senderId);
       return userName();
-    });
-    const _isNameEmailAddress = createMemo(() => {
-      return !!userName().match(
-        /^(?!\.)(?!.*\.\.)([a-z0-9_'+\-\.]*)[a-z0-9_'+\-]@([a-z0-9][a-z0-9\-]*\.)+[a-z]{2,}$/i
-      );
     });
 
     return (
       <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden">
-        <span class="flex gap-2 truncate font-medium text-sm shrink-0 items-center">
+        <span class="flex gap-1 truncate font-medium text-sm shrink-0 items-center">
           <span
             class="font-semibold truncate"
             classList={{
-              'w-[20cqw]': hasNotifications() && !props.showUnrollNotifications,
+              'w-[20cqw]': !props.showUnrollNotifications,
             }}
           >
-            {props.entity.name}
+            <Show when={searchHighlightName()} fallback={props.entity.name}>
+              {(name) => (
+                <StaticMarkdown
+                  markdown={name()}
+                  theme={unifiedListMarkdownTheme}
+                  singleLine={true}
+                />
+              )}
+            </Show>
           </span>
 
-          <Show
-            when={
-              hasNotifications() &&
-              !props.showUnrollNotifications &&
-              !isDirectMessage()
-            }
-          >
-            <ImportantBadge active={props.importantIndicatorActive} />
-            <span class="inline-block">
-              <span class="text-ink">{userName()}</span>
-            </span>
+          <Show when={!props.showUnrollNotifications}>
+            <div class="flex items-center gap-1">
+              {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
+              <span class="font-medium shrink-0 truncate">
+                {userNameFromSender()}
+              </span>
+            </div>
+          </Show>
+
+          <Show when={!props.showUnrollNotifications && lastMessageContent()}>
+            {(lastMessageContent) => (
+              <div class="truncate shrink grow opacity-60 flex items-center">
+                <StaticMarkdown
+                  markdown={lastMessageContent()}
+                  theme={unifiedListMarkdownTheme}
+                  singleLine={true}
+                />
+              </div>
+            )}
           </Show>
         </span>
-
-        <Show
-          when={!props.showUnrollNotifications && notificationMessageContent()}
-        >
-          {(messageContent) => (
-            <div class="text-sm truncate line-clamp-1 leading-none shrink text-ink-extra-muted py-1">
-              <StaticMarkdown
-                markdown={messageContent()}
-                theme={unifiedListMarkdownTheme}
-                singleLine={false}
-              />
-            </div>
-          )}
-        </Show>
       </div>
     );
   };
 
   const draggable = createDraggable(props.entity.id, props.entity);
   false && draggable;
-
   const droppable = createDroppable(props.entity.id, props.entity);
   false && droppable;
 
   const { didCursorMove } = useCursorMove();
 
+  // The main click handler for the entity row should navigate to an entity
+  // without forcing focus back to the source split until after navigation.
+  // Certain buttons in the entity need to NOT Navigate AND return focus to
+  // the split. Those buttons should have a 'data-blocks-navigation'
+  function blocksNavigation(e: PointerEvent | MouseEvent): boolean {
+    const { target } = e;
+    if (target instanceof Element) {
+      const closest = target.closest('[data-blocks-navigation]');
+      if (closest && entityDivRef()?.contains(closest)) return true;
+    }
+    return false;
+  }
+
+  const userId = useUserId();
+  const sharedData = () => {
+    if (props.entity.type === 'channel') {
+      return false;
+    }
+
+    if (props.entity.ownerId === userId()) {
+      return false;
+    }
+    return {
+      ownerDisplayName: useDisplayName(props.entity.ownerId)[0],
+      ownerId: props.entity.ownerId,
+    };
+  };
+
   return (
     <div
       use:draggable
       use:droppable
-      class={`relative group py-[7px] px-2 ${ITEM_WRAPPER_CLASS()}`}
+      data-checked={props.checked}
+      class="everything-entity relative group/entity"
       classList={{
-        'bg-hover': props.highlighted,
-        bracket: props.selected,
+        'bg-hover/30': props.highlighted && !props.checked,
+        'bg-accent/5': props.checked,
+        'bracket outline outline-accent/20 outline-offset-[-1px]':
+          props.selected,
       }}
       onMouseOver={(e) => {
         if (!didCursorMove(e)) {
           return;
         }
-
-        setShowActionList(true);
-
         props.onMouseOver?.();
-      }}
-      onMouseLeave={() => {
-        setShowActionList(false);
-      }}
-      onFocusIn={() => {
-        setShowActionList(true);
-        clearTimeout(focusId);
-        props.onFocusIn?.();
-      }}
-      onFocusOut={() => {
-        focusId = window.setTimeout(() => {
-          setShowActionList(false);
-        });
       }}
       onContextMenu={() => {
         props.onContextMenu?.();
@@ -294,13 +374,15 @@ export function EntityWithEverything<
       <div
         data-entity
         data-entity-id={props.entity.id}
-        // class="@md:flex grid w-full min-w-0 flex-1 grid-cols-2 @md:flex-row @md:items-center @md:gap-4"
-        class="min-h-[40px] grid w-full min-w-0 flex-1 gap-2 grid-rows-1 @md:items-center suppress-css-bracket"
-        classList={{
-          'grid-cols-[auto_1fr_auto]': props.showLeftColumnIndicator,
-          'grid-cols-[1fr_auto]': !props.showLeftColumnIndicator,
+        class="w-full min-w-0 grid flex-1 items-center suppress-css-bracket grid-cols-[2rem_1fr_auto] pr-2"
+        onClick={(e) => {
+          if (blocksNavigation(e)) return;
+          props.onClick?.(props.entity, e);
         }}
-        onClick={props.onClick ? [props.onClick, props.entity] : undefined}
+        onMouseDown={(e) => {
+          if (blocksNavigation(e)) return;
+          e.preventDefault();
+        }}
         // Action List is also rendered based on focus, but when focused via Shift+Tab, parent is focused due to Action List dom not present. Here we check if current browser task has captured Shift+Tab focus on Action List
         onFocusIn={(e) => {
           if (
@@ -312,7 +394,6 @@ export function EntityWithEverything<
             return;
           }
 
-          setShowActionList(true);
           actionButtonRef()?.focus();
         }}
         onKeyDown={onKeyDownClick((e) =>
@@ -321,81 +402,132 @@ export function EntityWithEverything<
         onKeyUp={onKeyUpClick((e) => props.onClick?.(props.entity, e as any))}
         role="button"
         tabIndex={0}
-        ref={mergeRefs(props.ref, (el) => {
-          tabbableEl = el;
-        })}
+        ref={mergeRefs(setEntityDivRef, props.ref)}
       >
+        <button
+          type="button"
+          class="col-1 size-full relative group/button flex items-center justify-center bracket-never"
+          onClick={(e) => {
+            props.onChecked?.(!props.checked, e.shiftKey);
+          }}
+          data-blocks-navigation
+        >
+          <div
+            class="size-4 p-0.5 flex items-center justify-center rounded-xs group-hover/button:border-accent group-hover/button:border pointer-events-none"
+            classList={{
+              'ring ring-edge-muted': props.selected,
+              'bg-panel': !props.checked && props.selected,
+              'bg-accent border border-accent': props.checked,
+            }}
+          >
+            <Show when={props.checked}>
+              <CheckIcon class="w-full h-full text-panel" />
+            </Show>
+          </div>
+          <Show when={props.showLeftColumnIndicator && !props.checked}>
+            <div class="absolute inset-0 flex items-center justify-center -z-1">
+              <UnreadIndicator active={props.unreadIndicatorActive} />
+            </div>
+          </Show>
+        </button>
         {/* Left Column Indicator(s) */}
-        <Show when={props.showLeftColumnIndicator}>
-          <UnreadIndicator active={props.unreadIndicatorActive} />
-        </Show>
         {/* Icon and name - top left on mobile, first item on desktop */}
         <div
-          class="min-h-[40px] min-w-[50px] flex flex-row items-center gap-2"
+          class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2"
           classList={{
             grow: props.contentPlacement === 'bottom-row',
             'opacity-70': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
           <div class="flex size-5 shrink-0 items-center justify-center">
-            <Dynamic
-              component={getIcon().icon}
-              class={`flex size-full ${getIcon().foreground}`}
-            />
+            <Show
+              when={
+                props.entity.type === 'channel' &&
+                props.entity.channelType === 'direct_message'
+              }
+              fallback={
+                <Dynamic
+                  component={getIcon().icon}
+                  class={`flex size-full ${getIcon().foreground}`}
+                />
+              }
+            >
+              <DirectMessageIcon entity={props.entity} />
+            </Show>
           </div>
           <EntityTitle />
         </div>
         {/* Date and user - top right on mobile, end on desktop  */}
         <div
-          class="relative row-1 ml-2 @md:ml-4 self-center min-w-0"
+          class="row-1 ml-2 @md:ml-4 self-center min-w-0 col-3"
           classList={{
-            'col-3': props.showLeftColumnIndicator,
-            'col-2': !props.showLeftColumnIndicator,
             'opacity-50': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
-          <div class="flex flex-row items-center justify-end gap-4 min-w-0">
-            <Show when={!showActionList()}>
-              <EntityProject entity={props.entity} />
-              <Show when={props.timestamp ?? props.entity.updatedAt}>
-                {(date) => {
-                  const formattedDate = createFormattedDate(date());
-                  return (
-                    <span class="shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
-                      {formattedDate()}
-                    </span>
-                  );
-                }}
-              </Show>
-            </Show>
-            <Show when={showActionList()}>
-              <div class="flex gap-1 h-8">
-                <button
-                  class="flex items-center justify-center size-8 hover:bg-accent hover:text-panel"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    props.onClickRowAction?.(props.entity, 'done');
-                  }}
-                  ref={setActionButtonRef}
+          <div class="flex flex-row items-center justify-end gap-2 min-w-0">
+            <Show when={sharedData()}>
+              {(shared) => (
+                <Tooltip
+                  tooltip={`${shared().ownerDisplayName()} shared with you`}
                 >
-                  <CheckIcon class="w-4 h-4" />
-                </button>
-              </div>
+                  <SharedBadge ownerId={shared().ownerId} />
+                </Tooltip>
+              )}
+            </Show>
+            <Show when={matches(props.entity, isProjectContainedEntity)}>
+              {(entity) => (
+                <EntityProject entity={entity()} onClick={props.onClick} />
+              )}
+            </Show>
+            <Show when={props.timestamp ?? props.entity.updatedAt}>
+              {(date) => {
+                const formattedDate = createFormattedDate(date());
+                return (
+                  <span class="shrink-0 whitespace-nowrap text-xs font-mono uppercase text-ink-extra-muted">
+                    {formattedDate()}
+                  </span>
+                );
+              }}
+            </Show>
+            <Show when={props.selected}>
+              <button
+                class="absolute top-1 right-1 flex items-center justify-center size-8 bg-panel border border-edge-muted hover:bg-accent hover:text-panel"
+                onClick={() => {
+                  props.onClickRowAction?.(props.entity, 'done');
+                }}
+                ref={setActionButtonRef}
+                data-blocks-navigation
+              >
+                <CheckIcon class="w-4 h-4 pointer-events-none" />
+              </button>
             </Show>
           </div>
         </div>
+        {/* Content Highlights from Search */}
+        <Show when={contentHighlights().length > 0}>
+          <div class="relative row-2 grid gap-2 col-2 col-end-4 pb-2">
+            <For each={contentHighlights()}>
+              {(highlight) => (
+                <div class="text-sm text-ink-muted truncate flex items-center">
+                  <StaticMarkdown
+                    markdown={highlight.content}
+                    theme={unifiedListMarkdownTheme}
+                    singleLine={true}
+                  />
+                </div>
+              )}
+            </For>
+          </div>
+        </Show>
         {/* Notifications */}
-        <Show when={props.showUnrollNotifications && hasNotifications()}>
-          <div
-            class="relative row-2 col-[2/-1] grid"
-            classList={{
-              'col-[2/-1]': props.showLeftColumnIndicator,
-              'col-[1/-1]': !props.showLeftColumnIndicator,
-            }}
-            style={{
-              gap: `${threadGap}px`,
-            }}
-          >
+        <Show
+          when={
+            props.showUnrollNotifications &&
+            hasNotifications() &&
+            contentHighlights().length === 0
+          }
+        >
+          <div class="relative col-2 col-end-4 200 pb-2 gap-2">
             <For each={notDoneNotifications()}>
               {(notification) => {
                 const [userName] = useDisplayName(notification.senderId);
@@ -458,7 +590,7 @@ export function EntityWithEverything<
 
                 return (
                   <div
-                    class="relative flex gap-1 items-center min-w-0 h-5"
+                    class="relative flex gap-1 items-center min-w-0 h-8"
                     classList={{
                       'hover:bg-hover/20 hover:opacity-70':
                         !!props.onClickNotification,
@@ -487,18 +619,15 @@ export function EntityWithEverything<
                           {ActionContent()}
                         </span>
                       </div>
-
-                      <ImportantBadge
+                      {/*<ImportantBadge
                         active={
                           notification.viewedAt === null &&
                           notification.isImportantV0
                         }
-                      />
-                      <div class="text-sm shrink truncate min-w-0 max-h-5 opacity-70 overflow-clip">
-                        <MessageContent />
-                      </div>
+                      />*/}
+                      <MessageContent />
                     </div>
-                    <div class="shrink-0 font-mono text-sm uppercase text-ink-extra-muted ml-2 @md:ml-4">
+                    <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
                       {formattedDate()}
                     </div>
                   </div>
@@ -519,6 +648,7 @@ export function EntityWithEverything<
                     e.stopPropagation();
                     setShowRestOfNotifications((prev) => !prev);
                   }}
+                  data-blocks-navigation
                 >
                   <Show
                     when={!showRestOfNotifications()}
@@ -538,6 +668,29 @@ export function EntityWithEverything<
           </div>
         </Show>
       </div>
+    </div>
+  );
+}
+
+function DirectMessageIcon(props: { entity: EntityData }) {
+  const userId = useUserId();
+  const participantId = () =>
+    props.entity.type === 'channel'
+      ? (props.entity.particpantIds ?? []).filter((id) => id !== userId()).at(0)
+      : undefined;
+
+  const Fallback = () => (
+    <Dynamic
+      component={getIconConfig('directMessage').icon}
+      class={`flex size-full ${getIconConfig('directMessage').foreground}`}
+    />
+  );
+
+  return (
+    <div class="bg-panel size-5 rounded-full p-[2px]">
+      <Show when={participantId()} fallback={<Fallback />}>
+        {(id) => <UserIcon id={id()} isDeleted={false} size="xs" />}
+      </Show>
     </div>
   );
 }
@@ -567,22 +720,97 @@ function NotificationUserIcon(props: { id: string; name?: string }) {
   );
 }
 
-function EntityProject(props: { entity: EntityData }) {
-  if (
-    !(
-      (props.entity.type === 'chat' || props.entity.type === 'document') &&
-      props.entity.projectId
-    )
-  ) {
-    return null;
-  }
-
-  const projectQuery = createProjectQuery(props.entity);
-  const Loading = () => (
-    <div class="h-3 w-10 bg-ink-placeholder animate-pulse" />
+function EntityProjectPathDisplay(props: { name: string; path: string[] }) {
+  const [displayPath, setDisplayPath] = createSignal<string | undefined>(
+    props.name
   );
+  const [truncated, setTruncated] = createSignal(false);
+
+  const fullPath = createMemo(() => props.path.join(' / '));
+
+  const getDisplayPath = (): { name: string; truncated: boolean } => {
+    const fullPathString = fullPath();
+    const maxLength = 30;
+
+    if (fullPathString.length <= maxLength) {
+      return { name: fullPathString, truncated: false };
+    }
+
+    if (props.path.length === 1) {
+      return {
+        name: props.path[0].slice(0, maxLength - 3) + '...',
+        truncated: true,
+      };
+    }
+
+    if (props.path.length === 2) {
+      const first = props.path[0];
+      const last = props.path[props.path.length - 1];
+      const combined = `${first} / ... / ${last}`;
+      if (combined.length <= maxLength) {
+        return { name: combined, truncated: true };
+      }
+      return {
+        name: `${first.slice(0, 10)}... / ${last.slice(0, 10)}...`,
+        truncated: true,
+      };
+    }
+
+    const first = props.path[0];
+    const last = props.path[props.path.length - 1];
+    return { name: `${first} / ... / ${last}`, truncated: true };
+  };
+
+  createDeferred(() => {
+    const { name, truncated } = getDisplayPath();
+    setDisplayPath(name);
+    setTruncated(truncated);
+  });
+
   return (
-    <div class="flex gap-1 items-center text-xs text-ink-extra-muted min-w-0">
+    <Tooltip tooltip={fullPath()} hide={!truncated()}>
+      <div class="truncate">{displayPath()}</div>
+    </Tooltip>
+  );
+}
+
+function EntityProject(props: {
+  entity: ProjectContainedEntity;
+  onClick?: EntityClickHandler<ProjectEntity>;
+}) {
+  const projectQuery = createProjectQuery(props.entity);
+  let projectIconRef!: HTMLDivElement;
+
+  createEffect(() => {
+    const click = props.onClick;
+    if (!click) return;
+    if (!projectQuery.isSuccess) return;
+
+    const data = projectQuery.data;
+    const handleClick = (e: EntityClickEvent) => {
+      const projectEntity: ProjectEntity = {
+        type: 'project',
+        id: data.id,
+        name: data.name,
+        ownerId: data.owner,
+        updatedAt: data.updatedAt,
+      };
+      click(projectEntity, e, { ignorePreview: true });
+    };
+
+    projectIconRef.classList.add('hover:text-accent');
+    projectIconRef.dataset.blocksNavigation = 'true';
+    projectIconRef.addEventListener('click', handleClick);
+    onCleanup(() => {
+      projectIconRef.removeEventListener('click', handleClick);
+    });
+  });
+
+  return (
+    <div
+      ref={projectIconRef}
+      class="flex gap-1 items-center text-xs text-ink-extra-muted min-w-0"
+    >
       <svg
         class="shrink-0"
         xmlns="http://www.w3.org/2000/svg"
@@ -596,9 +824,13 @@ function EntityProject(props: { entity: EntityData }) {
           fill="currentColor"
         />
       </svg>
-      <Suspense fallback={<Loading />}>
-        <Show when={projectQuery.data?.name}>
-          {(name) => <div class="truncate">{name()}</div>}
+      <Suspense
+        fallback={<div class="h-3 w-10 bg-ink-placeholder animate-pulse" />}
+      >
+        <Show when={projectQuery.data}>
+          {(data) => (
+            <EntityProjectPathDisplay name={data().name} path={data().path} />
+          )}
         </Show>
       </Suspense>
     </div>
@@ -670,293 +902,6 @@ const createFormattedDate = (timestamp: number) =>
       year: '2-digit',
     });
   });
-
-let init = true;
-let globalResizeObserver: ResizeObserver | null = null;
-const containerCallbacks = new WeakMap<HTMLElement, () => void>();
-
-const initGlobalResizeObserver = () => {
-  if (globalResizeObserver) return;
-
-  globalResizeObserver = new ResizeObserver((entries) => {
-    for (const entry of entries) {
-      const callback = containerCallbacks.get(entry.target as HTMLElement);
-      if (callback) {
-        callback();
-      }
-    }
-  });
-};
-
-// truncates rightmost child first
-function _truncateChildren(
-  containerRef: () => HTMLDivElement | undefined | null
-) {
-  const MIN_WIDTH = 80; // Minimum width for collapsed children
-
-  createEffect(() => {
-    const container = containerRef();
-    if (!container) return;
-
-    initGlobalResizeObserver();
-
-    const setSizes = () => {
-      const children = Array.from(container.children) as HTMLElement[];
-      if (children.length === 0) return;
-
-      const containerWidth = container.getBoundingClientRect().width;
-      if (containerWidth === 0) return;
-
-      // Store original styles to restore later
-      const originalStyles = children.map((child) => ({
-        width: child.style.width,
-      }));
-
-      // microtask callback hell to batch sequential dom read/write ...
-      queueMicrotask(() => {
-        // Write
-        // Temporarily reset all width constraints to measure true natural width
-        children.forEach((child) => {
-          child.style.width = 'auto';
-        });
-
-        queueMicrotask(() => {
-          // Read
-          // Measure natural widths using scrollWidth
-          // also forces reflow
-          const naturalWidths = children.map((child) => {
-            // const width = child.scrollWidth;
-            const width = child.scrollWidth;
-            // if(entity) {
-            // console.log(
-            //   'Child scrollWidth:',
-            //   width,
-            //   'Child text:',
-            //   child.textContent?.trim()
-            // );
-            // }
-            return width;
-          });
-
-          queueMicrotask(() => {
-            // Write
-            // Restore original styles immediately
-            children.forEach((child, index) => {
-              const original = originalStyles[index];
-              child.style.width = original.width;
-            });
-
-            queueMicrotask(() => {
-              // Read
-              container.offsetHeight;
-
-              // Account for gaps between children (gap-2 = 8px)
-              const GAP_SIZE = 8;
-              const totalNaturalWidth =
-                naturalWidths.reduce((sum, w) => sum + w, 0) +
-                (children.length - 1) * GAP_SIZE;
-
-              // console.log(
-              //   'Container width:',
-              //   containerWidth,
-              //   'Total natural width:',
-              //   totalNaturalWidth,
-              //   'Natural widths:',
-              //   naturalWidths
-              // );
-
-              // If container is wide enough, use natural widths
-              if (containerWidth >= totalNaturalWidth) {
-                // console.log('Using natural widths - container is wide enough');
-                queueMicrotask(() => {
-                  children.forEach((child) => {
-                    child.style.width = 'auto';
-                    child.style.flexShrink = '';
-                  });
-                });
-                return;
-              }
-
-              // console.log(
-              //   'Container too narrow, applying progressive collapse from right to left'
-              // );
-
-              // Progressive collapse: start from rightmost child and work backwards
-              const computedWidths = [...naturalWidths];
-
-              // Calculate total width needed (including gaps)
-              let totalWidth =
-                computedWidths.reduce((sum, w) => sum + w, 0) +
-                (computedWidths.length - 1) * GAP_SIZE;
-
-              // If total width exceeds container, start collapsing from right
-              if (totalWidth > containerWidth) {
-                // console.log(`Total width ${totalWidth} exceeds container ${containerWidth}, starting collapse from right`);
-
-                // Start from rightmost child and work backwards
-                for (let i = computedWidths.length - 1; i >= 0; i--) {
-                  // console.log(`Child ${i}: natural=${computedWidths[i]}, current total=${totalWidth}`);
-
-                  // Use the smaller of natural width or MIN_WIDTH
-                  const effectiveMinWidth = Math.min(
-                    computedWidths[i],
-                    MIN_WIDTH
-                  );
-
-                  if (computedWidths[i] > effectiveMinWidth) {
-                    // Calculate how much we need to reduce this child
-                    const excess = totalWidth - containerWidth;
-
-                    if (excess > 0) {
-                      // Reduce this child, but not below its effective minimum
-                      const reduction = Math.min(
-                        excess,
-                        computedWidths[i] - effectiveMinWidth
-                      );
-                      computedWidths[i] = Math.max(
-                        effectiveMinWidth,
-                        computedWidths[i] - reduction
-                      );
-                      totalWidth =
-                        computedWidths.reduce((sum, w) => sum + w, 0) +
-                        (computedWidths.length - 1) * GAP_SIZE;
-                      // console.log(`Reduced child ${i} by ${reduction}px to ${computedWidths[i]}px, new total: ${totalWidth}`);
-                    }
-                  }
-
-                  // Check if we're now within bounds
-                  if (totalWidth <= containerWidth) {
-                    // console.log(
-                    //   `Total width ${totalWidth} now fits in container ${containerWidth}`
-                    // );
-                    break;
-                  }
-                }
-              }
-
-              // Second pass: if still not enough space, proportionally reduce all children equally
-              let finalTotalWidth =
-                computedWidths.reduce((sum, w) => sum + w, 0) +
-                (computedWidths.length - 1) * GAP_SIZE;
-
-              if (finalTotalWidth > containerWidth) {
-                // console.log(
-                //   'Still too wide after collapse, applying proportional scaling'
-                // );
-                const availableWidth =
-                  containerWidth - (computedWidths.length - 1) * GAP_SIZE;
-                const scaleFactor = Math.max(
-                  0,
-                  availableWidth / computedWidths.reduce((sum, w) => sum + w, 0)
-                );
-
-                computedWidths.forEach((_, i) => {
-                  computedWidths[i] = Math.max(
-                    0,
-                    computedWidths[i] * scaleFactor
-                  );
-                });
-
-                // Recalculate final width
-                finalTotalWidth =
-                  computedWidths.reduce((sum, w) => sum + w, 0) +
-                  (computedWidths.length - 1) * GAP_SIZE;
-              }
-
-              // Safety check: ensure we never exceed container width
-              if (finalTotalWidth > containerWidth) {
-                const _excess = finalTotalWidth - containerWidth;
-                const availableForChildren =
-                  containerWidth - (computedWidths.length - 1) * GAP_SIZE;
-
-                // Distribute available width proportionally among children
-                const totalChildWidth = computedWidths.reduce(
-                  (sum, w) => sum + w,
-                  0
-                );
-                const finalScaleFactor = availableForChildren / totalChildWidth;
-
-                computedWidths.forEach((_, i) => {
-                  computedWidths[i] = Math.max(
-                    0,
-                    computedWidths[i] * finalScaleFactor
-                  );
-                });
-              }
-
-              // console.log('Final computed widths:', computedWidths);
-
-              // Apply computed widths to children
-              queueMicrotask(() => {
-                children.forEach((child, index) => {
-                  const computedWidth = computedWidths[index];
-                  const naturalWidth = naturalWidths[index];
-
-                  // Only set width if it's different from the natural width
-                  if (Math.abs(computedWidth - naturalWidth) > 0.1) {
-                    child.style.width = `${computedWidth}px`;
-                    // the resizing logic is off by 10 pixels or so
-                    // for now apply shrink in addition, to workaround that issue
-                    child.style.flexShrink = '1';
-                  } else {
-                    // Reset to natural width
-                    child.style.width = 'auto';
-                    child.style.flexShrink = '';
-                  }
-                });
-              });
-            });
-          });
-        });
-      });
-    };
-
-    // Register this container with the global observer
-    containerCallbacks.set(container, setSizes);
-    globalResizeObserver!.observe(container);
-
-    // Check if fonts are ready and recalculate if needed
-    const checkFontsAndRecalculate = async () => {
-      if ('fonts' in document) {
-        try {
-          await document.fonts.ready;
-          setTimeout(() => {
-            setSizes();
-          }, 800);
-        } catch (_error) {
-          setTimeout(setSizes, 100);
-        }
-      }
-    };
-
-    if (init) {
-      // Check fonts and recalculate when ready
-      checkFontsAndRecalculate();
-      init = false;
-    }
-
-    onCleanup(() => {
-      // Unobserve this container and remove its callback
-      globalResizeObserver!.unobserve(container);
-    });
-  });
-}
-
-const ITEM_WRAPPER_CLASS = () => {
-  let input = ITEM_WRAPPER;
-  const excludeclasses = [
-    'focus-bracket-within',
-    'suppress-css-brackets',
-    'focus-within:bg-hover',
-    'hover:bg-hover',
-  ];
-  excludeclasses.forEach((pattern) => {
-    input = input.replace(new RegExp(pattern, 'g'), '');
-  });
-
-  // Optional: clean up extra spaces
-  input = input.replace(/\s+/g, ' ').trim();
-};
 
 let lastMouseX: number | null = null;
 let lastMouseY: number | null = null;

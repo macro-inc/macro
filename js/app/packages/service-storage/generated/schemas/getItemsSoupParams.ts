@@ -8,7 +8,7 @@ import type { SoupApiSort } from './soupApiSort';
 
 export type GetItemsSoupParams = {
 /**
- * Whether to expand projects. Defaults to false.
+ * Whether to expand projects. Defaults to true.
  */
 expand?: boolean;
 /**

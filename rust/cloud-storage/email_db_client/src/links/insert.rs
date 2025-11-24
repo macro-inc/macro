@@ -1,4 +1,4 @@
-use anyhow::{Context, anyhow};
+use anyhow::anyhow;
 use models_email::email::{db, service};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
@@ -11,7 +11,7 @@ struct LinkId {
 /// If a record with matching fusionauth_user_id, email_address, and provider already exists,
 /// updates the existing record with values from the provided Link.
 /// Returns the ID of the inserted or updated link and a boolean indicating if a new record was created.
-#[tracing::instrument(skip(pool), level = "info")]
+#[tracing::instrument(skip(pool), level = "info", err)]
 pub async fn upsert_link(
     pool: &PgPool,
     service_link: service::link::Link,
@@ -24,7 +24,6 @@ pub async fn upsert_link(
     }
 
     let db_link: db::link::Link = service_link.into();
-    let provider_display = format!("{:?}", db_link.provider);
 
     let result = sqlx::query_as!(
         LinkId,
@@ -45,16 +44,22 @@ pub async fn upsert_link(
         db_link.is_sync_active
     )
         .fetch_one(pool)
-        .await
-        .with_context(|| {
-            format!(
-                "Failed to upsert link for fusionauth_user_id {}, email {}, provider {}",
-                db_link.fusionauth_user_id, db_link.email_address, provider_display
-            )
-        })?;
+        .await?;
 
     let mut service_link: service::link::Link = db_link.into();
     service_link.id = result.id;
+
+    let _ = sqlx::query!(
+        r#"
+        INSERT INTO email_settings (link_id) -- default settings for new links
+        VALUES ($1)
+        ON CONFLICT (link_id)
+        DO NOTHING
+        "#,
+        service_link.id,
+    )
+    .execute(pool)
+    .await?;
 
     Ok(service_link)
 }

@@ -5,7 +5,9 @@ use axum::{
 };
 use model::response::ErrorResponse;
 use model_notifications::UserNotification;
-use models_pagination::{CreatedAt, CursorExtractor, PaginateOn, PaginatedOpaqueCursor};
+use models_pagination::{
+    CreatedAt, CursorExtractor, PaginateOn, PaginatedOpaqueCursor, TypeEraseCursor,
+};
 use sqlx::types::Uuid;
 
 use crate::api::{
@@ -53,7 +55,7 @@ pub async fn handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     Query(Params { limit }): Query<Params>,
-    cursor: CursorExtractor<Uuid, CreatedAt>,
+    cursor: CursorExtractor<Uuid, CreatedAt, ()>,
     Json(req): Json<BulkGetUserNotificationsByEventItemIdRequest>,
 ) -> BulkResponse {
     tracing::info!("bulk_get_user_notifications_by_event_item_id");
@@ -66,7 +68,7 @@ pub async fn handler(
             &user_context.user_id,
             &req.event_item_ids,
             limit,
-            cursor.into_query(CreatedAt)
+            cursor.into_query(CreatedAt, ())
         )
         .await
         .map_err(|e| {
@@ -89,7 +91,11 @@ pub async fn handler(
                     message: "failed to convert notification",
                 }),
             )
-        })?.into_iter().paginate_on(limit as usize, CreatedAt).into_page().type_erase();
+        })?
+        .into_iter()
+        .paginate_on(limit as usize, CreatedAt)
+        .into_page()
+        .type_erase();
 
     Ok((StatusCode::OK, Json(result)))
 }

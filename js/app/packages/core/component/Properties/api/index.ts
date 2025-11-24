@@ -1,7 +1,7 @@
-export { fromApiFormat, toApiFormat } from './converters';
-export { fetchEntityProperties } from './properties';
+export { entityPropertyFromApi, propertyValueToApi } from './converters';
+export { fetchEntityProperties } from './fetchProperties';
 export {
-  addPropertyToEntity,
+  addEntityProperty,
   deleteEntityProperty,
-  savePropertyValue,
+  saveEntityProperty,
 } from './propertyValues';

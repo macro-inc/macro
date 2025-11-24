@@ -2,7 +2,6 @@ import { mountGlobalFocusListener } from '@app/signal/focus';
 import { useIsAuthenticated } from '@core/auth';
 import { Resize } from '@core/component/Resize';
 import { useABTest } from '@core/constant/ABTest';
-import { ENABLE_RIGHTHAND_SIDEBAR } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import {
@@ -14,10 +13,12 @@ import { attachGlobalDOMScope } from 'core/hotkey/hotkeys';
 import { createEffect, onCleanup, onMount, Show, Suspense } from 'solid-js';
 import { updateCookie } from '../util/updateCookie';
 import Banner from './banner/Banner';
+import { GlobalBulkEditEntityModal } from './bulk-edit-entity/BulkEditEntityModal';
 import { KommandMenu } from './command/Konsole';
 import { Dock } from './dock/Dock';
 import GlobalShortcuts from './GlobalHotkeys';
 import { ItemDndProvider } from './ItemDragAndDrop';
+import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { Paywall } from './paywall/Paywall';
 import { QuickCreateMenu } from './QuickCreateMenu';
 import { RightbarWrapper } from './rightbar/Rightbar';
@@ -112,6 +113,7 @@ export function Layout(props: RouteSectionProps) {
           <KommandMenu />
         </Suspense>
         <QuickCreateMenu />
+        <GlobalBulkEditEntityModal />
       </Show>
       <Show
         when={
@@ -128,7 +130,7 @@ export function Layout(props: RouteSectionProps) {
       <Show when={paywallOpen()}>
         <Paywall />
       </Show>
-      <div class="p-2 grow-1">
+      <div class="p-[var(--gutter-size)] grow-1">
         <Resize.Zone
           gutter={8}
           direction="horizontal"
@@ -139,14 +141,13 @@ export function Layout(props: RouteSectionProps) {
             <Resize.Panel id={LAYOUT_CONTEXT_ID} minSize={250}>
               {props.children}
             </Resize.Panel>
-            <Show when={ENABLE_RIGHTHAND_SIDEBAR}>
-              <RightbarWrapper />
-            </Show>
+            <RightbarWrapper />
           </ItemDndProvider>
         </Resize.Zone>
       </div>
       <Show when={isAuthenticated() && '/app/onboarding' !== location.pathname}>
         <Dock />
+        <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
       </Show>
     </div>
   );

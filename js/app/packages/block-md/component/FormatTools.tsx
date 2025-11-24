@@ -434,7 +434,6 @@ export function FormatTools(props: { withinPopup?: boolean }) {
 
   const FormatDropDown = (props: { buttonIsDisabled: Accessor<boolean> }) => {
     const [menuOpen, setMenuOpen] = createSignal(false);
-    // TODO bring up to menu best practives, ie. fully focusable menu items, etc.
     return (
       <DropdownMenu open={menuOpen()} onOpenChange={setMenuOpen}>
         <DropdownMenu.Trigger>

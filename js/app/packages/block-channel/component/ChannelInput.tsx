@@ -23,14 +23,16 @@ export type ChannelInputProps = {
   inputAttachmentsKey: string;
   channelName: string;
   onFocusLeaveStart?: (e: KeyboardEvent) => void;
+  autoFocusOnMount?: boolean;
+  domRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 };
 
 export function ChannelInput(props: ChannelInputProps) {
   const channelId = useBlockId();
 
   const sendMessage_ = createCallback(
-    async (args: Parameters<typeof sendMessage>[0]) => {
-      await sendMessage(args);
+    (args: Parameters<typeof sendMessage>[0]) => {
+      return sendMessage(args);
     }
   );
   const postTypingUpdate_ = createCallback(postTypingUpdate);
@@ -67,7 +69,7 @@ export function ChannelInput(props: ChannelInputProps) {
 
   return (
     <BaseInput
-      placeholder={`Send a message to ${props.channelName}`}
+      placeholder={`Message ${props.channelName} — @mention to share`}
       onStartTyping={() => postTypingUpdate_('start')}
       onStopTyping={() => postTypingUpdate_('stop')}
       onSend={sendMessage_}
@@ -82,6 +84,8 @@ export function ChannelInput(props: ChannelInputProps) {
       }}
       onFocusLeaveStart={props.onFocusLeaveStart}
       channelUsers={channelUsers}
+      autoFocusOnMount={props.autoFocusOnMount}
+      domRef={props.domRef}
     />
   );
 }

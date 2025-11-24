@@ -19,8 +19,12 @@ import { isErr } from '@core/util/maybeResult';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { isTauri, MaybeTauriProvider } from '@macro/tauri';
 import { createEmailSource, Provider as EntityProvider } from '@macro-entity';
-import { createNotificationSource } from '@notifications/notificationSource';
+import {
+  createNotificationSource,
+  usePlatformNotificationState,
+} from '@notifications';
 import { setUser, useObserveRouting } from '@observability';
+import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { gqlServiceClient } from '@service-gql/client';
 import { MetaProvider, Title } from '@solidjs/meta';
 import {
@@ -45,9 +49,13 @@ import {
   Suspense,
 } from 'solid-js';
 import { currentThemeId } from '../../block-theme/signals/themeSignals';
-import { applyTheme } from '../../block-theme/utils/themeUtils';
-import { useNotificationState } from '../../notification-provider/src/NotificationProvider';
+import {
+  applyTheme,
+  ensureMinimalThemeContrast,
+  systemThemeEffect,
+} from '../../block-theme/utils/themeUtils';
 import { TauriRouteListener } from '../../tauri/src/TauriProvider';
+import { useSoundHover } from '../util/soundHover';
 import { updateCookie } from '../util/updateCookie';
 import { Login } from './auth/Login';
 import { LOGIN_COOKIE_AGE, setCookie } from './auth/Shared';
@@ -55,14 +63,12 @@ import { GlobalAppStateProvider } from './GlobalAppState';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
-import { useMobileEffect, useMobileNavigate } from './settings/Mobile';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
 const rootPreload: RoutePreloadFunc = async (args) => {
   useObserveRouting();
-  useMobileNavigate();
 
   // even though we are using the transformUrl prop, we may still need to replace the url in the history
   const url = new URL(window.location.href);
@@ -235,8 +241,9 @@ const ROUTES: RouteDefinition[] = [
 
 export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   // Initialize global notification helpers
-  const notifInterface = useNotificationState();
+  const notifInterface = usePlatformNotificationState();
   const notificationSource = createNotificationSource(
+    connectionGatewayWebsocket,
     notifInterface === 'not-supported'
       ? undefined
       : notifInterface.showNotification
@@ -269,8 +276,7 @@ const clearBodyInlineStyleColor = () => {
 export function Root() {
   const isAuthenticated = useIsAuthenticated();
   useHotKeyRoot();
-
-  useMobileEffect();
+  useSoundHover();
 
   clearBodyInlineStyleColor();
 
@@ -309,7 +315,9 @@ export function Root() {
 
   const handleBeforeUnload = () => track(TrackingEvents.AUTH.TERMINATE);
   onMount(() => {
+    systemThemeEffect();
     applyTheme(currentThemeId());
+    ensureMinimalThemeContrast();
     window.addEventListener('beforeunload', handleBeforeUnload);
   });
   onCleanup(() =>

@@ -9,6 +9,6 @@ build:
 watch:
     cargo lambda watch -F local
 
-# invoke the lambda locally after watch-local is running
+# invoke the lambda locally after watch is running
 invoke:
     cargo lambda invoke {{lambda_name}} --data-file event.json 

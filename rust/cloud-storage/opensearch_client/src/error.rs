@@ -1,9 +1,6 @@
-use opensearch::{
-    Error,
-    http::{StatusCode, response::Response},
-};
+use opensearch::{Error, http::response::Response};
 
-#[derive(thiserror::Error, Debug, serde::Serialize)]
+#[derive(thiserror::Error, Debug, serde::Serialize, PartialEq)]
 #[serde(tag = "type")]
 pub enum OpensearchClientError {
     #[error("error deserializing response body. method: {method:?} details: {details}")]
@@ -11,6 +8,19 @@ pub enum OpensearchClientError {
         details: String,
         method: Option<String>,
     },
+
+    #[error("error deserializing search response. error: {details}, raw_body: {raw_body}")]
+    SearchDeserializationFailed { details: String, raw_body: String },
+
+    #[error("unable to grab bytes from http response: {details}")]
+    HttpBytesError { details: String },
+
+    #[error("unable to serialize into json. method: {method:?} details: {details}")]
+    SerializationFailed {
+        details: String,
+        method: Option<String>,
+    },
+
     #[error("a network error occurred. status_code: {status_code} message: {message}")]
     NetworkError { status_code: u16, message: String },
 
@@ -20,11 +30,20 @@ pub enum OpensearchClientError {
     #[error("validation failed: {details}")]
     ValidationFailed { details: String },
 
+    #[error("no terms provided")]
+    NoTermsProvided,
+
+    #[error("empty search indices provided")]
+    EmptySearchIndices,
+
     #[error("an unknown error occurred. method: {method:?} details: {details}")]
     Unknown {
         details: String,
         method: Option<String>,
     },
+
+    #[error("no title key is available for name search")]
+    NoTitleKeyForNameSearch,
 }
 
 impl From<anyhow::Error> for OpensearchClientError {
@@ -43,12 +62,13 @@ pub trait ResponseExt {
 
 impl ResponseExt for Response {
     async fn map_client_error(self) -> Result<Response, OpensearchClientError> {
-        match self.status_code() {
-            StatusCode::OK | StatusCode::CREATED | StatusCode::ACCEPTED => Ok(self),
-            _ => Err(OpensearchClientError::NetworkError {
+        if self.status_code().is_success() {
+            Ok(self)
+        } else {
+            Err(OpensearchClientError::NetworkError {
                 status_code: self.status_code().as_u16(),
                 message: self.text().await.unwrap_or_default(),
-            }),
+            })
         }
     }
 }

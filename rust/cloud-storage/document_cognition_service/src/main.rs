@@ -33,6 +33,15 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized config");
 
+    if matches!(
+        config.environment,
+        Environment::Develop | Environment::Local
+    ) {
+        let tool_schemas =
+            serde_json::to_string_pretty(&api::tools::tool_schemas()).expect("tool schemas");
+        std::fs::write("schemas/tools.json", tool_schemas).expect("write_tool_schema");
+    }
+
     let (min_connections, max_connections): (u32, u32) = match config.environment {
         Environment::Production => (5, 30),
         Environment::Develop => (3, 20),

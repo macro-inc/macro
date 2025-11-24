@@ -1,13 +1,12 @@
+use crate::pubsub::backfill::increment_counters::incr_completed_threads;
 use crate::pubsub::context::PubSubContext;
-use crate::util::backfill::backfill_insights::backfill_email_insights;
-use model::insight_context::email_insights::BackfillEmailInsightsFilter;
-use models_email::email::service::backfill::{
-    BackfillJobStatus, BackfillPubsubMessage, UpdateMetadataPayload,
-};
+use models_email::email::service::backfill::{BackfillPubsubMessage, UpdateMetadataPayload};
 use models_email::email::service::link;
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use models_opensearch::SearchEntityType;
 use sqs_client::search::SearchQueueMessage;
 use sqs_client::search::email::EmailThreadMessage;
+use sqs_client::search::name::EntityName;
 
 /// This step is invoked by BackfillMessage once all messages in a thread have been backfilled.
 /// Updates the thread metadata in the database, the replying_to_id values of its messages, and
@@ -56,99 +55,6 @@ pub async fn update_thread_metadata(
             })
         })?;
 
-        // update job status to complete and get back counters to update the job with
-        let thread_counters = email_db_client::backfill::thread::update_backfill_thread_success(
-            &mut *tx,
-            data.job_id,
-            &p.thread_provider_id,
-        )
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to update thread status to complete"),
-            })
-        })?;
-
-        // notify search-service about the new thread
-        let search_message = SearchQueueMessage::ExtractEmailThreadMessage(EmailThreadMessage {
-            thread_id: p.thread_db_id.clone().to_string(),
-            macro_user_id: link.macro_id.clone(),
-        });
-
-        ctx.sqs_client
-            .send_message_to_search_event_queue(search_message)
-            .await
-            .map_err(|e| {
-                ProcessingError::NonRetryable(DetailedError {
-                    reason: FailureReason::SqsEnqueueFailed,
-                    source: e.context("Failed to send message to search extractor queue"),
-                })
-            })?;
-
-        // update job counters with thread counters
-        let job_counters = email_db_client::backfill::job::update::record_thread_success_in_job(
-            &mut *tx,
-            data.job_id,
-            thread_counters,
-        )
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to update thread status to complete"),
-            })
-        })?;
-
-        // if all threads needing backfill have been processed, update job status to complete
-        let all_threads_processed =
-            job_counters.threads_processed_count >= job_counters.total_threads;
-
-        if all_threads_processed {
-            tracing::info!("Backfill complete for job {}", data.job_id);
-            email_db_client::backfill::job::update::update_backfill_job_status(
-                &mut *tx,
-                data.job_id,
-                BackfillJobStatus::Complete,
-            )
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to update thread status to complete"),
-                })
-            })?;
-
-            tracing::info!("Backfilling email insights for user {}", link.macro_id);
-            let backfill_email_insights_filter = BackfillEmailInsightsFilter {
-                user_ids: Some(vec![link.macro_id.clone()]),
-                user_thread_limit: None,
-            };
-
-            match backfill_email_insights(
-                ctx.sqs_client.clone(),
-                &ctx.db,
-                backfill_email_insights_filter,
-            )
-            .await
-            {
-                Ok(res) => {
-                    tracing::info!(
-                        "Backfilled email insights for user {} with job ids: {:?}",
-                        link.macro_id,
-                        res.job_ids
-                    );
-                }
-                Err(e) => {
-                    tracing::error!(
-                        error = ?e,
-                        "Failed to backfill email insights for user {}",
-                        link.macro_id
-                    );
-                }
-            }
-        }
-
         Ok(())
     }
     .await;
@@ -173,6 +79,38 @@ pub async fn update_thread_metadata(
                 .context("Failed to commit transaction for update metadata"),
         })
     })?;
+
+    incr_completed_threads(ctx, link, data.job_id).await?;
+
+    // notify search-service about the new thread
+    let search_message = SearchQueueMessage::ExtractEmailThreadMessage(EmailThreadMessage {
+        thread_id: p.thread_db_id.clone().to_string(),
+        macro_user_id: link.macro_id.clone(),
+    });
+
+    ctx.sqs_client
+        .send_message_to_search_event_queue(search_message)
+        .await
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::SqsEnqueueFailed,
+                source: e.context("Failed to send message to search extractor queue"),
+            })
+        })?;
+
+    // notify search about new entity
+    ctx.sqs_client
+        .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(EntityName {
+            entity_id: p.thread_db_id,
+            entity_type: SearchEntityType::Emails,
+        }))
+        .await
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::SqsEnqueueFailed,
+                source: e.context("Failed to send message to search extractor queue"),
+            })
+        })?;
 
     Ok(())
 }

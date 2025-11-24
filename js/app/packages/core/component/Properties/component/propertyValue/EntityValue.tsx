@@ -1,0 +1,104 @@
+import { useBlockId } from '@core/block';
+import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { Component } from 'solid-js';
+import { createSignal, For, Show } from 'solid-js';
+import { saveEntityProperty } from '../../api';
+import type { Property } from '../../types';
+import { getEntityValues } from '../../utils';
+import { ERROR_MESSAGES, handlePropertyError } from '../../utils/errorHandling';
+import { EntityIcon } from './EntityIcon';
+import { AddPropertyValueButton, EmptyValue } from './ValueComponents';
+
+type EntityValueProps = {
+  property: Property;
+  canEdit: boolean;
+  entityType: EntityType;
+  onEdit?: (property: Property, anchor?: HTMLElement) => void;
+  onRefresh?: () => void;
+};
+
+/**
+ * Display component for entity properties
+ * Shows entity badges and opens modal on click
+ */
+export const EntityValue: Component<EntityValueProps> = (props) => {
+  const blockId = useBlockId();
+  const [isSaving, setIsSaving] = createSignal(false);
+
+  const handleEditClick = (e: MouseEvent) => {
+    if (props.canEdit && !props.property.isMetadata) {
+      props.onEdit?.(props.property, e.currentTarget as HTMLElement);
+    }
+  };
+
+  const handleRemoveEntity = async (entityToRemove: EntityReference) => {
+    if (isReadOnly() || isSaving()) return;
+
+    setIsSaving(true);
+
+    try {
+      const entities = getEntityValues(props.property);
+      const newValues = entities.filter(
+        (entity: EntityReference) =>
+          entity.entity_id !== entityToRemove.entity_id ||
+          entity.entity_type !== entityToRemove.entity_type
+      );
+
+      const result = await saveEntityProperty(
+        blockId,
+        props.entityType,
+        props.property,
+        {
+          valueType: 'ENTITY',
+          refs: newValues.length > 0 ? newValues : null,
+        }
+      );
+
+      if (
+        handlePropertyError(
+          result,
+          ERROR_MESSAGES.PROPERTY_SAVE,
+          'EntityValue.handleRemoveEntity'
+        )
+      ) {
+        props.onRefresh?.();
+      }
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const isReadOnly = () => props.property.isMetadata || !props.canEdit;
+  const entities = getEntityValues(props.property);
+  return (
+    <div class="flex flex-wrap gap-1 justify-start items-start w-full min-w-0">
+      <For each={entities}>
+        {(entityRef) => (
+          <EntityIcon
+            property={props.property}
+            entityId={entityRef.entity_id}
+            entityType={entityRef.entity_type}
+            canEdit={!isReadOnly()}
+            onRemove={() => handleRemoveEntity(entityRef)}
+            isSaving={isSaving()}
+          />
+        )}
+      </For>
+      <Show
+        when={!isReadOnly()}
+        fallback={
+          <Show when={entities.length === 0}>
+            <div class="text-ink-muted text-xs px-2 py-1 border border-edge bg-transparent inline-block shrink-0">
+              <EmptyValue />
+            </div>
+          </Show>
+        }
+      >
+        <Show when={entities.length === 0 || props.property.isMultiSelect}>
+          <AddPropertyValueButton onClick={handleEditClick} />
+        </Show>
+      </Show>
+    </div>
+  );
+};

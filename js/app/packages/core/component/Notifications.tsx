@@ -3,14 +3,15 @@ import { useSplitLayout } from '@app/component/split-layout/layout';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import type { Entity } from '@core/types';
 import { formatDate } from '@core/util/date';
-import { notificationWithMetadata } from '@notifications/notificationMetadata';
-import { navigateToNotification } from '@notifications/notificationNavigation';
+import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
   extractNotificationData,
   NOTIFICATION_LABEL_BY_TYPE,
-} from '@notifications/notificationPreview';
-import type { NotificationSource } from '@notifications/notificationSource';
-import type { UnifiedNotification } from '@notifications/types';
+  type NotificationSource,
+  navigateToNotification,
+  notificationWithMetadata,
+  type UnifiedNotification,
+} from '@notifications';
 import { createMemo, For, Show } from 'solid-js';
 
 export type NotificationsProps = {
@@ -76,13 +77,16 @@ export function Notifications(props: NotificationsProps) {
         <For each={notifications()}>
           {(notification) => {
             const isUnread = !notification.viewedAt;
+            const navHandlers = useSplitNavigationHandler(() =>
+              handleNotificationClick(notification)
+            );
 
             return (
               <button
                 class={`w-full p-2 pb-3 border-b border-edge-muted hover:bg-hover text-left ${
                   isUnread ? 'bg-menu-hover' : 'bg-menu'
                 }`}
-                onClick={() => handleNotificationClick(notification)}
+                {...navHandlers}
               >
                 <div class="flex justify-start items-center gap-2 mb-4 font-mono text-ink-muted text-xs uppercase">
                   <div

@@ -6,6 +6,7 @@ pub(in crate::api) mod channel;
 pub(in crate::api) mod chat;
 pub(in crate::api) mod document;
 pub(in crate::api) mod email;
+pub(in crate::api::search) mod enrich;
 pub(in crate::api) mod project;
 pub(in crate::api) mod simple;
 pub(in crate::api) mod unified;
@@ -23,6 +24,6 @@ pub fn router() -> Router<ApiContext> {
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 pub struct SearchPaginationParams {
-    pub page: Option<i64>,
-    pub page_size: Option<i64>,
+    pub page: Option<u32>,
+    pub page_size: Option<u32>,
 }

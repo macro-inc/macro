@@ -1,10 +1,10 @@
 import { TabContent } from '@core/component/TabContent';
 import { Switch } from '@kobalte/core/switch';
 import { Show } from 'solid-js';
-import { useNotificationState } from '../../../notification-provider/src/NotificationProvider';
+import { usePlatformNotificationState } from '@notifications';
 
 export function Notification() {
-  const notificationState = useNotificationState();
+  const notificationState = usePlatformNotificationState();
 
   // this property is not reactive nor should it be
   if (notificationState === 'not-supported')

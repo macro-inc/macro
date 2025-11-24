@@ -4,18 +4,18 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SimpleDocumentSearchResponseBaseItemContent } from './simpleDocumentSearchResponseBaseItemContent';
+import type { SearchHighlight } from './searchHighlight';
 import type { SimpleDocumentSearchResponseBaseItemRawContent } from './simpleDocumentSearchResponseBaseItemRawContent';
 
 export interface SimpleDocumentSearchResponseBaseItem {
-  /** The opensearch matches on the document */
-  content?: SimpleDocumentSearchResponseBaseItemContent;
   /** The document id */
   document_id: string;
   /** The document name */
   document_name: string;
   /** The file type */
   file_type: string;
+  /** The highlights on the document */
+  highlight: SearchHighlight;
   /** The node id */
   node_id: string;
   /** The owner id */

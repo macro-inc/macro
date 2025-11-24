@@ -207,7 +207,7 @@ export const ViewsSvc = new Svc('Views Service')
     throws: withFetchErrors(),
   })
   .fn('createSavedView', {
-    description: 'Assign an affiliate to a user',
+    description: 'Create a saved view',
     args: schemas.createViewHandlerBody.shape,
     modifies: true,
     result: schemas.createViewHandlerResponse.shape,
@@ -235,34 +235,6 @@ export const ViewsSvc = new Svc('Views Service')
     },
     modifies: true,
     throws: withFetchErrors(),
-  });
-
-export const AffiliatesSvc = new Svc('Affiliates Service')
-  .use('fetchErrors', fetchErrorsSvc)
-  .fn('getAffiliateList', {
-    description: 'Get the list of affiliates',
-    result: {
-      users: z.array(
-        z.object({
-          email: z.string(),
-          createdAt: z.number(),
-        })
-      ),
-    },
-    throws: withFetchErrors(),
-  })
-  .fn('assignAffiliate', {
-    description: 'Assign an affiliate to a user',
-    args: {
-      email: z.string(),
-    },
-    modifies: true,
-    result: {},
-    throws: withFetchErrors(),
-  })
-  .fn('getReferredBy', {
-    description: 'Get the user who referred a user',
-    result: {},
   });
 
 export const PermissionsTokensSvc = new Svc('Permissions Tokens Service')
@@ -482,13 +454,6 @@ export const StorageService = new Svc('Document++ Storage Service API')
         schemas.createDocumentHandlerResponse.shape.data._def.left.shape
           .documentMetadata,
     },
-    modifies: true,
-    throws: withFetchErrors('INVALID_RESPONSE'),
-  })
-  .fn('createBlankDocx', {
-    description: schemas.createBlankDocxResponse.description || '',
-    args: schemas.createBlankDocxBody.shape,
-    result: schemas.createBlankDocxResponse.shape,
     modifies: true,
     throws: withFetchErrors('INVALID_RESPONSE'),
   })
@@ -750,7 +715,6 @@ export const StorageService = new Svc('Document++ Storage Service API')
   })
   .use('annotations', AnnotationsSvc)
   .use('projects', ProjectsSvc)
-  .use('affiliates', AffiliatesSvc)
   .use('permissionsTokens', PermissionsTokensSvc)
   .use('instructions', InstructionsSvc)
   .use('views', ViewsSvc);

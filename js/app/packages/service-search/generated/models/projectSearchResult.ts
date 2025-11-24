@@ -4,8 +4,11 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SearchHighlight } from './searchHighlight';
+import type { ProjectSearchResultScore } from './projectSearchResultScore';
 
 export interface ProjectSearchResult {
-  /** array of content matches for a project */
-  content: string[];
+  highlight: SearchHighlight;
+  /** The score of the result */
+  score?: ProjectSearchResultScore;
 }

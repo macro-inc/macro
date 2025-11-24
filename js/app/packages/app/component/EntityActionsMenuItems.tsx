@@ -1,0 +1,115 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
+import { MenuItem } from '@core/component/Menu';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { intersection } from '@core/util/list';
+import type { EntityData } from '@macro-entity';
+import { type Setter, Show } from 'solid-js';
+import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
+import type { EntityActionType } from './UnifiedEntityActions';
+
+interface EntityActionsMenuItemsProps {
+  entity: EntityData;
+  onSelectAction: (action: EntityActionType) => void;
+}
+
+export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
+  const { unifiedListContext } = useSplitPanelOrThrow();
+  const { actionRegistry, viewsDataStore, selectedView } = unifiedListContext;
+
+  const entities = () => {
+    const { selectedEntities } = viewsDataStore[selectedView()];
+    if (selectedEntities.length > 0) {
+      if (selectedEntities.some((e) => e.id === props.entity.id)) {
+        return selectedEntities;
+      }
+    }
+    return [props.entity];
+  };
+
+  const canOpenEntityInSplit = () => {
+    const splits = globalSplitManager()?.splits;
+    if (!splits) return false;
+    for (const split of splits()) {
+      if (split.content.id === props.entity.id) {
+        return false;
+      }
+    }
+    return true;
+  };
+
+  const setSelection: Setter<EntityData[]> = (entities) => {
+    return unifiedListContext.setViewDataStore(
+      selectedView(),
+      'selectedEntities',
+      entities
+    );
+  };
+  const Divider = () => (
+    <div class="border-b border-edge-muted w-full my-1"></div>
+  );
+
+  const MenuItemInner = (props: {
+    action: EntityActionType;
+    label: string;
+  }) => {
+    return (
+      <Show when={actionRegistry.has(props.action)}>
+        <MenuItem
+          text={props.label}
+          disabled={!actionRegistry.isActionEnabled(props.action, entities())}
+          onClick={async () => {
+            const { success, failedEntities } = await actionRegistry.execute(
+              props.action,
+              entities()
+            );
+            if (success) {
+              setSelection([]);
+            } else if (failedEntities) {
+              setSelection((prev) =>
+                intersection(prev, failedEntities, (a, b) => a.id === b.id)
+              );
+            }
+          }}
+        />
+      </Show>
+    );
+  };
+
+  return (
+    <>
+      <MenuItemInner action="mark_as_done" label="Mark Done" />
+      <MenuItem
+        text="Open in new split"
+        disabled={entities().length > 1 || !canOpenEntityInSplit()}
+        onClick={() => {
+          const splitManager = globalSplitManager();
+          if (!splitManager) {
+            console.error('No split manager available');
+            return;
+          }
+          if (props.entity.type === 'document') {
+            const { fileType, id } = props.entity;
+            splitManager.createNewSplit({
+              type: fileTypeToBlockName(fileType),
+              id,
+            });
+          } else {
+            const { id, type } = props.entity;
+            splitManager.createNewSplit({
+              type,
+              id,
+            });
+          }
+        }}
+      />
+      <Divider />
+      <MenuItemInner action="rename" label="Rename" />
+      <MenuItemInner action="move_to_project" label="Move to Project" />
+      <MenuItemInner action="copy" label="Copy" />
+      <Divider />
+      <div class="text-failure-ink w-full">
+        <MenuItemInner action="delete" label="Delete" />
+      </div>
+    </>
+  );
+};

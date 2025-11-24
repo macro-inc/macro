@@ -1,5 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { TOKENS } from '@core/hotkey/tokens';
+import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -12,14 +13,15 @@ import {
   useEmailContacts,
   useOrganizationUsers,
 } from '@core/user';
-import { createEffectOnEntityTypeNotification } from '@notifications/notificationHelpers';
-import { isNotificationWithMetadata } from '@notifications/notificationMetadata';
+import {
+  createEffectOnEntityTypeNotification,
+  isNotificationWithMetadata,
+} from '@notifications';
 import { emailClient } from '@service-email/client';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 import type { Thread } from '@service-email/generated/schemas/thread';
 import { createCallback } from '@solid-primitives/rootless';
 import { useSearchParams } from '@solidjs/router';
-import { registerHotkey } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   createEffect,
@@ -56,6 +58,7 @@ type EmailProps = {
 
 export function Email(props: EmailProps) {
   const scopeId = blockHotkeyScopeSignal.get;
+
   const setIsScrollingToMessage = isScrollingToMessage.set;
   const { navigateThread } = useThreadNavigation();
   const blockElement = blockElementSignal.get;
@@ -451,6 +454,28 @@ export function Email(props: EmailProps) {
     return true;
   });
 
+  // If there is a focused message id, but it does not currently exist in the message list, it is because the user has just sent a message. When it does come into existence, we want to scroll to the bottom.
+  createEffect((prev: boolean | undefined) => {
+    const currentFocusedId = focusedMessageId();
+    const messages = filteredMessages();
+    if (!currentFocusedId || !messages) return true;
+
+    const currentIndex = messages.findIndex(
+      (m) => m.db_id === currentFocusedId
+    );
+    if (currentIndex < 0) return false;
+
+    if (prev === false) {
+      setTimeout(() => {
+        const container = messagesRef();
+        if (container) {
+          scrollToLastMessage(container, 'smooth');
+        }
+      }, 100);
+    }
+    return true;
+  });
+
   const navigateMessage = createCallback((dir: 'prev' | 'next') => {
     const currentFocusedId = focusedMessageId();
     const messages = filteredMessages();
@@ -487,29 +512,16 @@ export function Email(props: EmailProps) {
       navigateToPreviousMessage,
       navigateToNextMessage,
     });
-    registerHotkey({
-      hotkey: 'k',
-      scopeId: scopeId(),
-      description: 'Next email',
-      keyDownHandler: () => navigateThread('down'),
-      hotkeyToken: TOKENS.email.nextThread,
-      displayPriority: 10,
-    });
-
-    registerHotkey({
-      hotkey: 'j',
-      scopeId: scopeId(),
-      description: 'Previous email',
-      keyDownHandler: () => navigateThread('up'),
-      hotkeyToken: TOKENS.email.previousThread,
-      displayPriority: 9,
-    });
   });
 
+  // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
+  let hasRun = false;
   createEffect(() => {
+    if (hasRun) return;
     // Focus the email block on mount
     if (!blockElement()) return;
     blockElement()?.focus();
+    hasRun = true;
   });
 
   const notificationSource = useGlobalNotificationSource();
@@ -539,6 +551,21 @@ export function Email(props: EmailProps) {
       }
     }
   );
+  let markdownDomRef!: HTMLDivElement;
+
+  registerScopeSignalHotkey(scopeId, {
+    hotkey: 'enter',
+    description: 'Focus Email Input',
+    keyDownHandler: () => {
+      if (markdownDomRef) {
+        markdownDomRef.focus();
+        return true;
+      }
+      return false;
+    },
+    hotkeyToken: TOKENS.block.focus,
+    hide: true,
+  });
 
   return (
     <EmailProvider
@@ -571,11 +598,18 @@ export function Email(props: EmailProps) {
           {/* <div class="z-4 absolute left-[44px] bottom-[92px] w-[21px] rounded-bl-xl min-h-[84px] border-l border-b border-edge" /> */}
           <Show when={filteredMessages()?.at(-1)}>
             {(lastMessage) => (
-              <div class="w-full flex flex-row justify-center my-2 bg-panel ">
-                <EmailInput
-                  replyingTo={lastMessage}
-                  draft={messageDbIdToDraftChildren[lastMessage().db_id ?? '']}
-                />
+              <div class="shrink-0 w-full px-4 pb-2">
+                <div class="w-full flex flex-row justify-center bg-panel macro-message-width mx-auto">
+                  <EmailInput
+                    replyingTo={lastMessage}
+                    draft={
+                      messageDbIdToDraftChildren[lastMessage().db_id ?? '']
+                    }
+                    markdownDomRef={(el) => {
+                      markdownDomRef = el;
+                    }}
+                  />
+                </div>
               </div>
             )}
           </Show>

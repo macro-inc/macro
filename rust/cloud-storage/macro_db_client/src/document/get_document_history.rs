@@ -9,9 +9,11 @@ pub struct DocumentHistoryInfo {
     pub updated_at: DateTime<Utc>,
     pub viewed_at: Option<DateTime<Utc>>,
     pub project_id: Option<String>,
+    pub deleted_at: Option<DateTime<Utc>>,
 }
 
 /// Gets document history information including when a user last viewed each document
+/// Returns only entries that exist in the database
 #[tracing::instrument(skip(db))]
 pub async fn get_document_history_info(
     db: &sqlx::Pool<sqlx::Postgres>,
@@ -28,6 +30,7 @@ pub async fn get_document_history_info(
             c."id" as "item_id!",
             c."createdAt" as "created_at!",
             c."updatedAt" as "updated_at!",
+            c."deletedAt" as "deleted_at?",
             uh."updatedAt" as "viewed_at?",
             c."projectId" as "project_id?"
         FROM
@@ -38,7 +41,6 @@ pub async fn get_document_history_info(
                 AND uh."itemType" = 'document'
         WHERE
             c."id" = ANY($2)
-            AND c."deletedAt" IS NULL
         ORDER BY
             c."updatedAt" DESC
         "#,
@@ -48,7 +50,7 @@ pub async fn get_document_history_info(
     .fetch_all(db)
     .await?;
 
-    let document_history_map = results
+    let document_history_map: HashMap<String, DocumentHistoryInfo> = results
         .into_iter()
         .map(|row| {
             let info = DocumentHistoryInfo {
@@ -59,8 +61,11 @@ pub async fn get_document_history_info(
                     .viewed_at
                     .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
                 project_id: row.project_id,
+                deleted_at: row
+                    .deleted_at
+                    .map(|dt| DateTime::<Utc>::from_naive_utc_and_offset(dt, Utc)),
             };
-            (row.item_id.clone(), info)
+            (row.item_id, info)
         })
         .collect();
 

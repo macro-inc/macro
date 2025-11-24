@@ -1,3 +1,4 @@
+import { playSound } from '@app/util/sound';
 import type { ViewId } from '@core/types/view';
 import { Tabs } from '@kobalte/core';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -13,7 +14,8 @@ import {
 } from 'solid-js';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 
-const titleCase = (str: string) => {
+// NOTE: unused since everything should already be correctly cased
+const _titleCase = (str: string) => {
   return str
     .split('')
     .map((c, i) => (i === 0 ? c.toUpperCase() : c.toLowerCase()))
@@ -92,6 +94,16 @@ export function SplitTabs(props: {
     updateClipIndicators();
   });
 
+  // Play sound when tab changes
+  let previousActive: ViewId | undefined;
+  createEffect(() => {
+    const currentActive = props.active();
+    if (previousActive !== undefined && previousActive !== currentActive) {
+      playSound('open');
+    }
+    previousActive = currentActive;
+  });
+
   return (
     <div class="relative isolate h-full shrink grow-2 @container-normal">
       {/* Left clip boundary indicator */}
@@ -141,7 +153,7 @@ export function SplitTabs(props: {
 
             createEffect(() => {
               if (isActive()) {
-                panel.handle.setDisplayName(titleCase(label));
+                panel.handle.setDisplayName(label);
               }
             });
 
@@ -152,17 +164,16 @@ export function SplitTabs(props: {
                 tabIndex={-1}
                 class="min-w-12 max-w-[40cqw] shrink-0 text-sm relative h-full flex items-center px-2"
                 classList={{
-                  'z-1 border-y border-edge-muted text-accent text-glow-sm':
-                    isActive(),
-                  'border-y border-edge-muted text-ink-disabled hover:text-accent/70 hover-transition-text':
+                  'z-1 text-accent text-glow-sm': isActive(),
+                  'text-ink-disabled hover:text-accent/70 hover-transition-text':
                     !isActive(),
                 }}
               >
-                <span class="flex items-center gap-1 w-full">
+                <span class="flex items-baseline gap-1 w-full">
                   <span class="text-xs font-mono opacity-70 mr-0.5">
                     {(i() + 1).toString()}
                   </span>
-                  <span class="truncate">{titleCase(label)}</span>
+                  <span class="truncate">{label}</span>
                 </span>
                 {/* <Show when={isActive()}>
                   <BrightJoins dots={[true, true, true, true]} />

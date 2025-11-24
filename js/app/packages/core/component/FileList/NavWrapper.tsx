@@ -4,7 +4,7 @@ import type { BlockName } from '@core/block';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
 import { rightbarOpenOnce, setRightbarOpenOnce } from '@core/signal/rightbar';
 import { isErr } from '@core/util/maybeResult';
-import { markNotificationForEntityIdAsRead } from '@notifications/notificationHelpers';
+import { markNotificationForEntityIdAsRead } from '@notifications';
 import {
   type ItemType,
   isCloudStorageItem,

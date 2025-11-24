@@ -40,15 +40,6 @@ if (LOCAL_ONLY) {
     )
   );
   registerComponent(
-    'md-parse',
-    lazy(
-      () =>
-        import(
-          '@core/component/LexicalMarkdown/component/debug/MarkdownParseTestPage'
-        )
-    )
-  );
-  registerComponent(
     'data',
     lazy(() => import('@core/internal/DataDebug'))
   );
@@ -80,6 +71,10 @@ if (LOCAL_ONLY) {
     )
   );
   registerComponent(
+    'custom-cursor',
+    lazy(() => import('@app/component/CustomCursorTest'))
+  );
+  registerComponent(
     'resize',
     lazy(() => import('@core/internal/ResizeDemo'))
   );
@@ -88,6 +83,15 @@ if (LOCAL_ONLY) {
     'onboarding',
     lazy(() => import('@app/component/Onboarding'))
   );
+
+  registerComponent(
+    'notifications-playground',
+    lazy(() =>
+      import('@notifications/components/Playground').then((m) => ({
+        default: m.NotificationsPlayground,
+      }))
+    )
+  );
 }
 
 if (DEV_MODE_ENV) {
@@ -95,5 +99,14 @@ if (DEV_MODE_ENV) {
   registerComponent(
     'pixel-icon',
     lazy(() => import('@core/internal/PixelArtIconDemo'))
+  );
+  registerComponent(
+    'md-parse',
+    lazy(
+      () =>
+        import(
+          '@core/component/LexicalMarkdown/component/debug/MarkdownParseTestPage'
+        )
+    )
   );
 }

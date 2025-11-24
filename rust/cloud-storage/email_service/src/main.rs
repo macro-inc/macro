@@ -3,7 +3,8 @@ use crate::config::CloudfrontSignerPrivateKey;
 use anyhow::Context;
 use config::{Config, Environment};
 use document_storage_service_client::DocumentStorageServiceClient;
-use frecency::outbound::postgres::FrecencyPgStorage;
+use email::{domain::service::EmailServiceImpl, inbound::EmailPreviewState, outbound::EmailPgRepo};
+use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
@@ -100,7 +101,8 @@ async fn main() -> anyhow::Result<()> {
         .insight_context_queue(&config.insight_context_queue)
         .email_backfill_queue(&config.backfill_queue)
         .email_scheduled_queue(&config.email_scheduled_queue)
-        .sfs_uploader_queue(&config.sfs_uploader_queue);
+        .sfs_uploader_queue(&config.sfs_uploader_queue)
+        .contacts_queue(&config.contacts_queue);
 
     let macro_notify_client = macro_notify::MacroNotify::new(
         config.notification_queue.clone(),
@@ -206,6 +208,7 @@ async fn main() -> anyhow::Result<()> {
         let macro_notify_client_webhook = macro_notify_client.clone();
         let sfs_client_webhook = sfs_client.clone();
         let connection_gateway_client_webhook = connection_gateway_client.clone();
+        let dss_client_webhook = dss_client.clone();
         tokio::spawn(async move {
             pubsub::webhook::worker::run_worker(
                 db_webhook,
@@ -217,6 +220,7 @@ async fn main() -> anyhow::Result<()> {
                 macro_notify_client_webhook,
                 sfs_client_webhook,
                 connection_gateway_client_webhook,
+                dss_client_webhook,
                 config.notifications_enabled,
             )
             .await;
@@ -236,6 +240,7 @@ async fn main() -> anyhow::Result<()> {
         let macro_notify_client_backfill = macro_notify_client.clone();
         let sfs_client_backfill = sfs_client.clone();
         let connection_gateway_client_backfill = connection_gateway_client.clone();
+        let dss_client_backfill = dss_client.clone();
         tokio::spawn(async move {
             pubsub::backfill::worker::run_worker(
                 db_backfill,
@@ -247,6 +252,7 @@ async fn main() -> anyhow::Result<()> {
                 macro_notify_client_backfill,
                 sfs_client_backfill,
                 connection_gateway_client_backfill,
+                dss_client_backfill,
                 config.notifications_enabled,
             )
             .await;
@@ -324,7 +330,10 @@ async fn main() -> anyhow::Result<()> {
         dss_client: Arc::new(dss_client),
         jwt_args,
         internal_auth_key: LocalOrRemoteSecret::Local(internal_auth_key),
-        frecency_storage: FrecencyPgStorage::new(db.clone()),
+        email_cursor_service: EmailPreviewState::new(EmailServiceImpl::new(
+            EmailPgRepo::new(db.clone()),
+            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db)),
+        )),
     })
     .await?;
     Ok(())

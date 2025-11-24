@@ -1,12 +1,11 @@
 mod ai_request;
-mod attachment;
 mod toolset;
 
 use crate::api::ws::connection::{
     MESSAGE_ABORT_MAP, add_partial_message_part, clear_partial_message, register_partial_message,
     ws_send,
 };
-use crate::core::model::ONE_MODEL;
+use crate::core::model::FALLBACK_MODEL;
 use crate::model::chats::ChatResponse;
 use crate::model::ws::{StreamError, StreamWebSocketError};
 use crate::{
@@ -32,7 +31,9 @@ use anyhow::{Context, Result};
 use futures::{future::join_all, stream::StreamExt};
 use metering_service_client::{CreateUsageRecordRequest, OperationType, ServiceName};
 use model::chat::{NewAttachment, NewChatMessage};
+use models_opensearch::SearchEntityType;
 use sqs_client::search::SearchQueueMessage;
+use sqs_client::search::name::EntityName;
 use std::sync::Arc;
 use tokio;
 use tokio::sync::mpsc::UnboundedSender;
@@ -103,7 +104,7 @@ pub async fn stream_chat_response(
     connection_id: &str,
     stream_id: &str,
     jwt_token: &str,
-) -> Result<StreamChatResponse> {
+) -> Result<StreamChatResponse, ai::types::AiError> {
     if MESSAGE_ABORT_MAP.contains_key(stream_id) {
         MESSAGE_ABORT_MAP.remove(stream_id);
         // No database cleanup needed since we don't create partial messages until disconnect
@@ -130,8 +131,7 @@ pub async fn stream_chat_response(
     let now = std::time::Instant::now();
     let mut stream = chat
         .send_message(request, request_context, user_id.to_owned())
-        .await
-        .context("failed to send message to AI client")?;
+        .await?;
 
     // Register potential partial message with connection for disconnect-based saving
     register_partial_message(connection_id, message_id, chat_id, Some(model.to_string()));
@@ -140,11 +140,12 @@ pub async fn stream_chat_response(
     let mut usage_reqs = vec![];
     let mut is_first_token = false;
     while let Some(response) = stream.next().await {
+        tracing::trace!("{:#?}", response);
         if !is_first_token {
             is_first_token = true;
             log::log_timing(log::LatencyMetric::TimeToFirstToken, model, now.elapsed());
         }
-        let response_chunk = response.context("failed to read stream chunk")?;
+        let response_chunk = response?;
         // Abort streaming for a message if it has been stopped
         if MESSAGE_ABORT_MAP.contains_key(stream_id) {
             MESSAGE_ABORT_MAP.remove(stream_id);
@@ -331,7 +332,7 @@ pub async fn handle_send_chat_message(
             }
         })?;
     let is_first_message = chat.messages.is_empty();
-    let model = ONE_MODEL;
+    let model = FALLBACK_MODEL;
 
     let user_message_id =
         store_incoming_message(ctx.clone(), user_id, &chat, model, &incoming_message)
@@ -370,8 +371,13 @@ pub async fn handle_send_chat_message(
     .await
     .map_err(|err| {
         tracing::error!(error=?err, "failed to stream chat response");
-        StreamError::InternalError {
-            stream_id: incoming_message.stream_id.clone(),
+        match err {
+            ai::types::AiError::ContextWindowExceeded => StreamError::ModelContextOverflow {
+                stream_id: incoming_message.stream_id.clone(),
+            },
+            ai::types::AiError::Generic(_) => StreamError::InternalError {
+                stream_id: incoming_message.stream_id.clone(),
+            },
         }
     })?;
 
@@ -413,7 +419,22 @@ pub async fn handle_send_chat_message(
                 )
             });
 
-        // Send the message to the search event queue
+        // Send the message to the search event queue for setting chat name
+        match macro_uuid::string_to_uuid(&incoming_message.chat_id) {
+            Ok(chat_id) => {
+                let _ = ctx.sqs_client.send_message_to_search_event_queue(
+                    SearchQueueMessage::UpdateEntityName(EntityName {
+                        entity_id: chat_id,
+                        entity_type: SearchEntityType::Chats,
+                    }),
+                ).await.inspect_err(|err| tracing::error!(error=?err, "failed to send message to search event queue"));
+            }
+            Err(err) => {
+                tracing::error!(error=?err, "failed to convert chat_id to uuid");
+            }
+        }
+
+        // TODO: remove this once we have fully moved to names index
         let _ = ctx
             .sqs_client
             .send_message_to_search_event_queue(SearchQueueMessage::UpdateChatMessageMetadata(

@@ -1,5 +1,6 @@
 //! This crate provides the utilities to compute aggregate frecency scores from some input event
 use chrono::{DateTime, Utc};
+use item_filters::ast::EntityFilterAst;
 use macro_user_id::{
     cowlike::CowLike,
     user_id::{MacroUserIdStr, ParseErr},
@@ -12,6 +13,7 @@ use num_traits::ToPrimitive;
 use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
+use thiserror::Error;
 
 #[cfg(test)]
 mod tests;
@@ -304,6 +306,16 @@ pub struct FrecencyPageRequest<'a> {
     pub from_score: Option<f64>,
     /// the limit to the number of results to return on the page
     pub limit: u32,
+    /// the filter ast that should remove values from the output
+    pub filters: Option<EntityFilterAst>,
+}
+
+/// request to get the frecency scores of some list of [Entity] for a specific user [MacroUserIdStr]
+pub struct FrecencyByIdsRequest<'a> {
+    /// the user to fetch the frecency for
+    pub user_id: MacroUserIdStr<'a>,
+    /// the list of entities to fetch
+    pub ids: &'a [Entity<'a>],
 }
 
 /// the response which contains the single page of frecency from the service
@@ -325,12 +337,15 @@ impl FrecencyPageResponse {
     pub fn new_mock(iter: impl IntoIterator<Item = AggregateFrecency>) -> Self {
         Self::new(iter)
     }
-}
 
-impl FrecencyPageResponse {
     /// return an iterator over all the ids in the [FrecencyPageResponse]
     pub fn ids(&self) -> impl Iterator<Item = &AggregateId<'static>> + '_ {
         self.results.keys()
+    }
+
+    /// return the inner data structure
+    pub fn into_inner(self) -> HashMap<AggregateId<'static>, FrecencyData> {
+        self.results
     }
 }
 
@@ -361,3 +376,8 @@ pub trait JoinFrecency: Iterator + Sized {
 }
 
 impl<T> JoinFrecency for T where T: Iterator + Sized {}
+
+/// The error that is produced by the [FrecencyQueryService]
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct FrecencyQueryErr(#[from] anyhow::Error);

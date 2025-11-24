@@ -1,7 +1,7 @@
+import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 import { IconButton } from '@core/component/IconButton';
-import { ResizeZoneContext } from '@core/component/Resize/Resize';
+import { ENABLE_PREVIEW } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
-import { cornerClip } from '@core/util/clipPath';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import CaretLeft from '@icon/regular/caret-left.svg';
@@ -10,6 +10,7 @@ import SplitIcon from '@icon/regular/square-split-horizontal.svg';
 import CloseIcon from '@icon/regular/x.svg';
 import {
   createEffect,
+  createMemo,
   createSignal,
   type ParentProps,
   type Setter,
@@ -21,7 +22,7 @@ import { SplitLayoutContext, SplitPanelContext } from '../context';
 
 function SplitBackButton() {
   const context = useContext(SplitPanelContext);
-  if (!context) return '';
+  if (!context) return null;
   return (
     <IconButton
       size="sm"
@@ -45,42 +46,6 @@ function SplitForwardButton() {
       disabled={!context.handle.canGoForward()}
       theme="current"
       onClick={context.handle.goForward}
-    />
-  );
-}
-
-// TODO: Move to Dock
-//   (would likely require global split context, or at least a bit higher in the tree)
-function SplitCreateButton() {
-  const context = useContext(SplitLayoutContext);
-  const zoneContext = useContext(ResizeZoneContext);
-  if (!context || !zoneContext) return '';
-
-  // TODO (seamus) : What should the behavior be for not enough space for split?
-  // Block, replace, toast? This should be consistent everywhere:
-  // 1) keyboard shortcut
-  // 2) here
-  // 3) opt-click and open-in-split button
-  const canAdd = () => zoneContext.canFit({ minSize: 400 });
-
-  return (
-    <IconButton
-      size="sm"
-      icon={SplitIcon}
-      theme="current"
-      disabled={!canAdd()}
-      tooltip={{
-        hotkeyToken: canAdd() ? TOKENS.global.createNewSplit : undefined,
-        label: canAdd()
-          ? 'Create New Split'
-          : 'Not Enough Space for a New Split',
-      }}
-      onClick={() => {
-        context.manager.createNewSplit({
-          type: 'component',
-          id: 'unified-list',
-        });
-      }}
     />
   );
 }
@@ -112,7 +77,7 @@ function SplitSpotlightButton() {
 
 function SplitCloseButton() {
   const context = useContext(SplitPanelContext);
-  if (!context) return '';
+  if (!context) return null;
   return (
     <IconButton
       size="sm"
@@ -125,9 +90,37 @@ function SplitCloseButton() {
   );
 }
 
+function SplitPreviewToggle() {
+  const context = useContext(SplitPanelContext);
+  if (!ENABLE_PREVIEW || !context || !context.previewState) return null;
+
+  // Only show toggle for unified-list component, not for blocks
+  const isUnifiedList = createMemo(() => {
+    const content = context.handle.content();
+    return content.type === 'component' && content.id === 'unified-list';
+  });
+
+  const [preview, setPreview] = context.previewState;
+
+  return (
+    <Show when={isUnifiedList()}>
+      <IconButton
+        size="sm"
+        icon={SplitIcon}
+        theme={preview() ? 'accent' : 'current'}
+        tooltip={{
+          label: preview() ? 'Split View' : 'Full View',
+          hotkeyToken: TOKENS.unifiedList.togglePreview,
+        }}
+        onClick={() => setPreview((prev) => !prev)}
+      />
+    </Show>
+  );
+}
+
 function SplitControlButtons() {
   return (
-    <div class="flex flex-row items-center px-2 border-t border-t-edge-muted border-b border-b-edge-muted h-full shrink-0">
+    <div class="flex flex-row items-center px-2 h-full shrink-0">
       <SplitCloseButton />
       <SplitBackButton />
       <SplitForwardButton />
@@ -142,16 +135,11 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
 
   return (
     <div
-      class="isolate relative bg-edge-muted w-full h-10 overflow-clip text-ink shrink-0"
+      class="isolate relative w-full h-10 overflow-clip text-ink shrink-0"
       data-split-header
       ref={props.ref}
     >
-      <div
-        class="absolute inset-0 flex justify-start items-center bg-panel"
-        style={{
-          'clip-path': cornerClip('calc(0.5rem + 0.5px)', 0, 0, 0),
-        }}
-      >
+      <div class="absolute inset-0 flex justify-start items-center bg-panel border-b border-b-edge-muted">
         <SplitControlButtons />
         <div
           class="relative w-fit min-w-0 h-full shrink"
@@ -161,17 +149,18 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
         />
 
         {/* space filler */}
-        <div class="border-t border-t-edge-muted border-b border-b-edge-muted h-full grow-1" />
+        <div class="h-full grow-1" />
 
         <div
-          class="border-t border-t-edge-muted border-b border-b-edge-muted min-w-4 h-full shrink-0"
+          class="min-w-4 h-full shrink-0"
           ref={(ref) => {
             ctx.layoutRefs.headerRight = ref;
           }}
         />
-        <div class="z-2 relative flex items-center bg-panel pr-2 border-t border-t-edge-muted border-b border-b-edge-muted h-full">
+        <div class="z-2 relative flex items-center bg-panel pr-2 h-full">
+          <EntityNavigationIndicator />
+          <SplitPreviewToggle />
           <SplitSpotlightButton />
-          <SplitCreateButton />
         </div>
       </div>
     </div>

@@ -1,45 +1,51 @@
 use crate::chat::SoupChat;
 use crate::document::SoupDocument;
+use crate::email_thread::SoupEnrichedEmailThreadPreview;
 use crate::project::SoupProject;
 use chrono::{DateTime, Utc};
 use model_entity::{Entity, EntityType};
 use models_pagination::{Identify, SimpleSortMethod, SortOn};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use strum::EnumString;
-use utoipa::ToSchema;
+use uuid::Uuid;
 
-#[derive(Debug, Clone, Eq, PartialEq, ToSchema, EnumString, Deserialize, Serialize)]
+#[derive(Debug, Clone, Eq, PartialEq, EnumString, Deserialize, Serialize)]
 #[strum(serialize_all = "snake_case")]
 #[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum SoupItemType {
     Document,
     Chat,
     Project,
+    EmailThread,
 }
 
-#[derive(Deserialize, Clone, ToSchema, Debug)]
-#[serde(untagged)]
-#[schema(discriminator(property_name = "type", mapping(
-     ("document" = "#/components/schemas/SoupDocument"),
-     ("chat" = "#/components/schemas/SoupChat"),
-     ("project" = "#/components/schemas/SoupProject"),
-)))]
+#[derive(Serialize, Deserialize, Debug)]
+#[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
+#[serde(rename_all = "camelCase", tag = "tag", content = "data")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum SoupItem {
     Document(SoupDocument),
     Chat(SoupChat),
     Project(SoupProject),
+    EmailThread(SoupEnrichedEmailThreadPreview),
 }
 
 impl SoupItem {
     /// return the [Entity] for this soup item
-    pub fn entity(&self) -> Entity<'_> {
+    pub fn entity(&self) -> Entity<'static> {
         match self {
             SoupItem::Document(soup_document) => {
-                EntityType::Document.with_entity_str(&soup_document.id)
+                EntityType::Document.with_entity_string(soup_document.id.to_string())
             }
-            SoupItem::Chat(soup_chat) => EntityType::Chat.with_entity_str(&soup_chat.id),
+            SoupItem::Chat(soup_chat) => {
+                EntityType::Chat.with_entity_string(soup_chat.id.to_string())
+            }
             SoupItem::Project(soup_project) => {
-                EntityType::Project.with_entity_str(&soup_project.id)
+                EntityType::Project.with_entity_string(soup_project.id.to_string())
+            }
+            SoupItem::EmailThread(email_thread) => {
+                EntityType::EmailThread.with_entity_string(email_thread.thread.id.to_string())
             }
         }
     }
@@ -49,61 +55,8 @@ impl SoupItem {
             SoupItem::Document(soup_document) => soup_document.updated_at,
             SoupItem::Chat(soup_chat) => soup_chat.updated_at,
             SoupItem::Project(soup_project) => soup_project.updated_at,
+            SoupItem::EmailThread(soup_thread) => soup_thread.thread.updated_at,
         }
-    }
-}
-
-impl Serialize for SoupItem {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        macro_rules! flatten_variant {
-            ($tag:expr, $tag_ty:ty, $inner_ty:ty, $inner_val:expr) => {{
-                #[derive(Serialize)]
-                struct Inline<'a> {
-                    #[serde(rename = "type")]
-                    tag: &'a $tag_ty,
-                    #[serde(flatten)]
-                    data: &'a $inner_ty,
-                }
-                let tmp = Inline {
-                    tag: $tag,
-                    data: $inner_val,
-                };
-                tmp.serialize(serializer)
-            }};
-        }
-
-        match self {
-            SoupItem::Document(doc) => {
-                flatten_variant!(&SoupItemType::Document, SoupItemType, SoupDocument, doc)
-            }
-            SoupItem::Chat(chat) => {
-                flatten_variant!(&SoupItemType::Chat, SoupItemType, SoupChat, chat)
-            }
-            SoupItem::Project(project) => {
-                flatten_variant!(&SoupItemType::Project, SoupItemType, SoupProject, project)
-            }
-        }
-    }
-}
-
-impl From<SoupProject> for SoupItem {
-    fn from(val: SoupProject) -> Self {
-        SoupItem::Project(val)
-    }
-}
-
-impl From<SoupDocument> for SoupItem {
-    fn from(val: SoupDocument) -> Self {
-        SoupItem::Document(val)
-    }
-}
-
-impl From<SoupChat> for SoupItem {
-    fn from(val: SoupChat) -> Self {
-        SoupItem::Chat(val)
     }
 }
 
@@ -142,18 +95,31 @@ impl SoupItem {
             (SoupItem::Project(soup_project), SimpleSortMethod::ViewedUpdated) => {
                 soup_project.viewed_at.unwrap_or(soup_project.updated_at)
             }
+            (SoupItem::EmailThread(thread), SimpleSortMethod::ViewedAt) => {
+                thread.thread.viewed_at.unwrap_or_default()
+            }
+            (SoupItem::EmailThread(thread), SimpleSortMethod::UpdatedAt) => {
+                thread.thread.updated_at
+            }
+            (SoupItem::EmailThread(thread), SimpleSortMethod::CreatedAt) => {
+                thread.thread.created_at
+            }
+            (SoupItem::EmailThread(thread), SimpleSortMethod::ViewedUpdated) => {
+                thread.thread.viewed_at.unwrap_or(thread.thread.updated_at)
+            }
         }
     }
 }
 
 impl Identify for SoupItem {
-    type Id = String;
+    type Id = Uuid;
 
     fn id(&self) -> Self::Id {
         match self {
-            SoupItem::Document(soup_document) => soup_document.id.clone(),
-            SoupItem::Chat(soup_chat) => soup_chat.id.clone(),
-            SoupItem::Project(soup_project) => soup_project.id.clone(),
+            SoupItem::Document(soup_document) => soup_document.id,
+            SoupItem::Chat(soup_chat) => soup_chat.id,
+            SoupItem::Project(soup_project) => soup_project.id,
+            SoupItem::EmailThread(thread) => thread.thread.id,
         }
     }
 }

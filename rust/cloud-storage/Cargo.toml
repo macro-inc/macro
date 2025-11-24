@@ -5,6 +5,7 @@ members = [
   "ai",
   "ai_format",
   "ai_tools",
+  "anthropic",
   "authentication_service",
   "authentication_service_client",
   "comms_db_client",
@@ -31,6 +32,7 @@ members = [
   "email_service",
   "email_service_client",
   "email_suppression_handler",
+  "email_utils",
   "email_validator",
   "experiment_service",
   "frecency",
@@ -60,10 +62,12 @@ members = [
   "metering_service",
   "metering_service_client",
   "model",
-  "model_notifications", "model_user",
+  "model_notifications",
+  "model_user",
   "models_dcs",
   "models_email",
   "models_metering",
+  "models_opensearch",
   "models_pagination",
   "models_permissions",
   "models_properties",
@@ -95,7 +99,8 @@ members = [
   "ses_client",
   "sha_cleanup_worker",
   "sha_ref_count_resetter",
-  "sns_client", "soup",
+  "sns_client",
+  "soup",
   "sqs_client",
   "sqs_worker",
   "static_file_service",
@@ -108,7 +113,6 @@ members = [
   "user_link_cleanup_handler",
   "user_quota",
   "worker_trigger",
-  "anthropic"
 ]
 
 [workspace.dependencies]
@@ -139,6 +143,7 @@ cookie = "0.18.1"
 dashmap = "6.1.0"
 dotenv = "0.15.0"
 ego-tree = "0.6.2"
+either = "1"
 futures = "0.3.31"
 hex = "0.4.3"
 http-body-util = "0.1.2"
@@ -147,11 +152,11 @@ lambda_runtime = "0.13.0"
 lazy_static = "1.5.0"
 log = "0.4.26"
 mockall = "0.13"
-nanoid = "0.4.0"
 nom = "8"
 openssl = { version = "0.10.71", features = ["vendored"] }
 pdfium-render = { version = "0.8.28" }
 rand = "0.9.0"
+recursion = "0.5.4"
 redis = "0.29.0"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", features = ["json"] }
@@ -162,12 +167,13 @@ serde_json = { version = "1.0.132" }
 serde_repr = "0.1"
 serde_with = { version = "3.12.0", features = ["base64"] }
 sha2 = "0.10.8"
-sqlx = { version = "0.7.4", features = [
+sqlx = { version = "0.8.6", features = [
   "chrono",
   "postgres",
   "runtime-tokio-native-tls",
   "uuid",
 ] }
+sqlx-core = { version = "0.8.6" }
 strum = { version = "0.27.1", features = ["derive"] }
 thiserror = "2.0.0"
 time = "0.3.37"
@@ -204,6 +210,7 @@ bzip2 = { version = "0.5.1", default-features = false, features = [
   "libbz2-rs-sys",
 ] }
 derive_builder = "0.20.2"
+doppleganger = "0.3"
 once_cell = "1.21.3"
 scraper = "0.18"
 strum_macros = "0.27.1"

@@ -1,5 +1,10 @@
 import type { NullableSize } from '@solid-primitives/resize-observer';
-import { type Accessor, createContext, type Setter } from 'solid-js';
+import {
+  type Accessor,
+  createContext,
+  type Setter,
+  type Signal,
+} from 'solid-js';
 import type { UnifiedListContext } from '../SoupContext';
 import type { SplitHandle, SplitManager } from './layoutManager';
 
@@ -12,7 +17,7 @@ export type HalfSplitState = {
   side: 'left' | 'right';
 };
 
-export const SplitPanelContext = createContext<{
+export type SplitPanelContextType = {
   handle: SplitHandle;
   splitHotkeyScope: string;
   unifiedListContext: UnifiedListContext;
@@ -22,10 +27,13 @@ export const SplitPanelContext = createContext<{
   contentOffsetTop: Accessor<number>;
   setContentOffsetTop: Setter<number>;
   halfSplitState?: Accessor<HalfSplitState | undefined>;
+  previewState: Signal<boolean>;
   layoutRefs: {
     headerLeft?: HTMLDivElement;
     headerRight?: HTMLDivElement;
     toolbarLeft?: HTMLDivElement;
     toolbarRight?: HTMLDivElement;
   };
-}>();
+};
+
+export const SplitPanelContext = createContext<SplitPanelContextType>();

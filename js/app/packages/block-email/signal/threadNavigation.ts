@@ -7,7 +7,8 @@ export function useThreadNavigation() {
   const {
     unifiedListContext: {
       entitiesSignal: [entities],
-      setSelectedViewStore,
+      selectedView,
+      setViewDataStore,
     },
   } = useSplitPanelOrThrow();
   const { replaceOrInsertSplit } = useSplitLayout();
@@ -37,7 +38,7 @@ export function useThreadNavigation() {
 
     if (!email) return false;
 
-    setSelectedViewStore('selectedEntity', email);
+    setViewDataStore(selectedView(), 'selectedEntity', email);
     replaceOrInsertSplit({ type: 'email', id: email.id });
 
     return true;

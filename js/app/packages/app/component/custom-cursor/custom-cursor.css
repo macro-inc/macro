@@ -1,0 +1,89 @@
+/* This sheet is imported into base layer in index.css and during runtime injected into shadowRoot style element  */
+
+:root {
+  /* custom cursor fallback */
+  --cursor-auto: auto;
+  --cursor-default: default;
+  --cursor-none: none;
+  --cursor-context-menu: context-menu;
+  --cursor-help: help;
+  --cursor-pointer: pointer;
+  --cursor-progress: progress;
+  --cursor-wait: wait;
+  --cursor-cell: cell;
+  --cursor-crosshair: crosshair;
+  --cursor-text: text;
+  --cursor-vertical-text: vertical-text;
+  --cursor-alias: alias;
+  --cursor-copy: copy;
+  --cursor-move: move;
+  --cursor-no-drop: no-drop;
+  --cursor-not-allowed: not-allowed;
+  --cursor-grab: grab;
+  --cursor-grabbing: grabbing;
+  --cursor-all-scroll: all-scroll;
+  --cursor-col-resize: col-resize;
+  --cursor-row-resize: row-resize;
+  --cursor-n-resize: n-resize;
+  --cursor-s-resize: s-resize;
+  --cursor-e-resize: e-resize;
+  --cursor-w-resize: w-resize;
+  --cursor-ne-resize: ne-resize;
+  --cursor-nw-resize: nw-resize;
+  --cursor-se-resize: se-resize;
+  --cursor-sw-resize: sw-resize;
+  --cursor-ew-resize: ew-resize;
+  --cursor-ns-resize: ns-resize;
+  --cursor-nesw-resize: nesw-resize;
+  --cursor-nwse-resize: nwse-resize;
+  --cursor-zoom-in: zoom-in;
+  --cursor-zoom-out: zoom-out;
+}
+
+a[href] {
+  cursor: var(--cursor-pointer);
+}
+button,
+[role="button"] {
+  cursor: var(--cursor-default);
+}
+summary {
+  cursor: var(--cursor-pointer);
+} /* collapsible <details> */
+label {
+  cursor: var(--cursor-pointer);
+} /* when linked to a control */
+input[type="button"],
+input[type="submit"],
+input[type="reset"] {
+  cursor: var(--cursor-pointer);
+}
+select {
+  cursor: var(--cursor-pointer);
+}
+option {
+  cursor: var(--cursor-pointer);
+} /* some browsers */
+optgroup {
+  cursor: var(--cursor-pointer);
+}
+
+input[type=text],
+input:not([type]),     /* default type="text" */
+input[type=password],
+input[type=search],
+input[type=email],
+input[type=tel],
+input[type=url],
+input[type=number],    /* on the text area, not the spin box */
+textarea,
+[contenteditable] {
+  cursor: var(--cursor-text);
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+textarea:disabled {
+  cursor: var(--cursor-not-allowed);
+}

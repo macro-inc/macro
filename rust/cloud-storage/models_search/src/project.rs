@@ -1,4 +1,4 @@
-use crate::{MatchType, SearchOn, SearchResponse, SearchResponseItem};
+use crate::{MatchType, SearchHighlight, SearchOn, SearchResponse, SearchResponseItem};
 use item_filters::ProjectFilters;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -6,8 +6,10 @@ use utoipa::ToSchema;
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ProjectSearchResult {
-    /// array of content matches for a project
-    pub content: Vec<String>,
+    pub highlight: SearchHighlight,
+    /// The score of the result
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub score: Option<f64>,
 }
 
 /// Metadata associated with Project Search, to be used with SearchResponseItem
@@ -35,15 +37,23 @@ pub struct ProjectSearchResponseItem {
     pub project_search_results: Vec<ProjectSearchResult>,
 }
 
+/// Metadata for a project fetched from the database
+#[derive(Debug, Serialize, Deserialize, ToSchema)]
+pub struct ProjectMetadata {
+    pub created_at: i64,
+    pub updated_at: i64,
+    pub viewed_at: Option<i64>,
+    pub parent_project_id: Option<String>,
+    pub deleted_at: Option<i64>,
+}
+
 /// ProjectSearchResponseItem object with project metadata we fetch from macrodb. we don't store these
 /// timestamps in opensearch as they would require us to update the project record
 /// every time the project updates (specifically for updated_at and viewed_at)
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ProjectSearchResponseItemWithMetadata {
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub viewed_at: Option<i64>,
-    pub parent_project_id: Option<String>,
+    /// Metadata from the database. None if the project doesn't exist in the database.
+    pub metadata: Option<ProjectMetadata>,
     #[serde(flatten)]
     pub extra: ProjectSearchResponseItem,
 }
@@ -74,6 +84,10 @@ pub struct ProjectSearchRequest {
     pub terms: Option<Vec<String>>,
     /// The match type to use when searching
     pub match_type: MatchType,
+    /// If search_on is set to NameContent, you can disable the recency filter
+    /// by setting to true.
+    #[serde(default)]
+    pub disable_recency: bool,
     /// Search filters for chat
     #[serde(flatten)]
     pub filters: Option<ProjectFilters>,
@@ -98,8 +112,8 @@ pub struct SimpleProjectSearchResponseBaseItem<T> {
     pub project_name: String,
     /// The id of the user who created the project
     pub user_id: String,
-    /// The opensearch matches on the project
-    pub content: Option<Vec<String>>,
+    /// The highlights on the project
+    pub highlight: SearchHighlight,
 }
 
 pub type SimpleProjectSearchResponseItem =
@@ -115,7 +129,7 @@ impl From<opensearch_client::search::projects::ProjectSearchResponse>
             created_at: response.created_at.into(),
             project_name: response.project_name,
             user_id: response.user_id,
-            content: response.content,
+            highlight: response.highlight.into(),
         }
     }
 }

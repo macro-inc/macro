@@ -3,7 +3,7 @@ use crate::service::attachment::{Attachment, AttachmentMacro};
 use crate::service::contact::Contact;
 use crate::service::message::MessageWithBodyReplyless;
 use chrono::{DateTime, Utc};
-use models_pagination::{Identify, Query, SimpleSortMethod, SortOn};
+use models_pagination::{Identify, SimpleSortMethod, SortOn};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
@@ -11,43 +11,8 @@ use sqlx::FromRow;
 use std::collections::HashMap;
 use std::str::FromStr;
 use strum::{Display, EnumString};
-use utoipa::{IntoParams, ToSchema};
+use utoipa::ToSchema;
 use uuid::Uuid;
-
-/// Parameters for getting thread previews with cursor-based pagination.
-#[derive(serde::Serialize, serde::Deserialize, Debug, ToSchema, IntoParams)]
-#[into_params(parameter_in = Query)]
-pub struct GetPreviewsCursorParams {
-    /// Limit for pagination. Default is 20. Max is 500.
-    pub limit: Option<u32>,
-    /// Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_updated.
-    pub sort_method: Option<ApiSortMethod>,
-}
-
-/// common types of sorts based on timestamps
-#[derive(Debug, Clone, Copy, Serialize, Deserialize, ToSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum ApiSortMethod {
-    /// we are sorting by the viewed_at time
-    ViewedAt,
-    /// we are sorting by the updated_at time
-    UpdatedAt,
-    /// we are sorting by the created_at time
-    CreatedAt,
-    /// we are sorting by the viewed/updated time
-    ViewedUpdated,
-}
-
-impl ApiSortMethod {
-    pub fn into_simple_sort(self) -> SimpleSortMethod {
-        match self {
-            ApiSortMethod::ViewedAt => SimpleSortMethod::ViewedAt,
-            ApiSortMethod::UpdatedAt => SimpleSortMethod::UpdatedAt,
-            ApiSortMethod::CreatedAt => SimpleSortMethod::CreatedAt,
-            ApiSortMethod::ViewedUpdated => SimpleSortMethod::ViewedUpdated,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct ThreadSummary {
@@ -197,18 +162,6 @@ impl SortOn<SimpleSortMethod> for ThreadPreviewCursor {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, JsonSchema, ToSchema)]
-pub struct PaginatedThreadCursor {
-    pub items: Vec<ThreadPreviewCursor>,
-    pub next_cursor: Option<String>,
-}
-
-#[derive(Debug, Serialize, Deserialize, JsonSchema, ToSchema)]
-pub struct GetPreviewsCursorResponse {
-    /// the thread, with messages inside
-    pub previews: PaginatedThreadCursor,
-}
-
 impl From<crate::email::db::thread::ThreadPreview> for ThreadPreview {
     fn from(db_preview: crate::email::db::thread::ThreadPreview) -> Self {
         Self {
@@ -319,6 +272,29 @@ pub enum PreviewView {
     UserLabel(String),
 }
 
+impl std::fmt::Display for PreviewView {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PreviewView::StandardLabel(label) => write!(f, "{}", label),
+            PreviewView::UserLabel(label) => write!(f, "user:{}", label),
+        }
+    }
+}
+
+impl FromStr for PreviewView {
+    type Err = String;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        match PreviewViewStandardLabel::from_str(s) {
+            Ok(label) => Ok(PreviewView::StandardLabel(label)),
+            Err(_) => match s.to_lowercase().as_str() {
+                s if s.starts_with("user:") => Ok(PreviewView::UserLabel(s[5..].to_string())),
+                _ => Err(format!("Unknown preview view: {}", s)),
+            },
+        }
+    }
+}
+
 impl utoipa::ToSchema for PreviewView {
     fn name() -> std::borrow::Cow<'static, str> {
         std::borrow::Cow::Borrowed("PreviewView")
@@ -345,29 +321,6 @@ impl utoipa::PartialSchema for PreviewView {
     }
 }
 
-impl std::fmt::Display for PreviewView {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            PreviewView::StandardLabel(label) => write!(f, "{}", label),
-            PreviewView::UserLabel(label) => write!(f, "user:{}", label),
-        }
-    }
-}
-
-impl FromStr for PreviewView {
-    type Err = String;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        match PreviewViewStandardLabel::from_str(s) {
-            Ok(label) => Ok(PreviewView::StandardLabel(label)),
-            Err(_) => match s.to_lowercase().as_str() {
-                s if s.starts_with("user:") => Ok(PreviewView::UserLabel(s[5..].to_string())),
-                _ => Err(format!("Unknown preview view: {}", s)),
-            },
-        }
-    }
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct UserThreadsPage {
     pub threads: Vec<ThreadUserInfo>,
@@ -383,85 +336,4 @@ pub struct UserThreadIds {
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct GetThreadOwnerResponse {
     pub user_id: String,
-}
-
-#[derive(Debug)]
-pub struct PreviewCursorQuery {
-    pub view: PreviewView,
-    pub link_id: Uuid,
-    pub limit: u32,
-    pub query: Query<Uuid, SimpleSortMethod>,
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_preview_view_display() {
-        assert_eq!(
-            PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox).to_string(),
-            "inbox"
-        );
-        assert_eq!(
-            PreviewView::StandardLabel(PreviewViewStandardLabel::Sent).to_string(),
-            "sent"
-        );
-        assert_eq!(
-            PreviewView::UserLabel("mytag".to_string()).to_string(),
-            "user:mytag"
-        );
-    }
-
-    #[test]
-    fn test_preview_view_from_str() {
-        assert_eq!(
-            PreviewView::from_str("inbox").unwrap(),
-            PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox)
-        );
-        assert_eq!(
-            PreviewView::from_str("SENT").unwrap(),
-            PreviewView::StandardLabel(PreviewViewStandardLabel::Sent)
-        );
-        assert_eq!(
-            PreviewView::from_str("user:mytag").unwrap(),
-            PreviewView::UserLabel("mytag".to_string())
-        );
-        assert!(PreviewView::from_str("invalid").is_err());
-    }
-
-    #[test]
-    fn test_preview_view_serialization() {
-        assert_eq!(
-            serde_json::to_string(&PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox))
-                .unwrap(),
-            "\"inbox\""
-        );
-        assert_eq!(
-            serde_json::to_string(&PreviewView::StandardLabel(PreviewViewStandardLabel::Sent))
-                .unwrap(),
-            "\"sent\""
-        );
-        assert_eq!(
-            serde_json::to_string(&PreviewView::UserLabel("mytag".to_string())).unwrap(),
-            "\"user:mytag\""
-        );
-    }
-
-    #[test]
-    fn test_preview_view_deserialization() {
-        assert_eq!(
-            serde_json::from_str::<PreviewView>("\"inbox\"").unwrap(),
-            PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox)
-        );
-        assert_eq!(
-            serde_json::from_str::<PreviewView>("\"SENT\"").unwrap(),
-            PreviewView::StandardLabel(PreviewViewStandardLabel::Sent)
-        );
-        assert_eq!(
-            serde_json::from_str::<PreviewView>("\"user:mytag\"").unwrap(),
-            PreviewView::UserLabel("mytag".to_string())
-        );
-        assert!(serde_json::from_str::<PreviewView>("\"invalid\"").is_err());
-    }
 }

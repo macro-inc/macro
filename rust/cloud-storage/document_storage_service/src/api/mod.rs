@@ -23,7 +23,6 @@ mod middleware;
 
 // Routes
 mod activity;
-mod affiliate;
 mod annotations;
 mod channel;
 mod documents;
@@ -87,7 +86,6 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 
 fn api_router(state: ApiContext) -> Router {
     let internal_router = Router::new()
-        .nest("/affiliate", affiliate::router(state.clone()))
         .nest(
             "/documents",
             documents::router(state.clone()).layer(ServiceBuilder::new().layer(

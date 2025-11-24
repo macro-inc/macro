@@ -120,6 +120,7 @@ import {
 } from '@core/signal/load';
 import { trackMention } from '@core/signal/mention';
 import { useCanComment, useCanEdit } from '@core/signal/permissions';
+import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
 import {
@@ -167,6 +168,7 @@ import {
   onCleanup,
   onMount,
   Show,
+  untrack,
 } from 'solid-js';
 import {
   completionSignal,
@@ -192,9 +194,11 @@ const EDITOR_PADDING_BOTTOM = 200;
 
 const DRAG_EVENT_PADDING = 8;
 
-export function MarkdownEditor() {
+export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   const blockData = blockDataSignal.get;
   const blockId = useBlockId();
+
+  const mdDocumentName = useBlockDocumentName('');
 
   const saveMarkdownDocument = useSaveMarkdownDocument();
   const setMdStore = mdStore.set;
@@ -783,7 +787,7 @@ export function MarkdownEditor() {
   autoRegister(
     registerRootEventListener(editor, 'focusin', (e) => {
       e.preventDefault();
-      editor.focus(undefined, {defaultSelection: 'rootStart'});
+      editor.focus(undefined, { defaultSelection: 'rootStart' });
     })
   );
 
@@ -954,6 +958,17 @@ export function MarkdownEditor() {
     }
 
     setEditorReady(true);
+  });
+
+  // Auto-focus on mount if enabled and editor is ready and document name is not empty.
+  createEffect(() => {
+    if (
+      props.autoFocusOnMount &&
+      editorReady() &&
+      untrack(mdDocumentName) !== ''
+    ) {
+      editor.focus(undefined, { defaultSelection: 'rootStart' });
+    }
   });
 
   const _generateContentCallback = createCallback((userRequest: string) => {
@@ -1361,14 +1376,6 @@ export function InstructionsMarkdownEditor() {
       })
     );
   };
-
-  // better focus in handling. preserves selection on regain focus!
-  autoRegister(
-    registerRootEventListener(editor, 'focusin', (e) => {
-      e.preventDefault();
-      editor.focus();
-    })
-  );
 
   const [fileArrayBuffer, setFileArrayBuffer] = createSignal<ArrayBuffer>();
   createEffect(() => {

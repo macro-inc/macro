@@ -11,7 +11,10 @@ use crate::api::ApiContext;
 
 pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
-        .nest("/previews", previews::router(state.clone()))
+        .nest(
+            "/previews",
+            previews::router(state.email_cursor_service.clone(), state.clone()),
+        )
         .route(
             "/:id",
             get(get::get_thread_handler).layer(axum::middleware::from_fn_with_state(

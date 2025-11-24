@@ -1,20 +1,26 @@
+//! This module contains the logic for generating queries using terms
+
 use crate::{Result, error::OpensearchClientError};
 
-use crate::SearchOn;
 use opensearch_query_builder::*;
 use unicode_segmentation::UnicodeSegmentation;
 
+/// Containing keys for the title and content fields
 pub struct Keys<'a> {
-    pub id_key: &'a str,
-    pub user_id_key: &'a str,
-    pub title_key: &'a str,
+    /// The title field key
+    pub title_key: Option<&'a str>,
+    /// The content field key
     pub content_key: &'a str,
 }
 
-#[derive(Debug, Clone, Copy)]
+/// The different types of ways we can match terms
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum QueryKey {
+    /// Match phrase
     MatchPhrase,
+    /// Match phrase prefix
     MatchPhrasePrefix,
+    /// Regexp
     Regexp,
 }
 
@@ -37,7 +43,7 @@ impl QueryKey {
     }
 
     /// Creates a query given a field and term
-    fn create_query(&self, field: &str, term: &str) -> QueryType {
+    pub fn create_query(&self, field: &str, term: &str) -> QueryType<'static> {
         // Fixes https://linear.app/macro-eng/issue/M-5094/unified-search-match-prefix-on-phrase-should-not-constrain-terms
         // We need to create a more complex combo query if the last word in a term is less than 3 characters.
         let mut terms = term.split(' ').collect::<Vec<_>>();
@@ -51,627 +57,142 @@ impl QueryKey {
 
             let last_part_of_term = terms.pop().unwrap();
             let first_part_of_term = terms.join(" ");
+            let wildcard_pattern = format!("*{}*", last_part_of_term.to_lowercase());
 
             // build the first term query
             let first_term_query = match self {
-                Self::MatchPhrase => {
-                    QueryType::MatchPhrase(MatchPhraseQuery::new(field, &first_part_of_term))
-                }
+                Self::MatchPhrase => QueryType::MatchPhrase(MatchPhraseQuery::new(
+                    field.to_string(),
+                    first_part_of_term,
+                )),
                 Self::MatchPhrasePrefix => QueryType::MatchPhrasePrefix(
-                    MatchPhrasePrefixQuery::new(field, &first_part_of_term),
+                    MatchPhrasePrefixQuery::new(field.to_string(), first_part_of_term),
                 ),
-                Self::Regexp => QueryType::Regexp(RegexpQuery::new(field, &first_part_of_term)),
+                Self::Regexp => {
+                    QueryType::Regexp(RegexpQuery::new(field.to_string(), first_part_of_term))
+                }
             };
 
-            let second_term_query =
-                QueryType::WildCard(WildcardQuery::new(field, last_part_of_term));
+            let second_term_query = QueryType::WildCard(WildcardQuery::new(
+                field.to_string(),
+                wildcard_pattern,
+                true,
+            ));
 
-            return QueryType::bool_query()
-                .must(first_term_query)
-                .must(second_term_query)
-                .build();
+            let mut bool_query = QueryType::bool_query();
+
+            bool_query.must(first_term_query);
+            bool_query.must(second_term_query);
+
+            return bool_query.build().into();
         }
 
         match self {
-            Self::MatchPhrase => QueryType::MatchPhrase(MatchPhraseQuery::new(field, term)),
-            Self::MatchPhrasePrefix => {
-                QueryType::MatchPhrasePrefix(MatchPhrasePrefixQuery::new(field, term))
+            Self::MatchPhrase => {
+                QueryType::MatchPhrase(MatchPhraseQuery::new(field.to_string(), term.to_string()))
             }
-            Self::Regexp => QueryType::Regexp(RegexpQuery::new(field, term)),
+            Self::MatchPhrasePrefix => QueryType::MatchPhrasePrefix(MatchPhrasePrefixQuery::new(
+                field.to_string(),
+                term.to_string(),
+            )),
+            Self::Regexp => {
+                QueryType::Regexp(RegexpQuery::new(field.to_string(), term.to_string()))
+            }
         }
     }
 }
 
 /// Generate the terms for the "must" query
-fn generate_terms_must_query(query_key: QueryKey, fields: &[&str], terms: &[String]) -> QueryType {
-    let mut terms_must_query = BoolQueryBuilder::new().minimum_should_match(1);
+pub(crate) fn generate_terms_must_query(
+    query_key: QueryKey,
+    fields: &[&str],
+    terms: &[String],
+) -> QueryType<'static> {
+    let mut terms_must_query = BoolQueryBuilder::new();
+
+    terms_must_query.minimum_should_match(1);
 
     // Map terms to queries
     let queries: Vec<_> = fields
         .iter()
-        .flat_map(|field| terms.iter().map(|term| query_key.create_query(field, term)))
+        .flat_map(|field| {
+            terms
+                .iter()
+                .map(|term| query_key.create_query(field, term.as_str()))
+        })
         .collect();
 
-    // populate in in "should" field
-    for query in queries {
-        terms_must_query = terms_must_query.should(query);
+    // If we only have 1 query returned, we can just return that singular query
+    // to go into the main bool must
+    if queries.len() == 1 {
+        return queries[0].clone();
     }
 
-    terms_must_query.build()
+    // Otherwise, we need to add all the queries to a new bool should in order to properly search
+    // over multiple terms
+    for query in queries {
+        terms_must_query.should(query);
+    }
+
+    terms_must_query.build().into()
 }
 
-/// Builds the basic query object that can be used to search any index
-/// This is meant to be expanded upon by specific search functions
-pub(crate) fn build_top_level_bool(
-    terms: &[String],
-    match_type: &str,
-    keys: Keys,
-    ids: &[String],
-    user_id: &str,
-    search_on: SearchOn,
-    ids_only: bool,
-) -> Result<BoolQueryBuilder> {
-    let query_key = QueryKey::from_match_type(match_type)?;
+/// Generates the term queries SearchOn::NameContent
+pub(crate) fn generate_name_content_query(keys: &Keys, terms: &[String]) -> QueryType<'static> {
+    let mut terms_must_query = BoolQueryBuilder::new();
 
-    // Only populate must array if there are terms, otherwise leave it empty
-    let mut must_array = Vec::new();
-    // TODO: we should error herer if terms is empty
-    if !terms.is_empty() {
-        // Determine which fields to search based on search_on parameter
-        let search_fields: Vec<&str> = match search_on {
-            SearchOn::Name => vec![keys.title_key],
-            SearchOn::Content => vec![keys.content_key],
-            SearchOn::NameContent => {
-                todo!("search on name content not implemented yet");
+    terms_must_query.minimum_should_match(1);
+
+    let queries: Vec<QueryType> = terms
+        .iter()
+        .map(|term| {
+            // base bool query
+            let mut bool_query = BoolQueryBuilder::new();
+            bool_query.minimum_should_match(1);
+
+            if let Some(title_key) = keys.title_key {
+                bool_query.should(QueryType::MatchPhrasePrefix(
+                    MatchPhrasePrefixQuery::new(title_key.to_string(), term.clone()).boost(1000.0),
+                ));
             }
-        };
 
-        let terms_must_query = generate_terms_must_query(query_key, &search_fields, terms);
-        // NOTE: this array is always going to be a length of one
-        must_array.push(terms_must_query);
+            bool_query.should(QueryType::MatchPhrasePrefix(
+                MatchPhrasePrefixQuery::new(keys.content_key.to_string(), term.clone())
+                    .boost(900.0),
+            ));
+
+            if let Some(title_key) = keys.title_key {
+                bool_query.should(QueryType::Match(
+                    MatchQuery::new(title_key.to_string(), term.clone())
+                        .boost(0.1)
+                        .minimum_should_match("80%"), // TODO: we may need to play around with this to get the best highlight match
+                ));
+            }
+
+            bool_query.should(QueryType::Match(
+                MatchQuery::new(keys.content_key.to_string(), term.clone())
+                    .boost(0.09)
+                    .minimum_should_match(term.split(' ').count().to_string()), // TODO: we may need to play around with this to get the best highlight match
+            ));
+
+            bool_query.build().into()
+        })
+        .collect();
+
+    // If we only have 1 query created, we can just return that singular query to be added to the
+    // main bool must query
+    if queries.len() == 1 {
+        return queries[0].clone();
     }
 
-    let mut query_object = BoolQueryBuilder::new().minimum_should_match(1);
-
-    if !ids_only {
-        query_object = query_object.should(QueryType::term(keys.user_id_key, user_id));
-    }
-    query_object = query_object.should(QueryType::terms(keys.id_key, ids.to_vec()));
-
-    for item in must_array {
-        query_object = query_object.must(item);
+    // Otherwise, we need to add all the queries to a new bool should in order to properly search
+    // over multiple terms
+    for query in queries {
+        terms_must_query.should(query);
     }
 
-    Ok(query_object)
+    terms_must_query.build().into()
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn build_basic_query_object(
-        terms: &[String],
-        match_type: &str,
-        keys: Keys,
-        ids: &[String],
-        user_id: &str,
-        search_on: SearchOn,
-        ids_only: bool,
-    ) -> Result<QueryType> {
-        let query_object =
-            build_top_level_bool(terms, match_type, keys, ids, user_id, search_on, ids_only)?;
-        let query_object = query_object.build();
-        Ok(query_object)
-    }
-
-    #[test]
-    fn test_generate_terms_must_query_single_field_single_term() {
-        let terms = vec!["test".to_string()];
-
-        let result = generate_terms_must_query(QueryKey::MatchPhrase, &["content"], &terms);
-
-        let expected = serde_json::json!({
-            "bool": {
-                "should": [
-                    {
-                        "match_phrase": {
-                            "content": "test"
-                        }
-                    },
-                ],
-                "minimum_should_match": 1
-            }
-        });
-
-        assert_eq!(result.to_json(), expected);
-    }
-
-    #[test]
-    fn test_generate_terms_must_query_single_field_multiple_terms() {
-        let terms = vec!["test".to_string(), "test2".to_string()];
-
-        let result = generate_terms_must_query(QueryKey::MatchPhrase, &["content"], &terms);
-
-        let expected = serde_json::json!({
-            "bool": {
-                "should": [
-                    {
-                        "match_phrase": {
-                            "content": "test"
-                        }
-                    },
-                    {
-                        "match_phrase": {
-                            "content": "test2"
-                        }
-                    },
-                ],
-                "minimum_should_match": 1
-            }
-        });
-
-        assert_eq!(result.to_json(), expected);
-    }
-
-    #[test]
-    fn test_generate_terms_must_query_multiple_field() {
-        let terms = vec!["test".to_string()];
-
-        let result =
-            generate_terms_must_query(QueryKey::MatchPhrase, &["content", "subject"], &terms);
-
-        let expected = serde_json::json!({
-            "bool": {
-                "should": [
-                    {
-                        "match_phrase": {
-                            "content": "test"
-                        }
-                    },
-                    {
-                        "match_phrase": {
-                            "subject": "test"
-                        }
-                    },
-                ],
-                "minimum_should_match": 1
-            }
-        });
-
-        assert_eq!(result.to_json(), expected);
-    }
-
-    #[test]
-    fn test_generate_terms_must_query_multiple_field_multiple_terms() {
-        let terms = vec!["test".to_string(), "test2".to_string()];
-
-        let result =
-            generate_terms_must_query(QueryKey::MatchPhrase, &["content", "subject"], &terms);
-
-        let expected = serde_json::json!({
-            "bool": {
-                "should": [
-                    {
-                        "match_phrase": {
-                            "content": "test"
-                        }
-                    },
-                    {
-                        "match_phrase": {
-                            "content": "test2"
-                        }
-                    },
-                    {
-                        "match_phrase": {
-                            "subject": "test"
-                        }
-                    },
-                    {
-                        "match_phrase": {
-                            "subject": "test2"
-                        }
-                    },
-                ],
-                "minimum_should_match": 1
-            }
-        });
-
-        assert_eq!(result.to_json(), expected);
-    }
-
-    #[test]
-    fn test_build_simple_query() {
-        let document_ids = ["A".to_string(), "B".to_string(), "C".to_string()];
-        let user_id = "user";
-        let terms = vec!["test".to_string()];
-        let reference = serde_json::json!({
-            "bool": {
-                "should": [
-                    {
-                        "term": {
-                            "owner_id": user_id
-                        }
-                    },
-                    {
-                        "terms": {
-                            "document_id": document_ids
-                        }
-                    }
-                ],
-                "minimum_should_match": 1,
-                "must": [
-                    {
-                        "bool": {
-                            "should": [
-                                {
-                                    "match_phrase": {
-                                        "content": terms[0],
-                                    }
-                                },
-                            ],
-                            "minimum_should_match": 1
-                        }
-                    },
-                ],
-            }
-        });
-
-        let keys = Keys {
-            id_key: "document_id",
-            user_id_key: "owner_id",
-            title_key: "document_name",
-            content_key: "content",
-        };
-
-        let generated = build_basic_query_object(
-            &terms,
-            "exact",
-            keys,
-            &document_ids,
-            user_id,
-            SearchOn::Content,
-            false,
-        )
-        .unwrap();
-
-        assert_eq!(&generated.to_json(), &reference);
-    }
-
-    #[test]
-    fn test_build_simple_query_multiple_terms() {
-        let document_ids = ["A".to_string(), "B".to_string(), "C".to_string()];
-        let user_id = "user";
-        let terms = vec!["test".to_string(), "test2".to_string()];
-        let reference = serde_json::json!({
-            "bool": {
-                "should": [
-                    {
-                        "term": {
-                            "owner_id": user_id
-                        }
-                    },
-                    {
-                        "terms": {
-                            "document_id": document_ids
-                        }
-                    }
-                ],
-                "minimum_should_match": 1,
-                "must": [
-                    {
-                        "bool": {
-                            "should": [
-                                {
-                                    "match_phrase": {
-                                        "content": terms[0],
-                                    }
-                                },
-                                {
-                                    "match_phrase": {
-                                        "content": terms[1],
-                                    }
-                                },
-                            ],
-                            "minimum_should_match": 1
-                        }
-                    },
-                ],
-            }
-        });
-
-        let keys = Keys {
-            id_key: "document_id",
-            user_id_key: "owner_id",
-            title_key: "document_name",
-            content_key: "content",
-        };
-
-        let generated = build_basic_query_object(
-            &terms,
-            "exact",
-            keys,
-            &document_ids,
-            user_id,
-            SearchOn::Content,
-            false,
-        )
-        .unwrap();
-
-        assert_eq!(&generated.to_json(), &reference);
-    }
-
-    #[test]
-    fn test_build_regexp_query_multiple_terms() {
-        let document_ids = ["A".to_string(), "B".to_string(), "C".to_string()];
-        let user_id = "user";
-        let terms = vec!["test".to_string(), "test2".to_string()];
-        let reference = serde_json::json!({
-            "bool": {
-                "should": [
-                    {
-                        "term": {
-                            "owner_id": user_id
-                        }
-                    },
-                    {
-                        "terms": {
-                            "document_id": document_ids
-                        }
-                    }
-                ],
-                "minimum_should_match": 1,
-                "must": [
-                    {
-                        "bool": {
-                            "should": [
-                                {
-                                    "regexp": {
-                                        "content": {
-                                            "value": terms[0],
-                                        }
-                                    }
-                                },
-                                {
-                                    "regexp": {
-                                        "content": {
-                                            "value": terms[1],
-                                        }
-                                    }
-                                },
-                            ],
-                            "minimum_should_match": 1
-                        }
-                    },
-                ],
-            }
-        });
-
-        let keys = Keys {
-            id_key: "document_id",
-            user_id_key: "owner_id",
-            title_key: "document_name",
-            content_key: "content",
-        };
-
-        let generated = build_basic_query_object(
-            &terms,
-            "regexp",
-            keys,
-            &document_ids,
-            user_id,
-            SearchOn::Content,
-            false,
-        )
-        .unwrap();
-
-        assert_eq!(&generated.to_json(), &reference);
-    }
-
-    #[test]
-    fn test_build_with_ids_only() {
-        let document_ids = ["A".to_string(), "B".to_string(), "C".to_string()];
-        let user_id = "user";
-        let terms = vec!["test".to_string(), "test2".to_string()];
-        let reference = serde_json::json!({
-            "bool": {
-                "should": [
-                    {
-                        "terms": {
-                            "document_id": document_ids
-                        }
-                    }
-                ],
-                "minimum_should_match": 1,
-                "must": [
-                    {
-                        "bool": {
-                            "should": [
-                                {
-                                    "regexp": {
-                                        "content": {
-                                            "value": terms[0],
-                                        }
-                                    }
-                                },
-                                {
-                                    "regexp": {
-                                        "content": {
-                                            "value": terms[1],
-                                        }
-                                    }
-                                },
-                            ],
-                            "minimum_should_match": 1
-                        }
-                    },
-                ],
-            }
-        });
-
-        let keys = Keys {
-            id_key: "document_id",
-            user_id_key: "owner_id",
-            title_key: "document_name",
-            content_key: "content",
-        };
-
-        let generated = build_basic_query_object(
-            &terms,
-            "regexp",
-            keys,
-            &document_ids,
-            user_id,
-            SearchOn::Content,
-            true,
-        )
-        .unwrap();
-
-        assert_eq!(&generated.to_json(), &reference);
-    }
-
-    #[test]
-    fn test_build_name_search_query() {
-        let document_ids = ["A".to_string(), "B".to_string(), "C".to_string()];
-        let user_id = "user";
-        let terms = vec!["test".to_string(), "test2".to_string()];
-        let reference = serde_json::json!({
-            "bool": {
-                "should": [
-                    {
-                        "term": {
-                            "owner_id": user_id
-                        }
-                    },
-                    {
-                        "terms": {
-                            "document_id": document_ids
-                        }
-                    }
-                ],
-                "minimum_should_match": 1,
-                "must": [
-                    {
-                        "bool": {
-                            "should": [
-                                {
-                                    "match_phrase": {
-                                        "document_name": terms[0],
-                                    }
-                                },
-                                {
-                                    "match_phrase": {
-                                        "document_name": terms[1],
-                                    }
-                                },
-                            ],
-                            "minimum_should_match": 1
-                        }
-                    },
-                ],
-            }
-        });
-
-        let keys = Keys {
-            id_key: "document_id",
-            user_id_key: "owner_id",
-            title_key: "document_name",
-            content_key: "content",
-        };
-
-        let generated = build_basic_query_object(
-            &terms,
-            "exact",
-            keys,
-            &document_ids,
-            user_id,
-            SearchOn::Name,
-            false,
-        )
-        .unwrap();
-
-        assert_eq!(&generated.to_json(), &reference);
-    }
-
-    /// Validates fix for https://linear.app/macro-eng/issue/M-5094/unified-search-match-prefix-on-phrase-should-not-constrain-terms
-    #[test]
-    fn test_create_query_with_short_last_term() {
-        let query_key = QueryKey::from_match_type("partial").unwrap();
-
-        let result = QueryKey::create_query(&query_key, "subject", "person one re").to_json();
-
-        assert_eq!(
-            result,
-            serde_json::json!({
-                "bool": {
-                    "must": [
-                        {
-                            "match_phrase_prefix": {
-                                "subject": {
-                                    "query": "person one"
-                                }
-                            }
-                        },
-                        {
-                            "wildcard": {
-                                "subject": {
-                                    "value": "*re*",
-                                    "case_insensitive": true
-                                }
-                            }
-                        }
-                    ]
-                }
-            })
-        );
-
-        let result = QueryKey::create_query(&query_key, "subject", "person one 🦀").to_json();
-        assert_eq!(
-            result,
-            serde_json::json!({
-                "bool": {
-                    "must": [
-                        {
-                            "match_phrase_prefix": {
-                                "subject": {
-                                    "query": "person one"
-                                }
-                            }
-                        },
-                        {
-                            "wildcard": {
-                                "subject": {
-                                    "value": "*🦀*",
-                                    "case_insensitive": true
-                                }
-                            }
-                        }
-                    ]
-                }
-            })
-        );
-
-        let result = QueryKey::create_query(&query_key, "subject", "person one").to_json();
-        assert_eq!(
-            result,
-            serde_json::json!({
-                "match_phrase_prefix": {
-                    "subject": {
-                        "query": "person one"
-                    }
-                }
-            })
-        );
-
-        let result = QueryKey::create_query(&query_key, "subject", "person one ").to_json();
-        assert_eq!(
-            result,
-            serde_json::json!({
-                "match_phrase_prefix": {
-                    "subject": {
-                        "query": "person one "
-                    }
-                }
-            })
-        );
-    }
-}
+mod test;

@@ -1,17 +1,13 @@
 //! This module defines the services that are exposed by this crate
-
-use crate::{
-    domain::{
-        models::{
-            AggregateFrecency, AggregateId, EventAggregationStats, EventRecordWithId,
-            FrecencyPageRequest, FrecencyPageResponse,
-        },
-        ports::{
-            AggregateFrecencyStorage, EventIngestorService, EventRecordStorage, FrecencyQueryErr,
-            FrecencyQueryService, PullEventAggregatorService, TimeGetter, UnprocessedEventsRepo,
-        },
+use crate::domain::{
+    models::{
+        AggregateFrecency, AggregateId, EventAggregationStats, EventRecordWithId,
+        FrecencyByIdsRequest, FrecencyPageRequest, FrecencyPageResponse, FrecencyQueryErr,
     },
-    outbound::time::DefaultTime,
+    ports::{
+        AggregateFrecencyStorage, EventIngestorService, EventRecordStorage, FrecencyQueryService,
+        PullEventAggregatorService, TimeGetter, UnprocessedEventsRepo,
+    },
 };
 use chrono::{DateTime, Utc};
 use macro_user_id::cowlike::CowLike;
@@ -171,17 +167,6 @@ where
     }
 }
 
-impl<S> PullAggregatorImpl<S, DefaultTime>
-where
-    S: UnprocessedEventsRepo,
-    anyhow::Error: From<S::Err>,
-{
-    /// create an instance of self passing the default impl for [TimeGetter]
-    pub fn new_with_default_time(event_storage: S) -> Self {
-        Self::new(event_storage, DefaultTime)
-    }
-}
-
 impl<S, T> PullEventAggregatorService for PullAggregatorImpl<S, T>
 where
     S: UnprocessedEventsRepo,
@@ -255,7 +240,20 @@ where
     ) -> Result<FrecencyPageResponse, FrecencyQueryErr> {
         let res = self
             .storage
-            .get_top_entities(query.user_id, query.limit)
+            .get_top_entities(query)
+            .await
+            .map_err(anyhow::Error::from)?;
+        Ok(FrecencyPageResponse::new(res))
+    }
+
+    async fn get_frecencies_by_ids<'a>(
+        &self,
+        request: FrecencyByIdsRequest<'a>,
+    ) -> Result<FrecencyPageResponse, FrecencyQueryErr> {
+        let FrecencyByIdsRequest { user_id, ids } = request;
+        let res = self
+            .storage
+            .get_aggregate_for_user_entities(user_id, ids)
             .await
             .map_err(anyhow::Error::from)?;
         Ok(FrecencyPageResponse::new(res))

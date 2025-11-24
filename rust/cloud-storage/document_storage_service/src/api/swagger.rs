@@ -3,6 +3,72 @@
     reason = "Just to allow GetActivitiesResponse and UserActivitiesResponse"
 )]
 
+use crate::api::saved_views::{
+    CreateViewRequest, ExcludeDefaultViewRequest, ExcludedDefaultView, View, ViewPatch,
+};
+use crate::{
+    api::{
+        activity, annotations,
+        documents::{
+            self,
+            export_document::ExportDocumentResponse,
+            permissions_token::{
+                create_permission_token::DocumentPermissionsTokenResponse,
+                validate_permissions_token::DocumentPermissionsTokenRequest,
+            },
+        },
+        health, history, instructions, mentions, pins,
+        projects::{
+            self,
+            delete_project::{ProjectDeleteResponse, ProjectDeleteResponseData},
+        },
+        recents::{
+            self,
+            recently_deleted::{RecentlyDeletedResponse, RecentlyDeletedResponseData},
+        },
+        saved_views, threads, user_document_view_location,
+    },
+    model::{
+        request::{
+            documents::{
+                copy::{CopyDocumentQueryParams, CopyDocumentRequest},
+                edit::EditDocumentRequestV2,
+                preview::GetBatchPreviewRequest,
+                save::{PreSaveDocumentRequest, SaveDocumentRequest},
+                user_document_view_location::UpsertUserDocumentViewLocationRequest,
+                user_mentions::UpsertUserMentionsRequest,
+            },
+            pins::{AddPinRequest, PinRequest},
+        },
+        response::{
+            activity::{GetActivitiesResponse, UserActivitiesResponse},
+            documents::{
+                create::{CreateBulkDocumentResponse, CreateBulkDocumentResponseData},
+                get::{
+                    GetDocumentKeyResponse, GetDocumentKeyResponseData,
+                    GetDocumentPermissionsResponseDataV2, GetDocumentProcessingResult,
+                    GetDocumentProcessingResultResponse, GetDocumentSearchResponse,
+                    GetDocumentUserAccessLevelResponse, GetDocumentsResponse,
+                    UserDocumentsResponse,
+                },
+                preview::GetBatchPreviewResponse,
+                save::{
+                    PreSaveDocumentResponse, PreSaveDocumentResponseData, SaveDocumentResponse,
+                    SaveDocumentResponseData,
+                },
+                user_document_view_location::UserDocumentViewLocationResponse,
+            },
+            history::GetUserHistoryResponse,
+            instructions::{CreateInstructionsDocumentResponse, GetInstructionsDocumentResponse},
+            pin::{GetPinsResponse, UserPinsResponse},
+            user_views::UserViewsResponse,
+        },
+    },
+};
+use model::document::response::{
+    CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
+    DocumentResponseMetadata,
+};
 use model::{
     activity::Activity,
     annotations::AnnotationIncrementalUpdate,
@@ -32,90 +98,13 @@ use model::{
     user_document_view_location::UserDocumentViewLocation,
     version::DocumentStorageServiceApiVersion,
 };
-use soup::inbound::axum_router::{SoupApiItem, SoupApiSort, SoupPage};
-
-use crate::{
-    api::{
-        activity,
-        affiliate::{
-            self, get_affiliate_referred_by::GetUsersAffiliateResponse,
-            get_affiliate_users::GetAffiliateUsersResponse,
-        },
-        annotations,
-        documents::{
-            self,
-            create_document::CreateDocumentResponse,
-            export_document::ExportDocumentResponse,
-            permissions_token::{
-                create_permission_token::DocumentPermissionsTokenResponse,
-                validate_permissions_token::DocumentPermissionsTokenRequest,
-            },
-        },
-        health, history, instructions, mentions, pins,
-        projects::{
-            self,
-            delete_project::{ProjectDeleteResponse, ProjectDeleteResponseData},
-        },
-        recents::{
-            self,
-            recently_deleted::{RecentlyDeletedResponse, RecentlyDeletedResponseData},
-        },
-        saved_views, threads, user_document_view_location,
-    },
-    model::{
-        request::{
-            documents::{
-                copy::{CopyDocumentQueryParams, CopyDocumentRequest},
-                create::CreateDocumentRequest,
-                edit::EditDocumentRequestV2,
-                preview::GetBatchPreviewRequest,
-                save::{PreSaveDocumentRequest, SaveDocumentRequest},
-                user_document_view_location::UpsertUserDocumentViewLocationRequest,
-                user_mentions::UpsertUserMentionsRequest,
-            },
-            pins::{AddPinRequest, PinRequest},
-        },
-        response::{
-            activity::{GetActivitiesResponse, UserActivitiesResponse},
-            documents::{
-                DocumentResponseMetadata,
-                create::{
-                    CreateBulkDocumentResponse, CreateBulkDocumentResponseData,
-                    CreateDocumentResponseData,
-                },
-                get::{
-                    GetDocumentKeyResponse, GetDocumentKeyResponseData,
-                    GetDocumentPermissionsResponseDataV2, GetDocumentProcessingResult,
-                    GetDocumentProcessingResultResponse, GetDocumentSearchResponse,
-                    GetDocumentUserAccessLevelResponse, GetDocumentsResponse,
-                    UserDocumentsResponse,
-                },
-                preview::GetBatchPreviewResponse,
-                save::{
-                    PreSaveDocumentResponse, PreSaveDocumentResponseData, SaveDocumentResponse,
-                    SaveDocumentResponseData,
-                },
-                user_document_view_location::UserDocumentViewLocationResponse,
-            },
-            history::GetUserHistoryResponse,
-            instructions::{CreateInstructionsDocumentResponse, GetInstructionsDocumentResponse},
-            pin::{GetPinsResponse, UserPinsResponse},
-            user_views::UserViewsResponse,
-        },
-    },
-};
-
-use crate::api::saved_views::{
-    CreateViewRequest, ExcludeDefaultViewRequest, ExcludedDefaultView, View, ViewPatch,
-};
-
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
 use models_soup::chat::SoupChat;
 use models_soup::document::SoupDocument;
 use models_soup::item::SoupItem;
 use models_soup::item::SoupItemType;
 use models_soup::project::SoupProject;
-
+use soup::inbound::axum_router::{PostSoupRequest, SoupApiItem, SoupApiSort, SoupPage};
 use utoipa::OpenApi;
 
 #[derive(OpenApi)]
@@ -144,7 +133,6 @@ use utoipa::OpenApi;
         documents::get_document::handler,
         documents::get_document_version::handler,
         documents::create_document::create_document_handler,
-        documents::create_document::create_blank_docx::handler,
         documents::copy_document::copy_document_handler,
         documents::save_document::save_document_handler,
         documents::pre_save::presave_document_handler,
@@ -212,11 +200,6 @@ use utoipa::OpenApi;
 
         // threads
         threads::edit_thread::edit_thread_handler,
-
-        // /affiliate
-        affiliate::affiliate_user::handler,
-        affiliate::get_affiliate_users::handler,
-        affiliate::get_affiliate_referred_by::handler,
 
         // /recents
         recents::recently_deleted::handler,
@@ -297,6 +280,7 @@ use utoipa::OpenApi;
             SoupItemType,
             SoupApiSort,
             SoupPage,
+            PostSoupRequest,
 
 
             // Permissions V2
@@ -333,10 +317,6 @@ use utoipa::OpenApi;
 
             // Mentions
             UpsertUserMentionsRequest,
-
-            // Affiliate
-            GetAffiliateUsersResponse,
-            GetUsersAffiliateResponse,
 
             // Annotations
             AnnotationIncrementalUpdate,

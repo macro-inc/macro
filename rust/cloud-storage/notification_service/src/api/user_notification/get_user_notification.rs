@@ -7,7 +7,7 @@ use axum::{
 use model::response::ErrorResponse;
 use model::user::UserContext;
 use model_notifications::UserNotification;
-use models_pagination::{CreatedAt, CursorExtractor, PaginateOn, Paginated};
+use models_pagination::{CreatedAt, CursorExtractor, PaginateOn, Paginated, TypeEraseCursor};
 use notification_db_client::user_notification::get::get_all::get_all_user_notifications;
 use serde::Serialize;
 use sqlx::types::Uuid;
@@ -45,7 +45,7 @@ pub async fn handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
     Query(Params { limit }): Query<Params>,
-    cursor: CursorExtractor<Uuid, CreatedAt>,
+    cursor: CursorExtractor<Uuid, CreatedAt, ()>,
 ) -> Result<Json<GetAllUserNotificationsResponse>, (StatusCode, Json<ErrorResponse<'static>>)> {
     tracing::info!("get_all_user_notifications");
 
@@ -55,7 +55,7 @@ pub async fn handler(
         &ctx.db,
         &user_context.user_id,
         limit,
-        cursor.into_query(CreatedAt),
+        cursor.into_query(CreatedAt, ()),
     )
     .await
     .map_err(|e| {

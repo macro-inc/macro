@@ -3,7 +3,7 @@ import { useSettingsState } from '@core/constant/SettingsState';
 import { useBigChat } from '@core/signal/layout/bigChat';
 import { createMemo, createSignal, onCleanup, onMount } from 'solid-js';
 import { setKonsoleMode, setKonsoleOpen } from '../command/state';
-import { setCreateMenuOpen } from './CreateMenu';
+import { setCreateMenuOpen } from '../Launcher';
 
 type HintItem = {
   text: string;
@@ -44,7 +44,6 @@ export default function Hints() {
         setActiveTabId('Appearance');
       },
     },
-    { text: 'Fake User is a real person' },
     {
       text: '40.7411857, -73.9957703',
       onClick: () =>
@@ -220,7 +219,7 @@ export default function Hints() {
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       onClick={handleClick}
-      class="flex flex-1 justify-center items-center w-full h-full font-mono text-center transition duration-[2s]"
+      class="flex flex-1 whitespace-nowrap justify-center items-center w-full h-full font-mono text-center transition duration-[2s]"
       classList={{
         'opacity-100': shouldShow(),
         'opacity-0': !shouldShow(),

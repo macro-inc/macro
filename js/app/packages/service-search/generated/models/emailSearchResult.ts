@@ -4,6 +4,8 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SearchHighlight } from './searchHighlight';
+import type { EmailSearchResultScore } from './emailSearchResultScore';
 import type { EmailSearchResultSentAt } from './emailSearchResultSentAt';
 import type { EmailSearchResultSubject } from './emailSearchResultSubject';
 
@@ -13,12 +15,14 @@ import type { EmailSearchResultSubject } from './emailSearchResultSubject';
 export interface EmailSearchResult {
   bcc: string[];
   cc: string[];
-  /** The array of content matches for the email message */
-  content: string[];
+  /** The highlights for the email message */
+  highlight: SearchHighlight;
   labels: string[];
   /** The email message id. */
   message_id: string;
   recipients: string[];
+  /** The score of the result */
+  score?: EmailSearchResultScore;
   sender: string;
   /** When the email message was sent */
   sent_at?: EmailSearchResultSentAt;

@@ -1,4 +1,6 @@
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { HotkeyTags } from '@core/hotkey/constants';
+import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import {
@@ -7,14 +9,21 @@ import {
   type View,
   type ViewId,
 } from '@core/types/view';
+import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
 import { getScrollParent } from '@core/util/scrollParent';
+import { waitForFrames } from '@core/util/sleep';
 import type { EntityData } from '@macro-entity';
+import { entityHasUnreadNotifications } from '@notifications';
 import { useTutorialCompleted } from '@service-gql/client';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { useQuery } from '@tanstack/solid-query';
-import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
+import {
+  registerHotkey,
+  runCommand,
+  useHotkeyDOMScope,
+} from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   batch,
@@ -32,11 +41,32 @@ import {
   type Store,
 } from 'solid-js/store';
 import type { VirtualizerHandle } from 'virtua/solid';
+import { useUserId } from '../../macro-entity/src/queries/auth';
+import { createBulkCopyDssEntityMutation } from '../../macro-entity/src/queries/dss';
+import { playSound } from '../util/sound';
+import { openBulkEditModal } from './bulk-edit-entity/BulkEditEntityModal';
+import {
+  resetCommandCategoryIndex,
+  searchCategories,
+  setCommandCategoryIndex,
+  setKonsoleContextInformation,
+} from './command/KonsoleItem';
+import {
+  konsoleOpen,
+  resetKonsoleMode,
+  setKonsoleMode,
+  toggleKonsoleVisibility,
+} from './command/state';
 import { useGlobalNotificationSource } from './GlobalAppState';
 import type { SplitHandle } from './split-layout/layoutManager';
 import {
+  createEntityActionRegistry,
+  type EntityActionRegistry,
+} from './UnifiedEntityActions';
+import {
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS,
+  VIEWCONFIG_DEFAULTS_IDS,
   type ViewConfigBase,
   type ViewConfigEnhanced,
   type ViewData,
@@ -45,9 +75,7 @@ import {
 
 export type UnifiedListContext = {
   viewsDataStore: Store<ViewDataMap>;
-  setViewDataStore: SetStoreFunction<ViewDataMap>;
-  getSelectedViewStore: Accessor<Store<ViewData>>;
-  setSelectedViewStore: SetStoreFunction<ViewData>;
+  setViewDataStore: SetStoreFunction<Partial<ViewDataMap>>;
   selectedView: Accessor<ViewId>;
   setSelectedView: Setter<ViewId>;
   virtualizerHandleSignal: Signal<VirtualizerHandle | undefined>;
@@ -56,18 +84,18 @@ export type UnifiedListContext = {
   emailViewSignal: Signal<'inbox' | 'sent' | 'drafts' | 'all'>;
   showHelpDrawer: Accessor<Set<string>>;
   setShowHelpDrawer: Setter<Set<string>>;
+  actionRegistry: EntityActionRegistry;
 };
 
-const DEFAULT_VIEW_ID = 'all';
+const DEFAULT_VIEW_ID: View = 'all';
+
+const DEFAULT_VIEW_IDS_SET = new Set(VIEWCONFIG_DEFAULTS_IDS);
 
 export function createSoupContext(): UnifiedListContext {
   const [selectedView, setSelectedView] = createSignal<ViewId>(DEFAULT_VIEW_ID);
   const [viewsDataStore, setViewDataStore_] = useAllViews({
     selectedViewSignal: [selectedView, setSelectedView],
   });
-  const getSelectedViewStore = createLazyMemo(
-    () => viewsDataStore[selectedView()]
-  );
   const virtualizerHandleSignal = createSignal<VirtualizerHandle>();
   const entityListRefSignal = createSignal<HTMLDivElement>();
   const entitiesSignal = createSignal<EntityData[]>();
@@ -92,24 +120,10 @@ export function createSoupContext(): UnifiedListContext {
     // @ts-ignore narrowing set store function is annoying due to function overloading
     setViewDataStore_(...args);
   };
-  const setSelectedViewStore: SetStoreFunction<ViewData> = (...args: any[]) => {
-    // need to create new reference, causes bug where first entity persits highlighting
-    if (
-      args.length === 2 &&
-      args[0] === 'selectedEntity' &&
-      typeof args[1] !== 'function'
-    ) {
-      args[1] = { ...args[1] };
-    }
-    // @ts-ignore narrowing set store function is annoying due to function overloading
-    setViewDataStore(selectedView(), ...args);
-  };
 
   return {
     viewsDataStore,
     setViewDataStore,
-    getSelectedViewStore,
-    setSelectedViewStore,
     selectedView,
     setSelectedView,
     virtualizerHandleSignal,
@@ -118,6 +132,7 @@ export function createSoupContext(): UnifiedListContext {
     emailViewSignal,
     showHelpDrawer,
     setShowHelpDrawer,
+    actionRegistry: createEntityActionRegistry(),
   };
 }
 
@@ -128,7 +143,7 @@ function createViewData(
 ): ViewData {
   return {
     id: (viewProps?.id || view) ?? '',
-    view,
+    view: viewProps?.view ?? view,
     filters: {
       notificationFilter:
         viewProps?.filters?.notificationFilter ??
@@ -154,13 +169,9 @@ function createViewData(
       showUnreadIndicator:
         viewProps?.display?.showUnreadIndicator ??
         VIEWCONFIG_BASE.display.showUnreadIndicator,
-      showProjects:
-        viewProps?.display?.showProjects ??
-        VIEWCONFIG_BASE.display.showProjects,
       unrollNotifications:
         viewProps?.display?.unrollNotifications ??
         VIEWCONFIG_BASE.display.unrollNotifications,
-      preview: viewProps?.display?.preview ?? VIEWCONFIG_BASE.display.preview,
       limit: viewProps?.display?.limit,
     },
     sort: {
@@ -171,45 +182,403 @@ function createViewData(
     selectedEntity: undefined,
     scrollOffset: undefined,
     initialConfig: undefined,
+    selectedEntities: [],
     hasUserInteractedEntity: false,
     searchText: viewProps?.searchText,
   };
 }
+
+type NavigationInput = {
+  axis: 'start' | 'end'; // movement direction
+  mode: 'step' | 'jump'; // how far: one step or to the end
+  highlight?: boolean;
+};
+
+type NavigationResult = {
+  success: boolean;
+  entity: EntityData | undefined;
+};
 
 export function createNavigationEntityListShortcut({
   splitName,
   splitHandle,
   splitHotkeyScope,
   unifiedListContext,
+  previewState,
 }: {
   splitName: Accessor<string>;
   splitHandle: SplitHandle;
   splitHotkeyScope: string;
   unifiedListContext: UnifiedListContext;
+  previewState: Signal<boolean>;
 }) {
   const {
     viewsDataStore: viewsData,
-    getSelectedViewStore: viewData,
-    setSelectedViewStore,
+    setViewDataStore,
     entityListRefSignal: [entityListRef],
     virtualizerHandleSignal: [virtualizerHandle],
     selectedView,
     setSelectedView,
     // selectedEntitySignal: [selectedEntity, setSelectedEntity],
     entitiesSignal: [entities],
+    actionRegistry,
   } = unifiedListContext;
+  const viewData = createMemo(() => viewsData[selectedView()]);
   const viewIds = createMemo<ViewId[]>(() => Object.keys(viewsData));
 
+  const [attachEntityHotkeys, entityHotkeyScope] = useHotkeyDOMScope('entity');
   const selectedEntity = () => viewData().selectedEntity;
 
   const notificationSource = useGlobalNotificationSource();
-  const defaultHotkeyE = () =>
-    VIEWCONFIG_DEFAULTS[selectedView() as View]?.hotkeyOptions?.e;
-  const markEntityAsDone = (entity: EntityData) =>
-    defaultHotkeyE()?.(entity, {
-      notificationSource,
-      soupContext: unifiedListContext,
-    });
+  const userId = useUserId();
+
+  const isViewingList = createMemo(() => {
+    return splitHandle.content().id === 'unified-list';
+  });
+
+  /**
+   * From the current selection, get the entity to try to select after a modal
+   * edit operation.
+   */
+  const getNextEntity = (
+    entitiesForAction: EntityData[]
+  ): EntityData | null => {
+    const entityList = entities();
+    if (!entityList) return null;
+    const idToIndexMap = new Map(entityList.map(({ id }, i) => [id, i]));
+    let maxIndex = 0;
+    for (const entity of entitiesForAction) {
+      const ndx = idToIndexMap.get(entity.id);
+      if (ndx && ndx > maxIndex) {
+        maxIndex = ndx;
+      }
+    }
+    return maxIndex < entityList.length - 1 ? entityList[maxIndex + 1] : null;
+  };
+
+  /**
+   * Return to list after entity modal edit action.
+   */
+  const afterEntityAction = (
+    entity: EntityData | null | undefined,
+    clearSelection?: boolean
+  ) => {
+    if (clearSelection) {
+      setViewDataStore(selectedView(), 'selectedEntities', []);
+    }
+    if (entity) {
+      setViewDataStore(selectedView(), 'selectedEntity', entity);
+      setViewDataStore(selectedView(), 'highlightedId', entity.id);
+      const nextIndex = entities()?.findIndex(({ id }) => id === entity.id);
+      if (nextIndex !== undefined && nextIndex > -1) {
+        virtualizerHandle()?.scrollToIndex(nextIndex, {
+          align: 'nearest',
+        });
+        waitForFrames(2).then(() => {
+          const elem = getEntityElAtIndex(nextIndex);
+          if (elem instanceof HTMLElement) {
+            elem.focus();
+            return;
+            // TODO: cooked state (no focus returned - have not yet seen tho)
+          }
+        });
+      } else {
+        const firstIndex = virtualizerHandle()?.findStartIndex();
+        if (!firstIndex) return;
+        const elem = getEntityElAtIndex(firstIndex);
+        if (elem instanceof HTMLElement) elem.focus();
+        // TODO: cooked state (no focus returned - have not yet seen tho)
+      }
+    }
+  };
+
+  // ---------------------------------------------------------------------------
+  // MARK AS DONE
+  // ---------------------------------------------------------------------------
+  actionRegistry.register(
+    'mark_as_done',
+    async (entities) => {
+      const handler =
+        VIEWCONFIG_DEFAULTS[selectedView() as View]?.hotkeyOptions?.e;
+      if (handler) {
+        if (isEntityLastItem()) {
+          navigateThroughList({ axis: 'start', mode: 'step' });
+        } else {
+          navigateThroughList({ axis: 'end', mode: 'step' });
+        }
+
+        for (const entity of entities) {
+          handler(entity, {
+            soupContext: unifiedListContext,
+            notificationSource,
+          });
+        }
+
+        setViewDataStore(selectedView(), 'selectedEntities', []);
+      }
+
+      return { success: true };
+    },
+    {
+      testEnabled: (entity) => {
+        if (entity.type === 'email') return true;
+        if (entityHasUnreadNotifications(notificationSource, entity))
+          return true;
+        return false;
+      },
+    }
+  );
+
+  registerHotkey({
+    hotkey: ['e'],
+    scopeId: entityHotkeyScope,
+    description: 'Mark done',
+    condition: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled('mark_as_done', plainSelectedEntities()),
+    keyDownHandler: () => {
+      const entitiesForAction = getEntitiesForAction();
+      if (entitiesForAction.entities.length === 0) {
+        return false;
+      }
+
+      actionRegistry.execute(
+        'mark_as_done',
+        entitiesForAction.entities.map(({ entity }) => entity)
+      );
+
+      return true;
+    },
+    displayPriority: 10,
+    tags: [HotkeyTags.SelectionModification],
+  });
+
+  // ---------------------------------------------------------------------------
+  // DELETE
+  // ---------------------------------------------------------------------------
+  actionRegistry.register(
+    'delete',
+    async (entitiesToDelete) => {
+      const prev = selectedEntity();
+      const next = getNextEntity(entitiesToDelete);
+      try {
+        openBulkEditModal({
+          view: 'delete',
+          entities: entitiesToDelete,
+          onFinish: () => {
+            afterEntityAction(next, true);
+          },
+          onCancel: () => {
+            afterEntityAction(prev);
+          },
+        });
+      } catch (err) {
+        console.error('Failed to open bulk delete modal', err);
+      }
+      return { success: true };
+    },
+    {
+      testEnabled: (entity) => {
+        // can't delete these bad boys yet.
+        if (entity.type === 'channel' || entity.type === 'email') return false;
+        // only delete what you own.
+        return entity.ownerId === userId();
+      },
+      // TODO (seamus): fix the handler from the modal so that we can delete
+      // some of the items. Then switch this to some.
+      enabledMode: 'every',
+    }
+  );
+
+  registerHotkey({
+    hotkey: ['delete', 'backspace'],
+    scopeId: splitHotkeyScope,
+    description: () =>
+      viewData().selectedEntities.length > 1 ? 'Delete items' : 'Delete item',
+    condition: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled('delete', plainSelectedEntities()),
+    keyDownHandler: () => {
+      const entitiesForAction = getEntitiesForAction();
+      if (entitiesForAction.entities.length === 0) {
+        return false;
+      }
+      actionRegistry.execute(
+        'delete',
+        entitiesForAction.entities.map(({ entity }) => entity)
+      );
+      return true;
+    },
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+  });
+
+  createEffect(() => {
+    const ref = entityListRef();
+    if (!ref) return;
+
+    attachEntityHotkeys(ref);
+  });
+
+  // ---------------------------------------------------------------------------
+  // RENAME
+  // ---------------------------------------------------------------------------
+  actionRegistry.register(
+    'rename',
+    async (entitiesToRename) => {
+      const prev = selectedEntity();
+      const next = getNextEntity(entitiesToRename);
+      try {
+        openBulkEditModal({
+          view: 'rename',
+          entities: entitiesToRename,
+          onFinish: () => {
+            afterEntityAction(next);
+          },
+          onCancel: () => {
+            afterEntityAction(prev);
+          },
+        });
+      } catch (err) {
+        console.error('Failed to open bulk rename modal', err);
+      }
+      return { success: true };
+    },
+    {
+      testEnabled: (entity) => {
+        // can't rename these bad boys yet.
+        if (entity.type === 'channel' || entity.type === 'email') return false;
+        // only rename what you own.
+        return entity.ownerId === userId();
+      },
+    }
+  );
+
+  registerHotkey({
+    scopeId: splitHotkeyScope,
+    description: () =>
+      viewData().selectedEntities.length > 1 ? 'Rename items' : 'Rename item',
+    condition: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled('rename', plainSelectedEntities()),
+    keyDownHandler: () => {
+      const entitiesForAction = getEntitiesForAction();
+      if (entitiesForAction.entities.length === 0) {
+        return false;
+      }
+      actionRegistry.execute(
+        'rename',
+        entitiesForAction.entities.map(({ entity }) => entity)
+      );
+      return true;
+    },
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+  });
+
+  // ---------------------------------------------------------------------------
+  // COPY
+  // ---------------------------------------------------------------------------
+  const bulkCopyMutation = createBulkCopyDssEntityMutation();
+  actionRegistry.register(
+    'copy',
+    async (entitiesToCopy) => {
+      try {
+        await bulkCopyMutation.mutateAsync({
+          entities: entitiesToCopy,
+          name: (name) => name,
+        });
+      } catch (_) {}
+      return { success: true };
+    },
+    {
+      testEnabled: (entity) => {
+        if (entity.type === 'channel' || entity.type === 'email') return false;
+        return true;
+      },
+    }
+  );
+
+  registerHotkey({
+    scopeId: splitHotkeyScope,
+    description: () =>
+      viewData().selectedEntities.length > 1 ? 'Copy items' : 'Copy item',
+    condition: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled('copy', plainSelectedEntities()),
+    keyDownHandler: () => {
+      const entitiesForAction = getEntitiesForAction();
+      if (entitiesForAction.entities.length === 0) {
+        return false;
+      }
+      actionRegistry.execute(
+        'copy',
+        entitiesForAction.entities.map(({ entity }) => entity)
+      );
+      return true;
+    },
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+  });
+
+  // ---------------------------------------------------------------------------
+  // MOVE TO PROJECT
+  // ---------------------------------------------------------------------------
+  actionRegistry.register(
+    'move_to_project',
+    async (entitiesToMove) => {
+      const prev = selectedEntity();
+      const next = getNextEntity(entitiesToMove);
+      try {
+        openBulkEditModal({
+          view: 'moveToProject',
+          entities: entitiesToMove,
+          onFinish: () => {
+            afterEntityAction(next, true);
+          },
+          onCancel: () => {
+            afterEntityAction(prev);
+          },
+        });
+      } catch (err) {
+        console.error('Failed to open bulk move modal', err);
+      }
+      return { success: true };
+    },
+    {
+      testEnabled: (entity) => {
+        if (entity.type === 'channel' || entity.type === 'email') return false;
+        return true;
+      },
+    }
+  );
+
+  registerHotkey({
+    scopeId: splitHotkeyScope,
+    description: () =>
+      viewData().selectedEntities.length > 1
+        ? 'Move items to project'
+        : 'Move item to project',
+    condition: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled(
+        'move_to_project',
+        plainSelectedEntities()
+      ),
+    keyDownHandler: () => {
+      const entitiesForAction = getEntitiesForAction();
+      if (entitiesForAction.entities.length === 0) {
+        return false;
+      }
+      actionRegistry.execute(
+        'move_to_project',
+        entitiesForAction.entities.map(({ entity }) => entity)
+      );
+      return true;
+    },
+    tags: [HotkeyTags.SelectionModification],
+    displayPriority: 10,
+  });
 
   const openEntity = (entity: EntityData) => {
     const { type, id } = entity;
@@ -255,6 +624,79 @@ export function createNavigationEntityListShortcut({
     };
   });
 
+  const getEntitiesForAction = createLazyMemo<{
+    entities: Array<{ entity: EntityData; index: number }>;
+    beforeEntity: EntityData | null;
+    afterEntity: EntityData | null;
+  }>(() => {
+    const entityList = entities();
+    if (!entityList)
+      return { entities: [], beforeEntity: null, afterEntity: null };
+
+    const idToIndexMap = new Map(entityList.map(({ id }, i) => [id, i]));
+    let selectedEntityIndices: Array<{ entity: EntityData; index: number }> =
+      [];
+
+    if (viewData().selectedEntities.length > 0) {
+      selectedEntityIndices = filterMap(
+        viewData().selectedEntities,
+        (entity) => {
+          const index = idToIndexMap.get(entity.id);
+          if (index === undefined) {
+            return undefined;
+          }
+          return {
+            index,
+            entity,
+          };
+        }
+      );
+    } else {
+      const entity = getHighlightedEntity();
+      if (entity) selectedEntityIndices = [entity];
+    }
+
+    if (selectedEntityIndices.length === 0) {
+      return { entities: [], beforeEntity: null, afterEntity: null };
+    }
+
+    selectedEntityIndices.sort((a, b) => a.index - b.index);
+
+    const firstIndex = selectedEntityIndices[0].index;
+    const lastIndex =
+      selectedEntityIndices[selectedEntityIndices.length - 1].index;
+
+    let before = null;
+    if (firstIndex === 0) {
+      // If first item is at index 0, use the item after the selection as beforeId
+      const afterSelectionIndex = lastIndex + 1;
+      if (afterSelectionIndex < entityList.length) {
+        before = entityList[afterSelectionIndex];
+      }
+    } else {
+      before = entityList[firstIndex - 1];
+    }
+
+    // Calculate afterId
+    let after = null;
+    const afterSelectionIndex = lastIndex + 1;
+    if (afterSelectionIndex < entityList.length) {
+      after = entityList[afterSelectionIndex];
+    }
+
+    return {
+      entities: selectedEntityIndices,
+      beforeEntity: before,
+      afterEntity: after,
+    };
+  });
+
+  // the full info with indices and neighbors is great but we also need to
+  // flatten back to the plain entities a lot - so just memoize.
+  const plainSelectedEntities = createLazyMemo(() => {
+    return getEntitiesForAction().entities.map(({ entity }) => entity);
+  });
+
   const isEntityLastItem = createLazyMemo(() => {
     const entityList = entities();
     if (!entityList) return false;
@@ -265,41 +707,50 @@ export function createNavigationEntityListShortcut({
     return highlightedEntity.index >= entityList.length - 1;
   });
 
+  const calculateEntityIndex = (
+    startIndex: number,
+    { axis, mode }: NavigationInput
+  ) => {
+    let index = startIndex;
+
+    const maxLength = (entities()?.length || 1) - 1;
+    if (mode === 'jump') {
+      if (axis === 'start') {
+        // setIndex(0);
+        index = 0;
+      } else {
+        // setIndex(maxLength);
+        index = maxLength;
+      }
+    } else {
+      if (axis === 'start') {
+        // setIndex(Math.max(index() - 1, 0));
+        index = Math.max(index - 1, 0);
+      } else {
+        // setIndex(Math.min(index() + 1, maxLength));
+        index = Math.min(index + 1, maxLength);
+      }
+    }
+
+    return index;
+  };
+
   const navigateThroughList = async ({
     axis,
     mode,
-  }: {
-    axis: 'start' | 'end'; // movement direction
-    mode: 'step' | 'jump'; // how far: one step or to the end
-  }) => {
-    let index = getHighlightedEntity()?.index ?? -1;
+  }: NavigationInput): Promise<NavigationResult> => {
+    let index = calculateEntityIndex(getHighlightedEntity()?.index ?? -1, {
+      axis,
+      mode,
+    });
     setJumpedToEnd(false);
 
-    setSelectedViewStore('hasUserInteractedEntity', true);
+    setViewDataStore(selectedView(), 'hasUserInteractedEntity', true);
 
     const entityEl = entityListRef()?.querySelector('[data-entity]');
     const scrollParent = getScrollParent(entityEl);
 
     const getAdjecentEl = async () => {
-      const maxLength = (entities()?.length || 1) - 1;
-      if (mode === 'jump') {
-        if (axis === 'start') {
-          // setIndex(0);
-          index = 0;
-        } else {
-          // setIndex(maxLength);
-          index = maxLength;
-        }
-      } else {
-        if (axis === 'start') {
-          // setIndex(Math.max(index() - 1, 0));
-          index = Math.max(index - 1, 0);
-        } else {
-          // setIndex(Math.min(index() + 1, maxLength));
-          index = Math.min(index + 1, maxLength);
-        }
-      }
-
       virtualizerHandle()?.scrollToIndex(index, {
         // align: mode === 'jump' && axis === 'end' ? 'end' : undefined,
         // align: align(),
@@ -327,9 +778,21 @@ export function createNavigationEntityListShortcut({
 
       const selectedEntity = entities()?.at(index);
       if (selectedEntity) {
+        if (splitHandle.content().type !== 'component') {
+          const { type, id } = selectedEntity;
+          if (type === 'document') {
+            const { fileType } = selectedEntity;
+            splitHandle.replace(
+              { type: fileTypeToBlockName(fileType), id },
+              true
+            );
+          } else {
+            splitHandle.replace({ type, id }, true);
+          }
+        }
         batch(() => {
-          setSelectedViewStore('highlightedId', selectedEntity.id);
-          setSelectedViewStore('selectedEntity', selectedEntity);
+          setViewDataStore(selectedView(), 'highlightedId', selectedEntity.id);
+          setViewDataStore(selectedView(), 'selectedEntity', selectedEntity);
         });
       }
 
@@ -345,10 +808,13 @@ export function createNavigationEntityListShortcut({
         });
       }
 
-      return newSelectedEntityEl;
+      return {
+        element: newSelectedEntityEl,
+        entity: selectedEntity,
+      };
     };
 
-    const adjacentEl = await getAdjecentEl();
+    const { element: adjacentEl, entity } = await getAdjecentEl();
 
     // Logic fails to focus entity element due to EntityList shuffling items after fetching new page
     // *ReSelectEntity effect logic covers this failure
@@ -356,9 +822,15 @@ export function createNavigationEntityListShortcut({
     if (adjacentEl instanceof HTMLElement) {
       adjacentEl.focus();
       setTimeout(() => adjacentEl.focus());
-      return true;
+      return {
+        success: true,
+        entity,
+      };
     }
-    return false;
+    return {
+      success: false,
+      entity,
+    };
   };
 
   const scrollToEntityFromId = async () => {
@@ -383,11 +855,79 @@ export function createNavigationEntityListShortcut({
 
     const onListScroll = () => {
       if (listScrollEl) {
-        setSelectedViewStore('scrollOffset', listScrollEl.scrollTop);
+        setViewDataStore(
+          selectedView(),
+          'scrollOffset',
+          listScrollEl.scrollTop
+        );
       }
     };
 
     listScrollEl?.addEventListener('scroll', onListScroll);
+  };
+
+  const isEntitySelected = (entityID: string) => {
+    return (
+      viewData()?.selectedEntities.find((e) => e.id === entityID) !== undefined
+    );
+  };
+
+  const toggleEntity = (entity: EntityData) => {
+    setViewDataStore(selectedView(), 'selectedEntities', (s) => {
+      if (isEntitySelected(entity.id)) {
+        return s.filter((e) => e.id !== entity.id);
+      }
+      return s.concat(entity);
+    });
+  };
+
+  const navigateAndSelectEntity = async (input: NavigationInput) => {
+    const { success, entity } = await navigateThroughList(input);
+
+    if (!success || !entity) return;
+
+    toggleEntity(entity);
+  };
+
+  const handleNavigationSelection = (input: NavigationInput) => {
+    const highlightedEntity = getHighlightedEntity();
+    const currentIndex = highlightedEntity?.index ?? -1;
+    const nextIndex = calculateEntityIndex(currentIndex, input);
+
+    const nextEntity = entities()?.at(nextIndex);
+    if (!nextEntity) return true;
+
+    if (!highlightedEntity) {
+      navigateAndSelectEntity(input);
+      return true;
+    }
+
+    // If selectedEntities is empty, select current item first without moving
+    const selectedEntities = viewData()?.selectedEntities || [];
+    if (selectedEntities.length === 0) {
+      toggleEntity(highlightedEntity.entity);
+      return true;
+    }
+
+    if (
+      !isEntitySelected(highlightedEntity.entity.id) &&
+      !isEntitySelected(nextEntity.id)
+    ) {
+      toggleEntity(highlightedEntity.entity);
+      navigateAndSelectEntity(input);
+
+      return true;
+    }
+
+    if (isEntitySelected(nextEntity.id)) {
+      toggleEntity(highlightedEntity.entity);
+      navigateThroughList(input);
+      return true;
+    }
+
+    navigateAndSelectEntity(input);
+
+    return true;
   };
 
   let virtuaMount = true;
@@ -449,24 +989,84 @@ export function createNavigationEntityListShortcut({
   );
 
   registerHotkey({
-    hotkey: ['arrowdown', 'j'],
+    scopeId: splitHotkeyScope,
+    description: 'Root Modify selection',
+    hotkey: 'cmd+k',
+    condition: () => !konsoleOpen() && isViewingList(),
+    keyDownHandler: (e) => {
+      e?.preventDefault();
+      const selectedEntities = viewData().selectedEntities;
+
+      const hasSelection = selectedEntities.length > 0;
+
+      if (hasSelection) {
+        setKonsoleMode('SELECTION_MODIFICATION');
+        const selectionIndex = searchCategories.getCateoryIndex('Selection');
+
+        if (selectionIndex === undefined) return false;
+
+        setCommandCategoryIndex(selectionIndex);
+
+        searchCategories.showCategory('Selection');
+
+        setKonsoleContextInformation({
+          selectedEntities: selectedEntities.slice(),
+        });
+
+        toggleKonsoleVisibility();
+        return true;
+      }
+      searchCategories.hideCategory('Selection');
+      resetCommandCategoryIndex();
+      resetKonsoleMode();
+      return false;
+    },
+  });
+
+  registerHotkey({
+    hotkey: ['j', 'arrowdown'],
     scopeId: splitHotkeyScope,
     description: 'Down',
     hotkeyToken: TOKENS.entity.step.end,
     keyDownHandler: () => {
+      playSound('down');
       navigateThroughList({ axis: 'end', mode: 'step' });
       return true;
     },
     hide: true,
   });
   registerHotkey({
-    hotkey: ['arrowup', 'k'],
+    hotkey: ['shift+arrowdown', 'shift+j'],
+    scopeId: splitHotkeyScope,
+    description: 'Select down',
+    hotkeyToken: TOKENS.entity.step.end,
+    keyDownHandler: () => {
+      const navigationInput: NavigationInput = { axis: 'end', mode: 'step' };
+      return handleNavigationSelection(navigationInput);
+    },
+    hide: true,
+  });
+  registerHotkey({
+    hotkey: ['k', 'arrowup'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.step.start,
     description: 'Up',
     keyDownHandler: () => {
+      playSound('up');
       navigateThroughList({ axis: 'start', mode: 'step' });
       return true;
+    },
+    hide: true,
+  });
+
+  registerHotkey({
+    hotkey: ['shift+arrowup', 'shift+k'],
+    scopeId: splitHotkeyScope,
+    hotkeyToken: TOKENS.entity.step.start,
+    description: 'Select up',
+    keyDownHandler: () => {
+      const navigationInput: NavigationInput = { axis: 'start', mode: 'step' };
+      return handleNavigationSelection(navigationInput);
     },
     hide: true,
   });
@@ -506,22 +1106,8 @@ export function createNavigationEntityListShortcut({
     description: 'Top',
     keyDownHandler: () => {
       navigateThroughList({ axis: 'start', mode: 'jump' });
-
       return true;
     },
-  });
-  registerHotkey({
-    hotkey: ['p'],
-    scopeId: splitHotkeyScope,
-    description: 'Toggle Preview',
-    hotkeyToken: TOKENS.unifiedList.togglePreview,
-    keyDownHandler: () => {
-      if (!entityListRef()) return false;
-
-      setSelectedViewStore('display', 'preview', (prev) => !prev);
-      return true;
-    },
-    hide: true,
   });
 
   const navigateThroughViews = ({
@@ -582,12 +1168,14 @@ export function createNavigationEntityListShortcut({
     hide: true,
   });
 
-  const [attachEntityHotkeys, entityHotkeyScope] = useHotkeyDOMScope('entity');
   registerHotkey({
     hotkey: ['enter'],
     scopeId: entityHotkeyScope,
     description: 'Open',
     keyDownHandler: () => {
+      const [preview] = previewState;
+      if (!preview()) return false;
+
       const entity = getHighlightedEntity()?.entity;
       if (!entity) return false;
 
@@ -597,32 +1185,79 @@ export function createNavigationEntityListShortcut({
     displayPriority: 4,
   });
   registerHotkey({
-    hotkey: ['e'],
+    hotkey: ['cmd+enter'],
     scopeId: entityHotkeyScope,
-    description: 'Mark done',
+    description: 'Focus Preview',
     keyDownHandler: () => {
-      const entity = getHighlightedEntity()?.entity;
+      const [preview] = previewState;
 
+      const entity = getHighlightedEntity()?.entity;
       if (!entity) return false;
 
-      if (isEntityLastItem()) {
-        navigateThroughList({ axis: 'start', mode: 'step' });
-      } else {
-        navigateThroughList({ axis: 'end', mode: 'step' });
+      if (preview()) {
+        // focus inside preview block
+        const blockEl = document.getElementById(`block-${entity.id}`);
+        if (blockEl) {
+          // TODO: use state instead to determine when preview block can recieve focus
+          blockEl.setAttribute('data-allow-focus-in-preview', '');
+
+          blockEl.focus();
+          const getEnterCommand = () => {
+            const currentActiveScope = activeScope();
+            if (!currentActiveScope) return undefined;
+            let activeScopeNode = hotkeyScopeTree.get(currentActiveScope);
+            if (!activeScopeNode) return undefined;
+            if (activeScopeNode?.type !== 'dom') return;
+            const dom = activeScopeNode.element;
+            const closestBlockScope = dom.closest(`[id="block-${entity.id}"]`);
+            if (
+              !closestBlockScope ||
+              !(closestBlockScope instanceof HTMLElement)
+            )
+              return;
+            const scopeId = closestBlockScope.dataset.hotkeyScope;
+            if (!scopeId) return undefined;
+            const splitNode = hotkeyScopeTree.get(scopeId);
+            if (!splitNode) return undefined;
+            return splitNode.hotkeyCommands.get('enter');
+          };
+          // runCommandByToken(TOKENS.block.focus);
+          const command = getEnterCommand();
+          if (command) {
+            runCommand(command);
+          }
+        }
+        return true;
       }
 
-      markEntityAsDone(entity);
-
+      openEntity(entity);
+      return true;
+    },
+    displayPriority: 4,
+  });
+  registerHotkey({
+    hotkey: ['x'],
+    scopeId: splitHotkeyScope,
+    description: 'Toggle select item',
+    condition: isViewingList,
+    keyDownHandler: () => {
+      const entity = getHighlightedEntity();
+      if (!entity) return false;
+      toggleEntity(entity.entity);
       return true;
     },
     displayPriority: 10,
   });
-
-  createEffect(() => {
-    const ref = entityListRef();
-    if (!ref) return;
-
-    attachEntityHotkeys(ref);
+  registerHotkey({
+    hotkey: ['escape'],
+    scopeId: splitHotkeyScope,
+    description: 'Clear multi selection',
+    condition: () => isViewingList() && viewData().selectedEntities.length > 0,
+    keyDownHandler: () => {
+      const length = viewData().selectedEntities.length;
+      setViewDataStore(selectedView(), 'selectedEntities', []);
+      return length > 1;
+    },
   });
 }
 
@@ -679,10 +1314,12 @@ const useAllViews = ({
 
         // Filter viewsData to exclude items that are not in savedViewConfigs, except for default views
         const savedViewIds = new Set(savedViewConfigs.map((view) => view.id));
-        const defaultViewIds = new Set(Object.keys(VIEWCONFIG_DEFAULTS));
         const filteredViewsData = Object.fromEntries(
           Object.entries(viewsData).filter(
-            ([viewId]) => savedViewIds.has(viewId) || defaultViewIds.has(viewId)
+            ([viewId, viewData]) =>
+              savedViewIds.has(viewId) ||
+              DEFAULT_VIEW_IDS_SET.has(viewId as View) ||
+              viewData.viewType !== undefined
           )
         );
 

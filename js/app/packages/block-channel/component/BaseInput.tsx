@@ -6,8 +6,10 @@ import type { sendMessage } from '@block-channel/signal/channel';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { isInBlock } from '@core/block';
 import { handleFoldersInput } from '@core/client/zipWorkerClient';
+import { BrightJoins } from '@core/component/BrightJoins';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
+import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -26,7 +28,7 @@ import FormatIcon from '@icon/regular/text-aa.svg';
 import XIcon from '@icon/regular/x.svg';
 import { logger } from '@observability';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import PaperPlaneRight from '@phosphor-icons/core/fill/paper-plane-right-fill.svg?component-solid';
+import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { createCallback } from '@solid-primitives/rootless';
 import { leading, throttle } from '@solid-primitives/scheduled';
@@ -37,6 +39,7 @@ import {
   type Accessor,
   createEffect,
   createMemo,
+  createRenderEffect,
   createSignal,
   For,
   onCleanup,
@@ -63,7 +66,7 @@ type InputAttachmentsStore = {
 type BaseInputProps = {
   /** callback to be executed when the user clicks the send button
    * or presses enter */
-  onSend: typeof sendMessage;
+  onSend: (args: Parameters<typeof sendMessage>[0]) => Promise<void>;
   /** callback to be executed when the user changes the input */
   onChange: (content: string) => void;
   /** callback to be executed when the user clears the input */
@@ -93,6 +96,7 @@ type BaseInputProps = {
   setLocalTyping?: (isTyping: boolean) => void;
   /** the list of users in the channel  */
   channelUsers?: () => IUser[];
+  domRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 };
 
 /** the time after a user stops typing before we consider them idle */
@@ -103,7 +107,7 @@ export function BaseInput(props: BaseInputProps) {
   const key = props.inputAttachments.key;
   const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
   const [isDraggedOver, setIsDraggedOver] = createSignal(false);
-
+  const [isPendingSend, setIsPendingSend] = createSignal(false);
   const [isValidChannelDrag] = isInBlock()
     ? isValidChannelDragSignal
     : createSignal(false);
@@ -164,7 +168,14 @@ export function BaseInput(props: BaseInputProps) {
     setNodeFormat,
     mentions,
     MarkdownArea,
+    editor,
+    ref,
   } = useChannelMarkdownArea();
+
+  createRenderEffect(() => {
+    const _ref = ref();
+    if (_ref) props.domRef?.(_ref);
+  });
 
   const allMentions: Accessor<SimpleMention[]> = () =>
     mentions().map((m) => ({
@@ -284,8 +295,12 @@ export function BaseInput(props: BaseInputProps) {
   }
 
   function handleSend() {
+    if (isPendingSend()) return false;
+    setIsPendingSend(true);
     const content = markdownState();
-    console.log('content', content);
+    clearMarkdownArea();
+    focusMarkdownArea();
+
     const args = {
       content: content,
       attachments: props.inputAttachments.store[key] ?? [],
@@ -296,13 +311,23 @@ export function BaseInput(props: BaseInputProps) {
       .onSend(args)
       .then(() => {
         props.inputAttachments.setStore(key, []);
-        clearMarkdownArea();
-        focusMarkdownArea();
         stopTyping();
         return props.afterSend?.();
       })
-      .catch((err) => {
-        logger.error('onSend failed', { error: err });
+      .catch((_) => {
+        // Restore the stashed editor state
+        clearMarkdownArea();
+        try {
+          setEditorStateFromMarkdown(editor, content);
+        } catch (e) {
+          logger.error('Failed to restore editor state after send error', {
+            error: e,
+          });
+        }
+        focusMarkdownArea();
+      })
+      .finally(() => {
+        setIsPendingSend(false);
       });
 
     return true;
@@ -381,7 +406,7 @@ export function BaseInput(props: BaseInputProps) {
 
   return (
     <div
-      class="relative flex flex-col flex-1 items-center justify-between bg-input border-1 border-edge focus-within:bracket-offset-2"
+      class="relative flex flex-col flex-1 items-center justify-between bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px]"
       ref={containerRef}
       use:fileFolderDrop={{
         onDrop: (files, folders) => {
@@ -402,6 +427,7 @@ export function BaseInput(props: BaseInputProps) {
         },
       }}
     >
+      <BrightJoins dots={[false, false, true, true]} />
       <Show when={isDraggedOver() || isDraggingOverChannel()}>
         <FileDropOverlay valid={isValidChannelDrag()}>
           <Show when={!isValidChannelDrag()}>
@@ -433,9 +459,9 @@ export function BaseInput(props: BaseInputProps) {
           placeholder={props.placeholder}
           onEnter={
             isMobileWidth()
-              ? undefined
-              : () => {
-                  if (hasPendingAttachments()) {
+              ? (_e) => false
+              : (_e) => {
+                  if (hasPendingAttachments() || isPendingSend()) {
                     return true;
                   }
                   return handleSend();
@@ -448,6 +474,7 @@ export function BaseInput(props: BaseInputProps) {
           initialValue={props.initialValue?.()}
           useBlockBoundary={true}
           onEscape={onEscape}
+          dontFocusOnMount
           onFocusLeaveStart={props.onFocusLeaveStart}
           onFocusLeaveEnd={onFocusLeaveEnd}
         />
@@ -518,12 +545,12 @@ export function BaseInput(props: BaseInputProps) {
         >
           <div class="bg-transparent rounded-full size-8 flex flex-row justify-center items-center">
             <Show
-              when={!hasPendingAttachments()}
+              when={!hasPendingAttachments() && !isPendingSend()}
               fallback={
                 <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
               }
             >
-              <PaperPlaneRight
+              <ArrowFatLineUp
                 width={20}
                 height={20}
                 class="!text-accent-ink !fill-accent"

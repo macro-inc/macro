@@ -31,7 +31,6 @@ import type { SafeFetchInit } from '@core/util/safeFetch';
 import { utf8Encode } from '@core/util/string';
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import { platformFetch } from 'core/util/platformFetch';
-import { createResource } from 'solid-js';
 import type { AccessLevel, View, ViewsResponse } from './generated/schemas';
 import type { AddPinRequest } from './generated/schemas/addPinRequest';
 import type { AnchorResponse } from './generated/schemas/anchorResponse';
@@ -39,7 +38,6 @@ import {
   type CloudStorageItemType,
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
-import type { CreateBlankDocxRequest } from './generated/schemas/createBlankDocxRequest';
 import type { CreateCommentResponse } from './generated/schemas/createCommentResponse';
 import type { CreateDocumentHandler200 as CreateDocumentResponse } from './generated/schemas/createDocumentHandler200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
@@ -130,12 +128,11 @@ export type Success = {
 };
 type SuccessResponse = { data: Success };
 
-export type ItemType = CloudStorageItemType | 'channel' | 'color' | 'email';
+export type ItemType = CloudStorageItemType | 'channel' | 'email';
 
 const _itemTypeSet = new Set([
   'document',
   'channel',
-  'color',
   'email',
   'chat',
   'project',
@@ -187,8 +184,6 @@ export function blockNameToItemType(
       return 'channel';
     case 'project':
       return 'project';
-    case 'color':
-      return 'color';
     case 'email':
       return 'email';
     default:
@@ -202,7 +197,6 @@ export function stringToItemType(str: string): ItemType | undefined {
     case 'document':
     case 'project':
     case 'channel':
-    case 'color':
       return str;
     default:
       return undefined;
@@ -241,36 +235,6 @@ export const storageServiceClient = {
       await dssFetch<SuccessResponse>(`/ping`),
       (result) => result.data
     );
-  },
-
-  affiliates: {
-    async getAffiliateList() {
-      const response = await dssFetch<{
-        users: {
-          email: string;
-          createdAt: number;
-        }[];
-      }>(`/affiliate`);
-      return response;
-    },
-    async assignAffiliate(params: { email: string }) {
-      return mapOk(
-        await dssFetch<SuccessResponse>(`/affiliate/${params.email}`, {
-          method: 'POST',
-        }),
-        (result) => result.data
-      );
-    },
-    async getReferredBy() {
-      return mapOk(
-        await dssFetch<{
-          affiliate?: {
-            email: string;
-          };
-        }>(`/affiliate/referred_by`),
-        (result) => result
-      );
-    },
   },
 
   permissionsTokens: {
@@ -534,13 +498,6 @@ export const storageServiceClient = {
 
     return ok({
       metadata: documentMetadata,
-    });
-  },
-
-  async createBlankDocx(request: CreateBlankDocxRequest) {
-    return dssFetch<DocumentMetadata>(`/documents/blank_docx`, {
-      method: 'POST',
-      body: JSON.stringify(request),
     });
   },
 
@@ -1333,23 +1290,5 @@ export const uploadFileToPresignedUrl = async (
     throw new Error(`Failed to upload file: ${text}`);
   }
 };
-
-export const [affiliateList, { refetch: refetchAffiliateList }] =
-  createResource(async () => {
-    const response = await storageServiceClient.affiliates.getAffiliateList();
-    if (!isOk(response)) return;
-    const [, responseData] = response;
-    return responseData.users;
-  });
-
-export const [referredBy, { refetch: refetchReferredBy }] = createResource(
-  async () => {
-    const response = await storageServiceClient.affiliates.getReferredBy();
-    if (!isOk(response)) return;
-    const [, responseData] = response;
-
-    return responseData.affiliate?.email;
-  }
-);
 
 registerClient('storage', storageServiceClient);

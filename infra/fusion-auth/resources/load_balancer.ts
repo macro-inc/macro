@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
-import * as pulumi from '@pulumi/pulumi';
-import { Output } from '@pulumi/pulumi';
+import type * as pulumi from '@pulumi/pulumi';
+import type { Output } from '@pulumi/pulumi';
 import { MACRO_SUBDOMAIN_CERT, stack } from './shared';
 
 export function serviceLoadBalancer(
@@ -27,7 +27,7 @@ export function serviceLoadBalancer(
     isPrivate?: boolean;
     tags: { [key: string]: string };
     idleTimeout?: number;
-  },
+  }
 ) {
   const targetGroup = new aws.alb.TargetGroup(
     `${serviceName}-tg-${stack}`,
@@ -45,7 +45,7 @@ export function serviceLoadBalancer(
       },
       tags,
     },
-    { parent },
+    { parent }
   );
 
   const lb = new aws.lb.LoadBalancer(
@@ -66,7 +66,7 @@ export function serviceLoadBalancer(
       },
       tags,
     },
-    { parent },
+    { parent }
   );
 
   const listener = new aws.lb.Listener(
@@ -85,7 +85,7 @@ export function serviceLoadBalancer(
         },
       ],
     },
-    { parent },
+    { parent }
   );
 
   new aws.lb.Listener(
@@ -106,7 +106,7 @@ export function serviceLoadBalancer(
         },
       ],
     },
-    { parent },
+    { parent }
   );
 
   return { targetGroup, lb, listener };

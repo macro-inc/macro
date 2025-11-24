@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type {
+  ApiPaginatedThreadCursor,
   ArchiveThreadRequest,
   CancelBackfillParams,
   CreateDraftRequest,
@@ -13,9 +14,9 @@ import type {
   CreateLabelResponse,
   EmptyResponse,
   ErrorResponse,
+  GetActiveBackfillJobResponse,
   GetAttachmentResponse,
   GetBackfillJobResponse,
-  GetPreviewsFrecencyResponse,
   GetThreadMessagesHandlerParams,
   GetThreadParams,
   GetThreadResponse,
@@ -154,11 +155,75 @@ export const cancelBackfillGmail = async (cancelBackfillParams: CancelBackfillPa
 
 
 /**
+ * @summary Get any active backfill job for the user.
+ */
+export type getBackfillGmailActiveResponse200 = {
+  data: GetActiveBackfillJobResponse
+  status: 200
+}
+
+export type getBackfillGmailActiveResponse204 = {
+  data: EmptyResponse
+  status: 204
+}
+
+export type getBackfillGmailActiveResponse401 = {
+  data: ErrorResponse
+  status: 401
+}
+
+export type getBackfillGmailActiveResponse500 = {
+  data: ErrorResponse
+  status: 500
+}
+    
+export type getBackfillGmailActiveResponseSuccess = (getBackfillGmailActiveResponse200 | getBackfillGmailActiveResponse204) & {
+  headers: Headers;
+};
+export type getBackfillGmailActiveResponseError = (getBackfillGmailActiveResponse401 | getBackfillGmailActiveResponse500) & {
+  headers: Headers;
+};
+
+export type getBackfillGmailActiveResponse = (getBackfillGmailActiveResponseSuccess | getBackfillGmailActiveResponseError)
+
+export const getGetBackfillGmailActiveUrl = () => {
+
+
+  
+
+  return `/email/backfill/gmail/active`
+}
+
+export const getBackfillGmailActive = async ( options?: RequestInit): Promise<getBackfillGmailActiveResponse> => {
+  
+  const res = await fetch(getGetBackfillGmailActiveUrl(),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: getBackfillGmailActiveResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getBackfillGmailActiveResponse
+}
+
+
+
+/**
  * @summary Get a backfill job.
  */
-export type getBackfillGmailResponse201 = {
+export type getBackfillGmailResponse200 = {
   data: GetBackfillJobResponse
-  status: 201
+  status: 200
+}
+
+export type getBackfillGmailResponse401 = {
+  data: ErrorResponse
+  status: 401
 }
 
 export type getBackfillGmailResponse404 = {
@@ -166,20 +231,15 @@ export type getBackfillGmailResponse404 = {
   status: 404
 }
 
-export type getBackfillGmailResponse429 = {
-  data: ErrorResponse
-  status: 429
-}
-
 export type getBackfillGmailResponse500 = {
   data: ErrorResponse
   status: 500
 }
     
-export type getBackfillGmailResponseSuccess = (getBackfillGmailResponse201) & {
+export type getBackfillGmailResponseSuccess = (getBackfillGmailResponse200) & {
   headers: Headers;
 };
-export type getBackfillGmailResponseError = (getBackfillGmailResponse404 | getBackfillGmailResponse429 | getBackfillGmailResponse500) & {
+export type getBackfillGmailResponseError = (getBackfillGmailResponse401 | getBackfillGmailResponse404 | getBackfillGmailResponse500) & {
   headers: Headers;
 };
 
@@ -1071,7 +1131,7 @@ export const disableSync = async ( options?: RequestInit): Promise<disableSyncRe
  * @summary Get paginated thread previews with cursor-based pagination.
  */
 export type previewsInboxCursorResponse200 = {
-  data: GetPreviewsFrecencyResponse
+  data: ApiPaginatedThreadCursor
   status: 200
 }
 

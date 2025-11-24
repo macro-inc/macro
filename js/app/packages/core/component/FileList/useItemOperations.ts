@@ -14,6 +14,7 @@ import {
   bulkDelete as bulkDeleteOp,
   bulkMoveToFolder as bulkMoveToFolderOp,
   bulkPermanentlyDelete as bulkPermanentlyDeleteOp,
+  bulkRename as bulkRenameOp,
   bulkRevertDelete as bulkRevertDeleteOp,
   bulkTogglePin as bulkTogglePinOp,
   copyItem as copyItemOp,
@@ -238,6 +239,26 @@ export const useItemOperations = createSingletonRoot(() => {
     return result;
   });
 
+  const bulkRename = createCallback(
+    async (items: { item: Item; newName: string }[]) => {
+      const result = await toast.promise(bulkRenameOp(items), {
+        loading: `Renaming ${items.length} ${items.length === 1 ? 'item' : 'items'}...`,
+        success: ({ failedItems }) => {
+          if (failedItems.length > 0) {
+            return `Failed to rename ${failedItems.length} ${failedItems.length === 1 ? 'item' : 'items'}`;
+          }
+          return `Successfully renamed ${items.length} ${items.length === 1 ? 'item' : 'items'}`;
+        },
+        error: (error) => {
+          return `Failed to rename items: ${error.message || 'Unknown error'}`;
+        },
+        toastTypeDeterminer: (result) =>
+          result.failedItems.length > 0 ? ToastType.FAILURE : ToastType.SUCCESS,
+      });
+      return result;
+    }
+  );
+
   const bulkRevertDelete = createCallback(async (items: Item[]) => {
     const result = await toast.promise(bulkRevertDeleteOp(items), {
       loading: `Restoring ${items.length} ${items.length === 1 ? 'item' : 'items'}...`,
@@ -265,6 +286,7 @@ export const useItemOperations = createSingletonRoot(() => {
     bulkDelete,
     bulkCopy,
     bulkMoveToFolder,
+    bulkRename,
     getItemAccessLevel,
     revertDelete,
     permanentlyDelete,

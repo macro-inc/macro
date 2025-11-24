@@ -1,3 +1,4 @@
+import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import type { SendBuilder } from '@block-chat/blockClient';
 import { TopBar } from '@block-chat/component/TopBar';
 import type { ChatData } from '@block-chat/definition';
@@ -17,17 +18,29 @@ import {
   storeChatState,
 } from '@core/component/AI/util/storage';
 import { usePaywallState } from '@core/constant/PaywallState';
+import { TOKENS } from '@core/hotkey/tokens';
+import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import { createMethodRegistration } from '@core/orchestrator';
+import {
+  blockElementSignal,
+  blockHotkeyScopeSignal,
+} from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
 import { invalidateUserQuota } from '@service-auth/userQuota';
 import { cognitionWebsocketServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
+import type { LexicalEditor } from 'lexical';
 import { createEffect, createSignal, Show } from 'solid-js';
+import { pendingLocationParamsSignal } from '../signal/pendingLocationParams';
 
 export function Chat(props: { data: ChatData }) {
   const canEdit = useCanEdit();
   const disabled = () => !canEdit();
+  const scopeId = blockHotkeyScopeSignal.get;
+  const blockElement = blockElementSignal.get;
+  const { navigatedFromJK } = useNavigatedFromJK();
+  const [chatEditor, setChatEditor] = createSignal<LexicalEditor>();
 
   const [stream, setStream] = createSignal<MessageStream>();
   const cancelStream = () => {
@@ -47,6 +60,7 @@ export function Chat(props: { data: ChatData }) {
     messages: props.data.chat.messages,
     chatId: props.data.chat.id,
     editDisabled: disabled,
+    pendingLocationParams: pendingLocationParamsSignal.get,
   });
   const blockHandle = blockHandleSignal.get;
 
@@ -121,12 +135,42 @@ export function Chat(props: { data: ChatData }) {
     saveChatState({ attachments: attached, input, model: model_ });
   });
 
+  const setPendingLocation = pendingLocationParamsSignal.set;
   const buildChatSendRequest = useBuildChatSendRequest();
+
   createMethodRegistration(blockHandle, {
     sendMessage: async (sendRequest: SendBuilder) => {
       const send = await buildChatSendRequest(sendRequest);
       onSend(send);
     },
+    goToLocationFromParams: (params: Record<string, string>) => {
+      setPendingLocation(params);
+    },
+  });
+
+  registerScopeSignalHotkey(scopeId, {
+    hotkey: 'enter',
+    description: 'Focus Chat Input',
+    keyDownHandler: () => {
+      const editor = chatEditor();
+      if (editor) {
+        editor.focus(undefined, { defaultSelection: 'rootStart' });
+        return true;
+      }
+      return false;
+    },
+    hotkeyToken: TOKENS.block.focus,
+    hide: true,
+  });
+
+  // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
+  let hasRun = false;
+  createEffect(() => {
+    if (hasRun) return;
+    if (!blockElement()) return;
+    if (!navigatedFromJK()) return;
+    blockElement()?.focus();
+    hasRun = true;
   });
 
   return (
@@ -145,7 +189,12 @@ export function Chat(props: { data: ChatData }) {
       <Show when={!disabled()}>
         <div class="flex w-full justify-center pb-2 px-4">
           <div class="w-3xl">
-            <ChatInput onSend={onSend} onStop={cancelStream} />
+            <ChatInput
+              onSend={onSend}
+              onStop={cancelStream}
+              captureEditor={setChatEditor}
+              autoFocusOnMount={!navigatedFromJK()}
+            />
           </div>
         </div>
       </Show>

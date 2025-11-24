@@ -1,9 +1,10 @@
-use macro_user_id::user_id::MacroUserIdStr;
+use crate::{map_soup_type, outbound::pg_soup_repo::type_err};
+use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use models_pagination::{Query, SimpleSortMethod};
-use models_soup::{
-    chat::map_soup_chat, document::map_soup_document, item::SoupItem, project::map_soup_project,
-};
+use models_soup::item::SoupItem;
 use sqlx::PgPool;
+use std::str::FromStr;
+use uuid::Uuid;
 
 /// Returns objects that a user has EXPLICIT access to, including project items.
 ///
@@ -17,7 +18,7 @@ pub async fn unexpanded_generic_cursor_soup(
     db: &PgPool,
     user_id: MacroUserIdStr<'_>,
     limit: u16,
-    cursor: Query<String, SimpleSortMethod>,
+    cursor: Query<String, SimpleSortMethod, ()>,
 ) -> Result<Vec<SoupItem>, sqlx::Error> {
     let query_limit = limit as i64;
     let sort_method_str = cursor.sort_method().to_string();
@@ -168,51 +169,7 @@ pub async fn unexpanded_generic_cursor_soup(
         cursor_timestamp, // $4
         cursor_id,        // $5
     )
-    .try_map(|r| match r.item_type.as_ref() {
-        "document" => {
-            let document = map_soup_document(
-                r.id,
-                r.user_id,
-                r.document_version_id,
-                r.name,
-                r.sha,
-                r.file_type,
-                r.document_family_id,
-                r.branched_from_id,
-                r.branched_from_version_id,
-                r.project_id,
-                r.created_at,
-                r.updated_at,
-                r.viewed_at,
-            )
-            .map_err(|e| sqlx::Error::TypeNotFound {
-                type_name: e.to_string(),
-            })?;
-            Ok(SoupItem::Document(document))
-        }
-        "chat" => Ok(SoupItem::Chat(map_soup_chat(
-            r.id,
-            r.user_id,
-            r.name,
-            r.project_id,
-            r.is_persistent,
-            r.created_at,
-            r.updated_at,
-            r.viewed_at,
-        ))),
-        "project" => Ok(SoupItem::Project(map_soup_project(
-            r.id,
-            r.user_id,
-            r.name,
-            r.project_id,
-            r.created_at,
-            r.updated_at,
-            r.viewed_at,
-        ))),
-        _ => Err(sqlx::Error::TypeNotFound {
-            type_name: r.item_type,
-        }),
-    })
+    .try_map(map_soup_type!())
     .fetch_all(db)
     .await?;
 
@@ -231,7 +188,7 @@ pub async fn no_frecency_unexpanded_generic_cursor_soup(
     db: &PgPool,
     user_id: MacroUserIdStr<'_>,
     limit: u16,
-    cursor: Query<String, SimpleSortMethod>,
+    cursor: Query<String, SimpleSortMethod, ()>,
 ) -> Result<Vec<SoupItem>, sqlx::Error> {
     let query_limit = limit as i64;
     let sort_method_str = cursor.sort_method().to_string();
@@ -389,51 +346,7 @@ pub async fn no_frecency_unexpanded_generic_cursor_soup(
         cursor_timestamp, // $4
         cursor_id,        // $5
     )
-    .try_map(|r| match r.item_type.as_ref() {
-        "document" => {
-            let document = map_soup_document(
-                r.id,
-                r.user_id,
-                r.document_version_id,
-                r.name,
-                r.sha,
-                r.file_type,
-                r.document_family_id,
-                r.branched_from_id,
-                r.branched_from_version_id,
-                r.project_id,
-                r.created_at,
-                r.updated_at,
-                r.viewed_at,
-            )
-            .map_err(|e| sqlx::Error::TypeNotFound {
-                type_name: e.to_string(),
-            })?;
-            Ok(SoupItem::Document(document))
-        }
-        "chat" => Ok(SoupItem::Chat(map_soup_chat(
-            r.id,
-            r.user_id,
-            r.name,
-            r.project_id,
-            r.is_persistent,
-            r.created_at,
-            r.updated_at,
-            r.viewed_at,
-        ))),
-        "project" => Ok(SoupItem::Project(map_soup_project(
-            r.id,
-            r.user_id,
-            r.name,
-            r.project_id,
-            r.created_at,
-            r.updated_at,
-            r.viewed_at,
-        ))),
-        _ => Err(sqlx::Error::TypeNotFound {
-            type_name: r.item_type,
-        }),
-    })
+    .try_map(map_soup_type!())
     .fetch_all(db)
     .await?;
 

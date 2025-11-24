@@ -6,7 +6,7 @@ pub mod labels;
 pub mod links;
 pub mod messages;
 pub mod parse;
-pub mod previews;
+pub mod settings;
 pub mod sfs_mappings;
 pub mod sync_tokens;
 pub mod threads;

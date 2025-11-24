@@ -144,53 +144,49 @@ export interface ListEmailsInput {
  */
 
 export interface ListEmailsOutput {
-  /**
-   * the thread, with messages inside
-   */
-  previews: {
-    items: {
-      attachments: {
-        content_id?: string | null;
-        data_url?: string | null;
-        db_id?: string | null;
-        filename?: string | null;
-        mime_type?: string | null;
-        provider_id?: string | null;
-        size_bytes?: number | null;
-      }[];
-      attachmentsMacro: {
-        db_id?: string | null;
-        item_id: string;
-        item_type: string;
-        message_id?: string | null;
-      }[];
+  items: {
+    attachments: {
+      contentId?: string | null;
       createdAt: number;
+      filename?: string | null;
       id: string;
-      inboxVisible: boolean;
-      isDraft: boolean;
-      isImportant: boolean;
-      isRead: boolean;
-      name?: string | null;
-      ownerId: string;
-      participants: {
-        email_address?: string | null;
-        id?: string | null;
-        link_id: string;
-        name?: string | null;
-        original_photo_url?: string | null;
-        sfs_photo_url?: string | null;
-      }[];
-      providerId?: string | null;
-      senderEmail?: string | null;
-      senderName?: string | null;
-      senderPhotoUrl?: string | null;
-      snippet?: string | null;
-      sortTs: number;
-      updatedAt: number;
-      viewedAt?: number | null;
+      messageId: string;
+      mimeType?: string | null;
+      providerAttachmentId?: string | null;
+      sizeBytes?: number | null;
     }[];
-    next_cursor?: string | null;
-  };
+    contacts: {
+      emailAddress?: string | null;
+      id: string;
+      linkId: string;
+      name?: string | null;
+      sfsPhotoUrl?: string | null;
+    }[];
+    createdAt: number;
+    frecencyScore?: number | null;
+    id: string;
+    inboxVisible: boolean;
+    isDraft: boolean;
+    isImportant: boolean;
+    isRead: boolean;
+    macroAttachments: {
+      dbId: string;
+      itemId: string;
+      itemType: string;
+      messageId: string;
+    }[];
+    name?: string | null;
+    ownerId: string;
+    providerId?: string | null;
+    senderEmail?: string | null;
+    senderName?: string | null;
+    senderPhotoUrl?: string | null;
+    snippet?: string | null;
+    sortTs: number;
+    updatedAt: number;
+    viewedAt?: number | null;
+  }[];
+  next_cursor?: string | null;
 }
 
 
@@ -242,16 +238,9 @@ export interface MarkdownRewriteOutput {
 
 /**
  * Read content by ID(s). Supports reading documents, channels, chats, and emails by their respective IDs. Use this tool when you need to retrieve the full content of a specific item(s).
+ *     Channel transcripts only include 300 messages. Use 'messages_since' to see messages in a different time window.
  */
 export interface ReadInput {
-  /**
-   * Number of messages to read after the target message. Only applicable for channel-message content type. Defaults to 0.
-   */
-  after: number | null;
-  /**
-   * Number of messages to read before the target message. Only applicable for channel-message content type. Defaults to 0.
-   */
-  before: number | null;
   /**
    * The type of content to read. Choose based on the type of content you want to retrieve.
    */
@@ -267,6 +256,10 @@ export interface ReadInput {
    * ID(s) of the content to read. IMPORTANT: Currently only chat-message content type supports MULTIPLE ids! For all other content types provide a single id.
    */
   ids: string[];
+  /**
+   * A local datetime of the earliest message to include in a channel transcript ex: 2025-11-25 12:00:09 EST, only applicable to channels
+   */
+  messagesSince: string | null;
 }
 
 
@@ -484,9 +477,9 @@ export interface UnifiedSearchInput {
      */
     match_type: 'exact' | 'partial' | 'regexp';
     /**
-     * If true, match the `terms` field on name only. If false, names will not be matched on in the search. False by default.
+     * Fields to search on (Name, Content, NameContent). Defaults to Content
      */
-    name_only: boolean | null;
+    search_on: 'name' | 'content' | 'name_content';
     /**
      * Multiple distinct search terms as separate strings. Use this for keyword-based searches where you want to find content containing any of these terms. Each term must be at least 3 characters (shorter terms are automatically filtered out). Examples: ['machine', 'learning', 'algorithms'], ['project', 'status', 'update']. `null` this field if searching without text terms to search all. This field matches query string against both name and content.
      */
@@ -513,10 +506,6 @@ export interface UnifiedSearchOutput {
     results: (
       | {
           /**
-           * The opensearch matches on the document
-           */
-          content?: string[] | null;
-          /**
            * The document id
            */
           document_id: string;
@@ -528,6 +517,19 @@ export interface UnifiedSearchOutput {
            * The file type
            */
           file_type: string;
+          /**
+           * The highlights on the document
+           */
+          highlight: {
+            /**
+             * The highlight match on the content field
+             */
+            content?: string[];
+            /**
+             * The highlight match on the name field
+             */
+            name?: string | null;
+          };
           /**
            * The node id
            */
@@ -556,9 +558,18 @@ export interface UnifiedSearchOutput {
            */
           chat_message_id: string;
           /**
-           * The opensearch matches on the chat
+           * The highlights on the chat
            */
-          content?: string[] | null;
+          highlight: {
+            /**
+             * The highlight match on the content field
+             */
+            content?: string[];
+            /**
+             * The highlight match on the name field
+             */
+            name?: string | null;
+          };
           /**
            * The role
            */
@@ -587,9 +598,18 @@ export interface UnifiedSearchOutput {
            */
           cc: string[];
           /**
-           * The opensearch matches on the email
+           * The highlights on the email
            */
-          content?: string[] | null;
+          highlight: {
+            /**
+             * The highlight match on the content field
+             */
+            content?: string[];
+            /**
+             * The highlight match on the name field
+             */
+            name?: string | null;
+          };
           /**
            * The labels
            */
@@ -638,21 +658,26 @@ export interface UnifiedSearchOutput {
            */
           channel_id: string;
           /**
-           * The channel name
-           */
-          channel_name?: string | null;
-          /**
            * The channel type
            */
           channel_type: string;
           /**
-           * The opensearch matches on the channel message
-           */
-          content?: string[] | null;
-          /**
            * The time the channel message was created
            */
           created_at: string;
+          /**
+           * The highlights on the channel message
+           */
+          highlight: {
+            /**
+             * The highlight match on the content field
+             */
+            content?: string[];
+            /**
+             * The highlight match on the name field
+             */
+            name?: string | null;
+          };
           /**
            * The mentions
            */
@@ -681,17 +706,22 @@ export interface UnifiedSearchOutput {
         }
       | {
           /**
-           * The opensearch matches on the project
-           */
-          content?: string[] | null;
-          /**
            * The time the project was created
            */
           created_at: string;
           /**
-           * The parent project id
+           * The highlights on the project
            */
-          parent_project_id?: string | null;
+          highlight: {
+            /**
+             * The highlight match on the content field
+             */
+            content?: string[];
+            /**
+             * The highlight match on the name field
+             */
+            name?: string | null;
+          };
           /**
            * The project id
            */

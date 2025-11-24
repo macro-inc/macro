@@ -1,9 +1,10 @@
 pub mod date_format;
 pub mod delete;
 pub mod error;
-pub mod get_document;
+pub mod name;
 pub mod search;
 pub mod search_on;
+pub mod unified;
 pub mod upsert;
 
 pub use search_on::SearchOn;
@@ -26,12 +27,6 @@ use opensearch::{
     },
     indices::{IndicesCreateParts, IndicesExistsParts},
 };
-
-pub static DOCUMENTS_INDEX: &str = "documents";
-pub static CHAT_INDEX: &str = "chats";
-pub static EMAIL_INDEX: &str = "emails";
-pub static CHANNEL_INDEX: &str = "channels";
-pub static PROJECT_INDEX: &str = "projects";
 
 #[derive(Clone, Debug)]
 pub struct OpensearchClient {

@@ -1,9 +1,9 @@
+use crate::compress_image::make_compressed_base64_webp;
 use anyhow::Error;
-use base64::{Engine as _, engine::general_purpose};
 use bytes::Bytes;
 use lexical_client::types::CognitionResponseData;
 use model::document::response::LocationResponseV3;
-use model::document::{DocumentBasic, FileType};
+use model::document::{DocumentBasic, FileType, FileTypeExt};
 
 #[derive(Debug, Clone)]
 pub struct DocumentContent {
@@ -13,11 +13,21 @@ pub struct DocumentContent {
     pub location: LocationResponseV3,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone)]
 pub enum Data {
     Text(String),
     Binary(Bytes),
     Markdown(CognitionResponseData),
+}
+
+impl std::fmt::Debug for Data {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Data::Binary(bytes) => write!(f, "Data::Binary(<{} bytes>)", bytes.len()),
+            Data::Text(chars) => write!(f, "Data::Text(<{} characters>)", chars.len()),
+            Data::Markdown(nodes) => write!(f, "Data::Markdown(<{} nodes>)", nodes.data.len()),
+        }
+    }
 }
 
 impl DocumentContent {
@@ -37,12 +47,11 @@ impl DocumentContent {
     }
 
     #[tracing::instrument(err)]
-    pub fn base64_image_content(self) -> Result<String, Error> {
-        let data = self.data.binary_data();
-        if self.file_type.is_image() && data.is_some() {
-            let base64_string = general_purpose::STANDARD.encode(data.unwrap());
-            let content_type = self.file_type.mime_type();
-            Ok(format!("data:{};base64,{}", content_type, base64_string))
+    pub fn base64_compressed_webp(self) -> Result<String, Error> {
+        if self.file_type.is_image()
+            && let Some(bytes) = self.data.binary_data()
+        {
+            make_compressed_base64_webp(&bytes)
         } else {
             Err(anyhow::anyhow!("Data is not in image format"))
         }

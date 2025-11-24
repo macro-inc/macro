@@ -1,8 +1,11 @@
-use crate::{PROJECT_INDEX, Result, date_format::EpochSeconds, error::OpensearchClientError};
+use models_opensearch::SearchIndex;
+
+use crate::{Result, date_format::EpochSeconds, error::OpensearchClientError};
 
 /// The arguments for upserting a project into the opensearch index
 #[derive(Debug, serde::Serialize)]
 pub struct UpsertProjectArgs {
+    #[serde(rename = "entity_id")]
     pub project_id: String,
     pub user_id: String,
     pub project_name: String,
@@ -17,7 +20,7 @@ pub(crate) async fn upsert_project(
 ) -> Result<()> {
     let response = client
         .index(opensearch::IndexParts::IndexId(
-            PROJECT_INDEX,
+            SearchIndex::Projects.as_ref(),
             &args.project_id,
         ))
         .body(args)

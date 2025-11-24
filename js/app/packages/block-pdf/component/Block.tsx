@@ -1,6 +1,7 @@
 import './block.css';
 
 import {
+  type LocationBlockParams,
   locationChangedSignal,
   pendingLocationParamsSignal,
 } from '@block-pdf/signal/location';
@@ -168,10 +169,11 @@ export default function BlockPdf() {
   });
   const blockHandle = blockHandleSignal.get;
 
+  const setPendingLocationParamsSignal = pendingLocationParamsSignal.set;
+  const setLocationChanged = locationChangedSignal.set;
   const goToLocationFromParams = createCallback(
-    (params: Record<string, any>) => {
-      const setPendingLocationParamsSignal = pendingLocationParamsSignal.set;
-      const setLocationChanged = locationChangedSignal.set;
+    (params: LocationBlockParams) => {
+      console.log('GO TO LOCATION FROM PARAMS', params);
 
       setLocationChanged(true);
 
@@ -181,7 +183,7 @@ export default function BlockPdf() {
   );
 
   createMethodRegistration(blockHandle, {
-    goToLocationFromParams: async (params: Record<string, any>) =>
+    goToLocationFromParams: async (params: LocationBlockParams) =>
       goToLocationFromParams(params),
   });
 

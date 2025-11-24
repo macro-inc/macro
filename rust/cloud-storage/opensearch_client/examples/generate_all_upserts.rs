@@ -46,14 +46,6 @@ async fn main() -> anyhow::Result<()> {
         "Jupiter Analytics Platform",
     ];
 
-    // Varied channel names
-    let channel_names = [
-        "Engineering Team (Test keyword for matching: Pineapple)",
-        "Design Collaboration",
-        "Product Strategy",
-        "DevOps Alerts",
-    ];
-
     // Varied chat titles
     let chat_titles = [
         "Code Review Discussion",
@@ -133,7 +125,6 @@ async fn main() -> anyhow::Result<()> {
     for i in 1..=4 {
         let channel_args = UpsertChannelMessageArgs {
             channel_id: format!("channel_{}", (i % 2) + 1),
-            channel_name: Some(channel_names[(i - 1) % channel_names.len()].to_string()),
             channel_type: "public".to_string(),
             org_id: Some(1),
             message_id: format!("msg_{}", i),

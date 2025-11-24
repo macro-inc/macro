@@ -26,17 +26,14 @@ impl ItemId for ChatOpenSearchResponse {
 
 impl From<&ChatOpenSearchResponse> for Option<ChatMessageSearchResult> {
     fn from(response: &ChatOpenSearchResponse) -> Self {
-        response
-            .inner
-            .content
-            .as_ref()
-            .map(|content| ChatMessageSearchResult {
-                chat_message_id: response.inner.chat_message_id.clone(),
-                role: response.inner.role.clone(),
-                content: content.clone(),
-                updated_at: response.inner.updated_at,
-                title: response.inner.title.clone(),
-            })
+        Some(ChatMessageSearchResult {
+            chat_message_id: response.inner.chat_message_id.clone(),
+            role: response.inner.role.clone(),
+            highlight: response.inner.highlight.clone().into(),
+            updated_at: response.inner.updated_at,
+            title: response.inner.title.clone(),
+            score: response.inner.score,
+        })
     }
 }
 
@@ -76,13 +73,10 @@ impl Metadata<ProjectSearchMetadata> for ProjectOpenSearchResponse {
 
 impl From<&ProjectOpenSearchResponse> for Option<ProjectSearchResult> {
     fn from(response: &ProjectOpenSearchResponse) -> Self {
-        response
-            .inner
-            .content
-            .as_ref()
-            .map(|content| ProjectSearchResult {
-                content: content.clone(),
-            })
+        Some(ProjectSearchResult {
+            highlight: response.inner.highlight.clone().into(),
+            score: response.inner.score,
+        })
     }
 }
 // Document
@@ -112,16 +106,13 @@ impl ItemId for DocumentOpenSearchResponse {
 
 impl From<&DocumentOpenSearchResponse> for Option<DocumentSearchResult> {
     fn from(response: &DocumentOpenSearchResponse) -> Self {
-        response
-            .inner
-            .content
-            .as_ref()
-            .map(|content| DocumentSearchResult {
-                node_id: response.inner.node_id.clone(),
-                raw_content: response.inner.raw_content.clone(),
-                updated_at: response.inner.updated_at,
-                content: content.clone(),
-            })
+        Some(DocumentSearchResult {
+            node_id: response.inner.node_id.clone(),
+            raw_content: response.inner.raw_content.clone(),
+            updated_at: response.inner.updated_at,
+            highlight: response.inner.highlight.clone().into(),
+            score: response.inner.score,
+        })
     }
 }
 
@@ -158,9 +149,10 @@ impl From<&EmailOpenSearchResponse> for Option<EmailSearchResult> {
             cc: response.inner.cc.clone(),
             bcc: response.inner.bcc.clone(),
             labels: response.inner.labels.clone(),
-            content: response.inner.content.clone().unwrap_or_default(),
+            highlight: response.inner.highlight.clone().into(),
             updated_at: response.inner.updated_at,
             sent_at: response.inner.sent_at,
+            score: response.inner.score,
         })
     }
 }
@@ -177,7 +169,6 @@ impl Metadata<ChannelSearchMetadata> for ChannelOpenSearchResponse {
     fn metadata(&self, id: &str) -> ChannelSearchMetadata {
         ChannelSearchMetadata {
             channel_id: id.to_string(),
-            channel_name: self.inner.channel_name.clone(),
             channel_type: self.inner.channel_type.clone(),
         }
     }
@@ -191,17 +182,14 @@ impl ItemId for ChannelOpenSearchResponse {
 
 impl From<&ChannelOpenSearchResponse> for Option<ChannelSearchResult> {
     fn from(response: &ChannelOpenSearchResponse) -> Self {
-        response
-            .inner
-            .content
-            .as_ref()
-            .map(|content| ChannelSearchResult {
-                message_id: response.inner.message_id.clone(),
-                thread_id: response.inner.thread_id.clone(),
-                sender_id: response.inner.sender_id.clone(),
-                content: content.clone(),
-                updated_at: response.inner.updated_at,
-                created_at: response.inner.created_at,
-            })
+        Some(ChannelSearchResult {
+            message_id: response.inner.message_id.clone(),
+            thread_id: response.inner.thread_id.clone(),
+            sender_id: response.inner.sender_id.clone(),
+            highlight: response.inner.highlight.clone().into(),
+            updated_at: response.inner.updated_at,
+            created_at: response.inner.created_at,
+            score: response.inner.score,
+        })
     }
 }

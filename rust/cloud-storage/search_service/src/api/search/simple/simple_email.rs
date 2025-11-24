@@ -91,7 +91,6 @@ pub(in crate::api::search) async fn search_emails(
         .search_emails(EmailSearchArgs {
             terms,
             user_id: user_id.to_string(),
-            message_ids: vec![],
             thread_ids: vec![],
             link_ids: vec![],
             sender: filters.senders,
@@ -104,6 +103,7 @@ pub(in crate::api::search) async fn search_emails(
             search_on: req.search_on.into(),
             collapse: req.collapse.unwrap_or(false),
             ids_only: false, // TODO: implement
+            disable_recency: req.disable_recency,
         })
         .await
         .map_err(SearchError::Search)?;

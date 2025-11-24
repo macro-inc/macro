@@ -42,7 +42,7 @@ pub(crate) async fn register_watch(
             .await
             .unwrap_or_else(|_| "Failed to read error body".to_string());
         return Err(GmailError::ApiError(format!(
-            "Gmail API error ({}): {}",
+            "({}): {}",
             status, error_body
         )));
     }

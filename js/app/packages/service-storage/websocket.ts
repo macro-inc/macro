@@ -1,9 +1,11 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
 import {
-  createDurableSocket,
-  createWSState,
-  heartbeatPlugin,
+  ConstantBackoff,
+  type Websocket,
+  WebsocketBuilder,
+  WebsocketEvent,
 } from '@websocket';
+import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
 
@@ -18,24 +20,20 @@ const HEARTBEAT_INTERVAL = 300000;
  */
 const HEARTBEAT_TIMEOUT = 5000;
 
-export const ws = createDurableSocket(
-  SERVER_HOSTS['websocket-service'],
-  {
-    retries: 5,
-    delay: 1500,
-  },
-  [
-    heartbeatPlugin({
-      message: JSON.stringify({ action: 'wsping' }),
-      wait: HEARTBEAT_TIMEOUT,
-      interval: HEARTBEAT_INTERVAL,
-    }),
-  ]
-);
+export const ws = new WebsocketBuilder(SERVER_HOSTS['websocket-service'])
+  .withBackoff(new ConstantBackoff(1500))
+  .withHeartbeat({
+    pingMessage: JSON.stringify({ action: 'wsping' }),
+    pongMessage: 'pong',
+    timeout: HEARTBEAT_TIMEOUT,
+    interval: HEARTBEAT_INTERVAL,
+    maxMissedHeartbeats: 3,
+  })
+  .build();
 
 export const storageWS = ws;
 
-export const state = createWSState(ws);
+export const state = createWebsocketStateSignal(ws);
 
 type WebSocketJobConfig<T, R, D, U> = {
   // websocket request data
@@ -61,7 +59,10 @@ export function createWebSocketJob<T, R, D, U>({
     const requestId = uuidv7();
 
     // TODO: use zod types
-    const messageHandler = async (event: MessageEvent) => {
+    const messageHandler = async (
+      _instance: Websocket,
+      event: MessageEvent
+    ) => {
       if (event.data === 'pong') return;
       const eventMessage = JSON.parse(event.data);
 
@@ -98,7 +99,7 @@ export function createWebSocketJob<T, R, D, U>({
       setJobId(eventMessage.jobId);
     };
 
-    storageWS.addEventListener('message', messageHandler);
+    storageWS.addEventListener(WebsocketEvent.Message, messageHandler);
     storageWS.send(
       JSON.stringify({
         requestId,
@@ -111,7 +112,7 @@ export function createWebSocketJob<T, R, D, U>({
       const completedJobId = jobId();
       const jobFailed = failed();
       if (completedJobId) {
-        storageWS.removeEventListener('message', messageHandler);
+        storageWS.removeEventListener(WebsocketEvent.Message, messageHandler);
 
         const currentResult = result();
         if (!currentResult) {
@@ -125,13 +126,13 @@ export function createWebSocketJob<T, R, D, U>({
       }
 
       if (jobFailed) {
-        storageWS.removeEventListener('message', messageHandler);
+        storageWS.removeEventListener(WebsocketEvent.Message, messageHandler);
         reject();
       }
     });
 
     onCleanup(() => {
-      storageWS.removeEventListener('message', messageHandler);
+      storageWS.removeEventListener(WebsocketEvent.Message, messageHandler);
     });
   });
 }

@@ -201,11 +201,20 @@ export const embeddedCodeBlock = createTheme({
 });
 
 export const unifiedListMarkdownTheme = createTheme({
-  code: 'font-mono my-2 overflow-hidden px-2 py-1 rounded bg-edge/20 inline-block',
+  code: 'font-mono overflow-hidden px-1.5 py-0.5 rounded bg-edge/20 inline-block',
   static: {
-    'code-container': 'font-mono md-code-box no-accessory overflow-hidden',
+    'code-container':
+      'font-mono md-code-box no-accessory overflow-hidden flex items-center',
   },
   paragraph: `${theme.paragraph} inline`,
+  heading: {
+    h1: 'text-[1em] font-semibold',
+    h2: 'text-[1em] font-semibold',
+    h3: 'text-[1em] font-semibold',
+    h4: 'text-[1em] font-medium',
+    h5: 'text-[1em] font-medium',
+    h6: 'text-[1em] font-medium',
+  },
   // padding right to prevent italics being clipped by overflow properties such as truncation
   root: `${theme.root} inline pr-[2px] cursor-default`,
 });

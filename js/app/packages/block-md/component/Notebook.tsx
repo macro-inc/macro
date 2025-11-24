@@ -1,3 +1,4 @@
+import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import {
   commentsStore,
@@ -11,6 +12,12 @@ import {
   ENABLE_MARKDOWN_COMMENTS,
   ENABLE_PROPERTIES_METADATA,
 } from '@core/constant/featureFlags';
+import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
+import {
+  blockElementSignal,
+  blockHotkeyScopeSignal,
+} from '@core/signal/blockElement';
 import { tempRedirectLocation } from '@core/signal/location';
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
@@ -57,10 +64,13 @@ const widthToMode = (width: number): CommentLayoutMode => {
 };
 
 export function Notebook() {
+  const blockElement = blockElementSignal.get;
   const setStore = mdStore.set;
   const setWideEnoughForComments = commentWidthSignal.set;
   const canEdit = useCanEdit();
   const documentName = useBlockDocumentName();
+  const scopeId = blockHotkeyScopeSignal.get;
+  const md = mdStore.get;
 
   let notebookRef!: HTMLDivElement;
   let commentMarginRef: HTMLDivElement | undefined;
@@ -69,6 +79,7 @@ export function Notebook() {
   const [layoutMode, setLayoutMode] = createSignal(CommentLayoutMode.none);
   const [width, setWidth] = createSignal(0);
   const [leftFloatX, setLeftFloatX] = createSignal(0);
+  const { navigatedFromJK } = useNavigatedFromJK();
 
   const comments = commentsStore.get;
   const hasComment = createMemo(() => {
@@ -143,6 +154,42 @@ export function Notebook() {
     }
   });
 
+  createEffect(() => {
+    if (!scopeId()) return;
+    untrack(() =>
+      registerHotkey({
+        hotkey: 'enter',
+        scopeId: scopeId(),
+        hotkeyToken: TOKENS.block.focus,
+        description: 'Focus Title or Markdown Editor',
+        keyDownHandler: () => {
+          const titleEditor = md.titleEditor;
+          const markdownEditor = md.editor;
+          const docName = untrack(documentName);
+
+          if (titleEditor && docName === '') {
+            titleEditor.focus();
+            return true;
+          } else if (markdownEditor) {
+            markdownEditor.focus(undefined, { defaultSelection: 'rootStart' });
+            return true;
+          }
+          return false;
+        },
+        hide: true,
+      })
+    );
+  });
+
+  // In preview mode, switching between Soup tabs was causing this createEffect to overflow the stack. We should figure out that root cause, this flag fixes it for now.
+  let hasRun = false;
+  createEffect(() => {
+    if (hasRun) return;
+    if (!blockElement()) return;
+    blockElement()?.focus();
+    hasRun = true;
+  });
+
   const containerClasses = createMemo(() => {
     const mode = layoutMode();
     const shared = 'flex relative text-ink min-h-full min-w-0 isolate';
@@ -212,7 +259,7 @@ export function Notebook() {
   return (
     <div class={containerClasses()} ref={notebookRef}>
       <div class={contentDivClasses()} ref={contentRef}>
-        <TitleEditor />
+        <TitleEditor autoFocusOnMount={!navigatedFromJK()} />
         <Show
           when={ENABLE_PROPERTIES_METADATA}
           fallback={<div class="h-6 w-full" />}
@@ -223,7 +270,7 @@ export function Notebook() {
             fallback={<div class="h-6 w-full" />}
           />
         </Show>
-        <MarkdownEditor />
+        <MarkdownEditor autoFocusOnMount={!navigatedFromJK()} />
       </div>
       <div
         class={commentPositioning().classes}

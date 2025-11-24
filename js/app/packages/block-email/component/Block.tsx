@@ -1,11 +1,11 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { withAnalytics } from '@coparse/analytics';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { EmailDebouncedReadMarker } from '@notifications/components/DebouncedNotificationReadMarker';
+import { EmailDebouncedReadMarker } from '@notifications';
 import { createEffect, createMemo, onMount, Show } from 'solid-js';
-import { markThreadAsSeen } from '../signal/email';
 import { blockDataSignal } from '../signal/emailBlockData';
 import { createThreadMessagesResource } from '../signal/threadMessages';
+import { markThreadAsSeen } from '../util/markThreadAsSeen';
 import { Email } from './Email';
 
 const { track, TrackingEvents } = withAnalytics();
@@ -51,7 +51,7 @@ export default function BlockEmail() {
 
   return (
     <DocumentBlockContainer title={title() ?? 'Email'}>
-      <div class="contents">
+      <div class="size-full bracket-never" tabIndex={-1}>
         <Show when={blockData()}>
           <Show when={blockData()?.thread?.db_id}>
             {(threadId) => {

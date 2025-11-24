@@ -1,3 +1,5 @@
+use std::str::FromStr;
+
 use crate::{
     api::context::ApiContext,
     model::response::annotations::{AnchorResponse, ThreadResponse},
@@ -78,7 +80,7 @@ pub async fn get_document_anchors_handler(
     match document_context
         .file_type
         .as_deref()
-        .and_then(|f| f.try_into().ok())
+        .and_then(|f| FileType::from_str(f).ok())
     {
         Some(FileType::Pdf | FileType::Docx) => match get_pdf_anchors(&db, &document_id).await {
             Ok(pdf_anchors) => {

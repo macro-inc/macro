@@ -4,20 +4,24 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { SearchHighlight } from './searchHighlight';
 import type { DocumentSearchResultRawContent } from './documentSearchResultRawContent';
+import type { DocumentSearchResultScore } from './documentSearchResultScore';
 
 /**
  * A document match for a given node
  */
 export interface DocumentSearchResult {
-  /** The array of content matches for the document */
-  content: string[];
+  /** The highlights for the document */
+  highlight: SearchHighlight;
   /** The node id for the document.
 This is only useful for markdown at the moment */
   node_id: string;
   /** The raw content of the document.
 This is only included for markdown files and will be the raw json node of the match */
   raw_content?: DocumentSearchResultRawContent;
+  /** The score of the result */
+  score?: DocumentSearchResultScore;
   /** When the search document was last updated */
   updated_at: number;
 }

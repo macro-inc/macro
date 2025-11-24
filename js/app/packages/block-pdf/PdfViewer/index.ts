@@ -1,8 +1,9 @@
+import type { WithRequired } from '@core/util/withRequired';
 import { debounce } from '@solid-primitives/scheduled';
 import type { PDFDocumentProxy } from 'pdfjs-dist';
 import type { PDFPageView } from 'pdfjs-dist/web/pdf_viewer';
 import type { TDestArray } from './DestArray';
-import type { IPublicEventBus } from './EventBus';
+import type { IFindEvent, IPublicEventBus } from './EventBus';
 import { InternalPDFViewer } from './InternalPDFViewer';
 import {
   correctScrollAfterWheelZoom,
@@ -37,6 +38,10 @@ export class PDFViewer extends InternalPDFViewer {
 
   get pdfDocument() {
     return this._viewer.pdfDocument;
+  }
+
+  get findController() {
+    return this._findController;
   }
 
   async destroy() {
@@ -216,6 +221,17 @@ export class PDFViewer extends InternalPDFViewer {
     100
   );
 
+  /**
+   * Search for text in the PDF document and highlight matches.
+   *
+   * @param query - The search text/term to find in the PDF
+   * @param again - If true, repeat the previous search immediately without timeout (default: false)
+   * @param phraseSearch - If true, search for exact phrase; if false, match partial words (default: true)
+   * @param caseSensitive - If true, match case exactly; if false, ignore case differences (default: false)
+   * @param entireWord - If true, only match complete words; if false, match partial words (default: false)
+   * @param highlightAll - If true, highlight all matches in document; if false, only highlight current match (default: true)
+   * @param findPrevious - If true, search backwards (previous match); if false, search forwards (next match) (default: false)
+   */
   search({
     query,
     again = false,
@@ -224,14 +240,8 @@ export class PDFViewer extends InternalPDFViewer {
     entireWord = false,
     highlightAll = true,
     findPrevious = false,
-  }: {
-    query: string;
+  }: WithRequired<Partial<Omit<IFindEvent, 'source' | 'type'>>, 'query'> & {
     again?: boolean;
-    phraseSearch?: boolean;
-    caseSensitive?: boolean;
-    entireWord?: boolean;
-    highlightAll?: boolean;
-    findPrevious?: boolean;
   }) {
     this._eventBus.dispatch('find', {
       source: this,
@@ -245,7 +255,7 @@ export class PDFViewer extends InternalPDFViewer {
     });
   }
 
-  resetSearch() {
+  findBarClose() {
     this._eventBus.dispatch('findbarclose', { source: this });
   }
 

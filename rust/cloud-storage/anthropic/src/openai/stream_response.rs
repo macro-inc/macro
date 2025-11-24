@@ -121,6 +121,15 @@ pub fn map_stream(mut stream: MessageCompletionResponseStream) -> ChatCompletion
                     AnthropicError::JsonDeserialize(e) => OpenAIError::JSONDeserialize(e),
                     AnthropicError::Reqwest(e) => OpenAIError::Reqwest(e),
                     AnthropicError::StreamError(e) => OpenAIError::StreamError(e),
+                    AnthropicError::ApiError { status_code, api_error } =>  {
+                        OpenAIError::ApiError(ApiError {
+                            message: api_error.error.message,
+                            r#type: Some(api_error.r#type),
+                            param: None,
+                            code: Some(status_code.to_string())
+                        })
+                    }
+
                 })
             } else {
                 match part.unwrap() {
@@ -287,7 +296,7 @@ impl<'c> Chat<'c> {
         request: I,
     ) -> ChatCompletionResponseStream
     where
-        I: Serialize,
+        I: Serialize + std::fmt::Debug,
     {
         map_stream(self.inner.post_stream("/v1/messages", request).await)
     }

@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
 import type { ChannelData } from '@block-channel/definition';
 import {
   latestActivitySignal,
@@ -32,7 +33,7 @@ import { blockHandleSignal } from '@core/signal/load';
 import { createTabFocusEffect } from '@core/signal/tabFocus';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import { handleFileFolderDrop } from '@core/util/upload';
-import { ChannelDebouncedNotificationReadMarker } from '@notifications/components/DebouncedNotificationReadMarker';
+import { ChannelDebouncedNotificationReadMarker } from '@notifications';
 import type { Message } from '@service-comms/generated/models';
 import { connectionGatewayClient } from '@service-connection/client';
 import { createCallback } from '@solid-primitives/rootless';
@@ -41,7 +42,14 @@ import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { toast } from 'core/component/Toast/Toast';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMethodRegistration } from 'core/orchestrator';
-import { createSignal, onMount } from 'solid-js';
+import {
+  createEffect,
+  createRenderEffect,
+  createSignal,
+  on,
+  onCleanup,
+  onMount,
+} from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { ChannelInput } from './ChannelInput';
@@ -174,10 +182,11 @@ export function Channel(props: { data: Required<ChannelData> }) {
 
   const focusPrevious = () => {
     const tabbableEls = tabbable(blockRef()!);
-    const activeEl = document.activeElement;
-    const activeElIndex = tabbableEls.indexOf(activeEl as FocusableElement);
-    if (activeElIndex !== -1) {
-      const prevIndex = activeElIndex - 1;
+    const fromEl = document.activeElement;
+
+    const fromElIndex = tabbableEls.indexOf(fromEl as FocusableElement);
+    if (fromElIndex !== -1) {
+      const prevIndex = fromElIndex - 1;
       if (prevIndex < 0) return false;
       const prevEl = tabbableEls[prevIndex];
       if (!prevEl) return false;
@@ -196,7 +205,22 @@ export function Channel(props: { data: Required<ChannelData> }) {
   };
 
   registerHotkey({
-    hotkey: ['arrowup', 'k', 'shift+tab'],
+    hotkey: 'enter',
+    scopeId: scopeId(),
+    description: 'Focus Channel Input',
+    keyDownHandler: () => {
+      if (channelInputRef()) {
+        channelInputRef()?.focus();
+        return true;
+      }
+      return false;
+    },
+    hotkeyToken: TOKENS.block.focus,
+    hide: true,
+  });
+
+  registerHotkey({
+    hotkey: ['arrowup', 'shift+tab'],
     scopeId: scopeId(),
     description: 'Focus previous',
     keyDownHandler: () => {
@@ -207,7 +231,7 @@ export function Channel(props: { data: Required<ChannelData> }) {
   });
 
   registerHotkey({
-    hotkey: ['arrowdown', 'j', 'tab'],
+    hotkey: ['arrowdown', 'tab'],
     scopeId: scopeId(),
     description: 'Focus next',
     keyDownHandler: () => {
@@ -227,9 +251,53 @@ export function Channel(props: { data: Required<ChannelData> }) {
     hotkeyToken: TOKENS.channel.focusNextMessage,
     hide: true,
   });
+  const [channelInputRef, setChannelInputRef] = createSignal<
+    HTMLDivElement | undefined
+  >();
+  const [lastMessageRef, setLastMessageRef] = createSignal<
+    HTMLDivElement | undefined
+  >();
+  const [autoFocusOnMount, setAutoFocusOnMount] = createSignal(true);
+
+  const { navigatedFromJK } = useNavigatedFromJK();
+
+  createRenderEffect(() => {
+    if (navigatedFromJK()) {
+      setAutoFocusOnMount(false);
+    }
+  });
+
+  let initialFocusSet = false;
+  createEffect(
+    on(lastMessageRef, () => {
+      if (autoFocusOnMount()) return;
+      if (!navigatedFromJK()) return;
+      if (initialFocusSet) return;
+
+      const lastMessage = lastMessageRef();
+      if (!lastMessage) return;
+      // Using Resize Observer here so that we only focus when the lastMessageRef
+      // is actually connected to DOM
+      const resizeObserver = new ResizeObserver(() => {
+        const lastMessageId = lastMessage?.getAttribute('data-message-body-id');
+        if (!lastMessageId) return;
+        setTimeout(() => lastMessage.focus(), 0);
+        setFocusedMessageId(lastMessageId);
+        initialFocusSet = true;
+      });
+      resizeObserver.observe(lastMessage);
+
+      onCleanup(() => {
+        resizeObserver.disconnect();
+      });
+    })
+  );
 
   return (
-    <div class={`relative flex flex-col w-full h-full bg-panel`}>
+    <div
+      class={`relative flex flex-col w-full h-full bg-panel bracket-never`}
+      tabIndex={-1}
+    >
       <ChannelDebouncedNotificationReadMarker
         notificationSource={notificationSource}
         channelId={channelId}
@@ -272,6 +340,7 @@ export function Channel(props: { data: Required<ChannelData> }) {
             latestActivity={latestActivity()}
             orderedMessages={orderedMessages}
             setOrderedMessages={setOrderedMessages}
+            setLastMessageRef={setLastMessageRef}
           />
           <div class="shrink-0 w-full px-4 pb-2">
             {/* seamus: note this element is below the scroll so we translate it back to account for the scroll above */}
@@ -282,6 +351,8 @@ export function Channel(props: { data: Required<ChannelData> }) {
                 setInputAttachmentsStore={setChannelInputAttachmentsStore}
                 inputAttachmentsKey={channelId}
                 onFocusLeaveStart={onChannelInputFocusLeaveStart}
+                autoFocusOnMount={autoFocusOnMount()}
+                domRef={setChannelInputRef}
               />
             </div>
           </div>

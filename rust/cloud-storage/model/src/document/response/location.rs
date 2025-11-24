@@ -2,6 +2,7 @@ use crate::document::{DocumentBasic, FileType};
 use crate::response::PresignedUrl;
 use crate::sync_service::DocumentMetadata as SyncServiceMetadata;
 use anyhow::Result;
+use std::str::FromStr;
 use utoipa::ToSchema;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, ToSchema, Clone)]
@@ -46,7 +47,8 @@ impl LocationResponseV3 {
         self.metadata()
             .file_type
             .as_deref()
-            .and_then(FileType::from_str)
+            .map(FileType::from_str)
+            .and_then(Result::ok)
             .ok_or_else(|| anyhow::anyhow!("unxpected file type {:?}", self.file_type()))
     }
 }

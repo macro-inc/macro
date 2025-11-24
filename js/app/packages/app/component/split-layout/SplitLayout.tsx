@@ -18,6 +18,7 @@ import {
   type Setter,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { gutterSize } from '../../../block-theme/signals/themeSignals';
 import {
   createNavigationEntityListShortcut,
   createSoupContext,
@@ -101,7 +102,7 @@ function createSplitFocusTracker(props: {
   panelRefs: Map<SplitId, HTMLDivElement>;
   splits: Accessor<ReadonlyArray<SplitState>>;
 }) {
-  const DEBOUNCE = 100;
+  const DEBOUNCE = 40;
   const activeSplitId = () => props.splitManager.activeSplitId();
 
   const currentSplitsIds = () => new Set(props.splits().map((s) => s.id));
@@ -169,14 +170,10 @@ function createSplitFocusTracker(props: {
   };
 
   const findNextSplitToActivate = (splitIndex: number): SplitId | undefined => {
-    const wasOnlySplit = splitIndex === 0;
-
-    // If the removed split was the only split,
-    // we automatically insert and activate a new one
-    // Don't need to handle anything here
-    if (wasOnlySplit) return undefined;
-
-    const nextSplitId = props.splits()[splitIndex - 1].id;
+    const nextSplitId =
+      splitIndex === 0
+        ? props.splits()[0].id
+        : props.splits()[splitIndex - 1].id;
 
     return nextSplitId;
   };
@@ -203,6 +200,7 @@ function createSplitFocusTracker(props: {
   // the button in the old split might trigger another focus event and re-active the old split.
   let focusTimeout: ReturnType<typeof setTimeout> | undefined;
   let activateTimeout: ReturnType<typeof setTimeout> | undefined;
+  let lastProgrammaticActivation = 0;
 
   /** Listens for explicit events from layoutManager that might trigger focus changes */
   createEffect(
@@ -226,6 +224,13 @@ function createSplitFocusTracker(props: {
     )
   );
 
+  /** Track when splits are programmatically activated */
+  createEffect(
+    on(activeSplitId, () => {
+      lastProgrammaticActivation = Date.now();
+    })
+  );
+
   /** Listens for focus changes on the document */
   createEffect(
     on(activeElement, (element) => {
@@ -240,6 +245,13 @@ function createSplitFocusTracker(props: {
       }
 
       activateTimeout = setTimeout(() => {
+        const timeSinceActivation = Date.now() - lastProgrammaticActivation;
+
+        // If a split was just programmatically activated, ignore this focus change
+        if (timeSinceActivation < DEBOUNCE + 50) {
+          return;
+        }
+
         activateFocusedSplit(element);
       }, DEBOUNCE);
     })
@@ -296,7 +308,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-      <Resize.Zone direction="horizontal" gutter={8}>
+      <Resize.Zone direction="horizontal" gutter={gutterSize()}>
         <For each={ids()}>
           {(id, index) => (
             <Resize.Panel id={id} minSize={400}>
@@ -401,11 +413,15 @@ function SplitPanel(props: SplitPanelProps) {
   });
 
   const unifiedListContext = createSoupContext();
+
+  const [previewState, setPreviewState] = createSignal(false);
+
   createNavigationEntityListShortcut({
     splitName,
     splitHandle: props.handle,
     splitHotkeyScope,
     unifiedListContext,
+    previewState: [previewState, setPreviewState],
   });
 
   return (
@@ -420,6 +436,7 @@ function SplitPanel(props: SplitPanelProps) {
         layoutRefs: {},
         contentOffsetTop,
         setContentOffsetTop,
+        previewState: [previewState, setPreviewState],
       }}
     >
       <SplitContainer

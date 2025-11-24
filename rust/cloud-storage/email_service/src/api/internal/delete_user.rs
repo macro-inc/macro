@@ -40,7 +40,7 @@ pub async fn handler(
         };
 
         let gmail_access_token = match crate::util::gmail::auth::fetch_gmail_access_token_from_link(
-            link.clone(),
+            &link,
             &ctx.redis_client,
             &ctx.auth_service_client,
         )
@@ -69,12 +69,14 @@ pub async fn handler(
         let db = ctx.db.clone();
         let sqs_client = ctx.sqs_client.clone();
         let link_id = link.id;
+        let macro_user_id = link.macro_id;
         tokio::spawn(async move {
             // send message to search text extractor queue
             sqs_client
                 .send_message_to_search_event_queue(SearchQueueMessage::RemoveEmailLink(
                     EmailLinkMessage {
                         link_id: link.id.to_string(),
+                        macro_user_id,
                     },
                 ))
                 .await

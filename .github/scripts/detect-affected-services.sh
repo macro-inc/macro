@@ -5,7 +5,7 @@ set -e
 # It uses cargo metadata to build a proper dependency graph
 
 # Get changed files from git
-CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep "^cloud-storage/" || true)
+CHANGED_FILES=$(git diff --name-only HEAD~1 HEAD | grep "^rust/cloud-storage/" || true)
 
 if [ -z "$CHANGED_FILES" ]; then
     echo "No cloud-storage files changed"
@@ -18,7 +18,7 @@ echo "Changed files:" >&2
 echo "$CHANGED_FILES" >&2
 
 # Change to cloud-storage directory
-cd cloud-storage
+cd rust/cloud-storage
 
 # Get cargo metadata for the entire workspace with dependencies
 METADATA=$(cargo metadata --format-version 1 --no-deps)
@@ -27,7 +27,7 @@ METADATA=$(cargo metadata --format-version 1 --no-deps)
 CHANGED_PACKAGES=()
 while IFS= read -r file; do
     # Extract package directory from file path (e.g., cloud-storage/models_bulk_upload/src/lib.rs -> models_bulk_upload)
-    if [[ "$file" =~ ^cloud-storage/([^/]+)/ ]]; then
+    if [[ "$file" =~ ^rust/cloud-storage/([^/]+)/ ]]; then
         PKG_NAME="${BASH_REMATCH[1]}"
         # Check if this is actually a package in our workspace
         if echo "$METADATA" | jq -r --arg name "$PKG_NAME" '.packages[] | select(.name == $name) | .name' | grep -q "$PKG_NAME"; then
@@ -44,16 +44,16 @@ done <<< "$CHANGED_FILES"
 AFFECTED_SERVICES=()
 
 # Get services from the config file
-SERVICES=$(jq -r '.services | keys[]' ../.github/services-config.json)
+SERVICES=$(jq -r '.services | keys[]' ../../.github/services-config.json)
 
 for service in $SERVICES; do
     SERVICE_AFFECTED=false
     
     # Get the source paths for this service from config
-    SOURCE_PATHS=$(jq -r --arg svc "$service" '.services[$svc].source_paths[]? // empty' ../.github/services-config.json)
+    SOURCE_PATHS=$(jq -r --arg svc "$service" '.services[$svc].source_paths[]? // empty' ../../.github/services-config.json)
     
     # Check stack path changes
-    STACK_PATH=$(jq -r --arg svc "$service" '.services[$svc].stack_path // empty' ../.github/services-config.json)
+    STACK_PATH=$(jq -r --arg svc "$service" '.services[$svc].stack_path // empty' ../../.github/services-config.json)
     if [ -n "$STACK_PATH" ]; then
         STACK_PATH_PATTERN="${STACK_PATH%/**}"
         if echo "$CHANGED_FILES" | grep -q "^$STACK_PATH_PATTERN"; then

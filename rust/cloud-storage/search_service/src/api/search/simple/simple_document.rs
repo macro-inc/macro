@@ -5,6 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use item_filters::DocumentFilters;
 use model::{
     item::{ShareableItem, ShareableItemType},
     response::ErrorResponse,
@@ -52,6 +53,123 @@ pub async fn handler(
         .into_response())
 }
 
+pub(in crate::api::search) struct FilterDocumentResponse {
+    pub document_ids: Vec<String>,
+    pub ids_only: bool,
+}
+
+pub(in crate::api::search) async fn filter_documents(
+    ctx: &ApiContext,
+    user_id: &str,
+    filters: &DocumentFilters,
+) -> Result<FilterDocumentResponse, SearchError> {
+    let document_ids_response = if !filters.document_ids.is_empty() {
+        // Item ids are provided, we want to get the list of those that are accessible to the user
+        ctx.dss_client
+            .validate_user_accessible_item_ids(
+                user_id,
+                filters
+                    .document_ids
+                    .iter()
+                    .map(|id| ShareableItem {
+                        item_id: id.to_string(),
+                        item_type: ShareableItemType::Document,
+                    })
+                    .collect(),
+            )
+            .await
+            .map_err(SearchError::InternalError)?
+    } else {
+        // If both the project_ids and owners are empty, we want to get the list of everything the has access to but does not own
+        // Otherwise, we need a list of all items the user has access to including what they own
+        let should_exclude_owner = filters.project_ids.is_empty()
+            && filters.owners.is_empty()
+            && filters.file_types.is_empty();
+
+        // No filters are provided, we want to get the list of everything the has access to but does not own
+        ctx.dss_client
+            .get_user_accessible_item_ids(
+                user_id,
+                Some("document".to_string()),
+                Some(should_exclude_owner),
+            )
+            .await
+            .map_err(SearchError::InternalError)?
+            .items
+    };
+
+    let document_ids: Vec<String> = document_ids_response
+        .iter()
+        .map(|a| a.item_id.clone())
+        .collect();
+
+    // If custom ids are provided or project_ids are provided, we will want to
+    // explicitly search over the ids provided in opensearch
+    let ids_only = !filters.document_ids.is_empty()
+        || !filters.project_ids.is_empty()
+        || !filters.owners.is_empty()
+        || !filters.file_types.is_empty();
+
+    // If project_ids are provided, we need to filter to ids that are within those projects
+    // or sub-projects of those projects
+    let document_ids = if !filters.project_ids.is_empty() {
+        macro_db_client::items::filter::filter_items_by_project_ids(
+            &ctx.db,
+            &document_ids,
+            ShareableItemType::Document,
+            &filters.project_ids,
+        )
+        .await
+        .map_err(SearchError::InternalError)?
+    } else {
+        document_ids
+    };
+
+    if document_ids.is_empty() && ids_only {
+        return Ok(FilterDocumentResponse {
+            document_ids: vec![],
+            ids_only,
+        });
+    }
+
+    let document_ids = if !filters.owners.is_empty() {
+        macro_db_client::items::filter::filter_items_by_owner_ids(
+            &ctx.db,
+            &document_ids,
+            ShareableItemType::Document,
+            &filters.owners,
+        )
+        .await
+        .map_err(SearchError::InternalError)?
+    } else {
+        document_ids
+    };
+
+    if document_ids.is_empty() && ids_only {
+        return Ok(FilterDocumentResponse {
+            document_ids: vec![],
+            ids_only,
+        });
+    }
+
+    let document_ids = if !filters.file_types.is_empty() {
+        macro_db_client::items::filter::filter_documents_by_file_types(
+            &ctx.db,
+            &document_ids,
+            &filters.file_types,
+        )
+        .await
+        .map_err(SearchError::InternalError)?
+    } else {
+        document_ids
+    };
+
+    Ok(FilterDocumentResponse {
+        document_ids,
+        ids_only,
+    })
+}
+
 /// Performs a search through your documents and returns the raw opensearch results
 pub(in crate::api::search) async fn search_documents(
     ctx: &ApiContext,
@@ -89,85 +207,10 @@ pub(in crate::api::search) async fn search_documents(
         return Err(SearchError::NoQueryOrTermsProvided);
     };
 
-    let filters = req.filters.unwrap_or_default();
+    let filter_document_response =
+        filter_documents(ctx, user_id, &req.filters.unwrap_or_default()).await?;
 
-    let document_ids_response = if !filters.document_ids.is_empty() {
-        // Item ids are provided, we want to get the list of those that are accessible to the user
-        ctx.dss_client
-            .validate_user_accessible_item_ids(
-                user_id,
-                filters
-                    .document_ids
-                    .iter()
-                    .map(|id| ShareableItem {
-                        item_id: id.to_string(),
-                        item_type: ShareableItemType::Document,
-                    })
-                    .collect(),
-            )
-            .await
-            .map_err(SearchError::InternalError)?
-    } else {
-        // If both the project_ids and owners are empty, we want to get the list of everything the has access to but does not own
-        // Otherwise, we need a list of all items the user has access to including what they own
-        let should_exclude_owner = filters.project_ids.is_empty() && filters.owners.is_empty();
-
-        // No filters are provided, we want to get the list of everything the has access to but does not own
-        ctx.dss_client
-            .get_user_accessible_item_ids(
-                user_id,
-                Some("document".to_string()),
-                Some(should_exclude_owner),
-            )
-            .await
-            .map_err(SearchError::InternalError)?
-            .items
-    };
-
-    let document_ids: Vec<String> = document_ids_response
-        .iter()
-        .map(|a| a.item_id.clone())
-        .collect();
-
-    // If custom ids are provided or project_ids are provided, we will want to
-    // explicitly search over the ids provided in opensearch
-    let ids_only = !filters.document_ids.is_empty()
-        || !filters.project_ids.is_empty()
-        || !filters.owners.is_empty();
-
-    // If project_ids are provided, we need to filter to ids that are within those projects
-    // or sub-projects of those projects
-    let document_ids = if !filters.project_ids.is_empty() {
-        macro_db_client::items::filter::filter_items_by_project_ids(
-            &ctx.db,
-            &document_ids,
-            ShareableItemType::Document,
-            &filters.project_ids,
-        )
-        .await
-        .map_err(SearchError::InternalError)?
-    } else {
-        document_ids
-    };
-
-    if document_ids.is_empty() && ids_only {
-        return Ok(Vec::new());
-    }
-
-    let document_ids = if !filters.owners.is_empty() {
-        macro_db_client::items::filter::filter_items_by_owner_ids(
-            &ctx.db,
-            &document_ids,
-            ShareableItemType::Document,
-            &filters.owners,
-        )
-        .await
-        .map_err(SearchError::InternalError)?
-    } else {
-        document_ids
-    };
-
-    if document_ids.is_empty() && ids_only {
+    if filter_document_response.document_ids.is_empty() && filter_document_response.ids_only {
         return Ok(Vec::new());
     }
 
@@ -176,14 +219,14 @@ pub(in crate::api::search) async fn search_documents(
         .search_documents(DocumentSearchArgs {
             terms,
             user_id: user_id.to_string(),
-            document_ids,
-            file_types: filters.file_types,
+            document_ids: filter_document_response.document_ids,
             page,
             page_size,
             match_type: req.match_type.to_string(),
             search_on: req.search_on.into(),
             collapse: req.collapse.unwrap_or(false),
-            ids_only,
+            ids_only: filter_document_response.ids_only,
+            disable_recency: req.disable_recency,
         })
         .await
         .map_err(SearchError::Search)?;

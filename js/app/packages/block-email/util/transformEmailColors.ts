@@ -1,4 +1,4 @@
-import { logger } from '@observability/logger';
+import { themeReactive } from '../../block-theme/signals/themeReactive';
 
 export interface TextNodeContrast {
   text: string;
@@ -19,10 +19,17 @@ type OKLCH = { l: number; c: number; h: number; a?: number };
  * @param root - The root node of the email content.
  */
 export function processEmailColors(root: Node) {
-  const { panel, ink, accentInk } = getThemeColors();
-  if (!panel || !ink || !accentInk)
-    return logger.error('Failed to get current theme colors');
-  const isDarkMode = ink.l > panel.l;
+  const inkL = themeReactive.c0.l[0]();
+  const inkC = themeReactive.c0.c[0]();
+  const inkH = themeReactive.c0.h[0]();
+
+  const panelL = themeReactive.b1.l[0]();
+
+  const accentL = themeReactive.a0.l[0]();
+  const accentC = themeReactive.a0.c[0]();
+  const accentH = themeReactive.a0.h[0]();
+
+  const themeIsDarkModish = inkL > panelL;
   const textNodeColors = computeTextNodeColor(root);
   // console.log('textNodeColors', textNodeColors);
   textNodeColors.forEach((textNodeColor) => {
@@ -30,32 +37,39 @@ export function processEmailColors(root: Node) {
     if ((textNodeColor.bg?.a ?? 0) > 0) return;
     if (!textNodeColor.fg) return;
     // if the text is inside an anchor tag, set the color to the accent ink color
-    if (textNodeColor.insideAnchor && accentInk) {
-      return setNodeColor(
+    if (textNodeColor.insideAnchor) {
+      setAnchorStyle(
         textNodeColor.node,
-        `oklch(${accentInk.l} ${accentInk.c} ${accentInk.h})`
+        'color',
+        `oklch(${accentL} ${accentC} ${accentH})`
       );
+      setAnchorStyle(
+        textNodeColor.node,
+        'text-decoration-color',
+        `oklch(${accentL} ${accentC} ${accentH})`
+      );
+      return;
     }
 
     let newColor = { ...textNodeColor.fg };
 
     // clamp text lightness to ink lightness, and, if we're in a dark mode, invert text color lightness
-    if (isDarkMode) {
-      newColor.l = Math.min(1 - textNodeColor.fg.l, ink.l);
+    if (themeIsDarkModish) {
+      newColor.l = Math.min(1 - textNodeColor.fg.l, inkL);
     } else {
-      newColor.l = Math.max(textNodeColor.fg.l, ink.l);
+      newColor.l = Math.max(textNodeColor.fg.l, inkL);
     }
 
     // if text color is monochrome, change it to ink chroma and hue
     if (newColor.c < EPSILON) {
-      newColor.c = ink.c;
-      newColor.h = ink.h;
+      newColor.c = inkC;
+      newColor.h = inkH;
     }
 
-    const contrast = Math.abs(newColor.l - panel.l);
+    const contrast = Math.abs(newColor.l - panelL);
 
     if (contrast < CONTRAST_THRESHOLD) {
-      newColor = findClosestContrastingColor(newColor, panel);
+      newColor = findClosestContrastingColor(newColor, panelL);
     }
 
     // if the new color is different from the original color, set the node color
@@ -74,6 +88,14 @@ function setNodeColor(node: Node, color: string) {
   const parentElement = node.parentElement;
   if (parentElement) {
     parentElement.style.color = color;
+  }
+}
+
+function setAnchorStyle(node: Node, style: string, value: string) {
+  const parentElement = node.parentElement;
+  const anchorElement = parentElement?.closest('a');
+  if (anchorElement) {
+    anchorElement.style.setProperty(style, value);
   }
 }
 
@@ -117,57 +139,6 @@ export function rgbaToOklch(rgba: RGBA | null): OKLCH | null {
     c: chroma,
     h: hueInDegrees < 0 ? hueInDegrees + 360 : hueInDegrees,
     a: a,
-  };
-}
-
-function parseOKLCHString(s: string): OKLCH | null {
-  const m = s.match(
-    /oklch\(\s*([^\s]+)\s+([^\s]+)\s+([^\s/]+)(?:\s*\/\s*([^\s)]+))?\s*\)/i
-  );
-  if (!m) return null;
-
-  const parsePctOrNumber = (x: string) => {
-    const t = x.trim().toLowerCase();
-    return t.endsWith('%') ? parseFloat(t) / 100 : parseFloat(t);
-  };
-
-  const parseAngleToDegrees = (x: string) => {
-    const t = x.trim().toLowerCase();
-    if (t === 'none') return 0;
-    if (t.endsWith('deg')) return parseFloat(t);
-    if (t.endsWith('rad')) return (parseFloat(t) * 180) / Math.PI;
-    if (t.endsWith('turn')) return parseFloat(t) * 360;
-    if (t.endsWith('grad')) return parseFloat(t) * 0.9; // 400grad = 360deg
-    return parseFloat(t); // unitless means degrees
-  };
-
-  const parseAlpha = (x?: string) => {
-    if (!x) return 1;
-    const t = x.trim().toLowerCase();
-    if (t === 'none') return 0;
-    return t.endsWith('%') ? parseFloat(t) / 100 : parseFloat(t);
-  };
-
-  return {
-    l: parsePctOrNumber(m[1]),
-    c: parsePctOrNumber(m[2]),
-    h: parseAngleToDegrees(m[3]),
-    a: parseAlpha(m[4]),
-  };
-}
-
-function getThemeColors() {
-  const style = getComputedStyle(document.body);
-  const panelOklchString = style.getPropertyValue('--color-panel');
-  const inkOklchString = style.getPropertyValue('--color-ink');
-  const accentInkOklchString = style.getPropertyValue('--color-accent-ink');
-  const parsedOklch = parseOKLCHString(panelOklchString);
-  const parsedInkOklch = parseOKLCHString(inkOklchString);
-  const parsedAccentInkOklch = parseOKLCHString(accentInkOklchString);
-  return {
-    panel: parsedOklch,
-    ink: parsedInkOklch,
-    accentInk: parsedAccentInkOklch,
   };
 }
 
@@ -249,13 +220,13 @@ function computeTextNodeColor(root: Node): TextNodeContrast[] {
   return out;
 }
 
-export function findClosestContrastingColor(fg: OKLCH, bg: OKLCH): OKLCH {
-  const dir = fg.l > bg.l ? 1 : -1;
-  const candidate = bg.l + dir * CONTRAST_THRESHOLD;
+export function findClosestContrastingColor(fg: OKLCH, bgL: number): OKLCH {
+  const dir = fg.l > bgL ? 1 : -1;
+  const candidate = bgL + dir * CONTRAST_THRESHOLD;
   const value =
     candidate >= 0 && candidate <= 1
       ? candidate
-      : bg.l - dir * CONTRAST_THRESHOLD;
+      : bgL - dir * CONTRAST_THRESHOLD;
 
   return { l: value, c: fg.c, h: fg.h, a: fg.a ?? 1 };
 }

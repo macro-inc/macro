@@ -11,6 +11,7 @@ import type { Accessor, JSXElement, Setter } from 'solid-js';
 import {
   createEffect,
   createMemo,
+  createSelector,
   createSignal,
   For,
   Match,
@@ -51,6 +52,7 @@ export function useChatMessages(args: {
   actions?: MessageActions;
   chatId?: string;
   editDisabled?: Accessor<boolean>;
+  pendingLocationParams?: Accessor<Record<string, string> | undefined>;
 }): ChatMessages {
   const [messages, setMessages] = createSignal(args.messages);
   const [stream, setStream] = createSignal<MessageStream>();
@@ -66,6 +68,7 @@ export function useChatMessages(args: {
       messageActions={args.actions}
       stream={[stream, setStream]}
       editDisabled={editDisabled()}
+      pendingLocationParams={args.pendingLocationParams}
     />
   ));
 
@@ -95,6 +98,7 @@ export type ChatMessagesProps = {
   chatId?: string;
   messageActions?: MessageActions;
   editDisabled?: boolean;
+  pendingLocationParams?: Accessor<Record<string, string> | undefined>;
 };
 
 function messageContentIsEmpty(message: ChatMessageWithAttachments) {
@@ -235,6 +239,40 @@ export function ChatMessages(props: ChatMessagesProps) {
     scrollToBottom('instant');
   });
 
+  // the highlight message id when arriving from search
+  const [activeTargetMessageId, setActiveTargetMessageId] = createSignal<
+    string | undefined
+  >(undefined);
+
+  createEffect(() => {
+    const params = props.pendingLocationParams?.();
+    if (!params) return;
+
+    if (params.message_id) {
+      setActiveTargetMessageId(params.message_id);
+      setTimeout(() => {
+        const messageElement = document.getElementById(
+          `chat-${params.message_id}`
+        );
+        if (messageElement) {
+          const scrollContainer = messageElement.closest(
+            '[data-chat-scroll]'
+          ) as HTMLElement;
+          if (scrollContainer) {
+            messageElement.scrollIntoView({
+              behavior: 'smooth',
+              block: 'center',
+            });
+          }
+        }
+      }, 0);
+
+      setTimeout(() => {
+        setActiveTargetMessageId(undefined);
+      }, 1500);
+    }
+  });
+
   const lastPair = () => {
     const msgs = messages();
     if (generatingMessage() || isStream()) {
@@ -257,12 +295,20 @@ export function ChatMessages(props: ChatMessagesProps) {
     }
   };
 
+  const activeIdSelector = createSelector(activeTargetMessageId);
+
   return (
     <StaticMarkdownContext theme={aiChatTheme}>
-      <div class="flex flex-col w-full px-2 gap-y-2" ref={messagesRef}>
+      <div class="relative flex flex-col w-full px-2 gap-y-2" ref={messagesRef}>
         <For each={allButLastMessagePair()}>
           {(msg) => (
-            <div id={'chat-' + msg.id} class="w-full">
+            <div
+              id={'chat-' + msg.id}
+              class="w-full transition-colors duration-300"
+              classList={{
+                'bg-accent': activeIdSelector(msg.id),
+              }}
+            >
               <Switch>
                 <Match when={msg.role === 'user'}>
                   <UserMessage message={msg} />
@@ -289,7 +335,13 @@ export function ChatMessages(props: ChatMessagesProps) {
               {(pair) => (
                 <For each={pair()}>
                   {(msg) => (
-                    <div id={'chat-' + msg.id} class="w-full">
+                    <div
+                      id={'chat-' + msg.id}
+                      class="w-full transition-colors duration-300"
+                      classList={{
+                        'bg-accent': activeIdSelector(msg.id),
+                      }}
+                    >
                       <Switch>
                         <Match when={msg.role === 'user'}>
                           <UserMessage

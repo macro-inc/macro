@@ -1,4 +1,5 @@
 import type { Extension } from '@codemirror/state';
+import { FileTypeMap } from '@service-storage/fileTypeMap';
 
 type LanguageLoader = () => Promise<Extension>;
 
@@ -110,12 +111,24 @@ const extensionToLanguage: Record<string, string> = {
   csv: 'plaintext',
 };
 
+// Build supported extensions from FileTypeMap where app === 'code'
+const codeFileExtensions = Object.values(FileTypeMap)
+  .filter((fileType) => fileType.app === 'code')
+  .map((fileType) => fileType.extension);
+
+export type CodeFileExtension = (typeof codeFileExtensions)[number];
+
+// Combine with our explicitly mapped extensions
+const allSupportedExtensions = [
+  ...new Set([...Object.keys(extensionToLanguage), ...codeFileExtensions]),
+];
+
 // Supported languages (source of truth for block-code)
 export const supportedLanguages = Object.keys(languageLoaders);
 export const supportedLanguageSet = new Set(supportedLanguages);
 
-// Supported file extensions
-export const supportedExtensions = Object.keys(extensionToLanguage);
+// Supported file extensions (derived from FileTypeMap)
+export const supportedExtensions = allSupportedExtensions;
 export const supportedExtensionSet = new Set(supportedExtensions);
 
 // Language aliases to file extensions (for create.ts compatibility)
@@ -156,15 +169,23 @@ export const langIdSet = new Set([
 // Export supported languages as langId for compatibility
 export const langId = supportedLanguages;
 
-// File extensions for type compatibility
-export const filesExtensions = supportedExtensions;
-export const fileExtensionSet = supportedExtensionSet;
-
 export function detectLanguageFromExtension(
   fileExtension: string
 ): string | null {
   const normalizedExt = fileExtension.toLowerCase().replace(/^\./, '');
-  return extensionToLanguage[normalizedExt] || null;
+
+  // Check if we have an explicit language mapping
+  if (extensionToLanguage[normalizedExt]) {
+    return extensionToLanguage[normalizedExt];
+  }
+
+  // Return plaintext as fallback for code files without explicit language mapping
+  const matchesCodeFileType = codeFileExtensions.includes(normalizedExt as any);
+  if (matchesCodeFileType) {
+    return 'plaintext';
+  }
+
+  return null;
 }
 
 export async function loadLanguageExtension(

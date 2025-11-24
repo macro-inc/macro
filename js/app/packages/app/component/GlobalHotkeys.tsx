@@ -11,24 +11,26 @@ import { AiInstructionsIcon } from '@service-storage/instructionsMd';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMemo } from 'solid-js';
 import {
+  beveledCorners,
   monochromeIcons,
+  setBeveledCorners,
   setDarkModeTheme,
   setLightModeTheme,
   setMonochromeIcons,
   setThemeShouldMatchSystem,
   themeShouldMatchSystem,
   themes,
+  toggleGutterSize,
 } from '../../block-theme/signals/themeSignals';
-
 import { applyTheme } from '../../block-theme/utils/themeUtils';
-
+import { playSound } from '../util/sound';
 import {
   konsoleOpen,
   resetKonsoleMode,
   setKonsoleMode,
   toggleKonsoleVisibility,
 } from './command/state';
-import { CREATABLE_BLOCKS, toggleCreateMenu } from './dock/CreateMenu';
+import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
 import { fireMacroJump } from './MacroJump';
 import {
   quickCreateMenuOpenSignal,
@@ -40,8 +42,13 @@ export default function GlobalShortcuts() {
   const toggleRightPanel = useToggleRightPanel();
 
   const handleCommandMenu = () => {
+    const wasOpen = konsoleOpen();
     resetKonsoleMode();
     toggleKonsoleVisibility();
+    // Play sound when opening (not closing)
+    if (!wasOpen) {
+      playSound('Kick - Struct - Tight Minimal 4');
+    }
     return;
   };
 
@@ -51,39 +58,44 @@ export default function GlobalShortcuts() {
     return;
   };
 
-  const createScope = registerHotkey({
+  const createCommandScope = registerHotkey({
     hotkeyToken: TOKENS.global.createCommand,
     hotkey: 'c',
     scopeId: 'global',
     description: 'Create',
     keyDownHandler: () => {
-      toggleCreateMenu();
+      setCreateMenuOpen((prev) => !prev);
       return true;
     },
     displayPriority: 10,
     activateCommandScope: true,
   });
 
-  CREATABLE_BLOCKS.forEach((item) => {
+  for (const block of CREATABLE_BLOCKS) {
     registerHotkey({
-      hotkeyToken: item.hotkeyToken,
-      hotkey: item.hotkey,
-      scopeId: createScope.commandScopeId,
-      description: item.description,
-      keyDownHandler: item.keyDownHandler,
+      hotkeyToken: block.hotkeyToken,
+      hotkey: block.hotkey,
+      scopeId: createCommandScope.commandScopeId,
+      description: block.description,
+      keyDownHandler: () => {
+        block.keyDownHandler();
+        return true;
+      },
       runWithInputFocused: true,
-      displayPriority: 10,
     });
+
     registerHotkey({
-      hotkeyToken: item.altHotkeyToken,
-      hotkey: `opt+${item.hotkey}` as ValidHotkey,
-      scopeId: createScope.commandScopeId,
-      description: `${item.description} in new split`,
-      keyDownHandler: item.keyDownHandler,
+      hotkeyToken: block.altHotkeyToken,
+      hotkey: `opt+${block.hotkey}` as ValidHotkey,
+      scopeId: createCommandScope.commandScopeId,
+      description: `${block.description} in new split`,
+      keyDownHandler: () => {
+        block.keyDownHandler();
+        return true;
+      },
       runWithInputFocused: true,
-      displayPriority: 1,
     });
-  });
+  }
 
   const quickCreateScope = registerHotkey({
     hotkeyToken: TOKENS.global.quickCreateCommand,
@@ -315,6 +327,26 @@ export default function GlobalShortcuts() {
     description: 'Toggle monochrome icons',
     keyDownHandler: () => {
       setMonochromeIcons(!monochromeIcons());
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: 'Toggle beveled corners',
+    keyDownHandler: () => {
+      setBeveledCorners(!beveledCorners());
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    scopeId: 'global',
+    description: 'Toggle gutter size',
+    keyDownHandler: () => {
+      toggleGutterSize();
       return true;
     },
     runWithInputFocused: true,

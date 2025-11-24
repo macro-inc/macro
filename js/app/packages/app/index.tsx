@@ -10,6 +10,8 @@ import { FatalError } from './component/FatalError';
 import { ReactiveFavicon } from './component/ReactiveFavicon';
 import { Root } from './component/Root';
 
+import './component/custom-cursor/custom-cursor';
+
 initializeLexical();
 
 const renderApp = () => {

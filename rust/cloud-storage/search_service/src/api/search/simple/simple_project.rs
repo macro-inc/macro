@@ -5,6 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use item_filters::ProjectFilters;
 use model::{
     item::{ShareableItem, ShareableItemType},
     response::ErrorResponse,
@@ -53,49 +54,16 @@ pub async fn handler(
         .into_response())
 }
 
-pub(in crate::api::search) async fn search_projects(
+pub(in crate::api::search) struct FilterProjectResponse {
+    pub project_ids: Vec<String>,
+    pub ids_only: bool,
+}
+
+pub(in crate::api::search) async fn filter_projects(
     ctx: &ApiContext,
     user_id: &str,
-    query_params: &SearchPaginationParams,
-    req: ProjectSearchRequest,
-) -> Result<Vec<opensearch_client::search::projects::ProjectSearchResponse>, SearchError> {
-    // content search is not applicable for projects
-    if req.search_on == SearchOn::Content {
-        return Ok(Vec::new());
-    }
-
-    if user_id.is_empty() {
-        return Err(SearchError::NoUserId);
-    }
-
-    let page = query_params.page.unwrap_or(0);
-
-    let page_size = if let Some(page_size) = query_params.page_size {
-        if !(0..=100).contains(&page_size) {
-            return Err(SearchError::InvalidPageSize);
-        }
-        page_size
-    } else {
-        10
-    };
-
-    let terms: Vec<String> = if let Some(terms) = req.terms {
-        terms
-            .into_iter()
-            .filter_map(|t| if t.len() < 3 { None } else { Some(t) })
-            .collect()
-    } else if let Some(query) = req.query {
-        if query.len() < 3 {
-            return Err(SearchError::InvalidQuerySize);
-        }
-
-        vec![query]
-    } else {
-        return Err(SearchError::NoQueryOrTermsProvided);
-    };
-
-    let filters = req.filters.unwrap_or_default();
-
+    filters: &ProjectFilters,
+) -> Result<FilterProjectResponse, SearchError> {
     let project_ids: Vec<String> = if !filters.project_ids.is_empty() {
         // Item ids are provided, we want to get the list of those that are accessible to the user
         ctx.dss_client
@@ -149,7 +117,10 @@ pub(in crate::api::search) async fn search_projects(
     };
 
     if project_ids.is_empty() && ids_only {
-        return Ok(Vec::new());
+        return Ok(FilterProjectResponse {
+            project_ids: vec![],
+            ids_only,
+        });
     }
 
     let project_ids = if !filters.owners.is_empty() {
@@ -165,7 +136,58 @@ pub(in crate::api::search) async fn search_projects(
         project_ids
     };
 
-    if project_ids.is_empty() && ids_only {
+    Ok(FilterProjectResponse {
+        project_ids,
+        ids_only,
+    })
+}
+
+pub(in crate::api::search) async fn search_projects(
+    ctx: &ApiContext,
+    user_id: &str,
+    query_params: &SearchPaginationParams,
+    req: ProjectSearchRequest,
+) -> Result<Vec<opensearch_client::search::projects::ProjectSearchResponse>, SearchError> {
+    // content search is not applicable for projects
+    if req.search_on == SearchOn::Content {
+        return Ok(Vec::new());
+    }
+
+    if user_id.is_empty() {
+        return Err(SearchError::NoUserId);
+    }
+
+    let page = query_params.page.unwrap_or(0);
+
+    let page_size = if let Some(page_size) = query_params.page_size {
+        if !(0..=100).contains(&page_size) {
+            return Err(SearchError::InvalidPageSize);
+        }
+        page_size
+    } else {
+        10
+    };
+
+    let terms: Vec<String> = if let Some(terms) = req.terms {
+        terms
+            .into_iter()
+            .filter_map(|t| if t.len() < 3 { None } else { Some(t) })
+            .collect()
+    } else if let Some(query) = req.query {
+        if query.len() < 3 {
+            return Err(SearchError::InvalidQuerySize);
+        }
+
+        vec![query]
+    } else {
+        return Err(SearchError::NoQueryOrTermsProvided);
+    };
+
+    let filters = req.filters.unwrap_or_default();
+
+    let filter_project_response = filter_projects(ctx, user_id, &filters).await?;
+
+    if filter_project_response.project_ids.is_empty() && filter_project_response.ids_only {
         return Ok(Vec::new());
     }
 
@@ -177,10 +199,11 @@ pub(in crate::api::search) async fn search_projects(
             page,
             page_size,
             match_type: req.match_type.to_string(),
-            project_ids,
+            project_ids: filter_project_response.project_ids,
             search_on: req.search_on.into(),
             collapse: req.collapse.unwrap_or(false),
-            ids_only,
+            ids_only: filter_project_response.ids_only,
+            disable_recency: req.disable_recency,
         })
         .await
         .map_err(SearchError::Search)?;

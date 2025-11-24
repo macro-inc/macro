@@ -24,6 +24,7 @@ pub enum ProcessingError {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Display, EnumString)]
 pub enum FailureReason {
     DatabaseQueryFailed,
+    RedisQueryFailed,
     SqsEnqueueFailed,
     AccessTokenFetchFailed,
     MessageNotFoundInProvider,
@@ -32,6 +33,8 @@ pub enum FailureReason {
     GmailApiFailed,
     GmailApiRateLimited,
     OutdatedHistoryId,
+    AttachmentParsingFailed,
+    DSSUploadFailed,
 }
 
 /// The message we send from the email_refresh_handler lambda to the service via SQS to refresh

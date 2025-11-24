@@ -23,7 +23,9 @@ describe('Date Utilities (core/utils/date.ts)', () => {
     it('should format time for today', () => {
       // Today at 8:15 AM UTC
       const todayMorning = epochTime('2025-06-14T08:15:00.000Z');
-      expect(formatDate(todayMorning, mockNowEpochSeconds, 'UTC')).toBe('8:15 AM');
+      expect(formatDate(todayMorning, mockNowEpochSeconds, 'UTC')).toBe(
+        '8:15 AM'
+      );
     });
 
     it('should format "Yesterday at {time}" for yesterday (UTC day boundary)', () => {
@@ -47,7 +49,9 @@ describe('Date Utilities (core/utils/date.ts)', () => {
       // Reference time: June 14, 2:15 PM UTC
       // Same day at 1:00 AM UTC (13.25 hours earlier, but same UTC day)
       const earlyToday = epochTime('2025-06-14T01:00:00.000Z');
-      expect(formatDate(earlyToday, mockNowEpochSeconds, 'UTC')).toBe('1:00 AM');
+      expect(formatDate(earlyToday, mockNowEpochSeconds, 'UTC')).toBe(
+        '1:00 AM'
+      );
     });
 
     it('should handle yesterday even with more than 24 hour difference', () => {

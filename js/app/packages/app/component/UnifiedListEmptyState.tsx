@@ -1,19 +1,20 @@
 import { useEmailLinksStatus } from '@app/signal/emailAuth';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 
+import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { fileSelector } from '@core/directive/fileSelector';
 import { folderSelector } from '@core/directive/folderSelector';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
-import type { View } from '@core/types/view';
+import type { ViewId } from '@core/types/view';
 import { handleFolderSelect } from '@core/util/upload';
-import { Match, Show, Switch } from 'solid-js';
+import { createMemo, Match, onMount, Show, Switch } from 'solid-js';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
 false && fileSelector;
 false && folderSelector;
 
-export function EmptyState(props: { view?: View }) {
+export function EmptyState(props: { viewId?: ViewId }) {
   const emailActive = useEmailLinksStatus();
   const splitPanelContext = useSplitPanelOrThrow();
   const {
@@ -21,22 +22,27 @@ export function EmptyState(props: { view?: View }) {
   } = splitPanelContext;
   return (
     <Switch>
-      <Match when={props.view === 'emails' && !emailActive()}>
+      <Match when={props.viewId === 'emails' && !emailActive()}>
         {(_) => {
-          setShowHelpDrawer((prev) => new Set([...prev, 'emails']));
+          onMount(() =>
+            setShowHelpDrawer((prev) => new Set([...prev, 'emails']))
+          );
           return <EmptyStateInner emptyMessage={'Email not connected.'} />;
         }}
       </Match>
       <Match
         when={
-          (props.view === 'emails' || props.view === 'inbox') && emailActive()
+          (props.viewId === 'emails' || props.viewId === 'inbox') &&
+          emailActive()
         }
       >
         <EmptyStateInner emptyMessage={'Inbox zero.'} />
       </Match>
-      <Match when={props.view === 'inbox' && !emailActive()}>
+      <Match when={props.viewId === 'inbox' && !emailActive()}>
         {(_) => {
-          setShowHelpDrawer((prev) => new Set([...prev, 'inbox']));
+          onMount(() =>
+            setShowHelpDrawer((prev) => new Set([...prev, 'inbox']))
+          );
           return (
             <EmptyStateInner
               emptyMessage={'Nothing to show. Email not connected.'}
@@ -44,27 +50,33 @@ export function EmptyState(props: { view?: View }) {
           );
         }}
       </Match>
-      <Match when={props.view === 'comms'}>
+      <Match when={props.viewId === 'comms'}>
         {(_) => {
-          setShowHelpDrawer((prev) => new Set([...prev, 'comms']));
+          onMount(() =>
+            setShowHelpDrawer((prev) => new Set([...prev, 'comms']))
+          );
           return <EmptyStateInner emptyMessage={'No messages to show.'} />;
         }}
       </Match>
-      <Match when={props.view === 'docs'}>
+      <Match when={props.viewId === 'docs'}>
         {(_) => {
-          setShowHelpDrawer((prev) => new Set([...prev, 'docs']));
+          onMount(() =>
+            setShowHelpDrawer((prev) => new Set([...prev, 'docs']))
+          );
           return <EmptyStateInner showDropZone />;
         }}
       </Match>
-      <Match when={props.view === 'ai'}>
+      <Match when={props.viewId === 'ai'}>
         {(_) => {
-          setShowHelpDrawer((prev) => new Set([...prev, 'ai']));
+          onMount(() => setShowHelpDrawer((prev) => new Set([...prev, 'ai'])));
           return <EmptyStateInner emptyMessage={'No AI chats to show.'} />;
         }}
       </Match>
-      <Match when={props.view === 'folders'}>
+      <Match when={props.viewId === 'folders'}>
         {(_) => {
-          setShowHelpDrawer((prev) => new Set([...prev, 'folders']));
+          onMount(() =>
+            setShowHelpDrawer((prev) => new Set([...prev, 'folders']))
+          );
           return <EmptyStateInner showDropZone />;
         }}
       </Match>
@@ -85,7 +97,16 @@ export interface EmptyStateInnerProps {
 }
 
 export function EmptyStateInner(props: EmptyStateInnerProps) {
-  const handleFileUpload = useHandleFileUpload();
+  const blockName = useMaybeBlockName();
+  const blockId = useMaybeBlockId();
+  const projectId = createMemo(() => {
+    if (blockName === 'project' && blockId) {
+      return blockId;
+    }
+    return undefined;
+  });
+
+  const handleFileUpload = useHandleFileUpload({ projectId: projectId() });
 
   return (
     <div class="size-full flex items-center justify-center p-4 text-ink-muted">

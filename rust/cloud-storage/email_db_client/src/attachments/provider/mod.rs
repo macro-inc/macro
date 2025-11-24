@@ -1,3 +1,6 @@
+pub mod upload;
+pub mod upload_filters;
+
 use crate::parse::db_to_service::map_db_attachment_to_service;
 use crate::parse::service_to_db::map_service_attachments_to_db;
 use anyhow::Context;
@@ -188,7 +191,7 @@ where
     Ok(())
 }
 
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_attachment_by_id(
     pool: &PgPool,
     attachment_id: Uuid,
@@ -304,4 +307,28 @@ pub async fn get_attachments_by_thread_ids(
     }
 
     Ok(result)
+}
+
+/// Get document_id for email attachment if record exists
+#[tracing::instrument(skip(db), err)]
+pub async fn get_document_id_by_attachment_id(
+    db: &Pool<Postgres>,
+    link_id: Uuid,
+    email_attachment_id: Uuid,
+) -> anyhow::Result<Option<String>> {
+    let result = sqlx::query!(
+        r#"
+        SELECT document_id
+        FROM document_email de
+        INNER JOIN email_attachments ea on de.email_attachment_id = ea.id
+        INNER JOIN email_messages em on ea.message_id = em.id
+        WHERE em.link_id = $1 AND email_attachment_id = $2
+        "#,
+        link_id,
+        email_attachment_id,
+    )
+    .fetch_optional(db)
+    .await?;
+
+    Ok(result.map(|record| record.document_id))
 }

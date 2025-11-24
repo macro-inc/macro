@@ -1,0 +1,9 @@
+[package]
+edition = "2024"
+name = "filter_ast"
+publish = false
+version = "0.1.0"
+
+[dependencies]
+recursion = { workspace = true }
+serde = { workspace = true }

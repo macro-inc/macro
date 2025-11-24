@@ -38,8 +38,6 @@ on:
           - search-upload
           - static-file-service
           - unfurl-service
-          - sha-cleanup
-          - sha-ref-count-resetter
           - opensearch
           - search-event-queue
           - search-text-extractor-queue

@@ -1,20 +1,25 @@
 use crate::{
-    CHAT_INDEX, Result, delegate_methods,
+    Result, delegate_methods,
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::DefaultSearchResponse,
+        model::{DefaultSearchResponse, Highlight, parse_highlight_hit},
+        query::Keys,
         utils::should_wildcard_field_query_builder,
     },
 };
 
 use crate::SearchOn;
-use opensearch_query_builder::BoolQueryBuilder;
+use models_opensearch::SearchIndex;
+use opensearch_query_builder::{
+    BoolQueryBuilder, FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
+    ToOpenSearchJson,
+};
 use serde_json::Value;
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChatIndex {
-    pub chat_id: String,
+    pub entity_id: String,
     pub chat_message_id: String,
     pub user_id: String,
     pub role: String,
@@ -23,7 +28,7 @@ pub(crate) struct ChatIndex {
     pub content: String,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct ChatSearchResponse {
     pub chat_id: String,
     pub chat_message_id: String,
@@ -31,39 +36,26 @@ pub struct ChatSearchResponse {
     pub role: String,
     pub updated_at: i64,
     pub title: String,
-    pub content: Option<Vec<String>>,
+    pub score: Option<f64>,
+    pub highlight: Highlight,
 }
 
-struct ChatSearchConfig;
+pub(crate) struct ChatSearchConfig;
 
 impl SearchQueryConfig for ChatSearchConfig {
-    const ID_KEY: &'static str = "chat_id";
-    const INDEX: &'static str = CHAT_INDEX;
     const USER_ID_KEY: &'static str = "user_id";
-    const TITLE_KEY: &'static str = "title";
+    const TITLE_KEY: Option<&'static str> = Some("title");
 
-    fn default_sort() -> Value {
-        serde_json::json!([
-            {
-                "updated_at_seconds": {
-                    "order": "desc"
-                }
-            },
-            {
-                Self::ID_KEY: {
-                    "order": "asc"
-                }
-            },
-            {
-                "chat_message_id": {
-                    "order": "asc"
-                }
-            },
-        ])
+    fn default_sort_types() -> Vec<SortType<'static>> {
+        vec![
+            SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
+            SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
+            SortType::Field(FieldSort::new("chat_message_id", SortOrder::Asc)),
+        ]
     }
 }
 
-struct ChatQueryBuilder {
+pub(crate) struct ChatQueryBuilder {
     inner: SearchQueryBuilder<ChatSearchConfig>,
     /// The role of the chat message
     role: Vec<String>,
@@ -80,13 +72,14 @@ impl ChatQueryBuilder {
     // Copy function signature from SearchQueryBuilder
     delegate_methods! {
         fn match_type(match_type: &str) -> Self;
-        fn page(page: i64) -> Self;
-        fn page_size(page_size: i64) -> Self;
+        fn page(page: u32) -> Self;
+        fn page_size(page_size: u32) -> Self;
         fn user_id(user_id: &str) -> Self;
         fn search_on(search_on: SearchOn) -> Self;
         fn collapse(collapse: bool) -> Self;
         fn ids(ids: Vec<String>) -> Self;
         fn ids_only(ids_only: bool) -> Self;
+        fn disable_recency(disable_recency: bool) -> Self;
     }
 
     pub fn role(mut self, role: Vec<String>) -> Self {
@@ -94,19 +87,31 @@ impl ChatQueryBuilder {
         self
     }
 
-    fn query_builder(self) -> Result<(SearchQueryBuilder<ChatSearchConfig>, BoolQueryBuilder)> {
-        let mut query_object = self.inner.query_builder()?;
+    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
+        let mut bool_query = self.inner.build_bool_query()?;
+
+        // CUSTOM ATTRIBUTES SECTION
+
+        // If role is provided, add them to the must query
         if !self.role.is_empty() {
             let should_query = should_wildcard_field_query_builder("role", &self.role);
-            query_object = query_object.must(should_query);
+            bool_query.must(should_query);
         }
-        Ok((self.inner, query_object))
+
+        // END CUSTOM ATTRIBUTES SECTION
+
+        Ok(bool_query)
     }
 
-    pub fn build(self) -> Result<Value> {
-        let (builder, query_object) = self.query_builder()?;
-        let base_query = builder.build_with_query(query_object.build())?;
-        Ok(base_query)
+    fn build_search_request(&self) -> Result<SearchRequest<'static>> {
+        let bool_query = self.build_bool_query()?;
+
+        // Build the search request with the bool query
+        // This will automatically wrap the bool query in a function score if
+        // SearchOn::NameContent is used
+        let search_request = self.inner.build_search_request(bool_query.build())?;
+
+        Ok(search_request)
     }
 }
 
@@ -115,31 +120,40 @@ pub struct ChatSearchArgs {
     pub terms: Vec<String>,
     pub user_id: String,
     pub chat_ids: Vec<String>,
-    pub page: i64,
-    pub page_size: i64,
+    pub page: u32,
+    pub page_size: u32,
     pub match_type: String,
     pub role: Vec<String>,
     pub search_on: SearchOn,
     pub collapse: bool,
     pub ids_only: bool,
+    pub disable_recency: bool,
+}
+
+impl From<ChatSearchArgs> for ChatQueryBuilder {
+    fn from(args: ChatSearchArgs) -> Self {
+        ChatQueryBuilder::new(args.terms)
+            .match_type(&args.match_type)
+            .page_size(args.page_size)
+            .page(args.page)
+            .user_id(&args.user_id)
+            .ids(args.chat_ids)
+            .role(args.role)
+            .search_on(args.search_on)
+            .collapse(args.collapse)
+            .ids_only(args.ids_only)
+            .disable_recency(args.disable_recency)
+    }
 }
 
 impl ChatSearchArgs {
     pub fn build(self) -> Result<Value> {
-        ChatQueryBuilder::new(self.terms)
-            .match_type(&self.match_type)
-            .page_size(self.page_size)
-            .page(self.page)
-            .user_id(&self.user_id)
-            .ids(self.chat_ids)
-            .role(self.role)
-            .search_on(self.search_on)
-            .collapse(self.collapse)
-            .ids_only(self.ids_only)
-            .build()
+        let builder: ChatQueryBuilder = self.into();
+        Ok(builder.build_search_request()?.to_json())
     }
 }
 
+#[tracing::instrument(skip(client, args), err)]
 pub(crate) async fn search_chats(
     client: &opensearch::OpenSearch,
     args: ChatSearchArgs,
@@ -147,696 +161,56 @@ pub(crate) async fn search_chats(
     let query_body = args.build()?;
 
     let response = client
-        .search(opensearch::SearchParts::Index(&[CHAT_INDEX]))
+        .search(opensearch::SearchParts::Index(&[
+            SearchIndex::Chats.as_ref()
+        ]))
         .body(query_body)
         .send()
         .await
         .map_client_error()
         .await?;
 
-    let result = response
-        .json::<DefaultSearchResponse<ChatIndex>>()
+    let bytes = response
+        .bytes()
         .await
-        .map_err(|e| OpensearchClientError::DeserializationFailed {
+        .map_err(|e| OpensearchClientError::HttpBytesError {
             details: e.to_string(),
-            method: Some("search_chats".to_string()),
         })?;
+
+    let result: DefaultSearchResponse<ChatIndex> = serde_json::from_slice(&bytes).map_err(|e| {
+        OpensearchClientError::SearchDeserializationFailed {
+            details: e.to_string(),
+            raw_body: String::from_utf8_lossy(&bytes).to_string(),
+        }
+    })?;
 
     Ok(result
         .hits
         .hits
         .into_iter()
         .map(|hit| ChatSearchResponse {
-            chat_id: hit._source.chat_id,
-            chat_message_id: hit._source.chat_message_id,
-            user_id: hit._source.user_id,
-            role: hit._source.role,
-            title: hit._source.title,
-            content: hit.highlight.map(|h| h.content),
-            updated_at: hit._source.updated_at_seconds,
+            chat_id: hit.source.entity_id,
+            chat_message_id: hit.source.chat_message_id,
+            user_id: hit.source.user_id,
+            role: hit.source.role,
+            title: hit.source.title,
+            score: hit.score,
+            highlight: hit
+                .highlight
+                .map(|h| {
+                    parse_highlight_hit(
+                        h,
+                        Keys {
+                            title_key: ChatSearchConfig::TITLE_KEY,
+                            content_key: ChatSearchConfig::CONTENT_KEY,
+                        },
+                    )
+                })
+                .unwrap_or_default(),
+            updated_at: hit.source.updated_at_seconds,
         })
         .collect())
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    #[test]
-    fn test_sanity() {
-        let query_key = "match_phrase";
-        let chat_ids = vec!["A".to_string(), "B".to_string(), "C".to_string()];
-        let user_id = "user";
-        let page = 1;
-        let page_size = 2;
-        let from = page * page_size;
-        let query = "test";
-        let reference = serde_json::json!({
-            "query": {
-                "bool": {
-                    "should": [
-                        {
-                            "term": {
-                                "user_id": user_id
-                            }
-                        },
-                        {
-                            "terms": {
-                                "chat_id": chat_ids
-                            }
-                        }
-                    ],
-                    "minimum_should_match": 1,
-                   "must": [
-                        {
-                            "bool": {
-                                "should": [
-                                    {
-                                        query_key: {
-                                            "content": query
-                                        }
-                                    },
-                                ],
-                                "minimum_should_match": 1
-                            }
-                        },
-                    ],
-                }
-            },
-            "from": from,
-            "size": page_size,
-            "sort":  [
-                {
-                    "updated_at_seconds": {
-                        "order": "desc"
-                    }
-                },
-                {
-                    "chat_id": {
-                        "order": "asc"
-                    }
-                },
-                {
-                    "chat_message_id": {
-                        "order": "asc"
-                    }
-                },
-            ],
-            "highlight": {
-                "fields": {
-                    "content": {
-                        "type": "unified", // The way the highlight is done
-                        "number_of_fragments": 500, // Breaks up the "content" field into said
-                        "pre_tags": ["<macro_em>"], // HTML tag before highlight
-                        "post_tags": ["</macro_em>"], // HTML tag after highlight
-                        "require_field_match": true, // Default is true, but good to be explicit
-                    }
-                }
-            },
-        });
-
-        let generated = ChatQueryBuilder::new(vec![query.to_string()])
-            .match_type("exact")
-            .page_size(page_size)
-            .page(page)
-            .user_id(user_id)
-            .ids(chat_ids)
-            .build()
-            .unwrap();
-
-        assert_eq!(&generated, &reference);
-    }
-
-    #[test]
-    fn test_build_with_single_role() {
-        let query = "test";
-        let user_id = "user1";
-        let role = vec!["user".to_string()];
-        let page_size = 10;
-        let page = 0;
-
-        let reference = serde_json::json!({
-            "query": {
-                "bool": {
-                    "should": [
-                        {
-                            "term": {
-                                "user_id": user_id
-                            }
-                        },
-                        {
-                            "terms": {
-                                "chat_id": []
-                            }
-                        }
-                    ],
-                    "minimum_should_match": 1,
-                    "must": [
-                        {
-                            "bool": {
-                                "should": [
-                                    {
-                                        "match_phrase": {
-                                            "content": query
-                                        }
-                                    },
-                                ],
-                                "minimum_should_match": 1
-                            }
-                        },
-                        {
-                            "bool": {
-                                "should": [
-                                    {
-                                        "wildcard": {
-                                            "role": {
-                                                "value": "*user*",
-                                                "case_insensitive": true
-                                            }
-                                        }
-                                    }
-                                ],
-                                "minimum_should_match": 1
-                            }
-                        }
-                    ],
-                }
-            },
-            "from": 0,
-            "size": page_size,
-            "sort": [
-                {
-                    "updated_at_seconds": {
-                        "order": "desc"
-                    }
-                },
-                {
-                    "chat_id": {
-                        "order": "asc"
-                    }
-                },
-                {
-                    "chat_message_id": {
-                        "order": "asc"
-                    }
-                },
-            ],
-            "highlight": {
-                "fields": {
-                    "content": {
-                        "type": "unified",
-                        "number_of_fragments": 500,
-                        "pre_tags": ["<macro_em>"],
-                        "post_tags": ["</macro_em>"],
-                        "require_field_match": true,
-                    }
-                }
-            },
-        });
-
-        let generated = ChatQueryBuilder::new(vec![query.to_string()])
-            .match_type("exact")
-            .page_size(page_size)
-            .page(page)
-            .user_id(user_id)
-            .role(role)
-            .build()
-            .unwrap();
-
-        assert_eq!(&generated, &reference);
-    }
-
-    #[test]
-    fn test_build_with_multiple_roles() {
-        let query = "test";
-        let user_id = "user1";
-        let roles = vec!["user".to_string(), "assistant".to_string()];
-        let page_size = 10;
-        let page = 0;
-
-        let reference = serde_json::json!({
-            "query": {
-                "bool": {
-                    "should": [
-                        {
-                            "term": {
-                                "user_id": user_id
-                            }
-                        },
-                        {
-                            "terms": {
-                                "chat_id": []
-                            }
-                        }
-                    ],
-                    "minimum_should_match": 1,
-                    "must": [
-                        {
-                            "bool": {
-                                "should": [
-                                    {
-                                        "match_phrase": {
-                                            "content": query
-                                        }
-                                    },
-                                ],
-                                "minimum_should_match": 1
-                            }
-                        },
-                        {
-                            "bool": {
-                                "should": [
-                                    {
-                                        "wildcard": {
-                                            "role": {
-                                                "value": "*user*",
-                                                "case_insensitive": true
-                                            }
-                                        }
-                                    },
-                                    {
-                                        "wildcard": {
-                                            "role": {
-                                                "value": "*assistant*",
-                                                "case_insensitive": true
-                                            }
-                                        }
-                                    }
-                                ],
-                                "minimum_should_match": 1
-                            }
-                        }
-                    ],
-                }
-            },
-            "from": 0,
-            "size": page_size,
-            "sort": [
-                {
-                    "updated_at_seconds": {
-                        "order": "desc"
-                    }
-                },
-                {
-                    "chat_id": {
-                        "order": "asc"
-                    }
-                },
-                {
-                    "chat_message_id": {
-                        "order": "asc"
-                    }
-                },
-            ],
-            "highlight": {
-                "fields": {
-                    "content": {
-                        "type": "unified",
-                        "number_of_fragments": 500,
-                        "pre_tags": ["<macro_em>"],
-                        "post_tags": ["</macro_em>"],
-                        "require_field_match": true,
-                    }
-                }
-            },
-        });
-
-        let generated = ChatQueryBuilder::new(vec![query.to_string()])
-            .match_type("exact")
-            .page_size(page_size)
-            .page(page)
-            .user_id(user_id)
-            .role(roles)
-            .build()
-            .unwrap();
-
-        assert_eq!(&generated, &reference);
-    }
-
-    #[test]
-    fn test_build_with_role_and_chat_ids() {
-        let query = "test";
-        let user_id = "user1";
-        let chat_ids = vec!["chat1".to_string(), "chat2".to_string()];
-        let roles = vec!["user".to_string()];
-        let page_size = 5;
-        let page = 1;
-        let from = page * page_size;
-
-        let reference = serde_json::json!({
-            "query": {
-                "bool": {
-                    "should": [
-                        {
-                            "term": {
-                                "user_id": user_id
-                            }
-                        },
-                        {
-                            "terms": {
-                                "chat_id": chat_ids
-                            }
-                        }
-                    ],
-                    "minimum_should_match": 1,
-                    "must": [
-                        {
-                            "bool": {
-                                "should": [
-                                    {
-                                        "match_phrase": {
-                                            "content": query
-                                        }
-                                    },
-                                ],
-                                "minimum_should_match": 1
-                            }
-                        },
-                        {
-                            "bool": {
-                                "should": [
-                                    {
-                                        "wildcard": {
-                                            "role": {
-                                                "value": "*user*",
-                                                "case_insensitive": true
-                                            }
-                                        }
-                                    }
-                                ],
-                                "minimum_should_match": 1
-                            }
-                        }
-                    ],
-                }
-            },
-            "from": from,
-            "size": page_size,
-            "sort": [
-                {
-                    "updated_at_seconds": {
-                        "order": "desc"
-                    }
-                },
-                {
-                    "chat_id": {
-                        "order": "asc"
-                    }
-                },
-                {
-                    "chat_message_id": {
-                        "order": "asc"
-                    }
-                },
-            ],
-            "highlight": {
-                "fields": {
-                    "content": {
-                        "type": "unified",
-                        "number_of_fragments": 500,
-                        "pre_tags": ["<macro_em>"],
-                        "post_tags": ["</macro_em>"],
-                        "require_field_match": true,
-                    }
-                }
-            },
-        });
-
-        let generated = ChatQueryBuilder::new(vec![query.to_string()])
-            .match_type("exact")
-            .page_size(page_size)
-            .page(page)
-            .user_id(user_id)
-            .ids(chat_ids)
-            .role(roles)
-            .build()
-            .unwrap();
-
-        assert_eq!(&generated, &reference);
-    }
-
-    #[test]
-    fn test_build_with_empty_role_filter() {
-        let query = "test";
-        let user_id = "user1";
-        let empty_roles = vec![];
-        let page_size = 10;
-        let page = 0;
-
-        let reference = serde_json::json!({
-            "query": {
-                "bool": {
-                    "should": [
-                        {
-                            "term": {
-                                "user_id": user_id
-                            }
-                        },
-                        {
-                            "terms": {
-                                "chat_id": []
-                            }
-                        }
-                    ],
-                    "minimum_should_match": 1,
-                    "must": [
-                        {
-                            "bool": {
-                                "should": [
-                                    {
-                                        "match_phrase": {
-                                            "content": query
-                                        }
-                                    },
-                                ],
-                                "minimum_should_match": 1
-                            }
-                        }
-                    ],
-                }
-            },
-            "from": 0,
-            "size": page_size,
-            "sort": [
-                {
-                    "updated_at_seconds": {
-                        "order": "desc"
-                    }
-                },
-                {
-                    "chat_id": {
-                        "order": "asc"
-                    }
-                },
-                {
-                    "chat_message_id": {
-                        "order": "asc"
-                    }
-                },
-            ],
-            "highlight": {
-                "fields": {
-                    "content": {
-                        "type": "unified",
-                        "number_of_fragments": 500,
-                        "pre_tags": ["<macro_em>"],
-                        "post_tags": ["</macro_em>"],
-                        "require_field_match": true,
-                    }
-                }
-            },
-        });
-
-        let generated = ChatQueryBuilder::new(vec![query.to_string()])
-            .match_type("exact")
-            .page_size(page_size)
-            .page(page)
-            .user_id(user_id)
-            .role(empty_roles)
-            .build()
-            .unwrap();
-
-        assert_eq!(&generated, &reference);
-    }
-
-    #[test]
-    fn test_ids_only() {
-        let query_key = "match_phrase";
-        let chat_ids = vec!["A".to_string(), "B".to_string(), "C".to_string()];
-        let user_id = "user";
-        let page = 1;
-        let page_size = 2;
-        let from = page * page_size;
-        let query = "test";
-        let reference = serde_json::json!({
-            "query": {
-                "bool": {
-                    "should": [
-                        {
-                            "terms": {
-                                "chat_id": chat_ids
-                            }
-                        }
-                    ],
-                    "minimum_should_match": 1,
-                   "must": [
-                        {
-                            "bool": {
-                                "should": [
-                                    {
-                                        query_key: {
-                                            "content": query
-                                        }
-                                    },
-                                ],
-                                "minimum_should_match": 1
-                            }
-                        },
-                    ],
-                }
-            },
-            "from": from,
-            "size": page_size,
-            "sort":  [
-                {
-                    "updated_at_seconds": {
-                        "order": "desc"
-                    }
-                },
-                {
-                    "chat_id": {
-                        "order": "asc"
-                    }
-                },
-                {
-                    "chat_message_id": {
-                        "order": "asc"
-                    }
-                },
-            ],
-            "highlight": {
-                "fields": {
-                    "content": {
-                        "type": "unified", // The way the highlight is done
-                        "number_of_fragments": 500, // Breaks up the "content" field into said
-                        "pre_tags": ["<macro_em>"], // HTML tag before highlight
-                        "post_tags": ["</macro_em>"], // HTML tag after highlight
-                        "require_field_match": true, // Default is true, but good to be explicit
-                    }
-                }
-            },
-        });
-
-        let generated = ChatQueryBuilder::new(vec![query.to_string()])
-            .match_type("exact")
-            .page_size(page_size)
-            .page(page)
-            .user_id(user_id)
-            .ids(chat_ids)
-            .ids_only(true)
-            .build()
-            .unwrap();
-
-        assert_eq!(&generated, &reference);
-    }
-
-    #[test]
-    fn test_build_with_role_and_search_on_name() {
-        let query = "test";
-        let user_id = "user1";
-        let roles = vec!["user".to_string()];
-        let page_size = 10;
-        let page = 0;
-
-        let reference = serde_json::json!({
-            "collapse": {
-                "field": "chat_id"
-            },
-            "from": 0,
-            "highlight": {
-                "fields": {
-                    "content": {
-                        "number_of_fragments": 500,
-                        "post_tags": ["</macro_em>"],
-                        "pre_tags": ["<macro_em>"],
-                        "require_field_match": true,
-                        "type": "unified"
-                    }
-                }
-            },
-            "query": {
-                "bool": {
-                    "minimum_should_match": 1,
-                    "must": [
-                        {
-                            "bool": {
-                                "minimum_should_match": 1,
-                                "should": [
-                                    {
-                                        "match_phrase": {
-                                            "title": query
-                                        }
-                                    }
-                                ]
-                            }
-                        },
-                        {
-                            "bool": {
-                                "minimum_should_match": 1,
-                                "should": [
-                                    {
-                                        "wildcard": {
-                                            "role": {
-                                                "case_insensitive": true,
-                                                "value": "*user*"
-                                            }
-                                        }
-                                    }
-                                ]
-                            }
-                        }
-                    ],
-                    "should": [
-                        {
-                            "term": {
-                                "user_id": "user1"
-                            }
-                        },
-                        {
-                            "terms": {
-                                "chat_id": []
-                            }
-                        }
-                    ]
-                }
-            },
-            "size": 10,
-            "sort": [
-                {
-                    "updated_at_seconds": {
-                        "order": "desc"
-                    }
-                },
-                {
-                    "chat_id": {
-                        "order": "asc"
-                    }
-                },
-                {
-                    "chat_message_id": {
-                        "order": "asc"
-                    }
-                }
-            ]
-        });
-        let generated = ChatQueryBuilder::new(vec![query.to_string()])
-            .page_size(page_size)
-            .page(page)
-            .user_id(user_id)
-            .role(roles)
-            .search_on(SearchOn::Name)
-            .build()
-            .unwrap();
-
-        assert_eq!(&generated, &reference);
-    }
-}
+mod test;

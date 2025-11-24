@@ -32,6 +32,8 @@ pub async fn create_instructions_document(
             project_name: None,
             share_permission: &SharePermissionV2::user_only(),
             skip_history: false,
+            email_attachment_id: None,
+            created_at: None,
         },
     )
     .await?;

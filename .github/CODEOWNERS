@@ -1,28 +1,3 @@
-/rust/cloud-storage/infra/ @whutchinson98
-/rust/cloud-storage/authentication_service/ @whutchinson98
-/rust/cloud-storage/notification_service/ @whutchinson98
-/rust/cloud-storage/notification_db_client/ @whutchinson98
-/rust/cloud-storage/macro_notify/ @whutchinson98
-/rust/cloud-storage/sqs_client/ @whutchinson98
-/rust/cloud-storage/ses_client/ @whutchinson98
-/rust/cloud-storage/sns_client/ @whutchinson98
-/rust/cloud-storage/secretsmanager_client/ @whutchinson98
-/rust/cloud-storage/opensearch_client/ @whutchinson98
-/rust/cloud-storage/search_processing_service/ @whutchinson98
-/rust/cloud-storage/search_service/ @whutchinson98
-/rust/cloud-storage/models_search/ @whutchinson98
-/rust/cloud-storage/models_notification/ @whutchinson98
-/rust/cloud-storage/macro_db_client/ @whutchinson98
-/infra/ @whutchinson98
-
-/rust/cloud-storage/email_db_client @evanhutnik
-/rust/cloud-storage/email_service @evanhutnik
-/rust/cloud-storage/gmail_client @evanhutnik
-/rust/cloud-storage/model/src/gmail @evanhutnik
-/rust/cloud-storage/model/src/email @evanhutnik
-
-/rust/cloud-storage/models_properties @danielkweon
-/rust/cloud-storage/properties_db_client @danielkweon
-/rust/cloud-storage/properties_service @danielkweon
-
-/rust/cloud-storage/frecency @seanaye
+/rust/ @macro-inc/rust
+/js/ @macro-inc/web
+/infra/ @macro-inc/infra

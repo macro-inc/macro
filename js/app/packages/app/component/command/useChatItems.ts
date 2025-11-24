@@ -11,11 +11,14 @@ export function useChatItems(fullTextSearchTerm: () => string) {
 
     const items: CommandItemCard[] = [];
     for (const chat of chatResults.results) {
-      if (chat.chat_search_results.length === 0) continue;
+      if (
+        chat.chat_search_results.length === 0 ||
+        !chat.metadata ||
+        chat.metadata.deleted_at
+      )
+        continue;
       for (const result of chat.chat_search_results) {
-        const contents = Array.isArray(result.content)
-          ? result.content
-          : [result.content || ''];
+        const contents = result.highlight.content ?? [];
         contents.forEach((content, index) => {
           items.push({
             type: 'item',

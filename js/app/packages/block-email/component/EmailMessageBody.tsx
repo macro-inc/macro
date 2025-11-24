@@ -17,6 +17,7 @@ import {
   type Setter,
   Show,
   Switch,
+  untrack,
 } from 'solid-js';
 // import { selectedTheme } from '@core/signal/theme';
 import { themeUpdate } from '../../block-theme/signals/themeSignals';
@@ -100,7 +101,8 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     const messageDiv = document.createElement('div');
     messageDiv.innerHTML = parsedHTML().mainContent;
     messageDiv.style.userSelect = 'text';
-    messageDiv.style.cursor = 'auto';
+    messageDiv.style.cursor = 'var(--cursor-auto)';
+    messageDiv.style.overflow = 'auto';
     shadow.appendChild(messageDiv);
     return hostContainer;
   });
@@ -151,7 +153,7 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
     if (root) {
       if (isPersonal()) {
         queueMicrotask(() => {
-          processEmailColors(root);
+          untrack(() => processEmailColors(root));
         });
       }
       // TODO: this is catching too many emails, we need to change how isPersonal gets detected.

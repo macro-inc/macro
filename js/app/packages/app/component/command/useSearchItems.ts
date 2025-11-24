@@ -1,6 +1,10 @@
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { useSearch } from '@core/signal/search';
 import { isErr } from '@core/util/maybeResult';
+import {
+  extractSearchSnippet,
+  extractSearchTerms,
+} from '@core/util/searchHighlight';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
 import { createEffect, createMemo, createSignal } from 'solid-js';
 import { searchClient } from '../../../service-search/client';
@@ -14,11 +18,16 @@ function createDocumentItems(
   const items: CommandItemCard[] = [];
   if (doc.type !== 'document') return [];
 
-  if (doc.document_search_results.length === 0) return [];
+  if (
+    doc.document_search_results.length === 0 ||
+    !doc.metadata ||
+    doc.metadata.deleted_at
+  )
+    return [];
 
   // TODO: de-duplicate: see logic in useDocumentItems
   for (const result of doc.document_search_results) {
-    const contents = Array.isArray(result.content) ? result.content : [''];
+    const contents = result.highlight.content ?? [];
     contents.forEach((content, index) => {
       // TODO: Canvas returns some nasty partial <m-foo> tags in plaintext
       //         so they are banned from search display for now.
@@ -36,6 +45,11 @@ function createDocumentItems(
             locationId: result.node_id,
             fileType: doc.file_type,
             matchIndex: index,
+            // For PDF files, extract additional location data
+            ...(['docx', 'pdf'].includes(doc.file_type) && {
+              searchSnippet: extractSearchSnippet(content),
+              highlightTerms: extractSearchTerms(content),
+            }),
           },
           updatedAt: result.updated_at * 1000, // Convert Unix timestamp to milliseconds
         });
@@ -54,7 +68,7 @@ function createEmailItems(email: UnifiedSearchResponseItem): CommandItemCard[] {
 
   // TODO: de-duplicate: see logic in useEmailItems
   for (const result of email.email_message_search_results) {
-    const contents = Array.isArray(result.content) ? result.content : [''];
+    const contents = result.highlight.content ?? [];
     contents.forEach((content, index) => {
       items.push({
         type: 'email',
@@ -85,13 +99,16 @@ function createChatItems(chat: UnifiedSearchResponseItem): CommandItemCard[] {
   const items: CommandItemCard[] = [];
   if (chat.type !== 'chat') return [];
 
-  if (chat.chat_search_results.length === 0) return [];
+  if (
+    chat.chat_search_results.length === 0 ||
+    !chat.metadata ||
+    chat.metadata.deleted_at
+  )
+    return [];
 
   // TODO: de-duplicate: see logic in useChatItems
   for (const result of chat.chat_search_results) {
-    const contents = Array.isArray(result.content)
-      ? result.content
-      : [result.content || ''];
+    const contents = result.highlight.content ?? [];
     contents.forEach((content, index) => {
       items.push({
         type: 'item',
@@ -124,15 +141,13 @@ function createChannelItems(
   if (channel.channel_message_search_results.length === 0) return [];
 
   for (const result of channel.channel_message_search_results) {
-    const contents = Array.isArray(result.content)
-      ? result.content
-      : [result.content || ''];
+    const contents = result.highlight.content ?? [];
     contents.forEach((content, index) => {
       items.push({
         type: 'channel',
         data: {
           id: channel.channel_id,
-          name: channel.channel_name!,
+          name: '', // Set name to empty string since search results don't contain channel names anymore
         },
         snippet: {
           content,
@@ -155,12 +170,15 @@ function createProjectItems(
   const items: CommandItemCard[] = [];
   if (project.type !== 'project') return [];
 
-  if (project.project_search_results.length === 0) return [];
+  if (
+    project.project_search_results.length === 0 ||
+    !project.metadata ||
+    project.metadata.deleted_at
+  )
+    return [];
 
   for (const result of project.project_search_results) {
-    const contents = Array.isArray(result.content)
-      ? result.content
-      : [result.content || ''];
+    const contents = result.highlight.content ?? [];
     contents.forEach((_content, _index) => {
       items.push({
         type: 'item',
@@ -223,11 +241,16 @@ export function usePaginatedSearchItems(searchTerm: () => string) {
   const [currentPage, setCurrentPage] = createSignal(0);
   const [hasMore, setHasMore] = createSignal(true);
   const [isLoading, setIsLoading] = createSignal(false);
+  let loadMoreAbortController: AbortController | null = null;
 
   // Reset when search term changes
   createEffect(() => {
     const term = searchTerm();
     if (term !== '') {
+      if (loadMoreAbortController) {
+        loadMoreAbortController.abort();
+        loadMoreAbortController = null;
+      }
       setAllItems([]);
       setCurrentPage(0);
       setHasMore(true);
@@ -249,6 +272,11 @@ export function usePaginatedSearchItems(searchTerm: () => string) {
   const loadMore = async () => {
     if (isLoading()) return;
 
+    if (loadMoreAbortController) {
+      loadMoreAbortController.abort();
+    }
+    loadMoreAbortController = new AbortController();
+
     setIsLoading(true);
     try {
       const nextPage = currentPage() + 1;
@@ -258,13 +286,16 @@ export function usePaginatedSearchItems(searchTerm: () => string) {
         return;
       }
 
-      const result = await searchClient.search({
-        request: {
-          match_type: 'partial',
-          query: term,
+      const result = await searchClient.search(
+        {
+          request: {
+            match_type: 'partial',
+            query: term,
+          },
+          params: { page: nextPage, page_size: 10 },
         },
-        params: { page: nextPage, page_size: 10 },
-      });
+        { signal: loadMoreAbortController.signal }
+      );
 
       if (isErr(result)) {
         console.error('Failed to load more search results');
@@ -278,6 +309,10 @@ export function usePaginatedSearchItems(searchTerm: () => string) {
         setCurrentPage(nextPage);
         if (newItems.length === 0) setHasMore(false);
       }
+    } catch (error) {
+      if (loadMoreAbortController.signal.aborted) return;
+
+      throw error;
     } finally {
       setIsLoading(false);
     }

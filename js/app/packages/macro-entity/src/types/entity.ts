@@ -1,3 +1,4 @@
+import { isEntityType } from '@core/types/utils';
 import type { JSX } from 'solid-js';
 
 export type EntityBase = {
@@ -14,6 +15,7 @@ export type ChannelEntity = EntityBase & {
   type: 'channel';
   channelType: 'direct_message' | 'private' | 'organization' | 'public';
   interactedAt?: number;
+  particpantIds?: string[];
   latestMessage?: {
     content: string;
     senderId: string;
@@ -45,6 +47,8 @@ export type EmailEntity = EntityBase & {
   snippet?: string;
   isImportant: boolean;
   done: boolean;
+  participantEmails?: string[];
+  participantNames?: string[];
   senderEmail?: string;
   senderName?: string;
 };
@@ -63,6 +67,18 @@ export type EntityData =
   | DocumentEntity
   | EmailEntity
   | ProjectEntity;
+
+export const isEntityData = (item: unknown): item is EntityData => {
+  if (typeof item !== 'object') return false;
+
+  if (!item) return false;
+
+  if (!('type' in item)) return false;
+
+  if (typeof item.type !== 'string') return false;
+
+  return isEntityType(item.type);
+};
 
 export type EntityType = EntityData['type'];
 

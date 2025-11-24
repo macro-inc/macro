@@ -33,7 +33,7 @@ mod service;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let env = Environment::new_or_prod();
-    MacroEntrypoint::new(env).init();
+    MacroEntrypoint::default().init();
 
     let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
         .region("us-east-1")
@@ -81,23 +81,32 @@ async fn main() -> anyhow::Result<()> {
     );
 
     // Create DynamoDB client with local endpoint for local environment
+    // If DynamoEndpointUrl is not set, use AWS DynamoDB even in local mode
     let dynamo_db = if matches!(config.environment, Environment::Local) {
         env_var!(
             struct DynamoEndpointUrl;
         );
-        let local_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
-            .region("us-east-1")
-            .endpoint_url(DynamoEndpointUrl::new()?.to_string())
-            .load()
-            .await;
-        aws_sdk_dynamodb::Client::new(&local_config)
+        match DynamoEndpointUrl::new() {
+            Ok(endpoint_url) => {
+                tracing::info!("Using local DynamoDB endpoint: {}", endpoint_url.as_ref());
+                let local_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
+                    .region("us-east-1")
+                    .endpoint_url(endpoint_url.to_string())
+                    .load()
+                    .await;
+                aws_sdk_dynamodb::Client::new(&local_config)
+            }
+            Err(_) => {
+                tracing::info!("DynamoEndpointUrl not set, using AWS DynamoDB");
+                aws_sdk_dynamodb::Client::new(&aws_config)
+            }
+        }
     } else {
         aws_sdk_dynamodb::Client::new(&aws_config)
     };
 
     let dynamodb_client = DynamodbClient::new_from_client(
         dynamo_db.clone(),
-        Some(config.vars.affiliate_users_table.as_ref().to_string()),
         Some(config.vars.bulk_upload_requests_table.as_ref().to_string()),
     );
     tracing::trace!("initialized dynamodb client");

@@ -91,7 +91,6 @@ export function BlockContainer(props: BlockContainerProps) {
   });
 
   const [attachHotkeys, scopeId] = useHotkeyDOMScope(blockName ?? 'block');
-
   setHotkeyScope(scopeId);
 
   onMount(() => {

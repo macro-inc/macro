@@ -18,18 +18,18 @@ use std::collections::HashMap;
 
 use super::SearchPaginationParams;
 
-/// Performs a search through emails and enriches the results with metadata
-pub async fn search_emails_enriched(
+/// Enriches email search results with metadata
+#[tracing::instrument(skip(ctx, results), err)]
+pub(in crate::api::search) async fn enrich_emails(
     ctx: &ApiContext,
     user_id: &str,
-    query_params: &SearchPaginationParams,
-    req: EmailSearchRequest,
+    results: Vec<opensearch_client::search::emails::EmailSearchResponse>,
 ) -> Result<Vec<EmailSearchResponseItemWithMetadata>, SearchError> {
-    // Use the simple search to get raw OpenSearch results
-    let opensearch_results = search_emails(ctx, user_id, query_params, req).await?;
-
+    if results.is_empty() {
+        return Ok(vec![]);
+    }
     // Extract thread IDs from results
-    let thread_ids: Vec<Uuid> = opensearch_results
+    let thread_ids: Vec<Uuid> = results
         .iter()
         .filter_map(|r| {
             match Uuid::parse_str(&r.thread_id) {
@@ -53,11 +53,24 @@ pub async fn search_emails_enriched(
         .map_err(SearchError::InternalError)?;
 
     // Construct enriched results
-    let enriched_results =
-        construct_search_result(opensearch_results, thread_histories.history_map)
-            .map_err(SearchError::InternalError)?;
+    let enriched_results = construct_search_result(results, thread_histories.history_map)
+        .map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
+}
+
+/// Performs a search through emails and enriches the results with metadata
+#[tracing::instrument(skip(ctx, query_params, req), err)]
+pub async fn search_emails_enriched(
+    ctx: &ApiContext,
+    user_id: &str,
+    query_params: &SearchPaginationParams,
+    req: EmailSearchRequest,
+) -> Result<Vec<EmailSearchResponseItemWithMetadata>, SearchError> {
+    // Use the simple search to get raw OpenSearch results
+    let opensearch_results = search_emails(ctx, user_id, query_params, req).await?;
+
+    enrich_emails(ctx, user_id, opensearch_results).await
 }
 
 /// Perform a search through your emails
@@ -121,6 +134,7 @@ pub fn construct_search_result(
                 created_at: message_history_info.created_at.timestamp(),
                 updated_at: message_history_info.updated_at.timestamp(),
                 viewed_at: message_history_info.viewed_at.map(|a| a.timestamp()),
+                snippet: message_history_info.snippet,
                 extra: item,
             }
         })
@@ -130,47 +144,4 @@ pub fn construct_search_result(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_construct_search_result_empty_input() {
-        let result = construct_search_result(vec![], HashMap::new());
-        assert!(result.is_ok());
-        assert_eq!(result.unwrap().len(), 0);
-    }
-
-    #[test]
-    fn test_construct_search_result_single_thread() {
-        let search_results = vec![opensearch_client::search::emails::EmailSearchResponse {
-            thread_id: "thread1".to_string(),
-            message_id: "msg1".to_string(),
-            sender: "sender@example.com".to_string(),
-            recipients: vec!["recipient@example.com".to_string()],
-            cc: vec![],
-            bcc: vec![],
-            labels: vec!["inbox".to_string()],
-            link_id: "link1".to_string(),
-            user_id: "user1".to_string(),
-            updated_at: 1234567890,
-            sent_at: Some(1234567800),
-            subject: Some("Test Subject".to_string()),
-            content: Some(vec!["Test content".to_string()]),
-        }];
-
-        let result = construct_search_result(search_results, HashMap::new()).unwrap();
-
-        assert_eq!(result.len(), 1);
-        assert_eq!(result[0].extra.thread_id, "thread1");
-        assert_eq!(result[0].extra.user_id, "user1");
-        assert_eq!(result[0].extra.email_message_search_results.len(), 1);
-        assert_eq!(
-            result[0].extra.email_message_search_results[0].message_id,
-            "msg1"
-        );
-        assert_eq!(
-            result[0].extra.email_message_search_results[0].subject,
-            Some("Test Subject".to_string())
-        );
-    }
-}
+mod test;

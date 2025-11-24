@@ -1,4 +1,7 @@
-use std::io::{Cursor, Write};
+use std::{
+    io::{Cursor, Write},
+    str::FromStr,
+};
 
 use crate::{api::context::ApiContext, service::s3::TEMP_FILE_PREFIX};
 use axum::{
@@ -66,7 +69,7 @@ pub async fn handler(
 ) -> Result<Response, Response> {
     tracing::info!("export document");
     if let Some(file_type) = document_context.file_type.as_deref() {
-        let file_type: FileType = file_type.try_into().map_err(|e| {
+        let file_type = FileType::from_str(file_type).map_err(|e| {
             tracing::error!(error=?e, "unable to convert file type");
             (
                 StatusCode::INTERNAL_SERVER_ERROR,

@@ -1,8 +1,11 @@
+use std::collections::HashSet;
+
 use crate::channel::ChannelSearchResponseItemWithMetadata;
 use crate::chat::ChatSearchResponseItemWithMetadata;
 use crate::document::DocumentSearchResponseItemWithMetadata;
 use crate::email::EmailSearchResponseItemWithMetadata;
 use crate::project::ProjectSearchResponseItemWithMetadata;
+use crate::score::calculate_average;
 use crate::{
     MatchType, SearchOn, channel::SimpleChannelSearchReponseBaseItem,
     chat::SimpleChatSearchResponseBaseItem, document::SimpleDocumentSearchResponseBaseItem,
@@ -28,46 +31,81 @@ pub enum UnifiedSearchIndex {
 pub struct UnifiedSearchRequest {
     #[schemars(skip)]
     pub query: Option<String>,
-    #[schemars(
-        description = "Multiple distinct search terms as separate strings. Use this for keyword-based searches where you want to find content containing any of these terms. Each term must be at least 3 characters (shorter terms are automatically filtered out). Examples: ['machine', 'learning', 'algorithms'], ['project', 'status', 'update']. `null` this field if searching without text terms to search all. This field matches query string against both name and content."
-    )]
+
+    /// Multiple distinct search terms as separate strings. Use this for keyword-based searches where you want to find content containing any of these terms. Each term must be at least 3 characters (shorter terms are automatically filtered out). Examples: ['machine', 'learning', 'algorithms'], ['project', 'status', 'update']. `null` this field if searching without text terms to search all. This field matches query string against both name and content.
     pub terms: Option<Vec<String>>,
-    #[schemars(
-        description = "How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field."
-    )]
+
+    /// How to match the search terms. 'exact' for precise case-sensitive phrase matches, 'partial' for prefix/partial matches. REQUIRED field.
     pub match_type: MatchType,
-    #[schemars(
-        description = "Search filters for various kinds of items. Set the entire filters property as `null` if you do not have specific filters for a given type, e.g. bcc for email filters."
-    )]
+
+    /// If search_on is set to NameContent, you can disable the recency filter
+    /// by setting to true.
+    #[serde(default)]
+    #[schemars(skip)]
+    pub disable_recency: bool,
+
+    /// Search filters for various kinds of items. Set the entire filters property as `null` if you do not have specific filters for a given type, e.g. bcc for email filters.
     pub filters: Option<UnifiedSearchFilters>,
-    #[schemars(
-        description = "Fields to search on (Name, Content, NameContent). Defaults to Content"
-    )]
+
+    /// Fields to search on (Name, Content, NameContent). Defaults to Content
     #[serde(default)]
     pub search_on: SearchOn,
+
     #[schemars(skip)]
     pub collapse: Option<bool>,
 
-    #[schemars(
-        description = "Include specific entity types from search. If empty, all entity types will be searched over. If you are unsure which types to search, use an empty array to search all."
-    )]
+    /// Include specific entity types from search. If empty, all entity types will be searched over. If you are unsure which types to search, use an empty array to search all.
     #[serde(default)]
     pub include: Vec<UnifiedSearchIndex>,
+}
+
+impl From<UnifiedSearchIndex> for models_opensearch::SearchEntityType {
+    fn from(index: UnifiedSearchIndex) -> Self {
+        match index {
+            UnifiedSearchIndex::Channels => Self::Channels,
+            UnifiedSearchIndex::Chats => Self::Chats,
+            UnifiedSearchIndex::Documents => Self::Documents,
+            UnifiedSearchIndex::Emails => Self::Emails,
+            UnifiedSearchIndex::Projects => Self::Projects,
+        }
+    }
+}
+
+/// Generates the search indices to search over for unified search
+pub fn generate_unified_search_indices(
+    include: Vec<UnifiedSearchIndex>,
+) -> HashSet<models_opensearch::SearchEntityType> {
+    if include.is_empty() {
+        let include: Vec<models_opensearch::SearchEntityType> = [
+            UnifiedSearchIndex::Channels,
+            UnifiedSearchIndex::Chats,
+            UnifiedSearchIndex::Documents,
+            UnifiedSearchIndex::Emails,
+            UnifiedSearchIndex::Projects,
+        ]
+        .into_iter()
+        .map(|i| i.into())
+        .collect();
+
+        include.into_iter().collect()
+    } else {
+        include.into_iter().map(|i| i.into()).collect()
+    }
 }
 
 // TODO: there's a data correlation between Filters and Response Item. Can this be consolidated?
 // None means do not search this entity, Some(_::default()) means search all for this entity
 #[derive(Debug, Serialize, Deserialize, ToSchema, Clone, JsonSchema)]
 pub struct UnifiedSearchFilters {
-    #[schemars(description = "Document filters. `null` to not filter documents searched over.")]
+    /// Document filters. `null` to not filter documents searched over.
     pub document: Option<DocumentFilters>,
-    #[schemars(description = "Chat filters. `null` to not filter chats searched over.")]
+    /// Chat filters. `null` to not filter chats searched over.
     pub chat: Option<ChatFilters>,
-    #[schemars(description = "Email filters. `null` to not filter emails searched over.")]
+    /// Email filters. `null` to not filter emails searched over.
     pub email: Option<EmailFilters>,
-    #[schemars(description = "Channel filters. `null` to not filter channels searched over.")]
+    /// Channel filters. `null` to not filter channels searched over.
     pub channel: Option<ChannelFilters>,
-    #[schemars(description = "Project filters. `null` to not filter projects searched over.")]
+    /// Project filters. `null` to not filter projects searched over.
     pub project: Option<ProjectFilters>,
 }
 
@@ -93,6 +131,19 @@ pub enum UnifiedSearchResponseItem {
     Project(ProjectSearchResponseItemWithMetadata),
 }
 
+impl UnifiedSearchResponseItem {
+    /// Calculate the average score from search_results
+    pub fn average_score(&self) -> f64 {
+        match self {
+            Self::Document(item) => calculate_average(&item.extra.document_search_results),
+            Self::Chat(item) => calculate_average(&item.extra.chat_search_results),
+            Self::Email(item) => calculate_average(&item.extra.email_message_search_results),
+            Self::Channel(item) => calculate_average(&item.extra.channel_message_search_results),
+            Self::Project(item) => calculate_average(&item.extra.project_search_results),
+        }
+    }
+}
+
 #[derive(Debug, Serialize, Deserialize, ToSchema, Default)]
 pub struct UnifiedSearchResponse {
     pub results: Vec<UnifiedSearchResponseItem>,
@@ -110,6 +161,79 @@ pub enum SimpleUnifiedSearchResponseBaseItem<T> {
 
 pub type SimpleUnifiedSearchResponseItem =
     SimpleUnifiedSearchResponseBaseItem<crate::TimestampSeconds>;
+
+impl From<opensearch_client::search::unified::UnifiedSearchResponse>
+    for SimpleUnifiedSearchResponseItem
+{
+    fn from(response: opensearch_client::search::unified::UnifiedSearchResponse) -> Self {
+        match response {
+            opensearch_client::search::unified::UnifiedSearchResponse::Document(a) => {
+                SimpleUnifiedSearchResponseItem::Document(SimpleDocumentSearchResponseBaseItem {
+                    document_id: a.document_id,
+                    document_name: a.document_name,
+                    node_id: a.node_id,
+                    owner_id: a.owner_id,
+                    file_type: a.file_type,
+                    updated_at: a.updated_at.into(),
+                    highlight: a.highlight.into(),
+                    raw_content: a.raw_content,
+                })
+            }
+            opensearch_client::search::unified::UnifiedSearchResponse::Chat(a) => {
+                SimpleUnifiedSearchResponseItem::Chat(SimpleChatSearchResponseBaseItem {
+                    chat_id: a.chat_id,
+                    chat_message_id: a.chat_message_id,
+                    user_id: a.user_id,
+                    role: a.role,
+                    title: a.title,
+                    highlight: a.highlight.into(),
+                    updated_at: a.updated_at.into(),
+                })
+            }
+            opensearch_client::search::unified::UnifiedSearchResponse::Email(a) => {
+                SimpleUnifiedSearchResponseItem::Email(SimpleEmailSearchResponseBaseItem {
+                    thread_id: a.thread_id,
+                    message_id: a.message_id,
+                    subject: a.subject,
+                    sender: a.sender,
+                    recipients: a.recipients,
+                    cc: a.cc,
+                    bcc: a.bcc,
+                    labels: a.labels,
+                    link_id: a.link_id,
+                    user_id: a.user_id,
+                    updated_at: a.updated_at.into(),
+                    sent_at: a.sent_at.map(|a| a.into()),
+                    highlight: a.highlight.into(),
+                })
+            }
+            opensearch_client::search::unified::UnifiedSearchResponse::ChannelMessage(a) => {
+                SimpleUnifiedSearchResponseItem::Channel(SimpleChannelSearchReponseBaseItem {
+                    channel_id: a.channel_id,
+                    channel_type: a.channel_type,
+                    org_id: a.org_id,
+                    message_id: a.message_id,
+                    thread_id: a.thread_id,
+                    sender_id: a.sender_id,
+                    mentions: a.mentions,
+                    created_at: a.created_at.into(),
+                    updated_at: a.updated_at.into(),
+                    highlight: a.highlight.into(),
+                })
+            }
+            opensearch_client::search::unified::UnifiedSearchResponse::Project(a) => {
+                SimpleUnifiedSearchResponseItem::Project(SimpleProjectSearchResponseBaseItem {
+                    project_id: a.project_id,
+                    project_name: a.project_name,
+                    user_id: a.user_id,
+                    created_at: a.created_at.into(),
+                    updated_at: a.updated_at.into(),
+                    highlight: a.highlight.into(),
+                })
+            }
+        }
+    }
+}
 
 #[derive(Debug, Serialize, Deserialize, ToSchema, Default)]
 pub struct SimpleUnifiedSearchBaseResponse<T> {

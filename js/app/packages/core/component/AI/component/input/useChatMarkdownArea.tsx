@@ -58,7 +58,7 @@ import {
   COMMAND_PRIORITY_HIGH,
   FORMAT_TEXT_COMMAND,
   KEY_ENTER_COMMAND,
-  LexicalEditor,
+  type LexicalEditor,
   type TextFormatType,
 } from 'lexical';
 import {

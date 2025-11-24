@@ -5,6 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use item_filters::ChatFilters;
 use model::{
     item::{ShareableItem, ShareableItemType},
     response::ErrorResponse,
@@ -52,44 +53,16 @@ pub async fn handler(
         .into_response())
 }
 
-pub(in crate::api::search) async fn search_chats(
+pub(in crate::api::search) struct FilterChatResponse {
+    pub chat_ids: Vec<String>,
+    pub ids_only: bool,
+}
+
+pub(in crate::api::search) async fn filter_chats(
     ctx: &ApiContext,
     user_id: &str,
-    query_params: &SearchPaginationParams,
-    req: ChatSearchRequest,
-) -> Result<Vec<opensearch_client::search::chats::ChatSearchResponse>, SearchError> {
-    if user_id.is_empty() {
-        return Err(SearchError::NoUserId);
-    }
-
-    let page = query_params.page.unwrap_or(0);
-
-    let page_size = if let Some(page_size) = query_params.page_size {
-        if !(0..=100).contains(&page_size) {
-            return Err(SearchError::InvalidPageSize);
-        }
-        page_size
-    } else {
-        10
-    };
-
-    let terms: Vec<String> = if let Some(terms) = req.terms {
-        terms
-            .into_iter()
-            .filter_map(|t| if t.len() < 3 { None } else { Some(t) })
-            .collect()
-    } else if let Some(query) = req.query {
-        if query.len() < 3 {
-            return Err(SearchError::InvalidQuerySize);
-        }
-
-        vec![query]
-    } else {
-        return Err(SearchError::NoQueryOrTermsProvided);
-    };
-
-    let filters = req.filters.unwrap_or_default();
-
+    filters: &ChatFilters,
+) -> Result<FilterChatResponse, SearchError> {
     let chat_ids_response = if !filters.chat_ids.is_empty() {
         // Item ids are provided, we want to get the list of those that are accessible to the user
         ctx.dss_client
@@ -148,7 +121,10 @@ pub(in crate::api::search) async fn search_chats(
     };
 
     if chat_ids.is_empty() && ids_only {
-        return Ok(Vec::new());
+        return Ok(FilterChatResponse {
+            chat_ids: vec![],
+            ids_only,
+        });
     }
 
     let chat_ids = if !filters.owners.is_empty() {
@@ -164,7 +140,50 @@ pub(in crate::api::search) async fn search_chats(
         chat_ids
     };
 
-    if chat_ids.is_empty() && ids_only {
+    Ok(FilterChatResponse { chat_ids, ids_only })
+}
+
+pub(in crate::api::search) async fn search_chats(
+    ctx: &ApiContext,
+    user_id: &str,
+    query_params: &SearchPaginationParams,
+    req: ChatSearchRequest,
+) -> Result<Vec<opensearch_client::search::chats::ChatSearchResponse>, SearchError> {
+    if user_id.is_empty() {
+        return Err(SearchError::NoUserId);
+    }
+
+    let page = query_params.page.unwrap_or(0);
+
+    let page_size = if let Some(page_size) = query_params.page_size {
+        if !(0..=100).contains(&page_size) {
+            return Err(SearchError::InvalidPageSize);
+        }
+        page_size
+    } else {
+        10
+    };
+
+    let terms: Vec<String> = if let Some(terms) = req.terms {
+        terms
+            .into_iter()
+            .filter_map(|t| if t.len() < 3 { None } else { Some(t) })
+            .collect()
+    } else if let Some(query) = req.query {
+        if query.len() < 3 {
+            return Err(SearchError::InvalidQuerySize);
+        }
+
+        vec![query]
+    } else {
+        return Err(SearchError::NoQueryOrTermsProvided);
+    };
+
+    let filters = req.filters.unwrap_or_default();
+
+    let filter_chat_response = filter_chats(ctx, user_id, &filters).await?;
+
+    if filter_chat_response.chat_ids.is_empty() && filter_chat_response.ids_only {
         return Ok(Vec::new());
     }
 
@@ -173,14 +192,15 @@ pub(in crate::api::search) async fn search_chats(
         .search_chats(ChatSearchArgs {
             terms,
             user_id: user_id.to_string(),
-            chat_ids,
+            chat_ids: filter_chat_response.chat_ids,
             page,
             page_size,
             match_type: req.match_type.to_string(),
             role: filters.role,
             search_on: req.search_on.into(),
             collapse: req.collapse.unwrap_or(false),
-            ids_only,
+            ids_only: filter_chat_response.ids_only,
+            disable_recency: req.disable_recency,
         })
         .await
         .map_err(SearchError::Search)?;
