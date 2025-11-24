@@ -13,6 +13,11 @@ export const LOCAL_ONLY = !!import.meta.hot;
 export const DEV_MODE_ENV = import.meta.env.MODE === 'development';
 
 /**
+ * This constant reflects whether is running as a native desktop app?
+ */
+export const DESKTOP_MODE_ENV = true;
+
+/**
  * This constant reflects whether the app is running in production mode with prod backend environment
  *
  * @returns true in macro.com, false otherwise

@@ -18,6 +18,7 @@ import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitModalProvider } from './SplitModalContext';
 import { SplitToolbar } from './SplitToolbar';
+import { DESKTOP_MODE_ENV } from '@core/constant/featureFlags';
 
 export function SplitContainer(
   props: ParentProps<{
@@ -99,9 +100,14 @@ export function SplitContainer(
             tr={
               panel.handle.isLast() &&
               !isRightPanelOpen() &&
-              !panel.handle.isSpotLight()
+              !panel.handle.isSpotLight() &&
+              !DESKTOP_MODE_ENV
             }
-            tl={panel.handle.isFirst() && !panel.handle.isSpotLight()}
+            tl={
+              panel.handle.isFirst() &&
+              !panel.handle.isSpotLight() &&
+              !DESKTOP_MODE_ENV
+            }
           >
             <div class="flex flex-col min-h-0 size-full">
               <SplitHeader ref={setHeaderRef} />

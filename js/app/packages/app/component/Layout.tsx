@@ -23,6 +23,8 @@ import { Paywall } from './paywall/Paywall';
 import { QuickCreateMenu } from './QuickCreateMenu';
 import { RightbarWrapper } from './rightbar/Rightbar';
 import { Settings, setViewportOffset } from './settings/Settings';
+import { TopBar } from './topbar/TopBar';
+import { DESKTOP_MODE_ENV } from '@core/constant/featureFlags';
 
 export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
@@ -129,6 +131,9 @@ export function Layout(props: RouteSectionProps) {
 
       <Show when={paywallOpen()}>
         <Paywall />
+      </Show>
+      <Show when={DESKTOP_MODE_ENV}>
+        <TopBar/>
       </Show>
       <div class="p-[var(--gutter-size)] grow-1">
         <Resize.Zone
