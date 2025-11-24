@@ -147,7 +147,7 @@ export function createDssInfiniteQueryPost(
   const params = () => {
     const argParams = _params?.();
     let limit = 100;
-    let sort_method = undefined;
+    let sort_method;
     const requestBody = options?.requestBody;
 
     if (requestBody) {

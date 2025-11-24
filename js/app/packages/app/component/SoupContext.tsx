@@ -24,7 +24,6 @@ import {
   runCommand,
   useHotkeyDOMScope,
 } from 'core/hotkey/hotkeys';
-import { clear } from 'mermaid/dist/rendering-util/rendering-elements/nodes.js';
 import {
   type Accessor,
   batch,
