@@ -293,7 +293,7 @@ export function createNavigationEntityListShortcut({
   };
 
   // ---------------------------------------------------------------------------
-  // DELETE
+  // MARK AS DONE
   // ---------------------------------------------------------------------------
   actionRegistry.register(
     'mark_as_done',
