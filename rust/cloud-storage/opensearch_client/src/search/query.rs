@@ -8,7 +8,7 @@ use unicode_segmentation::UnicodeSegmentation;
 /// Containing keys for the title and content fields
 pub struct Keys<'a> {
     /// The title field key
-    pub title_key: Option<&'a str>,
+    pub title_key: &'a str,
     /// The content field key
     pub content_key: &'a str,
 }
@@ -150,24 +150,20 @@ pub(crate) fn generate_name_content_query(keys: &Keys, terms: &[String]) -> Quer
             let mut bool_query = BoolQueryBuilder::new();
             bool_query.minimum_should_match(1);
 
-            if let Some(title_key) = keys.title_key {
-                bool_query.should(QueryType::MatchPhrasePrefix(
-                    MatchPhrasePrefixQuery::new(title_key.to_string(), term.clone()).boost(1000.0),
-                ));
-            }
+            bool_query.should(QueryType::MatchPhrasePrefix(
+                MatchPhrasePrefixQuery::new(keys.title_key.to_string(), term.clone()).boost(1000.0),
+            ));
 
             bool_query.should(QueryType::MatchPhrasePrefix(
                 MatchPhrasePrefixQuery::new(keys.content_key.to_string(), term.clone())
                     .boost(900.0),
             ));
 
-            if let Some(title_key) = keys.title_key {
-                bool_query.should(QueryType::Match(
-                    MatchQuery::new(title_key.to_string(), term.clone())
-                        .boost(0.1)
-                        .minimum_should_match("80%"), // TODO: we may need to play around with this to get the best highlight match
-                ));
-            }
+            bool_query.should(QueryType::Match(
+                MatchQuery::new(keys.title_key.to_string(), term.clone())
+                    .boost(0.1)
+                    .minimum_should_match("80%"), // TODO: we may need to play around with this to get the best highlight match
+            ));
 
             bool_query.should(QueryType::Match(
                 MatchQuery::new(keys.content_key.to_string(), term.clone())

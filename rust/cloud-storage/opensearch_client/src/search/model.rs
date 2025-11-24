@@ -46,17 +46,11 @@ pub(crate) fn parse_highlight_hit(
     highlight: HashMap<String, Vec<String>>,
     keys: Keys,
 ) -> Highlight {
-    let name = if let Some(title_key) = keys.title_key {
-        highlight
-            .get(title_key)
-            .and_then(|v| v.first())
-            .map(|v| v.to_string())
-    } else {
-        None
-    };
-
     Highlight {
-        name,
+        name: highlight
+            .get(keys.title_key)
+            .and_then(|v| v.first())
+            .map(|v| v.to_string()),
         content: highlight
             .get(keys.content_key)
             .map(|v| v.to_vec())

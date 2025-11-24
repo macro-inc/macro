@@ -48,8 +48,8 @@ pub trait SearchQueryConfig {
     const ID_KEY: &'static str = "entity_id";
     /// Key for user id
     const USER_ID_KEY: &'static str;
-    /// Key for title (there may not be a title key for things like channels index)
-    const TITLE_KEY: Option<&'static str>;
+    /// Key for title
+    const TITLE_KEY: &'static str;
     /// Content field
     const CONTENT_KEY: &'static str = "content";
 
@@ -222,45 +222,32 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
         let highlight = match self.search_on {
             SearchOn::Content => T::default_highlight(),
-            SearchOn::Name => {
-                if let Some(title_key) = T::TITLE_KEY {
-                    Highlight::new().require_field_match(true).field(
-                        title_key,
-                        HighlightField::new()
-                            .highlight_type("plain")
-                            .pre_tags(vec![MacroEm::Open.to_string()])
-                            .post_tags(vec![MacroEm::Close.to_string()])
-                            .number_of_fragments(1),
-                    )
-                } else {
-                    return Err(OpensearchClientError::NoTitleKeyForNameSearch);
-                }
-            }
-            SearchOn::NameContent => {
-                let mut highlight = Highlight::new();
-                highlight = highlight.require_field_match(false);
-                if let Some(title_key) = T::TITLE_KEY {
-                    highlight = highlight.field(
-                        title_key,
-                        HighlightField::new()
-                            .highlight_type("plain")
-                            .pre_tags(vec![MacroEm::Open.to_string()])
-                            .post_tags(vec![MacroEm::Close.to_string()])
-                            .number_of_fragments(1),
-                    );
-                }
-
-                highlight = highlight.field(
-                    "content",
+            SearchOn::Name => Highlight::new().require_field_match(true).field(
+                T::TITLE_KEY,
+                HighlightField::new()
+                    .highlight_type("plain")
+                    .pre_tags(vec![MacroEm::Open.to_string()])
+                    .post_tags(vec![MacroEm::Close.to_string()])
+                    .number_of_fragments(1),
+            ),
+            SearchOn::NameContent => Highlight::new()
+                .require_field_match(false)
+                .field(
+                    T::TITLE_KEY,
                     HighlightField::new()
                         .highlight_type("plain")
                         .pre_tags(vec![MacroEm::Open.to_string()])
                         .post_tags(vec![MacroEm::Close.to_string()])
                         .number_of_fragments(1),
-                );
-
-                highlight
-            }
+                )
+                .field(
+                    T::CONTENT_KEY,
+                    HighlightField::new()
+                        .highlight_type("plain")
+                        .pre_tags(vec![MacroEm::Open.to_string()])
+                        .post_tags(vec![MacroEm::Close.to_string()])
+                        .number_of_fragments(1),
+                ),
         };
 
         search_request.highlight(highlight);
@@ -330,16 +317,11 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
         match self.search_on {
             SearchOn::Name => {
-                if let Some(title_key) = keys.title_key {
-                    // map all terms over title key
-                    must_array.push(generate_terms_must_query(
-                        query_key,
-                        &[title_key],
-                        &self.terms,
-                    ));
-                } else {
-                    return Err(OpensearchClientError::NoTitleKeyForNameSearch);
-                }
+                must_array.push(generate_terms_must_query(
+                    query_key,
+                    &[keys.title_key],
+                    &self.terms,
+                ));
             }
             SearchOn::Content => {
                 // map all terms over content key

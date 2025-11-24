@@ -52,7 +52,7 @@ pub(crate) struct ChannelMessageSearchConfig;
 
 impl SearchQueryConfig for ChannelMessageSearchConfig {
     const USER_ID_KEY: &'static str = "sender_id";
-    const TITLE_KEY: Option<&'static str> = None;
+    const TITLE_KEY: &'static str = "name";
 
     fn default_sort_types() -> Vec<SortType<'static>> {
         vec![

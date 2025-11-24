@@ -21,7 +21,7 @@ pub(crate) struct DocumentSearchConfig;
 
 impl SearchQueryConfig for DocumentSearchConfig {
     const USER_ID_KEY: &'static str = "owner_id";
-    const TITLE_KEY: Option<&'static str> = Some("document_name");
+    const TITLE_KEY: &'static str = "name";
 
     fn default_sort_types() -> Vec<SortType<'static>> {
         vec![

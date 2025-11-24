@@ -391,18 +391,18 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         return Err(OpensearchClientError::EmptySearchIndices);
     }
     // Build out the title keys that we could need for highlighting
-    let mut title_keys: Vec<Option<&'static str>> = vec![];
+    let mut title_keys: HashSet<&'static str> = HashSet::new();
     for index in &args.search_indices {
         match index {
-            SearchEntityType::Channels => title_keys.push(ChannelMessageSearchConfig::TITLE_KEY),
-            SearchEntityType::Chats => title_keys.push(ChatSearchConfig::TITLE_KEY),
-            SearchEntityType::Documents => title_keys.push(DocumentSearchConfig::TITLE_KEY),
-            SearchEntityType::Emails => title_keys.push(EmailSearchConfig::TITLE_KEY),
-            SearchEntityType::Projects => title_keys.push(ProjectSearchConfig::TITLE_KEY),
-        }
+            SearchEntityType::Channels => title_keys.insert(ChannelMessageSearchConfig::TITLE_KEY),
+            SearchEntityType::Chats => title_keys.insert(ChatSearchConfig::TITLE_KEY),
+            SearchEntityType::Documents => title_keys.insert(DocumentSearchConfig::TITLE_KEY),
+            SearchEntityType::Emails => title_keys.insert(EmailSearchConfig::TITLE_KEY),
+            SearchEntityType::Projects => title_keys.insert(ProjectSearchConfig::TITLE_KEY),
+        };
     }
 
-    let title_keys: Vec<&'static str> = title_keys.into_iter().flatten().collect();
+    let title_keys: Vec<&'static str> = title_keys.into_iter().collect();
 
     let mut bool_query = BoolQueryBuilder::new();
     bool_query.minimum_should_match(1);

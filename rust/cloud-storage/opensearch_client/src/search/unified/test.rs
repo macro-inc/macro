@@ -852,7 +852,7 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
       "from": 20,
       "highlight": {
         "fields": {
-            "document_name": {
+            "name": {
                 "number_of_fragments": 1,
                 "post_tags": [
                     "</macro_em>"
@@ -862,7 +862,7 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
                 ],
                 "type": "plain"
             },
-            "subject": {
+            "name": {
                 "number_of_fragments": 1,
                 "post_tags": [
                     "</macro_em>"
@@ -872,7 +872,7 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
                 ],
                 "type": "plain"
             },
-            "title": {
+            "name": {
                 "number_of_fragments": 1,
                 "post_tags": [
                     "</macro_em>"
@@ -905,7 +905,7 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
                 "must": [
                   {
                     "match_phrase": {
-                      "document_name": "test"
+                      "name": "test"
                     }
                   },
                   {
@@ -937,7 +937,7 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
                 "must": [
                   {
                     "match_phrase": {
-                      "subject": "test"
+                      "name": "test"
                     }
                   },
                   {
@@ -1069,7 +1069,7 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
                 "must": [
                   {
                     "match_phrase": {
-                      "title": "test"
+                      "name": "test"
                     }
                   },
                   {
@@ -1245,7 +1245,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
             ],
             "type": "plain"
           },
-          "document_name": {
+          "name": {
             "number_of_fragments": 1,
             "post_tags": [
               "</macro_em>"
@@ -1265,26 +1265,6 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
             ],
             "type": "plain"
           },
-          "subject": {
-            "number_of_fragments": 1,
-            "post_tags": [
-              "</macro_em>"
-            ],
-            "pre_tags": [
-              "<macro_em>"
-            ],
-            "type": "plain"
-          },
-          "title": {
-            "number_of_fragments": 1,
-            "post_tags": [
-              "</macro_em>"
-            ],
-            "pre_tags": [
-              "<macro_em>"
-            ],
-            "type": "plain"
-          }
         },
         "require_field_match": false
       },
@@ -1318,7 +1298,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                           "should": [
                             {
                               "match_phrase_prefix": {
-                                "document_name": {
+                                "name": {
                                   "boost": 1000.0,
                                   "query": "test"
                                 }
@@ -1334,7 +1314,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                             },
                             {
                               "match": {
-                                "document_name": {
+                                "name": {
                                   "boost": 0.1,
                                   "minimum_should_match": "80%",
                                   "query": "test"
@@ -1386,7 +1366,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                           "should": [
                             {
                               "match_phrase_prefix": {
-                                "subject": {
+                                "name": {
                                   "boost": 1000.0,
                                   "query": "test"
                                 }
@@ -1402,7 +1382,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                             },
                             {
                               "match": {
-                                "subject": {
+                                "name": {
                                   "boost": 0.1,
                                   "minimum_should_match": "80%",
                                   "query": "test"
@@ -1554,8 +1534,25 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                           "should": [
                             {
                               "match_phrase_prefix": {
+                                "name": {
+                                  "boost": 1000.0,
+                                  "query": "test"
+                                }
+                              }
+                            },
+                            {
+                              "match_phrase_prefix": {
                                 "content": {
                                   "boost": 900.0,
+                                  "query": "test"
+                                }
+                              }
+                            },
+                            {
+                              "match": {
+                                "name": {
+                                  "boost": 0.1,
+                                  "minimum_should_match": "80%",
                                   "query": "test"
                                 }
                               }
@@ -1624,7 +1621,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                           "should": [
                             {
                               "match_phrase_prefix": {
-                                "title": {
+                                "name": {
                                   "boost": 1000.0,
                                   "query": "test"
                                 }
@@ -1640,7 +1637,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                             },
                             {
                               "match": {
-                                "title": {
+                                "name": {
                                   "boost": 0.1,
                                   "minimum_should_match": "80%",
                                   "query": "test"
