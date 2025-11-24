@@ -20,11 +20,7 @@ import { useHistory } from '@service-storage/history';
 import { useInfiniteQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { EntityData } from '../types/entity';
-import type {
-  FileTypeWithLocation,
-  SearchLocation,
-  WithSearch,
-} from '../types/search';
+import type { SearchData, WithSearch } from '../types/search';
 import type { EntityInfiniteQuery } from './entity';
 import { queryKeys } from './key';
 
@@ -37,98 +33,100 @@ type InnerSearchResult =
   | ChannelSearchResult
   | ProjectSearchResult;
 
-const getDocumentContentHitData = (
-  innerResults: DocumentSearchResult[],
-  fileType: FileTypeWithLocation,
-  searchQuery: string
-) => {
-  const contentHitData = innerResults.flatMap((r) => {
-    const contents = r.highlight.content ?? [];
+type TypedInnerSearchResult =
+  | { results: InnerSearchResult[]; type?: undefined }
+  | { results: DocumentSearchResult[]; type: 'pdf'; searchQuery: string }
+  | { results: DocumentSearchResult[]; type: 'md' }
+  | { results: ChannelSearchResult[]; type: 'channel' };
 
-    return contents.map((content) => {
-      const mergedContent = mergeAdjacentMacroEmTags(content);
-      let location: SearchLocation | undefined;
-      switch (fileType) {
-        case 'md':
-          location = { type: 'md' as const, nodeId: r.node_id };
-          break;
-        case 'pdf':
-          try {
-            const searchPage = parseInt(r.node_id);
-            location = {
-              type: 'pdf' as const,
-              searchPage,
-              searchSnippet: extractSearchSnippet(mergedContent),
-              searchRawQuery: searchQuery,
-              highlightTerms: extractSearchTerms(mergedContent),
-            };
-          } catch (_e) {
-            console.error('Cannot parse pdf serach info', r);
-            location = undefined;
-          }
-          break;
-      }
+const getSearchData = (data: TypedInnerSearchResult): SearchData => {
+  switch (data.type) {
+    case 'channel': {
+      const contentHitData = data.results.flatMap((r) => {
+        const contents = r.highlight.content ?? [];
+        return contents.map((content) => ({
+          type: 'channel' as const,
+          id: r.message_id,
+          content: mergeAdjacentMacroEmTags(content),
+          senderId: r.sender_id,
+          sentAt: r.created_at,
+          location: undefined,
+        }));
+      });
+      const nameHighlight = data.results.at(0)?.highlight.name ?? null;
 
       return {
-        type: undefined,
-        content: mergedContent,
-        location,
+        nameHighlight: nameHighlight
+          ? mergeAdjacentMacroEmTags(nameHighlight)
+          : null,
+        contentHitData: contentHitData.length > 0 ? contentHitData : null,
+        source: 'service' as const,
       };
-    });
-  });
+    }
+    case 'pdf': {
+      const contentHitData = data.results.flatMap((r) => {
+        const contents = r.highlight.content ?? [];
+        return contents.map((content) => {
+          const mergedContent = mergeAdjacentMacroEmTags(content);
+          return {
+            content: mergeAdjacentMacroEmTags(content),
+            location: {
+              type: 'pdf' as const,
+              searchPage: Number(r.node_id),
+              searchSnippet: extractSearchSnippet(mergedContent),
+              searchRawQuery: data.searchQuery,
+              highlightTerms: extractSearchTerms(mergedContent),
+            },
+          };
+        });
+      });
+      const nameHighlight = data.results.at(0)?.highlight.name ?? null;
 
-  const nameHighlight = innerResults.at(0)?.highlight.name ?? null;
+      return {
+        nameHighlight: nameHighlight
+          ? mergeAdjacentMacroEmTags(nameHighlight)
+          : null,
+        contentHitData: contentHitData.length > 0 ? contentHitData : null,
+        source: 'service' as const,
+      };
+    }
+    case 'md': {
+      const contentHitData = data.results.flatMap((r) => {
+        const contents = r.highlight.content ?? [];
+        return contents.map((content) => ({
+          content: mergeAdjacentMacroEmTags(content),
+          location: { type: 'md' as const, nodeId: r.node_id },
+        }));
+      });
+      const nameHighlight = data.results.at(0)?.highlight.name ?? null;
 
-  return {
-    nameHighlight: nameHighlight
-      ? mergeAdjacentMacroEmTags(nameHighlight)
-      : null,
-    contentHitData: contentHitData.length > 0 ? contentHitData : null,
-    source: 'service' as const,
-  };
-};
+      return {
+        nameHighlight: nameHighlight
+          ? mergeAdjacentMacroEmTags(nameHighlight)
+          : null,
+        contentHitData: contentHitData.length > 0 ? contentHitData : null,
+        source: 'service' as const,
+      };
+    }
+    default: {
+      const contentHitData = data.results.flatMap((r) => {
+        const contents = r.highlight.content ?? [];
+        return contents.map((content) => ({
+          content: mergeAdjacentMacroEmTags(content),
+          location: undefined,
+        }));
+      });
+      const nameHighlight = data.results.at(0)?.highlight.name ?? null;
 
-const getChannelContentHitData = (innerResults: ChannelSearchResult[]) => {
-  const contentHitData = innerResults.flatMap((r) => {
-    const contents = r.highlight.content ?? [];
-
-    return contents.map((content) => ({
-      type: 'channel-message' as const,
-      id: r.message_id,
-      content: mergeAdjacentMacroEmTags(content),
-      senderId: r.sender_id,
-      sentAt: r.created_at,
-      location: undefined,
-    }));
-  });
-
-  return {
-    nameHighlight: null,
-    contentHitData: contentHitData.length > 0 ? contentHitData : null,
-    source: 'service' as const,
-  };
-};
-
-const getContentHitData = (innerResults: InnerSearchResult[]) => {
-  const contentHitData = innerResults.flatMap((r) => {
-    const contents = r.highlight.content ?? [];
-
-    return contents.map((content) => ({
-      type: undefined,
-      content: mergeAdjacentMacroEmTags(content),
-      location: undefined,
-    }));
-  });
-
-  const nameHighlight = innerResults.at(0)?.highlight.name ?? null;
-
-  return {
-    nameHighlight: nameHighlight
-      ? mergeAdjacentMacroEmTags(nameHighlight)
-      : null,
-    contentHitData: contentHitData.length > 0 ? contentHitData : null,
-    source: 'service' as const,
-  };
+      return {
+        nameHighlight: nameHighlight
+          ? mergeAdjacentMacroEmTags(nameHighlight)
+          : null,
+        contentHitData: contentHitData.length > 0 ? contentHitData : null,
+        source: 'service' as const,
+      };
+    }
+  }
 };
 
 const useMapSearchResponseItem = () => {
@@ -146,13 +144,23 @@ const useMapSearchResponseItem = () => {
         if (!result.metadata || result.metadata.deleted_at) return;
         const searchFileType =
           result.file_type === 'docx' ? 'pdf' : result.file_type;
-        const search = ['md', 'pdf'].includes(searchFileType)
-          ? getDocumentContentHitData(
-              result.document_search_results,
-              searchFileType as FileTypeWithLocation,
-              searchQuery
-            )
-          : getContentHitData(result.document_search_results);
+        let search: SearchData;
+        if (searchFileType === 'md') {
+          search = getSearchData({
+            results: result.document_search_results,
+            type: 'md',
+          });
+        } else if (searchFileType === 'pdf') {
+          search = getSearchData({
+            results: result.document_search_results,
+            type: 'pdf',
+            searchQuery,
+          });
+        } else {
+          search = getSearchData({
+            results: result.document_search_results,
+          });
+        }
         return {
           type: 'document',
           id: result.document_id,
@@ -172,7 +180,9 @@ const useMapSearchResponseItem = () => {
           console.error('Email result not found', result);
           return;
         }
-        const search = getContentHitData(result.email_message_search_results);
+        const search = getSearchData({
+          results: result.email_message_search_results,
+        });
         return {
           type: 'email',
           id: result.thread_id,
@@ -190,7 +200,9 @@ const useMapSearchResponseItem = () => {
       }
       case 'chat': {
         if (!result.metadata || result.metadata.deleted_at) return;
-        const search = getContentHitData(result.chat_search_results);
+        const search = getSearchData({
+          results: result.chat_search_results,
+        });
         let name = result.name;
         if (!name || name === 'New Chat') {
           const chat = history().find((item) => item.id === result.chat_id);
@@ -214,9 +226,10 @@ const useMapSearchResponseItem = () => {
           (c) => c.id === result.channel_id
         );
 
-        const search = getChannelContentHitData(
-          result.channel_message_search_results
-        );
+        const search = getSearchData({
+          type: 'channel',
+          results: result.channel_message_search_results,
+        });
 
         return {
           type: 'channel',
@@ -234,7 +247,10 @@ const useMapSearchResponseItem = () => {
 
       case 'project': {
         if (!result.metadata || result.metadata.deleted_at) return;
-        const search = getContentHitData(result.project_search_results);
+        const search = getSearchData({
+          results: result.project_search_results,
+        });
+
         return {
           type: 'project',
           id: result.id,

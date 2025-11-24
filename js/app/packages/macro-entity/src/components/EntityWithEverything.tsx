@@ -33,7 +33,7 @@ import {
 import type { EntityData, ProjectEntity } from '../types/entity';
 import type { Notification, WithNotification } from '../types/notification';
 import type {
-  ChannelMessageContentHitData,
+  ChannelContentHitData,
   ContentHitData,
   WithSearch,
 } from '../types/search';
@@ -80,9 +80,7 @@ function GenericContentHit(props: { data: ContentHitData }) {
   );
 }
 
-function ChannelMessageContentHit(props: {
-  data: ChannelMessageContentHitData;
-}) {
+function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
   const [userName] = useDisplayName(props.data.senderId);
   const formattedDate = createFormattedDate(props.data.sentAt);
 
@@ -555,7 +553,7 @@ export function EntityWithEverything(
             <For each={contentHitData()}>
               {(data) => (
                 <Show
-                  when={data.type === 'channel-message' && data}
+                  when={data.type === 'channel' && data}
                   fallback={<GenericContentHit data={data} />}
                 >
                   {(data) => <ChannelMessageContentHit data={data()} />}

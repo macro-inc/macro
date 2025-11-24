@@ -11,12 +11,10 @@ type PdfHighlightLocation = {
   searchRawQuery: string;
 };
 
-export type FileTypeWithLocation = 'md' | 'pdf';
-
 export type SearchLocation = MarkdownHighlightLocation | PdfHighlightLocation;
 
-export type ChannelMessageContentHitData = {
-  type: 'channel-message';
+export type ChannelContentHitData = {
+  type: 'channel';
   id: string;
   content: string;
   senderId: string;
@@ -25,19 +23,19 @@ export type ChannelMessageContentHitData = {
 };
 
 type GenericContentHitData = {
-  type: undefined;
+  type?: undefined;
   content: string;
   location?: SearchLocation;
 };
 
-export type ContentHitData =
-  | GenericContentHitData
-  | ChannelMessageContentHitData;
+export type ContentHitData = GenericContentHitData | ChannelContentHitData;
+
+export type SearchData = {
+  nameHighlight: string | null;
+  contentHitData: ContentHitData[] | null;
+  source: 'local' | 'service';
+};
 
 export type WithSearch<T extends object> = T & {
-  search: {
-    nameHighlight: string | null;
-    contentHitData: ContentHitData[] | null;
-    source: 'local' | 'service';
-  };
+  search: SearchData;
 };
