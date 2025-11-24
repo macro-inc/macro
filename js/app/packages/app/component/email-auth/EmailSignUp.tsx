@@ -18,5 +18,6 @@ export function EmailSignUp() {
       returnPath: RETURN_PATH,
     });
   });
+
   return null;
 }
