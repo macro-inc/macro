@@ -1,3 +1,4 @@
+import { extractFileSystemEntries } from '@core/util/dataTransfer';
 import { type Accessor, onCleanup } from 'solid-js';
 
 interface FileFolderDropDirectiveOptions {
@@ -137,30 +138,12 @@ export function fileFolderDrop(
       return;
     }
 
-    const items = dataTransfer.items;
-    if (items && items.length > 0) {
-      let fileEntries: FileSystemFileEntry[] = [];
-      let dirEntries: FileSystemDirectoryEntry[] = [];
+    const { fileEntries, directoryEntries } =
+      extractFileSystemEntries(dataTransfer);
 
-      for (const item of items) {
-        if (item.kind !== 'file') continue;
-
-        const entry = item.webkitGetAsEntry();
-        if (!entry) {
-          continue;
-        }
-
-        if (entry.isFile) {
-          fileEntries.push(entry as FileSystemFileEntry);
-        } else if (entry.isDirectory) {
-          dirEntries.push(entry as FileSystemDirectoryEntry);
-        }
-      }
-
-      if (fileEntries.length > 0 || dirEntries.length > 0) {
-        options?.onDrop?.(fileEntries, dirEntries, e);
-        return;
-      }
+    if (fileEntries.length > 0 || directoryEntries.length > 0) {
+      options?.onDrop?.(fileEntries, directoryEntries, e);
+      return;
     }
 
     // Fallback to files if items didn't yield results (edge case where webkitGetAsEntry fails)

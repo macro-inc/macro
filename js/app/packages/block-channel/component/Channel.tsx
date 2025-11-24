@@ -316,9 +316,9 @@ export function Channel(props: { data: Required<ChannelData> }) {
                 })
               );
             },
-            onDragStart: () => {
+            onDragStart: (valid) => {
               setIsDraggingOverChannel(true);
-              setIsValidChannelDrag(true);
+              setIsValidChannelDrag(valid);
             },
             onDragEnd: () => {
               setIsDraggingOverChannel(false);

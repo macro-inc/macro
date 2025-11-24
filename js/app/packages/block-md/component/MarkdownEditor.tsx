@@ -4,7 +4,6 @@ import { markdownBlockErrorSignal } from '@block-md/signal/error';
 import { FindAndReplaceStore } from '@block-md/signal/findAndReplaceStore';
 import { revisionsSignal, rewriteSignal } from '@block-md/signal/rewriteSignal';
 import { type BlockName, useBlockId } from '@core/block';
-import { handleFoldersInput } from '@core/client/zipWorkerClient';
 import type { DragEventWithData } from '@core/component/FileList/DraggableItem';
 import { DecoratorRenderer } from '@core/component/LexicalMarkdown/component/core/DecoratorRenderer';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
@@ -427,42 +426,6 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     }
   }
 
-  const onPasteFilesAndDirs = async (
-    fileEntries: FileSystemFileEntry[],
-    directories: FileSystemDirectoryEntry[]
-  ) => {
-    const files = await Promise.all(
-      fileEntries.map(
-        (entry) =>
-          new Promise<File>((resolve, reject) =>
-            entry.file(
-              (f: File) => resolve(f),
-              (err: DOMException) => reject(err)
-            )
-          )
-      )
-    );
-
-    if (directories.length > 0) {
-      const zipPromises = handleFoldersInput(directories);
-      const zipped = await Promise.all(zipPromises);
-      const zipFiles = zipped.filter((f): f is File => !!f);
-
-      const entries: UploadInput[] = [
-        ...files.map((f) => ({ file: f, isFolder: false })),
-        ...zipFiles.map((f) => ({ file: f, isFolder: true })),
-      ];
-      await handleUploadEntriesForEditor(entries);
-      return;
-    }
-
-    const entries: UploadInput[] = files.map((f) => ({
-      file: f,
-      isFolder: false,
-    }));
-    await handleUploadEntriesForEditor(entries);
-  };
-
   // store for the drag insert pluign.
   const [dragInsertStore, setDragInsertStore] = createDragInsertStore();
 
@@ -701,7 +664,16 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     )
     .use(tableCellResizerPlugin())
     .use(tableActionMenuPlugin(tableActionsMenuPluginProps))
-    .use(filePastePlugin({ onPasteFilesAndDirs: onPasteFilesAndDirs }))
+    .use(
+      filePastePlugin({
+        onPasteFilesAndDirs: (fileEntries, directories) =>
+          handleFileFolderDrop(
+            fileEntries,
+            directories,
+            handleUploadEntriesForEditor
+          ),
+      })
+    )
     .use(
       findAndReplacePlugin({
         setListOffset: onSetListOffset,
@@ -1034,8 +1006,8 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
             handleFileFolderDrop(
               fileEntries,
               folderEntries,
-              async (uploadEntries: UploadInput[]) => {
-                await handleUploadEntriesForEditor(uploadEntries);
+              (uploadEntries: UploadInput[]) => {
+                handleUploadEntriesForEditor(uploadEntries);
               }
             );
           },

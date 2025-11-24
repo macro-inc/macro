@@ -1,3 +1,4 @@
+import { extractFileSystemEntries } from '@core/util/dataTransfer';
 import { mergeRegister } from '@lexical/utils';
 import {
   COMMAND_PRIORITY_NORMAL,
@@ -13,12 +14,6 @@ type FilePastePluginProps = {
   ) => void;
 };
 
-function isFileSystemFileEntry(
-  entry: FileSystemEntry
-): entry is FileSystemFileEntry {
-  return entry.isFile;
-}
-
 function registerFilePastePlugin(
   editor: LexicalEditor,
   props: FilePastePluginProps
@@ -32,19 +27,9 @@ function registerFilePastePlugin(
         const data = event.clipboardData;
         if (!data) return false;
 
-        const items = Array.from(data.items || []);
         const filesFromClipboard = Array.from(data.files || []);
-        const fileEntries: FileSystemFileEntry[] = [];
-        const directoryEntries: FileSystemDirectoryEntry[] = [];
-        for (const item of items) {
-          if (item.kind !== 'file') continue;
-          const entry = item.webkitGetAsEntry ? item.webkitGetAsEntry() : null;
-          if (entry && entry.isDirectory) {
-            directoryEntries.push(entry as FileSystemDirectoryEntry);
-          } else if (entry && isFileSystemFileEntry(entry)) {
-            fileEntries.push(entry);
-          }
-        }
+        const { fileEntries, directoryEntries } =
+          extractFileSystemEntries(data);
 
         if (fileEntries.length === 0 && directoryEntries.length === 0) {
           return false;
