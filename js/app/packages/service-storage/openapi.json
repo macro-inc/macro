@@ -6730,6 +6730,20 @@
           "frecency"
         ]
       },
+      "SoupAttachment": {
+        "type": "object",
+        "required": ["id", "messageId", "createdAt"],
+        "properties": {
+          "contentId": { "type": ["string", "null"] },
+          "createdAt": { "type": "integer", "format": "int64" },
+          "filename": { "type": ["string", "null"] },
+          "id": { "type": "string", "format": "uuid" },
+          "messageId": { "type": "string", "format": "uuid" },
+          "mimeType": { "type": ["string", "null"] },
+          "providerAttachmentId": { "type": ["string", "null"] },
+          "sizeBytes": { "type": ["integer", "null"], "format": "int64" }
+        }
+      },
       "SoupChat": {
         "type": "object",
         "required": [
@@ -6776,6 +6790,17 @@
             "format": "int64",
             "description": "The time the chat was last viewed"
           }
+        }
+      },
+      "SoupContact": {
+        "type": "object",
+        "required": ["id", "linkId"],
+        "properties": {
+          "emailAddress": { "type": ["string", "null"] },
+          "id": { "type": "string", "format": "uuid" },
+          "linkId": { "type": "string", "format": "uuid" },
+          "name": { "type": ["string", "null"] },
+          "sfsPhotoUrl": { "type": ["string", "null"] }
         }
       },
       "SoupDocument": {
@@ -6853,24 +6878,114 @@
           }
         }
       },
+      "SoupEmailThreadPreview": {
+        "type": "object",
+        "required": [
+          "id",
+          "ownerId",
+          "inboxVisible",
+          "isRead",
+          "isDraft",
+          "isImportant",
+          "sortTs",
+          "createdAt",
+          "updatedAt",
+          "viewedAt"
+        ],
+        "properties": {
+          "createdAt": { "type": "integer", "format": "int64" },
+          "id": { "type": "string", "format": "uuid" },
+          "inboxVisible": { "type": "boolean" },
+          "isDraft": { "type": "boolean" },
+          "isImportant": { "type": "boolean" },
+          "isRead": { "type": "boolean" },
+          "name": { "type": ["string", "null"] },
+          "ownerId": { "type": "string" },
+          "providerId": { "type": ["string", "null"] },
+          "senderEmail": { "type": ["string", "null"] },
+          "senderName": { "type": ["string", "null"] },
+          "senderPhotoUrl": { "type": ["string", "null"] },
+          "snippet": { "type": ["string", "null"] },
+          "sortTs": { "type": "integer", "format": "int64" },
+          "updatedAt": { "type": "integer", "format": "int64" },
+          "viewedAt": { "type": ["integer", "null"], "format": "int64" }
+        }
+      },
+      "SoupEnrichedEmailThreadPreview": {
+        "allOf": [
+          { "$ref": "#/components/schemas/SoupEmailThreadPreview" },
+          {
+            "type": "object",
+            "required": ["attachments", "attachmentsMacro", "participants"],
+            "properties": {
+              "attachments": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/SoupAttachment" }
+              },
+              "attachmentsMacro": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/SoupMacroAttachment" }
+              },
+              "participants": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/SoupContact" }
+              }
+            }
+          }
+        ]
+      },
       "SoupItem": {
         "oneOf": [
-          { "$ref": "#/components/schemas/SoupDocument" },
-          { "$ref": "#/components/schemas/SoupChat" },
-          { "$ref": "#/components/schemas/SoupProject" }
-        ],
-        "discriminator": {
-          "propertyName": "type",
-          "mapping": {
-            "chat": "#/components/schemas/SoupChat",
-            "document": "#/components/schemas/SoupDocument",
-            "project": "#/components/schemas/SoupProject"
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": { "$ref": "#/components/schemas/SoupDocument" },
+              "tag": { "type": "string", "enum": ["document"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": { "$ref": "#/components/schemas/SoupChat" },
+              "tag": { "type": "string", "enum": ["chat"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": { "$ref": "#/components/schemas/SoupProject" },
+              "tag": { "type": "string", "enum": ["project"] }
+            }
+          },
+          {
+            "type": "object",
+            "required": ["data", "tag"],
+            "properties": {
+              "data": {
+                "$ref": "#/components/schemas/SoupEnrichedEmailThreadPreview"
+              },
+              "tag": { "type": "string", "enum": ["emailThread"] }
+            }
           }
-        }
+        ]
       },
       "SoupItemType": {
         "type": "string",
-        "enum": ["document", "chat", "project"]
+        "enum": ["document", "chat", "project", "email_thread"]
+      },
+      "SoupMacroAttachment": {
+        "type": "object",
+        "required": ["threadId", "dbId", "messageId", "itemId", "itemType"],
+        "properties": {
+          "dbId": { "type": "string", "format": "uuid" },
+          "itemId": { "type": "string", "format": "uuid" },
+          "itemType": { "type": "string" },
+          "messageId": { "type": "string", "format": "uuid" },
+          "threadId": { "type": "string", "format": "uuid" }
+        }
       },
       "SoupPage": {
         "type": "object",

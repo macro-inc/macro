@@ -13,12 +13,16 @@ axum = [
   "models_pagination/axum",
   "models_soup/schema",
 ]
+inbound = ["ports"]
+outbound = ["ports"]
+ports = ["frecency/ports"]
 
 
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
 chrono = { workspace = true }
+doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 either = { workspace = true }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
@@ -41,7 +45,7 @@ uuid = { workspace = true }
 [dev-dependencies]
 cool_asserts = "2"
 filter_ast = { path = "../filter_ast" }
-frecency = { path = "../frecency", features = ["mock"] }
+frecency = { path = "../frecency", features = ["mock", "outbound"] }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 item_filters = { path = "../item_filters", features = ["mock"] }

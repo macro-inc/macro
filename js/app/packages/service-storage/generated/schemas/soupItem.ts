@@ -4,8 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
-import type { SoupDocument } from './soupDocument';
-import type { SoupChat } from './soupChat';
-import type { SoupProject } from './soupProject';
+import type { SoupItemOneOf } from './soupItemOneOf';
+import type { SoupItemOneOfThree } from './soupItemOneOfThree';
+import type { SoupItemOneOfFive } from './soupItemOneOfFive';
+import type { SoupItemOneOfSeven } from './soupItemOneOfSeven';
 
-export type SoupItem = SoupDocument | SoupChat | SoupProject;
+export type SoupItem = SoupItemOneOf | SoupItemOneOfThree | SoupItemOneOfFive | SoupItemOneOfSeven;

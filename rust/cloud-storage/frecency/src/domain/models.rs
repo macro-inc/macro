@@ -13,6 +13,7 @@ use num_traits::ToPrimitive;
 use ordered_float::OrderedFloat;
 use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, VecDeque};
+use thiserror::Error;
 
 #[cfg(test)]
 mod tests;
@@ -375,3 +376,8 @@ pub trait JoinFrecency: Iterator + Sized {
 }
 
 impl<T> JoinFrecency for T where T: Iterator + Sized {}
+
+/// The error that is produced by the [FrecencyQueryService]
+#[derive(Debug, Error)]
+#[error(transparent)]
+pub struct FrecencyQueryErr(#[from] anyhow::Error);
