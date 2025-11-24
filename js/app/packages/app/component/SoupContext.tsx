@@ -172,6 +172,9 @@ function createViewData(
       unrollNotifications:
         viewProps?.display?.unrollNotifications ??
         VIEWCONFIG_BASE.display.unrollNotifications,
+      displayProperties:
+        viewProps?.display?.displayProperties ??
+        VIEWCONFIG_BASE.display.displayProperties,
       limit: viewProps?.display?.limit,
     },
     sort: {
