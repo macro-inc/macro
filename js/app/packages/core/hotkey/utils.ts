@@ -326,10 +326,12 @@ export function runCommand(
         setActiveScope(commandScope.scopeId);
         if (!commandCaptured) {
           setExecutedTokens((prev) =>
-            prev.includes(command.hotkeyToken ?? '')
-              ? prev
-              : [...prev, command.hotkeyToken ?? '']
-          );
+            command.hotkeyToken ?
+              prev.includes(command.hotkeyToken)
+                ? prev
+                : [...prev, command.hotkeyToken]
+            : prev
+        );
         }
         commandScopeActivated = true;
         e?.preventDefault();
@@ -343,9 +345,11 @@ export function runCommand(
       setLastExecutedCommand(command);
       commandCaptured = command;
       setExecutedTokens((prev) =>
-        prev.includes(command.hotkeyToken ?? '')
-          ? prev
-          : [...prev, command.hotkeyToken ?? '']
+        command.hotkeyToken ?
+          prev.includes(command.hotkeyToken)
+            ? prev
+            : [...prev, command.hotkeyToken]
+          : prev
       );
       e?.preventDefault();
       e?.stopPropagation();

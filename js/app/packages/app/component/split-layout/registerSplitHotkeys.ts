@@ -6,14 +6,12 @@ import {
 } from '@core/signal/layout';
 import type { ViewId } from '@core/types/view';
 import { registerHotkey } from 'core/hotkey/hotkeys';
-import type { Accessor } from 'solid-js';
 import { fireMacroJump } from '../MacroJump';
 import type { SplitContent } from './layoutManager';
 import { focusAdjacentSplit } from './layoutUtils';
 
 export function registerSplitHotkeys({
   splitHotkeyScope,
-  splitName,
   insertSplit,
   closeSplit,
   toggleSpotlight,
@@ -23,9 +21,9 @@ export function registerSplitHotkeys({
   goForward,
   setSelectedView,
   replaceSplit,
+  splitName,
 }: {
   splitHotkeyScope: string;
-  splitName: Accessor<string>;
   insertSplit: (content: SplitContent) => void;
   closeSplit: () => void;
   toggleSpotlight: () => void;
@@ -35,6 +33,7 @@ export function registerSplitHotkeys({
   goForward: () => void;
   setSelectedView: (view: ViewId) => void;
   replaceSplit: (content: SplitContent) => void;
+  splitName: () => string;
 }) {
   const windowScope = registerHotkey({
     scopeId: splitHotkeyScope,
@@ -72,7 +71,7 @@ export function registerSplitHotkeys({
     scopeId: windowScope.commandScopeId,
     hotkey: 'm',
     hotkeyToken: TOKENS.split.spotlight.toggle,
-    description: `Spotlight ${splitName()}`,
+    description: () => `Maximize ${splitName()}`,
     keyDownHandler: () => {
       toggleSpotlight();
       return true;

@@ -335,13 +335,6 @@ function SplitPanel(props: SplitPanelProps) {
   const panelSize = createElementSize(panelRef);
   const [contentOffsetTop, setContentOffsetTop] = createSignal(0);
 
-  const splitName = createMemo(() => {
-    const { type, id } = props.split.content;
-    if (type === 'component') return id;
-
-    return type;
-  });
-
   const unifiedListContext = createSoupContext();
 
   const [previewState, setPreviewState] = createSignal(false);
@@ -349,7 +342,6 @@ function SplitPanel(props: SplitPanelProps) {
   const splitLayoutHelpers = useSplitLayout();
   const { goScope } = registerSplitHotkeys({
     splitHotkeyScope,
-    splitName,
     insertSplit: splitLayoutHelpers.insertSplit,
     closeSplit: () => props.handle.close(),
     toggleSpotlight: () => props.handle.toggleSpotlight(),
@@ -359,9 +351,9 @@ function SplitPanel(props: SplitPanelProps) {
     goForward: () => props.handle.goForward(),
     setSelectedView: (view) => unifiedListContext.setSelectedView(view),
     replaceSplit: splitLayoutHelpers.replaceSplit,
+    splitName: () => props.handle.displayName(),
   });
   createNavigationEntityListShortcut({
-    splitName,
     splitHandle: props.handle,
     splitHotkeyScope,
     unifiedListContext,
