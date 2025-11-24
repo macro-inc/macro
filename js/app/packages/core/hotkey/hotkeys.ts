@@ -236,7 +236,9 @@ export function registerHotkey(
         setHotkeyTokenMap((prev) => {
           const newMap = new Map(prev);
           const existingCommands = newMap.get(hotkeyToken) || [];
-          const newCommands = existingCommands.filter((c) => c.scopeId !== scopeId);
+          const newCommands = existingCommands.filter(
+            (c) => c.scopeId !== scopeId
+          );
           if (newCommands.length > 0) {
             newMap.set(hotkeyToken, newCommands);
           } else {

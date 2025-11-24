@@ -89,19 +89,6 @@ export default function GlobalShortcuts() {
     });
   }
 
-  const quickCreateScope = registerHotkey({
-    hotkeyToken: TOKENS.global.quickCreateCommand,
-    hotkey: 'q',
-    scopeId: 'global',
-    description: 'Quick send',
-    keyDownHandler: () => {
-      return true;
-    },
-    activateCommandScope: true,
-    // TODO: temporarily hiding this from the command menu, because we need to wire up the create options
-    hide: konsoleOpen,
-  });
-
   registerHotkey({
     hotkeyToken: TOKENS.global.commandMenu,
     hotkey: 'cmd+k',

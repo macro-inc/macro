@@ -1,7 +1,6 @@
 import { IS_MAC } from '@core/constant/isMac';
 import { logger } from '@observability/logger';
-import { createMemo } from 'solid-js';
-import { createEffect } from 'solid-js';
+import { createEffect, createMemo } from 'solid-js';
 import {
   macOptionReverse,
   shiftPunctuationMap,
@@ -21,7 +20,10 @@ import {
   setPressedKeys,
 } from './state';
 import type { HotkeyToken } from './tokens';
-import type { HotkeyCommand, HotkeyRegistrationOptions, ScopeNode,
+import type {
+  HotkeyCommand,
+  HotkeyRegistrationOptions,
+  ScopeNode,
   ValidHotkey,
 } from './types';
 
@@ -330,12 +332,12 @@ export function runCommand(
         setActiveScope(commandScope.scopeId);
         if (!commandCaptured) {
           setExecutedTokens((prev) =>
-            command.hotkeyToken ?
-              prev.includes(command.hotkeyToken)
+            command.hotkeyToken
+              ? prev.includes(command.hotkeyToken)
                 ? prev
                 : [...prev, command.hotkeyToken]
-            : prev
-        );
+              : prev
+          );
         }
         commandScopeActivated = true;
         e?.preventDefault();
@@ -349,8 +351,8 @@ export function runCommand(
       setLastExecutedCommand(command);
       commandCaptured = command;
       setExecutedTokens((prev) =>
-        command.hotkeyToken ?
-          prev.includes(command.hotkeyToken)
+        command.hotkeyToken
+          ? prev.includes(command.hotkeyToken)
             ? prev
             : [...prev, command.hotkeyToken]
           : prev
