@@ -57,6 +57,22 @@ pub async fn get_entity_name(
             .fetch_one(db)
             .await?
         }
+        SearchEntityType::Channels => {
+            sqlx::query!(
+                r#"
+                SELECT
+                    c.name as "name?"
+                FROM
+                    "comms_channels" c
+                WHERE
+                    c.id = $1
+                "#,
+                entity_id,
+            )
+            .map(|row| row.name)
+            .fetch_one(db)
+            .await?
+        }
         _ => {
             anyhow::bail!("entity type not supported");
         }
