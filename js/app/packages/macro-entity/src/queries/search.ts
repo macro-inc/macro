@@ -20,7 +20,7 @@ import { useHistory } from '@service-storage/history';
 import { useInfiniteQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { EntityData } from '../types/entity';
-import type { SearchData, WithSearch } from '../types/search';
+import type { ContentHitData, SearchData, WithSearch } from '../types/search';
 import type { EntityInfiniteQuery } from './entity';
 import { queryKeys } from './key';
 
@@ -40,9 +40,11 @@ type TypedInnerSearchResult =
   | { results: ChannelSearchResult[]; type: 'channel' };
 
 const getSearchData = (data: TypedInnerSearchResult): SearchData => {
+  let contentHitData: ContentHitData[] = [];
+
   switch (data.type) {
     case 'channel': {
-      const contentHitData = data.results.flatMap((r) => {
+      contentHitData = data.results.flatMap((r) => {
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
           type: 'channel' as const,
@@ -53,18 +55,10 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           location: undefined,
         }));
       });
-      const nameHighlight = data.results.at(0)?.highlight.name ?? null;
-
-      return {
-        nameHighlight: nameHighlight
-          ? mergeAdjacentMacroEmTags(nameHighlight)
-          : null,
-        contentHitData: contentHitData.length > 0 ? contentHitData : null,
-        source: 'service' as const,
-      };
+      break;
     }
     case 'pdf': {
-      const contentHitData = data.results.flatMap((r) => {
+      contentHitData = data.results.flatMap((r) => {
         const contents = r.highlight.content ?? [];
         return contents.map((content) => {
           const mergedContent = mergeAdjacentMacroEmTags(content);
@@ -80,53 +74,38 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           };
         });
       });
-      const nameHighlight = data.results.at(0)?.highlight.name ?? null;
-
-      return {
-        nameHighlight: nameHighlight
-          ? mergeAdjacentMacroEmTags(nameHighlight)
-          : null,
-        contentHitData: contentHitData.length > 0 ? contentHitData : null,
-        source: 'service' as const,
-      };
+      break;
     }
     case 'md': {
-      const contentHitData = data.results.flatMap((r) => {
+      contentHitData = data.results.flatMap((r) => {
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
           content: mergeAdjacentMacroEmTags(content),
           location: { type: 'md' as const, nodeId: r.node_id },
         }));
       });
-      const nameHighlight = data.results.at(0)?.highlight.name ?? null;
-
-      return {
-        nameHighlight: nameHighlight
-          ? mergeAdjacentMacroEmTags(nameHighlight)
-          : null,
-        contentHitData: contentHitData.length > 0 ? contentHitData : null,
-        source: 'service' as const,
-      };
+      break;
     }
     default: {
-      const contentHitData = data.results.flatMap((r) => {
+      contentHitData = data.results.flatMap((r) => {
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
           content: mergeAdjacentMacroEmTags(content),
           location: undefined,
         }));
       });
-      const nameHighlight = data.results.at(0)?.highlight.name ?? null;
-
-      return {
-        nameHighlight: nameHighlight
-          ? mergeAdjacentMacroEmTags(nameHighlight)
-          : null,
-        contentHitData: contentHitData.length > 0 ? contentHitData : null,
-        source: 'service' as const,
-      };
     }
   }
+
+  const nameHighlight = data.results.at(0)?.highlight.name ?? null;
+
+  return {
+    nameHighlight: nameHighlight
+      ? mergeAdjacentMacroEmTags(nameHighlight)
+      : null,
+    contentHitData: contentHitData.length > 0 ? contentHitData : null,
+    source: 'service' as const,
+  };
 };
 
 const useMapSearchResponseItem = () => {
