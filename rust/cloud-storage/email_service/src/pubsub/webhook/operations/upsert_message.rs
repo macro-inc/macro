@@ -428,12 +428,10 @@ async fn fetch_and_insert_thread(
 
         // notify search about new entity
         ctx.sqs_client
-            .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(
-                EntityName {
-                    entity_id: thread_id,
-                    entity_type: SearchEntityType::Emails,
-                },
-            ))
+            .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(EntityName {
+                entity_id: thread_id,
+                entity_type: SearchEntityType::Emails,
+            }))
             .await
             .map_err(|e| {
                 ProcessingError::NonRetryable(DetailedError {

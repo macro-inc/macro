@@ -100,12 +100,10 @@ pub async fn update_thread_metadata(
 
     // notify search about new entity
     ctx.sqs_client
-        .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(
-            EntityName {
-                entity_id: p.thread_db_id,
-                entity_type: SearchEntityType::Emails,
-            },
-        ))
+        .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(EntityName {
+            entity_id: p.thread_db_id,
+            entity_type: SearchEntityType::Emails,
+        }))
         .await
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {
