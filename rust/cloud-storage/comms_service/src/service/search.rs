@@ -87,7 +87,7 @@ pub fn send_remove_channel_name_to_search_extractor_queue(
 
         tokio::spawn({
             let sqs_client = sqs_client.clone();
-            let channel_id = channel_id.clone();
+            let channel_id = *channel_id;
             async move {
                 let _ = sqs_client
                     .send_message_to_search_event_queue(

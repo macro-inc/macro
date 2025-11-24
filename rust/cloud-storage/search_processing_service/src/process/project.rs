@@ -1,4 +1,3 @@
-use models_opensearch::SearchEntityType;
 use opensearch_client::{
     OpensearchClient, date_format::EpochSeconds, upsert::project::UpsertProjectArgs,
 };
@@ -52,10 +51,6 @@ pub async fn remove_project(
         .delete_project(&message.project_id)
         .await?;
 
-    opensearch_client
-        .delete_entity_name(&message.project_id, &SearchEntityType::Projects)
-        .await?;
-
     Ok(())
 }
 
@@ -67,10 +62,6 @@ pub async fn remove_project_bulk(
 ) -> anyhow::Result<()> {
     opensearch_client
         .delete_project_bulk(&message.project_ids)
-        .await?;
-
-    opensearch_client
-        .delete_entity_names_bulk(&message.project_ids, &SearchEntityType::Projects)
         .await?;
 
     Ok(())

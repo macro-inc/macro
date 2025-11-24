@@ -2,7 +2,7 @@ use models_opensearch::SearchEntityType;
 
 use crate::{
     OpensearchClient, Result,
-    delete::name::{delete_entity_name, delete_entity_name_bulk},
+    delete::name::{delete_entity_name, delete_entity_name_bulk, delete_entity_name_bulk_for_user},
     upsert::name::{UpsertEntityNameArgs, upsert_entity_name},
 };
 
@@ -31,5 +31,11 @@ impl OpensearchClient {
         entity_type: &SearchEntityType,
     ) -> Result<()> {
         delete_entity_name_bulk(&self.inner, entity_ids, entity_type).await
+    }
+
+    /// Delete entity names for a user
+    #[tracing::instrument(skip(self), err)]
+    pub async fn delete_entities_for_user(&self, user_id: &str) -> Result<()> {
+        delete_entity_name_bulk_for_user(&self.inner, user_id).await
     }
 }
