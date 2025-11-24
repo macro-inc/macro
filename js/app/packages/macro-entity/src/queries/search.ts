@@ -37,7 +37,7 @@ type InnerSearchResult =
   | ChannelSearchResult
   | ProjectSearchResult;
 
-const getLocationHighlights = (
+const getDocumentLocationHighlights = (
   innerResults: DocumentSearchResult[],
   fileType: FileTypeWithLocation,
   searchQuery: string
@@ -70,6 +70,7 @@ const getLocationHighlights = (
       }
 
       return {
+        type: undefined,
         content: mergedContent,
         location,
       };
@@ -87,11 +88,35 @@ const getLocationHighlights = (
   };
 };
 
+const getChannelMessageLocationHighlights = (
+  innerResults: ChannelSearchResult[]
+) => {
+  const contentHighlights = innerResults.flatMap((r) => {
+    const contents = r.highlight.content ?? [];
+
+    return contents.map((content) => ({
+      type: 'channel-message' as const,
+      id: r.message_id,
+      content: mergeAdjacentMacroEmTags(content),
+      senderId: r.sender_id,
+      sentAt: r.created_at,
+      location: undefined,
+    }));
+  });
+
+  return {
+    nameHighlight: null,
+    contentHighlights: contentHighlights.length > 0 ? contentHighlights : null,
+    source: 'service' as const,
+  };
+};
+
 const getHighlights = (innerResults: InnerSearchResult[]) => {
   const contentHighlights = innerResults.flatMap((r) => {
     const contents = r.highlight.content ?? [];
 
     return contents.map((content) => ({
+      type: undefined,
       content: mergeAdjacentMacroEmTags(content),
       location: undefined,
     }));
@@ -124,7 +149,7 @@ const useMapSearchResponseItem = () => {
         const searchFileType =
           result.file_type === 'docx' ? 'pdf' : result.file_type;
         const search = ['md', 'pdf'].includes(searchFileType)
-          ? getLocationHighlights(
+          ? getDocumentLocationHighlights(
               result.document_search_results,
               searchFileType as FileTypeWithLocation,
               searchQuery
@@ -191,7 +216,9 @@ const useMapSearchResponseItem = () => {
           (c) => c.id === result.channel_id
         );
 
-        const search = getHighlights(result.channel_message_search_results);
+        const search = getChannelMessageLocationHighlights(
+          result.channel_message_search_results
+        );
 
         return {
           type: 'channel',

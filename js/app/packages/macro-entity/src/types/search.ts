@@ -15,10 +15,24 @@ export type FileTypeWithLocation = 'md' | 'pdf';
 
 export type SearchLocation = MarkdownHighlightLocation | PdfHighlightLocation;
 
-type ContentHighlight = {
+export type ChannelMessageContentHighlight = {
+  type: 'channel-message';
+  id: string;
+  content: string;
+  senderId: string;
+  sentAt: number;
+  location?: SearchLocation;
+};
+
+type GenericContentHighlight = {
+  type: undefined;
   content: string;
   location?: SearchLocation;
 };
+
+type ContentHighlight =
+  | GenericContentHighlight
+  | ChannelMessageContentHighlight;
 
 export type WithSearch<T extends object> = T & {
   search: {
