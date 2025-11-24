@@ -30,12 +30,13 @@ import {
   setKonsoleMode,
   toggleKonsoleVisibility,
 } from './command/state';
-import { toggleCreateMenu } from './Launcher';
+import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
 import { fireMacroJump } from './MacroJump';
 import {
   quickCreateMenuOpenSignal,
   selectedQuickCreateTypeSignal,
 } from './QuickCreateMenu';
+import type { ValidHotkey } from '@core/hotkey/types';
 
 export default function GlobalShortcuts() {
   const [bigChatOpen, setBigChatOpen] = useBigChat();
@@ -58,17 +59,44 @@ export default function GlobalShortcuts() {
     return;
   };
 
-  registerHotkey({
+  const createCommandScope = registerHotkey({
     hotkeyToken: TOKENS.global.createCommand,
     hotkey: 'c',
     scopeId: 'global',
     description: 'Create',
     keyDownHandler: () => {
-      toggleCreateMenu();
+      setCreateMenuOpen((prev) => !prev);
       return true;
     },
     displayPriority: 10,
+    activateCommandScope: true,
   });
+
+  for (const block of CREATABLE_BLOCKS) {
+    registerHotkey({
+      hotkeyToken: block.hotkeyToken,
+      hotkey: block.hotkey,
+      scopeId: createCommandScope.commandScopeId,
+      description: block.description,
+      keyDownHandler: () => {
+        block.keyDownHandler();
+        return true;
+      },
+      runWithInputFocused: true,
+    });
+
+    registerHotkey({
+      hotkeyToken: block.altHotkeyToken,
+      hotkey: `opt+${block.hotkey}` as ValidHotkey,
+      scopeId: createCommandScope.commandScopeId,
+      description: `${block.description} in new split`,
+      keyDownHandler: () => {
+        block.keyDownHandler();
+        return true;
+      },
+      runWithInputFocused: true,
+    });
+  }
 
   const quickCreateScope = registerHotkey({
     hotkeyToken: TOKENS.global.quickCreateCommand,
