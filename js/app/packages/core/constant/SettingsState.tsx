@@ -6,7 +6,6 @@ export type SettingsTab =
   | 'Subscription'
   | 'Organization'
   | 'Appearance'
-  | 'Notification'
   | 'Mobile'
   | 'AI Memory';
 

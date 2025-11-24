@@ -24,6 +24,7 @@ import {
 import { useOrganizationName } from '@core/user';
 import Logout from '@icon/regular/sign-out.svg';
 import { Popover } from '@kobalte/core';
+import { Switch } from '@kobalte/core/switch';
 import IconUpload from '@macro-icons/macro-upload.svg';
 import { authServiceClient } from '@service-auth/client';
 import { useEmail, useLicenseStatus, useUserId } from '@service-gql/client';
@@ -34,6 +35,7 @@ import {
   useEmailLinksStatus,
 } from '../../signal/emailAuth';
 import { BetaTooltip } from '../BetaTooltip';
+import { usePlatformNotificationState } from '@notifications';
 
 // NOTE: solid directives
 false && fileSelector;
@@ -68,6 +70,7 @@ export function Account() {
   const { showPaywall } = usePaywallState();
   const hasPaidAccess = useHasPaidAccess();
   const [showEmailModal, setShowEmailModal] = createSignal<boolean>(false);
+  const notificationState = usePlatformNotificationState();
 
   const userName = useUserName();
   const [updatedFirstName, setUpdatedFirstName] = createSignal<
@@ -261,6 +264,27 @@ export function Account() {
               />
             </div>
           </div>
+        </Show>
+        <Show when={notificationState !== 'not-supported' && notificationState}>
+          {(state) => (
+            <div class="flex items-center justify-between mb-[18px]">
+              <div class="text-sm">Notifications</div>
+              <Switch
+                checked={state().permission.latest === 'granted'}
+                onChange={(enabled) =>
+                  enabled
+                    ? state().requestPermission()
+                    : state().unregisterNotification()
+                }
+                class="focus-bracket-within"
+              >
+                <Switch.Input class="sr-only" />
+                <Switch.Control class="mt-1 inline-flex h-6 w-11 hover:ring-1 hover:ring-edge rounded-full border-2 border-transparent transition-colors bg-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 data-[checked]:bg-accent">
+                  <Switch.Thumb class="block h-5 w-5 rounded-full bg-dialog transition-transform data-[checked]:translate-x-5" />
+                </Switch.Control>
+              </Switch>
+            </div>
+          )}
         </Show>
         <div class="flex flex-row justify-between items-center border-t border-edge pt-2">
           <div
