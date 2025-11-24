@@ -25,7 +25,7 @@ import WideEmail from '@macro-icons/wide/email.svg';
 import WideFileCode from '@macro-icons/wide/file-code.svg';
 import WideFileMd from '@macro-icons/wide/file-md.svg';
 import WideFolder from '@macro-icons/wide/folder.svg';
-import WideStar from '@macro-icons/wide/Star.svg';
+import WideStar from '@macro-icons/wide/star.svg';
 import { useCreateProject } from '@service-storage/projects';
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
