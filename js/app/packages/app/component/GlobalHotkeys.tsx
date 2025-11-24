@@ -1,6 +1,7 @@
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
+import type { ValidHotkey } from '@core/hotkey/types';
 import {
   isRightPanelOpen,
   useBigChat,
@@ -21,7 +22,6 @@ import {
   themes,
   toggleGutterSize,
 } from '../../block-theme/signals/themeSignals';
-
 import { applyTheme } from '../../block-theme/utils/themeUtils';
 import { playSound } from '../util/sound';
 import {
@@ -36,7 +36,6 @@ import {
   quickCreateMenuOpenSignal,
   selectedQuickCreateTypeSignal,
 } from './QuickCreateMenu';
-import type { ValidHotkey } from '@core/hotkey/types';
 
 export default function GlobalShortcuts() {
   const [bigChatOpen, setBigChatOpen] = useBigChat();
