@@ -18,6 +18,8 @@ import {
 } from 'solid-js';
 import type { DisplayOptions } from './ViewConfig';
 
+const MAX_DISPLAY_PROPERTIES = 4;
+
 type PropertyDisplayControlProps = {
   selectedPropertyIds: Accessor<DisplayOptions['displayProperties']>;
   setSelectedPropertyIds: (
@@ -212,7 +214,7 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
     if (!currentIds.includes(property.id)) {
       const currentIds = props.selectedPropertyIds();
       // Enforce max 6 properties
-      if (currentIds.length >= 6) {
+      if (currentIds.length >= MAX_DISPLAY_PROPERTIES) {
         toast.failure('You can only select up to 6 properties to display.');
         return;
       }
