@@ -176,7 +176,7 @@ export function MenuItem(props: MenuItemProps) {
   return (
     // Note: Kobalte's ContextMenu.Item is identical to DropdownMenu.Item. Either can be used inside of the other.
     <MenuItemWrapper
-      class={`${MENU_ITEM_CLASS} ${props.disabled ? 'opacity-50 cursor-not-allowed text-ink' : 'hover:bg-hover hover-transition-bg text-ink'} ${props.class ?? ''}`}
+      class={`${MENU_ITEM_CLASS} ${props.disabled ? 'opacity-50 cursor-not-allowed' : 'hover:bg-hover hover-transition-bg'} ${props.class ?? ''}`}
       onClick={props.onClick}
       disabled={props.disabled}
       closeOnSelect={props.closeOnSelect}

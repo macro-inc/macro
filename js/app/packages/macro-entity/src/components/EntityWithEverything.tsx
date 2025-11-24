@@ -406,7 +406,7 @@ export function EntityWithEverything(
       >
         <button
           type="button"
-          class="col-1 size-full relative group/button flex items-center justify-center"
+          class="col-1 size-full relative group/button flex items-center justify-center bracket-never"
           onClick={(e) => {
             props.onChecked?.(!props.checked, e.shiftKey);
           }}

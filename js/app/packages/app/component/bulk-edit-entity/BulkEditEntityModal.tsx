@@ -9,10 +9,11 @@ import {
   Show,
 } from 'solid-js';
 import { BulkDeleteView } from './BulkDeleteView';
+import { BulkMoveToProjectView } from './BulkMoveToProjectView';
 import { BulkRenameEntitiesView } from './BulkRenameEntitiesView';
 
 export const BulkEditEntityModalTitle = (props: { title: string }) => {
-  return <h2 class="text-xl mb-3">{props.title}</h2>;
+  return <h2 class="text-xl mb-4">{props.title}</h2>;
 };
 
 export const BulkEditEntityModalActionFooter = (props: {
@@ -22,16 +23,19 @@ export const BulkEditEntityModalActionFooter = (props: {
   isDisabled?: boolean;
 }) => {
   return (
-    <div class="flex justify-end mt-2 tex-sm pt-2">
-      <button class="py-1 px-3 font-mono text-sm" onClick={props.onCancel}>
+    <div class="flex w-full justify-end items-stretch tex-sm gap-1">
+      <button
+        class="py-1 px-3 text-sm border-edge-muted border bg-panel"
+        onClick={props.onCancel}
+      >
         Cancel
       </button>
       <button
-        class={`uppercase py-1 px-3 font-mono text-sm ${
-          props.isDisabled
-            ? 'bg-edge/20 text-ink-placeholder cursor-not-allowed'
-            : 'bg-accent text-menu'
-        }`}
+        class="uppercase py-1 px-3 text-sm font-semibold border"
+        classList={{
+          'text-accent bg-accent/10 border-accent/20': !props.isDisabled,
+          'text-ink-disabled bg-egde/10 border-edge-muted': props.isDisabled,
+        }}
         onClick={props.onConfirm}
         disabled={props.isDisabled}
       >
@@ -47,6 +51,7 @@ const BulkEditEntityModalContent = (props: {
   view: 'rename' | 'moveToProject' | 'delete' | null;
   entities: EntityData[];
   onFinish?: () => void;
+  onCancel?: () => void;
 }) => {
   const handleFinish = () => {
     props.setIsOpen(false);
@@ -54,15 +59,25 @@ const BulkEditEntityModalContent = (props: {
   };
   const handleCancel = () => {
     props.setIsOpen(false);
+    props.onCancel?.();
   };
 
   return (
-    <Dialog open={props.isOpen()} onOpenChange={props.setIsOpen} modal={true}>
+    <Dialog
+      open={props.isOpen()}
+      onOpenChange={(open) => {
+        if (!open) {
+          handleCancel();
+        }
+        props.setIsOpen(open);
+      }}
+      modal={true}
+    >
       <Dialog.Portal>
         <Dialog.Overlay class="fixed inset-0 z-modal bg-modal-overlay" />
-        <div class="fixed inset-0 z-modal w-screen h-screen flex items-center justify-center">
-          <Dialog.Content class="flex items-center justify-center">
-            <div class="pointer-events-auto max-w-xl bg-menu border border-edge w-lg h-fit p-2">
+        <div class="fixed inset-0 z-modal">
+          <Dialog.Content>
+            <div class="pointer-events-auto max-w-xl bg-menu border border-edge-muted w-lg h-fit p-2 mt-[25vh] mx-auto">
               <div class="w-full my-1">
                 <Show when={props.view === 'rename'}>
                   <BulkRenameEntitiesView
@@ -72,12 +87,11 @@ const BulkEditEntityModalContent = (props: {
                   />
                 </Show>
                 <Show when={props.view === 'moveToProject'}>
-                  {/* <MoveToProjectView */}
-                  {/*   entity={props.entity!} */}
-                  {/*   onFinish={handleFinish} */}
-                  {/*   onCancel={handleCancel} */}
-                  {/* /> */}
-                  <div />
+                  <BulkMoveToProjectView
+                    entities={props.entities}
+                    onFinish={handleFinish}
+                    onCancel={handleCancel}
+                  />
                 </Show>
                 <Show when={props.view === 'delete'}>
                   <BulkDeleteView
@@ -117,19 +131,19 @@ export const BulkEditEntityModal: ParentComponent<BulkEditEntityModalProps> = (
   );
 };
 
-// Global modal state
 const [globalModalProps, setGlobalModalProps] = createSignal<{
   view: 'rename' | 'moveToProject' | 'delete';
   entities: EntityData[];
   onFinish?: () => void;
+  onCancel?: () => void;
 } | null>(null);
 const [modalOpen, setModalOpen] = createControlledOpenSignal();
 
-// Global modal open function
 export const openBulkEditModal = (props: {
   view: 'rename' | 'moveToProject' | 'delete';
   entities: EntityData[];
   onFinish?: () => void;
+  onCancel?: () => void;
 }) => {
   setModalOpen(true);
   setGlobalModalProps(props);
@@ -146,6 +160,14 @@ export const GlobalBulkEditEntityModal = () => {
     }
   };
 
+  const handleCancel = () => {
+    const props = globalModalProps();
+    setGlobalModalProps(null);
+    if (props?.onCancel) {
+      props.onCancel();
+    }
+  };
+
   return (
     <Show when={modalProps()}>
       {(props) => (
@@ -155,6 +177,7 @@ export const GlobalBulkEditEntityModal = () => {
           view={props().view}
           entities={props().entities}
           onFinish={handleFinish}
+          onCancel={handleCancel}
         />
       )}
     </Show>
