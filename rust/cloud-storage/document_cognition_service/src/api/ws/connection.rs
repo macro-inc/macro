@@ -1,5 +1,4 @@
-use ai::types::ChatMessageContent;
-use ai::types::{AssistantMessagePart, Role};
+use super::chat_permissions;
 use anyhow::Result;
 use axum::extract::State;
 use axum::{
@@ -12,19 +11,9 @@ use axum::{
 use dashmap::DashMap;
 use macro_user_id::user_id::MacroUserId;
 use model::{chat::AttachmentType, user::UserContext};
+use models_permissions::share_permission::access_level::AccessLevel;
 use std::sync::Arc;
 use std::sync::LazyLock;
-use tokio::sync::Mutex;
-
-#[derive(Debug, Clone)]
-pub struct PartialMessageInfo {
-    pub chat_id: String,
-    pub content: ChatMessageContent,
-    pub model: Option<String>,
-}
-use super::chat_permissions;
-use macro_db_client::dcs::partial_message::create_partial_message;
-use models_permissions::share_permission::access_level::AccessLevel;
 use tokio::sync::mpsc::{self, UnboundedSender, WeakUnboundedSender};
 use tokio_util::sync::CancellationToken;
 use uuid::Uuid;
@@ -53,105 +42,6 @@ pub static MESSAGE_ABORT_MAP: LazyLock<DashMap<String, bool>> =
 /// Maps a connection id to a websocket sender
 pub static CONNECTION_MAP: LazyLock<DashMap<String, WeakUnboundedSender<FromWebSocketMessage>>> =
     std::sync::LazyLock::new(DashMap::new);
-
-/// Maps a connection id to active partial message info
-pub static CONNECTION_PARTIAL_MESSAGES: LazyLock<DashMap<String, PartialMessageInfo>> =
-    std::sync::LazyLock::new(DashMap::new);
-
-pub static CONNECTION_COUNT: LazyLock<Mutex<u32>> = std::sync::LazyLock::new(|| Mutex::new(0));
-
-pub async fn increment_connection_count() -> u32 {
-    let mut connection_count = CONNECTION_COUNT.lock().await;
-    *connection_count += 1;
-    *connection_count
-}
-
-pub async fn decrement_connection_count() -> u32 {
-    let mut connection_count = CONNECTION_COUNT.lock().await;
-    *connection_count -= 1;
-    *connection_count
-}
-
-pub fn register_partial_message(
-    connection_id: &str,
-    _message_id: &str,
-    chat_id: &str,
-    model: Option<String>,
-) {
-    CONNECTION_PARTIAL_MESSAGES.insert(
-        connection_id.to_string(),
-        PartialMessageInfo {
-            chat_id: chat_id.to_string(),
-            content: ChatMessageContent::AssistantMessageParts(Vec::new()),
-            model,
-        },
-    );
-}
-
-pub fn add_partial_message_part(connection_id: &str, part: AssistantMessagePart) {
-    if let Some(mut entry) = CONNECTION_PARTIAL_MESSAGES.get_mut(connection_id)
-        && let ChatMessageContent::AssistantMessageParts(ref mut parts) = entry.content
-    {
-        // Only add the part if serialization would succeed
-        if serde_json::to_value(&part).is_ok() {
-            match &part {
-                AssistantMessagePart::Text { text } => {
-                    // If the last part is also text, accumulate it
-                    if let Some(AssistantMessagePart::Text { text: last_text }) = parts.last_mut() {
-                        last_text.push_str(text);
-                    } else {
-                        // Otherwise, add as new text part
-                        parts.push(part);
-                    }
-                }
-                _ => {
-                    // For non-text parts (tool calls, responses, etc.), add as separate parts
-                    parts.push(part);
-                }
-            }
-        }
-    }
-}
-
-/// Clears partial message tracking for a connection (used when stream completes successfully)
-pub fn clear_partial_message(connection_id: &str) {
-    CONNECTION_PARTIAL_MESSAGES.remove(connection_id);
-}
-
-/// Handles disconnection from the websocket connection by removing the connection from the map
-/// and logging any partial message content
-pub async fn write_partial_message(connection_id: &str, ctx: &crate::api::context::ApiContext) {
-    if let Some((_, partial_info)) = CONNECTION_PARTIAL_MESSAGES.remove(connection_id) {
-        // Check if there are any message parts to save
-        let has_content = match &partial_info.content {
-            ChatMessageContent::AssistantMessageParts(parts) => !parts.is_empty(),
-            ChatMessageContent::Text(text) => !text.is_empty(),
-        };
-
-        if has_content {
-            // Create a partial message in database with the accumulated content
-            if let Ok(mut transaction) = ctx.db.begin().await {
-                if let Err(e) = create_partial_message(
-                    &mut transaction,
-                    &partial_info.chat_id,
-                    Role::Assistant,
-                    &partial_info.content,
-                    partial_info.model,
-                )
-                .await
-                {
-                    tracing::warn!("Failed to save partial message on disconnect: {}", e);
-                } else {
-                    let _ = transaction.commit().await;
-                    tracing::info!(
-                        chat_id=?partial_info.chat_id,
-                        "Saved partial message on disconnect",
-                    );
-                }
-            }
-        }
-    }
-}
 
 #[utoipa::path(
         get,
@@ -215,13 +105,7 @@ async fn handle_websocket_connection(
     ctx: ApiContext,
     user_context: UserContext,
 ) {
-    let connection_count = increment_connection_count().await;
-    tracing::debug!(
-        user_id = ?user_context.user_id,
-        connection_count,
-        "accepted websocket connection"
-    );
-
+    tracing::info!(abort_map_size=?MESSAGE_ABORT_MAP.len(), connection_map_size=?CONNECTION_MAP.len(), "new connection");
     let connection_id = Uuid::new_v4().to_string();
 
     // ws_sender handles sending messages over the websocket
@@ -240,7 +124,6 @@ async fn handle_websocket_connection(
     // Ability to cancel the receiver task from any subtask
     let receiver_cancel_token = CancellationToken::new();
     let cancel_token = receiver_cancel_token.clone();
-    let ctx_for_cleanup = ctx.clone();
     let connection_id_clone = connection_id.clone();
 
     // the sender task listens on messages to the message_receiver, and then
@@ -521,12 +404,7 @@ async fn handle_websocket_connection(
         },
 
     };
-
     CONNECTION_MAP.remove(&connection_id);
-    write_partial_message(&connection_id, &ctx_for_cleanup).await;
-
-    let connection_count = decrement_connection_count().await;
-    tracing::trace!(connection_count, "closed websocket connection");
 }
 
 pub fn ws_send(sender: &UnboundedSender<FromWebSocketMessage>, message: FromWebSocketMessage) {
