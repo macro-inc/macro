@@ -926,8 +926,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     if (entity.type === 'channel' && isSearchEntity(entity)) {
       const location = entity.search.contentHitData?.at(0)?.location;
-      if (!location || location.type !== 'channel') return;
-
+      if (!location) return;
       const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
       await blockHandle?.goToLocationFromParams({
         [CHANNEL_PARAMS.message]: location.messageId,

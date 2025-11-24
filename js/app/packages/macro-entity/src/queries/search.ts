@@ -70,6 +70,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
         return contents.map((content) => {
           const mergedContent = mergeAdjacentMacroEmTags(content);
           return {
+            type: 'pdf' as const,
             content: mergeAdjacentMacroEmTags(content),
             location: {
               type: 'pdf' as const,
@@ -87,6 +88,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
       contentHitData = data.results.flatMap((r) => {
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
+          type: 'md' as const,
           content: mergeAdjacentMacroEmTags(content),
           location: { type: 'md' as const, nodeId: r.node_id },
         }));
