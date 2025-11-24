@@ -62,7 +62,7 @@ pub async fn process_macro_id(
             let macro_id = macro_id.to_string();
 
             async move {
-                match processor.upload(&attachment).await {
+                match processor.upload(link_id, &attachment).await {
                     Ok(_) => {
                         success_count.fetch_add(1, Ordering::Relaxed);
                         println!("Successfully uploaded '{}' (index: {}) for {}", attachment.filename, index, macro_id);

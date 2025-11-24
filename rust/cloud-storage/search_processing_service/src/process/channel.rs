@@ -27,7 +27,6 @@ pub async fn process_channel_message_update(
 
     let upsert_channel_message_args = UpsertChannelMessageArgs {
         channel_id: channel_message_info.channel_id.to_string(),
-        channel_name: channel_message_info.name,
         channel_type: channel_message_info.channel_type.to_string(),
         org_id: channel_message_info.org_id,
         message_id: channel_message_info.channel_message.message_id.to_string(),

@@ -1,6 +1,11 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { isErr } from '@core/util/maybeResult';
+import {
+  extractSearchSnippet,
+  extractSearchTerms,
+  mergeAdjacentMacroEmTags,
+} from '@core/util/searchHighlight';
 import type { ChannelType } from '@service-comms/generated/models';
 import { type PaginatedSearchArgs, searchClient } from '@service-search/client';
 import type {
@@ -15,7 +20,11 @@ import { useHistory } from '@service-storage/history';
 import { useInfiniteQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { EntityData } from '../types/entity';
-import type { WithSearch } from '../types/search';
+import type {
+  FileTypeWithLocation,
+  SearchLocation,
+  WithSearch,
+} from '../types/search';
 import type { EntityInfiniteQuery } from './entity';
 import { queryKeys } from './key';
 
@@ -28,10 +37,73 @@ type InnerSearchResult =
   | ChannelSearchResult
   | ProjectSearchResult;
 
-const getHighlights = (innerResults: InnerSearchResult[]) => {
+const getLocationHighlights = (
+  innerResults: DocumentSearchResult[],
+  fileType: FileTypeWithLocation,
+  searchQuery: string
+) => {
+  const contentHighlights = innerResults.flatMap((r) => {
+    const contents = r.highlight.content ?? [];
+
+    return contents.map((content) => {
+      const mergedContent = mergeAdjacentMacroEmTags(content);
+      let location: SearchLocation | undefined;
+      switch (fileType) {
+        case 'md':
+          location = { type: 'md' as const, nodeId: r.node_id };
+          break;
+        case 'pdf':
+          try {
+            const searchPage = parseInt(r.node_id);
+            location = {
+              type: 'pdf' as const,
+              searchPage,
+              searchSnippet: extractSearchSnippet(mergedContent),
+              searchRawQuery: searchQuery,
+              highlightTerms: extractSearchTerms(mergedContent),
+            };
+          } catch (_e) {
+            console.error('Cannot parse pdf serach info', r);
+            location = undefined;
+          }
+          break;
+      }
+
+      return {
+        content: mergedContent,
+        location,
+      };
+    });
+  });
+
+  const nameHighlight = innerResults.at(0)?.highlight.name ?? null;
+
   return {
-    nameHighlight: innerResults.at(0)?.highlight.name ?? null,
-    contentHighlights: innerResults.flatMap((r) => r.highlight.content ?? []),
+    nameHighlight: nameHighlight
+      ? mergeAdjacentMacroEmTags(nameHighlight)
+      : null,
+    contentHighlights: contentHighlights.length > 0 ? contentHighlights : null,
+    source: 'service' as const,
+  };
+};
+
+const getHighlights = (innerResults: InnerSearchResult[]) => {
+  const contentHighlights = innerResults.flatMap((r) => {
+    const contents = r.highlight.content ?? [];
+
+    return contents.map((content) => ({
+      content: mergeAdjacentMacroEmTags(content),
+      location: undefined,
+    }));
+  });
+
+  const nameHighlight = innerResults.at(0)?.highlight.name ?? null;
+
+  return {
+    nameHighlight: nameHighlight
+      ? mergeAdjacentMacroEmTags(nameHighlight)
+      : null,
+    contentHighlights: contentHighlights.length > 0 ? contentHighlights : null,
     source: 'service' as const,
   };
 };
@@ -42,11 +114,22 @@ const useMapSearchResponseItem = () => {
 
   const history = useHistory();
 
-  return (result: UnifiedSearchResponseItem): Entity | undefined => {
+  return (
+    result: UnifiedSearchResponseItem,
+    searchQuery: string
+  ): Entity | undefined => {
     switch (result.type) {
       case 'document': {
         if (!result.metadata || result.metadata.deleted_at) return;
-        const search = getHighlights(result.document_search_results);
+        const searchFileType =
+          result.file_type === 'docx' ? 'pdf' : result.file_type;
+        const search = ['md', 'pdf'].includes(searchFileType)
+          ? getLocationHighlights(
+              result.document_search_results,
+              searchFileType as FileTypeWithLocation,
+              searchQuery
+            )
+          : getHighlights(result.document_search_results);
         return {
           type: 'document',
           id: result.document_id,
@@ -126,7 +209,7 @@ const useMapSearchResponseItem = () => {
           type: 'channel',
           // TODO: distinguish channel name match from channel message match
           id: result.channel_id,
-          name: result.name ?? channelWithLatest?.name ?? '',
+          name: channelWithLatest?.name ?? '',
           ownerId: result.owner_id ?? '',
           createdAt: result.metadata?.created_at,
           updatedAt: result.metadata?.updated_at,
@@ -228,12 +311,14 @@ export function createUnifiedSearchInfiniteQuery(
         page: lastPageParam.page + 1,
       };
     },
-    select: (data) =>
-      data.pages.flatMap((page) =>
+    select: (data) => {
+      const searchQuery = terms()[0];
+      return data.pages.flatMap((page) =>
         page.results
-          .map(mapSearchResponseItem)
+          .map((result) => mapSearchResponseItem(result, searchQuery))
           .filter((entity): entity is Entity => !!entity)
-      ),
+      );
+    },
     enabled: enabled(),
   }));
 

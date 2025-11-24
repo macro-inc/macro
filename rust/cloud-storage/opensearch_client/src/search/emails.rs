@@ -23,7 +23,7 @@ pub(crate) struct EmailSearchConfig;
 
 impl SearchQueryConfig for EmailSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
-    const TITLE_KEY: &'static str = "subject";
+    const TITLE_KEY: Option<&'static str> = Some("subject");
 
     fn default_sort_types() -> Vec<SortType<'static>> {
         vec![

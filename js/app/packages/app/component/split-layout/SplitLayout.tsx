@@ -18,6 +18,7 @@ import {
   type Setter,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { gutterSize } from '../../../block-theme/signals/themeSignals';
 import {
   createNavigationEntityListShortcut,
   createSoupContext,
@@ -311,7 +312,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-      <Resize.Zone direction="horizontal" gutter={8}>
+      <Resize.Zone direction="horizontal" gutter={gutterSize()}>
         <For each={ids()}>
           {(id, index) => (
             <Resize.Panel id={id} minSize={400}>

@@ -191,7 +191,7 @@ where
     Ok(())
 }
 
-#[tracing::instrument(skip(pool))]
+#[tracing::instrument(skip(pool), err)]
 pub async fn fetch_attachment_by_id(
     pool: &PgPool,
     attachment_id: Uuid,
@@ -309,22 +309,26 @@ pub async fn get_attachments_by_thread_ids(
     Ok(result)
 }
 
-/// return if record exists for email attachment
+/// Get document_id for email attachment if record exists
 #[tracing::instrument(skip(db), err)]
-pub async fn document_email_record_exists(
+pub async fn get_document_id_by_attachment_id(
     db: &Pool<Postgres>,
+    link_id: Uuid,
     email_attachment_id: Uuid,
-) -> anyhow::Result<bool> {
-    let exists = sqlx::query!(
+) -> anyhow::Result<Option<String>> {
+    let result = sqlx::query!(
         r#"
         SELECT document_id
-            FROM document_email
-            WHERE email_attachment_id = $1
+        FROM document_email de
+        INNER JOIN email_attachments ea on de.email_attachment_id = ea.id
+        INNER JOIN email_messages em on ea.message_id = em.id
+        WHERE em.link_id = $1 AND email_attachment_id = $2
         "#,
+        link_id,
         email_attachment_id,
     )
     .fetch_optional(db)
     .await?;
 
-    Ok(exists.is_some())
+    Ok(result.map(|record| record.document_id))
 }

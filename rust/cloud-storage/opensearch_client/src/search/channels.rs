@@ -19,7 +19,6 @@ use serde_json::Value;
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct ChannelMessageIndex {
     pub entity_id: String,
-    pub channel_name: Option<String>,
     pub channel_type: String,
     pub org_id: Option<i64>,
     pub message_id: String,
@@ -34,7 +33,6 @@ pub(crate) struct ChannelMessageIndex {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct ChannelMessageSearchResponse {
     pub channel_id: String,
-    pub channel_name: Option<String>,
     pub channel_type: String,
     pub org_id: Option<i64>,
     pub message_id: String,
@@ -54,7 +52,7 @@ pub(crate) struct ChannelMessageSearchConfig;
 
 impl SearchQueryConfig for ChannelMessageSearchConfig {
     const USER_ID_KEY: &'static str = "sender_id";
-    const TITLE_KEY: &'static str = "channel_name";
+    const TITLE_KEY: Option<&'static str> = None;
 
     fn default_sort_types() -> Vec<SortType<'static>> {
         vec![
@@ -226,7 +224,6 @@ pub(crate) async fn search_channel_messages(
         .into_iter()
         .map(|hit| ChannelMessageSearchResponse {
             channel_id: hit.source.entity_id,
-            channel_name: hit.source.channel_name,
             channel_type: hit.source.channel_type,
             org_id: hit.source.org_id,
             message_id: hit.source.message_id,

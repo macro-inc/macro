@@ -5,7 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SearchHighlight } from './searchHighlight';
+import type { ProjectSearchResultScore } from './projectSearchResultScore';
 
 export interface ProjectSearchResult {
   highlight: SearchHighlight;
+  /** The score of the result */
+  score?: ProjectSearchResultScore;
 }

@@ -1,8 +1,8 @@
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::upload_attachment::upload_attachment;
 use crate::pubsub::util::{cg_refresh_email, check_gmail_rate_limit};
 use crate::pubsub::webhook::process;
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
+use crate::util::upload_attachment::upload_attachment;
 use email_db_client::threads;
 use email_db_client::threads::get::get_outbound_threads_by_thread_ids;
 use email_utils::dedupe_emails;
@@ -24,8 +24,10 @@ use models_email::gmail::operations::GmailApiOperation;
 use models_email::gmail::webhook::UpsertMessagePayload;
 use models_email::service::message::Message;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
+use models_opensearch::SearchEntityType;
 use sqs_client::search::SearchQueueMessage;
 use sqs_client::search::email::EmailMessage;
+use sqs_client::search::name::UpdateEntityName;
 use std::collections::{HashMap, HashSet};
 use std::result;
 use uuid::Uuid;
@@ -210,7 +212,16 @@ async fn handle_attachment_upload(
 
     for attachment in attachments {
         // keep processing if it fails, best effort
-        if let Err(e) = upload_attachment(ctx, gmail_access_token, link, &attachment).await {
+        if let Err(e) = upload_attachment(
+            &ctx.redis_client,
+            &ctx.gmail_client,
+            &ctx.dss_client,
+            gmail_access_token,
+            link,
+            &attachment,
+        )
+        .await
+        {
             tracing::error!("Failed to upload attachment to Macro: {e}");
         }
     }
@@ -406,12 +417,28 @@ async fn fetch_and_insert_thread(
 
     // insert threads into db
     for thread in threads.into_iter() {
-        threads::insert::insert_thread_and_messages(&ctx.db, thread, link_id)
+        let thread_id = threads::insert::insert_thread_and_messages(&ctx.db, thread, link_id)
             .await
             .map_err(|e| {
                 ProcessingError::Retryable(DetailedError {
                     reason: FailureReason::DatabaseQueryFailed,
                     source: e.context("Failed to insert thread and messages".to_string()),
+                })
+            })?;
+
+        // notify search about new entity
+        ctx.sqs_client
+            .send_message_to_search_event_queue(SearchQueueMessage::UpdateEntityName(
+                UpdateEntityName {
+                    entity_id: thread_id,
+                    entity_type: SearchEntityType::Emails,
+                },
+            ))
+            .await
+            .map_err(|e| {
+                ProcessingError::NonRetryable(DetailedError {
+                    reason: FailureReason::SqsEnqueueFailed,
+                    source: e.context("Failed to send message to search extractor queue"),
                 })
             })?;
     }

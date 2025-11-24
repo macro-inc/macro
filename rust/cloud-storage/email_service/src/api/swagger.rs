@@ -1,4 +1,5 @@
 use crate::api::email::attachments::get::GetAttachmentResponse;
+use crate::api::email::attachments::get_document_id::GetAttachmentDocumentIDResponse;
 use crate::api::email::backfill::cancel::CancelBackfillParams;
 use crate::api::email::backfill::get::{GetActiveBackfillJobResponse, GetBackfillJobResponse};
 use crate::api::email::contacts::list::ListContactsResponse;
@@ -36,6 +37,7 @@ use utoipa::OpenApi;
     paths(
         health::health_handler,
         email::attachments::get::handler,
+        email::attachments::get_document_id::handler,
         email::backfill::cancel::handler,
         email::backfill::get::handler,
         email::backfill::get::active_handler,
@@ -97,6 +99,7 @@ use utoipa::OpenApi;
             PreviewViewStandardLabel,
             // Attachment types
             GetAttachmentResponse,
+            GetAttachmentDocumentIDResponse,
             // Link types
             ListLinksResponse,
             Link,
