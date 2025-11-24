@@ -1,7 +1,4 @@
-use opensearch::{
-    Error,
-    http::{StatusCode, response::Response},
-};
+use opensearch::{Error, http::response::Response};
 
 #[derive(thiserror::Error, Debug, serde::Serialize, PartialEq)]
 #[serde(tag = "type")]
@@ -44,6 +41,9 @@ pub enum OpensearchClientError {
         details: String,
         method: Option<String>,
     },
+
+    #[error("no title key is available for name search")]
+    NoTitleKeyForNameSearch,
 }
 
 impl From<anyhow::Error> for OpensearchClientError {
@@ -62,12 +62,13 @@ pub trait ResponseExt {
 
 impl ResponseExt for Response {
     async fn map_client_error(self) -> Result<Response, OpensearchClientError> {
-        match self.status_code() {
-            StatusCode::OK | StatusCode::CREATED | StatusCode::ACCEPTED => Ok(self),
-            _ => Err(OpensearchClientError::NetworkError {
+        if self.status_code().is_success() {
+            Ok(self)
+        } else {
+            Err(OpensearchClientError::NetworkError {
                 status_code: self.status_code().as_u16(),
                 message: self.text().await.unwrap_or_default(),
-            }),
+            })
         }
     }
 }

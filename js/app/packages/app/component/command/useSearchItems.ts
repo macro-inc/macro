@@ -1,6 +1,10 @@
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { useSearch } from '@core/signal/search';
 import { isErr } from '@core/util/maybeResult';
+import {
+  extractSearchSnippet,
+  extractSearchTerms,
+} from '@core/util/searchHighlight';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
 import { createEffect, createMemo, createSignal } from 'solid-js';
 import { searchClient } from '../../../service-search/client';
@@ -14,7 +18,11 @@ function createDocumentItems(
   const items: CommandItemCard[] = [];
   if (doc.type !== 'document') return [];
 
-  if (doc.document_search_results.length === 0 || doc.metadata?.deleted_at)
+  if (
+    doc.document_search_results.length === 0 ||
+    !doc.metadata ||
+    doc.metadata.deleted_at
+  )
     return [];
 
   // TODO: de-duplicate: see logic in useDocumentItems
@@ -37,6 +45,11 @@ function createDocumentItems(
             locationId: result.node_id,
             fileType: doc.file_type,
             matchIndex: index,
+            // For PDF files, extract additional location data
+            ...(['docx', 'pdf'].includes(doc.file_type) && {
+              searchSnippet: extractSearchSnippet(content),
+              highlightTerms: extractSearchTerms(content),
+            }),
           },
           updatedAt: result.updated_at * 1000, // Convert Unix timestamp to milliseconds
         });
@@ -86,7 +99,11 @@ function createChatItems(chat: UnifiedSearchResponseItem): CommandItemCard[] {
   const items: CommandItemCard[] = [];
   if (chat.type !== 'chat') return [];
 
-  if (chat.chat_search_results.length === 0 || chat.metadata?.deleted_at)
+  if (
+    chat.chat_search_results.length === 0 ||
+    !chat.metadata ||
+    chat.metadata.deleted_at
+  )
     return [];
 
   // TODO: de-duplicate: see logic in useChatItems
@@ -130,7 +147,7 @@ function createChannelItems(
         type: 'channel',
         data: {
           id: channel.channel_id,
-          name: channel.channel_name!,
+          name: '', // Set name to empty string since search results don't contain channel names anymore
         },
         snippet: {
           content,
@@ -155,7 +172,8 @@ function createProjectItems(
 
   if (
     project.project_search_results.length === 0 ||
-    project.metadata?.deleted_at
+    !project.metadata ||
+    project.metadata.deleted_at
   )
     return [];
 

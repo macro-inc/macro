@@ -1,11 +1,13 @@
 import { IS_MAC } from '@core/constant/isMac';
 import { logger } from '@observability/logger';
 import { createMemo } from 'solid-js';
+import { createEffect } from 'solid-js';
 import {
   macOptionReverse,
   shiftPunctuationMap,
   shiftPunctuationReverseMap,
 } from './constants';
+import { registerHotkey } from './hotkeys';
 import {
   activeScope,
   activeScopeBranch,
@@ -19,7 +21,9 @@ import {
   setPressedKeys,
 } from './state';
 import type { HotkeyToken } from './tokens';
-import type { HotkeyCommand, ScopeNode, ValidHotkey } from './types';
+import type { HotkeyCommand, HotkeyRegistrationOptions, ScopeNode,
+  ValidHotkey,
+} from './types';
 
 let scopeCounter = 0;
 export function getScopeId(prefix: string = 'scope'): string {
@@ -445,6 +449,55 @@ export function findClosestParentScopeId(element: Element) {
 
 export function findClosestParentScopeElement(element: Element) {
   return element.parentElement?.closest('[data-hotkey-scope]');
+}
+
+/**
+ * Registers a hotkey in situations where the scopeId is a signal that may not have been set yet, or may change.
+ * @param scopeSignal - An accessor that returns the scopeId where the hotkey is active.
+ * @param args
+ */
+export function registerScopeSignalHotkey(
+  scopeSignal: () => string,
+  args: Omit<HotkeyRegistrationOptions, 'scopeId'>
+) {
+  let disposer: (() => void) | undefined;
+
+  createEffect(() => {
+    const scopeId = scopeSignal();
+
+    if (disposer) {
+      disposer();
+      disposer = undefined;
+    }
+
+    if (!scopeId) return;
+
+    const result = registerHotkey({
+      hotkeyToken: args.hotkeyToken,
+      hotkey: args.hotkey,
+      condition: args.condition,
+      scopeId,
+      description: args.description,
+      keyDownHandler: args.keyDownHandler,
+      keyUpHandler: args.keyUpHandler,
+      activateCommandScope: args.activateCommandScope,
+      runWithInputFocused: args.runWithInputFocused,
+      displayPriority: args.displayPriority,
+      hide: args.hide,
+      icon: args.icon,
+      tags: args.tags,
+    });
+
+    disposer = result.dispose;
+
+    // Return cleanup function for the effect
+    return () => {
+      if (disposer) {
+        disposer();
+        disposer = undefined;
+      }
+    };
+  });
 }
 
 export const useIsInCommandScope = () => {

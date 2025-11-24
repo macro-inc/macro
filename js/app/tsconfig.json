@@ -82,9 +82,6 @@
       "@service-stripe/*": [
         "./packages/service-stripe/*"
       ],
-      "@growth/*": [
-        "./packages/growth/*"
-      ],
       "@service-storage/*": [
         "./packages/service-storage/*"
       ],
@@ -153,9 +150,6 @@
       ],
       "@macro-icons/*": [
         "./packages/macro-icons/*"
-      ],
-      "@macros-prompts/*": [
-        "./packages/macros-prompts/*"
       ],
       "@observability": [
         "./packages/observability/src/"

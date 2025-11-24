@@ -1,5 +1,9 @@
-import { ENABLE_CUSTOM_CURSOR } from '@core/constant/featureFlags';
+import {
+  ENABLE_CUSTOM_CURSOR,
+  ENABLE_CUSTOM_CURSOR_TEXT_GLYPH_DETECTION,
+} from '@core/constant/featureFlags';
 import { isMobile } from '@solid-primitives/platform';
+import { throttle } from '@solid-primitives/scheduled';
 import {
   createEffect,
   createRoot,
@@ -48,7 +52,7 @@ import customCursorCSSFileRaw from './custom-cursor.css?raw';
 let defaultCursor: string = '';
 let hexColor: string = '';
 let cursorCache: Record<string, string> = {};
-let currentCursorType: string | null = 'auto';
+let _currentCursorType: string | null = 'auto';
 const styleElements = new Set<HTMLStyleElement>();
 
 export const [customCursorEnabled, setCustomCursorEnabled] = createSignal(true);
@@ -173,7 +177,7 @@ const cursorSvgMap: Record<
 > = {
   // general cursors
   auto: { svg: defaultSvgRaw, fallback: 'auto', position: '11 9' },
-  default: { svg: defaultSvgRaw, fallback: 'auto', position: '11 9' }, // Will be set dynamically
+  default: { svg: defaultSvgRaw, fallback: 'default', position: '11 9' }, // Will be set dynamically
   none: { svg: '', fallback: 'none', position: '11 9' },
   // link and status cursors
   'context-menu': {
@@ -311,28 +315,42 @@ const cursorClassPrefix = createUniqueId();
 const getCursorClassFromKey = (key: string) => {
   return `${cursorClassPrefix}-${key}`;
 };
-const allCustomCursorClasses = Object.keys(cursorSvgMap).map((key) =>
+const _allCustomCursorClasses = Object.keys(cursorSvgMap).map((key) =>
   getCursorClassFromKey(key)
 );
 
-function generateCustomCursorStyleTextContent() {
-  let styleTextContent = customCursorCSSFileRaw;
-  styleTextContent += `${'*'} { cursor: ${getCursor('default')} !important; }`;
+function generateCustomCursorStyleTextContent(isRoot?: boolean) {
+  let styleTextContent = !isRoot ? customCursorCSSFileRaw : '';
+  styleTextContent += `html { cursor: ${getCursor('auto')} }`;
+  styleTextContent += `:root { `;
+  styleTextContent += Object.keys(cursorSvgMap)
+    .map((key) => {
+      return `
+      --cursor-${key}: ${getCursor(key)};
+       `;
+    })
+    .join('');
+  styleTextContent += ` }`;
   styleTextContent += Object.keys(cursorSvgMap)
     .map((key) => {
       return `
       .${getCursorClassFromKey(key)} {
-      cursor: ${getCursor(key)} !important;
-      --custom-cursor: ${key};
+      cursor: ${getCursor(key)};
        }`;
     })
     .join('');
   return styleTextContent;
 }
-function createCustomCursorStylesheetEl(element: HTMLElement | ShadowRoot) {
+function createCustomCursorStylesheetEl(
+  element: HTMLElement | ShadowRoot,
+  isRoot?: boolean
+) {
   const styleEl = document.createElement('style');
+  if (isRoot) {
+    rootStyleSheet = styleEl;
+  }
   styleElements.add(styleEl);
-  styleEl.textContent = generateCustomCursorStyleTextContent();
+  styleEl.textContent = generateCustomCursorStyleTextContent(isRoot);
   element.appendChild(styleEl);
 }
 
@@ -342,7 +360,8 @@ function updateAllCustomCursorStylesheetEls() {
       styleElements.delete(styleEl);
       return;
     }
-    styleEl.textContent = generateCustomCursorStyleTextContent();
+    const isRoot = styleEl === rootStyleSheet;
+    styleEl.textContent = generateCustomCursorStyleTextContent(isRoot);
   });
 }
 
@@ -387,82 +406,93 @@ function updateCustomCursor() {
   cursorMap.default = defaultCursor;
 }
 
+const textNodeMap = new WeakMap<Element, (e: MouseEvent) => void>();
+
+let rootStyleSheet!: HTMLStyleElement;
 // Initialize cursor
 function initCursor() {
   if (!ENABLE_CUSTOM_CURSOR) return;
 
   if (isMobile) return;
   updateCustomCursor();
-  createCustomCursorStylesheetEl(document.head);
 
-  // Add mousemove listener to handle cursor states and text glyph detection
-  const onMouseMove = (e: MouseEvent) => {
+  const isRoot = true;
+  createCustomCursorStylesheetEl(document.head, isRoot);
+  const holdsDirectTextNode = (target: HTMLElement) => {
+    const childNodes = target.childNodes;
+
+    for (let i = 0; i < childNodes.length; i++) {
+      const node = childNodes[i];
+
+      if (node.nodeValue && node.nodeName === '#text') return true;
+    }
+
+    return false;
+  };
+
+  const ifTextNodeThenAddMouseMoveToTarget = (target: HTMLElement) => {
+    if (!holdsDirectTextNode(target)) return;
+
+    const onMouseMove =
+      textNodeMap.get(target) ||
+      ((e: MouseEvent) => {
+        // left mouse held down, such as dragging column or scrollbar
+        if (e.buttons === 1) {
+          return;
+        }
+
+        if (!customCursorEnabled()) {
+          return;
+        }
+
+        const computedStyle = getComputedStyle(e.target as HTMLElement);
+        const currentTarget = e.currentTarget as HTMLElement;
+        const cursor = extractFallbackCursor(computedStyle.cursor);
+
+        if (computedStyle.userSelect === 'none') {
+          currentTarget.removeEventListener('mousemove', onMouseMove);
+          return;
+        }
+        if (cursor !== 'auto' && cursor !== 'text') {
+          currentTarget.removeEventListener('mousemove', onMouseMove);
+          return;
+        }
+
+        if (isOverTextGlyph(e.clientX, e.clientY)) {
+          currentTarget.classList.add(getCursorClassFromKey('text'));
+        } else {
+          target.classList.remove(getCursorClassFromKey('text'));
+        }
+      });
+    textNodeMap.set(target, onMouseMove);
+    target.addEventListener('mousemove', onMouseMove, { passive: true });
+  };
+
+  // Add mouseover listener to handle text glyph detection
+  // The mouseover event should be computationally cheap, just checks if node has as text nodes
+  // If it does then that node adds mousemove event that determines the boundary box of the text glyph, that could be expensive
+  const onMouseOver = (e: MouseEvent) => {
     if (!customCursorEnabled()) {
-      clearAllCustomCursorStylesheetEls();
       return;
     }
 
-    const target = e.target as Element;
+    const target = e.target as HTMLElement;
 
     if (target.shadowRoot) {
       createCustomCursorStylesheetEl(target.shadowRoot);
 
       [...target.shadowRoot.children].forEach((child) => {
-        child.addEventListener('mousemove', onMouseMove);
+        ifTextNodeThenAddMouseMoveToTarget(child as HTMLElement);
+        child.addEventListener('mouseover', onMouseOver, { passive: true });
       });
       return;
     }
-
-    target.classList.remove(...allCustomCursorClasses);
-
-    const getCursorValueFromTargetEl = (target: Element) => {
-      const run = () => {
-        if (target instanceof HTMLElement && target.style.cursor) {
-          return target.style.cursor;
-        }
-        const targetComputedStyle = getComputedStyle(target);
-        const customCursorCSSVariableValue =
-          targetComputedStyle.getPropertyValue('--custom-cursor');
-        if (customCursorCSSVariableValue) {
-          return customCursorCSSVariableValue;
-        }
-
-        return targetComputedStyle.cursor;
-      };
-      return run().replace('!important', '');
-    };
-
-    const computedCursor = getCursorValueFromTargetEl(target);
-    const computedUserSelect = getComputedStyle(target).userSelect;
-    // target.classList.add(getCursorClassFromKey(currentCursorType!));
-
-    // Extract fallback cursor if computed cursor is a custom cursor string
-    const baseCursor = extractFallbackCursor(computedCursor);
-
-    let inferredCursorType: string | null = null;
-
-    // Use inferred cursor type if available, otherwise use extracted fallback cursor
-    let cs = inferredCursorType || baseCursor;
-
-    // Only use text glyph detection when cursor is 'auto' and not 'text'
-    if (cs !== 'text') {
-      if (cs === 'auto' && isOverTextGlyph(e.clientX, e.clientY)) {
-        if (computedUserSelect === 'none') {
-          cs = 'default';
-        } else {
-          cs = 'text';
-        }
-        if (target.tagName === 'BUTTON' || target.closest('button')) {
-          cs = 'default';
-        }
-      }
-    }
-    currentCursorType = cs;
-
-    target.classList.add(getCursorClassFromKey(currentCursorType));
+    ifTextNodeThenAddMouseMoveToTarget(target);
   };
 
-  document.addEventListener('mousemove', onMouseMove);
+  if (ENABLE_CUSTOM_CURSOR_TEXT_GLYPH_DETECTION) {
+    document.addEventListener('mouseover', onMouseOver, { passive: true });
+  }
 }
 
 if (document.readyState === 'loading') {
@@ -474,6 +504,8 @@ if (document.readyState === 'loading') {
 createRoot(() => {
   if (!ENABLE_CUSTOM_CURSOR) return;
 
+  const throttledUpdateCursor = throttle(updateCursor, 250);
+
   createEffect(() => {
     const { l, c, h } = themeReactive.a0;
     const _col = `oklch(${l[0]()} ${c[0]()} ${h[0]()}deg)`;
@@ -481,6 +513,6 @@ createRoot(() => {
       clearAllCustomCursorStylesheetEls();
       return;
     }
-    updateCursor();
+    throttledUpdateCursor();
   });
 });

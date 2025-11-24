@@ -1,4 +1,9 @@
-import { FindState } from '@block-pdf/PdfViewer/EventBus';
+import type { PDFViewer } from '@block-pdf/PdfViewer';
+import {
+  FindState,
+  type IUpdateFindControlStateEvent,
+} from '@block-pdf/PdfViewer/EventBus';
+import type { FindController } from '@block-pdf/PdfViewer/FindController';
 import { useScrollToCommentThread } from '@block-pdf/store/comments/commentOperations';
 import { activeCommentThreadSignal } from '@block-pdf/store/comments/commentStore';
 import {
@@ -14,38 +19,50 @@ import {
 import { buildSimpleEntityUrl } from '@core/util/url';
 import { waitForSignal } from '@core/util/waitForSignal';
 import { createCallback } from '@solid-primitives/rootless';
+import type { Accessor } from 'solid-js';
 import { z } from 'zod';
 import { pdfViewLocation } from './document';
 import {
   updateFindControlStateSignal,
   useGetRootViewer,
+  viewerHasVisiblePagesSignal,
   viewerReadySignal,
 } from './pdfViewer';
 
-export const useGoToTempRedirect = () => {
-  const [activeThreadId, setActiveThreadId] = activeCommentThreadSignal;
-  const scrollToCommentThread = useScrollToCommentThread();
+export const URL_PARAMS = {
+  pageNumber: 'pdf_page_number',
+  yPos: 'pdf_page_y',
+  x: 'pdf_page_x',
+  width: 'pdf_width',
+  height: 'pdf_height',
+  annotationId: 'pdf_ann_id',
+  searchPage: 'pdf_search_page',
+  searchSnippet: 'pdf_search_snippet',
+  searchRawQuery: 'pdf_search_raw_query',
+  searchHighlightTerms: 'pdf_search_highlight_terms',
+} as const;
 
-  return (documentId: string, state: TempRedirectLocation) => {
-    if (state.itemId !== documentId) {
-      return;
-    }
-    setTempRedirectLocation(undefined);
-
-    const threadId = state.location?.threadId;
-    if (!threadId) return;
-
-    const prevActiveThreadId = activeThreadId();
-    setActiveThreadId(threadId);
-
-    // if the thread is already active, scroll to it directly
-    // Note that there is already a block effect in comment operations that will
-    // scroll to a new active thread signal on change
-    if (prevActiveThreadId === threadId) {
-      scrollToCommentThread(threadId);
-    }
-  };
+export type LocationSearchParams = {
+  annotationId?: string;
+  searchPage?: string;
+  searchMatchNumOnPage?: string;
+  searchSnippet?: string;
+  searchRawQuery?: string;
+  highlightTerms?: string;
+  pageNumber?: string;
+  yPos?: string;
+  x?: string;
+  width?: string;
+  height?: string;
 };
+
+/**
+ * Type for location parameters received from block params (e.g., from URL query string).
+ * All values are strings as they come from URL parameters.
+ */
+export type LocationBlockParams = Partial<
+  Record<(typeof URL_PARAMS)[keyof typeof URL_PARAMS], string>
+>;
 
 export enum LocationType {
   General = 'general',
@@ -101,8 +118,9 @@ export interface AnnotationLocation {
 export interface SearchLocation {
   type: 'search';
   pageIndex: number;
-  matchNum: number;
-  term: string;
+  snippet: string;
+  rawQuery: string;
+  highlightTerms: string[];
 }
 
 export type PdfLocation =
@@ -120,25 +138,26 @@ export type PdfOrderInfo = z.infer<typeof PdfOrderInfoSchema>;
 
 export const locationChangedSignal = createBlockSignal<boolean>(false);
 
-// go to this location when it changes
-export const pendingLocationSignal = createBlockSignal<
-  PdfLocation | undefined
->();
+export const pendingLocationParamsSignal =
+  createBlockSignal<LocationBlockParams>();
 
-export const pendingLocationParamsSignal = createBlockSignal<
-  Record<string, string> | undefined
->();
+export const searchLocationPendingSignal = createBlockSignal<boolean>(false);
 
 createBlockEffect(() => {
-  const viewerReady = viewerReadySignal();
+  const getViewer = useGetRootViewer();
+  const goToLinkLocationFromParams = useGoToLinkLocationFromParams();
+
+  const viewerReady = viewerReadySignal() && viewerHasVisiblePagesSignal.get();
   const params = pendingLocationParamsSignal();
+
   if (viewerReady && params) {
-    const getViewer = useGetRootViewer();
-    const viewer = getViewer();
-    viewer?.clearAllOverlays();
+    // TODO: do we need to clear all overlays here
+    getViewer()?.clearAllOverlays();
+
     goToLinkLocationFromParams(params);
   }
 });
+
 export const locationStore = createBlockStore<{
   general: GeneralLocation | undefined;
   precise: PreciseLocation | undefined;
@@ -149,14 +168,6 @@ export const locationStore = createBlockStore<{
   precise: undefined,
   annotation: undefined,
   search: undefined,
-});
-
-createBlockEffect(() => {
-  const viewerReady = viewerReadySignal();
-  const location = pendingLocationSignal();
-  if (viewerReady && location) {
-    goToPdfLocation(location);
-  }
 });
 
 export function useSetLocationStore() {
@@ -188,18 +199,6 @@ export const generalPopupLocationSignal = createBlockSignal<{
   hasHighlight?: boolean;
   hasComment?: boolean;
 } | null>(null);
-
-export const URL_PARAMS = {
-  pageNumber: 'pdf_page_number',
-  yPos: 'pdf_page_y',
-  x: 'pdf_page_x',
-  width: 'pdf_width',
-  height: 'pdf_height',
-  annotationId: 'pdf_ann_id',
-  searchPage: 'pdf_search_page', // 0 indexed page number of the search result
-  searchMatchNumOnPage: 'pdf_search_match_num', // the index of the content from the search node that was clicked on. this loosely maps to match number since some highlights will contain multiple matches
-  searchTerm: 'pdf_search_term', // the search term that was used. this is grabbed from the inside of the <em> tag of the highlight
-} as const;
 
 /**
  * Converts a location into URL parameters for sharing.
@@ -313,94 +312,22 @@ export function useCreateShareUrl() {
 }
 
 /**
- * Parses params into a PDF location.
+ * Internal helper to parse location parameters into a PDF location.
  * Returns most precise location type possible based on available parameters.
- *
- * @param searchParams - URL search parameters to parse
- * @returns PDF location object or null if no valid location found
  */
-export function parseLocationFromBlockParams(
-  params: Record<string, string>
-): PdfLocation | null {
-  // Check for annotation first as it's highest priority
-  const id = params[URL_PARAMS.annotationId];
-  if (id?.trim()) {
-    return {
-      type: 'annotation',
-      pageIndex: 1,
-      id,
-    };
-  }
-
-  // Next highest priority is a search result
-  const searchPage = params[URL_PARAMS.searchPage];
-  const searchMatchNumOnPage = params[URL_PARAMS.searchMatchNumOnPage];
-  const searchTerm = params[URL_PARAMS.searchTerm];
-
-  if (searchPage && searchMatchNumOnPage && searchTerm) {
-    // TODO: setup analytics?
-    return {
-      type: 'search',
-      pageIndex: Number(searchPage) + 1,
-      matchNum: Number(searchMatchNumOnPage),
-      term: searchTerm,
-    };
-  }
-
-  const pageIndex = Number(params[URL_PARAMS.pageNumber]);
-  const y = Number(params[URL_PARAMS.yPos]);
-
-  if (isNaN(pageIndex) || isNaN(y) || pageIndex < 1) {
-    return null;
-  }
-
-  const x = Number(params[URL_PARAMS.x]);
-  const width = Number(params[URL_PARAMS.width]);
-  const height = Number(params[URL_PARAMS.height]);
-
-  if (!isNaN(x) && !isNaN(width) && !isNaN(height) && width > 0 && height > 0) {
-    return {
-      type: 'precise',
-      pageIndex,
-      y,
-      x,
-      width,
-      height,
-    };
-  }
-
-  // Fall back to general location
-  return {
-    type: 'general',
-    pageIndex,
-    y,
-  };
-}
-
-export type LocationSearchParams = {
+function parseLocationParams(params: {
   annotationId?: string;
   searchPage?: string;
-  searchMatchNumOnPage?: string;
-  searchTerm?: string;
+  searchSnippet?: string;
+  searchRawQuery?: string;
+  searchHighlightTerms?: string;
   pageNumber?: string;
   yPos?: string;
   x?: string;
   width?: string;
   height?: string;
-};
-
-/**
- * Parses URL search parameters into a PDF location.
- * Returns most precise location type possible based on available parameters.
- *
- * @param searchParams - URL search parameters to parse
- * @returns PDF location object or null if no valid location found
- */
-export function parseLocationFromUrl(
-  params: LocationSearchParams
-): PdfLocation | null {
+}): PdfLocation | null {
   // Check for annotation first as it's highest priority
-
   const id = params.annotationId;
   if (id?.trim()) {
     return {
@@ -412,17 +339,20 @@ export function parseLocationFromUrl(
 
   // Next highest priority is a search result
   const searchPage = params.searchPage;
-  const searchMatchNumOnPage = params.searchMatchNumOnPage;
+  const searchSnippet = params.searchSnippet;
+  const searchRawQuery = params.searchRawQuery;
+  const searchHighlightTermsString = params.searchHighlightTerms;
+  const searchHighlightTerms = searchHighlightTermsString
+    ? JSON.parse(searchHighlightTermsString)
+    : [];
 
-  const searchTerm = params.searchTerm;
-
-  if (searchPage && searchMatchNumOnPage && searchTerm) {
-    // TODO: setup analytics?
+  if (searchPage && searchRawQuery && searchSnippet && searchHighlightTerms) {
     return {
       type: 'search',
       pageIndex: Number(searchPage) + 1,
-      matchNum: Number(searchMatchNumOnPage),
-      term: searchTerm,
+      snippet: searchSnippet,
+      rawQuery: searchRawQuery,
+      highlightTerms: searchHighlightTerms,
     };
   }
 
@@ -457,137 +387,389 @@ export function parseLocationFromUrl(
 }
 
 /**
+ * Parses params into a PDF location.
+ * Returns most precise location type possible based on available parameters.
+ *
+ * @param params - Block parameters containing location information
+ * @returns PDF location object or null if no valid location found
+ */
+export function parseLocationFromBlockParams(
+  params: LocationBlockParams
+): PdfLocation | null {
+  return parseLocationParams({
+    annotationId: params[URL_PARAMS.annotationId],
+    searchPage: params[URL_PARAMS.searchPage],
+    searchSnippet: params[URL_PARAMS.searchSnippet],
+    searchRawQuery: params[URL_PARAMS.searchRawQuery],
+    searchHighlightTerms: params[URL_PARAMS.searchHighlightTerms],
+    pageNumber: params[URL_PARAMS.pageNumber],
+    yPos: params[URL_PARAMS.yPos],
+    x: params[URL_PARAMS.x],
+    width: params[URL_PARAMS.width],
+    height: params[URL_PARAMS.height],
+  });
+}
+
+/**
+ * Parses URL search parameters into a PDF location.
+ * Returns most precise location type possible based on available parameters.
+ *
+ * @param params - URL search parameters to parse
+ * @returns PDF location object or null if no valid location found
+ */
+export function parseLocationFromUrl(
+  params: LocationSearchParams
+): PdfLocation | null {
+  return parseLocationParams({
+    annotationId: params.annotationId,
+    searchPage: params.searchPage,
+    searchSnippet: params.searchSnippet,
+    searchRawQuery: params.searchRawQuery,
+    searchHighlightTerms: params.highlightTerms,
+    pageNumber: params.pageNumber,
+    yPos: params.yPos,
+    x: params.x,
+    width: params.width,
+    height: params.height,
+  });
+}
+
+/**
+ * Applies custom highlights using phraseSearch: false to highlight all macro_em terms
+ * in a single search pass, filtered to only matches within the snippet boundaries.
+ */
+async function applyCustomHighlights(
+  viewer: PDFViewer,
+  currentScrollTop: number,
+  currentScrollLeft: number,
+  findController: FindController,
+  findControllerStateEventSignal: Accessor<
+    IUpdateFindControlStateEvent | undefined
+  >,
+  pageIndex: number,
+  terms: string[],
+  snippetStartPos: number,
+  snippetEndPos: number
+) {
+  if (terms.length === 0) {
+    console.warn('No highlight terms found');
+    return;
+  }
+
+  // Join all terms with spaces for multi-term search
+  // phraseSearch: false will create an alternation regex (term1|term2|term3)
+  const query = terms.join(' ');
+
+  // Perform single search with phraseSearch: false to highlight all terms
+  viewer.search({
+    query,
+    again: false,
+    phraseSearch: false,
+    caseSensitive: true,
+    entireWord: false,
+    highlightAll: true,
+    findPrevious: false,
+  });
+
+  // Wait for search to complete
+  const searchResult = await waitForSignal(
+    findControllerStateEventSignal,
+    (val) => {
+      return (
+        val?.state === FindState.FOUND || val?.state === FindState.NOT_FOUND
+      );
+    }
+  );
+
+  // Restore the scroll position to where we were before the search
+  viewer.container().scrollTop = currentScrollTop;
+  viewer.container().scrollLeft = currentScrollLeft;
+
+  if (searchResult?.state === FindState.NOT_FOUND) {
+    console.warn('Terms not found:', terms);
+    return;
+  }
+
+  if (!searchResult) {
+    console.warn('Search result is undefined');
+    return;
+  }
+
+  // Log pageMatches and pageMatchesLength for debugging
+  const pageMatches = findController.pageMatches;
+  const pageMatchesLength = findController.pageMatchesLength;
+
+  if (!pageMatches || !pageMatchesLength) {
+    console.warn('pageMatches or pageMatchesLength is undefined');
+    return;
+  }
+
+  const filteredMatches: number[] = [];
+  const filteredLengths: number[] = [];
+
+  const targetPageMatches = pageMatches[pageIndex] || [];
+  const targetPageLengths = pageMatchesLength[pageIndex] || [];
+
+  for (let i = 0; i < targetPageMatches.length; i++) {
+    const matchStart = targetPageMatches[i];
+    const matchEnd = matchStart + targetPageLengths[i];
+
+    // Only keep matches that are completely within the snippet bounds
+    if (matchStart >= snippetStartPos && matchEnd <= snippetEndPos) {
+      filteredMatches.push(matchStart);
+      filteredLengths.push(targetPageLengths[i]);
+    }
+  }
+
+  // Clear matches on all pages
+  if (findController._pageMatches && findController._pageMatchesLength) {
+    for (let i = 0; i < pageMatches.length; i++) {
+      findController._pageMatches[i] = [];
+      findController._pageMatchesLength[i] = [];
+    }
+
+    // Set only the filtered matches on the target page
+    findController._pageMatches[pageIndex] = filteredMatches;
+    findController._pageMatchesLength[pageIndex] = filteredLengths;
+  }
+
+  findController._matchesCountTotal = filteredMatches.length;
+
+  // Force re-render with the filtered matches
+  findController._updateAllPages();
+
+  viewer.markPageHighlightsSelected(pageIndex);
+}
+
+export const useGoToTempRedirect = () => {
+  const [activeThreadId, setActiveThreadId] = activeCommentThreadSignal;
+  const scrollToCommentThread = useScrollToCommentThread();
+
+  return (documentId: string, state: TempRedirectLocation) => {
+    if (state.itemId !== documentId) {
+      return;
+    }
+    setTempRedirectLocation(undefined);
+
+    const threadId = state.location?.threadId;
+    if (!threadId) return;
+
+    const prevActiveThreadId = activeThreadId();
+    setActiveThreadId(threadId);
+
+    // if the thread is already active, scroll to it directly
+    // Note that there is already a block effect in comment operations that will
+    // scroll to a new active thread signal on change
+    if (prevActiveThreadId === threadId) {
+      scrollToCommentThread(threadId);
+    }
+  };
+};
+
+/**
  * Go to the given location in the pdf viewer
  *
  * @param location - The location to go to
  */
-export async function goToPdfLocation(location: PdfLocation) {
+function useGoToPdfLocation() {
   const getRootViewer = useGetRootViewer();
-  const viewer = getRootViewer();
-  const documentId = useBlockId();
-  const findControlelrStateEventSignal = updateFindControlStateSignal.get;
-  if (!viewer || !documentId) return;
+  const findControllerStateEventSignal = updateFindControlStateSignal.get;
+  const setSearchLocationPending = searchLocationPendingSignal.set;
 
-  switch (location.type) {
-    case 'general':
-      await viewer.scrollTo({
-        pageNumber: location.pageIndex,
-        yPos: location.y,
-      });
-      break;
-    case 'precise':
-      await viewer.scrollTo({
-        pageNumber: location.pageIndex,
-        yPos: location.y,
-      });
-      viewer.generateOverlayForSelectionRect(location.pageIndex - 1, location);
-      break;
-    case 'annotation':
-      //TODO: @synoet @gbirman
-      // once macrotations are implemented, this should be changed to
-      // properly port over gotoMacrotation
-      await viewer.scrollTo({
-        pageNumber: location.pageIndex,
-        yPos: 0,
-      });
-      break;
-    case 'search':
-      // Go to the page of the match
-      // We need to scroll to the top of the page with the search result to ensure we can go to the correct search match relative to the page
-      await viewer.scrollTo({
-        pageNumber: location.pageIndex,
-        yPos: 0,
-      });
+  const go = async (location: PdfLocation): Promise<void> => {
+    const viewer = getRootViewer();
+    if (!viewer) return;
 
-      // Perform initial search to goto the first match for the page
-      viewer.search({
-        query: location.term,
-        again: false, // set type to ''
-        phraseSearch: true,
-        caseSensitive: false,
-        entireWord: false,
-        highlightAll: false, // we only want to highlight the actual match
-        findPrevious: false,
-      });
+    switch (location.type) {
+      case 'general':
+        await viewer.scrollTo({
+          pageNumber: location.pageIndex,
+          yPos: location.y,
+        });
+        return;
+      case 'precise':
+        await viewer.scrollTo({
+          pageNumber: location.pageIndex,
+          yPos: location.y,
+        });
+        viewer.generateOverlayForSelectionRect(
+          location.pageIndex - 1,
+          location
+        );
+        return;
+      case 'annotation':
+        // TODO: implement specific annotation navigation, e.g. comments
+        await viewer.scrollTo({
+          pageNumber: location.pageIndex,
+          yPos: 0,
+        });
+        return;
+      case 'search':
+        // Go to the page of the match
+        await viewer.scrollTo({
+          pageNumber: location.pageIndex,
+          yPos: 0,
+        });
 
-      // Wait for the find controller to be ready
-      const findControllerStateEvent = await waitForSignal(
-        findControlelrStateEventSignal,
-        // NOTE: if we run into a race condition where find controller is not cleared a cleaner solution would be to set updateFindControlStateSignal to
-        // undefined before you call hidden search then wait for search state to update
-        (val) =>
-          val?.state === FindState.FOUND || val?.state === FindState.NOT_FOUND
-      );
+        // Save the current scroll position to restore after search
+        const currentScrollTop = viewer.container().scrollTop;
+        const currentScrollLeft = viewer.container().scrollLeft;
 
-      // Break early if we can't find the match
-      if (findControllerStateEvent?.state === FindState.NOT_FOUND) {
-        console.warn('unable to find match', { location });
-        break;
-      }
+        // Pre-warm text extraction for just the target page
+        const findController = viewer.findController;
+        const pageIdx = location.pageIndex - 1; // Convert to 0-indexed
 
-      // Since we have a FOUND state, we can jump to the correct match
-      for (let i = 0; i < location.matchNum; i++) {
-        findControllerStateEvent?.source._nextMatch();
-      }
+        await findController.warmSearchTextForPage(pageIdx);
 
-      break;
-  }
+        // Use the snippet to find the location in the PDF
+        viewer.search({
+          query: location.snippet,
+          again: false,
+          phraseSearch: true,
+          caseSensitive: true,
+          entireWord: false,
+          highlightAll: false,
+          findPrevious: false,
+        });
+
+        // Wait for the find controller to be ready
+        const findControllerStateEvent = await waitForSignal(
+          findControllerStateEventSignal,
+          (val) =>
+            val?.state === FindState.FOUND || val?.state === FindState.NOT_FOUND
+        ).catch((_e) => {
+          console.error('search timed out');
+          return undefined;
+        });
+
+        if (!findControllerStateEvent) {
+          return;
+        }
+
+        // Break early if we can't find the match
+        if (findControllerStateEvent.state === FindState.NOT_FOUND) {
+          console.warn('unable to find match', { location });
+          // TODO: fallback to raw query
+          return;
+        }
+
+        viewer.container().scrollTop = currentScrollTop;
+        viewer.container().scrollLeft = currentScrollLeft;
+
+        if (
+          !findController._selected ||
+          !findController._pageMatches ||
+          !findController._pageMatchesLength
+        ) {
+          console.error('FindController state is incomplete');
+          return;
+        }
+
+        const snippetMatchIdx = findController._selected.matchIdx;
+        const snippetStartPos =
+          findController._pageMatches[pageIdx]?.[snippetMatchIdx];
+        const snippetLength =
+          findController._pageMatchesLength[pageIdx]?.[snippetMatchIdx];
+
+        if (snippetStartPos === undefined || snippetLength === undefined) {
+          console.error('Could not find snippet position');
+          return;
+        }
+
+        const snippetEndPos = snippetStartPos + snippetLength;
+
+        // Clear the snippet search highlights without resetting state
+        // This preserves the findController's ability to emit events
+        findController._highlightMatches = false;
+        findController._updatePage(pageIdx);
+
+        // Apply custom highlights based on macro_em tags
+        await applyCustomHighlights(
+          viewer,
+          currentScrollTop,
+          currentScrollLeft,
+          findController,
+          findControllerStateEventSignal,
+          pageIdx,
+          location.highlightTerms,
+          snippetStartPos,
+          snippetEndPos
+        );
+
+        // Trigger full extraction in the background immediately
+        findController.forceFullExtraction();
+
+        // resets the highlight after a short delay
+        return new Promise((resolve) => {
+          setTimeout(() => {
+            viewer.findBarClose();
+            resolve();
+          }, 2000);
+        });
+    }
+  };
+
+  return async (location: PdfLocation) => {
+    if (location.type === 'search') {
+      setSearchLocationPending(true);
+      await go(location);
+      setSearchLocationPending(false);
+      return;
+    }
+
+    go(location);
+  };
 }
 
-export async function goToLinkLocationFromSearchParams(
-  searchPage: string,
-  searchMatchNumOnPage: string,
-  searchTerm: string
-) {
-  const location = {
-    type: 'search',
-    pageIndex: Number(searchPage) + 1,
-    matchNum: Number(searchMatchNumOnPage),
-    term: searchTerm,
-  } as PdfLocation;
+const useGoToPreviousLocation = () => {
+  const getViewer = useGetRootViewer();
+  const getViewLocation = pdfViewLocation.get;
 
-  if (location) {
-    return await goToPdfLocation(location);
-  }
-}
+  return async () => {
+    const viewer = getViewer();
+
+    await waitForSignal(getViewLocation, (location) => !!location, 300).then(
+      (prevLocationHash) => {
+        if (viewer && prevLocationHash) {
+          viewer.goToLocationHash(prevLocationHash);
+        }
+      }
+    );
+  };
+};
 
 /**
  * Go to the location in the pdf viewer based on the current url
  */
-export async function goToLinkLocation(params: LocationSearchParams) {
-  //const params = makeLocationSearchParams(searchParams);
-  const location = parseLocationFromUrl(params);
-  if (location) {
-    return await goToPdfLocation(location);
-  }
+export function useGoToLinkLocation() {
+  const goToPreviousLocation = useGoToPreviousLocation();
+  const goToPdfLocation = useGoToPdfLocation();
 
-  const getViewer = useGetRootViewer();
-  const viewer = getViewer();
-  // TODO: this should be a hook?
-  const prevLocationHash = pdfViewLocation();
-  if (viewer && prevLocationHash) {
-    viewer.goToLocationHash(prevLocationHash);
-  }
+  return async (params: LocationSearchParams) => {
+    const location = parseLocationFromUrl(params);
+    if (location) {
+      await goToPdfLocation(location);
+      return;
+    }
+
+    await goToPreviousLocation();
+  };
 }
 
 /**
  * Go to the location in the pdf viewer based on the params
  */
-export async function goToLinkLocationFromParams(
-  params: Record<string, string>
-) {
-  console.log(' go to link location, ', params);
-  const location = parseLocationFromBlockParams(params);
-  console.log({ location });
-  if (location) {
-    return await goToPdfLocation(location);
-  }
+export function useGoToLinkLocationFromParams() {
+  const goToPreviousLocation = useGoToPreviousLocation();
+  const goToPdfLocation = useGoToPdfLocation();
 
-  const getViewer = useGetRootViewer();
-  const viewer = getViewer();
-  // TODO: this should be a hook?
-  const prevLocationHash = pdfViewLocation();
-  if (viewer && prevLocationHash) {
-    viewer.goToLocationHash(prevLocationHash);
-  }
+  return async (params: LocationBlockParams) => {
+    const location = parseLocationFromBlockParams(params);
+    if (location) {
+      await goToPdfLocation(location);
+      return;
+    }
+
+    await goToPreviousLocation();
+  };
 }

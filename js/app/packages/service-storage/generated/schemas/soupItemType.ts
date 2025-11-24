@@ -13,4 +13,5 @@ export const SoupItemType = {
   document: 'document',
   chat: 'chat',
   project: 'project',
+  email_thread: 'email_thread',
 } as const;

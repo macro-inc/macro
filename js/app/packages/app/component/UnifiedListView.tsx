@@ -6,6 +6,8 @@ import {
   emailRefetchInterval,
   useEmailLinksStatus,
 } from '@app/signal/emailAuth';
+import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
+import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import { Button } from '@core/component/FormControls/Button';
 import DropdownMenu from '@core/component/FormControls/DropdownMenu';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
@@ -32,7 +34,8 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { supportedExtensions } from '@lexical-core/utils';
 import {
   createChannelsQuery,
-  createDssInfiniteQuery,
+  createDssInfiniteQueryGet,
+  createDssInfiniteQueryPost,
   createEmailsInfiniteQuery,
   createFilterComposer,
   createProjectFilterFn,
@@ -75,7 +78,10 @@ import type {
   UnifiedSearchIndex,
   UnifiedSearchRequestFilters,
 } from '@service-search/generated/models';
-import type { GetItemsSoupParams } from '@service-storage/generated/schemas';
+import type {
+  GetItemsSoupParams,
+  PostSoupRequest,
+} from '@service-storage/generated/schemas';
 import { debounce } from '@solid-primitives/scheduled';
 import stringify from 'json-stable-stringify';
 import {
@@ -129,6 +135,7 @@ import {
   type SortOptions,
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_IDS,
+  VIEWCONFIG_DEFAULTS_IDS_ENUM,
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
@@ -501,7 +508,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   // NOTE: these filters are required because the backend doesn't support these filters yet
   createEffect(() => {
-    let filterFns: EntityFilter<EntityData>[] = [];
+    const filterFns: EntityFilter<EntityData>[] = [];
 
     if (importantFilter()) filterFns.push(importantFilterFn);
 
@@ -513,7 +520,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   });
 
   createEffect(() => {
-    let filterFns: EntityFilter<EntityData>[] = [];
+    const filterFns: EntityFilter<EntityData>[] = [];
 
     const projectFilter_ = projectFilter();
     if (projectFilter_) {
@@ -637,6 +644,27 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       sort_method: sortType(),
     })
   );
+  const GARBAGE_UUID = '00000000-0000-0000-0000-000000000000';
+  const dssQueryPOSTRequestBody = createMemo(
+    (): PostSoupRequest => ({
+      channel_filters: {
+        channel_ids: [GARBAGE_UUID],
+      },
+      document_filters: {
+        document_ids: entityTypeFilter().includes('document')
+          ? []
+          : [GARBAGE_UUID],
+      },
+      chat_filters: {
+        chat_ids: [GARBAGE_UUID],
+      },
+      email_filters: {
+        recipients: [GARBAGE_UUID],
+      },
+      limit: props.defaultDisplayOptions?.limit ?? 100,
+      sort_method: sortType(),
+    })
+  );
   const emailQueryParams = createMemo((): FetchPaginatedEmailsParams => {
     const sort = sortType();
     return {
@@ -692,7 +720,18 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return false;
   });
 
-  const disableDssInfiniteQuery = createMemo(() => {
+  const disableDssInfiniteQueryGET = createMemo(() => {
+    if (view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.folders) return true;
+
+    const typeFilter = entityTypeFilter();
+    if (typeFilter.length === 0) return false;
+    const dssTypes = ['document', 'chat', 'project'];
+    const hasDssTypes = typeFilter.some((t) => dssTypes.includes(t));
+    return !hasDssTypes;
+  });
+  const disableDssInfiniteQueryPost = createMemo(() => {
+    if (view().id !== VIEWCONFIG_DEFAULTS_IDS_ENUM.folders) return true;
+
     const typeFilter = entityTypeFilter();
     if (typeFilter.length === 0) return false;
     const dssTypes = ['document', 'chat', 'project'];
@@ -709,8 +748,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const channelsQuery = createChannelsQuery({
     disabled: disableChannelsQuery,
   });
-  const dssInfiniteQuery = createDssInfiniteQuery(dssQueryParams, {
-    disabled: disableDssInfiniteQuery,
+  const dssInfiniteQueryGET = createDssInfiniteQueryGet(dssQueryParams, {
+    disabled: disableDssInfiniteQueryGET,
+  });
+  const dssInfiniteQueryPOST = createDssInfiniteQueryPost(dssQueryParams, {
+    disabled: disableDssInfiniteQueryPost,
+    requestBody: dssQueryPOSTRequestBody,
   });
   const emailsInfiniteQuery = createEmailsInfiniteQuery(emailQueryParams, {
     refetchInterval: () => emailRefetchInterval(),
@@ -790,7 +833,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     >({
       entityInfiniteQueries: [
         {
-          query: dssInfiniteQuery,
+          query: dssInfiniteQueryGET,
+          operations: { filter: true, search: true },
+        },
+        {
+          query: dssInfiniteQueryPOST,
           operations: { filter: true, search: true },
         },
         {
@@ -820,15 +867,41 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     setIsSearchLoading(loading);
   });
 
-  const documentEntityClickHandler: EntityClickHandler<DocumentEntity> = (
-    { id, fileType },
-    event
-  ) => {
+  const documentEntityClickHandler: EntityClickHandler<
+    DocumentEntity | WithSearch<DocumentEntity>
+  > = async (entity, event) => {
+    const { id, fileType } = entity;
     const blockName = fileTypeToBlockName(fileType);
     const handle = event.altKey
       ? insertSplit({ type: blockName, id })
       : replaceOrInsertSplit({ type: blockName, id });
-    handle?.activate();
+
+    const location =
+      'search' in entity && entity.search.contentHighlights?.at(0)?.location;
+    if (location) {
+      handle?.activate();
+      const blockHandle = await blockOrchestrator.getBlockHandle(id);
+      switch (location.type) {
+        case 'md':
+          await blockHandle?.goToLocationFromParams({
+            [MD_PARAMS.nodeId]: location.nodeId,
+          });
+          break;
+        case 'pdf':
+          console.log('go to pdf location', location);
+          await blockHandle?.goToLocationFromParams({
+            [PDF_PARAMS.searchPage]: location.searchPage.toString(),
+            [PDF_PARAMS.searchRawQuery]: location.searchRawQuery,
+            [PDF_PARAMS.searchHighlightTerms]: JSON.stringify(
+              location.highlightTerms
+            ),
+            [PDF_PARAMS.searchSnippet]: location.searchSnippet,
+          });
+          break;
+      }
+    } else {
+      handle?.activate();
+    }
   };
 
   const entityClickHandler: EntityClickHandler<EntityData> = (
@@ -936,11 +1009,23 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   });
 
   let lastClickedEntityId = -1;
+
+  // reset last clicked on view change.
   createEffect(
     on(view, () => {
       lastClickedEntityId = -1;
     })
   );
+
+  // reset last clicked on reset multi-selection.
+  createEffect(() => {
+    if (
+      unifiedListContext.viewsDataStore[selectedView()].selectedEntities
+        .length === 0
+    ) {
+      lastClickedEntityId = -1;
+    }
+  });
 
   return (
     <>

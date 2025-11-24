@@ -326,7 +326,7 @@ export function EntityWithEverything(
   // the split. Those buttons should have a 'data-blocks-navigation'
   function blocksNavigation(e: PointerEvent | MouseEvent): boolean {
     const { target } = e;
-    if (target instanceof HTMLElement) {
+    if (target instanceof Element) {
       const closest = target.closest('[data-blocks-navigation]');
       if (closest && entityDivRef()?.contains(closest)) return true;
     }
@@ -401,7 +401,7 @@ export function EntityWithEverything(
       >
         <button
           type="button"
-          class="col-1 size-full relative group/button flex items-center justify-center"
+          class="col-1 size-full relative group/button flex items-center justify-center bracket-never"
           onClick={(e) => {
             props.onChecked?.(!props.checked, e.shiftKey);
           }}
@@ -505,7 +505,7 @@ export function EntityWithEverything(
               {(highlight) => (
                 <div class="text-sm text-ink-muted truncate flex items-center">
                   <StaticMarkdown
-                    markdown={highlight}
+                    markdown={highlight.content}
                     theme={unifiedListMarkdownTheme}
                     singleLine={true}
                   />

@@ -133,7 +133,6 @@ use utoipa::OpenApi;
         documents::get_document::handler,
         documents::get_document_version::handler,
         documents::create_document::create_document_handler,
-        documents::create_document::create_blank_docx::handler,
         documents::copy_document::copy_document_handler,
         documents::save_document::save_document_handler,
         documents::pre_save::presave_document_handler,

@@ -68,13 +68,22 @@ export interface IScrollMatchEvent extends ISourcedEvent {
 }
 
 export interface IFindEvent {
+  /** The object that initiated the find operation */
   source: any;
+  /** Search type: '' for new search (with timeout), 'again' for repeat search (immediate) */
   type: '' | 'again';
+  /** The search text/term to find in the PDF */
   query: string;
+  /** If true, search for exact phrase; if false, match partial words */
   phraseSearch: boolean;
+  /** If true, match case exactly; if false, ignore case differences */
   caseSensitive: boolean;
+  /** If true, only match complete words; if false, match partial words.
+   * e.g. credit will match creditors if entireWord is false */
   entireWord: boolean;
+  /** If true, highlight all matches in document; if false, only highlight current match */
   highlightAll: boolean;
+  /** If true, search backwards (previous match); if false, search forwards (next match) */
   findPrevious: boolean;
 }
 

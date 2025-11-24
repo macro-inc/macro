@@ -28,7 +28,7 @@ email = ["model", "models_email"]
 gmail = ["model", "uuid"]
 insight_context = ["model"]
 organization_retention = []
-search = ["chrono", "model"]
+search = ["chrono", "model", "models_opensearch", "uuid"]
 sfs_uploader = []
 upload_extractor = []
 
@@ -43,3 +43,4 @@ serde_json = { workspace = true }
 strum = { workspace = true, features = ["derive"] }
 tracing = { workspace = true }
 uuid = { workspace = true, optional = true }
+models_opensearch = { path = "../models_opensearch", optional = true }

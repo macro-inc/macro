@@ -1,10 +1,11 @@
 use crate::chat::SoupChat;
 use crate::document::SoupDocument;
+use crate::email_thread::SoupEnrichedEmailThreadPreview;
 use crate::project::SoupProject;
 use chrono::{DateTime, Utc};
 use model_entity::{Entity, EntityType};
 use models_pagination::{Identify, SimpleSortMethod, SortOn};
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use strum::EnumString;
 use uuid::Uuid;
 
@@ -16,20 +17,18 @@ pub enum SoupItemType {
     Document,
     Chat,
     Project,
+    EmailThread,
 }
 
-#[derive(Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
-#[serde(untagged)]
-#[cfg_attr(feature = "schema", derive(utoipa::ToSchema), schema(discriminator(property_name = "type", mapping(
-     ("document" = "#/components/schemas/SoupDocument"),
-     ("chat" = "#/components/schemas/SoupChat"),
-     ("project" = "#/components/schemas/SoupProject"),
-))))]
+#[serde(rename_all = "camelCase", tag = "tag", content = "data")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub enum SoupItem {
     Document(SoupDocument),
     Chat(SoupChat),
     Project(SoupProject),
+    EmailThread(SoupEnrichedEmailThreadPreview),
 }
 
 impl SoupItem {
@@ -45,6 +44,9 @@ impl SoupItem {
             SoupItem::Project(soup_project) => {
                 EntityType::Project.with_entity_string(soup_project.id.to_string())
             }
+            SoupItem::EmailThread(email_thread) => {
+                EntityType::EmailThread.with_entity_string(email_thread.thread.id.to_string())
+            }
         }
     }
 
@@ -53,42 +55,7 @@ impl SoupItem {
             SoupItem::Document(soup_document) => soup_document.updated_at,
             SoupItem::Chat(soup_chat) => soup_chat.updated_at,
             SoupItem::Project(soup_project) => soup_project.updated_at,
-        }
-    }
-}
-
-impl Serialize for SoupItem {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        macro_rules! flatten_variant {
-            ($tag:expr, $tag_ty:ty, $inner_ty:ty, $inner_val:expr) => {{
-                #[derive(Serialize)]
-                struct Inline<'a> {
-                    #[serde(rename = "type")]
-                    tag: &'a $tag_ty,
-                    #[serde(flatten)]
-                    data: &'a $inner_ty,
-                }
-                let tmp = Inline {
-                    tag: $tag,
-                    data: $inner_val,
-                };
-                tmp.serialize(serializer)
-            }};
-        }
-
-        match self {
-            SoupItem::Document(doc) => {
-                flatten_variant!(&SoupItemType::Document, SoupItemType, SoupDocument, doc)
-            }
-            SoupItem::Chat(chat) => {
-                flatten_variant!(&SoupItemType::Chat, SoupItemType, SoupChat, chat)
-            }
-            SoupItem::Project(project) => {
-                flatten_variant!(&SoupItemType::Project, SoupItemType, SoupProject, project)
-            }
+            SoupItem::EmailThread(soup_thread) => soup_thread.thread.updated_at,
         }
     }
 }
@@ -128,6 +95,18 @@ impl SoupItem {
             (SoupItem::Project(soup_project), SimpleSortMethod::ViewedUpdated) => {
                 soup_project.viewed_at.unwrap_or(soup_project.updated_at)
             }
+            (SoupItem::EmailThread(thread), SimpleSortMethod::ViewedAt) => {
+                thread.thread.viewed_at.unwrap_or_default()
+            }
+            (SoupItem::EmailThread(thread), SimpleSortMethod::UpdatedAt) => {
+                thread.thread.updated_at
+            }
+            (SoupItem::EmailThread(thread), SimpleSortMethod::CreatedAt) => {
+                thread.thread.created_at
+            }
+            (SoupItem::EmailThread(thread), SimpleSortMethod::ViewedUpdated) => {
+                thread.thread.viewed_at.unwrap_or(thread.thread.updated_at)
+            }
         }
     }
 }
@@ -140,6 +119,7 @@ impl Identify for SoupItem {
             SoupItem::Document(soup_document) => soup_document.id,
             SoupItem::Chat(soup_chat) => soup_chat.id,
             SoupItem::Project(soup_project) => soup_project.id,
+            SoupItem::EmailThread(thread) => thread.thread.id,
         }
     }
 }

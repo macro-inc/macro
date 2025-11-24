@@ -20,5 +20,9 @@ pub async fn process_remove_messages_by_link_id(
         .delete_email_messages_by_link_id(remove_link_message.link_id.as_str())
         .await?;
 
+    opensearch_client
+        .delete_entities_for_user(remove_link_message.macro_user_id.as_str())
+        .await?;
+
     Ok(())
 }

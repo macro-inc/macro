@@ -1,10 +1,15 @@
-use crate::{PROJECT_INDEX, Result, error::OpensearchClientError};
+use models_opensearch::SearchIndex;
+
+use crate::{Result, error::OpensearchClientError};
 
 /// Deletes a project by its ID
 #[tracing::instrument(skip(client))]
 pub async fn delete_project_by_id(client: &opensearch::OpenSearch, project_id: &str) -> Result<()> {
     let response = client
-        .delete(opensearch::DeleteParts::IndexId(PROJECT_INDEX, project_id))
+        .delete(opensearch::DeleteParts::IndexId(
+            SearchIndex::Projects.as_ref(),
+            project_id,
+        ))
         .refresh(opensearch::params::Refresh::True) // Ensure the index reflects changes immediately
         .send()
         .await
@@ -66,7 +71,9 @@ pub async fn delete_project_bulk_ids(
     });
 
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[PROJECT_INDEX]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
+            SearchIndex::Projects.as_ref(),
+        ]))
         .body(query)
         .refresh(true)
         .send()
@@ -120,7 +127,9 @@ pub async fn delete_projects_by_user_id(
     });
 
     let response = client
-        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[PROJECT_INDEX]))
+        .delete_by_query(opensearch::DeleteByQueryParts::Index(&[
+            SearchIndex::Projects.as_ref(),
+        ]))
         .body(query)
         .refresh(true) // Ensure the index reflects changes immediately
         .send()

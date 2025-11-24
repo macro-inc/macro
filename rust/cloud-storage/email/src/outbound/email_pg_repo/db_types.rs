@@ -1,9 +1,13 @@
-use crate::domain::models::{Attachment, AttachmentMacro, ThreadPreviewCursor};
+use crate::domain::models::{Attachment, AttachmentMacro, EmailThreadPreview};
 use chrono::{DateTime, Utc};
+use doppleganger::Doppleganger;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use uuid::Uuid;
 
+#[derive(Doppleganger)]
+#[dg(forward = AttachmentMacro)]
 pub struct AttachmentMacroDbRow {
+    #[dg(rename = "db_id")]
     pub id: Uuid,
     pub message_id: Uuid,
     pub item_id: Uuid,
@@ -12,30 +16,13 @@ pub struct AttachmentMacroDbRow {
         dead_code,
         reason = "We need this field to use query_as with the current query, but we never read it"
     )]
-    pub created_at: DateTime<Utc>,
+    #[dg(ignore)]
+    pub(crate) created_at: DateTime<Utc>,
     pub thread_id: Uuid,
 }
 
-impl AttachmentMacroDbRow {
-    pub fn into_model(self) -> AttachmentMacro {
-        let AttachmentMacroDbRow {
-            id,
-            message_id,
-            item_id,
-            item_type,
-            created_at: _,
-            thread_id,
-        } = self;
-        AttachmentMacro {
-            thread_id,
-            db_id: id,
-            message_id,
-            item_id,
-            item_type,
-        }
-    }
-}
-
+#[derive(Doppleganger)]
+#[dg(forward = Attachment)]
 pub struct AttachmentDbRow {
     pub id: Uuid,
     pub message_id: Uuid,
@@ -48,34 +35,6 @@ pub struct AttachmentDbRow {
     pub content_id: Option<String>,
     pub created_at: DateTime<Utc>,
     pub thread_id: Uuid,
-}
-
-impl AttachmentDbRow {
-    pub fn into_model(self) -> Attachment {
-        let AttachmentDbRow {
-            id,
-            message_id,
-            provider_attachment_id,
-            filename,
-            mime_type,
-            size_bytes,
-            content_id,
-            created_at,
-            thread_id,
-        } = self;
-
-        Attachment {
-            id,
-            thread_id,
-            message_id,
-            provider_attachment_id,
-            filename,
-            mime_type,
-            size_bytes,
-            content_id,
-            created_at,
-        }
-    }
 }
 
 /// thread summary returned in preview cursor endpoint
@@ -99,7 +58,7 @@ pub struct ThreadPreviewCursorDbRow {
 }
 
 impl ThreadPreviewCursorDbRow {
-    pub fn with_user_id(self, owner_id: MacroUserIdStr<'_>) -> ThreadPreviewCursor {
+    pub fn with_user_id(self, owner_id: MacroUserIdStr<'_>) -> EmailThreadPreview {
         let ThreadPreviewCursorDbRow {
             id,
             provider_id,
@@ -118,7 +77,7 @@ impl ThreadPreviewCursorDbRow {
             updated_at,
         } = self;
 
-        ThreadPreviewCursor {
+        EmailThreadPreview {
             id,
             provider_id,
             owner_id: owner_id.into_owned(),

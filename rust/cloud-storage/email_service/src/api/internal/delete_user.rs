@@ -69,12 +69,14 @@ pub async fn handler(
         let db = ctx.db.clone();
         let sqs_client = ctx.sqs_client.clone();
         let link_id = link.id;
+        let macro_user_id = link.macro_id;
         tokio::spawn(async move {
             // send message to search text extractor queue
             sqs_client
                 .send_message_to_search_event_queue(SearchQueueMessage::RemoveEmailLink(
                     EmailLinkMessage {
                         link_id: link.id.to_string(),
+                        macro_user_id,
                     },
                 ))
                 .await

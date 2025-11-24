@@ -4,14 +4,15 @@ use models_email::email::service::message;
 use sqlx::types::Uuid;
 use sqlx::{Executor, Postgres};
 
-/// Deletes message from the database with transaction handling. Returns if the thread was deleted
+/// Deletes message from the database with transaction handling. Returns an optional db thread id
+/// if the thread was deleted
 #[tracing::instrument(skip(tx, message), fields(link_id = %message.link_id), level = "info")]
 pub async fn delete_message_with_tx(
     tx: &mut sqlx::PgConnection,
     message: &message::SimpleMessage,
     // update thread-object vals (inbox_visible, latest timestamps)
     update_thread_metadata: bool,
-) -> anyhow::Result<()> {
+) -> anyhow::Result<Option<Uuid>> {
     // delete the message itself
     delete_db_message(&mut *tx, message.db_id)
         .await
@@ -28,7 +29,11 @@ pub async fn delete_message_with_tx(
             .context("Failed to update thread metadata")?;
     }
 
-    Ok(())
+    if deleted_thread {
+        Ok(Some(message.thread_db_id))
+    } else {
+        Ok(None)
+    }
 }
 
 #[tracing::instrument(skip(executor), level = "info")]

@@ -17,7 +17,10 @@ use constants::ORIGINS;
 use frecency::{
     domain::services::{EventIngestorImpl, PullAggregatorImpl},
     inbound::polling_aggregator::FrecencyAggregatorWorkerHandle,
-    outbound::postgres::{FrecencyPgProcessor, FrecencyPgStorage},
+    outbound::{
+        postgres::{FrecencyPgProcessor, FrecencyPgStorage},
+        time::DefaultTime,
+    },
 };
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
@@ -112,7 +115,7 @@ async fn main() -> Result<()> {
         jwt_args,
         internal_auth_key: LocalOrRemoteSecret::Local(InternalApiSecretKey::new()?),
         frecency_worker: Arc::new(FrecencyAggregatorWorkerHandle::new_worker(
-            PullAggregatorImpl::new_with_default_time(FrecencyPgProcessor::new(pgpool)),
+            PullAggregatorImpl::new(FrecencyPgProcessor::new(pgpool), DefaultTime),
             Duration::from_secs(60),
         )),
     })

@@ -7,6 +7,7 @@ use item_filters::ast::EntityFilterAst;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use model_entity::EntityType;
+use models_pagination::Identify;
 use models_pagination::{Frecency, PaginateOn, Query, SimpleSortMethod};
 use models_soup::item::SoupItem;
 use sqlx::{PgPool, Pool, Postgres};
@@ -40,6 +41,7 @@ async fn test_viewed_at_orders_nulls_last(pool: Pool<Postgres>) -> anyhow::Resul
             SoupItem::Chat(c) => c.id,
             SoupItem::Document(d) => d.id,
             SoupItem::Project(p) => p.id,
+            SoupItem::EmailThread(t) => t.thread.id,
         })
         .collect();
 
@@ -68,14 +70,7 @@ async fn test_viewed_at_orders_nulls_last(pool: Pool<Postgres>) -> anyhow::Resul
     );
 
     // Check that items are ordered by their UserHistory.updatedAt timestamp.
-    let ordered_ids: Vec<Uuid> = items
-        .iter()
-        .map(|item| match item {
-            SoupItem::Chat(c) => c.id,
-            SoupItem::Document(d) => d.id,
-            SoupItem::Project(p) => p.id,
-        })
-        .collect();
+    let ordered_ids: Vec<Uuid> = items.iter().map(|item| item.id()).collect();
 
     let expected_order: Vec<Uuid> = vec![
         Uuid::parse_str("11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap(), // doc-in-B - 2024-01-10
@@ -98,19 +93,8 @@ async fn test_viewed_at_orders_nulls_last(pool: Pool<Postgres>) -> anyhow::Resul
     );
 
     // Map for easier lookup when checking item details
-    let items_map: std::collections::HashMap<Uuid, &SoupItem> = items
-        .iter()
-        .map(|item| {
-            (
-                match item {
-                    SoupItem::Chat(c) => c.id,
-                    SoupItem::Document(d) => d.id,
-                    SoupItem::Project(p) => p.id,
-                },
-                item,
-            )
-        })
-        .collect();
+    let items_map: std::collections::HashMap<Uuid, &SoupItem> =
+        items.iter().map(|item| (item.id(), item)).collect();
 
     // Check a standalone item that is still present
     let chat_uuid = Uuid::parse_str("22222222-0000-0000-0000-000000000000").unwrap(); // chat-standalone
@@ -220,16 +204,8 @@ async fn test_expanded_generic_sorting_methods(pool: Pool<Postgres>) -> anyhow::
     let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
 
     // --- Helper to extract IDs for easy comparison ---
-    let get_item_ids = |items: &[SoupItem]| -> Vec<Uuid> {
-        items
-            .iter()
-            .map(|item| match item {
-                SoupItem::Document(d) => d.id,
-                SoupItem::Chat(c) => c.id,
-                SoupItem::Project(p) => p.id,
-            })
-            .collect()
-    };
+    let get_item_ids =
+        |items: &[SoupItem]| -> Vec<Uuid> { items.iter().map(|item| item.id()).collect() };
 
     // --- Case 1: Test SortMethod::LastViewed ---
     // Should FILTER to only the 3 items with a history entry.
@@ -361,7 +337,7 @@ async fn test_expanded_soup_by_ids(pool: Pool<Postgres>) {
         .iter()
         .find_map(|x| match x {
             SoupItem::Document(soup_document) => Some(soup_document),
-            SoupItem::Chat(_) | SoupItem::Project(_) => None,
+            SoupItem::Chat(_) | SoupItem::Project(_) | _ => None,
         })
         .expect("The document should exist");
     let expected_doc_id = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap(); // doc-in-A
@@ -375,7 +351,7 @@ async fn test_expanded_soup_by_ids(pool: Pool<Postgres>) {
         .iter()
         .find_map(|x| match x {
             SoupItem::Chat(soup_chat) => Some(soup_chat),
-            SoupItem::Document(_) | SoupItem::Project(_) => None,
+            SoupItem::Document(_) | SoupItem::Project(_) | _ => None,
         })
         .expect("The chat should exist");
     let expected_chat_id = Uuid::parse_str("22222222-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap(); // chat-in-B
@@ -455,14 +431,7 @@ async fn test_no_frecency_expanded_filters_out_frecency_items(
     );
 
     // Verify the returned items are the ones WITHOUT frecency
-    let returned_ids: HashSet<Uuid> = items
-        .iter()
-        .map(|item| match item {
-            SoupItem::Chat(c) => c.id,
-            SoupItem::Document(d) => d.id,
-            SoupItem::Project(p) => p.id,
-        })
-        .collect();
+    let returned_ids: HashSet<Uuid> = items.iter().map(|item| item.id()).collect();
 
     let expected_ids: HashSet<Uuid> = [
         "44444444-4444-4444-4444-444444444444", // doc-no-frecency-1
@@ -509,16 +478,8 @@ async fn test_no_frecency_expanded_filters_out_frecency_items(
 async fn test_no_frecency_expanded_sorting_methods(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let user_id = MacroUserIdStr::parse_from_str("macro|user-1@test.com").unwrap();
 
-    let get_item_ids = |items: &[SoupItem]| -> Vec<Uuid> {
-        items
-            .iter()
-            .map(|item| match item {
-                SoupItem::Document(d) => d.id,
-                SoupItem::Chat(c) => c.id,
-                SoupItem::Project(p) => p.id,
-            })
-            .collect()
-    };
+    let get_item_ids =
+        |items: &[SoupItem]| -> Vec<Uuid> { items.iter().map(|item| item.id()).collect() };
 
     // Test UpdatedAt sorting
     {
@@ -732,23 +693,9 @@ async fn empty_ast_returns_same_as_static_query(db: PgPool) {
     .unwrap();
 
     // Compare the IDs since SoupItem doesn't implement PartialEq
-    let ast_ids: Vec<Uuid> = ast_res
-        .iter()
-        .map(|item| match item {
-            SoupItem::Chat(c) => c.id,
-            SoupItem::Document(d) => d.id,
-            SoupItem::Project(p) => p.id,
-        })
-        .collect();
+    let ast_ids: Vec<Uuid> = ast_res.iter().map(|item| item.id()).collect();
 
-    let static_ids: Vec<Uuid> = static_res
-        .iter()
-        .map(|item| match item {
-            SoupItem::Chat(c) => c.id,
-            SoupItem::Document(d) => d.id,
-            SoupItem::Project(p) => p.id,
-        })
-        .collect();
+    let static_ids: Vec<Uuid> = static_res.iter().map(|item| item.id()).collect();
 
     assert_eq!(ast_ids, static_ids);
 }
@@ -812,6 +759,9 @@ async fn test_filter_by_document_file_type(db: PgPool) -> anyhow::Result<()> {
             }
             SoupItem::Project(_) => {
                 project_count += 1;
+            }
+            _ => {
+                unimplemented!("encountered an unexpected value");
             }
         }
     }
@@ -880,6 +830,7 @@ async fn test_filter_by_document_ids(db: PgPool) -> anyhow::Result<()> {
             SoupItem::Project(_) => {
                 project_count += 1;
             }
+            _ => unimplemented!("encountered unexpected entity"),
         }
     }
 
@@ -962,6 +913,7 @@ async fn test_filter_documents_by_project_id(db: PgPool) -> anyhow::Result<()> {
             SoupItem::Project(_) => {
                 project_count += 1;
             }
+            _ => unimplemented!("encounted unexpected entity"),
         }
     }
 
@@ -1033,6 +985,7 @@ async fn test_filter_chats_by_project_id(db: PgPool) -> anyhow::Result<()> {
             SoupItem::Project(_) => {
                 project_count += 1;
             }
+            _ => unimplemented!("encounted unexpected entity"),
         }
     }
 
@@ -1101,6 +1054,7 @@ async fn test_filter_by_chat_ids(db: PgPool) -> anyhow::Result<()> {
             SoupItem::Project(_) => {
                 project_count += 1;
             }
+            _ => unimplemented!("encounted unexpected entity"),
         }
     }
 
@@ -1177,18 +1131,22 @@ async fn test_filter_by_project_ids(db: PgPool) -> anyhow::Result<()> {
             SoupItem::Chat(_) => {
                 chat_count += 1;
             }
+            _ => unimplemented!("encounted unexpected entity"),
         }
     }
 
-    assert_eq!(project_ids.len(), 2, "Should get exactly 2 projects");
+    assert_eq!(
+        project_ids.len(),
+        1,
+        "Should get exactly 1 project (project-B, child of project-A)"
+    );
     assert_eq!(doc_count, 5, "Should get all documents");
     assert_eq!(chat_count, 4, "Should get all chats");
 
     let returned_ids = project_ids;
 
     let expected_ids: HashSet<Uuid> = [
-        "11111111-1111-1111-1111-111111111111",
-        "44444444-4444-4444-4444-444444444444",
+        "22222222-2222-2222-2222-222222222222", // Project B (parentId = project-A)
     ]
     .iter()
     .map(|&s| Uuid::parse_str(s).unwrap())
@@ -1196,7 +1154,7 @@ async fn test_filter_by_project_ids(db: PgPool) -> anyhow::Result<()> {
 
     assert_eq!(
         returned_ids, expected_ids,
-        "Should get the correct projects"
+        "Should get project-B (child of project-A)"
     );
 
     Ok(())
@@ -1251,8 +1209,13 @@ async fn test_combined_entity_filters(db: PgPool) -> anyhow::Result<()> {
     )
     .await?;
 
-    // Should get: doc-in-A, doc-in-B, chat-standalone, project-D = 4 items
-    assert_eq!(items.len(), 4, "Should get 4 items total");
+    // Should get: doc-in-A, doc-in-B, chat-standalone = 3 items
+    // Note: project filter for project-D returns 0 projects (no children of project-D exist)
+    assert_eq!(
+        items.len(),
+        3,
+        "Should get 3 items total (2 docs + 1 chat, no projects match parentId filter)"
+    );
 
     let mut doc_count = 0;
     let mut chat_count = 0;
@@ -1277,20 +1240,19 @@ async fn test_combined_entity_filters(db: PgPool) -> anyhow::Result<()> {
                     "Should only get standalone chat"
                 );
             }
-            SoupItem::Project(project) => {
+            SoupItem::Project(_project) => {
                 project_count += 1;
-                assert_eq!(
-                    project.id,
-                    Uuid::parse_str("44444444-4444-4444-4444-444444444444").unwrap(),
-                    "Should only get project-D"
-                );
             }
+            _ => unimplemented!("encounted unexpected entity"),
         }
     }
 
     assert_eq!(doc_count, 2, "Should get 2 documents");
     assert_eq!(chat_count, 1, "Should get 1 chat");
-    assert_eq!(project_count, 1, "Should get 1 project");
+    assert_eq!(
+        project_count, 0,
+        "Should get 0 projects (no children of project-D)"
+    );
 
     Ok(())
 }
@@ -1355,6 +1317,7 @@ async fn test_multiple_filter_criteria_documents(db: PgPool) -> anyhow::Result<(
             SoupItem::Project(_) => {
                 project_count += 1;
             }
+            _ => unimplemented!("encounted unexpected entity"),
         }
     }
 
@@ -1432,6 +1395,7 @@ async fn test_filters_respect_access_control(db: PgPool) -> anyhow::Result<()> {
             SoupItem::Project(_) => {
                 project_count += 1;
             }
+            _ => unimplemented!("encounted unexpected entity"),
         }
     }
 
@@ -1501,6 +1465,7 @@ async fn test_filter_by_owner(db: PgPool) -> anyhow::Result<()> {
             SoupItem::Project(_) => {
                 project_count += 1;
             }
+            _ => unimplemented!("encounted unexpected entity"),
         }
     }
 
@@ -1562,6 +1527,7 @@ async fn test_filter_non_existent_items(db: PgPool) -> anyhow::Result<()> {
             SoupItem::Project(_) => {
                 project_count += 1;
             }
+            _ => unimplemented!("encounted unexpected entity"),
         }
     }
 
@@ -1665,25 +1631,15 @@ async fn test_cursor_pagination_with_document_filter(db: PgPool) -> anyhow::Resu
             SoupItem::Project(_) => {
                 // Projects are fine
             }
+            _ => unimplemented!("encounted unexpected entity"),
         }
     }
 
     // Verify no duplicate items between pages
-    let first_page_ids: HashSet<Uuid> = first_page_items
-        .iter()
-        .map(|item| match item {
-            SoupItem::Document(d) => d.id,
-            SoupItem::Chat(c) => c.id,
-            SoupItem::Project(p) => p.id,
-        })
-        .collect();
+    let first_page_ids: HashSet<Uuid> = first_page_items.iter().map(|item| item.id()).collect();
 
     for item in &second_page_items {
-        let id = match item {
-            SoupItem::Document(d) => d.id,
-            SoupItem::Chat(c) => c.id,
-            SoupItem::Project(p) => p.id,
-        };
+        let id = item.id();
         assert!(
             !first_page_ids.contains(&id),
             "No item should appear on both pages"
@@ -1784,6 +1740,7 @@ async fn test_cursor_pagination_with_combined_filters(db: PgPool) -> anyhow::Res
                 SoupItem::Project(_) => {
                     // All projects should be included
                 }
+                _ => unimplemented!("encountered an unknown entity"),
             }
         }
     }
@@ -1884,14 +1841,7 @@ async fn test_cursor_pagination_filter_consistency(db: PgPool) -> anyhow::Result
     );
 
     // Verify no duplicate items
-    let all_ids: Vec<Uuid> = all_items
-        .iter()
-        .map(|item| match item {
-            SoupItem::Document(d) => d.id,
-            SoupItem::Chat(c) => c.id,
-            SoupItem::Project(p) => p.id,
-        })
-        .collect();
+    let all_ids: Vec<Uuid> = all_items.iter().map(|item| item.id()).collect();
 
     let unique_ids: HashSet<_> = all_ids.iter().collect();
     assert_eq!(

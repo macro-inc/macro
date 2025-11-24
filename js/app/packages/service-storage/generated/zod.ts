@@ -612,36 +612,6 @@ export const createDocumentHandlerResponse = zod.object({
 })
 
 
-/**
- * @summary Creates a new blank docx file for the user
- */
-export const createBlankDocxBody = zod.object({
-  "projectId": zod.string().nullish()
-})
-
-export const createBlankDocxResponse = zod.object({
-  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
-  "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on\nthe file type'),
-  "createdAt": zod.number().describe('The time the document was created'),
-  "documentBom": zod.array(zod.object({
-  "id": zod.string().describe('The uuid of the bom part'),
-  "path": zod.string().describe('The file path of the bom part content'),
-  "sha": zod.string().describe('The sha of the bom part content\nThere is an index on sha for more performant queries based on it.')
-})).nullish().describe('If the document is a DOCX document and unzipped, the document_bom will be present'),
-  "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
-  "documentId": zod.string().describe('The document id'),
-  "documentName": zod.string().describe('The name of the document'),
-  "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
-  "fileType": zod.string().nullish().describe('The file type of the document (file extension)'),
-  "modificationData": zod.any().optional().describe('The modification data for the document instance.\nThis is only used for PDF documents.'),
-  "owner": zod.string().describe('The owner of the document'),
-  "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
-  "projectName": zod.string().nullish().describe('The name of the project that this document belongs to'),
-  "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
-  "updatedAt": zod.number().describe('The time the document instance / document BOM was updated')
-})
-
-
 export const initializeUserDocumentsResponse = zod.object({
   "success": zod.boolean().describe('Indicates if the request was successful')
 })
@@ -1191,39 +1161,90 @@ export const getItemsSoupQueryParams = zod.object({
 
 export const getItemsSoupResponse = zod.object({
   "items": zod.array(zod.union([zod.object({
-  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
+  "data": zod.object({
+  "branchedFromId": zod.string().uuid().nullish().describe('The id of the document this document branched from'),
   "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'),
   "createdAt": zod.number().describe('The time the document was created'),
   "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on the file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
-  "id": zod.string().describe('The document id'),
+  "id": zod.string().uuid().describe('The document id'),
   "name": zod.string().describe('The name of the document'),
   "ownerId": zod.string().describe('The owner of the document'),
-  "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
+  "projectId": zod.string().uuid().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
-  "viewedAt": zod.number().nullable().describe('The time the document was last viewed'),
-  "type": zod.enum(['document'])
+  "viewedAt": zod.number().nullable().describe('The time the document was last viewed')
+}),
+  "tag": zod.enum(['document'])
 }),zod.object({
+  "data": zod.object({
   "createdAt": zod.number().describe('The time the chat was created'),
-  "id": zod.string().describe('The chat uuid'),
+  "id": zod.string().uuid().describe('The chat uuid'),
   "isPersistent": zod.boolean().describe('Whether the chat is persistent or not'),
   "name": zod.string().describe('The name of the chat'),
   "ownerId": zod.string().describe('Who the chat belongs to'),
-  "projectId": zod.string().nullish().describe('The project id of the chat'),
+  "projectId": zod.string().uuid().nullish().describe('The project id of the chat'),
   "updatedAt": zod.number().describe('The time the chat was last updated'),
-  "viewedAt": zod.number().nullable().describe('The time the chat was last viewed'),
-  "type": zod.enum(['chat'])
+  "viewedAt": zod.number().nullable().describe('The time the chat was last viewed')
+}),
+  "tag": zod.enum(['chat'])
 }),zod.object({
+  "data": zod.object({
   "createdAt": zod.number().describe('The time the project was created'),
-  "id": zod.string().describe('The id of the project'),
+  "id": zod.string().uuid().describe('The id of the project'),
   "name": zod.string().describe('The name of the project'),
   "ownerId": zod.string().describe('The user id of who created the project'),
-  "parentId": zod.string().nullish().describe('The parent project id'),
+  "parentId": zod.string().uuid().nullish().describe('The parent project id'),
   "updatedAt": zod.number().describe('The time the project was updated'),
-  "viewedAt": zod.number().nullable().describe('The time the document was last viewed'),
-  "type": zod.enum(['project'])
+  "viewedAt": zod.number().nullable().describe('The time the document was last viewed')
+}),
+  "tag": zod.enum(['project'])
+}),zod.object({
+  "data": zod.object({
+  "createdAt": zod.number(),
+  "id": zod.string().uuid(),
+  "inboxVisible": zod.boolean(),
+  "isDraft": zod.boolean(),
+  "isImportant": zod.boolean(),
+  "isRead": zod.boolean(),
+  "name": zod.string().nullish(),
+  "ownerId": zod.string(),
+  "providerId": zod.string().nullish(),
+  "senderEmail": zod.string().nullish(),
+  "senderName": zod.string().nullish(),
+  "senderPhotoUrl": zod.string().nullish(),
+  "snippet": zod.string().nullish(),
+  "sortTs": zod.number(),
+  "updatedAt": zod.number(),
+  "viewedAt": zod.number().nullable()
+}).and(zod.object({
+  "attachments": zod.array(zod.object({
+  "contentId": zod.string().nullish(),
+  "createdAt": zod.number(),
+  "filename": zod.string().nullish(),
+  "id": zod.string().uuid(),
+  "messageId": zod.string().uuid(),
+  "mimeType": zod.string().nullish(),
+  "providerAttachmentId": zod.string().nullish(),
+  "sizeBytes": zod.number().nullish()
+})),
+  "attachmentsMacro": zod.array(zod.object({
+  "dbId": zod.string().uuid(),
+  "itemId": zod.string().uuid(),
+  "itemType": zod.string(),
+  "messageId": zod.string().uuid(),
+  "threadId": zod.string().uuid()
+})),
+  "participants": zod.array(zod.object({
+  "emailAddress": zod.string().nullish(),
+  "id": zod.string().uuid(),
+  "linkId": zod.string().uuid(),
+  "name": zod.string().nullish(),
+  "sfsPhotoUrl": zod.string().nullish()
+}))
+})),
+  "tag": zod.enum(['emailThread'])
 })]).and(zod.object({
   "frecency_score": zod.number()
 }))),
@@ -1279,39 +1300,90 @@ export const postItemsSoupBody = zod.object({
 
 export const postItemsSoupResponse = zod.object({
   "items": zod.array(zod.union([zod.object({
-  "branchedFromId": zod.string().nullish().describe('The id of the document this document branched from'),
+  "data": zod.object({
+  "branchedFromId": zod.string().uuid().nullish().describe('The id of the document this document branched from'),
   "branchedFromVersionId": zod.number().nullish().describe('The id of the version this document branched from\nThis could be either DocumentInstance or DocumentBom id depending on the file type'),
   "createdAt": zod.number().describe('The time the document was created'),
   "documentFamilyId": zod.number().nullish().describe('The id of the document family this document belongs to'),
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on the file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
-  "id": zod.string().describe('The document id'),
+  "id": zod.string().uuid().describe('The document id'),
   "name": zod.string().describe('The name of the document'),
   "ownerId": zod.string().describe('The owner of the document'),
-  "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
+  "projectId": zod.string().uuid().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
-  "viewedAt": zod.number().nullable().describe('The time the document was last viewed'),
-  "type": zod.enum(['document'])
+  "viewedAt": zod.number().nullable().describe('The time the document was last viewed')
+}),
+  "tag": zod.enum(['document'])
 }),zod.object({
+  "data": zod.object({
   "createdAt": zod.number().describe('The time the chat was created'),
-  "id": zod.string().describe('The chat uuid'),
+  "id": zod.string().uuid().describe('The chat uuid'),
   "isPersistent": zod.boolean().describe('Whether the chat is persistent or not'),
   "name": zod.string().describe('The name of the chat'),
   "ownerId": zod.string().describe('Who the chat belongs to'),
-  "projectId": zod.string().nullish().describe('The project id of the chat'),
+  "projectId": zod.string().uuid().nullish().describe('The project id of the chat'),
   "updatedAt": zod.number().describe('The time the chat was last updated'),
-  "viewedAt": zod.number().nullable().describe('The time the chat was last viewed'),
-  "type": zod.enum(['chat'])
+  "viewedAt": zod.number().nullable().describe('The time the chat was last viewed')
+}),
+  "tag": zod.enum(['chat'])
 }),zod.object({
+  "data": zod.object({
   "createdAt": zod.number().describe('The time the project was created'),
-  "id": zod.string().describe('The id of the project'),
+  "id": zod.string().uuid().describe('The id of the project'),
   "name": zod.string().describe('The name of the project'),
   "ownerId": zod.string().describe('The user id of who created the project'),
-  "parentId": zod.string().nullish().describe('The parent project id'),
+  "parentId": zod.string().uuid().nullish().describe('The parent project id'),
   "updatedAt": zod.number().describe('The time the project was updated'),
-  "viewedAt": zod.number().nullable().describe('The time the document was last viewed'),
-  "type": zod.enum(['project'])
+  "viewedAt": zod.number().nullable().describe('The time the document was last viewed')
+}),
+  "tag": zod.enum(['project'])
+}),zod.object({
+  "data": zod.object({
+  "createdAt": zod.number(),
+  "id": zod.string().uuid(),
+  "inboxVisible": zod.boolean(),
+  "isDraft": zod.boolean(),
+  "isImportant": zod.boolean(),
+  "isRead": zod.boolean(),
+  "name": zod.string().nullish(),
+  "ownerId": zod.string(),
+  "providerId": zod.string().nullish(),
+  "senderEmail": zod.string().nullish(),
+  "senderName": zod.string().nullish(),
+  "senderPhotoUrl": zod.string().nullish(),
+  "snippet": zod.string().nullish(),
+  "sortTs": zod.number(),
+  "updatedAt": zod.number(),
+  "viewedAt": zod.number().nullable()
+}).and(zod.object({
+  "attachments": zod.array(zod.object({
+  "contentId": zod.string().nullish(),
+  "createdAt": zod.number(),
+  "filename": zod.string().nullish(),
+  "id": zod.string().uuid(),
+  "messageId": zod.string().uuid(),
+  "mimeType": zod.string().nullish(),
+  "providerAttachmentId": zod.string().nullish(),
+  "sizeBytes": zod.number().nullish()
+})),
+  "attachmentsMacro": zod.array(zod.object({
+  "dbId": zod.string().uuid(),
+  "itemId": zod.string().uuid(),
+  "itemType": zod.string(),
+  "messageId": zod.string().uuid(),
+  "threadId": zod.string().uuid()
+})),
+  "participants": zod.array(zod.object({
+  "emailAddress": zod.string().nullish(),
+  "id": zod.string().uuid(),
+  "linkId": zod.string().uuid(),
+  "name": zod.string().nullish(),
+  "sfsPhotoUrl": zod.string().nullish()
+}))
+})),
+  "tag": zod.enum(['emailThread'])
 })]).and(zod.object({
   "frecency_score": zod.number()
 }))),

@@ -122,6 +122,7 @@ pub async fn disable_handler(
             .send_message_to_search_event_queue(SearchQueueMessage::RemoveEmailLink(
                 EmailLinkMessage {
                     link_id: link_context_cloned.id.to_string(),
+                    macro_user_id: link_context_cloned.macro_id.clone(),
                 },
             ))
             .await

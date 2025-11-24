@@ -4,7 +4,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { logger } from '@observability';
-import { onCleanup, onMount } from 'solid-js';
+import { onCleanup, onMount, untrack } from 'solid-js';
 import {
   EVENT_MODIFIER_KEYS,
   EVENT_MODIFIER_NAME_MAP,
@@ -143,7 +143,7 @@ export function registerHotkey(
 
   // Check for existing duplicate hotkeyToken for non-identical command
   const existingCommand = hotkeyToken
-    ? hotkeyTokenMap().get(hotkeyToken)?.at(0)
+    ? untrack(() => hotkeyTokenMap().get(hotkeyToken)?.at(0))
     : undefined;
   if (existingCommand && hotkeys && existingCommand.hotkeys) {
     // Yes, you should be able to register multiple hotkeys with the same token. But if you do this, they should be "the same" hotkey.
@@ -272,7 +272,7 @@ let scopeActivatedByFocusIn = false;
  * Attaches hotkeys to a DOM element. Manages scope activation and deactivation based on focus events.
  * This is the correct way to attach hotkeys to a block.
  * @param {string} scopePrefix - Optional scope prefix for debugging purposes.
- * @param {boolean} detachedScope - If true, the scope will not be attached to any parent scopes except for global.
+ * @param {boolean} detachedScope - If true, the scope will be attached directly to global scope.
  * @returns {[attachFn: (el: Element) => void, scopeId: string]} A tuple containing:
  *   - attachFn: Function to attach hotkey handlers to a DOM element
  *   - scopeId: The unique scope identifier that can be used with registerHotkey

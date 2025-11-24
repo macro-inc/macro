@@ -17,6 +17,7 @@ import {
   type Setter,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { gutterSize } from '../../../block-theme/signals/themeSignals';
 import {
   createNavigationEntityListShortcut,
   createSoupContext,
@@ -171,14 +172,10 @@ function createSplitFocusTracker(props: {
   };
 
   const findNextSplitToActivate = (splitIndex: number): SplitId | undefined => {
-    const wasOnlySplit = splitIndex === 0;
-
-    // If the removed split was the only split,
-    // we automatically insert and activate a new one
-    // Don't need to handle anything here
-    if (wasOnlySplit) return undefined;
-
-    const nextSplitId = props.splits()[splitIndex - 1].id;
+    const nextSplitId =
+      splitIndex === 0
+        ? props.splits()[0].id
+        : props.splits()[splitIndex - 1].id;
 
     return nextSplitId;
   };
@@ -301,7 +298,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-      <Resize.Zone direction="horizontal" gutter={8}>
+      <Resize.Zone direction="horizontal" gutter={gutterSize()}>
         <For each={ids()}>
           {(id, index) => (
             <Resize.Panel id={id} minSize={400}>

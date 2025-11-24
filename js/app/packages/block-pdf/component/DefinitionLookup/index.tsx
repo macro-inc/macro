@@ -41,7 +41,7 @@ import { parseDefinitionMetadata } from './shared';
 const iconStyles: JSX.CSSProperties = {
   'margin-right': '8px',
   'margin-top': '8px',
-  cursor: 'pointer',
+  cursor: 'var(--cursor-pointer)',
 };
 
 const DefinitionLabelWrapper = styled.div`
