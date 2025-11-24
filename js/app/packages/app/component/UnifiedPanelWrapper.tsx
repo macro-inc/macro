@@ -1,8 +1,9 @@
 import { openPanel, setOpenPanel, useToggleRightPanel, useToggleSettingsPanel } from '@core/signal/layout/unifiedPanel';
 import { settingsSpotlight, setSettingsSpotlight } from '@core/constant/SettingsState';
 import { SplitlikeContainer } from './split-layout/components/SplitContainer';
-import { Show, createEffect, createSignal } from 'solid-js';
+import { createEffect, createSignal, Show } from 'solid-js';
 import { registerHotkey } from 'core/hotkey/hotkeys';
+import { useBigChat } from '@core/signal/layout';
 import { Resize } from '@core/component/Resize';
 import { useIsAuthenticated } from '@core/auth';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -11,10 +12,10 @@ import { RightbarContent } from './rightbar/Rightbar';
 import { SettingsContent } from './settings/Settings';
 
 export function UnifiedPanelWrapper() {
-  const isAuthenticated = useIsAuthenticated();
-  const toggleRightPanel = useToggleRightPanel();
   const toggleSettingsPanel = useToggleSettingsPanel();
-
+  const [bigChatOpen, setBigChatOpen] = useBigChat();
+  const toggleRightPanel = useToggleRightPanel();
+  const isAuthenticated = useIsAuthenticated();
 
   const [panelSpotlight, setPanelSpotlight] = createSignal(false);
 
@@ -42,7 +43,7 @@ export function UnifiedPanelWrapper() {
     const scopeId = 'unified-panel';
 
     registerHotkey({
-      condition: () => Boolean(panelSpotlight() || openPanel()),
+      condition: () => Boolean(panelSpotlight() || openPanel() || bigChatOpen()),
       hotkeyToken: TOKENS.global.toggleRightPanel,
       description: 'Close panel',
       runWithInputFocused: true,
@@ -50,11 +51,12 @@ export function UnifiedPanelWrapper() {
       scopeId,
 
       keyDownHandler: () => {
-        if(panelSpotlight()){
+        if (bigChatOpen()) {
+          setBigChatOpen(false);
+        } else if (panelSpotlight()) {
           setPanelSpotlight(false);
           setSettingsSpotlight(false);
-        }
-        else{
+        } else {
           setOpenPanel(null);
         }
         return true;
@@ -92,7 +94,7 @@ export function UnifiedPanelWrapper() {
     });
   };
 
-  const isPanelOpen = () => openPanel() !== null;
+  const isPanelOpen = () => openPanel() !== null || bigChatOpen();
   const currentPanelType = () => openPanel();
 
   return (
@@ -104,25 +106,39 @@ export function UnifiedPanelWrapper() {
         minSize={400}
       >
         <div
-          classList={{
-            visible: isPanelOpen() || panelSpotlight(),
+          class="size-full"
+          style={{
+            display: isPanelOpen() ? 'block' : 'none',
           }}
-          class="size-full invisible"
           ref={(r) => {
             attachHotkeys(r);
           }}
         >
           <SplitlikeContainer
             setSpotlight={handleSetSpotlight}
-            spotlight={panelSpotlight}
-            tr={!panelSpotlight()}
+            spotlight={panelSpotlight || bigChatOpen}
+            tr={!panelSpotlight() && !bigChatOpen()}
           >
-            <Show when={currentPanelType() === 'rightbar'}>
+            <div
+              style={{
+                display: currentPanelType() === 'rightbar' || bigChatOpen() ? 'flex' : 'none',
+                'flex-direction': 'column',
+                width: '100%',
+                height: '100%',
+              }}
+            >
               <RightbarContent />
-            </Show>
-            <Show when={currentPanelType() === 'settings'}>
+            </div>
+            <div
+              style={{
+                display: currentPanelType() === 'settings' ? 'flex' : 'none',
+                'flex-direction': 'column',
+                width: '100%',
+                height: '100%',
+              }}
+            >
               <SettingsContent />
-            </Show>
+            </div>
           </SplitlikeContainer>
         </div>
       </Resize.Panel>
