@@ -32,7 +32,11 @@ import {
 } from '../queries/project';
 import type { EntityData, ProjectEntity } from '../types/entity';
 import type { Notification, WithNotification } from '../types/notification';
-import type { ChannelMessageContentHitData, WithSearch } from '../types/search';
+import type {
+  ChannelMessageContentHitData,
+  ContentHitData,
+  WithSearch,
+} from '../types/search';
 import type { EntityClickEvent, EntityClickHandler } from './Entity';
 
 function UnreadIndicator(props: { active?: boolean }) {
@@ -64,16 +68,28 @@ function SharedBadge(props: { ownerId: string }) {
   );
 }
 
+function GenericContentHit(props: { data: ContentHitData }) {
+  return (
+    <div class="text-sm text-ink-muted truncate flex items-center">
+      <StaticMarkdown
+        markdown={props.data.content}
+        theme={unifiedListMarkdownTheme}
+        singleLine={true}
+      />
+    </div>
+  );
+}
+
 function ChannelMessageContentHit(props: {
-  highlight: ChannelMessageContentHitData;
+  data: ChannelMessageContentHitData;
 }) {
-  const [userName] = useDisplayName(props.highlight.senderId);
-  const formattedDate = createFormattedDate(props.highlight.sentAt);
+  const [userName] = useDisplayName(props.data.senderId);
+  const formattedDate = createFormattedDate(props.data.sentAt);
 
   return (
     <div class="flex gap-2 items-center min-w-0">
       <div class="flex size-5 shrink-0 items-center justify-center">
-        <UserIcon id={props.highlight.senderId} size="xs" />
+        <UserIcon id={props.data.senderId} size="xs" />
       </div>
       <div class="flex gap-2 text-sm w-full min-w-0 overflow-hidden items-baseline">
         <div class="text-sm shrink-0 truncate min-w-0 font-medium">
@@ -84,7 +100,7 @@ function ChannelMessageContentHit(props: {
         </div>
         <div class="text-sm text-ink-muted truncate flex items-center flex-1 min-w-0">
           <StaticMarkdown
-            markdown={props.highlight.content}
+            markdown={props.data.content}
             theme={unifiedListMarkdownTheme}
             singleLine={true}
           />
@@ -193,7 +209,7 @@ export function EntityWithEverything(
   const searchHighlightName = () =>
     'search' in props.entity && props.entity.search.nameHighlight;
 
-  const contentHighlights = () => {
+  const contentHitData = () => {
     if (!('search' in props.entity)) return [];
     return props.entity.search.contentHitData ?? [];
   };
@@ -533,26 +549,16 @@ export function EntityWithEverything(
             </Show>
           </div>
         </div>
-        {/* Content Highlights from Search */}
-        <Show when={contentHighlights().length > 0}>
+        {/* Content Hits from Search */}
+        <Show when={contentHitData().length > 0}>
           <div class="relative row-2 grid gap-2 col-2 col-end-4 pb-2">
-            <For each={contentHighlights()}>
-              {(highlight) => (
+            <For each={contentHitData()}>
+              {(data) => (
                 <Show
-                  when={highlight.type === 'channel-message'}
-                  fallback={
-                    <div class="text-sm text-ink-muted truncate flex items-center">
-                      <StaticMarkdown
-                        markdown={highlight.content}
-                        theme={unifiedListMarkdownTheme}
-                        singleLine={true}
-                      />
-                    </div>
-                  }
+                  when={data.type === 'channel-message' && data}
+                  fallback={<GenericContentHit data={data} />}
                 >
-                  <ChannelMessageContentHit
-                    highlight={highlight as ChannelMessageContentHitData}
-                  />
+                  {(data) => <ChannelMessageContentHit data={data()} />}
                 </Show>
               )}
             </For>
@@ -563,7 +569,7 @@ export function EntityWithEverything(
           when={
             props.showUnrollNotifications &&
             hasNotifications() &&
-            contentHighlights().length === 0
+            contentHitData().length === 0
           }
         >
           <div class="relative col-2 col-end-4 200 pb-2 gap-2">

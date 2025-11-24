@@ -30,7 +30,9 @@ type GenericContentHitData = {
   location?: SearchLocation;
 };
 
-type ContentHitData = GenericContentHitData | ChannelMessageContentHitData;
+export type ContentHitData =
+  | GenericContentHitData
+  | ChannelMessageContentHitData;
 
 export type WithSearch<T extends object> = T & {
   search: {
