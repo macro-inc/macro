@@ -519,11 +519,14 @@ export function useHotKeyRoot() {
             setPressedKeys(new Set<string>());
             setActiveScope(newScope.id);
             if (!transitionOrCommandFound) {
-              setExecutedTokens((prev) =>
-                prev.includes(command.hotkeyToken ?? '')
-                  ? prev
-                  : [...prev, command.hotkeyToken ?? '']
-              );
+              setExecutedTokens((prev) => {
+                if (command.hotkeyToken) {
+                  return prev.includes(command.hotkeyToken)
+                    ? prev
+                    : [...prev, command.hotkeyToken];
+                }
+                return prev;
+              });
             }
             transitionOrCommandFound = true;
             e.preventDefault();
@@ -533,12 +536,17 @@ export function useHotKeyRoot() {
         const captured = command.keyDownHandler?.(e);
         if (captured) {
           setPressedKeys(new Set<string>());
+          if (!transitionOrCommandFound) {
+            setExecutedTokens((prev) => {
+              if (command.hotkeyToken) {
+                return prev.includes(command.hotkeyToken)
+                  ? prev
+                  : [...prev, command.hotkeyToken];
+              }
+              return prev;
+            });
+          }
           transitionOrCommandFound = true;
-          setExecutedTokens((prev) =>
-            prev.includes(command.hotkeyToken ?? '')
-              ? prev
-              : [...prev, command.hotkeyToken ?? '']
-          );
           e.preventDefault();
           e.stopPropagation();
         }
