@@ -15,7 +15,7 @@ axum = [
 ]
 inbound = ["ports"]
 outbound = ["ports"]
-ports = ["frecency/ports"]
+ports = ["dep:tokio", "frecency/ports"]
 
 
 [dependencies]
@@ -39,6 +39,7 @@ recursion = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros"], optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }

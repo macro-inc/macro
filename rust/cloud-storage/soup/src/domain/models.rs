@@ -161,9 +161,7 @@ impl Identify for FrecencySoupItem {
 }
 
 impl SortOn<Frecency> for FrecencySoupItem {
-    fn sort_on(
-        sort_type: Frecency,
-    ) -> impl FnOnce(&Self) -> models_pagination::CursorVal<Frecency> {
+    fn sort_on(sort_type: Frecency) -> impl FnMut(&Self) -> models_pagination::CursorVal<Frecency> {
         move |val| CursorVal {
             sort_type,
             // if this record does not have a frecency score we fallback to created_at as the sort
@@ -176,8 +174,8 @@ impl SortOn<Frecency> for FrecencySoupItem {
 }
 
 impl SortOn<SimpleSortMethod> for FrecencySoupItem {
-    fn sort_on(sort: SimpleSortMethod) -> impl FnOnce(&Self) -> CursorVal<SimpleSortMethod> {
-        let cb = SoupItem::sort_on(sort);
+    fn sort_on(sort: SimpleSortMethod) -> impl FnMut(&Self) -> CursorVal<SimpleSortMethod> {
+        let mut cb = SoupItem::sort_on(sort);
         move |v| cb(&v.item)
     }
 }
@@ -188,4 +186,6 @@ pub enum SoupErr {
     FrecencyErr(#[from] FrecencyQueryErr),
     #[error(transparent)]
     SoupDbErr(#[from] anyhow::Error),
+    #[error(transparent)]
+    EmailErr(#[from] email::domain::models::EmailErr),
 }
