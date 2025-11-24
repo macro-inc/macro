@@ -73,3 +73,37 @@ pub fn send_remove_channel_message_to_search_extractor_queue(
         });
     }
 }
+
+#[tracing::instrument(skip(sqs_client))]
+pub fn send_remove_channel_name_to_search_extractor_queue(
+    sqs_client: &sqs_client::SQS,
+    channel_id: &uuid::Uuid,
+) {
+    #[cfg(feature = "channel_search")]
+    {
+        use tracing::Instrument;
+
+        tracing::trace!("enqueueing message to search");
+
+        tokio::spawn({
+            let sqs_client = sqs_client.clone();
+            let channel_id = channel_id.clone();
+            async move {
+                let _ = sqs_client
+                    .send_message_to_search_event_queue(
+                        sqs_client::search::SearchQueueMessage::RemoveEntityName(
+                            sqs_client::search::name::EntityName {
+                                entity_id: channel_id,
+                                entity_type: models_opensearch::SearchEntityType::Channels,
+                            },
+                        ),
+                    )
+                    .await
+                    .inspect_err(|e| {
+                        tracing::error!(error=?e, "SEARCH_QUEUE unable to enqueue message");
+                    });
+            }
+            .in_current_span()
+        });
+    }
+}
