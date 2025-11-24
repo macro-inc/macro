@@ -37,12 +37,12 @@ type InnerSearchResult =
   | ChannelSearchResult
   | ProjectSearchResult;
 
-const getDocumentLocationHighlights = (
+const getDocumentContentHitData = (
   innerResults: DocumentSearchResult[],
   fileType: FileTypeWithLocation,
   searchQuery: string
 ) => {
-  const contentHighlights = innerResults.flatMap((r) => {
+  const contentHitData = innerResults.flatMap((r) => {
     const contents = r.highlight.content ?? [];
 
     return contents.map((content) => {
@@ -83,15 +83,13 @@ const getDocumentLocationHighlights = (
     nameHighlight: nameHighlight
       ? mergeAdjacentMacroEmTags(nameHighlight)
       : null,
-    contentHighlights: contentHighlights.length > 0 ? contentHighlights : null,
+    contentHitData: contentHitData.length > 0 ? contentHitData : null,
     source: 'service' as const,
   };
 };
 
-const getChannelMessageLocationHighlights = (
-  innerResults: ChannelSearchResult[]
-) => {
-  const contentHighlights = innerResults.flatMap((r) => {
+const getChannelContentHitData = (innerResults: ChannelSearchResult[]) => {
+  const contentHitData = innerResults.flatMap((r) => {
     const contents = r.highlight.content ?? [];
 
     return contents.map((content) => ({
@@ -106,13 +104,13 @@ const getChannelMessageLocationHighlights = (
 
   return {
     nameHighlight: null,
-    contentHighlights: contentHighlights.length > 0 ? contentHighlights : null,
+    contentHitData: contentHitData.length > 0 ? contentHitData : null,
     source: 'service' as const,
   };
 };
 
-const getHighlights = (innerResults: InnerSearchResult[]) => {
-  const contentHighlights = innerResults.flatMap((r) => {
+const getContentHitData = (innerResults: InnerSearchResult[]) => {
+  const contentHitData = innerResults.flatMap((r) => {
     const contents = r.highlight.content ?? [];
 
     return contents.map((content) => ({
@@ -128,7 +126,7 @@ const getHighlights = (innerResults: InnerSearchResult[]) => {
     nameHighlight: nameHighlight
       ? mergeAdjacentMacroEmTags(nameHighlight)
       : null,
-    contentHighlights: contentHighlights.length > 0 ? contentHighlights : null,
+    contentHitData: contentHitData.length > 0 ? contentHitData : null,
     source: 'service' as const,
   };
 };
@@ -149,12 +147,12 @@ const useMapSearchResponseItem = () => {
         const searchFileType =
           result.file_type === 'docx' ? 'pdf' : result.file_type;
         const search = ['md', 'pdf'].includes(searchFileType)
-          ? getDocumentLocationHighlights(
+          ? getDocumentContentHitData(
               result.document_search_results,
               searchFileType as FileTypeWithLocation,
               searchQuery
             )
-          : getHighlights(result.document_search_results);
+          : getContentHitData(result.document_search_results);
         return {
           type: 'document',
           id: result.document_id,
@@ -174,7 +172,7 @@ const useMapSearchResponseItem = () => {
           console.error('Email result not found', result);
           return;
         }
-        const search = getHighlights(result.email_message_search_results);
+        const search = getContentHitData(result.email_message_search_results);
         return {
           type: 'email',
           id: result.thread_id,
@@ -192,7 +190,7 @@ const useMapSearchResponseItem = () => {
       }
       case 'chat': {
         if (!result.metadata || result.metadata.deleted_at) return;
-        const search = getHighlights(result.chat_search_results);
+        const search = getContentHitData(result.chat_search_results);
         let name = result.name;
         if (!name || name === 'New Chat') {
           const chat = history().find((item) => item.id === result.chat_id);
@@ -216,7 +214,7 @@ const useMapSearchResponseItem = () => {
           (c) => c.id === result.channel_id
         );
 
-        const search = getChannelMessageLocationHighlights(
+        const search = getChannelContentHitData(
           result.channel_message_search_results
         );
 
@@ -236,7 +234,7 @@ const useMapSearchResponseItem = () => {
 
       case 'project': {
         if (!result.metadata || result.metadata.deleted_at) return;
-        const search = getHighlights(result.project_search_results);
+        const search = getContentHitData(result.project_search_results);
         return {
           type: 'project',
           id: result.id,

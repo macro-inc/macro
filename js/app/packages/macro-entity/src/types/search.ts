@@ -15,7 +15,7 @@ export type FileTypeWithLocation = 'md' | 'pdf';
 
 export type SearchLocation = MarkdownHighlightLocation | PdfHighlightLocation;
 
-export type ChannelMessageContentHighlight = {
+export type ChannelMessageContentHitData = {
   type: 'channel-message';
   id: string;
   content: string;
@@ -24,20 +24,18 @@ export type ChannelMessageContentHighlight = {
   location?: SearchLocation;
 };
 
-type GenericContentHighlight = {
+type GenericContentHitData = {
   type: undefined;
   content: string;
   location?: SearchLocation;
 };
 
-type ContentHighlight =
-  | GenericContentHighlight
-  | ChannelMessageContentHighlight;
+type ContentHitData = GenericContentHitData | ChannelMessageContentHitData;
 
 export type WithSearch<T extends object> = T & {
   search: {
     nameHighlight: string | null;
-    contentHighlights: ContentHighlight[] | null;
+    contentHitData: ContentHitData[] | null;
     source: 'local' | 'service';
   };
 };

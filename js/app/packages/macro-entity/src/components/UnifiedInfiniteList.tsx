@@ -60,9 +60,9 @@ const mergeSearchEntities = <T extends EntityData>(
       ...serviceEntity.search,
       nameHighlight:
         serviceEntity.search.nameHighlight || localEntity.search.nameHighlight,
-      contentHighlights: serviceEntity.search.contentHighlights?.length
-        ? serviceEntity.search.contentHighlights
-        : localEntity.search.contentHighlights,
+      contentHighlights: serviceEntity.search.contentHitData?.length
+        ? serviceEntity.search.contentHitData
+        : localEntity.search.contentHitData,
     },
   } as T;
 };

@@ -439,7 +439,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               ...result.item,
               search: {
                 nameHighlight: result.nameHighlight,
-                contentHighlights: null,
+                contentHitData: null,
                 source: 'local',
               },
             } as WithNotification<WithSearch<EntityData>>;
@@ -877,7 +877,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       : replaceOrInsertSplit({ type: blockName, id });
 
     const location =
-      'search' in entity && entity.search.contentHighlights?.at(0)?.location;
+      'search' in entity && entity.search.contentHitData?.at(0)?.location;
     if (location) {
       handle?.activate();
       const blockHandle = await blockOrchestrator.getBlockHandle(id);

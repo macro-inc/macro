@@ -32,7 +32,7 @@ import {
 } from '../queries/project';
 import type { EntityData, ProjectEntity } from '../types/entity';
 import type { Notification, WithNotification } from '../types/notification';
-import type { WithSearch } from '../types/search';
+import type { ChannelMessageContentHitData, WithSearch } from '../types/search';
 import type { EntityClickEvent, EntityClickHandler } from './Entity';
 
 function UnreadIndicator(props: { active?: boolean }) {
@@ -60,6 +60,36 @@ function SharedBadge(props: { ownerId: string }) {
     <div class="font-mono font-medium user-select-none uppercase flex items-center text-ink-extra-muted p-0.5 gap-1 text-[0.625rem] rounded-full border border-edge-muted pr-2">
       <UserIcon id={props.ownerId} size="xs" />
       shared
+    </div>
+  );
+}
+
+function ChannelMessageContentHit(props: {
+  highlight: ChannelMessageContentHitData;
+}) {
+  const [userName] = useDisplayName(props.highlight.senderId);
+  const formattedDate = createFormattedDate(props.highlight.sentAt);
+
+  return (
+    <div class="flex gap-2 items-center min-w-0">
+      <div class="flex size-5 shrink-0 items-center justify-center">
+        <UserIcon id={props.highlight.senderId} size="xs" />
+      </div>
+      <div class="flex gap-2 text-sm w-full min-w-0 overflow-hidden items-baseline">
+        <div class="text-sm shrink-0 truncate min-w-0 font-medium">
+          {userName()}
+        </div>
+        <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted">
+          {formattedDate()}
+        </div>
+        <div class="text-sm text-ink-muted truncate flex items-center flex-1 min-w-0">
+          <StaticMarkdown
+            markdown={props.highlight.content}
+            theme={unifiedListMarkdownTheme}
+            singleLine={true}
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -165,7 +195,7 @@ export function EntityWithEverything(
 
   const contentHighlights = () => {
     if (!('search' in props.entity)) return [];
-    return props.entity.search.contentHighlights ?? [];
+    return props.entity.search.contentHitData ?? [];
   };
 
   const EntityTitle = () => {
@@ -508,13 +538,22 @@ export function EntityWithEverything(
           <div class="relative row-2 grid gap-2 col-2 col-end-4 pb-2">
             <For each={contentHighlights()}>
               {(highlight) => (
-                <div class="text-sm text-ink-muted truncate flex items-center">
-                  <StaticMarkdown
-                    markdown={highlight.content}
-                    theme={unifiedListMarkdownTheme}
-                    singleLine={true}
+                <Show
+                  when={highlight.type === 'channel-message'}
+                  fallback={
+                    <div class="text-sm text-ink-muted truncate flex items-center">
+                      <StaticMarkdown
+                        markdown={highlight.content}
+                        theme={unifiedListMarkdownTheme}
+                        singleLine={true}
+                      />
+                    </div>
+                  }
+                >
+                  <ChannelMessageContentHit
+                    highlight={highlight as ChannelMessageContentHitData}
                   />
-                </div>
+                </Show>
               )}
             </For>
           </div>
