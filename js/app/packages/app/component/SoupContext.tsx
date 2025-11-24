@@ -1128,7 +1128,9 @@ export function createNavigationEntityListShortcut({
     setSelectedView(newViewId);
   };
 
-  const splitIsUnifiedList = createMemo(() => splitHandle.content().id === 'unified-list');
+  const splitIsUnifiedList = createMemo(
+    () => splitHandle.content().id === 'unified-list'
+  );
 
   for (let i = 0; i < viewIds().length && i < 9; i++) {
     const viewId = viewIds()[i];
@@ -1253,13 +1255,14 @@ export function createNavigationEntityListShortcut({
     displayPriority: 10,
   });
 
-  const clearMultiCondition: () => boolean = () => isViewingList() && viewData().selectedEntities.length > 0;
+  const clearMultiCondition: () => boolean = () =>
+    isViewingList() && viewData().selectedEntities.length > 0;
   const closeSpotlightCondition = () => splitHandle.isSpotLight();
   const escapeDescription = () => {
     if (clearMultiCondition()) {
       return 'Clear multi selection';
     }
-    if(closeSpotlightCondition()) {
+    if (closeSpotlightCondition()) {
       return 'Close spotlight';
     }
     return '';
@@ -1280,7 +1283,7 @@ export function createNavigationEntityListShortcut({
         return true;
       }
       return false;
-    }
+    },
   });
 }
 

@@ -13,6 +13,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { ENABLE_FOLDER_UPLOAD } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
+import { RegisterHotkeyReturn } from '@core/hotkey/types';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import {
   CONDITIONAL_VIEWS,
@@ -239,34 +240,40 @@ export function Soup() {
 
   const entityQueryClient = useEntityQueryClient();
 
-  registerHotkey({
-    hotkey: ['shift+/'],
-    scopeId: splitHotkeyScope,
-    description: () =>
-      `${showHelpDrawer().has(selectedView()) ? 'Hide' : 'Show'} help drawer`,
-    hotkeyToken: TOKENS.split.showHelpDrawer,
-    keyDownHandler: () => {
-      if (showHelpDrawer().has(selectedView())) {
-        setShowHelpDrawer(new Set<string>());
-      } else {
-        setShowHelpDrawer(new Set([...DEFAULT_VIEWS, ...CONDITIONAL_VIEWS]));
-      }
-      return true;
-    },
-  });
+  const hotkeyDisposers: RegisterHotkeyReturn[] = [];
 
-  registerHotkey({
-    hotkey: ['p'],
-    scopeId: splitHotkeyScope,
-    description: 'Toggle Preview',
-    hotkeyToken: TOKENS.unifiedList.togglePreview,
-    keyDownHandler: () => {
-      playSound('open');
-      setPreview((prev) => !prev);
-      return true;
-    },
-    // displayPriority: 10,
-  });
+  hotkeyDisposers.push(
+    registerHotkey({
+      hotkey: ['shift+/'],
+      scopeId: splitHotkeyScope,
+      description: () =>
+        `${showHelpDrawer().has(selectedView()) ? 'Hide' : 'Show'} help drawer`,
+      hotkeyToken: TOKENS.split.showHelpDrawer,
+      keyDownHandler: () => {
+        if (showHelpDrawer().has(selectedView())) {
+          setShowHelpDrawer(new Set<string>());
+        } else {
+          setShowHelpDrawer(new Set([...DEFAULT_VIEWS, ...CONDITIONAL_VIEWS]));
+        }
+        return true;
+      },
+    })
+  );
+
+  hotkeyDisposers.push(
+    registerHotkey({
+      hotkey: ['p'],
+      scopeId: splitHotkeyScope,
+      description: 'Toggle Preview',
+      hotkeyToken: TOKENS.unifiedList.togglePreview,
+      keyDownHandler: () => {
+        playSound('open');
+        setPreview((prev) => !prev);
+        return true;
+      },
+      // displayPriority: 10,
+    })
+  );
 
   const [isDragging, setIsDragging] = createSignal(false);
   const [isValidDrag, setIsValidDrag] = createSignal(true);
@@ -313,7 +320,10 @@ export function Soup() {
 
   let tabsRef: HTMLDivElement | undefined;
 
-  onCleanup(() => setEntityListRef(undefined));
+  onCleanup(() => {
+    setEntityListRef(undefined);
+    hotkeyDisposers.forEach((disposer) => disposer.dispose());
+  });
 
   const TabContextMenu = (props: { value: ViewId; label: string }) => {
     const [isModalOpen, setIsModalOpen] = createSignal(false);

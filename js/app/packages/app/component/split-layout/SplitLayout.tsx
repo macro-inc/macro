@@ -136,7 +136,11 @@ function createSplitFocusTracker(props: {
     }
 
     // return if panel has a child already with focus.
-    if (splitPanelRef.contains(document.activeElement) && splitPanelRef !== document.activeElement) return;
+    if (
+      splitPanelRef.contains(document.activeElement) &&
+      splitPanelRef !== document.activeElement
+    )
+      return;
 
     // look for a child to return focus to.
     const child = lastFocusedChildBySplitId.get(id);
