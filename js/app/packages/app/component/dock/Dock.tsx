@@ -295,7 +295,7 @@ export function Dock() {
               'height': '38px',
               'gap': '4px'
             }}>
-              <Show when={isSoupActive()}>
+              {/*<Show when={isSoupActive()}>
                 <IconButton
                   onClick={() => {
                     const showHelp = activeSoupDrawerCommand();
@@ -310,22 +310,7 @@ export function Dock() {
                   theme="clear"
                   size="sm"
                 />
-              </Show>
-
-              <IconButton
-                onClick={() => {
-                  if (isRightPanelCollapsed()) { track(TrackingEvents.RIGHTBAR.OPEN) }
-                  else { track(TrackingEvents.RIGHTBAR.CLOSE) }
-                  toggleRightPanel();
-                }}
-                theme={isRightPanelCollapsed() ? 'clear' : 'accent'}
-                tooltip={{
-                  hotkeyToken: TOKENS.global.toggleRightPanel,
-                  label: 'Toggle AI Panel',
-                }}
-                icon={IconAtom}
-                size="sm"
-              />
+              </Show>*/}
 
               <IconButton
                 tooltip={{
@@ -343,6 +328,21 @@ export function Dock() {
                 }}
                 icon={SplitIcon}
                 theme="clear"
+                size="sm"
+              />
+
+              <IconButton
+                onClick={() => {
+                  if (isRightPanelCollapsed()) { track(TrackingEvents.RIGHTBAR.OPEN) }
+                  else { track(TrackingEvents.RIGHTBAR.CLOSE) }
+                  toggleRightPanel();
+                }}
+                theme={isRightPanelCollapsed() ? 'clear' : 'accent'}
+                tooltip={{
+                  hotkeyToken: TOKENS.global.toggleRightPanel,
+                  label: 'Toggle AI Panel',
+                }}
+                icon={IconAtom}
                 size="sm"
               />
 
