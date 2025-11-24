@@ -316,7 +316,6 @@ export function Channel(props: { data: Required<ChannelData> }) {
                 })
               );
             },
-            folder: true,
             onDragStart: () => {
               setIsDraggingOverChannel(true);
               setIsValidChannelDrag(true);

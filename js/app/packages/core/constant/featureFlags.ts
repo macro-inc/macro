@@ -61,8 +61,6 @@ export const ENABLE_GMAIL_BASED_CONTACTS = DEV_MODE_ENV;
 
 export const ENABLE_PROFILE_PICTURES = true;
 
-export const ENABLE_FOLDER_UPLOAD = true;
-
 export const ENABLE_VIDEO_BLOCK = true;
 
 export const ENABLE_DOCX_TO_PDF = true;

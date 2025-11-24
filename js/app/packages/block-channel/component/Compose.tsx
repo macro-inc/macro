@@ -121,7 +121,6 @@ export function ChannelCompose() {
               })
             );
           },
-          folder: true,
           onDragStart: () => {
             setIsDraggedOver(true);
           },

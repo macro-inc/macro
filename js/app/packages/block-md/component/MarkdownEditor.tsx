@@ -1024,7 +1024,6 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
               }
             );
           },
-          folder: true,
         }}
         use:droppable
       >

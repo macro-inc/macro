@@ -418,7 +418,6 @@ export function BaseInput(props: BaseInputProps) {
             })
           );
         },
-        folder: true,
         onDragStart: () => {
           setIsDraggedOver(true);
         },
