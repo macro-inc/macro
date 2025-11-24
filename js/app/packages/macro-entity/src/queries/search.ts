@@ -228,7 +228,6 @@ const useMapSearchResponseItem = () => {
           updatedAt: result.metadata?.updated_at,
           channelType: result.channel_type as ChannelType,
           interactedAt: result.metadata?.interacted_at ?? undefined,
-          latestMessage: undefined,
           search,
         };
       }

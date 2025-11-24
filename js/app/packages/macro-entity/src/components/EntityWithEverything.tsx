@@ -303,7 +303,7 @@ export function EntityWithEverything(
       props.entity.type === 'channel' ? props.entity : null
     );
 
-    const lastMessageContent = createMemo(
+    const latestMessageContent = createMemo(
       () => channelEntity()?.latestMessage?.content
     );
 
@@ -313,6 +313,15 @@ export function EntityWithEverything(
       const [userName] = useDisplayName(senderId);
       return userName();
     });
+
+    const showLatestMessageInfo = () => {
+      return (
+        !props.showUnrollNotifications &&
+        props.entity.type === 'channel' &&
+        !isSearchEntity(props.entity) &&
+        !!props.entity.latestMessage?.content
+      );
+    };
 
     return (
       <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden">
@@ -334,25 +343,24 @@ export function EntityWithEverything(
             </Show>
           </span>
 
-          <Show when={!props.showUnrollNotifications}>
+          <Show when={showLatestMessageInfo()}>
             <div class="flex items-center gap-1">
               {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
               <span class="font-medium shrink-0 truncate">
                 {userNameFromSender()}
               </span>
             </div>
-          </Show>
-
-          <Show when={!props.showUnrollNotifications && lastMessageContent()}>
-            {(lastMessageContent) => (
-              <div class="truncate shrink grow opacity-60 flex items-center">
-                <StaticMarkdown
-                  markdown={lastMessageContent()}
-                  theme={unifiedListMarkdownTheme}
-                  singleLine={true}
-                />
-              </div>
-            )}
+            <Show when={latestMessageContent()}>
+              {(lastMessageContent) => (
+                <div class="truncate shrink grow opacity-60 flex items-center">
+                  <StaticMarkdown
+                    markdown={lastMessageContent()}
+                    theme={unifiedListMarkdownTheme}
+                    singleLine={true}
+                  />
+                </div>
+              )}
+            </Show>
           </Show>
         </span>
       </div>
