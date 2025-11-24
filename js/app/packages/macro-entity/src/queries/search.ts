@@ -191,23 +191,10 @@ const useMapSearchResponseItem = () => {
           (c) => c.id === result.channel_id
         );
 
-        // TODO: serialize correctly from backend
-        const latestMessage = channelWithLatest?.latest_message
-          ? {
-              content: channelWithLatest.latest_message.content,
-              senderId: channelWithLatest.latest_message.sender_id,
-              createdAt:
-                new Date(
-                  channelWithLatest.latest_message.created_at
-                ).getTime() / 1000,
-            }
-          : undefined;
-
         const search = getHighlights(result.channel_message_search_results);
 
         return {
           type: 'channel',
-          // TODO: distinguish channel name match from channel message match
           id: result.channel_id,
           name: channelWithLatest?.name ?? '',
           ownerId: result.owner_id ?? '',
@@ -215,7 +202,7 @@ const useMapSearchResponseItem = () => {
           updatedAt: result.metadata?.updated_at,
           channelType: result.channel_type as ChannelType,
           interactedAt: result.metadata?.interacted_at ?? undefined,
-          latestMessage,
+          latestMessage: undefined,
           search,
         };
       }
