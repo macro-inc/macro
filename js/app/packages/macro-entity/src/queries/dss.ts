@@ -1,5 +1,9 @@
-import { deleteItem } from '@core/component/FileList/itemOperations';
-import { useItemOperations } from '@core/component/FileList/useItemOperations';
+import {
+  copyItem,
+  deleteItem,
+  moveToFolder,
+  renameItem,
+} from '@core/component/FileList/itemOperations';
 import type { ItemType } from '@service-storage/client';
 import type {
   PostItemsSoupParams,
@@ -506,19 +510,17 @@ export function createBulkDeleteDssItemsMutation() {
 }
 
 export function createRenameDssEntityMutation() {
-  const itemOperations = useItemOperations();
   return useMutation(() => ({
     mutationFn: async ({
-      entity: { id, type, name },
+      entity: { id, type },
       newName,
     }: {
       entity: EntityData & { name: string };
       newName: string;
     }) => {
-      const success = await itemOperations.renameItem({
+      const success = await renameItem({
         itemType: type as ItemType,
         id,
-        itemName: name,
         newName,
       });
 
@@ -591,8 +593,6 @@ export function createRenameDssEntityMutation() {
 }
 
 export function createBulkRenameDssEntityMutation() {
-  // const itemOperations = useItemOperations();
-
   const isUnsupportedEntity = (entity: EntityData) => {
     const type = entity.type;
     return type === 'channel' || type === 'email';
@@ -601,34 +601,34 @@ export function createBulkRenameDssEntityMutation() {
   return useMutation(() => ({
     mutationFn: async ({
       entities,
-      newName,
+      name,
     }: {
-      entities: EntityData[];
-      newName: string;
+      entities: (EntityData & { name: string })[];
+      name: (oldName: string) => string | string;
     }) => {
       if (entities.some(isUnsupportedEntity)) {
         throw new Error(`Unsupported entity type provided`);
       }
-
-      // const success = await itemOperations.bulkRename(
-      //   entities.map((entity) => ({}))
-      // );
-      //
-      const success = false;
-
-      if (!success) {
-        throw new Error(`TODO (SEAMUS): bulk rename! – ${newName}`);
-      }
-
-      return { success: true };
+      return await Promise.all(
+        entities.map((e) => {
+          return renameItem({
+            itemType: e.type as ItemType,
+            id: e.id,
+            newName: typeof name === 'function' ? name(e.name) : name,
+          });
+        })
+      );
     },
+
     onMutate: async ({
       entities,
-      newName,
+      name,
     }: {
-      entities: EntityData[];
-      newName: string;
+      entities: (EntityData & { name: string })[];
+      name: (oldName: string) => string | string;
     }) => {
+      const ids = new Set(entities.map((e) => e.id));
+
       await Promise.all([
         queryClient.cancelQueries({
           queryKey: queryKeys.dss({ infinite: true }),
@@ -637,66 +637,65 @@ export function createBulkRenameDssEntityMutation() {
           queryKey: queryKeys.dssPost({ infinite: true }),
         }),
       ]);
-      function updateBulkEntityNamesInQueryData(
-        prev: { pages: { items: EntityData[] }[] } | undefined
-      ): { pages: { items: EntityData[] }[] } | undefined {
-        if (!prev) return prev;
-        const pages = prev.pages.map((page) => ({
-          ...page,
-          items: page.items.map((item) => {
-            const found = entities.find((e) => e.id === item.id);
-            if (!found) return item;
 
-            return { ...item, name: newName };
-          }),
-        }));
+      function update(prev: { pages: { items: EntityData[] }[] } | undefined) {
+        if (!prev) return prev;
         return {
           ...prev,
-          pages,
+          pages: prev.pages.map((page) => ({
+            ...page,
+            items: page.items.map((item) =>
+              ids.has(item.id)
+                ? {
+                    ...item,
+                    name: typeof name === 'function' ? name(item.name) : name,
+                  }
+                : item
+            ),
+          })),
         };
       }
+
       queryClient.setQueriesData(
         { queryKey: queryKeys.dss({ infinite: true }) },
-        (prev) =>
-          updateBulkEntityNamesInQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined
-          )
+        (prev) => update(prev as any)
       );
+
       queryClient.setQueriesData(
         { queryKey: queryKeys.dssPost({ infinite: true }) },
-        (prev) =>
-          updateBulkEntityNamesInQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined
-          )
+        (prev) => update(prev as any)
       );
     },
+
     onSettled: (data, error, { entities }) => {
-      if (error)
-        console.error(`Failed to rename dss items`, entities, data, error);
+      if (error) {
+        console.error(`Failed bulk rename`, entities, data, error);
+      }
 
       queryClient.invalidateQueries({
         queryKey: queryKeys.dss({ infinite: true }),
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dssPost({ infinite: true }),
       });
     },
   }));
 }
 
 export function createMoveToProjectDssEntityMutation() {
-  const itemOperations = useItemOperations();
   return useMutation(() => ({
     mutationFn: async ({
-      entity: { id, type, name },
-      project: { id: projectId, name: projectName },
+      entity: { id, type },
+      project: { id: projectId },
     }: {
       entity: EntityData & { name: string };
       project: { id: string; name: string };
     }) => {
-      const success = await itemOperations.moveToFolder({
+      const success = await moveToFolder({
         itemType: type as 'document' | 'chat' | 'project',
         id: id,
-        itemName: name,
         folderId: projectId,
-        folderName: projectName,
       });
 
       return { success };
@@ -758,7 +757,6 @@ export function createMoveToProjectDssEntityMutation() {
 }
 
 export function createCopyDssEntityMutation() {
-  const itemOperations = useItemOperations();
   return useMutation(() => ({
     mutationFn: async ({
       entity: { id, type, name },
@@ -770,7 +768,7 @@ export function createCopyDssEntityMutation() {
           `Unsupported entity type: ${type} for id ${id}. Projects cannot be copied.`
         );
 
-      const success = await itemOperations.copyItem({
+      const success = await copyItem({
         itemType: type as 'document' | 'chat',
         id,
         name,
@@ -799,6 +797,172 @@ export function createCopyDssEntityMutation() {
 
       queryClient.invalidateQueries({
         queryKey: queryKeys.dss({ infinite: true }),
+      });
+    },
+  }));
+}
+
+export function createBulkCopyDssEntityMutation() {
+  // Only support chat + document, same as single-copy version
+  const isUnsupportedEntity = (entity: EntityData) => {
+    const type = entity.type;
+    return type !== 'chat' && type !== 'document';
+  };
+
+  return useMutation(() => ({
+    mutationFn: async ({
+      entities,
+      name,
+    }: {
+      entities: (EntityData & { name: string })[];
+      name: string | ((oldName: string) => string);
+    }) => {
+      if (entities.some(isUnsupportedEntity)) {
+        throw new Error(`Unsupported entity type provided`);
+      }
+
+      const results = await Promise.all(
+        entities.map((e) =>
+          copyItem({
+            itemType: e.type as 'document' | 'chat',
+            id: e.id,
+            name: typeof name === 'function' ? name(e.name) : name,
+          })
+        )
+      );
+
+      if (results.some((r) => !r)) {
+        throw new Error(`One or more DSS items failed to copy`);
+      }
+
+      return { success: true };
+    },
+
+    onMutate: async () => {
+      // For copy, no optimistic update — new IDs unknown until server
+      await Promise.all([
+        queryClient.cancelQueries({
+          queryKey: queryKeys.dss({ infinite: true }),
+        }),
+        queryClient.cancelQueries({
+          queryKey: queryKeys.dssPost({ infinite: true }),
+        }),
+      ]);
+    },
+
+    onSettled: (data, error, { entities }) => {
+      if (error) {
+        console.error(`Failed bulk copy`, entities, data, error);
+      }
+
+      // Trigger refetch so new items appear
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dss({ infinite: true }),
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dssPost({ infinite: true }),
+      });
+    },
+  }));
+}
+
+export function createBulkMoveToProjectDssEntityMutation() {
+  const isUnsupportedEntity = (entity: EntityData) => {
+    const type = entity.type;
+    return type !== 'chat' && type !== 'document' && type !== 'project';
+  };
+
+  return useMutation(() => ({
+    mutationFn: async ({
+      entities,
+      project,
+    }: {
+      entities: (EntityData & { name: string })[];
+      project: { id: string; name: string };
+    }) => {
+      if (entities.some(isUnsupportedEntity)) {
+        throw new Error(`Unsupported entity type provided`);
+      }
+
+      const results = await Promise.all(
+        entities.map((entity) =>
+          moveToFolder({
+            itemType: entity.type as 'document' | 'chat' | 'project',
+            id: entity.id,
+            folderId: project.id,
+          })
+        )
+      );
+
+      if (results.some((r) => !r)) {
+        throw new Error(`One or more DSS items failed to move`);
+      }
+
+      return { success: true };
+    },
+
+    onMutate: async ({
+      entities,
+      project,
+    }: {
+      entities: (EntityData & { name: string })[];
+      project: { id: string; name: string };
+    }) => {
+      await Promise.all([
+        queryClient.cancelQueries({
+          queryKey: queryKeys.dss({ infinite: true }),
+        }),
+        queryClient.cancelQueries({
+          queryKey: queryKeys.dssPost({ infinite: true }),
+        }),
+      ]);
+
+      function updateEntityProjectIdInQueryData(
+        prev: { pages: { items: EntityData[] }[] } | undefined
+      ): { pages: { items: EntityData[] }[] } | undefined {
+        if (!prev) return prev;
+        const entityIds = entities.map((e) => e.id);
+        const pages = prev.pages.map((page) => ({
+          ...page,
+          items: page.items.map((item) =>
+            entityIds.includes(item.id)
+              ? { ...item, projectId: project.id }
+              : item
+          ),
+        }));
+        return {
+          ...prev,
+          pages,
+        };
+      }
+
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.dss({ infinite: true }) },
+        (prev) =>
+          updateEntityProjectIdInQueryData(
+            prev as { pages: { items: EntityData[] }[] } | undefined
+          )
+      );
+      queryClient.setQueriesData(
+        { queryKey: queryKeys.dssPost({ infinite: true }) },
+        (prev) =>
+          updateEntityProjectIdInQueryData(
+            prev as { pages: { items: EntityData[] }[] } | undefined
+          )
+      );
+    },
+
+    onSettled: (data, error, { entities }) => {
+      if (data?.success === false || error)
+        console.error(`Failed to bulk move dss items`, entities, data, error);
+
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dss({ infinite: true }),
+      });
+
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.dssPost({ infinite: true }),
       });
     },
   }));
