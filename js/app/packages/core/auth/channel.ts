@@ -66,7 +66,7 @@ export function waitForAuthSuccessOrTimeout(
   );
 }
 
-const AUTH_TIMEOUT = 10_000;
+const AUTH_TIMEOUT = 60_000;
 /**
  * Waits for the auth success message to be received on the channel.
  *

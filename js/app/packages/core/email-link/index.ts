@@ -128,7 +128,6 @@ const EMAIL_POLLING_TIMEOUT = 20_000;
  * Starts a polling fetch for new emails during the sync process.
  */
 function startEmailPolling() {
-  console.log('startEmailPolling');
   if (emailRefetchInterval()) return;
   setEmailRefetchInterval(EMAIL_POLLING_INTERVAL);
   setTimeout(() => {

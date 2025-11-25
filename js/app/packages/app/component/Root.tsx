@@ -151,7 +151,6 @@ function BasePathComponent() {
   if (redirectUrl) {
     sessionStorage.removeItem('redirectUrl');
     const relativeUrl = redirectUrl.replace(window.location.origin, '');
-    console.log(relativeUrl);
     window.location.href = relativeUrl;
     return;
   }
@@ -170,7 +169,6 @@ function BasePathComponent() {
 }
 
 function NotFound() {
-  console.log('NOT FOUND');
   if (isNativeMobilePlatform()) return <Navigate href={DEFAULT_ROUTE} />;
   window.location.href = window.location.origin;
   return '';
