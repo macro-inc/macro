@@ -3,8 +3,11 @@ use utoipa::ToSchema;
 /// The search service version of a highlight
 #[derive(Debug, serde::Serialize, serde::Deserialize, ToSchema)]
 pub struct Highlight {
+    /// If the match was on the entity name, this will be present with that highlight
     #[serde(skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// If the match was on the entity content, this will provide a list of highlights
+    /// for each content match
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub content: Vec<String>,
 }
@@ -12,6 +15,8 @@ pub struct Highlight {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, ToSchema)]
 pub struct SearchGotoDocument {
     /// The node id of the document
+    /// This can be a stringified page number 0-indexed for pdf/docx files,
+    /// or it can be a unique id that is used in lexical for markdown files.
     pub node_id: String,
     /// The raw content of the document
     pub raw_content: Option<String>,

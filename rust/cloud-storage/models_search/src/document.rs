@@ -10,14 +10,13 @@ use crate::{MatchType, SearchHighlight, SearchOn, SearchResponseItem};
 pub struct DocumentSearchResult {
     /// The node id for the document.
     /// This is only useful for markdown at the moment
-    pub node_id: String,
+    /// This will only be provided if the match was on content
+    pub node_id: Option<String>,
     /// The highlights for the document
     pub highlight: SearchHighlight,
     /// The raw content of the document.
     /// This is only included for markdown files and will be the raw json node of the match
     pub raw_content: Option<String>,
-    /// When the search document was last updated
-    pub updated_at: i64,
     /// The score of the result
     #[serde(skip_serializing_if = "Option::is_none")]
     pub score: Option<f64>,
@@ -38,7 +37,7 @@ pub struct DocumentSearchResponseItem {
     /// The name of the document
     pub document_name: String,
     /// The file type of the document
-    pub file_type: String,
+    pub file_type: Option<String>,
     /// The search results for the document
     /// This may be empty if the search result match was on the document name only
     pub document_search_results: Vec<DocumentSearchResult>,
@@ -74,7 +73,7 @@ pub struct DocumentSearchMetadata {
     /// The id of the owner of the document
     pub owner_id: String,
     /// The file type of the document
-    pub file_type: String,
+    pub file_type: Option<String>,
 }
 
 impl From<SearchResponseItem<DocumentSearchResult, DocumentSearchMetadata>>

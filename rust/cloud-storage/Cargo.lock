@@ -7405,6 +7405,7 @@ dependencies = [
  "macro_middleware",
  "model",
  "models_email",
+ "models_opensearch",
  "models_search",
  "opensearch_client",
  "secretsmanager_client",

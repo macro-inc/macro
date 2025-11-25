@@ -4,7 +4,7 @@ use crate::api::ApiContext;
 
 // pub(in crate::api) mod channel;
 // pub(in crate::api) mod chat;
-// pub(in crate::api) mod document;
+pub(in crate::api) mod document;
 // pub(in crate::api) mod email;
 // pub(in crate::api::search) mod enrich;
 // pub(in crate::api) mod project;
@@ -14,7 +14,7 @@ pub(in crate::api) mod simple;
 pub fn router() -> Router<ApiContext> {
     Router::new()
         // .route("/", post(unified::handler))
-        // .route("/document", post(document::handler))
+        .route("/document", post(document::handler))
         // .route("/chat", post(chat::handler))
         // .route("/email", post(email::handler))
         // .route("/channel", post(channel::handler))
