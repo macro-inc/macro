@@ -1,4 +1,5 @@
-import { Tooltip } from '@core/component/Tooltip';
+import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { TOKENS } from '@core/hotkey/tokens';
 import { matches } from '@core/util/match';
 import CheckIcon from '@icon/regular/check.svg';
 import { notificationWithMetadata } from '@notifications';
@@ -354,7 +355,7 @@ export function EntityWithEverything(
               {(lastMessageContent) => (
                 <div class="truncate shrink grow opacity-60 flex items-center">
                   <StaticMarkdown
-                    markdown={lastMessageContent()}
+                    markdown={lastMessageContent().trim()}
                     theme={unifiedListMarkdownTheme}
                     singleLine={true}
                   />
@@ -542,12 +543,20 @@ export function EntityWithEverything(
                 );
               }}
             </Show>
-            <Show when={props.highlighted}>
+            <Show when={props.highlighted && props.onClickRowAction}>
               <div class="absolute top-1 right-1 items-center flex">
-                <Tooltip tooltip="Mark as done">
+                <Tooltip
+                  tooltip={
+                    <LabelAndHotKey
+                      label="Mark as done"
+                      hotkeyToken={TOKENS.entity.action.markDone}
+                    />
+                  }
+                >
                   <button
                     class="bg-panel flex items-center justify-center size-8 border border-edge-muted hover:bg-accent hover:text-panel"
-                    onClick={() => {
+                    onClick={(e) => {
+                      e.stopPropagation();
                       props.onClickRowAction?.(props.entity, 'done');
                     }}
                     ref={setActionButtonRef}
@@ -637,7 +646,7 @@ export function EntityWithEverything(
 
                   return (
                     <StaticMarkdown
-                      markdown={metadata.messageContent}
+                      markdown={metadata.messageContent.trim()}
                       theme={unifiedListMarkdownTheme}
                       singleLine={true}
                     />

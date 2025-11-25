@@ -334,6 +334,7 @@ export function createNavigationEntityListShortcut({
 
   registerHotkey({
     hotkey: ['e'],
+    hotkeyToken: TOKENS.entity.action.markDone,
     scopeId: entityHotkeyScope,
     description: 'Mark done',
     condition: () =>
@@ -395,6 +396,7 @@ export function createNavigationEntityListShortcut({
 
   registerHotkey({
     hotkey: ['delete', 'backspace'],
+    hotkeyToken: TOKENS.entity.action.delete,
     scopeId: splitHotkeyScope,
     description: () =>
       viewData().selectedEntities.length > 1 ? 'Delete items' : 'Delete item',
@@ -459,6 +461,7 @@ export function createNavigationEntityListShortcut({
 
   registerHotkey({
     scopeId: splitHotkeyScope,
+    hotkeyToken: TOKENS.entity.action.rename,
     description: () =>
       viewData().selectedEntities.length > 1 ? 'Rename items' : 'Rename item',
     condition: () =>
@@ -504,6 +507,7 @@ export function createNavigationEntityListShortcut({
 
   registerHotkey({
     scopeId: splitHotkeyScope,
+    hotkeyToken: TOKENS.entity.action.copy,
     description: () =>
       viewData().selectedEntities.length > 1 ? 'Copy items' : 'Copy item',
     condition: () =>
@@ -558,6 +562,7 @@ export function createNavigationEntityListShortcut({
 
   registerHotkey({
     scopeId: splitHotkeyScope,
+    hotkeyToken: TOKENS.entity.action.moveToFolder,
     description: () =>
       viewData().selectedEntities.length > 1
         ? 'Move items to project'

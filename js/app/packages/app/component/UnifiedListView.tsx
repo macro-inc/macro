@@ -1351,11 +1351,18 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   entity={innerProps.entity}
                   timestamp={timestamp()}
                   onClick={entityClickHandler}
-                  onClickRowAction={(entity, type) => {
-                    if (type === 'done') {
-                      markEntityAsDone?.(entity);
-                    }
-                  }}
+                  onClickRowAction={
+                    unifiedListContext.actionRegistry.isActionEnabled(
+                      'mark_as_done',
+                      innerProps.entity
+                    )
+                      ? (entity, type) => {
+                          if (type === 'done') {
+                            markEntityAsDone?.(entity);
+                          }
+                        }
+                      : undefined
+                  }
                   onClickNotification={(notifiedEntity) => {
                     const notification = notificationWithMetadata(
                       notifiedEntity.notification
