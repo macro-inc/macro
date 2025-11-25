@@ -18,10 +18,17 @@ type ChannelMessageHighlightLocation = {
   messageId: string;
 };
 
+type EmailMessageHighlightLocation = {
+  type: 'email';
+  threadId: string;
+  messageId: string;
+};
+
 export type SearchLocation =
   | MarkdownHighlightLocation
   | PdfHighlightLocation
-  | ChannelMessageHighlightLocation;
+  | ChannelMessageHighlightLocation
+  | EmailMessageHighlightLocation;
 
 export type ChannelContentHitData = {
   type: 'channel';
@@ -50,22 +57,32 @@ type GenericContentHitData = {
   location?: never;
 };
 
+type EmailContentHitData = {
+  type: 'email';
+  content: string;
+  location: EmailMessageHighlightLocation;
+};
+
 export type DocumentContentHitData =
   | MdContentHitData
   | PdfContentHitData
   | GenericContentHitData;
 
 export type ContentHitData<T extends EntityData = EntityData> = T extends {
-  type: 'channel';
+  type: 'email';
 }
-  ? ChannelContentHitData
-  : T extends { type: 'document'; fileType: 'md' }
-    ? MdContentHitData
-    : T extends { type: 'document'; fileType: 'pdf' | 'docx' }
-      ? PdfContentHitData
-      : T extends { type: 'document' }
-        ? DocumentContentHitData
-        : GenericContentHitData;
+  ? EmailContentHitData
+  : T extends {
+        type: 'channel';
+      }
+    ? ChannelContentHitData
+    : T extends { type: 'document'; fileType: 'md' }
+      ? MdContentHitData
+      : T extends { type: 'document'; fileType: 'pdf' | 'docx' }
+        ? PdfContentHitData
+        : T extends { type: 'document' }
+          ? DocumentContentHitData
+          : GenericContentHitData;
 
 export type SearchData<T extends EntityData = EntityData> = {
   nameHighlight: string | null;

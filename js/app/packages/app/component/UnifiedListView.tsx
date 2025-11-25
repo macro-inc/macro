@@ -938,13 +938,28 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     handle?.activate();
 
-    if (entity.type === 'channel' && isSearchEntity(entity)) {
-      const location = entity.search.contentHitData?.at(0)?.location;
-      if (!location) return;
-      const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
-      await blockHandle?.goToLocationFromParams({
-        [CHANNEL_PARAMS.message]: location.messageId,
-      });
+    if (!isSearchEntity(entity)) return;
+
+    const location = entity.search.contentHitData?.at(0)?.location;
+    if (!location) return;
+
+    switch (location.type) {
+      case 'channel': {
+        const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
+        await blockHandle?.goToLocationFromParams({
+          [CHANNEL_PARAMS.message]: location.messageId,
+        });
+        break;
+      }
+      case 'email': {
+        // // TODO: implement email go to location
+        // const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
+        // await blockHandle?.goToLocationFromParams({
+        //   [EMAIL_PARAMS.threadId]: location.threadId,
+        //   [EMAIL_PARAMS.messageId]: location.messageId,
+        // });
+        break;
+      }
     }
   };
 
