@@ -1,4 +1,4 @@
-/// backfill_entity_names.rs is used to trigger a backfill for chats
+/// backfill_entity_names.rs is used to trigger a backfill for the entity name index in OS
 /// Required environment variables:
 /// - DATABASE_URL
 /// - SEARCH_EVENT_QUEUE
