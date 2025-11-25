@@ -9,7 +9,7 @@ config:
   authentication-service:stripe_secret_key: stripe-dev
   authentication-service:macro_cache_secret_key: macro-cache-dev
   authentication-service:jwt_secret_key: fusionauth-jwt-secret-dev
-  authentication-service:fusionauth_client_id: eb75fe7a-0ef1-4186-96d9-cc62cfb1d10c
+  authentication-service:fusionauth_client_id: fusionauth-client-id-key-dev
   authentication-service:fusionauth_issuer: fusionauth-dev.macro.com
   authentication-service:google_client_id: 500231286272-21nk2ahms4udek5ki9hii25fve0vt38h.apps.googleusercontent.com
   authentication-service:google_client_secret_key: google-client-secret-dev

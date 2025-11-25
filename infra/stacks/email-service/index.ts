@@ -24,7 +24,13 @@ const tags = {
 export const coparse_api_vpc = get_coparse_api_vpc();
 
 const JWT_SECRET_KEY = config.require(`jwt_secret_key`);
-const AUDIENCE = config.require(`fusionauth_client_id`);
+const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
+
+const AUDIENCE = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: fusionauthClientIdSecretKey,
+  })
+  .apply((secret) => secret.secretString);
 const ISSUER = config.require(`fusionauth_issuer`);
 const NOTIFICATIONS_ENABLED = config.require(`notifications_enabled`);
 const REDIS_RATE_LIMIT_REQS = config.require(`redis_rate_limit_reqs`);

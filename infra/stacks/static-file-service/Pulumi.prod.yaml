@@ -2,8 +2,6 @@ config:
   aws-native:region: us-east-1
   aws:region: us-east-1
   static-file-service:jwt_secret_key: fusionauth-jwt-secret-prod
-  static-file-service:fusionauth_client_id: 75409999-7dc4-4241-b73b-a51818c3a71c
+  static-file-service:fusionauth_client_id: fusionauth-client-id-key-prod
   static-file-service:fusionauth_issuer: auth.macro.com
-  static-file-service:datadog_api_key:
-    secure: AAABALGJGy3tOfgSdDfs9Srjln5/d6pkm18LH4rPw4g2K9WWomtPI0frSDUh4raWQy/UflO8Yq+XTjFMOYVRWg==
   static-file-service:internal_api_key: document-storage-service-auth-key-prod

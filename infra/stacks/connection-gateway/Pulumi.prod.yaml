@@ -3,7 +3,7 @@ config:
   aws:region: us-east-1
   connection-gateway:datadog_api_key:
     secure: AAABAKPDBY5Z6DR6NO2ygTkpHiGCEZFXUpkP7+FXqwXwmJkR/Ce2rGbUNfsDVo1tfvEndUznEHwK8j8/ztgFBA==
-  connection-gateway:fusionauth_client_id: 75409999-7dc4-4241-b73b-a51818c3a71c
+  connection-gateway:fusionauth_client_id: fusionauth-client-id-key-prod
   connection-gateway:fusionauth_issuer: auth.macro.com
   connection-gateway:internal_auth_key: document-storage-service-auth-key-prod
   connection-gateway:jwt_secret_key: fusionauth-jwt-secret-prod

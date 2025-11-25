@@ -2,7 +2,7 @@ config:
   aws-native:region: us-east-1
   aws:region: us-east-1
   notification-service:jwt_secret_key: fusionauth-jwt-secret-dev
-  notification-service:fusionauth_client_id: eb75fe7a-0ef1-4186-96d9-cc62cfb1d10c
+  notification-service:fusionauth_client_id: fusionauth-client-id-key-dev
   notification-service:fusionauth_issuer: fusionauth-dev.macro.com
   notification-service:internal_api_key: document-storage-service-auth-key-dev
   notification-service:db-password-secret-key: notification-db-password-dev

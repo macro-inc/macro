@@ -45,7 +45,13 @@ const FUSIONAUTH_CLIENT_SECRET_KEY = config.require(
   `fusionauth_client_secret_key`
 );
 const STRIPE_SECRET_KEY = config.require(`stripe_secret_key`);
-const FUSIONAUTH_CLIENT_ID = config.require(`fusionauth_client_id`);
+const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
+
+const FUSIONAUTH_CLIENT_ID = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: fusionauthClientIdSecretKey,
+  })
+  .apply((secret) => secret.secretString);
 const FUSIONAUTH_ISSUER = config.require(`fusionauth_issuer`);
 const FUSIONAUTH_BASE_URL = `https://${FUSIONAUTH_ISSUER}`;
 const GOOGLE_CLIENT_SECRET_KEY = config.require(`google_client_secret_key`);

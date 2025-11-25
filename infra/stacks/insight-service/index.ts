@@ -64,7 +64,13 @@ const OPEN_ROUTER_API_KEY = aws.secretsmanager
   .apply((secret) => secret.secretString);
 
 const JWT_SECRET_KEY = config.require(`jwt_secret_key`);
-const FUSIONAUTH_CLIENT_ID = config.require('fusionauth_client_id');
+const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
+
+const FUSIONAUTH_CLIENT_ID = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: fusionauthClientIdSecretKey,
+  })
+  .apply((secret) => secret.secretString);
 const FUSIONAUTH_ISSUER = config.require(`fusionauth_issuer`);
 
 const SERVICE_INTERNAL_AUTH_KEY_KEY = config.require(

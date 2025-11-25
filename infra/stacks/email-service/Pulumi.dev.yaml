@@ -3,7 +3,7 @@ config:
   aws:region: us-east-1
   email-service:authentication_service_internal_api_key: authentication-service-internal-api-key-dev
   email-service:jwt_secret_key: fusionauth-jwt-secret-dev
-  email-service:fusionauth_client_id: eb75fe7a-0ef1-4186-96d9-cc62cfb1d10c
+  email-service:fusionauth_client_id: fusionauth-client-id-key-dev
   email-service:fusionauth_issuer: fusionauth-dev.macro.com
   email-service:db_password_secret_key: email-db-password-dev
   email-service:internal_auth_key: document-storage-service-auth-key-dev
