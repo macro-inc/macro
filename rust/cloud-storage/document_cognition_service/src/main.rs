@@ -33,10 +33,7 @@ async fn main() -> anyhow::Result<()> {
 
     tracing::info!("initialized config");
 
-    if matches!(
-        config.environment,
-        Environment::Develop | Environment::Local
-    ) {
+    if matches!(config.environment, Environment::Local) {
         let tool_schemas =
             serde_json::to_string_pretty(&api::tools::tool_schemas()).expect("tool schemas");
         std::fs::write("schemas/tools.json", tool_schemas).expect("write_tool_schema");
