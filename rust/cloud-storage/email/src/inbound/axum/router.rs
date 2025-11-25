@@ -20,7 +20,7 @@ use crate::{
 };
 
 pub struct EmailPreviewState<T> {
-    inner: Arc<T>,
+    pub(crate) inner: Arc<T>,
 }
 
 impl<T> Clone for EmailPreviewState<T> {

@@ -241,6 +241,7 @@ impl UserProvider {
     }
 }
 
+#[derive(Clone)]
 pub struct Link {
     pub id: Uuid,
     pub macro_id: MacroUserIdStr<'static>,

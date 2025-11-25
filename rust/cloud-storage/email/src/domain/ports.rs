@@ -52,4 +52,10 @@ pub trait EmailService: Send + Sync + 'static {
             EmailErr,
         >,
     > + Send;
+
+    fn get_link_by_auth_id_and_macro_id(
+        &self,
+        auth_id: &str,
+        macro_id: MacroUserIdStr<'_>,
+    ) -> impl Future<Output = Result<Option<Link>, EmailErr>> + Send;
 }
