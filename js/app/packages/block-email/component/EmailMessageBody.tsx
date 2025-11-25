@@ -159,7 +159,11 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
         const contentWrapper = root.querySelector('div');
         console.log('contentWrapper', contentWrapper);
         if (contentWrapper instanceof HTMLElement) {
-          contentWrapper.style.setProperty('background-color', 'white', 'important');
+          contentWrapper.style.setProperty(
+            'background-color',
+            'white',
+            'important'
+          );
           // Some emails don't have a color set, so we need to set it to black to ensure text is readable againnst white background
           contentWrapper.style.setProperty('color', 'black');
         }
