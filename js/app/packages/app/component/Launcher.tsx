@@ -18,14 +18,14 @@ import {
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { isErr, ok } from '@core/util/maybeResult';
 import { Dialog } from '@kobalte/core/dialog';
-import PixelChat from '@macro-icons/pixel/ai.svg';
 import PixelArrowRight from '@macro-icons/pixel/arrow-right.svg';
-import PixelCanvas from '@macro-icons/pixel/canvas.svg';
-import PixelChannel from '@macro-icons/pixel/channel.svg';
-import PixelCode from '@macro-icons/pixel/code.svg';
-import PixelEmail from '@macro-icons/pixel/email.svg';
-import PixelProject from '@macro-icons/pixel/folder-alt.svg';
-import PixelMd from '@macro-icons/pixel/notes.svg';
+import WideChat from '@macro-icons/wide/chat.svg';
+import WideDiagram from '@macro-icons/wide/diagram.svg';
+import WideEmail from '@macro-icons/wide/email.svg';
+import WideFileCode from '@macro-icons/wide/file-code.svg';
+import WideFileMd from '@macro-icons/wide/file-md.svg';
+import WideFolder from '@macro-icons/wide/folder.svg';
+import WideStar from '@macro-icons/wide/star.svg';
 import { useCreateProject } from '@service-storage/projects';
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
@@ -86,7 +86,7 @@ type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
 export const CREATABLE_BLOCKS: CreatableBlock[] = [
   {
     label: 'Note',
-    icon: () => <PixelMd />,
+    icon: () => <WideFileMd />,
     description: 'Create note',
     blockName: 'md',
     hotkeyToken: TOKENS.create.note,
@@ -109,7 +109,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Email',
-    icon: () => <PixelEmail />,
+    icon: () => <WideEmail />,
     description: 'Create email',
     blockName: 'email',
     hotkeyToken: TOKENS.create.email,
@@ -125,7 +125,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Message',
-    icon: () => <PixelChannel />,
+    icon: () => <WideChat />,
     description: 'Create message',
     blockName: 'channel',
     hotkeyToken: TOKENS.create.message,
@@ -141,7 +141,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'AI',
-    icon: () => <PixelChat />,
+    icon: () => <WideStar />,
     description: 'Create AI chat',
     blockName: 'chat' as BlockName,
     hotkeyToken: TOKENS.create.chat,
@@ -164,7 +164,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Canvas',
-    icon: () => <PixelCanvas />,
+    icon: () => <WideDiagram />,
     description: 'Create canvas',
     blockName: 'canvas',
     hotkeyToken: TOKENS.create.canvas,
@@ -190,7 +190,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Project',
-    icon: () => <PixelProject />,
+    icon: () => <WideFolder />,
     description: 'Create project',
     blockName: 'project',
     hotkeyToken: TOKENS.create.project,
@@ -210,7 +210,7 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
   },
   {
     label: 'Code',
-    icon: () => <PixelCode />,
+    icon: () => <WideFileCode />,
     description: 'Create code file',
     blockName: 'code',
     hotkeyToken: TOKENS.create.code,
