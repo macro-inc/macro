@@ -1,13 +1,13 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { getMacroApiToken } from '@service-auth/fetch';
 import {
   ConstantBackoff,
+  type UrlResolver,
   type Websocket,
   WebsocketBuilder,
   WebsocketEvent,
-  type UrlResolver,
 } from '@websocket';
 import { createWebsocketStateSignal } from '@websocket/solid/state-signal';
-import { getMacroApiToken } from '@service-auth/fetch';
 import { createEffect, createSignal, onCleanup } from 'solid-js';
 import { v7 as uuidv7 } from 'uuid';
 
