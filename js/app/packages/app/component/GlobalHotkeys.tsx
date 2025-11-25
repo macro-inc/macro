@@ -2,11 +2,7 @@ import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
-import {
-  isRightPanelOpen,
-  useBigChat,
-  useToggleRightPanel,
-} from '@core/signal/layout';
+import { useBigChat } from '@core/signal/layout';
 import { AiInstructionsIcon } from '@service-storage/instructionsMd';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { createMemo } from 'solid-js';
@@ -31,15 +27,11 @@ import {
   toggleKonsoleVisibility,
 } from './command/state';
 import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
-import { fireMacroJump } from './MacroJump';
-import {
-  quickCreateMenuOpenSignal,
-  selectedQuickCreateTypeSignal,
-} from './QuickCreateMenu';
+import { fireVisor, resetVisor } from './Visor';
+import { openWhichKey, setOpenWhichKey } from './WhichKey';
 
 export default function GlobalShortcuts() {
-  const [bigChatOpen, setBigChatOpen] = useBigChat();
-  const toggleRightPanel = useToggleRightPanel();
+  const [_, setBigChatOpen] = useBigChat();
 
   const handleCommandMenu = () => {
     const wasOpen = konsoleOpen();
@@ -97,99 +89,10 @@ export default function GlobalShortcuts() {
     });
   }
 
-  const quickCreateScope = registerHotkey({
-    hotkeyToken: TOKENS.global.quickCreateCommand,
-    hotkey: 'q',
-    scopeId: 'global',
-    description: 'Quick send',
-    keyDownHandler: () => {
-      return true;
-    },
-    activateCommandScope: true,
-    displayPriority: 4,
-  });
-
-  const [_selectedQuickCreateType, setSelectedQuickCreateType] =
-    selectedQuickCreateTypeSignal;
-  const [_quickCreateMenuOpen, setQuickCreateMenuOpen] =
-    quickCreateMenuOpenSignal;
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.quickCreate.note,
-    hotkey: 'n',
-    scopeId: quickCreateScope.commandScopeId,
-    description: 'Create note',
-    keyDownHandler: () => {
-      setSelectedQuickCreateType('note');
-      setQuickCreateMenuOpen(true);
-      return true;
-    },
-    displayPriority: 10,
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.quickCreate.email,
-    hotkey: 'e',
-    scopeId: quickCreateScope.commandScopeId,
-    description: 'Create email',
-    keyDownHandler: () => {
-      setSelectedQuickCreateType('email');
-      setQuickCreateMenuOpen(true);
-      return true;
-    },
-    displayPriority: 10,
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.quickCreate.message,
-    hotkey: 'm',
-    scopeId: quickCreateScope.commandScopeId,
-    description: 'Create message',
-    keyDownHandler: () => {
-      setSelectedQuickCreateType('message');
-      setQuickCreateMenuOpen(true);
-      return true;
-    },
-    displayPriority: 10,
-    runWithInputFocused: true,
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.macroJump,
-    hotkey: 'cmd+m',
-    scopeId: 'global',
-    description: 'Macro jump',
-    runWithInputFocused: true,
-    keyDownHandler: () => {
-      fireMacroJump();
-      return true;
-    },
-  });
-
-  registerHotkey({
-    hotkeyToken: TOKENS.global.toggleRightPanel,
-    hotkey: 'cmd+/',
-    scopeId: 'global',
-    description: () => {
-      return isRightPanelOpen() ? 'Close AI panel' : 'Open AI panel';
-    },
-    keyDownHandler: () => {
-      toggleRightPanel();
-      return true;
-    },
-    condition: () => {
-      return !bigChatOpen();
-    },
-    runWithInputFocused: true,
-  });
-
   registerHotkey({
     hotkeyToken: TOKENS.global.commandMenu,
     hotkey: 'cmd+k',
     scopeId: 'global',
-    // condition: () => !konsoleOpen(),
     description: () => {
       return konsoleOpen() ? 'Close command menu' : 'Open command menu';
     },
@@ -197,8 +100,8 @@ export default function GlobalShortcuts() {
       handleCommandMenu();
       return true;
     },
-    displayPriority: 1,
-    hide: true,
+    displayPriority: 10,
+    hide: konsoleOpen,
     runWithInputFocused: true,
   });
 
@@ -328,6 +231,25 @@ export default function GlobalShortcuts() {
     keyDownHandler: () => {
       setMonochromeIcons(!monochromeIcons());
       return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.global.toggleVisor,
+    scopeId: 'global',
+    hotkey: ['escape'],
+    description: 'Toggle visor',
+    keyDownHandler: () => {
+      if (!openWhichKey()) {
+        fireVisor();
+        setOpenWhichKey(true);
+        return false;
+      } else {
+        resetVisor();
+        setOpenWhichKey(false);
+        return false;
+      }
     },
     runWithInputFocused: true,
   });

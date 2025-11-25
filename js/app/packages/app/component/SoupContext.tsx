@@ -3,6 +3,7 @@ import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
+import { runCommand } from '@core/hotkey/utils';
 import {
   CONDITIONAL_VIEWS,
   DEFAULT_VIEWS,
@@ -19,11 +20,7 @@ import { useTutorialCompleted } from '@service-gql/client';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { useQuery } from '@tanstack/solid-query';
-import {
-  registerHotkey,
-  runCommand,
-  useHotkeyDOMScope,
-} from 'core/hotkey/hotkeys';
+import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   batch,
@@ -203,16 +200,16 @@ type NavigationResult = {
 };
 
 export function createNavigationEntityListShortcut({
-  splitName,
   splitHandle,
   splitHotkeyScope,
   unifiedListContext,
+  goScopeId,
   previewState,
 }: {
-  splitName: Accessor<string>;
   splitHandle: SplitHandle;
   splitHotkeyScope: string;
   unifiedListContext: UnifiedListContext;
+  goScopeId: string;
   previewState: Signal<boolean>;
 }) {
   const {
@@ -993,7 +990,9 @@ export function createNavigationEntityListShortcut({
 
   registerHotkey({
     scopeId: splitHotkeyScope,
-    description: 'Root Modify selection',
+    description: () => {
+      return konsoleOpen() ? 'Close command menu' : 'Open command menu';
+    },
     hotkey: 'cmd+k',
     condition: () => !konsoleOpen() && isViewingList(),
     keyDownHandler: (e) => {
@@ -1024,6 +1023,9 @@ export function createNavigationEntityListShortcut({
       resetKonsoleMode();
       return false;
     },
+    displayPriority: 10,
+    hide: konsoleOpen,
+    runWithInputFocused: true,
   });
 
   registerHotkey({
@@ -1042,7 +1044,7 @@ export function createNavigationEntityListShortcut({
     hotkey: ['shift+arrowdown', 'shift+j'],
     scopeId: splitHotkeyScope,
     description: 'Select down',
-    hotkeyToken: TOKENS.entity.step.end,
+    hotkeyToken: TOKENS.entity.select.end,
     keyDownHandler: () => {
       const navigationInput: NavigationInput = { axis: 'end', mode: 'step' };
       return handleNavigationSelection(navigationInput);
@@ -1065,7 +1067,7 @@ export function createNavigationEntityListShortcut({
   registerHotkey({
     hotkey: ['shift+arrowup', 'shift+k'],
     scopeId: splitHotkeyScope,
-    hotkeyToken: TOKENS.entity.step.start,
+    hotkeyToken: TOKENS.entity.select.start,
     description: 'Select up',
     keyDownHandler: () => {
       const navigationInput: NavigationInput = { axis: 'start', mode: 'step' };
@@ -1088,27 +1090,31 @@ export function createNavigationEntityListShortcut({
     hotkey: ['shift+g', 'end'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.entity.jump.end,
-    description: 'Bottom',
+    description: 'Go to bottom of list',
     keyDownHandler: () => {
       navigateThroughList({ axis: 'end', mode: 'jump' });
       return true;
     },
     hide: true,
   });
-  const topGScope = registerHotkey({
-    hotkey: ['g'],
-    scopeId: splitHotkeyScope,
-    description: 'Top',
-    keyDownHandler: () => true,
-    activateCommandScope: true,
-    hide: true,
-  });
+
   registerHotkey({
     hotkey: ['g'],
-    scopeId: topGScope.commandScopeId,
-    description: 'Top',
+    scopeId: goScopeId,
+    description: 'Go to top of list',
     keyDownHandler: () => {
       navigateThroughList({ axis: 'start', mode: 'jump' });
+      return true;
+    },
+  });
+
+  registerHotkey({
+    hotkey: ['shift+g', 'end'],
+    scopeId: goScopeId,
+    hotkeyToken: TOKENS.entity.jump.end,
+    description: 'Go to bottom of list',
+    keyDownHandler: () => {
+      navigateThroughList({ axis: 'end', mode: 'jump' });
       return true;
     },
   });
@@ -1125,26 +1131,29 @@ export function createNavigationEntityListShortcut({
     setSelectedView(newViewId);
   };
 
-  const splitIsUnifiedList = createMemo(() => splitName() === 'unified-list');
+  const splitIsUnifiedList = createMemo(
+    () => splitHandle.content().id === 'unified-list'
+  );
 
-  createEffect(() => {
-    for (let i = 0; i < viewIds().length && i < 9; i++) {
-      const viewId = viewIds()[i];
-      const viewData = viewsData[viewId];
-      registerHotkey({
-        hotkey: [(i + 1).toString() as ValidHotkey],
-        scopeId: splitHotkeyScope,
-        description: viewData.view,
-        condition: splitIsUnifiedList,
-        keyDownHandler: () => {
-          setSelectedView(viewData.id);
-          return true;
-        },
-        // displayPriority: 0,
-        hide: true,
-      });
-    }
-  });
+  for (let i = 0; i < viewIds().length && i < 9; i++) {
+    const viewId = viewIds()[i];
+    const viewData = viewsData[viewId];
+    registerHotkey({
+      hotkeyToken:
+        TOKENS.soup.tabs[i.toString() as keyof typeof TOKENS.soup.tabs],
+      hotkey: [(i + 1).toString() as ValidHotkey],
+      scopeId: splitHotkeyScope,
+      description: viewData.view,
+      condition: splitIsUnifiedList,
+      keyDownHandler: () => {
+        setSelectedView(viewData.id);
+        return true;
+      },
+      // displayPriority: 0,
+      hide: true,
+    });
+  }
+  1;
 
   registerHotkey({
     hotkey: 'tab',
@@ -1173,12 +1182,10 @@ export function createNavigationEntityListShortcut({
 
   registerHotkey({
     hotkey: ['enter'],
+    hotkeyToken: TOKENS.entity.open,
     scopeId: entityHotkeyScope,
     description: 'Open',
     keyDownHandler: () => {
-      const [preview] = previewState;
-      if (!preview()) return false;
-
       const entity = getHighlightedEntity()?.entity;
       if (!entity) return false;
 
@@ -1224,7 +1231,6 @@ export function createNavigationEntityListShortcut({
             if (!splitNode) return undefined;
             return splitNode.hotkeyCommands.get('enter');
           };
-          // runCommandByToken(TOKENS.block.focus);
           const command = getEnterCommand();
           if (command) {
             runCommand(command);
@@ -1251,15 +1257,35 @@ export function createNavigationEntityListShortcut({
     },
     displayPriority: 10,
   });
+
+  const clearMultiCondition: () => boolean = () =>
+    isViewingList() && viewData().selectedEntities.length > 0;
+  const closeSpotlightCondition = () => splitHandle.isSpotLight();
+  const escapeDescription = () => {
+    if (clearMultiCondition()) {
+      return 'Clear multi selection';
+    }
+    if (closeSpotlightCondition()) {
+      return 'Close spotlight';
+    }
+    return '';
+  };
   registerHotkey({
     hotkey: ['escape'],
     scopeId: splitHotkeyScope,
-    description: 'Clear multi selection',
-    condition: () => isViewingList() && viewData().selectedEntities.length > 0,
+    description: escapeDescription,
+    condition: () => clearMultiCondition() || closeSpotlightCondition(),
     keyDownHandler: () => {
-      const length = viewData().selectedEntities.length;
-      setViewDataStore(selectedView(), 'selectedEntities', []);
-      return length > 1;
+      if (clearMultiCondition()) {
+        const length = viewData().selectedEntities.length;
+        setViewDataStore(selectedView(), 'selectedEntities', []);
+        return length > 1;
+      }
+      if (closeSpotlightCondition()) {
+        splitHandle.toggleSpotlight();
+        return true;
+      }
+      return false;
     },
   });
 }

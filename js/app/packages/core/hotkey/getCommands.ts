@@ -63,9 +63,6 @@ export function getActiveCommandsFromScope(
     );
     scopeLevel++;
   }
-  if (displayOptions.hideShadowedCommands) {
-    commands.filter((command) => !command.hotkeyIsShadowed);
-  }
   commands.sort((a, b) => {
     if (displayOptions.sortByScopeLevel) {
       if (a.scopeLevel !== b.scopeLevel) {
@@ -75,17 +72,21 @@ export function getActiveCommandsFromScope(
     }
     return (b.displayPriority ?? 0) - (a.displayPriority ?? 0);
   });
-  return commands;
+  return displayOptions.hideShadowedCommands
+    ? commands.filter((command) => !command.hotkeyIsShadowed)
+    : commands;
 }
 
 const filterCommands = (displayOptions: sortAndFilterOptions) => {
   return (command: HotkeyCommand) => {
+    const hideValue =
+      typeof command.hide === 'function' ? command.hide() : command.hide;
     return (
       (command.hotkeys || !displayOptions.hideCommandsWithoutHotkeys) &&
       (!command.condition || command.condition()) &&
       (!isEditableInput(activeElement() as HTMLElement) ||
         command.runWithInputFocused) &&
-      command.hide !== true
+      hideValue !== true
     );
   };
 };

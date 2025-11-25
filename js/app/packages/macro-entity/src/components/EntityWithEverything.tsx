@@ -10,7 +10,6 @@ import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/St
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
 import { emailToId, useDisplayName } from 'core/user';
-import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
 import type { ParentProps, Ref } from 'solid-js';
 import {
   createDeferred,
@@ -449,10 +448,6 @@ export function EntityWithEverything(
 
           actionButtonRef()?.focus();
         }}
-        onKeyDown={onKeyDownClick((e) =>
-          props.onClick?.(props.entity, e as any)
-        )}
-        onKeyUp={onKeyUpClick((e) => props.onClick?.(props.entity, e as any))}
         role="button"
         tabIndex={0}
         ref={mergeRefs(setEntityDivRef, props.ref)}

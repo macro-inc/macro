@@ -6,11 +6,7 @@ import { cornerClip } from '@core/util/clipPath';
 import { createFreshSearch } from '@core/util/freshSort';
 import { Popover } from '@kobalte/core';
 import { Command as CommandK, useCommandState } from 'cmdk-solid';
-import {
-  registerHotkey,
-  runCommand,
-  useHotkeyDOMScope,
-} from 'core/hotkey/hotkeys';
+import { registerHotkey, useHotkeyDOMScope } from 'core/hotkey/hotkeys';
 import {
   type Accessor,
   createEffect,
@@ -152,16 +148,7 @@ export function KommandMenuInner(props: {
           data: {
             id: description.replaceAll(' ', '-'),
             name: description,
-            hotkeys: command.hotkeys ?? [],
-            handler: () => {
-              runCommand({
-                keyDownHandler: command.keyDownHandler,
-                activateCommandScopeId: command.activateCommandScopeId,
-              });
-              setCommandScopeCommands([]);
-              return true;
-            },
-            activateCommandScopeId: command.activateCommandScopeId,
+            command: command,
           },
         };
       });

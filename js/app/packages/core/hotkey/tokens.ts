@@ -2,6 +2,18 @@ export const TOKENS = {
   // soup
   soup: {
     openSearch: 'soup.openSearch',
+    tabs: {
+      '0': 'soup.tabs.0',
+      '1': 'soup.tabs.1',
+      '2': 'soup.tabs.2',
+      '3': 'soup.tabs.3',
+      '4': 'soup.tabs.4',
+      '5': 'soup.tabs.5',
+      '6': 'soup.tabs.6',
+      '7': 'soup.tabs.7',
+      '8': 'soup.tabs.8',
+      '9': 'soup.tabs.9',
+    },
   },
 
   // unified list
@@ -15,10 +27,15 @@ export const TOKENS = {
       end: 'entity.step.end',
       start: 'entity.step.start',
     },
+    select: {
+      end: 'entity.select.end',
+      start: 'entity.select.start',
+    },
     jump: {
       home: 'entity.jump.home',
       end: 'entity.jump.end',
     },
+    open: 'entity.open',
   },
 
   // code block
@@ -37,14 +54,13 @@ export const TOKENS = {
       message: 'global.quickCreate.message',
       menuFormat: 'global.quickCreate.menuFormat',
     },
-    macroJump: 'global.macroJump',
-    toggleRightPanel: 'global.toggleRightPanel',
     commandMenu: 'global.commandMenu',
     toggleBigChat: 'global.toggleBigChat',
     instructions: 'global.instructions',
     searchMenu: 'global.searchMenu',
     toggleSettings: 'global.toggleSettings',
     createNewSplit: 'global.createNewSplit',
+    toggleVisor: 'global.toggleVisor',
   },
 
   // email
@@ -64,12 +80,23 @@ export const TOKENS = {
   // split
   split: {
     close: 'split.close',
+    goCommand: 'split.goCommand',
+    go: {
+      home: 'split.go.home',
+      email: 'split.go.email',
+      inbox: 'split.go.inbox',
+      docs: 'split.go.docs',
+      focusSplitRight: 'split.go.focusSplitRight',
+      focusSplitLeft: 'split.go.focusSplitLeft',
+      toggleRightPanel: 'split.go.toggleRightPanel',
+      macroJump: 'split.go.macroJump',
+      back: 'split.go.back',
+      forward: 'split.go.forward',
+    },
     spotlight: {
       toggle: 'split.spotlight.toggle',
       close: 'split.spotlight.close',
     },
-    back: 'split.back',
-    forward: 'split.forward',
     showHelpDrawer: 'split.showHelpDrawer',
   },
 
@@ -175,3 +202,31 @@ export const TOKENS = {
 
 type ExtractValues<T> = T extends object ? ExtractValues<T[keyof T]> : T;
 export type HotkeyToken = ExtractValues<typeof TOKENS>;
+
+/**
+ * Builds a Map from token string values to their token references
+ * e.g. 'channel.moveUp' -> TOKENS.channel.moveUp
+ */
+export function buildTokenMap(tokens: typeof TOKENS): Map<string, HotkeyToken> {
+  const map = new Map<string, HotkeyToken>();
+
+  function traverse(obj: any, path: string[] = []) {
+    for (const key in obj) {
+      const value = obj[key];
+      const currentPath = [...path, key];
+
+      if (typeof value === 'string') {
+        // Leaf node - add to map
+        map.set(value, value as HotkeyToken);
+      } else if (typeof value === 'object' && value !== null) {
+        // Nested object - recurse
+        traverse(value, currentPath);
+      }
+    }
+  }
+
+  traverse(tokens);
+  return map;
+}
+
+export const tokenMap = buildTokenMap(TOKENS);

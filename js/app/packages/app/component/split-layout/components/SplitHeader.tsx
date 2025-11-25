@@ -27,7 +27,7 @@ function SplitBackButton() {
     <IconButton
       size="sm"
       icon={CaretLeft}
-      tooltip={{ label: 'Go Back', hotkeyToken: TOKENS.split.back }}
+      tooltip={{ label: 'Go Back', hotkeyToken: TOKENS.split.go.back }}
       disabled={!context.handle.canGoBack()}
       theme="current"
       onClick={context.handle.goBack}
@@ -42,7 +42,7 @@ function SplitForwardButton() {
     <IconButton
       size="sm"
       icon={CaretRight}
-      tooltip={{ label: 'Go Forward', hotkeyToken: TOKENS.split.forward }}
+      tooltip={{ label: 'Go Forward', hotkeyToken: TOKENS.split.go.forward }}
       disabled={!context.handle.canGoForward()}
       theme="current"
       onClick={context.handle.goForward}

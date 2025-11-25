@@ -113,7 +113,7 @@ export function Settings() {
 
   registerHotkey({
     hotkeyToken: TOKENS.global.toggleSettings,
-    hotkey: 'cmd+;',
+    hotkey: ';',
     scopeId: 'global',
     description: () => {
       return settingsOpen() ? 'Close Settings Panel' : 'Open Settings Panel';
@@ -122,7 +122,6 @@ export function Settings() {
       toggleSettings();
       return true;
     },
-    runWithInputFocused: true,
   });
 
   let settingsContentEl!: HTMLDivElement;
