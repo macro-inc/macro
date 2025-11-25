@@ -2,6 +2,7 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
+import { CustomScrollbar } from '../../macro-entity/src/components/CustomScrollbar';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@service-storage/instructionsMd';
 import { createEffect, createSignal, onMount, Show } from 'solid-js';
@@ -54,13 +55,10 @@ export default function BlockMarkdown() {
           notificationSource={notificationSource}
           documentId={blockId}
         />
-        <div class="w-full grow overflow-hidden" data-block-content>
+        <div class="w-full grow overflow-hidden relative" data-block-content>
           <div
-            class="w-full h-full relative overflow-auto portal-scope"
+            class="w-full h-full relative overflow-auto portal-scope scrollbar-hidden"
             ref={setScrollRef}
-            style={{
-              'scrollbar-gutter': 'stable',
-            }}
           >
             <Show
               when={!isInstructionsMd()}
@@ -69,6 +67,7 @@ export default function BlockMarkdown() {
               <Notebook />
             </Show>
           </div>
+          <CustomScrollbar scrollContainer={scrollRef} />
         </div>
       </div>
     </DocumentBlockContainer>
