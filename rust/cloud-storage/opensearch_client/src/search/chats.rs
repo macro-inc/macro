@@ -3,7 +3,9 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{DefaultSearchResponse, Highlight, parse_highlight_hit},
+        model::{
+            DefaultSearchResponse, Highlight, NameIndex, NameSearchResponse, parse_highlight_hit,
+        },
         query::Keys,
         utils::should_wildcard_field_query_builder,
     },
@@ -28,8 +30,14 @@ pub(crate) struct ChatIndex {
     pub content: String,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) enum ChatNameIndex {
+    Name(NameIndex),
+    Chat(ChatIndex),
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct ChatSearchResponse {
+pub struct ChatSearchContentResponse {
     pub chat_id: String,
     pub chat_message_id: String,
     pub user_id: String,
@@ -38,6 +46,12 @@ pub struct ChatSearchResponse {
     pub title: String,
     pub score: Option<f64>,
     pub highlight: Highlight,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub enum ChatSearchResponse {
+    Chat(ChatSearchContentResponse),
+    Name(NameSearchResponse),
 }
 
 pub(crate) struct ChatSearchConfig;
@@ -188,25 +202,20 @@ pub(crate) async fn search_chats(
             details: e.to_string(),
         })?;
 
-    let result: DefaultSearchResponse<ChatIndex> = serde_json::from_slice(&bytes).map_err(|e| {
-        OpensearchClientError::SearchDeserializationFailed {
-            details: e.to_string(),
-            raw_body: String::from_utf8_lossy(&bytes).to_string(),
-        }
-    })?;
+    let result: DefaultSearchResponse<ChatNameIndex> =
+        serde_json::from_slice(&bytes).map_err(|e| {
+            OpensearchClientError::SearchDeserializationFailed {
+                details: e.to_string(),
+                raw_body: String::from_utf8_lossy(&bytes).to_string(),
+            }
+        })?;
 
     Ok(result
         .hits
         .hits
         .into_iter()
-        .map(|hit| ChatSearchResponse {
-            chat_id: hit.source.entity_id,
-            chat_message_id: hit.source.chat_message_id,
-            user_id: hit.source.user_id,
-            role: hit.source.role,
-            title: hit.source.title,
-            score: hit.score,
-            highlight: hit
+        .map(|hit| {
+            let highlight = hit
                 .highlight
                 .map(|h| {
                     parse_highlight_hit(
@@ -217,8 +226,28 @@ pub(crate) async fn search_chats(
                         },
                     )
                 })
-                .unwrap_or_default(),
-            updated_at: hit.source.updated_at_seconds,
+                .unwrap_or_default();
+
+            match hit.source {
+                ChatNameIndex::Name(a) => ChatSearchResponse::Name(NameSearchResponse {
+                    entity_id: a.entity_id,
+                    entity_type: a.entity_type,
+                    name: a.name,
+                    user_id: a.user_id,
+                    score: hit.score,
+                    highlight,
+                }),
+                ChatNameIndex::Chat(a) => ChatSearchResponse::Chat(ChatSearchContentResponse {
+                    chat_id: a.entity_id,
+                    chat_message_id: a.chat_message_id,
+                    user_id: a.user_id,
+                    role: a.role,
+                    title: a.title,
+                    score: hit.score,
+                    updated_at: a.updated_at_seconds,
+                    highlight,
+                }),
+            }
         })
         .collect())
 }
