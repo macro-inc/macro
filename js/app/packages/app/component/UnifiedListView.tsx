@@ -1609,7 +1609,7 @@ const EntityTypeToggle = (props: {
         })
       }
     >
-      <span class="uppercase">{props.type}</span>
+      <span class="uppercase">{props.type === 'project' ? 'folder' : props.type}</span>
     </ToggleButton>
   );
 };

@@ -141,13 +141,13 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     icon: Folder,
     foreground: 'text-folder',
     background: 'bg-folder-bg',
-    prettyName: 'Project',
+    prettyName: 'Folder',
   },
   sharedProject: {
     icon: FolderUser,
     foreground: 'text-folder',
     background: 'bg-folder-bg',
-    prettyName: 'Shared Project',
+    prettyName: 'Shared Folder',
   },
   unknown: {
     icon: File,

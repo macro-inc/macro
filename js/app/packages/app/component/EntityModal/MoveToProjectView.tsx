@@ -438,7 +438,7 @@ export const MoveToProjectView = (props: {
       <div class="w-full h-fit suppress-css-brackets mb-3">
         <input
           type="text"
-          placeholder="Search projects..."
+          placeholder="Search folders..."
           value={searchQuery()}
           onInput={(e) => setSearchQuery(e.currentTarget.value)}
           class="w-full p-2 text-sm border-1 border-edge/20 bg-menu text-ink placeholder:text-ink-placeholder focus:outline-none selection:bg-ink selection:text-panel"
