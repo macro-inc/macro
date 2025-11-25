@@ -5,7 +5,6 @@ import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { useChatInput } from '@core/component/AI/component/input/useChatInput';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
-import { CustomScrollbar } from '@macro-entity';
 import type {
   Attachment,
   ChatMessageWithAttachments,
@@ -42,6 +41,7 @@ import NotepadIcon from '@icon/regular/notepad.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import XIcon from '@icon/regular/x.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { CustomScrollbar } from '@macro-entity';
 import { invalidateUserQuota } from '@service-auth/userQuota';
 import {
   cognitionApiServiceClient,

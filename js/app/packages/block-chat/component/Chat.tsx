@@ -7,7 +7,6 @@ import { useBuildChatSendRequest } from '@core/component/AI/component/input/buil
 import { useChatInput } from '@core/component/AI/component/input/useChatInput';
 import { useChatMessages } from '@core/component/AI/component/message';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
-import { CustomScrollbar } from '@macro-entity';
 import type {
   CreateAndSend,
   MessageStream,
@@ -28,6 +27,7 @@ import {
 } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
+import { CustomScrollbar } from '@macro-entity';
 import { invalidateUserQuota } from '@service-auth/userQuota';
 import { cognitionWebsocketServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';

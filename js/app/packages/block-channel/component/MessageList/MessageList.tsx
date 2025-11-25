@@ -18,6 +18,7 @@ import type { InputAttachment } from '@core/store/cacheChannelInput';
 import SunIcon from '@icon/duotone/sun-horizon-duotone.svg';
 import ArrowDownIcon from '@icon/regular/arrow-down.svg';
 import XIcon from '@icon/regular/x.svg';
+import { CustomScrollbar } from '@macro-entity';
 import type { Activity as ChannelActivity } from '@service-comms/generated/models/activity';
 import type { Message } from '@service-comms/generated/models/message';
 import { useUserId } from '@service-gql/client';
@@ -39,7 +40,6 @@ import {
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
-import { CustomScrollbar } from '@macro-entity';
 import { MessageContainer } from '../Message/MessageContainer';
 import { ReplyInputsPortaler } from '../ReplyInputsPortaler';
 
