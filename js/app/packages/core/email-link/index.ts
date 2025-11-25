@@ -1,12 +1,20 @@
+import { updateUserAuth } from '@core/auth';
+import {
+  authenticateWithEmailPermissions,
+  type TimeoutError,
+} from '@core/auth/channel';
+import { openEmailAuthPopup } from '@core/auth/email';
 import { isErr } from '@core/util/maybeResult';
+import { queryKeys } from '@macro-entity';
 import { emailClient } from '@service-email/client';
 import type { Link } from '@service-email/generated/schemas/link';
+import { updateUserInfo } from '@service-gql/client';
 import { useQuery } from '@tanstack/solid-query';
-import { err, okAsync, type Result } from 'neverthrow';
+import { err, okAsync, type Result, ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { queryClient } from '../../macro-entity/src/queries/client';
 
-export const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
+const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
   number | undefined
 >();
 
@@ -20,17 +28,27 @@ async function fetchEmailLinks() {
   return result[1]?.links ?? [];
 }
 
-export function useEmailLinks() {
+export function useEmailLinksQuery() {
   return useQuery(() => ({
     queryKey: EMAIL_LINKS_QUERY_KEY,
     queryFn: fetchEmailLinks,
   }));
 }
 
-export function invalidateEmailLinks() {
+export function useEmailLinksStatus() {
+  const links = useEmailLinksQuery();
+  return links.isSuccess && links.data?.length > 0;
+}
+
+function invalidateEmailLinks() {
   queryClient.invalidateQueries({
     queryKey: EMAIL_LINKS_QUERY_KEY,
   });
+  queryClient.cancelQueries({ queryKey: queryKeys.all.email });
+  queryClient.setQueriesData({ queryKey: queryKeys.all.email }, () => ({
+    pages: [],
+    pageParams: [],
+  }));
 }
 
 /** Arbitrary threshold in ms between created_at and updated_at */
@@ -79,9 +97,9 @@ async function syncEmails(): Promise<Result<void, EmailSyncError>> {
       badRequestError
         ? { tag: 'AlreadyInitialized' as const }
         : {
-            tag: 'FailedToInitialize' as const,
-            message: 'Failed to initialize',
-          }
+          tag: 'FailedToInitialize' as const,
+          message: 'Failed to initialize',
+        }
     );
   }
 
@@ -102,7 +120,7 @@ const EMAIL_POLLING_TIMEOUT = 20_000;
 /**
  * Starts a polling fetch for new emails during the sync process.
  */
-export function startEmailPolling() {
+function startEmailPolling() {
   if (emailRefetchInterval()) return;
   setEmailRefetchInterval(EMAIL_POLLING_INTERVAL);
   setTimeout(() => {
@@ -113,7 +131,7 @@ export function startEmailPolling() {
 /**
  * Stops the polling fetch for new emails during the sync process.
  */
-export function stopEmailPolling() {
+function stopEmailPolling() {
   setEmailRefetchInterval(undefined);
 }
 
@@ -122,11 +140,60 @@ export function stopEmailPolling() {
  *
  * @returns true if syncing emails was started
  */
-export function maybeStartEmailSync(links: Link[]): boolean {
+function maybeStartEmailSync(links: Link[]): boolean {
   if (!anyLinksNeedSync(links)) {
     return false;
   }
   syncEmails();
   startEmailPolling();
   return true;
+}
+
+/**
+ * Disconnects the email service and invalidates the email links query.
+ *
+ * NOTE: only to be used in development
+ *
+ * @returns ok if the email service was disconnected, err if it failed to disconnect
+ */
+function disconnectEmail(): ResultAsync<void, 'failed-to-disconnect'> {
+  return ResultAsync.fromSafePromise(emailClient.stopSync()).andThen(
+    (response) =>
+      isErr(response) ? err('failed-to-disconnect') : okAsync(void 0)
+  );
+}
+
+/**
+ * Connects to the email service and authenticates with email permissions.
+ *
+ * @returns A promise that resolves when the auth success message is received.
+ */
+function connectEmail(): ResultAsync<void, TimeoutError> {
+  openEmailAuthPopup({
+    idpName: 'google_gmail',
+    returnPath: '/app/login/popup/success',
+  });
+
+  return authenticateWithEmailPermissions();
+}
+
+/**
+ * Hooks for interacting with email links.
+ */
+export function useEmailLinks() {
+  const invalidations = async () => {
+    invalidateEmailLinks();
+    await updateUserAuth();
+    await updateUserInfo();
+  };
+
+  return {
+    query: useEmailLinksQuery(),
+    status: useEmailLinksStatus(),
+    connect: () => connectEmail().andTee(invalidations),
+    disconnect: () => disconnectEmail().andTee(invalidations),
+    maybeSync: () => maybeStartEmailSync(useEmailLinksQuery().data ?? []),
+    invalidate: () => invalidateEmailLinks(),
+    refetchInterval: emailRefetchInterval,
+  };
 }

@@ -32,7 +32,7 @@ export function waitForAuthSuccess(channel: BroadcastChannel): Promise<void> {
 }
 
 /** Errot type for a promise timing out. */
-type TimeoutError = { tag: 'TimeoutError'; message: string };
+export type TimeoutError = { tag: 'TimeoutError'; message: string };
 
 /**
  * Waits for the auth success message to be received on the given channel.
