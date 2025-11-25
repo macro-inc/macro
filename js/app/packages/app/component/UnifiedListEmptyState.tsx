@@ -1,9 +1,8 @@
-import { useEmailLinksStatus } from '@app/signal/emailAuth';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
-
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
 import { fileSelector } from '@core/directive/fileSelector';
 import { folderSelector } from '@core/directive/folderSelector';
+import { useEmailLinksStatus } from '@core/email-link';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import type { ViewId } from '@core/types/view';

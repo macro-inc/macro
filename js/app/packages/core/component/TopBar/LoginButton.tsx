@@ -15,7 +15,7 @@ export function LoginButton() {
     <div class="flex gap-2 justify-center w-max items-baseline font-mono">
       <Button onClick={() => navigate('/login')}>Login</Button>
       <span class="italic">or</span>
-      <Button onClick={() => navigate('/onboarding')}>Sign Up</Button>
+      <Button onClick={() => navigate('/signup')}>Sign Up</Button>
     </div>
   );
 }
