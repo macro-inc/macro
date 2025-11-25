@@ -42,7 +42,7 @@ cloudfront_sign = { workspace = true }
 comms_service_client = { path = "../comms_service_client" }
 connection_gateway = { path = "../connection_gateway" }
 dynamodb_client = { path = "../dynamodb_client" }
-email = { path = "../email", features = ["ports"] }
+email = { path = "../email", features = ["outbound", "ports"] }
 email_service_client = { path = "../email_service_client" }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }

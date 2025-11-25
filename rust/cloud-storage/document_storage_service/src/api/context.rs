@@ -1,7 +1,8 @@
-use crate::{TempNoopEmailService, config::Config, service::s3::S3};
+use crate::{config::Config, service::s3::S3};
 use axum::extract::FromRef;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use dynamodb_client::DynamodbClient;
+use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use email_service_client::EmailServiceClient;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -21,7 +22,11 @@ pub struct InternalFlag {
 }
 
 type DssSoupState = SoupRouterState<
-    SoupImpl<PgSoupRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>, TempNoopEmailService>,
+    SoupImpl<
+        PgSoupRepo,
+        FrecencyQueryServiceImpl<FrecencyPgStorage>,
+        EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>>,
+    >,
 >;
 
 #[derive(Clone, FromRef)]

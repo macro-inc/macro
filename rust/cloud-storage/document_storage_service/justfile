@@ -1,16 +1,4 @@
-# export DATABASE_URL := "postgres://user:password@localhost:5432/macrodb"
-# export REDIS_URI := "redis://localhost:6369"
-# export DOCUMENT_STORAGE_BUCKET := "doc-storage-dev"
-# export ENVIRONMENT := "local"
-# export RUST_LOG := "document_text_extractor=trace"
-# export SEARCH_TEXT_EXTRACTOR_QUEUE := "extractor-queue"
-# export DOCX_DOCUMENT_UPLOAD_BUCKET := "testing-bucket"
-# export DOCUMENT_DELETE_QUEUE := "FILL_IN"
-
-export FRECENCY_TABLE_NAME := "frecency"
 export DYNAMO_ENDPOINT_URL := 'http://localhost:8000'
-export AWS_ACCESS_KEY_ID := 'dummy'
-export AWS_SECRET_ACCESS_KEY := 'dummy'
 
 
 set dotenv-load := true

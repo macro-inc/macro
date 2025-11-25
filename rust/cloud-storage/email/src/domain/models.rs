@@ -82,6 +82,7 @@ pub struct EmailThreadPreview {
 }
 
 #[non_exhaustive]
+#[derive(Debug)]
 pub struct EnrichedEmailThreadPreview {
     pub thread: EmailThreadPreview,
     pub attachments: Vec<Attachment>,

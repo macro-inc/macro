@@ -1,5 +1,3 @@
-use std::sync::Arc;
-
 use crate::{
     api::context::{ApiContext, DocumentStorageServiceAuthKey},
     config::{CloudfrontSignerPrivateKeySecretName, DocumentPermissionJwtSecretKey},
@@ -10,6 +8,7 @@ use comms_service_client::CommsServiceClient;
 use config::{Config, Environment};
 use connection_gateway_client::client::ConnectionGatewayClient;
 use dynamodb_client::DynamodbClient;
+use email::{domain::service::EmailServiceImpl, outbound::EmailPgRepo};
 use email_service_client::EmailServiceClient;
 use frecency::{domain::services::FrecencyQueryServiceImpl, outbound::postgres::FrecencyPgStorage};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
@@ -23,8 +22,8 @@ use soup::{
     outbound::pg_soup_repo::PgSoupRepo,
 };
 use sqlx::postgres::PgPoolOptions;
+use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
-use uuid::Uuid;
 
 mod api;
 mod config;
@@ -182,11 +181,12 @@ async fn main() -> anyhow::Result<()> {
         JwtValidationArgs::new_with_secret_manager(config.environment, &secretsmanager_client)
             .await?;
 
+    let frecency_service = FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone()));
     let api_context = ApiContext {
         soup_router_state: SoupRouterState::new(SoupImpl::new(
             PgSoupRepo::new(db.clone()),
-            FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
-            TempNoopEmailService,
+            frecency_service.clone(),
+            EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service),
         )),
         db,
         redis_client: Arc::new(Redis::new(redis_client)),
@@ -212,30 +212,4 @@ async fn main() -> anyhow::Result<()> {
     api::setup_and_serve(api_context).await?;
 
     Ok(())
-}
-
-/// Temporary email service implementation which returns nothing
-struct TempNoopEmailService;
-
-impl email::domain::ports::EmailService for TempNoopEmailService {
-    async fn get_email_thread_previews(
-        &self,
-        _req: email::domain::models::GetEmailsRequest,
-    ) -> Result<
-        models_pagination::PaginatedCursor<
-            email::domain::models::EnrichedEmailThreadPreview,
-            Uuid,
-            models_pagination::SimpleSortMethod,
-            (),
-        >,
-        email::domain::models::EmailErr,
-    > {
-        use models_pagination::PaginateOn;
-        Ok(
-            Option::<email::domain::models::EnrichedEmailThreadPreview>::None
-                .into_iter()
-                .paginate_on(0, models_pagination::SimpleSortMethod::CreatedAt)
-                .into_page(),
-        )
-    }
 }
