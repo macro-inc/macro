@@ -542,17 +542,21 @@ export function EntityWithEverything(
                 );
               }}
             </Show>
-            <Show when={props.selected}>
-              <button
-                class="absolute top-1 right-1 flex items-center justify-center size-8 bg-panel border border-edge-muted hover:bg-accent hover:text-panel"
-                onClick={() => {
-                  props.onClickRowAction?.(props.entity, 'done');
-                }}
-                ref={setActionButtonRef}
-                data-blocks-navigation
-              >
-                <CheckIcon class="w-4 h-4 pointer-events-none" />
-              </button>
+            <Show when={props.highlighted}>
+              <div class="absolute top-1 right-1 items-center flex">
+                <Tooltip tooltip="Mark as done">
+                  <button
+                    class="bg-panel flex items-center justify-center size-8 border border-edge-muted hover:bg-accent hover:text-panel"
+                    onClick={() => {
+                      props.onClickRowAction?.(props.entity, 'done');
+                    }}
+                    ref={setActionButtonRef}
+                    data-blocks-navigation
+                  >
+                    <CheckIcon class="w-4 h-4 pointer-events-none" />
+                  </button>
+                </Tooltip>
+              </div>
             </Show>
           </div>
         </div>
