@@ -2,10 +2,6 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
-import {
-  emailRefetchInterval,
-  useEmailLinksStatus,
-} from '@app/signal/emailAuth';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
@@ -26,6 +22,7 @@ import {
   ENABLE_PROPERTY_DISPLAY_CONTROL,
   ENABLE_SOUP_FROM_FILTER,
 } from '@core/constant/featureFlags';
+import { emailRefetchInterval, useEmailLinksStatus } from '@core/email-link';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
