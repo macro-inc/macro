@@ -33,7 +33,9 @@ aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
+comms_db_client = { path = "../comms_db_client" }
 comms_service_client = { path = "../comms_service_client" }
+email_db_client = { path = "../email_db_client" }
 email_service_client = { path = "../email_service_client" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
