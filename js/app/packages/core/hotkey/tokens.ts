@@ -1,5 +1,3 @@
-import { moveToFolder } from '@core/component/FileList/itemOperations';
-
 export const TOKENS = {
   // soup
   soup: {

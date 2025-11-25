@@ -69,7 +69,6 @@ import {
   isChannelMention,
   isChannelMessageReply,
   isChannelMessageSend,
-  markNotificationsForEntityAsDone,
   notificationWithMetadata,
   type UnifiedNotification,
   useNotificationsForEntity,
@@ -133,7 +132,6 @@ import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { EmptyState } from './UnifiedListEmptyState';
 import {
-  archiveEmail,
   type DisplayOptions,
   type DocumentTypeFilter,
   type FilterOptions,
