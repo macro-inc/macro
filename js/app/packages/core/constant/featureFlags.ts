@@ -112,6 +112,8 @@ export const ENABLE_SVG_PREVIEW = true;
 
 export const USE_PIXEL_BLOCK_ICONS = false;
 
+export const USE_WIDE_ICONS = true;
+
 export const ENABLE_PROPERTIES_METADATA = DEV_MODE_ENV;
 export const ENABLE_PROPERTY_DISPLAY_CONTROL =
   ENABLE_PROPERTIES_METADATA && DEV_MODE_ENV;
