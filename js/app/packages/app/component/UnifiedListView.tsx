@@ -69,7 +69,6 @@ import {
   isChannelMention,
   isChannelMessageReply,
   isChannelMessageSend,
-  markNotificationsForEntityAsDone,
   notificationWithMetadata,
   type UnifiedNotification,
   useNotificationsForEntity,
@@ -133,7 +132,6 @@ import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { EmptyState } from './UnifiedListEmptyState';
 import {
-  archiveEmail,
   type DisplayOptions,
   type DocumentTypeFilter,
   type FilterOptions,
@@ -799,20 +797,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const notificationSource = useGlobalNotificationSource();
   const markEntityAsDone = (entity: EntityData) => {
-    if (emailView() === 'inbox') {
-      if (entity.type === 'email') {
-        archiveEmail(entity.id, {
-          isDone: entity.done,
-          optimisticallyExclude: true,
-        });
-      }
+    const actions = unifiedListContext.actionRegistry;
+    if (actions.isActionEnabled('mark_as_done', entity)) {
+      actions.execute('mark_as_done', entity);
       return true;
     }
-    if (entity.type === 'email') {
-      archiveEmail(entity.id, { isDone: entity.done });
-    }
-    markNotificationsForEntityAsDone(notificationSource, entity);
-    return true;
+    return false;
   };
 
   const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
@@ -1359,11 +1349,18 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   entity={innerProps.entity}
                   timestamp={timestamp()}
                   onClick={entityClickHandler}
-                  onClickRowAction={(entity, type) => {
-                    if (type === 'done') {
-                      markEntityAsDone?.(entity);
-                    }
-                  }}
+                  onClickRowAction={
+                    unifiedListContext.actionRegistry.isActionEnabled(
+                      'mark_as_done',
+                      innerProps.entity
+                    )
+                      ? (entity, type) => {
+                          if (type === 'done') {
+                            markEntityAsDone?.(entity);
+                          }
+                        }
+                      : undefined
+                  }
                   onClickNotification={(notifiedEntity) => {
                     const notification = notificationWithMetadata(
                       notifiedEntity.notification
