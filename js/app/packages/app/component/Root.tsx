@@ -1,5 +1,4 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
-import { useEmailLinksStatus } from '@app/signal/emailAuth';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { ChannelsContextProvider } from '@core/component/ChannelsProvider';
@@ -11,6 +10,7 @@ import {
   ENABLE_WEBSOCKET_DEBUGGER,
   PROD_MODE_ENV,
 } from '@core/constant/featureFlags';
+import { useEmailLinksStatus } from '@core/email-link';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
@@ -59,6 +59,7 @@ import { useSoundHover } from '../util/soundHover';
 import { updateCookie } from '../util/updateCookie';
 import { Login } from './auth/Login';
 import { LOGIN_COOKIE_AGE, setCookie } from './auth/Shared';
+import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
@@ -173,11 +174,24 @@ function NotFound() {
   return '';
 }
 
+const { EmailSignUp, EmailCallback, CALLBACK_PATH } = makeEmailAuthComponents({
+  callbackPath: '/email-signup-callback',
+  successPath: '/',
+});
+
 const ROUTES: RouteDefinition[] = [
   LAYOUT_ROUTE,
   {
     path: '/',
     component: BasePathComponent,
+  },
+  {
+    path: '/signup',
+    component: EmailSignUp,
+  },
+  {
+    path: CALLBACK_PATH,
+    component: EmailCallback,
   },
   {
     path: '/login/popup/success',

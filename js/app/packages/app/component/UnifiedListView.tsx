@@ -2,10 +2,6 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
-import {
-  emailRefetchInterval,
-  useEmailLinksStatus,
-} from '@app/signal/emailAuth';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
@@ -26,6 +22,7 @@ import {
   ENABLE_PROPERTY_DISPLAY_CONTROL,
   ENABLE_SOUP_FROM_FILTER,
 } from '@core/constant/featureFlags';
+import { emailRefetchInterval, useEmailLinksStatus } from '@core/email-link';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -69,7 +66,6 @@ import {
   isChannelMention,
   isChannelMessageReply,
   isChannelMessageSend,
-  markNotificationsForEntityAsDone,
   notificationWithMetadata,
   type UnifiedNotification,
   useNotificationsForEntity,
@@ -133,7 +129,6 @@ import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { EmptyState } from './UnifiedListEmptyState';
 import {
-  archiveEmail,
   type DisplayOptions,
   type DocumentTypeFilter,
   type FilterOptions,
@@ -799,20 +794,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const notificationSource = useGlobalNotificationSource();
   const markEntityAsDone = (entity: EntityData) => {
-    if (emailView() === 'inbox') {
-      if (entity.type === 'email') {
-        archiveEmail(entity.id, {
-          isDone: entity.done,
-          optimisticallyExclude: true,
-        });
-      }
+    const actions = unifiedListContext.actionRegistry;
+    if (actions.isActionEnabled('mark_as_done', entity)) {
+      actions.execute('mark_as_done', entity);
       return true;
     }
-    if (entity.type === 'email') {
-      archiveEmail(entity.id, { isDone: entity.done });
-    }
-    markNotificationsForEntityAsDone(notificationSource, entity);
-    return true;
+    return false;
   };
 
   const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
@@ -1359,11 +1346,18 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   entity={innerProps.entity}
                   timestamp={timestamp()}
                   onClick={entityClickHandler}
-                  onClickRowAction={(entity, type) => {
-                    if (type === 'done') {
-                      markEntityAsDone?.(entity);
-                    }
-                  }}
+                  onClickRowAction={
+                    unifiedListContext.actionRegistry.isActionEnabled(
+                      'mark_as_done',
+                      innerProps.entity
+                    )
+                      ? (entity, type) => {
+                          if (type === 'done') {
+                            markEntityAsDone?.(entity);
+                          }
+                        }
+                      : undefined
+                  }
                   onClickNotification={(notifiedEntity) => {
                     const notification = notificationWithMetadata(
                       notifiedEntity.notification
@@ -1609,7 +1603,9 @@ const EntityTypeToggle = (props: {
         })
       }
     >
-      <span class="uppercase">{props.type}</span>
+      <span class="uppercase">
+        {props.type === 'project' ? 'folder' : props.type}
+      </span>
     </ToggleButton>
   );
 };

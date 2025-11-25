@@ -1,7 +1,7 @@
 import { createCallback } from '@solid-primitives/rootless';
 import { useContext } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from './context';
-import type { SplitContent } from './layoutManager';
+import type { SplitContent, SplitManager } from './layoutManager';
 
 export function decodePairs(segments: string[]): SplitContent[] {
   const pairs: SplitContent[] = [];
@@ -60,4 +60,20 @@ export function useSplitPanelOrThrow() {
  */
 export function useSplitPanel() {
   return useContext(SplitPanelContext);
+}
+
+/**
+ * Remove all the items from all split histories that meet a certain criteria.
+ * @param manager
+ * @param predicate A function that returns true to remove a SplitContent entry
+ *     from all splits' histories.
+ */
+export function globalRemoveFromSplitHistory(
+  manager: SplitManager,
+  predicate: (item: SplitContent) => boolean
+) {
+  for (const split of manager.splits()) {
+    const handle = manager.getSplit(split.id);
+    handle?.removeFromHistory(predicate);
+  }
 }
