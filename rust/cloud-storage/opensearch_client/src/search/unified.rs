@@ -7,27 +7,17 @@ use crate::{
         builder::SearchQueryConfig,
         channels::{
             ChannelMessageIndex, ChannelMessageQueryBuilder, ChannelMessageSearchArgs,
-            ChannelMessageSearchConfig, ChannelMessageSearchContentResponse,
+            ChannelMessageSearchConfig,
         },
-        chats::{
-            ChatIndex, ChatQueryBuilder, ChatSearchArgs, ChatSearchConfig,
-            ChatSearchContentResponse,
-        },
+        chats::{ChatIndex, ChatQueryBuilder, ChatSearchArgs, ChatSearchConfig},
         documents::{
             DocumentIndex, DocumentQueryBuilder, DocumentSearchArgs, DocumentSearchConfig,
-            DocumentSearchContentResponse,
         },
-        emails::{
-            EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig,
-            EmailSearchContentResponse,
-        },
+        emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
         model::{
-            DefaultSearchResponse, Hit, MacroEm, NameIndex, NameSearchResponse, parse_highlight_hit,
+            DefaultSearchResponse, Hit, MacroEm, NameIndex, SearchGotoChannel, SearchGotoChat, SearchGotoContent, SearchGotoDocument, SearchGotoEmail, SearchHit, parse_highlight_hit
         },
-        projects::{
-            ProjectIndex, ProjectQueryBuilder, ProjectSearchArgs, ProjectSearchConfig,
-            ProjectSearchResponse,
-        },
+        projects::{ProjectIndex, ProjectQueryBuilder, ProjectSearchArgs, ProjectSearchConfig},
         query::Keys,
     },
 };
@@ -203,183 +193,100 @@ pub(crate) enum UnifiedSearchIndex {
     Name(NameIndex),
 }
 
-#[derive(Debug)]
-pub enum UnifiedSearchResponse {
-    ChannelMessage(ChannelMessageSearchContentResponse),
-    Chat(ChatSearchContentResponse),
-    Document(DocumentSearchContentResponse),
-    Name(NameSearchResponse),
-    Email(EmailSearchContentResponse),
-    Project(ProjectSearchResponse),
-}
-
 pub struct SplitUnifiedSearchResponseValues {
-    pub channel_message: Vec<ChannelMessageSearchContentResponse>,
-    pub chat: Vec<ChatSearchContentResponse>,
-    pub document: Vec<DocumentSearchContentResponse>,
-    pub email: Vec<EmailSearchContentResponse>,
-    pub project: Vec<ProjectSearchResponse>,
-    pub name: Vec<NameSearchResponse>,
+    pub channel_message: Vec<SearchHit>,
+    pub chat: Vec<SearchHit>,
+    pub document: Vec<SearchHit>,
+    pub email: Vec<SearchHit>,
+    pub project: Vec<SearchHit>,
+    pub name: Vec<SearchHit>,
 }
 
-pub trait SplitUnifiedSearchResponse: Iterator<Item = UnifiedSearchResponse> {
-    fn split_search_response(self) -> SplitUnifiedSearchResponseValues;
-}
-
-impl<T> SplitUnifiedSearchResponse for T
-where
-    T: Iterator<Item = UnifiedSearchResponse>,
-{
-    fn split_search_response(self) -> SplitUnifiedSearchResponseValues {
-        let (channel_message, chat, document, email, project, name) = self.into_iter().fold(
-            (vec![], vec![], vec![], vec![], vec![], vec![]),
-            |(mut channel_message, mut chat, mut document, mut email, mut project, mut name),
-             item| {
-                match item {
-                    UnifiedSearchResponse::ChannelMessage(a) => {
-                        channel_message.push(a);
-                    }
-                    UnifiedSearchResponse::Chat(a) => {
-                        chat.push(a);
-                    }
-                    UnifiedSearchResponse::Document(a) => {
-                        document.push(a);
-                    }
-                    UnifiedSearchResponse::Email(a) => {
-                        email.push(a);
-                    }
-                    UnifiedSearchResponse::Project(a) => {
-                        project.push(a);
-                    }
-                    UnifiedSearchResponse::Name(a) => {
-                        name.push(a);
-                    }
-                }
-                (channel_message, chat, document, email, project, name)
-            },
-        );
-
-        SplitUnifiedSearchResponseValues {
-            channel_message,
-            chat,
-            document,
-            email,
-            project,
-            name,
-        }
-    }
-}
-
-impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
+impl From<Hit<UnifiedSearchIndex>> for SearchHit {
     fn from(index: Hit<UnifiedSearchIndex>) -> Self {
         match index.source {
-            UnifiedSearchIndex::ChannelMessage(a) => {
-                UnifiedSearchResponse::ChannelMessage(ChannelMessageSearchContentResponse {
-                    channel_id: a.entity_id,
-                    channel_type: a.channel_type,
-                    org_id: a.org_id,
-                    message_id: a.message_id,
-                    thread_id: a.thread_id,
-                    sender_id: a.sender_id,
-                    mentions: a.mentions,
-                    created_at: a.created_at_seconds,
-                    updated_at: a.updated_at_seconds,
-                    score: index.score,
-                    highlight: index
-                        .highlight
-                        .map(|h| {
-                            parse_highlight_hit(
-                                h,
-                                Keys {
-                                    title_key: ChannelMessageSearchConfig::TITLE_KEY,
-                                    content_key: ChannelMessageSearchConfig::CONTENT_KEY,
-                                },
-                            )
-                        })
-                        .unwrap_or_default(),
-                })
-            }
-            UnifiedSearchIndex::Document(a) => {
-                UnifiedSearchResponse::Document(DocumentSearchContentResponse {
-                    document_id: a.entity_id,
-                    document_name: a.document_name,
+            UnifiedSearchIndex::ChannelMessage(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::Channels,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: ChannelMessageSearchConfig::TITLE_KEY,
+                                content_key: ChannelMessageSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: Some(SearchGotoContent::Channels(SearchGotoChannel {
+                    channel_message_id: a.message_id,
+                })),
+            },
+            UnifiedSearchIndex::Document(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::Documents,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: DocumentSearchConfig::TITLE_KEY,
+                                content_key: DocumentSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: Some(SearchGotoContent::Documents(SearchGotoDocument {
                     node_id: a.node_id,
                     raw_content: a.raw_content,
-                    owner_id: a.owner_id,
-                    file_type: a.file_type,
-                    updated_at: a.updated_at_seconds,
-                    score: index.score,
-                    highlight: index
-                        .highlight
-                        .map(|h| {
-                            parse_highlight_hit(
-                                h,
-                                Keys {
-                                    title_key: DocumentSearchConfig::TITLE_KEY,
-                                    content_key: DocumentSearchConfig::CONTENT_KEY,
-                                },
-                            )
-                        })
-                        .unwrap_or_default(),
-                })
-            }
-            UnifiedSearchIndex::Email(a) => {
-                UnifiedSearchResponse::Email(EmailSearchContentResponse {
-                    thread_id: a.entity_id,
-                    message_id: a.message_id,
-                    subject: a.subject,
-                    sender: a.sender,
-                    recipients: a.recipients,
-                    cc: a.cc,
-                    bcc: a.bcc,
-                    labels: a.labels,
-                    link_id: a.link_id,
-                    user_id: a.user_id,
-                    updated_at: a.updated_at_seconds,
-                    sent_at: a.sent_at_seconds,
-                    score: index.score,
-                    highlight: index
-                        .highlight
-                        .map(|h| {
-                            parse_highlight_hit(
-                                h,
-                                Keys {
-                                    title_key: EmailSearchConfig::TITLE_KEY,
-                                    content_key: EmailSearchConfig::CONTENT_KEY,
-                                },
-                            )
-                        })
-                        .unwrap_or_default(),
-                })
-            }
-            UnifiedSearchIndex::Project(a) => {
-                UnifiedSearchResponse::Project(ProjectSearchResponse {
-                    project_id: a.entity_id,
-                    user_id: a.user_id,
-                    project_name: a.project_name,
-                    created_at: a.created_at_seconds,
-                    updated_at: a.updated_at_seconds,
-                    score: index.score,
-                    highlight: index
-                        .highlight
-                        .map(|h| {
-                            parse_highlight_hit(
-                                h,
-                                Keys {
-                                    title_key: ProjectSearchConfig::TITLE_KEY,
-                                    content_key: ProjectSearchConfig::CONTENT_KEY,
-                                },
-                            )
-                        })
-                        .unwrap_or_default(),
-                })
-            }
-            UnifiedSearchIndex::Chat(a) => UnifiedSearchResponse::Chat(ChatSearchContentResponse {
-                chat_id: a.entity_id,
-                chat_message_id: a.chat_message_id,
-                user_id: a.user_id,
-                role: a.role,
-                title: a.title,
+                })),
+            },
+            UnifiedSearchIndex::Email(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::Emails,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: EmailSearchConfig::TITLE_KEY,
+                                content_key: EmailSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: Some(SearchGotoContent::Emails(SearchGotoEmail {
+                    email_message_id: a.message_id,
+                })),
+            },
+            UnifiedSearchIndex::Project(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::Projects,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: ProjectSearchConfig::TITLE_KEY,
+                                content_key: ProjectSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: None,
+            },
+            UnifiedSearchIndex::Chat(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::Chats,
                 score: index.score,
                 highlight: index
                     .highlight
@@ -393,13 +300,13 @@ impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
                         )
                     })
                     .unwrap_or_default(),
-                updated_at: a.updated_at_seconds,
-            }),
-            UnifiedSearchIndex::Name(a) => UnifiedSearchResponse::Name(NameSearchResponse {
+                goto: Some(SearchGotoContent::Chats(SearchGotoChat {
+                    chat_message_id: a.chat_message_id,
+                })),
+            },
+            UnifiedSearchIndex::Name(a) => SearchHit {
                 entity_id: a.entity_id,
                 entity_type: a.entity_type,
-                name: a.name,
-                user_id: a.user_id,
                 score: index.score,
                 highlight: index
                     .highlight
@@ -413,7 +320,8 @@ impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
                         )
                     })
                     .unwrap_or_default(),
-            }),
+                goto: None,
+            },
         }
     }
 }
@@ -576,7 +484,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
 pub(crate) async fn search_unified(
     client: &opensearch::OpenSearch,
     args: UnifiedSearchArgs,
-) -> Result<Vec<UnifiedSearchResponse>> {
+) -> Result<Vec<SearchHit>> {
     let search_request = build_unified_search_request(&args)?.to_json();
 
     let search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.as_ref()).collect();

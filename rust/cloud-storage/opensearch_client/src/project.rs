@@ -1,7 +1,7 @@
 use crate::{
     OpensearchClient, Result,
     delete::project::{delete_project_bulk_ids, delete_project_by_id, delete_projects_by_user_id},
-    search::projects::{ProjectSearchArgs, ProjectSearchResponse, search_projects},
+    search::{model::SearchHit, projects::{ProjectSearchArgs,search_projects}},
     upsert::project::{UpsertProjectArgs, upsert_project},
 };
 
@@ -29,7 +29,7 @@ impl OpensearchClient {
     pub async fn search_project(
         &self,
         args: ProjectSearchArgs,
-    ) -> Result<Vec<ProjectSearchResponse>> {
+    ) -> Result<Vec<SearchHit>> {
         search_projects(&self.inner, args).await
     }
 

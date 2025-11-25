@@ -4,7 +4,8 @@ use crate::{
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
         model::{
-            DefaultSearchResponse, Highlight, NameIndex, NameSearchResponse, parse_highlight_hit,
+            DefaultSearchResponse, NameIndex, SearchGotoChannel, SearchGotoContent, SearchHit,
+            parse_highlight_hit,
         },
         query::Keys,
     },
@@ -36,29 +37,6 @@ pub(crate) struct ChannelMessageIndex {
 pub(crate) enum ChannelMessageNameIndex {
     Name(NameIndex),
     ChannelMessage(ChannelMessageIndex),
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct ChannelMessageSearchContentResponse {
-    pub channel_id: String,
-    pub channel_type: String,
-    pub org_id: Option<i64>,
-    pub message_id: String,
-    pub thread_id: Option<String>,
-    pub sender_id: String,
-    pub mentions: Vec<String>,
-    pub created_at: i64,
-    pub updated_at: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub score: Option<f64>,
-    /// Contains the highlight matches for the channel name and content
-    pub highlight: Highlight,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub enum ChannelMessageSearchResponse {
-    ChannelMessage(ChannelMessageSearchContentResponse),
-    Name(NameSearchResponse),
 }
 
 #[derive(Default)]
@@ -217,7 +195,7 @@ impl ChannelMessageSearchArgs {
 pub(crate) async fn search_channel_messages(
     client: &opensearch::OpenSearch,
     args: ChannelMessageSearchArgs,
-) -> Result<Vec<ChannelMessageSearchResponse>> {
+) -> Result<Vec<SearchHit>> {
     let query_body = args.build()?;
 
     let response = client
@@ -262,33 +240,22 @@ pub(crate) async fn search_channel_messages(
                 .unwrap_or_default();
 
             match hit.source {
-                ChannelMessageNameIndex::Name(a) => {
-                    ChannelMessageSearchResponse::Name(NameSearchResponse {
-                        entity_id: a.entity_id,
-                        entity_type: a.entity_type,
-                        name: a.name,
-                        user_id: a.user_id,
-                        score: hit.score,
-                        highlight,
-                    })
-                }
-                ChannelMessageNameIndex::ChannelMessage(a) => {
-                    ChannelMessageSearchResponse::ChannelMessage(
-                        ChannelMessageSearchContentResponse {
-                            channel_id: a.entity_id,
-                            channel_type: a.channel_type,
-                            org_id: a.org_id,
-                            message_id: a.message_id,
-                            thread_id: a.thread_id,
-                            sender_id: a.sender_id,
-                            mentions: a.mentions,
-                            created_at: a.created_at_seconds,
-                            updated_at: a.updated_at_seconds,
-                            score: hit.score,
-                            highlight,
-                        },
-                    )
-                }
+                ChannelMessageNameIndex::Name(a) => SearchHit {
+                    entity_id: a.entity_id,
+                    entity_type: a.entity_type,
+                    score: hit.score,
+                    highlight,
+                    goto: None,
+                },
+                ChannelMessageNameIndex::ChannelMessage(a) => SearchHit {
+                    entity_id: a.entity_id,
+                    entity_type: SearchEntityType::Channels,
+                    score: hit.score,
+                    highlight,
+                    goto: Some(SearchGotoContent::Channels(SearchGotoChannel {
+                        channel_message_id: a.message_id,
+                    })),
+                },
             }
         })
         .collect())

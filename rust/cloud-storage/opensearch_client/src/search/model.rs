@@ -104,12 +104,53 @@ pub struct NameIndex {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct NameSearchResponse {
+pub struct SearchGotoDocument {
+    /// The node id of the document
+    pub node_id: String,
+    /// The raw content of the document
+    pub raw_content: Option<String>,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct SearchGotoChat {
+    /// The chat message id
+    pub chat_message_id: String,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct SearchGotoEmail {
+    /// The email message id
+    pub email_message_id: String,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct SearchGotoChannel {
+    /// The channel message id
+    pub channel_message_id: String,
+}
+
+/// Enum containing structs for all data needed to handle search "goto" in the frontend
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+#[serde(untagged)]
+pub enum SearchGotoContent {
+    Documents(SearchGotoDocument),
+    Chats(SearchGotoChat),
+    Emails(SearchGotoEmail),
+    Channels(SearchGotoChannel),
+    // there is no goto needed for projects
+}
+
+/// This struct represents a single search hit for a given entity
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct SearchHit {
+    /// The id of the entity
     pub entity_id: String,
+    /// The entity type
     pub entity_type: SearchEntityType,
-    pub name: String,
-    pub user_id: String,
+    /// The name of the entity
     pub score: Option<f64>,
-    /// Contains the highlight matches for the name
+    /// The highlight of the match
     pub highlight: Highlight,
+    /// The goto content for the entity
+    pub goto: Option<SearchGotoContent>,
 }

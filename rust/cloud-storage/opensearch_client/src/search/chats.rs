@@ -3,9 +3,7 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{
-            DefaultSearchResponse, Highlight, NameIndex, NameSearchResponse, parse_highlight_hit,
-        },
+        model::{DefaultSearchResponse, NameIndex, SearchGotoChat, SearchGotoContent, SearchHit, parse_highlight_hit},
         query::Keys,
         utils::should_wildcard_field_query_builder,
     },
@@ -34,24 +32,6 @@ pub(crate) struct ChatIndex {
 pub(crate) enum ChatNameIndex {
     Name(NameIndex),
     Chat(ChatIndex),
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct ChatSearchContentResponse {
-    pub chat_id: String,
-    pub chat_message_id: String,
-    pub user_id: String,
-    pub role: String,
-    pub updated_at: i64,
-    pub title: String,
-    pub score: Option<f64>,
-    pub highlight: Highlight,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub enum ChatSearchResponse {
-    Chat(ChatSearchContentResponse),
-    Name(NameSearchResponse),
 }
 
 pub(crate) struct ChatSearchConfig;
@@ -182,7 +162,7 @@ impl ChatSearchArgs {
 pub(crate) async fn search_chats(
     client: &opensearch::OpenSearch,
     args: ChatSearchArgs,
-) -> Result<Vec<ChatSearchResponse>> {
+) -> Result<Vec<SearchHit>> {
     let query_body = args.build()?;
 
     let response = client
@@ -229,24 +209,22 @@ pub(crate) async fn search_chats(
                 .unwrap_or_default();
 
             match hit.source {
-                ChatNameIndex::Name(a) => ChatSearchResponse::Name(NameSearchResponse {
+                ChatNameIndex::Name(a) => SearchHit {
                     entity_id: a.entity_id,
                     entity_type: a.entity_type,
-                    name: a.name,
-                    user_id: a.user_id,
                     score: hit.score,
                     highlight,
-                }),
-                ChatNameIndex::Chat(a) => ChatSearchResponse::Chat(ChatSearchContentResponse {
-                    chat_id: a.entity_id,
-                    chat_message_id: a.chat_message_id,
-                    user_id: a.user_id,
-                    role: a.role,
-                    title: a.title,
+                    goto: None,
+                },
+                ChatNameIndex::Chat(a) => SearchHit {
+                    entity_id: a.entity_id,
+                    entity_type: SearchEntityType::Chats,
                     score: hit.score,
-                    updated_at: a.updated_at_seconds,
                     highlight,
-                }),
+                    goto: Some(SearchGotoContent::Chats(SearchGotoChat {
+                        chat_message_id: a.chat_message_id,
+                    })),
+                },
             }
         })
         .collect())

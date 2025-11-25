@@ -3,9 +3,7 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{
-            DefaultSearchResponse, Highlight, NameIndex, NameSearchResponse, parse_highlight_hit,
-        },
+        model::{DefaultSearchResponse, NameIndex, SearchGotoContent, SearchGotoDocument, SearchHit, parse_highlight_hit},
         query::Keys,
     },
 };
@@ -94,29 +92,6 @@ pub(crate) enum DocumentNameIndex {
     Document(DocumentIndex),
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct DocumentSearchContentResponse {
-    pub document_id: String,
-    pub document_name: String,
-    pub node_id: String,
-    pub owner_id: String,
-    pub file_type: String,
-    pub updated_at: i64,
-    /// Contains the highlight matches for the document name and content
-    pub highlight: Highlight,
-    pub raw_content: Option<String>,
-    pub score: Option<f64>,
-}
-
-#[derive(Debug, serde::Serialize, serde::Deserialize)]
-#[serde(untagged)]
-pub enum DocumentSearchResponse {
-    /// Document content match
-    Document(DocumentSearchContentResponse),
-    /// The name match
-    Name(NameSearchResponse),
-}
-
 #[derive(Debug)]
 pub struct DocumentSearchArgs {
     pub terms: Vec<String>,
@@ -157,7 +132,7 @@ impl DocumentSearchArgs {
 pub(crate) async fn search_documents(
     client: &opensearch::OpenSearch,
     args: DocumentSearchArgs,
-) -> Result<Vec<DocumentSearchResponse>> {
+) -> Result<Vec<SearchHit>> {
     let query_body = args.build()?;
 
     tracing::trace!("query: {}", query_body);
@@ -206,27 +181,23 @@ pub(crate) async fn search_documents(
                 .unwrap_or_default();
 
             match hit.source {
-                DocumentNameIndex::Name(a) => DocumentSearchResponse::Name(NameSearchResponse {
+                DocumentNameIndex::Name(a) => SearchHit {
                     entity_id: a.entity_id,
                     entity_type: a.entity_type,
-                    name: a.name,
-                    user_id: a.user_id,
                     score: hit.score,
                     highlight,
-                }),
-                DocumentNameIndex::Document(a) => {
-                    DocumentSearchResponse::Document(DocumentSearchContentResponse {
-                        document_id: a.entity_id,
+                    goto: None,
+                },
+                DocumentNameIndex::Document(a) => SearchHit {
+                    entity_id: a.entity_id,
+                    entity_type: SearchEntityType::Documents,
+                    score: hit.score,
+                    highlight,
+                    goto: Some(SearchGotoContent::Documents(SearchGotoDocument {
                         node_id: a.node_id,
-                        document_name: a.document_name,
-                        owner_id: a.owner_id,
-                        file_type: a.file_type,
-                        updated_at: a.updated_at_seconds,
                         raw_content: a.raw_content,
-                        score: hit.score,
-                        highlight,
-                    })
-                }
+                    })),
+                },
             }
         })
         .collect())

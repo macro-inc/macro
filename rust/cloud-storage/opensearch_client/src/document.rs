@@ -1,9 +1,6 @@
 use crate::{
     OpensearchClient, Result, delete,
-    search::{
-        self,
-        documents::{DocumentSearchResponse, search_documents},
-    },
+    search::{self, documents::search_documents, model::SearchHit},
     upsert::{self, document::UpsertDocumentArgs},
 };
 
@@ -28,7 +25,7 @@ impl OpensearchClient {
     pub async fn search_documents(
         &self,
         args: search::documents::DocumentSearchArgs,
-    ) -> Result<Vec<DocumentSearchResponse>> {
+    ) -> Result<Vec<SearchHit>> {
         search_documents(&self.inner, args).await
     }
 

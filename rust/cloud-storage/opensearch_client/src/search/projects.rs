@@ -3,7 +3,7 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{Highlight, MacroEm, SearchResponse, parse_highlight_hit},
+        model::{MacroEm, SearchHit, SearchResponse, parse_highlight_hit},
         query::Keys,
     },
 };
@@ -126,22 +126,11 @@ impl ProjectSearchArgs {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ProjectSearchResponse {
-    pub project_id: String,
-    pub user_id: String,
-    pub project_name: String,
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub score: Option<f64>,
-    pub highlight: Highlight,
-}
-
 #[tracing::instrument(skip(client, args), err)]
 pub(crate) async fn search_projects(
     client: &opensearch::OpenSearch,
     args: ProjectSearchArgs,
-) -> Result<Vec<ProjectSearchResponse>> {
+) -> Result<Vec<SearchHit>> {
     let query_body = args.build()?;
 
     let response = client
@@ -172,12 +161,9 @@ pub(crate) async fn search_projects(
         .hits
         .hits
         .into_iter()
-        .map(|hit| ProjectSearchResponse {
-            project_id: hit.source.entity_id,
-            user_id: hit.source.user_id,
-            project_name: hit.source.project_name,
-            created_at: hit.source.created_at_seconds,
-            updated_at: hit.source.updated_at_seconds,
+        .map(|hit| SearchHit {
+            entity_id: hit.source.entity_id,
+            entity_type: SearchEntityType::Projects,
             score: hit.score,
             highlight: hit
                 .highlight
@@ -191,6 +177,7 @@ pub(crate) async fn search_projects(
                     )
                 })
                 .unwrap_or_default(),
+            goto: None,
         })
         .collect())
 }
