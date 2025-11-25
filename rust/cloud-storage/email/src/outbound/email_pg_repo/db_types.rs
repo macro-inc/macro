@@ -1,7 +1,11 @@
-use crate::domain::models::{Attachment, AttachmentMacro, EmailThreadPreview};
+use crate::domain::models::{
+    Attachment, AttachmentMacro, EmailThreadPreview, Label, LabelListVisibility, LabelType,
+    MessageListVisibility,
+};
 use chrono::{DateTime, Utc};
 use doppleganger::Doppleganger;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use sqlx::FromRow;
 use uuid::Uuid;
 
 #[derive(Doppleganger)]
@@ -55,6 +59,53 @@ pub struct ThreadPreviewCursorDbRow {
     pub viewed_at: Option<DateTime<Utc>>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+}
+
+#[derive(Debug, sqlx::Type, Clone, Copy, PartialEq, Eq, Doppleganger)]
+#[dg(forward = MessageListVisibility)]
+#[sqlx(
+    type_name = "email_message_list_visibility_enum",
+    rename_all = "PascalCase"
+)]
+pub enum MessageListVisibilityDbRow {
+    Show,
+    Hide,
+}
+
+#[derive(Debug, sqlx::Type, Clone, Copy, PartialEq, Eq, Doppleganger)]
+#[dg(forward = LabelListVisibility)]
+#[sqlx(
+    type_name = "email_label_list_visibility_enum",
+    rename_all = "PascalCase"
+)]
+pub enum LabelListVisibilityDbRow {
+    LabelShow,
+    LabelShowIfUnread,
+    LabelHide,
+}
+
+#[derive(Debug, sqlx::Type, Clone, Copy, PartialEq, Eq, Doppleganger)]
+#[dg(forward = LabelType)]
+#[sqlx(type_name = "email_label_type_enum", rename_all = "PascalCase")]
+pub enum LabelTypeDbRow {
+    System,
+    User,
+}
+
+#[derive(Doppleganger)]
+#[dg(forward = Label)]
+#[derive(FromRow, Debug, Clone)]
+pub struct LabelDbRow {
+    pub id: Uuid,
+    pub thread_id: Uuid,
+    pub link_id: Uuid,
+    pub provider_label_id: String,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+    pub message_list_visibility: MessageListVisibilityDbRow,
+    pub label_list_visibility: LabelListVisibilityDbRow,
+    #[sqlx(rename = "type")]
+    pub type_: LabelTypeDbRow,
 }
 
 impl ThreadPreviewCursorDbRow {

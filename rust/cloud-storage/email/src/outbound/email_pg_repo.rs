@@ -1,3 +1,4 @@
+use crate::domain::models::Label;
 use crate::domain::{
     models::{
         Attachment, AttachmentMacro, Contact, EmailThreadPreview, PreviewCursorQuery, PreviewView,
@@ -191,6 +192,37 @@ impl EmailRepo for EmailPgRepo {
         .await?
         .into_iter()
         .map(ThreadContactResult::mirror)
+        .collect())
+    }
+
+    async fn labels_by_thread_ids(&self, thread_ids: &[Uuid]) -> Result<Vec<Label>, Self::Err> {
+        // Query all labels for email_messages in the provided threads
+        // Include thread_id in the result set
+        Ok(sqlx::query_as!(
+            LabelDbRow,
+            r#"
+        SELECT DISTINCT ON (l.id, m.thread_id)
+            l.id,
+            m.thread_id as "thread_id!",
+            l.link_id,
+            l.provider_label_id,
+            l.name,
+            l.created_at,
+            l.message_list_visibility as "message_list_visibility: _",
+            l.label_list_visibility as "label_list_visibility: _",
+            l.type as "type_: _"
+        FROM
+             email_messages m
+        JOIN email_message_labels ml ON m.id = ml.message_id
+        JOIN email_labels l ON ml.label_id = l.id
+        WHERE m.thread_id = ANY($1)
+        "#,
+            thread_ids
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(LabelDbRow::mirror)
         .collect())
     }
 }

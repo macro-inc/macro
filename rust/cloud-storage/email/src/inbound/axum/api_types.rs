@@ -7,7 +7,8 @@ use utoipa::ToSchema;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    Attachment, AttachmentMacro, Contact, EmailThreadPreview, EnrichedEmailThreadPreview,
+    Attachment, AttachmentMacro, Contact, EmailThreadPreview, EnrichedEmailThreadPreview, Label,
+    LabelListVisibility, LabelType, MessageListVisibility,
 };
 
 /// common types of sorts based on timestamps
@@ -47,6 +48,7 @@ struct ApiThreadPreviewCursor {
     macro_attachments: Vec<ApiAttachmentMacro>,
     #[dg(rename = "participants")]
     contacts: Vec<ApiContact>,
+    labels: Vec<ApiLabel>,
     frecency_score: Option<f64>,
 }
 
@@ -130,6 +132,46 @@ pub struct ApiContact {
     name: Option<String>,
     email_address: Option<String>,
     sfs_photo_url: Option<String>,
+}
+
+#[derive(Debug, ToSchema, Serialize, Deserialize, Doppleganger)]
+#[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
+#[serde(rename_all = "camelCase")]
+#[dg(backward = Label)]
+pub struct ApiLabel {
+    id: Uuid,
+    link_id: Uuid,
+    provider_label_id: String,
+    name: String,
+    created_at: DateTime<Utc>,
+    message_list_visibility: ApiMessageListVisibility,
+    label_list_visibility: ApiLabelListVisibility,
+    type_: ApiLabelType,
+}
+
+#[derive(Debug, ToSchema, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Doppleganger)]
+#[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
+#[dg(backward = MessageListVisibility)]
+pub enum ApiMessageListVisibility {
+    Show,
+    Hide,
+}
+
+#[derive(Debug, ToSchema, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Doppleganger)]
+#[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
+#[dg(backward = LabelListVisibility)]
+pub enum ApiLabelListVisibility {
+    LabelShow,
+    LabelShowIfUnread,
+    LabelHide,
+}
+
+#[derive(Debug, ToSchema, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Doppleganger)]
+#[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
+#[dg(backward = LabelType)]
+pub enum ApiLabelType {
+    System,
+    User,
 }
 
 #[derive(Debug, ToSchema, Serialize, Deserialize)]
