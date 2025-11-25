@@ -334,10 +334,13 @@ export function Dock() {
                 onClick={() => {
                   const manager = globalSplitManager();
                   if (manager) {
-                    manager.createNewSplit({
-                      id: 'unified-list',
-                      type: 'component',
-                    });
+                    const canFit = manager.resizeContext()?.canFit({ minSize: 400 }) ?? true;
+                    if (canFit) {
+                      manager.createNewSplit({
+                        id: 'unified-list',
+                        type: 'component',
+                      });
+                    }
                   }
                 }}
                 icon={SplitIcon}
