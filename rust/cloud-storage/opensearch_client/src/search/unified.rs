@@ -14,12 +14,14 @@ use crate::{
         },
         documents::{
             DocumentIndex, DocumentQueryBuilder, DocumentSearchArgs, DocumentSearchConfig,
-            DocumentSearchResponse,
+            DocumentSearchContentResponse,
         },
         emails::{
             EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig, EmailSearchResponse,
         },
-        model::{DefaultSearchResponse, Hit, MacroEm, parse_highlight_hit},
+        model::{
+            DefaultSearchResponse, Hit, MacroEm, NameIndex, NameSearchResponse, parse_highlight_hit,
+        },
         projects::{
             ProjectIndex, ProjectQueryBuilder, ProjectSearchArgs, ProjectSearchConfig,
             ProjectSearchResponse,
@@ -29,7 +31,7 @@ use crate::{
 };
 
 use crate::SearchOn;
-use models_opensearch::{SearchEntityType, SearchIndex};
+use models_opensearch::SearchEntityType;
 use opensearch_query_builder::*;
 
 #[derive(Debug, Default, Clone)]
@@ -196,13 +198,15 @@ pub(crate) enum UnifiedSearchIndex {
     Chat(ChatIndex),
     Email(EmailIndex),
     Project(ProjectIndex),
+    Name(NameIndex),
 }
 
 #[derive(Debug)]
 pub enum UnifiedSearchResponse {
     ChannelMessage(ChannelMessageSearchResponse),
     Chat(ChatSearchResponse),
-    Document(DocumentSearchResponse),
+    Document(DocumentSearchContentResponse),
+    Name(NameSearchResponse),
     Email(EmailSearchResponse),
     Project(ProjectSearchResponse),
 }
@@ -210,9 +214,10 @@ pub enum UnifiedSearchResponse {
 pub struct SplitUnifiedSearchResponseValues {
     pub channel_message: Vec<ChannelMessageSearchResponse>,
     pub chat: Vec<ChatSearchResponse>,
-    pub document: Vec<DocumentSearchResponse>,
+    pub document: Vec<DocumentSearchContentResponse>,
     pub email: Vec<EmailSearchResponse>,
     pub project: Vec<ProjectSearchResponse>,
+    pub name: Vec<NameSearchResponse>,
 }
 
 pub trait SplitUnifiedSearchResponse: Iterator<Item = UnifiedSearchResponse> {
@@ -224,9 +229,10 @@ where
     T: Iterator<Item = UnifiedSearchResponse>,
 {
     fn split_search_response(self) -> SplitUnifiedSearchResponseValues {
-        let (channel_message, chat, document, email, project) = self.into_iter().fold(
-            (vec![], vec![], vec![], vec![], vec![]),
-            |(mut channel_message, mut chat, mut document, mut email, mut project), item| {
+        let (channel_message, chat, document, email, project, name) = self.into_iter().fold(
+            (vec![], vec![], vec![], vec![], vec![], vec![]),
+            |(mut channel_message, mut chat, mut document, mut email, mut project, mut name),
+             item| {
                 match item {
                     UnifiedSearchResponse::ChannelMessage(a) => {
                         channel_message.push(a);
@@ -243,8 +249,11 @@ where
                     UnifiedSearchResponse::Project(a) => {
                         project.push(a);
                     }
+                    UnifiedSearchResponse::Name(a) => {
+                        name.push(a);
+                    }
                 }
-                (channel_message, chat, document, email, project)
+                (channel_message, chat, document, email, project, name)
             },
         );
 
@@ -254,6 +263,7 @@ where
             document,
             email,
             project,
+            name,
         }
     }
 }
@@ -288,7 +298,7 @@ impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
                 })
             }
             UnifiedSearchIndex::Document(a) => {
-                UnifiedSearchResponse::Document(DocumentSearchResponse {
+                UnifiedSearchResponse::Document(DocumentSearchContentResponse {
                     document_id: a.entity_id,
                     document_name: a.document_name,
                     node_id: a.node_id,
@@ -380,6 +390,25 @@ impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
                     })
                     .unwrap_or_default(),
                 updated_at: a.updated_at_seconds,
+            }),
+            UnifiedSearchIndex::Name(a) => UnifiedSearchResponse::Name(NameSearchResponse {
+                entity_id: a.entity_id,
+                entity_type: a.entity_type,
+                name: a.name,
+                user_id: a.user_id,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: "name",
+                                content_key: "",
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
             }),
         }
     }

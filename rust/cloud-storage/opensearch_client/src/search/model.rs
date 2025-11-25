@@ -1,5 +1,7 @@
 use std::{collections::HashMap, fmt::Display};
 
+use models_opensearch::SearchEntityType;
+
 use crate::search::query::Keys;
 
 /// macro open/close tags for highlight matches
@@ -87,4 +89,27 @@ pub(crate) struct SearchResponse<T> {
     pub took: i32,
     pub timed_out: bool,
     pub _shards: Shards,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub struct NameIndex {
+    /// The entity id
+    pub entity_id: String,
+    /// The entity type
+    pub entity_type: SearchEntityType,
+    /// The name of the entity
+    pub name: String,
+    /// The creator of the entity
+    pub user_id: String,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub struct NameSearchResponse {
+    pub entity_id: String,
+    pub entity_type: SearchEntityType,
+    pub name: String,
+    pub user_id: String,
+    pub score: Option<f64>,
+    /// Contains the highlight matches for the name
+    pub highlight: Highlight,
 }

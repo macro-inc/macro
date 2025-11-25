@@ -196,58 +196,5 @@ pub(crate) fn generate_terms_must_query<'a>(
     terms_must_query.build().into()
 }
 
-/// Generates the term queries SearchOn::NameContent
-pub(crate) fn generate_name_content_query(keys: &Keys, terms: &[String]) -> QueryType<'static> {
-    let mut terms_must_query = BoolQueryBuilder::new();
-
-    terms_must_query.minimum_should_match(1);
-
-    let queries: Vec<QueryType> = terms
-        .iter()
-        .map(|term| {
-            // base bool query
-            let mut bool_query = BoolQueryBuilder::new();
-            bool_query.minimum_should_match(1);
-
-            bool_query.should(QueryType::MatchPhrasePrefix(
-                MatchPhrasePrefixQuery::new(keys.title_key.to_string(), term.clone()).boost(1000.0),
-            ));
-
-            bool_query.should(QueryType::MatchPhrasePrefix(
-                MatchPhrasePrefixQuery::new(keys.content_key.to_string(), term.clone())
-                    .boost(900.0),
-            ));
-
-            bool_query.should(QueryType::Match(
-                MatchQuery::new(keys.title_key.to_string(), term.clone())
-                    .boost(0.1)
-                    .minimum_should_match("80%"), // TODO: we may need to play around with this to get the best highlight match
-            ));
-
-            bool_query.should(QueryType::Match(
-                MatchQuery::new(keys.content_key.to_string(), term.clone())
-                    .boost(0.09)
-                    .minimum_should_match(term.split(' ').count().to_string()), // TODO: we may need to play around with this to get the best highlight match
-            ));
-
-            bool_query.build().into()
-        })
-        .collect();
-
-    // If we only have 1 query created, we can just return that singular query to be added to the
-    // main bool must query
-    if queries.len() == 1 {
-        return queries[0].clone();
-    }
-
-    // Otherwise, we need to add all the queries to a new bool should in order to properly search
-    // over multiple terms
-    for query in queries {
-        terms_must_query.should(query);
-    }
-
-    terms_must_query.build().into()
-}
-
 #[cfg(test)]
 mod test;

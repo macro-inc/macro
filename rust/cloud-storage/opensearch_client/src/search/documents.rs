@@ -3,7 +3,9 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{DefaultSearchResponse, Highlight, parse_highlight_hit},
+        model::{
+            DefaultSearchResponse, Highlight, NameIndex, NameSearchResponse, parse_highlight_hit,
+        },
         query::Keys,
     },
 };
@@ -86,8 +88,14 @@ pub(crate) struct DocumentIndex {
     pub updated_at_seconds: i64,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) enum DocumentNameIndex {
+    Name(NameIndex),
+    Document(DocumentIndex),
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct DocumentSearchResponse {
+pub struct DocumentSearchContentResponse {
     pub document_id: String,
     pub document_name: String,
     pub node_id: String,
@@ -98,6 +106,15 @@ pub struct DocumentSearchResponse {
     pub highlight: Highlight,
     pub raw_content: Option<String>,
     pub score: Option<f64>,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+pub enum DocumentSearchResponse {
+    /// Document content match
+    Document(DocumentSearchContentResponse),
+    /// The name match
+    Name(NameSearchResponse),
 }
 
 #[derive(Debug)]
@@ -162,7 +179,7 @@ pub(crate) async fn search_documents(
             details: e.to_string(),
         })?;
 
-    let result: DefaultSearchResponse<DocumentIndex> =
+    let result: DefaultSearchResponse<DocumentNameIndex> =
         serde_json::from_slice(&bytes).map_err(|e| {
             OpensearchClientError::SearchDeserializationFailed {
                 details: e.to_string(),
@@ -174,16 +191,8 @@ pub(crate) async fn search_documents(
         .hits
         .hits
         .into_iter()
-        .map(|hit| DocumentSearchResponse {
-            document_id: hit.source.entity_id,
-            node_id: hit.source.node_id,
-            document_name: hit.source.document_name,
-            owner_id: hit.source.owner_id,
-            file_type: hit.source.file_type,
-            updated_at: hit.source.updated_at_seconds,
-            raw_content: hit.source.raw_content,
-            score: hit.score,
-            highlight: hit
+        .map(|hit| {
+            let highlight = hit
                 .highlight
                 .map(|h| {
                     parse_highlight_hit(
@@ -194,7 +203,31 @@ pub(crate) async fn search_documents(
                         },
                     )
                 })
-                .unwrap_or_default(),
+                .unwrap_or_default();
+
+            match hit.source {
+                DocumentNameIndex::Name(a) => DocumentSearchResponse::Name(NameSearchResponse {
+                    entity_id: a.entity_id,
+                    entity_type: a.entity_type,
+                    name: a.name,
+                    user_id: a.user_id,
+                    score: hit.score,
+                    highlight,
+                }),
+                DocumentNameIndex::Document(a) => {
+                    DocumentSearchResponse::Document(DocumentSearchContentResponse {
+                        document_id: a.entity_id,
+                        node_id: a.node_id,
+                        document_name: a.document_name,
+                        owner_id: a.owner_id,
+                        file_type: a.file_type,
+                        updated_at: a.updated_at_seconds,
+                        raw_content: a.raw_content,
+                        score: hit.score,
+                        highlight,
+                    })
+                }
+            }
         })
         .collect())
 }

@@ -26,8 +26,13 @@ async fn main() -> anyhow::Result<()> {
         .await?;
 
     for document in result {
-        println!("{:?}", document.document_id);
-        println!("{:?}", document.highlight);
+        match document {
+            opensearch_client::search::documents::DocumentSearchResponse::Document(document) => {
+                println!("{:?}", document);
+                println!("{:?}", document.highlight);
+            }
+            _ => {}
+        }
     }
 
     Ok(())
