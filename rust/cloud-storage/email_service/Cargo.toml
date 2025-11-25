@@ -71,6 +71,7 @@ model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
 models_email = { path = "../models_email" }
 models_pagination = { path = "../models_pagination", features = ["axum"] }
+models_permissions = { path = "../models_permissions" }
 redis = { workspace = true, features = [
   "cluster-async",
   "tokio-native-tls-comp",
