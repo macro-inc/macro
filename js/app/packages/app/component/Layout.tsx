@@ -30,8 +30,8 @@ const AUTH_URLS = [
   '/app/login/popup/success',
   '/app/onboarding',
   '/app/signup',
-  '/app/email-signup-callback'
-]
+  '/app/email-signup-callback',
+];
 
 export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
@@ -124,12 +124,7 @@ export function Layout(props: RouteSectionProps) {
         <QuickCreateMenu />
         <GlobalBulkEditEntityModal />
       </Show>
-      <Show
-        when={
-          !isAuthenticated() &&
-          !AUTH_URLS.includes(location.pathname)
-        }
-      >
+      <Show when={!isAuthenticated() && !AUTH_URLS.includes(location.pathname)}>
         <Banner />
       </Show>
       {/* <Show when={isAuthenticated() && isTutorialCompleted() === false}>

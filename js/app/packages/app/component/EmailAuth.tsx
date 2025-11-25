@@ -1,11 +1,12 @@
 import { updateUserAuth } from '@core/auth';
 import { redirectToEmailAuth } from '@core/auth/email';
+import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
 import { useEmailLinks } from '@core/email-link';
 import { whenSettled } from '@core/util/whenSettled';
 import { updateUserInfo } from '@service-gql/client';
 import { useNavigate } from '@solidjs/router';
-import { onMount } from 'solid-js';
+import { onMount, Suspense } from 'solid-js';
 
 type EmailAuthParams = {
   callbackPath: string;
@@ -14,12 +15,18 @@ type EmailAuthParams = {
 
 export function makeEmailAuthComponents(params: EmailAuthParams) {
   return {
-    EmailCallback: () => <EmailCallback successPath={params.successPath} />,
+    EmailCallback: () => (
+      <Suspense>
+        <EmailCallback successPath={params.successPath} />
+      </Suspense>
+    ),
     EmailSignUp: () => (
-      <EmailSignUp
-        callbackPath={params.callbackPath}
-        successPath={params.successPath}
-      />
+      <Suspense>
+        <EmailSignUp
+          callbackPath={params.callbackPath}
+          successPath={params.successPath}
+        />
+      </Suspense>
     ),
     CALLBACK_PATH: params.callbackPath,
   };
@@ -29,21 +36,21 @@ function EmailCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   const navigate = useNavigate();
   const { query, maybeSync } = useEmailLinks();
 
+  const onSuccessfulAuth = async () => {
+    await updateUserAuth();
+    await updateUserInfo();
+    const channel = new BroadcastChannel('auth');
+    channel.postMessage({ type: 'login-success' });
+  };
+
   whenSettled(
     query,
     async (links) => {
       let result = maybeSync(links);
       if (result) {
-        toast.success('Syncing email links...', 'this might take a while');
+        toast.success('Syncing emails', 'this might take a while');
       }
-
-      await updateUserAuth();
-      await updateUserInfo();
-
-      const channel = new BroadcastChannel('auth');
-
-      channel.postMessage({ type: 'login-success' });
-
+      onSuccessfulAuth();
       navigate(props.successPath, {
         replace: true,
       });
@@ -53,12 +60,14 @@ function EmailCallback(props: Pick<EmailAuthParams, 'successPath'>) {
     }
   );
 
-  return null;
+  return <LoadingBlock />;
 }
 
 function EmailSignUp(props: EmailAuthParams) {
   const navigate = useNavigate();
   const { query: emailLinks } = useEmailLinks();
+
+  const withAppPrefix = (path: string) => `/app${path}`;
 
   onMount(() => {
     if (emailLinks.data && emailLinks.data?.length > 0) {
@@ -66,9 +75,8 @@ function EmailSignUp(props: EmailAuthParams) {
       return;
     }
     redirectToEmailAuth({
-      returnPath: props.callbackPath,
+      returnPath: withAppPrefix(props.callbackPath),
     });
   });
-
-  return null;
+  return <LoadingBlock />;
 }

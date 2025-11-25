@@ -22,10 +22,7 @@ import {
   ENABLE_PROPERTY_DISPLAY_CONTROL,
   ENABLE_SOUP_FROM_FILTER,
 } from '@core/constant/featureFlags';
-import {
-  emailRefetchInterval,
-  useEmailLinksStatus,
-} from '@core/email-link';
+import { emailRefetchInterval, useEmailLinksStatus } from '@core/email-link';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';

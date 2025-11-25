@@ -39,6 +39,7 @@ import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { IS_MAC } from '@core/constant/isMac';
+import { useEmailLinksStatus } from '@core/email-link';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -89,7 +90,6 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
-import { useEmailLinksStatus } from '@core/email-link';
 import { useSplitLayout } from './split-layout/layout';
 
 type CreateType = 'note' | 'email' | 'message';

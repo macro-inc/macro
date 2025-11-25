@@ -33,6 +33,7 @@ export function useEmailLinksQuery() {
     queryKey: EMAIL_LINKS_QUERY_KEY,
     queryFn: fetchEmailLinks,
     suspense: false,
+    refetchOnMount: 'always',
   }));
 }
 
@@ -42,7 +43,7 @@ export function useEmailLinksStatus() {
     if (!links.data || links.error) {
       return false;
     }
-    return links.isSuccess && links.data?.length > 0;
+    return links.data?.length > 0;
   };
 }
 
@@ -189,7 +190,7 @@ function connectEmail(): ResultAsync<void, TimeoutError> {
  */
 export function useEmailLinks() {
   const invalidations = async () => {
-    invalidateEmailLinks();
+    // invalidateEmailLinks();
     await updateUserAuth();
     await updateUserInfo();
   };
