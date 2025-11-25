@@ -39,7 +39,7 @@ import {
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
-import { CustomScrollbar } from '../../../macro-entity/src/components/CustomScrollbar';
+import { CustomScrollbar } from '@macro-entity';
 import { MessageContainer } from '../Message/MessageContainer';
 import { ReplyInputsPortaler } from '../ReplyInputsPortaler';
 

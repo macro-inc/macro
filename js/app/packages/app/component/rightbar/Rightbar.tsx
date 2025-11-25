@@ -5,6 +5,7 @@ import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { useChatInput } from '@core/component/AI/component/input/useChatInput';
 import { ChatMessages } from '@core/component/AI/component/message/ChatMessages';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
+import { CustomScrollbar } from '@macro-entity';
 import type {
   Attachment,
   ChatMessageWithAttachments,
@@ -398,19 +399,22 @@ export function Rightbar(props: {
             </div>
           </Show>
           <Show when={props.messages().length > 0 || !props.isBig}>
-            <div
-              data-chat-scroll
-              class="flex-1 overflow-y-auto overflow-x-hidden scroll-smooth flex justify-center w-full"
-              ref={messagesContainerRef}
-            >
-              <div class="w-full macro-message-width">
-                <ChatMessages
-                  chatId={props.chatId}
-                  messages={[props.messages, props.setState.setMessages]}
-                  messageActions={undefined}
-                  stream={[props.stream, props.setState.setStream]}
-                />
+            <div class="relative flex-1 min-h-0 w-full">
+              <div
+                data-chat-scroll
+                class="absolute inset-0 overflow-y-auto overflow-x-hidden scroll-smooth flex justify-center scrollbar-hidden"
+                ref={messagesContainerRef}
+              >
+                <div class="w-full macro-message-width">
+                  <ChatMessages
+                    chatId={props.chatId}
+                    messages={[props.messages, props.setState.setMessages]}
+                    messageActions={undefined}
+                    stream={[props.stream, props.setState.setStream]}
+                  />
+                </div>
               </div>
+              <CustomScrollbar scrollContainer={() => messagesContainerRef} />
             </div>
           </Show>
 

@@ -7,6 +7,7 @@ import { useBuildChatSendRequest } from '@core/component/AI/component/input/buil
 import { useChatInput } from '@core/component/AI/component/input/useChatInput';
 import { useChatMessages } from '@core/component/AI/component/message';
 import { registerToolHandler } from '@core/component/AI/signal/tool';
+import { CustomScrollbar } from '@macro-entity';
 import type {
   CreateAndSend,
   MessageStream,
@@ -173,18 +174,25 @@ export function Chat(props: { data: ChatData }) {
     hasRun = true;
   });
 
+  let scrollContainerRef!: HTMLDivElement;
+
   return (
     <DragDropWrapper
       class="size-full bg-panel overscroll-none overflow-hidden flex flex-col"
       uploadQueue={uploadQueue}
     >
       <TopBar />
-      <div class="size-full flex-1 min-h-0 p-2">
-        <div data-chat-scroll class="h-full min-h-0 overflow-auto">
+      <div class="relative flex-1 min-h-0 p-2">
+        <div
+          data-chat-scroll
+          class="absolute inset-0 overflow-auto scrollbar-hidden"
+          ref={scrollContainerRef}
+        >
           <div class="mx-auto w-full max-w-3xl">
             <ChatMessages />
           </div>
         </div>
+        <CustomScrollbar scrollContainer={() => scrollContainerRef} />
       </div>
       <Show when={!disabled()}>
         <div class="flex w-full justify-center pb-2 px-4">
