@@ -1,10 +1,11 @@
 use crate::domain::models::{
-    Attachment, AttachmentMacro, EmailThreadPreview, Label, LabelListVisibility, LabelType,
+    Attachment, AttachmentMacro, EmailThreadPreview, Label, LabelListVisibility, LabelType, Link,
     MessageListVisibility,
 };
 use chrono::{DateTime, Utc};
-use doppleganger::Doppleganger;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use doppleganger::{Doppleganger, Mirror};
+use macro_user_id::{cowlike::CowLike, email::EmailStr, user_id::MacroUserIdStr};
+use sqlx::Type;
 use uuid::Uuid;
 
 #[derive(Doppleganger)]
@@ -145,5 +146,50 @@ impl ThreadPreviewCursorDbRow {
             updated_at,
             viewed_at,
         }
+    }
+}
+
+#[derive(Type, Debug, Clone, Copy, Doppleganger)]
+#[sqlx(type_name = "email_user_provider_enum", rename_all = "UPPERCASE")]
+#[dg(forward = crate::domain::models::UserProvider)]
+pub enum DbUserProvider {
+    Gmail,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct DbLink {
+    pub id: Uuid,
+    pub macro_id: String,
+    pub fusionauth_user_id: String,
+    pub email_address: String,
+    pub provider: DbUserProvider,
+    pub is_sync_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl DbLink {
+    pub(crate) fn try_into_model(self) -> Result<Link, macro_user_id::error::ParseErr> {
+        let DbLink {
+            id,
+            macro_id,
+            fusionauth_user_id,
+            email_address,
+            provider,
+            is_sync_active,
+            created_at,
+            updated_at,
+        } = self;
+
+        Ok(Link {
+            id,
+            macro_id: MacroUserIdStr::parse_from_str(&macro_id)?.into_owned(),
+            fusionauth_user_id,
+            email_address: EmailStr::try_from(email_address)?,
+            provider: DbUserProvider::mirror(provider),
+            is_sync_active,
+            created_at,
+            updated_at,
+        })
     }
 }

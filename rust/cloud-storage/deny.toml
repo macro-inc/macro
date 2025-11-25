@@ -100,6 +100,7 @@ allow = [
   "BSD-2-Clause",
   "BSD-3-Clause",
   "BSL-1.0",
+  "CDLA-Permissive-2.0",
   "ISC",
   "MIT",
   "MPL-2.0",
@@ -107,7 +108,6 @@ allow = [
   "Unicode-3.0",
   "Zlib",
   "bzip2-1.0.6",
-  "CDLA-Permissive-2.0",
 ]
 # The confidence threshold for detecting a license from license text.
 # The higher the value, the more closely the license text must be to the

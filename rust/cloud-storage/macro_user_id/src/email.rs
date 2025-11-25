@@ -2,6 +2,7 @@
 use crate::{
     byte_range::ByteRange,
     cowlike::{ArcCowStr, CowLike},
+    error::ParseErr,
     lowercased::Lowercase,
 };
 use nom::{
@@ -12,6 +13,7 @@ use nom::{
     multi::separated_list1,
     sequence::delimited,
 };
+use serde::{Deserialize, Serialize};
 
 #[cfg(test)]
 mod tests;
@@ -101,6 +103,42 @@ pub struct Email<T> {
     local_part: ByteRange,
     domain_part: ByteRange,
     email: T,
+}
+
+/// The standard wrapper type for a [Email]
+/// This is a value which is guaranteed to be unmodified from its original input
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct EmailStr<'a>(pub Email<ArcCowStr<'a>>);
+
+impl<'a> doppleganger::Primitive for EmailStr<'a> {}
+
+impl TryFrom<String> for EmailStr<'static> {
+    type Error = ParseErr;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        Ok(<Email<ArcCowStr<'_>>>::parse_from_str(&value)
+            .map(CowLike::into_owned)
+            .map(EmailStr)?)
+    }
+}
+
+impl<'a> From<EmailStr<'a>> for String {
+    fn from(value: EmailStr<'a>) -> Self {
+        value.0.as_ref().to_string()
+    }
+}
+
+impl<'a> CowLike<'a> for EmailStr<'a> {
+    type Owned<'b> = EmailStr<'b>;
+
+    fn into_owned(self) -> Self::Owned<'static> {
+        EmailStr(self.0.into_owned())
+    }
+
+    fn copied(&'a self) -> Self {
+        EmailStr(self.0.copied())
+    }
 }
 
 impl<T> Email<T> {

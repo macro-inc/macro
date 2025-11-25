@@ -52,7 +52,7 @@ pub enum ExpandErr {
     Uuid(#[from] uuid::Error),
     /// invalid macro user id
     #[error(transparent)]
-    MacroIdErr(#[from] macro_user_id::user_id::ParseErr),
+    MacroIdErr(#[from] macro_user_id::error::ParseErr),
 }
 
 /// Describes a bundle of filters that should be applied across different entity types

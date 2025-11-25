@@ -111,13 +111,13 @@ pub async fn send_handler(
     let sender_contact = email_db_client::contacts::get::fetch_contact_by_email(
         &ctx.db,
         link.id,
-        &link.email_address,
+        &link.email_address.0.as_ref(),
     )
     .await?
     .ok_or(SendMessageError::SenderContactNotFound)?;
 
     let from_contact = ContactInfo {
-        email: link.email_address.clone(),
+        email: link.email_address.0.as_ref().to_string(),
         name: sender_contact.name,
         photo_url: sender_contact.photo_url,
     };

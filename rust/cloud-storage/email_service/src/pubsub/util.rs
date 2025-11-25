@@ -3,6 +3,7 @@ use crate::util::redis::RedisClient;
 use anyhow::anyhow;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
+use macro_user_id::user_id::MacroUserIdStr;
 /// shared utils across different pubsub workers
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::gmail::operations::GmailApiOperation;
@@ -86,7 +87,7 @@ pub async fn fetch_access_token_for_link(
 ) -> anyhow::Result<String> {
     let cache_key = TokenCacheKey {
         fusion_user_id: link.fusionauth_user_id.clone(),
-        macro_id: link.macro_id.clone(),
+        macro_id: link.macro_id.to_string(),
         provider: link.provider,
     };
 

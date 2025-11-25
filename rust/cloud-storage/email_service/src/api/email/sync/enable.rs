@@ -5,6 +5,8 @@ use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
+use macro_user_id::email::EmailStr;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::response::{EmptyResponse, ErrorResponse};
 use model::user::UserContext;
 use models_email::email::service::link;
@@ -26,14 +28,17 @@ pub enum EnableSyncError {
 
     #[error("Bad request")]
     BadRequest(String),
+
+    #[error("Invalid input")]
+    Parse(#[from] macro_user_id::error::ParseErr),
 }
 
 impl IntoResponse for EnableSyncError {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            EnableSyncError::SyncAlreadyEnabled | EnableSyncError::BadRequest(_) => {
-                StatusCode::BAD_REQUEST
-            }
+            EnableSyncError::SyncAlreadyEnabled
+            | EnableSyncError::BadRequest(_)
+            | EnableSyncError::Parse(_) => StatusCode::BAD_REQUEST,
             EnableSyncError::RegisterWatchError(_) | EnableSyncError::QueryError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
@@ -121,9 +126,9 @@ pub async fn enable_gmail_sync(
 
     let mut link = link::Link {
         id: macro_uuid::generate_uuid_v7(), // will get ignored for existing links
-        macro_id: user_context.user_id.clone(),
+        macro_id: MacroUserIdStr::try_from(user_context.user_id.clone())?,
         fusionauth_user_id: user_context.fusion_user_id.clone(),
-        email_address: email,
+        email_address: EmailStr::try_from(email)?,
         provider: UserProvider::Gmail,
         is_sync_active: true,
         created_at: Default::default(),

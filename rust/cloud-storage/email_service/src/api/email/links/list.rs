@@ -83,7 +83,7 @@ pub async fn list_links_handler(
 
             let signature = ctx
                 .gmail_client
-                .get_email_signature(&access_token, &link.email_address)
+                .get_email_signature(&access_token, link.email_address.0.as_ref())
                 .await
                 .unwrap_or(None);
 

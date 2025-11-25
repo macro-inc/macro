@@ -120,7 +120,7 @@ pub async fn handler(
                 .await
                 .context("Failed to fetch jobs by macro id")?;
 
-            if recent_jobs.len() >= 3 && !link.email_address.ends_with("@macro.com") {
+            if recent_jobs.len() >= 3 && !link.email_address.0.as_ref().ends_with("@macro.com") {
                 tracing::info!(user_id = %user_context.user_id, "Too many jobs error");
                 email_db_client::links::delete::delete_link_by_id(&ctx.db, link.id)
                     .await
