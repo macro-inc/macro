@@ -392,7 +392,7 @@ export const MoveToProjectView = (props: {
 
   return (
     <div class="" ref={rootScopeId} tabindex={-1}>
-      <EntityModalTitle title="Move to Project" />
+      <EntityModalTitle title="Move to folder" />
       <div class="flex pb-2">
         <div class="flex justify-between items-center gap-2">
           <div class="flex items-center gap-1">

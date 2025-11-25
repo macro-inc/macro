@@ -15,6 +15,7 @@ false && fileSelector;
 false && folderSelector;
 
 export function EmptyState(props: { viewId?: ViewId }) {
+  console.log('EmptyState', props.viewId);
   const emailActive = useEmailLinksStatus();
   const splitPanelContext = useSplitPanelOrThrow();
   const {
