@@ -262,7 +262,7 @@ async fn handle_websocket_connection(
                     tokio::spawn(async move {
                         tokio::select! {
                             _ = cancel_token.cancelled() => {},
-                            result = handle_send_chat_message(
+                            result = Box::pin(handle_send_chat_message(
                                 &message_sender_clone,
                                 ctx,
                                 message_id,
@@ -270,7 +270,7 @@ async fn handle_websocket_connection(
                                 user_id.as_str(),
                                 &connection_id,
                                 &jwt_token
-                            ) => {
+                            )) => {
                                 if let Err(err) = result {
                                     ws_send(&message_sender_clone, FromWebSocketMessage::Error(err.into()))
                                 }
