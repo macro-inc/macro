@@ -192,7 +192,7 @@ export function useEmailLinks() {
     status: useEmailLinksStatus(),
     connect: () => connectEmail().andTee(invalidations),
     disconnect: () => disconnectEmail().andTee(invalidations),
-    maybeSync: () => maybeStartEmailSync(useEmailLinksQuery().data ?? []),
+    maybeSync: maybeStartEmailSync,
     invalidate: () => invalidateEmailLinks(),
     refetchInterval: emailRefetchInterval,
   };

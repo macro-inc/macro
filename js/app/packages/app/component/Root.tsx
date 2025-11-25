@@ -64,8 +64,7 @@ import { Layout } from './Layout';
 import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
-import { EmailSignUp } from './email-auth/EmailSignUp';
-import { EmailCallback } from './email-auth/EmailCallback';
+import { makeEmailAuthComponents } from './EmailAuth';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 
@@ -175,6 +174,11 @@ function NotFound() {
   return '';
 }
 
+const { EmailSignUp, EmailCallback, CALLBACK_PATH } = makeEmailAuthComponents({
+  callbackPath: '/app/login/popup/success',
+  successPath: '/app/email-signup-callback',
+});
+
 const ROUTES: RouteDefinition[] = [
   LAYOUT_ROUTE,
   {
@@ -186,7 +190,7 @@ const ROUTES: RouteDefinition[] = [
     component: EmailSignUp,
   },
   {
-    path: '/email-signup-callback',
+    path: CALLBACK_PATH,
     component: EmailCallback,
   },
   {
