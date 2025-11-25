@@ -7,11 +7,13 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
-use model::{response::ErrorResponse, user::UserContext};
+use email::domain::models::UserProvider;
+use email::domain::ports::EmailRepo;
+use model::response::ErrorResponse;
+use model::user::axum_extractor::MacroUserExtractor;
 use models_email::email::service::backfill::{
     BackfillJobStatus, BackfillOperation, BackfillPubsubMessage,
 };
-use models_email::email::service::link::UserProvider;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -88,19 +90,24 @@ pub struct InitResponse {
 #[tracing::instrument(skip(ctx, user_context, gmail_token), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id,
+        user_context,
+        ..
+    }: MacroUserExtractor,
     gmail_token: Extension<String>,
 ) -> Result<Response, InitError> {
     tracing::info!(user_id = %user_context.user_id, "Init called");
     // Fetch the existing link for the user
-    let existing_link = email_db_client::links::get::fetch_link_by_fusionauth_and_macro_id(
-        &ctx.db,
-        &user_context.fusion_user_id,
-        &user_context.user_id,
-        UserProvider::Gmail,
-    )
-    .await
-    .context("Failed to fetch existing link")?;
+    let pg_repo = email::outbound::EmailPgRepo::new(ctx.db.clone());
+    let existing_link = pg_repo
+        .link_by_fusionauth_and_macro_id(
+            &user_context.fusion_user_id,
+            macro_user_id,
+            UserProvider::Gmail,
+        )
+        .await
+        .context("Failed to fetch existing link")?;
 
     // Handle different cases based on the existing link's state
     match &existing_link {

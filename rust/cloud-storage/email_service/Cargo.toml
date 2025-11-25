@@ -24,9 +24,9 @@ path = "src/bin/backfill_search/backfill_search.rs"
 [features]
 disable_attachment_upload = []
 disable_connection_gateway = []
+disable_contacts_sync = []
 disable_gmail_webhook_auth = []
 disable_sfs_map = []
-disable_contacts_sync = []
 local_queue = []
 
 [dependencies]
@@ -37,15 +37,17 @@ aws-sdk-s3 = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
+axum-extra = { workspace = true }
 base64 = { workspace = true }
 bytes = { workspace = true }
 cloudfront_sign = { workspace = true }
 connection_gateway = { path = "../connection_gateway" }
 document_storage_service_client = { path = "../document_storage_service_client" }
+doppleganger = { workspace = true }
 ego-tree = { workspace = true }
 email = { path = "../email", features = ["axum", "inbound", "outbound"] }
 email_db_client = { path = "../email_db_client" }
-email_utils = { path = "../email_utils"}
+email_utils = { path = "../email_utils" }
 frecency = { path = "../frecency", features = ["postgres"] }
 futures = { workspace = true }
 gmail_client = { path = "../gmail_client" }
@@ -70,6 +72,7 @@ model = { path = "../model" }
 model-entity = { path = "../model-entity" }
 model_notifications = { path = "../model_notifications" }
 models_email = { path = "../models_email" }
+models_opensearch = { path = "../models_opensearch" }
 models_pagination = { path = "../models_pagination", features = ["axum"] }
 models_permissions = { path = "../models_permissions" }
 redis = { workspace = true, features = [
@@ -106,7 +109,6 @@ urlencoding = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 uuid = { workspace = true }
-models_opensearch = { path = "../models_opensearch" }
 
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }

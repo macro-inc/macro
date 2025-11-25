@@ -9,7 +9,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
         .route("/", patch(patch_settings_handler))
         .layer(axum::middleware::from_fn_with_state(
-            state,
+            state.email_service,
             crate::api::middleware::link::attach_link_context,
         ))
 }
