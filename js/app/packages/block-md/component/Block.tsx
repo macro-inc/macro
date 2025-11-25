@@ -1,11 +1,11 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { withAnalytics } from '@coparse/analytics';
 import { useBlockId } from '@core/block';
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useInstructionsMdIdQuery } from '@service-storage/instructionsMd';
 import { createEffect, createSignal, onMount, Show } from 'solid-js';
-import { CustomScrollbar } from '../../macro-entity/src/components/CustomScrollbar';
 import { mdStore } from '../signal/markdownBlockData';
 import { FindAndReplace } from './FindAndReplace';
 import { InstructionsNotebook, Notebook } from './Notebook';

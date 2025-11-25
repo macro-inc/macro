@@ -1,3 +1,4 @@
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import Fragment from '@core/util/Fragment';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
@@ -36,7 +37,6 @@ import type {
   EntityRenderer,
 } from '../types/entity';
 import type { WithSearch } from '../types/search';
-import { CustomScrollbar } from './CustomScrollbar';
 import { Entity } from './Entity';
 
 /**
