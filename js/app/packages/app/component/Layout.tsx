@@ -24,6 +24,15 @@ import { QuickCreateMenu } from './QuickCreateMenu';
 import { RightbarWrapper } from './rightbar/Rightbar';
 import { Settings, setViewportOffset } from './settings/Settings';
 
+const AUTH_URLS = [
+  '/app/login',
+  '/app/login/popup',
+  '/app/login/popup/success',
+  '/app/onboarding',
+  '/app/signup',
+  '/app/email-signup-callback'
+]
+
 export function Layout(props: RouteSectionProps) {
   const isAuthenticated = useIsAuthenticated();
   const { paywallOpen, showPaywall } = usePaywallState();
@@ -118,7 +127,7 @@ export function Layout(props: RouteSectionProps) {
       <Show
         when={
           !isAuthenticated() &&
-          !['/app/login', '/app/onboarding'].includes(location.pathname)
+          !AUTH_URLS.includes(location.pathname)
         }
       >
         <Banner />
@@ -145,7 +154,7 @@ export function Layout(props: RouteSectionProps) {
           </ItemDndProvider>
         </Resize.Zone>
       </div>
-      <Show when={isAuthenticated() && '/app/onboarding' !== location.pathname}>
+      <Show when={isAuthenticated() && !AUTH_URLS.includes(location.pathname)}>
         <Dock />
         <Launcher open={createMenuOpen()} onOpenChange={setCreateMenuOpen} />
       </Show>

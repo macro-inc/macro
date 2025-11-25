@@ -14,11 +14,9 @@ import { err, okAsync, type Result, ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { queryClient } from '../../macro-entity/src/queries/client';
 
-const [_emailRefetchInterval, setEmailRefetchInterval] = createSignal<
+export const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
   number | undefined
 >();
-
-export const emailRefetchInterval = _emailRefetchInterval;
 
 const EMAIL_LINKS_QUERY_KEY = ['email-links'];
 
@@ -34,12 +32,16 @@ export function useEmailLinksQuery() {
   return useQuery(() => ({
     queryKey: EMAIL_LINKS_QUERY_KEY,
     queryFn: fetchEmailLinks,
+    suspense: false,
   }));
 }
 
 export function useEmailLinksStatus() {
+  const links = useEmailLinksQuery();
   return () => {
-    const links = useEmailLinksQuery();
+    if (!links.data || links.error) {
+      return false;
+    }
     return links.isSuccess && links.data?.length > 0;
   };
 }
@@ -125,6 +127,7 @@ const EMAIL_POLLING_TIMEOUT = 20_000;
  * Starts a polling fetch for new emails during the sync process.
  */
 function startEmailPolling() {
+  console.log('startEmailPolling');
   if (emailRefetchInterval()) return;
   setEmailRefetchInterval(EMAIL_POLLING_INTERVAL);
   setTimeout(() => {
@@ -191,8 +194,10 @@ export function useEmailLinks() {
     await updateUserInfo();
   };
 
+  const query = useEmailLinksQuery();
+
   return {
-    query: useEmailLinksQuery(),
+    query: query,
     status: useEmailLinksStatus(),
     connect: () => connectEmail().andTee(invalidations),
     disconnect: () => disconnectEmail().andTee(invalidations),

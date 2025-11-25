@@ -40,6 +40,10 @@ function EmailCallback(props: Pick<EmailAuthParams, 'successPath'>) {
       await updateUserAuth();
       await updateUserInfo();
 
+      const channel = new BroadcastChannel('auth');
+
+      channel.postMessage({ type: 'login-success' });
+
       navigate(props.successPath, {
         replace: true,
       });

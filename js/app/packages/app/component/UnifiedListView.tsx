@@ -2,6 +2,7 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import { Button } from '@core/component/FormControls/Button';
@@ -11,12 +12,16 @@ import { ToggleButton } from '@core/component/FormControls/ToggleButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { IconButton } from '@core/component/IconButton';
 import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
+import { getSuggestedProperties } from '@core/component/Properties/utils';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import {
   blockAcceptsFileExtension,
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
-import { ENABLE_SOUP_FROM_FILTER } from '@core/constant/featureFlags';
+import {
+  ENABLE_PROPERTY_DISPLAY_CONTROL,
+  ENABLE_SOUP_FROM_FILTER,
+} from '@core/constant/featureFlags';
 import {
   emailRefetchInterval,
   useEmailLinksStatus,
@@ -49,6 +54,7 @@ import {
   type EntityFilter,
   type EntityType,
   importantFilterFn,
+  isSearchEntity,
   notDoneFilterFn,
   type SortOption,
   sortByCreatedAt,
@@ -117,6 +123,7 @@ import {
 import { EntityActionsMenuItems } from './EntityActionsMenuItems';
 import { EntityModal } from './EntityModal/EntityModal';
 import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
+import { PropertyDisplayControl } from './PropertyDisplayControl';
 import { useUpsertSavedViewMutation } from './Soup';
 import {
   SplitToolbarLeft,
@@ -387,6 +394,28 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     );
   };
 
+  const displayProperties = createMemo(
+    () =>
+      view()?.display?.displayProperties ??
+      defaultDisplayOptions.displayProperties
+  );
+  const setDisplayProperties = (
+    properties: DisplayOptions['displayProperties']
+  ) => {
+    setViewDataStore(
+      selectedView(),
+      'display',
+      'displayProperties',
+      properties
+    );
+  };
+
+  // Suggested properties reactive to filter type
+  const suggestedProperties = createMemo(() => {
+    const types = entityTypeFilter();
+    return getSuggestedProperties(types);
+  });
+
   const rawSearchText = createMemo<string>(() => view()?.searchText ?? '');
   const searchText = createMemo(() => rawSearchText()?.trim() ?? '');
   const [isSearchLoading, setIsSearchLoading] = createSignal(false);
@@ -439,7 +468,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               ...result.item,
               search: {
                 nameHighlight: result.nameHighlight,
-                contentHighlights: null,
+                contentHitData: null,
                 source: 'local',
               },
             } as WithNotification<WithSearch<EntityData>>;
@@ -876,35 +905,34 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       ? insertSplit({ type: blockName, id })
       : replaceOrInsertSplit({ type: blockName, id });
 
-    const location =
-      'search' in entity && entity.search.contentHighlights?.at(0)?.location;
-    if (location) {
-      handle?.activate();
-      const blockHandle = await blockOrchestrator.getBlockHandle(id);
-      switch (location.type) {
-        case 'md':
-          await blockHandle?.goToLocationFromParams({
-            [MD_PARAMS.nodeId]: location.nodeId,
-          });
-          break;
-        case 'pdf':
-          console.log('go to pdf location', location);
-          await blockHandle?.goToLocationFromParams({
-            [PDF_PARAMS.searchPage]: location.searchPage.toString(),
-            [PDF_PARAMS.searchRawQuery]: location.searchRawQuery,
-            [PDF_PARAMS.searchHighlightTerms]: JSON.stringify(
-              location.highlightTerms
-            ),
-            [PDF_PARAMS.searchSnippet]: location.searchSnippet,
-          });
-          break;
-      }
-    } else {
-      handle?.activate();
+    handle?.activate();
+
+    if (!isSearchEntity(entity)) return;
+
+    const location = entity.search.contentHitData?.at(0)?.location;
+    if (!location) return;
+
+    const blockHandle = await blockOrchestrator.getBlockHandle(id);
+    switch (location.type) {
+      case 'md':
+        await blockHandle?.goToLocationFromParams({
+          [MD_PARAMS.nodeId]: location.nodeId,
+        });
+        break;
+      case 'pdf':
+        await blockHandle?.goToLocationFromParams({
+          [PDF_PARAMS.searchPage]: location.searchPage.toString(),
+          [PDF_PARAMS.searchRawQuery]: location.searchRawQuery,
+          [PDF_PARAMS.searchHighlightTerms]: JSON.stringify(
+            location.highlightTerms
+          ),
+          [PDF_PARAMS.searchSnippet]: location.searchSnippet,
+        });
+        break;
     }
   };
 
-  const entityClickHandler: EntityClickHandler<EntityData> = (
+  const entityClickHandler: EntityClickHandler<EntityData> = async (
     entity,
     event,
     options
@@ -920,7 +948,17 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const handle = event.altKey
       ? insertSplit({ type: entity.type, id: entity.id })
       : replaceOrInsertSplit({ type: entity.type, id: entity.id });
+
     handle?.activate();
+
+    if (entity.type === 'channel' && isSearchEntity(entity)) {
+      const location = entity.search.contentHitData?.at(0)?.location;
+      if (!location) return;
+      const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
+      await blockHandle?.goToLocationFromParams({
+        [CHANNEL_PARAMS.message]: location.messageId,
+      });
+    }
   };
 
   const StyledTriggerLabel = (props: ParentProps) => {
@@ -1238,6 +1276,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       onChange={setShowUnreadIndicator}
                     />
                   </section>
+                  <Show when={ENABLE_PROPERTY_DISPLAY_CONTROL}>
+                    <section class="p-2">
+                      <PropertyDisplayControl
+                        selectedPropertyIds={displayProperties}
+                        setSelectedPropertyIds={setDisplayProperties}
+                        suggestedProperties={suggestedProperties()}
+                      />
+                    </section>
+                  </Show>
                 </div>
               </div>
             </DropdownMenu>
