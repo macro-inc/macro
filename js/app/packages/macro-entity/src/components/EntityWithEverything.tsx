@@ -1,3 +1,4 @@
+import { EntityIcon } from '@core/component/EntityIcon';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { TOKENS } from '@core/hotkey/tokens';
 import { matches } from '@core/util/match';
@@ -744,12 +745,7 @@ function DirectMessageIcon(props: { entity: EntityData }) {
       ? (props.entity.particpantIds ?? []).filter((id) => id !== userId()).at(0)
       : undefined;
 
-  const Fallback = () => (
-    <Dynamic
-      component={getIconConfig('directMessage').icon}
-      class={`flex size-full ${getIconConfig('directMessage').foreground}`}
-    />
-  );
+  const Fallback = () => <EntityIcon targetType="directMessage" />;
 
   return (
     <div class="bg-panel size-5 rounded-full p-[2px]">

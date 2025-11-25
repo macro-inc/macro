@@ -31,6 +31,7 @@ type ZoneProps = {
   minSize?: number;
   class?: string;
   id?: string;
+  captureResizeCtx?: (ctx: ResizeZoneCtx) => void;
 };
 
 /**
@@ -120,6 +121,10 @@ function Zone(props: ParentProps<ZoneProps>) {
     isHidden: solver.isHidden,
   };
 
+  createEffect(() => {
+    props.captureResizeCtx?.(ctx);
+  });
+
   return (
     <div
       class={props.class ?? ''}
@@ -128,7 +133,6 @@ function Zone(props: ParentProps<ZoneProps>) {
         position: 'relative',
         height: '100%',
         width: '100%',
-        // overflow: 'hidden',
       }}
       data-resize-zone
     >
