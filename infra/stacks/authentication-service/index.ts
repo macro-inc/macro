@@ -219,23 +219,27 @@ const service = new AuthenticationService('authentication-service', {
     },
     {
       name: 'COMMS_SERVICE_URL',
-      value: `https://comms-service${stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+      value: `https://comms-service${
+        stack === 'prod' ? '' : `-${stack}`
+      }.macro.com`,
     },
     {
       name: 'DOCUMENT_STORAGE_SERVICE_URL',
-      value: `https://cloud-storage${stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+      value: `https://cloud-storage${
+        stack === 'prod' ? '' : `-${stack}`
+      }.macro.com`,
     },
     {
       name: 'NOTIFICATION_SERVICE_URL',
-      value: `https://notifications${stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+      value: `https://notifications${
+        stack === 'prod' ? '' : `-${stack}`
+      }.macro.com`,
     },
     {
       name: 'PROPERTIES_SERVICE_URL',
-      value: `https://properties-service${stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+      value: `https://properties-service${
+        stack === 'prod' ? '' : `-${stack}`
+      }.macro.com`,
     },
     {
       name: 'NOTIFICATION_QUEUE',
