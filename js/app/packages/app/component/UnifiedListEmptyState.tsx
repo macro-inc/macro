@@ -1,4 +1,4 @@
-import { useEmailLinksStatus } from '@app/signal/emailAuth';
+import { useEmailLinksStatus } from '@core/email-link';
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';

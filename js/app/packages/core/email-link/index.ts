@@ -14,9 +14,11 @@ import { err, okAsync, type Result, ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { queryClient } from '../../macro-entity/src/queries/client';
 
-const [emailRefetchInterval, setEmailRefetchInterval] = createSignal<
+const [_emailRefetchInterval, setEmailRefetchInterval] = createSignal<
   number | undefined
 >();
+
+export const emailRefetchInterval = _emailRefetchInterval;
 
 const EMAIL_LINKS_QUERY_KEY = ['email-links'];
 
@@ -36,8 +38,10 @@ export function useEmailLinksQuery() {
 }
 
 export function useEmailLinksStatus() {
-  const links = useEmailLinksQuery();
-  return links.isSuccess && links.data?.length > 0;
+  return () => {
+    const links = useEmailLinksQuery();
+    return links.isSuccess && links.data?.length > 0;
+  };
 }
 
 function invalidateEmailLinks() {
