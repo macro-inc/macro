@@ -59,12 +59,12 @@ import { useSoundHover } from '../util/soundHover';
 import { updateCookie } from '../util/updateCookie';
 import { Login } from './auth/Login';
 import { LOGIN_COOKIE_AGE, setCookie } from './auth/Shared';
+import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
 import Onboarding from './Onboarding';
 import { LAYOUT_ROUTE } from './split-layout/SplitLayoutRoute';
-import { makeEmailAuthComponents } from './EmailAuth';
 
 const { track, identify, TrackingEvents } = withAnalytics();
 

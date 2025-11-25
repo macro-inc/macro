@@ -72,4 +72,3 @@ export function whenSettled<T>(
 
   return () => dispose?.();
 }
-

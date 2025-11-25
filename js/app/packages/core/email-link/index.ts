@@ -97,9 +97,9 @@ async function syncEmails(): Promise<Result<void, EmailSyncError>> {
       badRequestError
         ? { tag: 'AlreadyInitialized' as const }
         : {
-          tag: 'FailedToInitialize' as const,
-          message: 'Failed to initialize',
-        }
+            tag: 'FailedToInitialize' as const,
+            message: 'Failed to initialize',
+          }
     );
   }
 

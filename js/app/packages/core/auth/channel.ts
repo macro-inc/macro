@@ -1,8 +1,8 @@
-import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 import {
   broadcastChannels,
   setBroadcastChannels,
 } from '@app/signal/broadcastChannels';
+import { errAsync, okAsync, ResultAsync } from 'neverthrow';
 
 const AUTH_CHANNEL = 'auth';
 const LOGIN_SUCCESS = 'login-success';
