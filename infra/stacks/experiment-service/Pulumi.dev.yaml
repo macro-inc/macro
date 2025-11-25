@@ -2,7 +2,7 @@ config:
   aws-native:region: us-east-1
   aws:region: us-east-1
   experiment-service:macro_db_secret_key: macro-db-dev
-  experiment-service:fusionauth_api_key_secret_key: fusionauth-api-key-dev
+  experiment-service:fusionauth_client_id: fusionauth-api-key-dev
   experiment-service:fusionauth_issuer: fusionauth-dev.macro.com
   experiment-service:jwt_secret_key: fusionauth-jwt-secret-dev
   experiment-service:internal_api_key: document-storage-service-auth-key-dev
