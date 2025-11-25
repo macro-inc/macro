@@ -137,6 +137,9 @@ fn validate_macro_access_token_inner(
     // Verify and decode the JWT
     let mut validation = Validation::new(Algorithm::HS256);
 
+    validation.leeway = 0;
+    validation.reject_tokens_expiring_in_less_than = 60;
+
     validation.set_audience(&[audience.as_ref()]);
     validation.set_issuer(&[issuer.as_ref()]);
 
