@@ -3,6 +3,7 @@ import {
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
+import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import { Button } from '@core/component/FormControls/Button';
@@ -952,12 +953,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         break;
       }
       case 'email': {
-        // // TODO: implement email go to location
-        // const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
-        // await blockHandle?.goToLocationFromParams({
-        //   [EMAIL_PARAMS.threadId]: location.threadId,
-        //   [EMAIL_PARAMS.messageId]: location.messageId,
-        // });
+        const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
+        await blockHandle?.goToLocationFromParams({
+          [EMAIL_PARAMS.threadId]: location.threadId,
+          [EMAIL_PARAMS.messageId]: location.messageId,
+        });
         break;
       }
     }

@@ -31,6 +31,7 @@ export type EmailContextValue = {
   filteredMessages: Accessor<MessageWithBodyReplyless[]>;
   threadData: Accessor<Thread | undefined>;
   archiveThread: () => boolean;
+  activeTargetMessageId: Accessor<string | undefined>;
 };
 
 const EmailContext = createContext<EmailContextValue>();

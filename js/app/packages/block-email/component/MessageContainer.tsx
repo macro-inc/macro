@@ -66,6 +66,10 @@ export function MessageContainer(props: MessageContainerProps) {
     );
   });
 
+  const isTarget = createMemo(() => {
+    return context.activeTargetMessageId() === props.message.db_id;
+  });
+
   // Hide attachments that are referenced in inline images
   const inlineContentIds = createMemo(() => {
     const set = new Set<string>();
@@ -113,6 +117,7 @@ export function MessageContainer(props: MessageContainerProps) {
           isLastMessage={isLastMessage()}
           senderId={props.message.from?.email}
           isNewMessage={isNewMessage()}
+          isTarget={isTarget()}
         >
           <Message.TopBar>
             <EmailMessageTopBar
