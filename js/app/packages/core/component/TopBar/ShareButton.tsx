@@ -257,9 +257,9 @@ export function ShareModal(props: ShareModalProps) {
       });
       if (!isErr(result)) {
         refetch();
-        toast.success('Removed project access', 'Project no longer has access');
+        toast.success('Removed folder access');
       } else {
-        toast.alert('Failed to remove project access', 'Please try again');
+        toast.alert('Failed to remove folder access', 'Please try again');
         console.error(result);
       }
     }
@@ -404,13 +404,13 @@ export function ShareModal(props: ShareModalProps) {
       if (!isErr(result)) {
         refetch();
         toast.success(
-          newIsPublic ? 'Made project public' : 'Made project private',
+          newIsPublic ? 'Made folder public' : 'Made folder private',
           newIsPublic
-            ? 'Anyone with the link can now view this project'
-            : 'Only shared users can access this project'
+            ? 'Anyone with the link can now view this folder'
+            : 'Only shared users can access this folder'
         );
       } else {
-        toast.alert('Failed to change project access', 'Please try again');
+        toast.alert('Failed to change folder access', 'Please try again');
         console.error(result);
       }
     }
@@ -448,7 +448,7 @@ export function ShareModal(props: ShareModalProps) {
           refetch();
           toast.success('Updated public link sharing access level');
         } else {
-          toast.alert('Failed to change project access', 'Please try again');
+          toast.alert('Failed to change folder access', 'Please try again');
           console.error(result);
         }
       }

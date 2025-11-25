@@ -362,7 +362,7 @@ export function DocumentFileMenu(props: ParentProps<DocumentFileMenuProps>) {
       documentId: props.documentId,
       projectId,
     });
-    if (isErr(result)) return toast.failure('Unable to move file to project');
+    if (isErr(result)) return toast.failure('Unable to move file to folder');
 
     refetch();
     refetchResources();
