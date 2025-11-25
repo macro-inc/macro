@@ -1,8 +1,6 @@
 config:
   aws-native:region: us-east-1
   aws:region: us-east-1
-  connection-gateway:datadog_api_key:
-    secure: AAABAKPDBY5Z6DR6NO2ygTkpHiGCEZFXUpkP7+FXqwXwmJkR/Ce2rGbUNfsDVo1tfvEndUznEHwK8j8/ztgFBA==
   connection-gateway:fusionauth_client_id: fusionauth-client-id-key-prod
   connection-gateway:fusionauth_issuer: auth.macro.com
   connection-gateway:internal_auth_key: document-storage-service-auth-key-prod

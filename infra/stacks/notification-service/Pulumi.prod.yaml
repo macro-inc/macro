@@ -6,8 +6,6 @@ config:
   notification-service:fusionauth_issuer: auth.macro.com
   notification-service:internal_api_key: document-storage-service-auth-key-prod
   notification-service:db-password-secret-key: notification-db-password-prod
-  notification-service:datadog_api_key:
-    secure: AAABAIT37VjZ+mgt3zu0wHkTgX7KB/p4/YwgWZIENw3S0TmRFDviN04qdUm/wBUamPfT23Y06eBgf+C+H899gw==
   notification-service:apple_team_id: apple-team-id
   notification-service:apple_bundle_id: apple-bundle-id-prod
   notification-service:apns_key_id: apns-key-id

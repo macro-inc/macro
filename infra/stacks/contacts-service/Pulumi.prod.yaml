@@ -2,8 +2,6 @@ config:
   aws-native:region: us-east-1
   aws:region: us-east-1
   contacts-service:db-password-secret-key: contacts-db-password
-  contacts-service:datadog_api_key:
-    secure: AAABALiYNX/ZP/wsirPiS0Qh1HDbM+7OX8MkaRoedMvh12SDCTnjsOG1Tv/E36oocrscA/DUJaWeJCdpalsXHg==
   contacts-service:fusionauth_client_id: fusionauth-client-id-key-prod
   contacts-service:fusionauth_issuer: auth.macro.com
   contacts-service:jwt_secret_key: fusionauth-jwt-secret-prod
