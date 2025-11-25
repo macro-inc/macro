@@ -18,7 +18,7 @@ export enum PaywallKey {
 
 export const PaywallMessages: Record<PaywallKey, string> = {
   [PaywallKey.PROJECT_LIMIT]:
-    'You have reached the project limit of your current plan. Please upgrade to continue.',
+    'You have reached the folder limit of your current plan. Please upgrade to continue.',
   [PaywallKey.FILE_LIMIT]:
     'You have reached the file limit of your current plan. Please upgrade to continue.',
   [PaywallKey.CHAT_LIMIT]:

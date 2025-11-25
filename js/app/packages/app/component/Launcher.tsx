@@ -189,19 +189,19 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
     },
   },
   {
-    label: 'Project',
+    label: 'Folder',
     icon: () => <WideFolder />,
-    description: 'Create project',
+    description: 'Create folder',
     blockName: 'project',
     hotkeyToken: TOKENS.create.project,
     altHotkeyToken: TOKENS.create.projectNewSplit,
-    hotkey: 'p',
+    hotkey: 'f',
     keyDownHandler: () => {
       createBlock({
         blockName: 'project',
         createFn: () => {
           const createProject = useCreateProject();
-          return createProject({ name: 'New Project' });
+          return createProject({ name: 'New Folder' });
         },
         shouldInsert: pressedKeys().has('opt'),
       });
