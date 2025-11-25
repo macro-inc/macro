@@ -1,3 +1,5 @@
+use std::time::Duration;
+
 use anyhow::Context;
 use jsonwebtoken::{Algorithm, DecodingKey, Validation, decode};
 use macro_env::Environment;
@@ -128,6 +130,8 @@ pub fn validate_macro_access_token(
     )
 }
 
+const TOKEN_EXPIRATION_BUFFER_SECONDS: Duration = Duration::from_secs(60);
+
 fn validate_macro_access_token_inner(
     macro_access_token: &str,
     jwt_secret: &LocalOrRemoteSecret<JwtSecretKey>,
@@ -138,7 +142,7 @@ fn validate_macro_access_token_inner(
     let mut validation = Validation::new(Algorithm::HS256);
 
     validation.leeway = 0;
-    validation.reject_tokens_expiring_in_less_than = 60;
+    validation.reject_tokens_expiring_in_less_than = TOKEN_EXPIRATION_BUFFER_SECONDS.as_secs();
 
     validation.set_audience(&[audience.as_ref()]);
     validation.set_issuer(&[issuer.as_ref()]);
