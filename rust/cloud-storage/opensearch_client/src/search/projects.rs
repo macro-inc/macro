@@ -23,7 +23,7 @@ impl SearchQueryConfig for ProjectSearchConfig {
     const ENTITY_INDEX: SearchEntityType = SearchEntityType::Projects;
 
     // Projects have no "content" to highlight match on, so match on the TITLE_KEY instead
-    fn default_highlight() -> opensearch_query_builder::Highlight<'static> {
+    fn default_highlight<'a>() -> opensearch_query_builder::Highlight<'a> {
         opensearch_query_builder::Highlight::new()
             .require_field_match(true)
             .field(
@@ -63,12 +63,12 @@ impl ProjectQueryBuilder {
         fn disable_recency(disable_recency: bool) -> Self;
     }
 
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
+    pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         self.inner
             .build_bool_query(self.inner.build_content_and_name_bool_query()?)
     }
 
-    fn build_search_request(&self) -> Result<SearchRequest<'static>> {
+    fn build_search_request<'a>(&'a self) -> Result<SearchRequest<'a>> {
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
         // SearchOn::NameContent is used

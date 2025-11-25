@@ -1,6 +1,8 @@
 //! This module contains the logic for generating queries using terms
 
-use crate::{Result, SearchOn, error::OpensearchClientError, search_on::NameOrContent};
+use std::borrow::Cow;
+
+use crate::{Result, error::OpensearchClientError, search_on::NameOrContent};
 
 use opensearch_query_builder::*;
 use unicode_segmentation::UnicodeSegmentation;
@@ -29,22 +31,42 @@ fn validate_last_term_length(term: &str) -> bool {
     UnicodeSegmentation::graphemes(term, true).count() >= 3
 }
 
+pub(crate) struct CreateQueryParams<'a> {
+    /// The query key to use
+    /// This is only used if unified params are not provided
+    pub query_key: QueryKey,
+    /// The field to search on
+    pub field: &'a str,
+    /// The term to search for
+    pub term: &'a str,
+    /// Optional unified search params
+    /// If present, the unified search field is used
+    pub unified_params: Option<&'a CreateQueryUnifiedParams>,
+}
+
+pub(crate) struct CreateQueryUnifiedParams {
+    /// Specifies whether the unified search field is a name or content field
+    /// This is used to determine the boosting of the match queries
+    pub name_or_content: NameOrContent,
+}
+
 /// Creates a query for a given term
-pub(crate) fn create_query<'a>(
-    query_key: &QueryKey,
-    field: &'a str,
-    term: &'a str,
-    name_or_content: NameOrContent,
-    is_unified: bool,
-) -> QueryType<'static> {
-    if is_unified {
+pub(crate) fn create_query<'a>(params: CreateQueryParams<'a>) -> QueryType<'a> {
+    let CreateQueryParams {
+        query_key,
+        field,
+        term,
+        unified_params,
+    } = params;
+
+    if let Some(unified_params) = unified_params {
+        let name_or_content = unified_params.name_or_content;
         // base bool query
         let mut bool_query = BoolQueryBuilder::new();
         bool_query.minimum_should_match(1);
 
-        let mut match_phrase_prefix_query =
-            MatchPhrasePrefixQuery::new(field.to_string(), term.clone());
-        let mut match_query = MatchQuery::new(field.to_string(), term.clone());
+        let mut match_phrase_prefix_query = MatchPhrasePrefixQuery::new(field.to_string(), term);
+        let mut match_query = MatchQuery::new(field.to_string(), term);
 
         match name_or_content {
             NameOrContent::Name => {
@@ -64,33 +86,12 @@ pub(crate) fn create_query<'a>(
 
         bool_query.build().into()
     } else {
-        query_key.create_query(field, term)
-    }
-}
-
-impl QueryKey {
-    /// Creates a query key given a match type
-    pub fn from_match_type(match_type: &str) -> Result<Self> {
-        match match_type {
-            "exact" => Ok(Self::MatchPhrase),
-            "partial" => Ok(Self::MatchPhrasePrefix),
-            "regexp" => Ok(Self::Regexp),
-            _ => Err(OpensearchClientError::InvalidMatchType {
-                match_type: match_type.to_string(),
-            }),
-        }
-    }
-
-    /// Creates a query given a field and term
-    pub fn create_query(&self, field: &str, term: &str) -> QueryType<'static> {
         // Fixes https://linear.app/macro-eng/issue/M-5094/unified-search-match-prefix-on-phrase-should-not-constrain-terms
         // We need to create a more complex combo query if the last word in a term is less than 3 characters.
         let mut terms = term.split(' ').collect::<Vec<_>>();
         let last_term = terms.last().unwrap_or(&"");
         let is_last_term_long_enough = validate_last_term_length(last_term);
 
-        // TODO: we need type validation that the term is not an empty string
-        // As a workaround, we will check if last_term is empty before entering into this block
         if !last_term.is_empty() && !is_last_term_long_enough && terms.len() > 1 {
             tracing::trace!("last value in term has length less than 3, building combo query");
 
@@ -99,15 +100,15 @@ impl QueryKey {
             let wildcard_pattern = format!("*{}*", last_part_of_term.to_lowercase());
 
             // build the first term query
-            let first_term_query = match self {
-                Self::MatchPhrase => QueryType::MatchPhrase(MatchPhraseQuery::new(
+            let first_term_query = match query_key {
+                QueryKey::MatchPhrase => QueryType::MatchPhrase(MatchPhraseQuery::new(
                     field.to_string(),
                     first_part_of_term,
                 )),
-                Self::MatchPhrasePrefix => QueryType::MatchPhrasePrefix(
+                QueryKey::MatchPhrasePrefix => QueryType::MatchPhrasePrefix(
                     MatchPhrasePrefixQuery::new(field.to_string(), first_part_of_term),
                 ),
-                Self::Regexp => {
+                QueryKey::Regexp => {
                     QueryType::Regexp(RegexpQuery::new(field.to_string(), first_part_of_term))
                 }
             };
@@ -126,35 +127,58 @@ impl QueryKey {
             return bool_query.build().into();
         }
 
-        match self {
-            Self::MatchPhrase => {
+        match query_key {
+            QueryKey::MatchPhrase => {
                 QueryType::MatchPhrase(MatchPhraseQuery::new(field.to_string(), term.to_string()))
             }
-            Self::MatchPhrasePrefix => QueryType::MatchPhrasePrefix(MatchPhrasePrefixQuery::new(
-                field.to_string(),
-                term.to_string(),
-            )),
-            Self::Regexp => {
+            QueryKey::MatchPhrasePrefix => QueryType::MatchPhrasePrefix(
+                MatchPhrasePrefixQuery::new(field.to_string(), term.to_string()),
+            ),
+            QueryKey::Regexp => {
                 QueryType::Regexp(RegexpQuery::new(field.to_string(), term.to_string()))
             }
         }
     }
 }
 
+impl QueryKey {
+    /// Creates a query key given a match type
+    pub fn from_match_type(match_type: &str) -> Result<Self> {
+        match match_type {
+            "exact" => Ok(Self::MatchPhrase),
+            "partial" => Ok(Self::MatchPhrasePrefix),
+            "regexp" => Ok(Self::Regexp),
+            _ => Err(OpensearchClientError::InvalidMatchType {
+                match_type: match_type.to_string(),
+            }),
+        }
+    }
+}
+
 /// Generate the terms for the "must" query
-pub(crate) fn generate_terms_must_query(
+pub(crate) fn generate_terms_must_query<'a>(
     query_key: QueryKey,
-    field: &str,
-    terms: &[String],
-) -> QueryType<'static> {
+    field: &'a str,
+    terms: impl Into<Cow<'a, [&'a str]>>,
+    unified_params: Option<&'a CreateQueryUnifiedParams>,
+) -> QueryType<'a> {
     let mut terms_must_query = BoolQueryBuilder::new();
 
     terms_must_query.minimum_should_match(1);
 
+    let terms = terms.into();
+
     // Map terms to queries
     let queries: Vec<_> = terms
         .iter()
-        .map(|term| query_key.create_query(field, term.as_str()))
+        .map(|term| {
+            create_query(CreateQueryParams {
+                query_key,
+                field,
+                term,
+                unified_params,
+            })
+        })
         .collect();
 
     // If we only have 1 query returned, we can just return that singular query

@@ -26,7 +26,7 @@ impl SearchQueryConfig for EmailSearchConfig {
     const TITLE_KEY: &'static str = "name";
     const ENTITY_INDEX: SearchEntityType = SearchEntityType::Emails;
 
-    fn default_sort_types() -> Vec<SortType<'static>> {
+    fn default_sort_types<'a>() -> Vec<SortType<'a>> {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
@@ -98,7 +98,7 @@ impl EmailQueryBuilder {
         self
     }
 
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
+    pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         let mut content_and_name_bool_queries = self.inner.build_content_and_name_bool_query()?;
 
         // CUSTOM ATTRIBUTES SECTION
@@ -146,7 +146,7 @@ impl EmailQueryBuilder {
         Ok(bool_query)
     }
 
-    fn build_search_request(&self) -> Result<SearchRequest<'static>> {
+    fn build_search_request<'a>(&'a self) -> Result<SearchRequest<'a>> {
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
         // SearchOn::NameContent is used

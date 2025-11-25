@@ -24,7 +24,7 @@ impl SearchQueryConfig for DocumentSearchConfig {
     const TITLE_KEY: &'static str = "name";
     const ENTITY_INDEX: SearchEntityType = SearchEntityType::Documents;
 
-    fn default_sort_types() -> Vec<SortType<'static>> {
+    fn default_sort_types<'a>() -> Vec<SortType<'a>> {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
@@ -57,12 +57,12 @@ impl DocumentQueryBuilder {
         fn disable_recency(disable_recency: bool) -> Self;
     }
 
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
+    pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         self.inner
             .build_bool_query(self.inner.build_content_and_name_bool_query()?)
     }
 
-    fn build_search_request(self) -> Result<SearchRequest<'static>> {
+    fn build_search_request<'a>(&'a self) -> Result<SearchRequest<'a>> {
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
         // SearchOn::NameContent is used

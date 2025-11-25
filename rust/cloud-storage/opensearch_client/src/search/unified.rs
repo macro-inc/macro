@@ -410,17 +410,17 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     if args.search_indices.contains(&SearchEntityType::Documents) {
         let document_search_args: DocumentSearchArgs = args.clone().into();
         let document_query_builder: DocumentQueryBuilder = document_search_args.into();
-        let mut document_bool_query = document_query_builder.build_bool_query()?;
-        document_bool_query.must(QueryType::term("_index", SearchIndex::Documents.as_ref()));
-        bool_query.should(document_bool_query.build().into());
+        let document_bool_query = document_query_builder.build_bool_query()?;
+        let query_type: QueryType = document_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
     }
 
     if args.search_indices.contains(&SearchEntityType::Emails) {
         let email_search_args: EmailSearchArgs = args.clone().into();
         let email_query_builder: EmailQueryBuilder = email_search_args.into();
-        let mut email_bool_query = email_query_builder.build_bool_query()?;
-        email_bool_query.must(QueryType::term("_index", SearchIndex::Emails.as_ref()));
-        bool_query.should(email_bool_query.build().into());
+        let email_bool_query = email_query_builder.build_bool_query()?;
+        let query_type: QueryType = email_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
     }
 
     // We can only search over channels if we are not explicitly searching by name
@@ -429,25 +429,27 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         let channel_message_search_args: ChannelMessageSearchArgs = args.clone().into();
         let channel_message_query_builder: ChannelMessageQueryBuilder =
             channel_message_search_args.into();
-        let mut channel_message_bool_query = channel_message_query_builder.build_bool_query()?;
-        channel_message_bool_query.must(QueryType::term("_index", SearchIndex::Channels.as_ref()));
-        bool_query.should(channel_message_bool_query.build().into());
+        let channel_message_bool_query = channel_message_query_builder.build_bool_query()?;
+        let query_type: QueryType = channel_message_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
     }
 
     if args.search_indices.contains(&SearchEntityType::Chats) {
         let chat_search_args: ChatSearchArgs = args.clone().into();
         let chat_query_builder: ChatQueryBuilder = chat_search_args.into();
-        let mut chat_bool_query = chat_query_builder.build_bool_query()?;
-        chat_bool_query.must(QueryType::term("_index", SearchIndex::Chats.as_ref()));
-        bool_query.should(chat_bool_query.build().into());
+        let chat_bool_query = chat_query_builder.build_bool_query()?;
+        let query_type: QueryType = chat_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
     }
 
-    if args.search_indices.contains(&SearchEntityType::Projects) {
+    if args.search_indices.contains(&SearchEntityType::Projects)
+        && args.search_on != SearchOn::Content
+    {
         let project_search_args: ProjectSearchArgs = args.clone().into();
         let project_query_builder: ProjectQueryBuilder = project_search_args.into();
-        let mut project_bool_query = project_query_builder.build_bool_query()?;
-        project_bool_query.must(QueryType::term("_index", SearchIndex::Projects.as_ref()));
-        bool_query.should(project_bool_query.build().into());
+        let project_bool_query = project_query_builder.build_bool_query()?;
+        let query_type: QueryType = project_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
     }
 
     // create the search request
@@ -456,23 +458,14 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     search_request_builder.from(args.page * args.page_size);
     search_request_builder.size(args.page_size);
 
-    if args.collapse || args.search_on == SearchOn::NameContent || args.search_on == SearchOn::Name
-    {
+    if args.collapse {
         search_request_builder.collapse(Collapse::new("entity_id"));
-    }
-
-    if args.search_on == SearchOn::NameContent {
-        search_request_builder.track_total_hits(true);
-        search_request_builder.add_agg(
-            "total_uniques",
-            AggregationType::Cardinality(CardinalityAggregation::new("entity_id")),
-        );
     }
 
     // Build sort
     let sort = vec![
         SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-        SortType::Field(FieldSort::new("entity_id", SortOrder::Asc)),
+        SortType::Field(FieldSort::new("entity_id", SortOrder::Desc)),
     ];
 
     for sort in sort {
@@ -539,35 +532,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
 
     let query_object = bool_query.build();
 
-    let built_query: QueryType = match args.search_on {
-        SearchOn::Name | SearchOn::Content => query_object.into(),
-        SearchOn::NameContent => {
-            if args.disable_recency {
-                query_object.into()
-            } else {
-                let mut function_score_query = FunctionScoreQueryBuilder::new();
-
-                function_score_query.query(query_object.into());
-
-                function_score_query.function(ScoreFunction {
-                    function: ScoreFunctionType::Gauss(DecayFunction {
-                        field: "updated_at_seconds".into(),
-                        origin: Some("now".into()),
-                        scale: "21d".into(),
-                        offset: Some("3d".into()),
-                        decay: Some(0.5),
-                    }),
-                    filter: None,
-                    weight: Some(1.3),
-                });
-
-                function_score_query.boost_mode(BoostMode::Multiply);
-                function_score_query.score_mode(ScoreMode::Multiply);
-
-                function_score_query.build().into()
-            }
-        }
-    };
+    let built_query: QueryType = query_object.into();
 
     search_request_builder.query(built_query);
 

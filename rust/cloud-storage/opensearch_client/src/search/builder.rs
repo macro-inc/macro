@@ -1,10 +1,11 @@
+use std::borrow::Cow;
+
 use crate::Result;
 use crate::SearchOn;
 use crate::error::OpensearchClientError;
 use crate::search::model::MacroEm;
 use crate::search::query::Keys;
 use crate::search::query::QueryKey;
-use crate::search::query::generate_name_content_query;
 use crate::search::query::generate_terms_must_query;
 use models_opensearch::SearchEntityType;
 use models_opensearch::SearchIndex;
@@ -59,7 +60,7 @@ pub trait SearchQueryConfig {
 
     /// Returns the default sort types that are used on the search query.
     /// Override this method if you need custom sort logic
-    fn default_sort_types() -> Vec<SortType<'static>> {
+    fn default_sort_types<'a>() -> Vec<SortType<'a>> {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
@@ -67,7 +68,7 @@ pub trait SearchQueryConfig {
     }
 
     /// Override this method if you need custom highlight logic
-    fn default_highlight() -> Highlight<'static> {
+    fn default_highlight<'a>() -> Highlight<'a> {
         Highlight::new().require_field_match(true).field(
             "content",
             HighlightField::new()
@@ -111,9 +112,9 @@ pub struct SearchQueryBuilder<T: SearchQueryConfig> {
     _phantom: std::marker::PhantomData<T>,
 }
 
-pub struct ContentAndNameBoolQueries {
-    pub content_bool_query: Option<BoolQueryBuilder<'static>>,
-    pub name_bool_query: Option<BoolQueryBuilder<'static>>,
+pub struct ContentAndNameBoolQueries<'a> {
+    pub content_bool_query: Option<BoolQueryBuilder<'a>>,
+    pub name_bool_query: Option<BoolQueryBuilder<'a>>,
 }
 
 impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
@@ -179,7 +180,9 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
     }
 
     /// Builds a content and name bool query
-    pub fn build_content_and_name_bool_query(&self) -> Result<ContentAndNameBoolQueries> {
+    pub fn build_content_and_name_bool_query<'a>(
+        &'a self,
+    ) -> Result<ContentAndNameBoolQueries<'a>> {
         let content_bool_query = match self.search_on {
             SearchOn::Name => None,
             SearchOn::NameContent | SearchOn::Content => {
@@ -190,7 +193,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                 bool_query.minimum_should_match(1);
 
                 // For name OR content queries, we can build a much more simple bool query
-                let term_must_array: Vec<QueryType<'static>> =
+                let term_must_array: Vec<QueryType<'a>> =
                     self.build_must_term_query(SearchOn::Content)?;
 
                 // For each item in term must array, add to bool must query
@@ -227,7 +230,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                 bool_query.minimum_should_match(1);
 
                 // For name OR content queries, we can build a much more simple bool query
-                let term_must_array: Vec<QueryType<'static>> =
+                let term_must_array: Vec<QueryType<'a>> =
                     self.build_must_term_query(SearchOn::Name)?;
 
                 // For each item in term must array, add to bool must query
@@ -254,6 +257,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                     }
                     _ => {
                         bool_query.must(QueryType::term("_index", SearchIndex::Names.as_ref()));
+                        bool_query.must(QueryType::term("entity_type", T::ENTITY_INDEX.as_ref()));
                     }
                 }
 
@@ -271,10 +275,10 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
     /// generated from self.build_content_and_name_bool_query().
     /// They must be geneated separately as they could be modified after initially
     /// being built.
-    pub fn build_bool_query(
+    pub fn build_bool_query<'a>(
         &self,
-        content_and_name_bool_queries: ContentAndNameBoolQueries,
-    ) -> Result<BoolQueryBuilder<'static>> {
+        content_and_name_bool_queries: ContentAndNameBoolQueries<'a>,
+    ) -> Result<BoolQueryBuilder<'a>> {
         // If we have name content search, we need to combine the content and name bool queries
         // under a single root bool query
         match self.search_on {
@@ -309,11 +313,11 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
     /// Builds the search request with the provided main bool query
     /// This will automatically wrap the bool query in a function score if
     /// SearchOn::NameContent is used
-    pub fn build_search_request(
-        &self,
-        query_object: BoolQuery<'static>,
-    ) -> Result<SearchRequest<'static>> {
-        let mut search_request = SearchRequestBuilder::new();
+    pub fn build_search_request<'a>(
+        &'a self,
+        query_object: BoolQuery<'a>,
+    ) -> Result<SearchRequest<'a>> {
+        let mut search_request: SearchRequestBuilder<'a> = SearchRequestBuilder::new();
 
         // Collapse on the ID_KEY if collapse is true
         // or if we are searchign on Name or NameContent
@@ -405,7 +409,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
     }
 
     /// Generates a vec of term queries to be put inside of the bool must query
-    pub fn build_must_term_query(&self, search_on: SearchOn) -> Result<Vec<QueryType<'static>>> {
+    pub fn build_must_term_query<'a>(&'a self, search_on: SearchOn) -> Result<Vec<QueryType<'a>>> {
         let keys = Keys {
             title_key: T::TITLE_KEY,
             content_key: T::CONTENT_KEY,
@@ -419,12 +423,16 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
         let mut must_array = Vec::new();
 
+        let terms: Cow<'_, [&str]> =
+            Cow::Owned(self.terms.iter().map(|t| t.as_str()).collect::<Vec<&str>>());
+
         match search_on {
             SearchOn::Name => {
                 must_array.push(generate_terms_must_query(
                     query_key,
                     keys.title_key,
-                    &self.terms,
+                    terms,
+                    None,
                 ));
             }
             SearchOn::Content => {
@@ -432,7 +440,8 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                 must_array.push(generate_terms_must_query(
                     query_key,
                     keys.content_key,
-                    &self.terms,
+                    terms,
+                    None,
                 ));
             }
             SearchOn::NameContent => unreachable!(),

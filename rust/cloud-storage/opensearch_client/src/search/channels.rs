@@ -55,7 +55,7 @@ impl SearchQueryConfig for ChannelMessageSearchConfig {
     const TITLE_KEY: &'static str = "name";
     const ENTITY_INDEX: SearchEntityType = SearchEntityType::Channels;
 
-    fn default_sort_types() -> Vec<SortType<'static>> {
+    fn default_sort_types<'a>() -> Vec<SortType<'a>> {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
@@ -109,7 +109,7 @@ impl ChannelMessageQueryBuilder {
     }
 
     /// Builds the main bool query for the index
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
+    pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
         let mut content_and_name_bool_queries = self.inner.build_content_and_name_bool_query()?;
 
         // CUSTOM ATTRIBUTES SECTION
@@ -144,7 +144,7 @@ impl ChannelMessageQueryBuilder {
         Ok(bool_query)
     }
 
-    fn build_search_request(&self) -> Result<SearchRequest<'static>> {
+    fn build_search_request<'a>(&'a self) -> Result<SearchRequest<'a>> {
         let bool_query = self.build_bool_query()?;
 
         // Build the search request with the bool query

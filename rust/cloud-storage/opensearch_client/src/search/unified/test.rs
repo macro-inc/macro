@@ -449,7 +449,8 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
 
     let result = build_unified_search_request(&unified_search_args)?;
 
-    let expected = serde_json::json!({
+    let expected = serde_json::json!(
+    {
       "collapse": {
         "field": "entity_id"
       },
@@ -515,6 +516,11 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                     }
                   },
                   {
+                    "term": {
+                      "_index": "emails"
+                    }
+                  },
+                  {
                     "terms": {
                       "link_id": [
                         "id1",
@@ -613,11 +619,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                         }
                       ]
                     }
-                  },
-                  {
-                    "term": {
-                      "_index": "emails"
-                    }
                   }
                 ],
                 "should": [
@@ -644,6 +645,11 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                   {
                     "match_phrase": {
                       "content": "test"
+                    }
+                  },
+                  {
+                    "term": {
+                      "_index": "channels"
                     }
                   },
                   {
@@ -669,11 +675,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                         "id2"
                       ]
                     }
-                  },
-                  {
-                    "term": {
-                      "_index": "channels"
-                    }
                   }
                 ],
                 "should": [
@@ -684,7 +685,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                         "id2"
                       ]
                     }
-                  },
+                  }
                 ]
               }
             },
@@ -695,6 +696,11 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                   {
                     "match_phrase": {
                       "content": "test"
+                    }
+                  },
+                  {
+                    "term": {
+                      "_index": "chats"
                     }
                   },
                   {
@@ -719,11 +725,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                         }
                       ]
                     }
-                  },
-                  {
-                    "term": {
-                      "_index": "chats"
-                    }
                   }
                 ],
                 "should": [
@@ -743,38 +744,6 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                 ]
               }
             },
-            {
-              "bool": {
-                "minimum_should_match": 1,
-                "must": [
-                  {
-                    "match_phrase": {
-                      "content": "test"
-                    }
-                  },
-                  {
-                    "term": {
-                      "_index": "projects"
-                    }
-                  }
-                ],
-                "should": [
-                  {
-                    "terms": {
-                      "entity_id": [
-                        "id1",
-                        "id2"
-                      ]
-                    }
-                  },
-                  {
-                    "term": {
-                      "user_id": "user"
-                    }
-                  }
-                ]
-              }
-            }
           ]
         }
       },
@@ -784,7 +753,7 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
           "_score": "desc"
         },
         {
-          "entity_id": "asc"
+          "entity_id": "desc"
         }
       ]
     });
@@ -845,53 +814,34 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
 
     let result = build_unified_search_request(&unified_search_args)?;
 
-    let expected = serde_json::json!({
+    let expected = serde_json::json!(
+    {
       "collapse": {
         "field": "entity_id"
       },
       "from": 20,
       "highlight": {
         "fields": {
-            "name": {
-                "number_of_fragments": 1,
-                "post_tags": [
-                    "</macro_em>"
-                ],
-                "pre_tags": [
-                    "<macro_em>"
-                ],
-                "type": "plain"
-            },
-            "name": {
-                "number_of_fragments": 1,
-                "post_tags": [
-                    "</macro_em>"
-                ],
-                "pre_tags": [
-                    "<macro_em>"
-                ],
-                "type": "plain"
-            },
-            "name": {
-                "number_of_fragments": 1,
-                "post_tags": [
-                    "</macro_em>"
-                ],
-                "pre_tags": [
-                    "<macro_em>"
-                ],
-                "type": "plain"
-            },
-            "project_name": {
-                "number_of_fragments": 1,
-                "post_tags": [
-                    "</macro_em>"
-                ],
-                "pre_tags": [
-                    "<macro_em>"
-                ],
-                "type": "plain"
-            }
+          "name": {
+            "number_of_fragments": 1,
+            "post_tags": [
+              "</macro_em>"
+            ],
+            "pre_tags": [
+              "<macro_em>"
+            ],
+            "type": "plain"
+          },
+          "project_name": {
+            "number_of_fragments": 1,
+            "post_tags": [
+              "</macro_em>"
+            ],
+            "pre_tags": [
+              "<macro_em>"
+            ],
+            "type": "plain"
+          }
         },
         "require_field_match": true
       },
@@ -910,139 +860,12 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
                   },
                   {
                     "term": {
-                      "_index": "documents"
-                    }
-                  }
-                ],
-                "should": [
-                  {
-                    "terms": {
-                      "entity_id": [
-                        "id1",
-                        "id2"
-                      ]
+                      "_index": "names"
                     }
                   },
                   {
                     "term": {
-                      "owner_id": "user"
-                    }
-                  }
-                ]
-              }
-            },
-            {
-              "bool": {
-                "minimum_should_match": 1,
-                "must": [
-                  {
-                    "match_phrase": {
-                      "name": "test"
-                    }
-                  },
-                  {
-                    "terms": {
-                      "link_id": [
-                        "id1",
-                        "id2"
-                      ]
-                    }
-                  },
-                  {
-                    "bool": {
-                      "minimum_should_match": 1,
-                      "should": [
-                        {
-                          "wildcard": {
-                            "sender": {
-                              "case_insensitive": true,
-                              "value": "*id1*"
-                            }
-                          }
-                        },
-                        {
-                          "wildcard": {
-                            "sender": {
-                              "case_insensitive": true,
-                              "value": "*id2*"
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "bool": {
-                      "minimum_should_match": 1,
-                      "should": [
-                        {
-                          "wildcard": {
-                            "cc": {
-                              "case_insensitive": true,
-                              "value": "*id1*"
-                            }
-                          }
-                        },
-                        {
-                          "wildcard": {
-                            "cc": {
-                              "case_insensitive": true,
-                              "value": "*id2*"
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "bool": {
-                      "minimum_should_match": 1,
-                      "should": [
-                        {
-                          "wildcard": {
-                            "bcc": {
-                              "case_insensitive": true,
-                              "value": "*id1*"
-                            }
-                          }
-                        },
-                        {
-                          "wildcard": {
-                            "bcc": {
-                              "case_insensitive": true,
-                              "value": "*id2*"
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "bool": {
-                      "minimum_should_match": 1,
-                      "should": [
-                        {
-                          "wildcard": {
-                            "recipients": {
-                              "case_insensitive": true,
-                              "value": "*id1*"
-                            }
-                          }
-                        },
-                        {
-                          "wildcard": {
-                            "recipients": {
-                              "case_insensitive": true,
-                              "value": "*id2*"
-                            }
-                          }
-                        }
-                      ]
-                    }
-                  },
-                  {
-                    "term": {
-                      "_index": "emails"
+                      "entity_type": "documents"
                     }
                   }
                 ],
@@ -1073,31 +896,50 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
                     }
                   },
                   {
-                    "bool": {
-                      "minimum_should_match": 1,
-                      "should": [
-                        {
-                          "wildcard": {
-                            "role": {
-                              "case_insensitive": true,
-                              "value": "*id1*"
-                            }
-                          }
-                        },
-                        {
-                          "wildcard": {
-                            "role": {
-                              "case_insensitive": true,
-                              "value": "*id2*"
-                            }
-                          }
-                        }
+                    "term": {
+                      "_index": "names"
+                    }
+                  },
+                  {
+                    "term": {
+                      "entity_type": "emails"
+                    }
+                  }
+                ],
+                "should": [
+                  {
+                    "terms": {
+                      "entity_id": [
+                        "id1",
+                        "id2"
                       ]
                     }
                   },
                   {
                     "term": {
-                      "_index": "chats"
+                      "user_id": "user"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "bool": {
+                "minimum_should_match": 1,
+                "must": [
+                  {
+                    "match_phrase": {
+                      "name": "test"
+                    }
+                  },
+                  {
+                    "term": {
+                      "_index": "names"
+                    }
+                  },
+                  {
+                    "term": {
+                      "entity_type": "chats"
                     }
                   }
                 ],
@@ -1159,7 +1001,7 @@ fn test_build_unified_search_request_name() -> anyhow::Result<()> {
           "_score": "desc"
         },
         {
-          "entity_id": "asc"
+          "entity_id": "desc"
         }
       ]
     });
@@ -1222,13 +1064,6 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
 
     let expected = serde_json::json!(
     {
-      "aggs": {
-        "total_uniques": {
-          "cardinality": {
-            "field": "entity_id"
-          }
-        }
-      },
       "collapse": {
         "field": "entity_id"
       },
@@ -1264,516 +1099,527 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
               "<macro_em>"
             ],
             "type": "plain"
-          },
+          }
         },
         "require_field_match": false
       },
       "query": {
-        "function_score": {
-          "boost_mode": "multiply",
-          "functions": [
+        "bool": {
+          "minimum_should_match": 1,
+          "should": [
             {
-              "gauss": {
-                "updated_at_seconds": {
-                  "decay": 0.5,
-                  "offset": "3d",
-                  "origin": "now",
-                  "scale": "21d"
-                }
-              },
-              "weight": 1.3
+              "bool": {
+                "minimum_should_match": 1,
+                "should": [
+                  {
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "must": [
+                        {
+                          "match_phrase": {
+                            "content": "test"
+                          }
+                        },
+                        {
+                          "term": {
+                            "_index": "documents"
+                          }
+                        }
+                      ],
+                      "should": [
+                        {
+                          "terms": {
+                            "entity_id": [
+                              "id1",
+                              "id2"
+                            ]
+                          }
+                        },
+                        {
+                          "term": {
+                            "owner_id": "user"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "must": [
+                        {
+                          "match_phrase": {
+                            "name": "test"
+                          }
+                        },
+                        {
+                          "term": {
+                            "_index": "names"
+                          }
+                        },
+                        {
+                          "term": {
+                            "entity_type": "documents"
+                          }
+                        }
+                      ],
+                      "should": [
+                        {
+                          "terms": {
+                            "entity_id": [
+                              "id1",
+                              "id2"
+                            ]
+                          }
+                        },
+                        {
+                          "term": {
+                            "user_id": "user"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "bool": {
+                "minimum_should_match": 1,
+                "should": [
+                  {
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "must": [
+                        {
+                          "match_phrase": {
+                            "content": "test"
+                          }
+                        },
+                        {
+                          "term": {
+                            "_index": "emails"
+                          }
+                        },
+                        {
+                          "terms": {
+                            "link_id": [
+                              "id1",
+                              "id2"
+                            ]
+                          }
+                        },
+                        {
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "wildcard": {
+                                  "sender": {
+                                    "case_insensitive": true,
+                                    "value": "*id1*"
+                                  }
+                                }
+                              },
+                              {
+                                "wildcard": {
+                                  "sender": {
+                                    "case_insensitive": true,
+                                    "value": "*id2*"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "wildcard": {
+                                  "cc": {
+                                    "case_insensitive": true,
+                                    "value": "*id1*"
+                                  }
+                                }
+                              },
+                              {
+                                "wildcard": {
+                                  "cc": {
+                                    "case_insensitive": true,
+                                    "value": "*id2*"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "wildcard": {
+                                  "bcc": {
+                                    "case_insensitive": true,
+                                    "value": "*id1*"
+                                  }
+                                }
+                              },
+                              {
+                                "wildcard": {
+                                  "bcc": {
+                                    "case_insensitive": true,
+                                    "value": "*id2*"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        },
+                        {
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "wildcard": {
+                                  "recipients": {
+                                    "case_insensitive": true,
+                                    "value": "*id1*"
+                                  }
+                                }
+                              },
+                              {
+                                "wildcard": {
+                                  "recipients": {
+                                    "case_insensitive": true,
+                                    "value": "*id2*"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ],
+                      "should": [
+                        {
+                          "terms": {
+                            "entity_id": [
+                              "id1",
+                              "id2"
+                            ]
+                          }
+                        },
+                        {
+                          "term": {
+                            "user_id": "user"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "must": [
+                        {
+                          "match_phrase": {
+                            "name": "test"
+                          }
+                        },
+                        {
+                          "term": {
+                            "_index": "names"
+                          }
+                        },
+                        {
+                          "term": {
+                            "entity_type": "emails"
+                          }
+                        }
+                      ],
+                      "should": [
+                        {
+                          "terms": {
+                            "entity_id": [
+                              "id1",
+                              "id2"
+                            ]
+                          }
+                        },
+                        {
+                          "term": {
+                            "user_id": "user"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "bool": {
+                "minimum_should_match": 1,
+                "should": [
+                  {
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "must": [
+                        {
+                          "match_phrase": {
+                            "content": "test"
+                          }
+                        },
+                        {
+                          "term": {
+                            "_index": "channels"
+                          }
+                        },
+                        {
+                          "terms": {
+                            "thread_id": [
+                              "id1",
+                              "id2"
+                            ]
+                          }
+                        },
+                        {
+                          "terms": {
+                            "mentions": [
+                              "id1",
+                              "id2"
+                            ]
+                          }
+                        },
+                        {
+                          "terms": {
+                            "sender_id": [
+                              "id1",
+                              "id2"
+                            ]
+                          }
+                        }
+                      ],
+                      "should": [
+                        {
+                          "terms": {
+                            "entity_id": [
+                              "id1",
+                              "id2"
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "must": [
+                        {
+                          "match_phrase": {
+                            "name": "test"
+                          }
+                        },
+                        {
+                          "term": {
+                            "_index": "names"
+                          }
+                        },
+                        {
+                          "term": {
+                            "entity_type": "channels"
+                          }
+                        }
+                      ],
+                      "should": [
+                        {
+                          "terms": {
+                            "entity_id": [
+                              "id1",
+                              "id2"
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "bool": {
+                "minimum_should_match": 1,
+                "should": [
+                  {
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "must": [
+                        {
+                          "match_phrase": {
+                            "content": "test"
+                          }
+                        },
+                        {
+                          "term": {
+                            "_index": "chats"
+                          }
+                        },
+                        {
+                          "bool": {
+                            "minimum_should_match": 1,
+                            "should": [
+                              {
+                                "wildcard": {
+                                  "role": {
+                                    "case_insensitive": true,
+                                    "value": "*id1*"
+                                  }
+                                }
+                              },
+                              {
+                                "wildcard": {
+                                  "role": {
+                                    "case_insensitive": true,
+                                    "value": "*id2*"
+                                  }
+                                }
+                              }
+                            ]
+                          }
+                        }
+                      ],
+                      "should": [
+                        {
+                          "terms": {
+                            "entity_id": [
+                              "id1",
+                              "id2"
+                            ]
+                          }
+                        },
+                        {
+                          "term": {
+                            "user_id": "user"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "must": [
+                        {
+                          "match_phrase": {
+                            "name": "test"
+                          }
+                        },
+                        {
+                          "term": {
+                            "_index": "names"
+                          }
+                        },
+                        {
+                          "term": {
+                            "entity_type": "chats"
+                          }
+                        }
+                      ],
+                      "should": [
+                        {
+                          "terms": {
+                            "entity_id": [
+                              "id1",
+                              "id2"
+                            ]
+                          }
+                        },
+                        {
+                          "term": {
+                            "user_id": "user"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "bool": {
+                "minimum_should_match": 1,
+                "should": [
+                  {
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "must": [
+                        {
+                          "match_phrase": {
+                            "content": "test"
+                          }
+                        },
+                        {
+                          "term": {
+                            "_index": "projects"
+                          }
+                        }
+                      ],
+                      "should": [
+                        {
+                          "terms": {
+                            "entity_id": [
+                              "id1",
+                              "id2"
+                            ]
+                          }
+                        },
+                        {
+                          "term": {
+                            "user_id": "user"
+                          }
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "bool": {
+                      "minimum_should_match": 1,
+                      "must": [
+                        {
+                          "match_phrase": {
+                            "project_name": "test"
+                          }
+                        },
+                        {
+                          "term": {
+                            "_index": "projects"
+                          }
+                        }
+                      ],
+                      "should": [
+                        {
+                          "terms": {
+                            "entity_id": [
+                              "id1",
+                              "id2"
+                            ]
+                          }
+                        },
+                        {
+                          "term": {
+                            "user_id": "user"
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
             }
-          ],
-          "query": {
-            "bool": {
-              "minimum_should_match": 1,
-              "should": [
-                {
-                  "bool": {
-                    "minimum_should_match": 1,
-                    "must": [
-                      {
-                        "bool": {
-                          "minimum_should_match": 1,
-                          "should": [
-                            {
-                              "match_phrase_prefix": {
-                                "name": {
-                                  "boost": 1000.0,
-                                  "query": "test"
-                                }
-                              }
-                            },
-                            {
-                              "match_phrase_prefix": {
-                                "content": {
-                                  "boost": 900.0,
-                                  "query": "test"
-                                }
-                              }
-                            },
-                            {
-                              "match": {
-                                "name": {
-                                  "boost": 0.1,
-                                  "minimum_should_match": "80%",
-                                  "query": "test"
-                                }
-                              }
-                            },
-                            {
-                              "match": {
-                                "content": {
-                                  "boost": 0.09,
-                                  "minimum_should_match": "1",
-                                  "query": "test"
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      },
-                      {
-                        "term": {
-                          "_index": "documents"
-                        }
-                      }
-                    ],
-                    "should": [
-                      {
-                        "terms": {
-                          "entity_id": [
-                            "id1",
-                            "id2"
-                          ]
-                        }
-                      },
-                      {
-                        "term": {
-                          "owner_id": "user"
-                        }
-                      }
-                    ]
-                  }
-                },
-                {
-                  "bool": {
-                    "minimum_should_match": 1,
-                    "must": [
-                      {
-                        "bool": {
-                          "minimum_should_match": 1,
-                          "should": [
-                            {
-                              "match_phrase_prefix": {
-                                "name": {
-                                  "boost": 1000.0,
-                                  "query": "test"
-                                }
-                              }
-                            },
-                            {
-                              "match_phrase_prefix": {
-                                "content": {
-                                  "boost": 900.0,
-                                  "query": "test"
-                                }
-                              }
-                            },
-                            {
-                              "match": {
-                                "name": {
-                                  "boost": 0.1,
-                                  "minimum_should_match": "80%",
-                                  "query": "test"
-                                }
-                              }
-                            },
-                            {
-                              "match": {
-                                "content": {
-                                  "boost": 0.09,
-                                  "minimum_should_match": "1",
-                                  "query": "test"
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      },
-                      {
-                        "terms": {
-                          "link_id": [
-                            "id1",
-                            "id2"
-                          ]
-                        }
-                      },
-                      {
-                        "bool": {
-                          "minimum_should_match": 1,
-                          "should": [
-                            {
-                              "wildcard": {
-                                "sender": {
-                                  "case_insensitive": true,
-                                  "value": "*id1*"
-                                }
-                              }
-                            },
-                            {
-                              "wildcard": {
-                                "sender": {
-                                  "case_insensitive": true,
-                                  "value": "*id2*"
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      },
-                      {
-                        "bool": {
-                          "minimum_should_match": 1,
-                          "should": [
-                            {
-                              "wildcard": {
-                                "cc": {
-                                  "case_insensitive": true,
-                                  "value": "*id1*"
-                                }
-                              }
-                            },
-                            {
-                              "wildcard": {
-                                "cc": {
-                                  "case_insensitive": true,
-                                  "value": "*id2*"
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      },
-                      {
-                        "bool": {
-                          "minimum_should_match": 1,
-                          "should": [
-                            {
-                              "wildcard": {
-                                "bcc": {
-                                  "case_insensitive": true,
-                                  "value": "*id1*"
-                                }
-                              }
-                            },
-                            {
-                              "wildcard": {
-                                "bcc": {
-                                  "case_insensitive": true,
-                                  "value": "*id2*"
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      },
-                      {
-                        "bool": {
-                          "minimum_should_match": 1,
-                          "should": [
-                            {
-                              "wildcard": {
-                                "recipients": {
-                                  "case_insensitive": true,
-                                  "value": "*id1*"
-                                }
-                              }
-                            },
-                            {
-                              "wildcard": {
-                                "recipients": {
-                                  "case_insensitive": true,
-                                  "value": "*id2*"
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      },
-                      {
-                        "term": {
-                          "_index": "emails"
-                        }
-                      }
-                    ],
-                    "should": [
-                      {
-                        "terms": {
-                          "entity_id": [
-                            "id1",
-                            "id2"
-                          ]
-                        }
-                      },
-                      {
-                        "term": {
-                          "user_id": "user"
-                        }
-                      }
-                    ]
-                  }
-                },
-                {
-                  "bool": {
-                    "minimum_should_match": 1,
-                    "must": [
-                      {
-                        "bool": {
-                          "minimum_should_match": 1,
-                          "should": [
-                            {
-                              "match_phrase_prefix": {
-                                "name": {
-                                  "boost": 1000.0,
-                                  "query": "test"
-                                }
-                              }
-                            },
-                            {
-                              "match_phrase_prefix": {
-                                "content": {
-                                  "boost": 900.0,
-                                  "query": "test"
-                                }
-                              }
-                            },
-                            {
-                              "match": {
-                                "name": {
-                                  "boost": 0.1,
-                                  "minimum_should_match": "80%",
-                                  "query": "test"
-                                }
-                              }
-                            },
-                            {
-                              "match": {
-                                "content": {
-                                  "boost": 0.09,
-                                  "minimum_should_match": "1",
-                                  "query": "test"
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      },
-                      {
-                        "terms": {
-                          "thread_id": [
-                            "id1",
-                            "id2"
-                          ]
-                        }
-                      },
-                      {
-                        "terms": {
-                          "mentions": [
-                            "id1",
-                            "id2"
-                          ]
-                        }
-                      },
-                      {
-                        "terms": {
-                          "sender_id": [
-                            "id1",
-                            "id2"
-                          ]
-                        }
-                      },
-                      {
-                        "term": {
-                          "_index": "channels"
-                        }
-                      }
-                    ],
-                    "should": [
-                      {
-                        "terms": {
-                          "entity_id": [
-                            "id1",
-                            "id2"
-                          ]
-                        }
-                      },
-                    ]
-                  }
-                },
-                {
-                  "bool": {
-                    "minimum_should_match": 1,
-                    "must": [
-                      {
-                        "bool": {
-                          "minimum_should_match": 1,
-                          "should": [
-                            {
-                              "match_phrase_prefix": {
-                                "name": {
-                                  "boost": 1000.0,
-                                  "query": "test"
-                                }
-                              }
-                            },
-                            {
-                              "match_phrase_prefix": {
-                                "content": {
-                                  "boost": 900.0,
-                                  "query": "test"
-                                }
-                              }
-                            },
-                            {
-                              "match": {
-                                "name": {
-                                  "boost": 0.1,
-                                  "minimum_should_match": "80%",
-                                  "query": "test"
-                                }
-                              }
-                            },
-                            {
-                              "match": {
-                                "content": {
-                                  "boost": 0.09,
-                                  "minimum_should_match": "1",
-                                  "query": "test"
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      },
-                      {
-                        "bool": {
-                          "minimum_should_match": 1,
-                          "should": [
-                            {
-                              "wildcard": {
-                                "role": {
-                                  "case_insensitive": true,
-                                  "value": "*id1*"
-                                }
-                              }
-                            },
-                            {
-                              "wildcard": {
-                                "role": {
-                                  "case_insensitive": true,
-                                  "value": "*id2*"
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      },
-                      {
-                        "term": {
-                          "_index": "chats"
-                        }
-                      }
-                    ],
-                    "should": [
-                      {
-                        "terms": {
-                          "entity_id": [
-                            "id1",
-                            "id2"
-                          ]
-                        }
-                      },
-                      {
-                        "term": {
-                          "user_id": "user"
-                        }
-                      }
-                    ]
-                  }
-                },
-                {
-                  "bool": {
-                    "minimum_should_match": 1,
-                    "must": [
-                      {
-                        "bool": {
-                          "minimum_should_match": 1,
-                          "should": [
-                            {
-                              "match_phrase_prefix": {
-                                "project_name": {
-                                  "boost": 1000.0,
-                                  "query": "test"
-                                }
-                              }
-                            },
-                            {
-                              "match_phrase_prefix": {
-                                "content": {
-                                  "boost": 900.0,
-                                  "query": "test"
-                                }
-                              }
-                            },
-                            {
-                              "match": {
-                                "project_name": {
-                                  "boost": 0.1,
-                                  "minimum_should_match": "80%",
-                                  "query": "test"
-                                }
-                              }
-                            },
-                            {
-                              "match": {
-                                "content": {
-                                  "boost": 0.09,
-                                  "minimum_should_match": "1",
-                                  "query": "test"
-                                }
-                              }
-                            }
-                          ]
-                        }
-                      },
-                      {
-                        "term": {
-                          "_index": "projects"
-                        }
-                      }
-                    ],
-                    "should": [
-                      {
-                        "terms": {
-                          "entity_id": [
-                            "id1",
-                            "id2"
-                          ]
-                        }
-                      },
-                      {
-                        "term": {
-                          "user_id": "user"
-                        }
-                      }
-                    ]
-                  }
-                }
-              ]
-            }
-          },
-          "score_mode": "multiply"
+          ]
         }
       },
       "size": 20,
@@ -1782,10 +1628,9 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
           "_score": "desc"
         },
         {
-          "entity_id": "asc"
+          "entity_id": "desc"
         }
-      ],
-      "track_total_hits": true
+      ]
     });
 
     assert_eq!(result.to_json(), expected);
@@ -1878,7 +1723,7 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
           "_score": "desc"
         },
         {
-          "entity_id": "asc"
+          "entity_id": "desc"
         }
       ]
     });
