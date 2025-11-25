@@ -799,20 +799,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const notificationSource = useGlobalNotificationSource();
   const markEntityAsDone = (entity: EntityData) => {
-    if (emailView() === 'inbox') {
-      if (entity.type === 'email') {
-        archiveEmail(entity.id, {
-          isDone: entity.done,
-          optimisticallyExclude: true,
-        });
-      }
+    const actions = unifiedListContext.actionRegistry;
+    if (actions.isActionEnabled('mark_as_done', entity)) {
+      actions.execute('mark_as_done', entity);
       return true;
     }
-    if (entity.type === 'email') {
-      archiveEmail(entity.id, { isDone: entity.done });
-    }
-    markNotificationsForEntityAsDone(notificationSource, entity);
-    return true;
+    return false;
   };
 
   const { replaceOrInsertSplit, insertSplit } = useSplitLayout();

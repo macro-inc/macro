@@ -324,7 +324,7 @@ export function createNavigationEntityListShortcut({
     },
     {
       testEnabled: (entity) => {
-        if (entity.type === 'email') return true;
+        if (entity.type === 'email' || entity.type === 'channel') return true;
         if (entityHasUnreadNotifications(notificationSource, entity))
           return true;
         return false;
