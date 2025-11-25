@@ -3,7 +3,10 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{DefaultSearchResponse, NameIndex, SearchGotoChat, SearchGotoContent, SearchHit, parse_highlight_hit},
+        model::{
+            DefaultSearchResponse, NameIndex, SearchGotoChat, SearchGotoContent, SearchHit,
+            parse_highlight_hit,
+        },
         query::Keys,
         utils::should_wildcard_field_query_builder,
     },

@@ -15,7 +15,8 @@ use crate::{
         },
         emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
         model::{
-            DefaultSearchResponse, Hit, MacroEm, NameIndex, SearchGotoChannel, SearchGotoChat, SearchGotoContent, SearchGotoDocument, SearchGotoEmail, SearchHit, parse_highlight_hit
+            DefaultSearchResponse, Hit, MacroEm, NameIndex, SearchGotoChannel, SearchGotoChat,
+            SearchGotoContent, SearchGotoDocument, SearchGotoEmail, SearchHit, parse_highlight_hit,
         },
         projects::{ProjectIndex, ProjectQueryBuilder, ProjectSearchArgs, ProjectSearchConfig},
         query::Keys,
