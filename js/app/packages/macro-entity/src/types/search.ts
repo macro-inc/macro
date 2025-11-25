@@ -68,28 +68,18 @@ export type DocumentContentHitData =
   | PdfContentHitData
   | GenericContentHitData;
 
-export type ContentHitData<T extends EntityData = EntityData> = T extends {
-  type: 'email';
-}
-  ? EmailContentHitData
-  : T extends {
-        type: 'channel';
-      }
-    ? ChannelContentHitData
-    : T extends { type: 'document'; fileType: 'md' }
-      ? MdContentHitData
-      : T extends { type: 'document'; fileType: 'pdf' | 'docx' }
-        ? PdfContentHitData
-        : T extends { type: 'document' }
-          ? DocumentContentHitData
-          : GenericContentHitData;
+export type ContentHitData =
+  | DocumentContentHitData
+  | ChannelContentHitData
+  | EmailContentHitData
+  | GenericContentHitData;
 
-export type SearchData<T extends EntityData = EntityData> = {
+export type SearchData = {
   nameHighlight: string | null;
-  contentHitData: ContentHitData<T>[] | null;
+  contentHitData: ContentHitData[] | null;
   source: 'local' | 'service';
 };
 
 export type WithSearch<T extends EntityData> = T & {
-  search: SearchData<T>;
+  search: SearchData;
 };
