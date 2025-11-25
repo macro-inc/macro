@@ -32,6 +32,7 @@ pub(crate) struct ChatIndex {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
 pub(crate) enum ChatNameIndex {
     Name(NameIndex),
     Chat(ChatIndex),

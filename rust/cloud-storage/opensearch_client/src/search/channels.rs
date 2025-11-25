@@ -34,6 +34,7 @@ pub(crate) struct ChannelMessageIndex {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
 pub(crate) enum ChannelMessageNameIndex {
     Name(NameIndex),
     ChannelMessage(ChannelMessageIndex),

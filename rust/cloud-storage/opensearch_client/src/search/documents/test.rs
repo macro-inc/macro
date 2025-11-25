@@ -1,3 +1,5 @@
+use crate::search::model::SearchResponse;
+
 use super::*;
 use opensearch_query_builder::ToOpenSearchJson;
 

@@ -2,8 +2,7 @@ use crate::api::search::{SearchPaginationParams, simple::SearchError};
 use axum::{
     Extension,
     extract::{self, State},
-    http::StatusCode,
-    response::{IntoResponse, Json, Response},
+    response::Json,
 };
 use item_filters::ChatFilters;
 use model::{
@@ -11,7 +10,10 @@ use model::{
     response::ErrorResponse,
     user::UserContext,
 };
-use models_search::chat::{ChatSearchRequest, SimpleChatSearchResponse};
+use models_search::{
+    SimpleSearchResponse,
+    chat::{ChatSearchRequest, SimpleChatSearchResponse},
+};
 use opensearch_client::search::chats::ChatSearchArgs;
 
 use crate::api::ApiContext;
@@ -39,18 +41,14 @@ pub async fn handler(
     user_context: Extension<UserContext>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<ChatSearchRequest>,
-) -> Result<Response, SearchError> {
+) -> Result<Json<SimpleSearchResponse>, SearchError> {
     tracing::info!("simple_chat_search");
 
     let results = search_chats(&ctx, user_context.user_id.as_str(), &query_params, req).await?;
 
-    Ok((
-        StatusCode::OK,
-        Json(SimpleChatSearchResponse {
-            results: results.into_iter().map(|a| a.into()).collect(),
-        }),
-    )
-        .into_response())
+    Ok(Json(SimpleSearchResponse {
+        results: results.into_iter().map(|a| a.into()).collect(),
+    }))
 }
 
 pub(in crate::api::search) struct FilterChatResponse {
@@ -148,7 +146,7 @@ pub(in crate::api::search) async fn search_chats(
     user_id: &str,
     query_params: &SearchPaginationParams,
     req: ChatSearchRequest,
-) -> Result<Vec<opensearch_client::search::chats::ChatSearchResponse>, SearchError> {
+) -> Result<Vec<opensearch_client::search::model::SearchHit>, SearchError> {
     if user_id.is_empty() {
         return Err(SearchError::NoUserId);
     }

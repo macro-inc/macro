@@ -189,6 +189,7 @@ pub(crate) struct EmailIndex {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
 pub(crate) enum EmailNameIndex {
     Email(Box<EmailIndex>),
     Name(NameIndex),

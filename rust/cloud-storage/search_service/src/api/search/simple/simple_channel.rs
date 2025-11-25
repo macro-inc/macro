@@ -5,11 +5,13 @@ use std::collections::HashSet;
 use axum::{
     Extension,
     extract::{self, State},
-    http::StatusCode,
-    response::{IntoResponse, Json, Response},
+    response::Json,
 };
 use model::{response::ErrorResponse, user::UserContext};
-use models_search::channel::{ChannelSearchRequest, SimpleChannelSearchResponse};
+use models_search::{
+    SimpleSearchResponse,
+    channel::{ChannelSearchRequest, SimpleChannelSearchResponse},
+};
 use opensearch_client::search::channels::ChannelMessageSearchArgs;
 
 use crate::api::ApiContext;
@@ -37,7 +39,7 @@ pub async fn handler(
     user_context: Extension<UserContext>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<ChannelSearchRequest>,
-) -> Result<Response, SearchError> {
+) -> Result<Json<SimpleSearchResponse>, SearchError> {
     tracing::info!("simple_channel_search");
 
     let results = search_channels(
@@ -49,13 +51,9 @@ pub async fn handler(
     )
     .await?;
 
-    Ok((
-        StatusCode::OK,
-        Json(SimpleChannelSearchResponse {
-            results: results.into_iter().map(|a| a.into()).collect(),
-        }),
-    )
-        .into_response())
+    Ok(Json(SimpleSearchResponse {
+        results: results.into_iter().map(|a| a.into()).collect(),
+    }))
 }
 
 pub(in crate::api::search) struct FilterChannelResponse {
@@ -115,7 +113,7 @@ pub(in crate::api::search) async fn search_channels(
     organization_id: Option<i32>,
     query_params: &SearchPaginationParams,
     req: ChannelSearchRequest,
-) -> Result<Vec<opensearch_client::search::channels::ChannelMessageSearchResponse>, SearchError> {
+) -> Result<Vec<opensearch_client::search::model::SearchHit>, SearchError> {
     if user_id.is_empty() {
         return Err(SearchError::NoUserId);
     }

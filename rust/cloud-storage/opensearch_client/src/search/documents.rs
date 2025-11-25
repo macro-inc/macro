@@ -90,6 +90,7 @@ pub(crate) struct DocumentIndex {
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
 pub(crate) enum DocumentNameIndex {
     Name(NameIndex),
     Document(DocumentIndex),

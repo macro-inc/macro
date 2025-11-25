@@ -105,7 +105,10 @@ pub struct NameIndex {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SearchGotoDocument {
-    /// The node id of the document
+    /// The node id of the document.
+    /// This is either a 0-indexed page number for pdfs (and docx since they are pdfs) 
+    /// or a uuid of a lexical node for md. This can be ignored for all other 
+    /// file types.
     pub node_id: String,
     /// The raw content of the document
     pub raw_content: Option<String>,
@@ -147,7 +150,7 @@ pub struct SearchHit {
     pub entity_id: String,
     /// The entity type
     pub entity_type: SearchEntityType,
-    /// The name of the entity
+    /// The score of the match
     pub score: Option<f64>,
     /// The highlight of the match
     pub highlight: Highlight,
