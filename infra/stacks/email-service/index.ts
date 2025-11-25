@@ -45,7 +45,10 @@ const BACKFILL_QUEUE_MAX_MESSAGES = config.require(
 const WEBHOOK_QUEUE_WORKERS = config.require(`webhook_queue_workers`);
 const WEBHOOK_QUEUE_MAX_MESSAGES = config.require(`webhook_queue_max_messages`);
 const SFS_UPLOADER_WORKERS = config.require(`sfs_uploader_workers`);
-const GMAIL_GCP_QUEUE = config.require(`gmail_gcp_queue`);
+const gmailGcpQueue = config.require(`gmail_gcp_queue`);
+const GMAIL_GCP_QUEUE = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: gmailGcpQueue })
+  .apply((secret) => secret.secretString);
 
 const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: JWT_SECRET_KEY })

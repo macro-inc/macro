@@ -17,5 +17,5 @@ config:
   email-service:webhook_queue_max_messages: 1
   email-service:sfs_uploader_workers: 3
   email-service:presigned_url_ttl_secs: 3600
-  email-service:gmail_gcp_queue: projects/starry-core-441014-b5/topics/email-service-dev
+  email-service:gmail_gcp_queue: gmail-gcp-queue-dev
   email-service:macro_db_secret_key: macro-db-dev
