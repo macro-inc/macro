@@ -157,6 +157,7 @@ export type SplitHandle = {
     cb: (payload: SplitEventPayload[SplitEvent.ContentChange]) => void
   ) => void;
   replace: (next: SplitContent, mergeHistory?: boolean) => void;
+  removeFromHistory: (predicate: (content: SplitContent) => boolean) => void;
   toggleSpotlight: (force?: boolean) => void;
   setDisplayName: (name: string) => void;
   canGoForward: () => boolean;
@@ -210,15 +211,6 @@ function sameNonComponentIdentity(a: SplitContent, b: SplitContent): boolean {
   if (a.type === 'component' || b.type === 'component') return false;
   if (a.type !== b.type) return false;
   return a.id === b.id;
-}
-
-function _findDuplicateSplit(
-  splits: SplitState[],
-  content: SplitContent
-): SplitState | null {
-  return (
-    splits.find((s) => sameNonComponentIdentity(s.content, content)) ?? null
-  );
 }
 
 function isDuplicateSplit(
@@ -362,6 +354,20 @@ export function createSplitLayout(
     reattach(split, next);
   }
 
+  function removeFromHistory(
+    id: SplitId,
+    predicate: (content: SplitContent) => boolean
+  ) {
+    const i = state.splits.findIndex((s) => s.id === id);
+    if (i < 0) return console.error(`Split with id ${id} not found`);
+
+    const split = state.splits[i];
+    const next = split.history.remove(predicate);
+    if (!next) return;
+
+    reattach(split, next);
+  }
+
   /**
    * Replace the content of a split with the provided content. If mergeHistory is true, the current history index will be replaced with the new content.
    */
@@ -469,6 +475,9 @@ export function createSplitLayout(
       goForward: () => forward(currentSplit.id),
       replace: (next, mergeHistory = false) =>
         replace(currentSplit.id, next, mergeHistory),
+      removeFromHistory: (predicate: (content: SplitContent) => boolean) => {
+        removeFromHistory(currentSplit.id, predicate);
+      },
       close: () => {
         // If there's only one split and it's the default split, then no-op
         if (state.splits.length <= 1) {
