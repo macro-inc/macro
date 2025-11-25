@@ -175,8 +175,8 @@ function NotFound() {
 }
 
 const { EmailSignUp, EmailCallback, CALLBACK_PATH } = makeEmailAuthComponents({
-  callbackPath: '/app/login/popup/success',
-  successPath: '/app/email-signup-callback',
+  callbackPath: '/app/email-signup-callback',
+  successPath: '/component/unified-list',
 });
 
 const ROUTES: RouteDefinition[] = [
