@@ -3,7 +3,9 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{DefaultSearchResponse, Highlight, parse_highlight_hit},
+        model::{
+            DefaultSearchResponse, Highlight, NameIndex, NameSearchResponse, parse_highlight_hit,
+        },
         query::Keys,
     },
 };
@@ -30,8 +32,14 @@ pub(crate) struct ChannelMessageIndex {
     pub updated_at_seconds: i64,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) enum ChannelMessageNameIndex {
+    Name(NameIndex),
+    ChannelMessage(ChannelMessageIndex),
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct ChannelMessageSearchResponse {
+pub struct ChannelMessageSearchContentResponse {
     pub channel_id: String,
     pub channel_type: String,
     pub org_id: Option<i64>,
@@ -45,6 +53,12 @@ pub struct ChannelMessageSearchResponse {
     pub score: Option<f64>,
     /// Contains the highlight matches for the channel name and content
     pub highlight: Highlight,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub enum ChannelMessageSearchResponse {
+    ChannelMessage(ChannelMessageSearchContentResponse),
+    Name(NameSearchResponse),
 }
 
 #[derive(Default)]
@@ -223,7 +237,7 @@ pub(crate) async fn search_channel_messages(
             details: e.to_string(),
         })?;
 
-    let result: DefaultSearchResponse<ChannelMessageIndex> = serde_json::from_slice(&bytes)
+    let result: DefaultSearchResponse<ChannelMessageNameIndex> = serde_json::from_slice(&bytes)
         .map_err(|e| OpensearchClientError::SearchDeserializationFailed {
             details: e.to_string(),
             raw_body: String::from_utf8_lossy(&bytes).to_string(),
@@ -233,18 +247,8 @@ pub(crate) async fn search_channel_messages(
         .hits
         .hits
         .into_iter()
-        .map(|hit| ChannelMessageSearchResponse {
-            channel_id: hit.source.entity_id,
-            channel_type: hit.source.channel_type,
-            org_id: hit.source.org_id,
-            message_id: hit.source.message_id,
-            thread_id: hit.source.thread_id,
-            sender_id: hit.source.sender_id,
-            mentions: hit.source.mentions,
-            created_at: hit.source.created_at_seconds,
-            updated_at: hit.source.updated_at_seconds,
-            score: hit.score,
-            highlight: hit
+        .map(|hit| {
+            let highlight = hit
                 .highlight
                 .map(|h| {
                     parse_highlight_hit(
@@ -255,7 +259,37 @@ pub(crate) async fn search_channel_messages(
                         },
                     )
                 })
-                .unwrap_or_default(),
+                .unwrap_or_default();
+
+            match hit.source {
+                ChannelMessageNameIndex::Name(a) => {
+                    ChannelMessageSearchResponse::Name(NameSearchResponse {
+                        entity_id: a.entity_id,
+                        entity_type: a.entity_type,
+                        name: a.name,
+                        user_id: a.user_id,
+                        score: hit.score,
+                        highlight,
+                    })
+                }
+                ChannelMessageNameIndex::ChannelMessage(a) => {
+                    ChannelMessageSearchResponse::ChannelMessage(
+                        ChannelMessageSearchContentResponse {
+                            channel_id: a.entity_id,
+                            channel_type: a.channel_type,
+                            org_id: a.org_id,
+                            message_id: a.message_id,
+                            thread_id: a.thread_id,
+                            sender_id: a.sender_id,
+                            mentions: a.mentions,
+                            created_at: a.created_at_seconds,
+                            updated_at: a.updated_at_seconds,
+                            score: hit.score,
+                            highlight,
+                        },
+                    )
+                }
+            }
         })
         .collect())
 }

@@ -7,7 +7,7 @@ use crate::{
         builder::SearchQueryConfig,
         channels::{
             ChannelMessageIndex, ChannelMessageQueryBuilder, ChannelMessageSearchArgs,
-            ChannelMessageSearchConfig, ChannelMessageSearchResponse,
+            ChannelMessageSearchConfig, ChannelMessageSearchContentResponse,
         },
         chats::{
             ChatIndex, ChatQueryBuilder, ChatSearchArgs, ChatSearchConfig, ChatSearchResponse,
@@ -203,7 +203,7 @@ pub(crate) enum UnifiedSearchIndex {
 
 #[derive(Debug)]
 pub enum UnifiedSearchResponse {
-    ChannelMessage(ChannelMessageSearchResponse),
+    ChannelMessage(ChannelMessageSearchContentResponse),
     Chat(ChatSearchResponse),
     Document(DocumentSearchContentResponse),
     Name(NameSearchResponse),
@@ -212,7 +212,7 @@ pub enum UnifiedSearchResponse {
 }
 
 pub struct SplitUnifiedSearchResponseValues {
-    pub channel_message: Vec<ChannelMessageSearchResponse>,
+    pub channel_message: Vec<ChannelMessageSearchContentResponse>,
     pub chat: Vec<ChatSearchResponse>,
     pub document: Vec<DocumentSearchContentResponse>,
     pub email: Vec<EmailSearchResponse>,
@@ -272,7 +272,7 @@ impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
     fn from(index: Hit<UnifiedSearchIndex>) -> Self {
         match index.source {
             UnifiedSearchIndex::ChannelMessage(a) => {
-                UnifiedSearchResponse::ChannelMessage(ChannelMessageSearchResponse {
+                UnifiedSearchResponse::ChannelMessage(ChannelMessageSearchContentResponse {
                     channel_id: a.entity_id,
                     channel_type: a.channel_type,
                     org_id: a.org_id,
