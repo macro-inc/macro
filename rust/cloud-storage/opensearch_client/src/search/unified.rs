@@ -18,7 +18,8 @@ use crate::{
             DocumentSearchContentResponse,
         },
         emails::{
-            EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig, EmailSearchResponse,
+            EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig,
+            EmailSearchContentResponse,
         },
         model::{
             DefaultSearchResponse, Hit, MacroEm, NameIndex, NameSearchResponse, parse_highlight_hit,
@@ -208,7 +209,7 @@ pub enum UnifiedSearchResponse {
     Chat(ChatSearchContentResponse),
     Document(DocumentSearchContentResponse),
     Name(NameSearchResponse),
-    Email(EmailSearchResponse),
+    Email(EmailSearchContentResponse),
     Project(ProjectSearchResponse),
 }
 
@@ -216,7 +217,7 @@ pub struct SplitUnifiedSearchResponseValues {
     pub channel_message: Vec<ChannelMessageSearchContentResponse>,
     pub chat: Vec<ChatSearchContentResponse>,
     pub document: Vec<DocumentSearchContentResponse>,
-    pub email: Vec<EmailSearchResponse>,
+    pub email: Vec<EmailSearchContentResponse>,
     pub project: Vec<ProjectSearchResponse>,
     pub name: Vec<NameSearchResponse>,
 }
@@ -322,33 +323,35 @@ impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
                         .unwrap_or_default(),
                 })
             }
-            UnifiedSearchIndex::Email(a) => UnifiedSearchResponse::Email(EmailSearchResponse {
-                thread_id: a.entity_id,
-                message_id: a.message_id,
-                subject: a.subject,
-                sender: a.sender,
-                recipients: a.recipients,
-                cc: a.cc,
-                bcc: a.bcc,
-                labels: a.labels,
-                link_id: a.link_id,
-                user_id: a.user_id,
-                updated_at: a.updated_at_seconds,
-                sent_at: a.sent_at_seconds,
-                score: index.score,
-                highlight: index
-                    .highlight
-                    .map(|h| {
-                        parse_highlight_hit(
-                            h,
-                            Keys {
-                                title_key: EmailSearchConfig::TITLE_KEY,
-                                content_key: EmailSearchConfig::CONTENT_KEY,
-                            },
-                        )
-                    })
-                    .unwrap_or_default(),
-            }),
+            UnifiedSearchIndex::Email(a) => {
+                UnifiedSearchResponse::Email(EmailSearchContentResponse {
+                    thread_id: a.entity_id,
+                    message_id: a.message_id,
+                    subject: a.subject,
+                    sender: a.sender,
+                    recipients: a.recipients,
+                    cc: a.cc,
+                    bcc: a.bcc,
+                    labels: a.labels,
+                    link_id: a.link_id,
+                    user_id: a.user_id,
+                    updated_at: a.updated_at_seconds,
+                    sent_at: a.sent_at_seconds,
+                    score: index.score,
+                    highlight: index
+                        .highlight
+                        .map(|h| {
+                            parse_highlight_hit(
+                                h,
+                                Keys {
+                                    title_key: EmailSearchConfig::TITLE_KEY,
+                                    content_key: EmailSearchConfig::CONTENT_KEY,
+                                },
+                            )
+                        })
+                        .unwrap_or_default(),
+                })
+            }
             UnifiedSearchIndex::Project(a) => {
                 UnifiedSearchResponse::Project(ProjectSearchResponse {
                     project_id: a.entity_id,

@@ -3,7 +3,7 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{Highlight, parse_highlight_hit},
+        model::{Highlight, NameIndex, NameSearchResponse, parse_highlight_hit},
         query::Keys,
         utils::should_wildcard_field_query_builder,
     },
@@ -188,8 +188,14 @@ pub(crate) struct EmailIndex {
     pub content: String,
 }
 
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+pub(crate) enum EmailNameIndex {
+    Email(Box<EmailIndex>),
+    Name(NameIndex),
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct EmailSearchResponse {
+pub struct EmailSearchContentResponse {
     pub thread_id: String,
     pub message_id: String,
     pub sender: String,
@@ -204,6 +210,12 @@ pub struct EmailSearchResponse {
     pub subject: Option<String>,
     pub score: Option<f64>,
     pub highlight: Highlight,
+}
+
+#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
+pub enum EmailSearchResponse {
+    Email(EmailSearchContentResponse),
+    Name(NameSearchResponse),
 }
 
 pub struct EmailSearchArgs {
@@ -275,7 +287,7 @@ pub(crate) async fn search_emails(
             details: e.to_string(),
         })?;
 
-    let result: DefaultSearchResponse<EmailIndex> =
+    let result: DefaultSearchResponse<EmailNameIndex> =
         serde_json::from_slice(&bytes).map_err(|e| {
             OpensearchClientError::SearchDeserializationFailed {
                 details: e.to_string(),
@@ -287,21 +299,8 @@ pub(crate) async fn search_emails(
         .hits
         .hits
         .into_iter()
-        .map(|hit| EmailSearchResponse {
-            thread_id: hit.source.entity_id,
-            message_id: hit.source.message_id,
-            subject: hit.source.subject,
-            sender: hit.source.sender,
-            recipients: hit.source.recipients,
-            cc: hit.source.cc,
-            bcc: hit.source.bcc,
-            labels: hit.source.labels,
-            link_id: hit.source.link_id,
-            user_id: hit.source.user_id,
-            updated_at: hit.source.updated_at_seconds,
-            sent_at: hit.source.sent_at_seconds,
-            score: hit.score,
-            highlight: hit
+        .map(|hit| {
+            let highlight = hit
                 .highlight
                 .map(|h| {
                     parse_highlight_hit(
@@ -312,7 +311,36 @@ pub(crate) async fn search_emails(
                         },
                     )
                 })
-                .unwrap_or_default(),
+                .unwrap_or_default();
+
+            match hit.source {
+                EmailNameIndex::Name(a) => EmailSearchResponse::Name(NameSearchResponse {
+                    entity_id: a.entity_id,
+                    entity_type: a.entity_type,
+                    name: a.name,
+                    user_id: a.user_id,
+                    score: hit.score,
+                    highlight,
+                }),
+                EmailNameIndex::Email(a) => {
+                    EmailSearchResponse::Email(EmailSearchContentResponse {
+                        thread_id: a.entity_id,
+                        message_id: a.message_id,
+                        subject: a.subject,
+                        sender: a.sender,
+                        recipients: a.recipients,
+                        cc: a.cc,
+                        bcc: a.bcc,
+                        labels: a.labels,
+                        link_id: a.link_id,
+                        user_id: a.user_id,
+                        updated_at: a.updated_at_seconds,
+                        sent_at: a.sent_at_seconds,
+                        score: hit.score,
+                        highlight,
+                    })
+                }
+            }
         })
         .collect())
 }
