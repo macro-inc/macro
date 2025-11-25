@@ -3,7 +3,10 @@ import {
   blockAcceptedFileExtensionSet,
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
-import { USE_PIXEL_BLOCK_ICONS } from '@core/constant/featureFlags';
+import {
+  USE_PIXEL_BLOCK_ICONS,
+  USE_WIDE_ICONS,
+} from '@core/constant/featureFlags';
 import Building from '@icon/duotone/building-duotone.svg';
 import Chat from '@icon/duotone/chat-duotone.svg';
 import FileCode from '@icon/duotone/code-duotone.svg';
@@ -41,6 +44,18 @@ import PixelUser from '@macro-icons/pixel/user.svg';
 import PixelUsers from '@macro-icons/pixel/users.svg';
 import PixelVideo from '@macro-icons/pixel/video.svg';
 import PixelWord from '@macro-icons/pixel/write.svg';
+import WideBook from '@macro-icons/wide/book.svg';
+import WideChannel from '@macro-icons/wide/channel.svg';
+import WideChat from '@macro-icons/wide/chat.svg';
+import WideDiagram from '@macro-icons/wide/diagram.svg';
+import WideEmail from '@macro-icons/wide/email.svg';
+import WideFileCode from '@macro-icons/wide/file-code.svg';
+import WideFileImage from '@macro-icons/wide/file-image.svg';
+import WideFileMd from '@macro-icons/wide/file-md.svg';
+import WideFolder from '@macro-icons/wide/folder.svg';
+import WideStar from '@macro-icons/wide/star.svg';
+import WideUnknown from '@macro-icons/wide/unknown.svg';
+import WideUser from '@macro-icons/wide/user.svg';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Component, JSX } from 'solid-js';
@@ -246,6 +261,30 @@ export const PIXEL_ICONS: Record<EntityWithValidIcon, Component> = {
   emailRead: PixelEmailRead,
 };
 
+export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
+  canvas: WideDiagram,
+  html: WideFileCode,
+  channel: WideChannel,
+  company: WideUnknown,
+  email: WideEmail,
+  code: WideFileCode,
+  pdf: WideBook,
+  md: WideFileMd,
+  image: WideFileImage,
+  write: WideFileMd,
+  chat: WideStar,
+  project: WideFolder,
+  sharedProject: WideFolder,
+  unknown: WideUnknown,
+  archive: WideUnknown,
+  video: WideUnknown,
+  contact: WideUser,
+  default: WideUnknown,
+  directMessage: WideChat,
+  user: WideUser,
+  emailRead: WideEmail,
+};
+
 export const ICON_SIZES = {
   xs: 'w-4 h-4',
   sm: 'w-4.5 h-4.5',
@@ -307,8 +346,15 @@ export function EntityIcon(props: EntityIconProps) {
   };
 
   const config = () => ENTITY_ICON_CONFIGS[getName()];
-  const icon = () =>
-    USE_PIXEL_BLOCK_ICONS ? PIXEL_ICONS[getName()] : config().icon;
+  const icon = () => {
+    if (USE_PIXEL_BLOCK_ICONS) {
+      return PIXEL_ICONS[getName()];
+    } else if (USE_WIDE_ICONS) {
+      return WIDE_ICONS[getName()];
+    } else {
+      return config().icon;
+    }
+  };
   const sizeClass = () => ICON_SIZE_CLASSES[props.size ?? 'xs'];
   const isMonochrome = () => props.theme === 'monochrome';
 
@@ -361,6 +407,8 @@ export function getIconConfig(
   const config = { ...ENTITY_ICON_CONFIGS[key] };
   if (USE_PIXEL_BLOCK_ICONS) {
     config.icon = PIXEL_ICONS[key];
+  } else if (USE_WIDE_ICONS) {
+    config.icon = WIDE_ICONS[key];
   }
   return config;
 }
