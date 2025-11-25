@@ -155,18 +155,15 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
         queueMicrotask(() => {
           untrack(() => processEmailColors(root));
         });
+      } else if (parsedHTML().hasTable) {
+        const contentWrapper = root.querySelector('div');
+        console.log('contentWrapper', contentWrapper);
+        if (contentWrapper instanceof HTMLElement) {
+          contentWrapper.style.setProperty('background-color', 'white', 'important');
+          // Some emails don't have a color set, so we need to set it to black to ensure text is readable againnst white background
+          contentWrapper.style.setProperty('color', 'black');
+        }
       }
-      // TODO: this is catching too many emails, we need to change how isPersonal gets detected.
-      // else {
-      //   const contentWrapper = root.firstChild;
-      //   if (contentWrapper instanceof HTMLElement) {
-      //     contentWrapper.style.setProperty(
-      //       'background-color',
-      //       'white',
-      //       'important'
-      //     );
-      //   }
-      // }
     }
   });
 
