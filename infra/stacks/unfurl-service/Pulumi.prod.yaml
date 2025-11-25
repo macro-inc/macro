@@ -1,5 +1,3 @@
 config:
   aws-native:region: us-east-1
   aws:region: us-east-1
-  unfurl-service:datadog_api_key:
-    secure: AAABAIJfIpRacVISvDjwxKywjFgCsRc/WIM775O30HuFN2abqYQvDc5MYy6VA6uQsBlZpQOV0I/QokkEgv1dzA==

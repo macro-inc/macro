@@ -3,7 +3,7 @@ config:
   aws:region: us-east-1
   email-service:authentication_service_internal_api_key: authentication-service-internal-api-key-prod
   email-service:jwt_secret_key: fusionauth-jwt-secret-prod
-  email-service:fusionauth_client_id: 75409999-7dc4-4241-b73b-a51818c3a71c
+  email-service:fusionauth_client_id: fusionauth-client-id-key-prod
   email-service:fusionauth_issuer: auth.macro.com
   email-service:db_password_secret_key: email-db-password-prod
   email-service:internal_auth_key: document-storage-service-auth-key-prod
@@ -17,5 +17,5 @@ config:
   email-service:webhook_queue_max_messages: 1
   email-service:sfs_uploader_workers: 3
   email-service:presigned_url_ttl_secs: 3600
-  email-service:gmail_gcp_queue: projects/macro-435922/topics/email-service
+  email-service:gmail_gcp_queue: gmail-gcp-queue-prod
   email-service:macro_db_secret_key: macro-db-prod

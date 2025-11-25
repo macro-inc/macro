@@ -57,7 +57,13 @@ const syncServiceAuthKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: SYNC_SERVICE_AUTH_KEY })
   .apply((secret) => secret.arn);
 
-const FUSIONAUTH_CLIENT_ID = config.require(`fusionauth_client_id`);
+const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
+
+const FUSIONAUTH_CLIENT_ID = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: fusionauthClientIdSecretKey,
+  })
+  .apply((secret) => secret.secretString);
 const FUSIONAUTH_ISSUER = config.require(`fusionauth_issuer`);
 
 const DOCUMENT_STORAGE_PERMISSIONS_KEY = config.require(
