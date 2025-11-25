@@ -538,7 +538,7 @@ export function createNavigationEntityListShortcut({
   });
 
   // ---------------------------------------------------------------------------
-  // MOVE TO PROJECT
+  // MOVE TO FOLDER
   // ---------------------------------------------------------------------------
   actionRegistry.register(
     'move_to_project',
@@ -574,8 +574,8 @@ export function createNavigationEntityListShortcut({
     hotkeyToken: TOKENS.entity.action.moveToFolder,
     description: () =>
       viewData().selectedEntities.length > 1
-        ? 'Move items to project'
-        : 'Move item to project',
+        ? 'Move items to folder'
+        : 'Move item to folder',
     condition: () =>
       isViewingList() &&
       actionRegistry.isActionEnabled(

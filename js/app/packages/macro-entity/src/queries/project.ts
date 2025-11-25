@@ -88,7 +88,7 @@ const fetchProjectData = async (
 
     // Check access level
     if (projectPreview.access === 'no_access') {
-      throw new Error(`No access to project ${projectId}`);
+      throw new Error(`No access to folder ${projectId}`);
     }
 
     if (projectPreview.access === 'does_not_exist') {
