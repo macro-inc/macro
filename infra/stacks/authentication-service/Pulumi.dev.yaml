@@ -11,7 +11,7 @@ config:
   authentication-service:jwt_secret_key: fusionauth-jwt-secret-dev
   authentication-service:fusionauth_client_id: fusionauth-client-id-key-dev
   authentication-service:fusionauth_issuer: fusionauth-dev.macro.com
-  authentication-service:google_client_id: 500231286272-21nk2ahms4udek5ki9hii25fve0vt38h.apps.googleusercontent.com
+  authentication-service:google_client_id: google-client-id-dev
   authentication-service:google_client_secret_key: google-client-secret-dev
   authentication-service:macro_api_token_private_secret_key: macro-api-token-private-key-dev
   authentication-service:stripe_webhook_secret_key: stripe-webhook-secret-dev

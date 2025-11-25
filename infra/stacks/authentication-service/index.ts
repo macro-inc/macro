@@ -55,7 +55,12 @@ const FUSIONAUTH_CLIENT_ID = aws.secretsmanager
 const FUSIONAUTH_ISSUER = config.require(`fusionauth_issuer`);
 const FUSIONAUTH_BASE_URL = `https://${FUSIONAUTH_ISSUER}`;
 const GOOGLE_CLIENT_SECRET_KEY = config.require(`google_client_secret_key`);
-const GOOGLE_CLIENT_ID = config.require(`google_client_id`);
+const googleClientId = config.require(`google_client_id`);
+const GOOGLE_CLIENT_ID = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: googleClientId,
+  })
+  .apply((secret) => secret.secretString);
 
 // Using the 5 secret names
 // We need to grab their arns so we can create a policy to allow them to be retrieved by service
@@ -214,27 +219,23 @@ const service = new AuthenticationService('authentication-service', {
     },
     {
       name: 'COMMS_SERVICE_URL',
-      value: `https://comms-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      value: `https://comms-service${stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
     },
     {
       name: 'DOCUMENT_STORAGE_SERVICE_URL',
-      value: `https://cloud-storage${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      value: `https://cloud-storage${stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
     },
     {
       name: 'NOTIFICATION_SERVICE_URL',
-      value: `https://notifications${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      value: `https://notifications${stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
     },
     {
       name: 'PROPERTIES_SERVICE_URL',
-      value: `https://properties-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      value: `https://properties-service${stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
     },
     {
       name: 'NOTIFICATION_QUEUE',
