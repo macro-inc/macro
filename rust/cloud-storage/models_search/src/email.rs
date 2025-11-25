@@ -145,28 +145,6 @@ pub struct SimpleEmailSearchResponseBaseItem<T> {
 
 pub type SimpleEmailSearchResponseItem = SimpleEmailSearchResponseBaseItem<crate::TimestampSeconds>;
 
-impl From<opensearch_client::search::emails::EmailSearchResponse>
-    for SimpleEmailSearchResponseItem
-{
-    fn from(response: opensearch_client::search::emails::EmailSearchResponse) -> Self {
-        Self {
-            thread_id: response.thread_id,
-            message_id: response.message_id,
-            sender: response.sender,
-            recipients: response.recipients,
-            cc: response.cc,
-            bcc: response.bcc,
-            labels: response.labels,
-            link_id: response.link_id,
-            user_id: response.user_id,
-            updated_at: response.updated_at.into(),
-            sent_at: response.sent_at.map(|t| t.into()),
-            subject: response.subject,
-            highlight: response.highlight.into(),
-        }
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleEmailSearchResponse {
     /// List containing results from emails.

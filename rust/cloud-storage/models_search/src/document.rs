@@ -124,23 +124,6 @@ pub struct SimpleDocumentSearchResponseBaseItem<T> {
 pub type SimpleDocumentSearchResponseItem =
     SimpleDocumentSearchResponseBaseItem<crate::TimestampSeconds>;
 
-impl From<opensearch_client::search::documents::DocumentSearchResponse>
-    for SimpleDocumentSearchResponseItem
-{
-    fn from(response: opensearch_client::search::documents::DocumentSearchResponse) -> Self {
-        Self {
-            document_id: response.document_id,
-            document_name: response.document_name,
-            node_id: response.node_id,
-            owner_id: response.owner_id,
-            file_type: response.file_type,
-            updated_at: response.updated_at.into(),
-            highlight: response.highlight.into(),
-            raw_content: response.raw_content,
-        }
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleDocumentSearchResponse {
     /// List containing results from documents.

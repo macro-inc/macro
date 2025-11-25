@@ -140,20 +140,6 @@ pub struct SimpleChatSearchResponseBaseItem<T> {
 
 pub type SimpleChatSearchResponseItem = SimpleChatSearchResponseBaseItem<crate::TimestampSeconds>;
 
-impl From<opensearch_client::search::chats::ChatSearchResponse> for SimpleChatSearchResponseItem {
-    fn from(response: opensearch_client::search::chats::ChatSearchResponse) -> Self {
-        Self {
-            chat_id: response.chat_id,
-            chat_message_id: response.chat_message_id,
-            user_id: response.user_id,
-            role: response.role,
-            updated_at: response.updated_at.into(),
-            title: response.title,
-            highlight: response.highlight.into(),
-        }
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleChatSearchResponse {
     /// List containing results from chats.

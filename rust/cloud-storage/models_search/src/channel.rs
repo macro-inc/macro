@@ -146,25 +146,6 @@ pub struct SimpleChannelSearchReponseBaseItem<T> {
 pub type SimpleChannelSearchReponseItem =
     SimpleChannelSearchReponseBaseItem<crate::TimestampSeconds>;
 
-impl From<opensearch_client::search::channels::ChannelMessageSearchResponse>
-    for SimpleChannelSearchReponseItem
-{
-    fn from(response: opensearch_client::search::channels::ChannelMessageSearchResponse) -> Self {
-        Self {
-            channel_id: response.channel_id,
-            channel_type: response.channel_type,
-            org_id: response.org_id,
-            message_id: response.message_id,
-            thread_id: response.thread_id,
-            sender_id: response.sender_id,
-            mentions: response.mentions,
-            created_at: response.created_at.into(),
-            updated_at: response.updated_at.into(),
-            highlight: response.highlight.into(),
-        }
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleChannelSearchResponse {
     /// List containing results from channels.

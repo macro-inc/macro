@@ -9,21 +9,21 @@ use model::response::ErrorResponse;
 use opensearch_client::error::OpensearchClientError;
 
 pub(in crate::api::search::simple) mod filter;
-pub(in crate::api) mod simple_channel;
-pub(in crate::api) mod simple_chat;
+// pub(in crate::api) mod simple_channel;
+// pub(in crate::api) mod simple_chat;
 pub(in crate::api) mod simple_document;
-pub(in crate::api) mod simple_email;
-pub(in crate::api) mod simple_project;
-pub(in crate::api) mod simple_unified;
+// pub(in crate::api) mod simple_email;
+// pub(in crate::api) mod simple_project;
+// pub(in crate::api) mod simple_unified;
 
 pub fn router() -> Router<ApiContext> {
     Router::new()
-        .route("/", post(simple_unified::handler))
+        // .route("/", post(simple_unified::handler))
         .route("/document", post(simple_document::handler))
-        .route("/chat", post(simple_chat::handler))
-        .route("/email", post(simple_email::handler))
-        .route("/channel", post(simple_channel::handler))
-        .route("/project", post(simple_project::handler))
+        // .route("/chat", post(simple_chat::handler))
+        // .route("/email", post(simple_email::handler))
+        // .route("/channel", post(simple_channel::handler))
+        // .route("/project", post(simple_project::handler))
 }
 
 #[derive(thiserror::Error, Debug)]
