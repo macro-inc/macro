@@ -67,8 +67,5 @@ fn test_construct_search_result_single_thread() {
             .unwrap(),
         "msg1"
     );
-    assert_eq!(
-        result[0].extra.subject,
-        Some("subject".to_string())
-    );
+    assert_eq!(result[0].extra.subject, Some("subject".to_string()));
 }
