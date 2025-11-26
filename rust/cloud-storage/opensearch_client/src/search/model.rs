@@ -118,6 +118,8 @@ pub struct SearchGotoDocument {
 pub struct SearchGotoChat {
     /// The chat message id
     pub chat_message_id: String,
+    /// The role of the chat message
+    pub role: String,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]

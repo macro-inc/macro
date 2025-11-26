@@ -1,6 +1,6 @@
+use crate::api::ApiContext;
 use crate::api::search::simple::SearchError;
-use crate::{api::ApiContext, util};
-use crate::{api::search::simple::simple_chat::search_chats, model::ChatOpenSearchResponse};
+use crate::api::search::simple::simple_chat::search_chats;
 use axum::{
     Extension,
     extract::{self, State},
@@ -9,9 +9,10 @@ use axum::{
 };
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::chat::{
-    ChatMessageSearchResult, ChatSearchMetadata, ChatSearchRequest, ChatSearchResponse,
-    ChatSearchResponseItem, ChatSearchResponseItemWithMetadata,
+    ChatMessageSearchResult, ChatSearchRequest, ChatSearchResponse, ChatSearchResponseItem,
+    ChatSearchResponseItemWithMetadata,
 };
+use opensearch_client::search::model::SearchGotoContent;
 use std::collections::HashMap;
 
 use super::SearchPaginationParams;
@@ -21,13 +22,18 @@ use super::SearchPaginationParams;
 pub(in crate::api::search) async fn enrich_chats(
     ctx: &ApiContext,
     user_id: &str,
-    results: Vec<opensearch_client::search::chats::ChatSearchResponse>,
+    results: Vec<opensearch_client::search::model::SearchHit>,
 ) -> Result<Vec<ChatSearchResponseItemWithMetadata>, SearchError> {
+    let results: Vec<opensearch_client::search::model::SearchHit> = results
+        .into_iter()
+        .filter(|r| r.entity_type == models_opensearch::SearchEntityType::Chats)
+        .collect();
+
     if results.is_empty() {
         return Ok(vec![]);
     }
     // Extract chat IDs from results
-    let chat_ids: Vec<String> = results.iter().map(|r| r.chat_id.clone()).collect();
+    let chat_ids: Vec<String> = results.iter().map(|r| r.entity_id.clone()).collect();
 
     // Fetch chat metadata from database
     let chat_histories =
@@ -89,39 +95,62 @@ pub async fn handler(
 }
 
 pub fn construct_search_result(
-    search_results: Vec<opensearch_client::search::chats::ChatSearchResponse>,
+    search_results: Vec<opensearch_client::search::model::SearchHit>,
     chat_histories: HashMap<String, macro_db_client::chat::get::ChatHistoryInfo>,
 ) -> anyhow::Result<Vec<ChatSearchResponseItemWithMetadata>> {
-    let search_results = search_results
+    // construct entity hit map of id -> vec<hits>
+    let entity_id_hit_map: HashMap<String, Vec<ChatMessageSearchResult>> = search_results
         .into_iter()
-        .map(|inner| ChatOpenSearchResponse { inner })
-        .collect();
-    let result = util::construct_search_result::<
-        ChatOpenSearchResponse,
-        ChatMessageSearchResult,
-        ChatSearchMetadata,
-    >(search_results)?;
-    // To preserve backwards compatibility for now, convert back into old struct
-    let result: Vec<ChatSearchResponseItem> = result.into_iter().map(|a| a.into()).collect();
+        .map(|hit| {
+            let result = if let Some(SearchGotoContent::Chats(goto)) = hit.goto {
+                ChatMessageSearchResult {
+                    chat_message_id: Some(goto.chat_message_id),
+                    role: Some(goto.role),
+                    highlight: hit.highlight.into(),
+                    score: hit.score,
+                }
+            } else {
+                // name match
+                ChatMessageSearchResult {
+                    chat_message_id: None,
+                    role: None,
+                    highlight: hit.highlight.into(),
+                    score: hit.score,
+                }
+            };
+            (hit.entity_id, result)
+        })
+        .fold(HashMap::new(), |mut map, (entity_id, result)| {
+            map.entry(entity_id).or_insert_with(Vec::new).push(result);
+            map
+        });
 
-    // Add metadata for each chat fetched from macrodb
-    let result: Vec<ChatSearchResponseItemWithMetadata> = result
+    // now construct the search results
+    let result: Vec<ChatSearchResponseItemWithMetadata> = entity_id_hit_map
         .into_iter()
-        .map(|item| {
-            let metadata =
-                chat_histories
-                    .get(&item.chat_id)
-                    .map(|info| models_search::chat::ChatMetadata {
-                        created_at: info.created_at.timestamp(),
-                        updated_at: info.updated_at.timestamp(),
-                        viewed_at: info.viewed_at.map(|a| a.timestamp()),
-                        project_id: info.project_id.clone(),
-                        deleted_at: info.deleted_at.map(|a| a.timestamp()),
-                    });
-
-            ChatSearchResponseItemWithMetadata {
-                metadata,
-                extra: item,
+        .filter_map(|(entity_id, hits)| {
+            if let Some(info) = chat_histories.get(&entity_id) {
+                let info = info.clone();
+                let metadata = models_search::chat::ChatMetadata {
+                    created_at: info.created_at.timestamp(),
+                    updated_at: info.updated_at.timestamp(),
+                    viewed_at: info.viewed_at.map(|a| a.timestamp()),
+                    project_id: info.project_id.clone(),
+                    deleted_at: info.deleted_at.map(|a| a.timestamp()),
+                };
+                Some(ChatSearchResponseItemWithMetadata {
+                    metadata: Some(metadata),
+                    extra: ChatSearchResponseItem {
+                        id: entity_id.clone(),
+                        chat_id: entity_id,
+                        owner_id: info.user_id.clone(),
+                        user_id: info.user_id,
+                        name: info.name,
+                        chat_search_results: hits,
+                    },
+                })
+            } else {
+                None
             }
         })
         .collect();

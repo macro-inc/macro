@@ -227,6 +227,7 @@ pub(crate) async fn search_chats(
                     highlight,
                     goto: Some(SearchGotoContent::Chats(SearchGotoChat {
                         chat_message_id: a.chat_message_id,
+                        role: a.role,
                     })),
                 },
             }

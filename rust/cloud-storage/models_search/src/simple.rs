@@ -26,6 +26,8 @@ pub struct SearchGotoDocument {
 pub struct SearchGotoChat {
     /// The chat message id
     pub chat_message_id: String,
+    /// The role of the chat message
+    pub role: String,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, ToSchema)]
@@ -62,6 +64,7 @@ impl From<opensearch_client::search::model::SearchGotoContent> for SearchGotoCon
             opensearch_client::search::model::SearchGotoContent::Chats(a) => {
                 SearchGotoContent::Chats(SearchGotoChat {
                     chat_message_id: a.chat_message_id,
+                    role: a.role,
                 })
             }
             opensearch_client::search::model::SearchGotoContent::Emails(a) => {

@@ -303,6 +303,7 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     .unwrap_or_default(),
                 goto: Some(SearchGotoContent::Chats(SearchGotoChat {
                     chat_message_id: a.chat_message_id,
+                    role: a.role,
                 })),
             },
             UnifiedSearchIndex::Name(a) => SearchHit {

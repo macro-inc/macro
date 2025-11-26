@@ -9,15 +9,13 @@ use crate::{MatchType, SearchHighlight, SearchOn, SearchResponseItem};
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ChatMessageSearchResult {
     /// The chat message id for the chat
-    pub chat_message_id: String,
+    /// This is only present if the search match was on the chat message content
+    pub chat_message_id: Option<String>,
     /// The role of the chat message
-    pub role: String,
+    /// This is only present if the search match was on the chat message content
+    pub role: Option<String>,
     /// The highlights for the chat message
     pub highlight: SearchHighlight,
-    /// When the search chat was last updated
-    pub updated_at: i64,
-    /// The title of the chat
-    pub title: String,
     /// The score of the result
     #[serde(skip_serializing_if = "Option::is_none")]
     pub score: Option<f64>,

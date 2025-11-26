@@ -10,6 +10,8 @@ pub struct ProjectHistoryInfo {
     pub viewed_at: Option<DateTime<Utc>>,
     pub parent_project_id: Option<String>,
     pub deleted_at: Option<DateTime<Utc>>,
+    pub user_id: String,
+    pub name: String,
 }
 
 /// Gets project history information including when a user last viewed each project
@@ -32,7 +34,9 @@ pub async fn get_project_history_info(
             p."updatedAt" as "updated_at!",
             p."deletedAt" as "deleted_at?",
             p."parentId" as "parent_project_id?",
-            uh."updatedAt" as "viewed_at?"
+            uh."updatedAt" as "viewed_at?",
+            p."userId" as "user_id",
+            p."name"
         FROM
             "Project" p
         LEFT JOIN
@@ -55,6 +59,8 @@ pub async fn get_project_history_info(
         .map(|row| {
             let info = ProjectHistoryInfo {
                 item_id: row.item_id.clone(),
+                user_id: row.user_id,
+                name: row.name,
                 created_at: DateTime::<Utc>::from_naive_utc_and_offset(row.created_at, Utc),
                 updated_at: DateTime::<Utc>::from_naive_utc_and_offset(row.updated_at, Utc),
                 viewed_at: row

@@ -132,8 +132,6 @@ pub fn construct_search_result(
             map
         });
 
-    tracing::trace!("entity_id_hit_map: {:?}", entity_id_hit_map);
-
     // now construct the search results
     let result: Vec<DocumentSearchResponseItemWithMetadata> = entity_id_hit_map
         .into_iter()
