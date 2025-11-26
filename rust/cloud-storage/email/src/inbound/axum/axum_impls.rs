@@ -7,15 +7,15 @@ use crate::{
 };
 use axum::{
     RequestPartsExt, async_trait,
-    extract::{FromRequestParts, Path, rejection::PathRejection},
+    extract::{FromRef, FromRequestParts, Path, rejection::PathRejection},
     http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
 };
+use axum_extra::extract::Cached;
 use model_user::axum_extractor::{MacroUserExtractor, UserExtractorErr};
-use std::{str::FromStr, sync::Arc};
+use std::{marker::PhantomData, str::FromStr};
 use thiserror::Error;
 use utoipa::{IntoParams, ToSchema};
-use uuid::Uuid;
 
 #[derive(Debug, Error)]
 pub enum GetPreviewsCursorError {
@@ -44,9 +44,6 @@ impl IntoResponse for GetPreviewsCursorError {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct LinkUuid(pub Uuid);
-
 pub(crate) struct PreviewViewExtractor(pub PreviewView);
 
 #[async_trait]
@@ -71,8 +68,13 @@ pub struct GetPreviewsCursorParams {
     pub sort_method: Option<ApiSortMethod>,
 }
 
-#[derive(Clone)]
-pub struct EmailLinkExtractor(pub Link);
+pub struct EmailLinkExtractor<U>(pub Link, pub PhantomData<U>);
+
+impl<U> Clone for EmailLinkExtractor<U> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
 
 #[derive(Debug, Error)]
 pub enum EmailLinkErr {
@@ -99,26 +101,25 @@ impl IntoResponse for EmailLinkErr {
 }
 
 #[async_trait]
-impl<S> FromRequestParts<EmailPreviewState<S>> for EmailLinkExtractor
+impl<S, U> FromRequestParts<S> for EmailLinkExtractor<U>
 where
-    S: EmailService,
+    EmailPreviewState<U>: FromRef<S>,
+    U: EmailService,
+    S: Send + Sync + 'static,
 {
     type Rejection = EmailLinkErr;
 
-    async fn from_request_parts(
-        parts: &mut Parts,
-        state: &EmailPreviewState<S>,
-    ) -> Result<Self, Self::Rejection> {
-        let MacroUserExtractor {
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let Cached(MacroUserExtractor {
             macro_user_id,
             user_context,
             ..
-        } = parts.extract_with_state(state).await?;
-        let res = state
+        }) = parts.extract_with_state(state).await?;
+        let res = <EmailPreviewState<U>>::from_ref(state)
             .inner
             .get_link_by_auth_id_and_macro_id(&user_context.fusion_user_id, macro_user_id)
             .await?
             .ok_or(EmailLinkErr::NotFound)?;
-        Ok(Self(res))
+        Ok(Self(res, PhantomData))
     }
 }

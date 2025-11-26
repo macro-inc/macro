@@ -2832,6 +2832,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "axum-extra",
  "chrono",
  "doppleganger",
  "frecency",
@@ -7987,6 +7988,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "axum",
+ "axum-extra",
  "chrono",
  "cool_asserts",
  "doppleganger",

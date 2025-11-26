@@ -27,6 +27,7 @@ impl IntoResponse for UserExtractorErr {
 }
 
 #[non_exhaustive]
+#[derive(Clone)]
 pub struct MacroUserExtractor {
     pub macro_user_id: MacroUserIdStr<'static>,
     pub user_context: UserContext,

@@ -2,6 +2,7 @@ use axum::{
     Extension, Router,
     http::{Request, StatusCode},
 };
+use email::domain::{models::EmailErr, ports::EmailService};
 use http_body_util::BodyExt;
 use model_user::UserContext;
 use serde_json::json;
@@ -28,8 +29,35 @@ impl SoupService for MockSoup {
     }
 }
 
+struct MockEmail;
+
+impl EmailService for MockEmail {
+    async fn get_email_thread_previews(
+        &self,
+        req: email::domain::models::GetEmailsRequest,
+    ) -> Result<
+        models_pagination::PaginatedCursor<
+            email::domain::models::EnrichedEmailThreadPreview,
+            uuid::Uuid,
+            models_pagination::SimpleSortMethod,
+            (),
+        >,
+        email::domain::models::EmailErr,
+    > {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+
+    async fn get_link_by_auth_id_and_macro_id(
+        &self,
+        auth_id: &str,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+    }
+}
+
 fn mock_router() -> Router {
-    soup_router(SoupRouterState::new(MockSoup)).layer(Extension(UserContext {
+    soup_router(SoupRouterState::new(MockSoup, MockEmail)).layer(Extension(UserContext {
         user_id: "macro|test@example.com".to_string(),
         fusion_user_id: "1234".to_string(),
         permissions: None,

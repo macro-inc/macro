@@ -14,6 +14,7 @@ use models_pagination::{CollectBy, PaginateOn, PaginatedCursor, SimpleSortMethod
 use std::collections::HashMap;
 use uuid::Uuid;
 
+#[derive(Clone)]
 pub struct EmailServiceImpl<T, U> {
     email_repo: T,
     frecency_service: U,

@@ -182,12 +182,17 @@ async fn main() -> anyhow::Result<()> {
             .await?;
 
     let frecency_service = FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone()));
+    let email_service =
+        EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
     let api_context = ApiContext {
-        soup_router_state: SoupRouterState::new(SoupImpl::new(
-            PgSoupRepo::new(db.clone()),
-            frecency_service.clone(),
-            EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service),
-        )),
+        soup_router_state: SoupRouterState::new(
+            SoupImpl::new(
+                PgSoupRepo::new(db.clone()),
+                frecency_service,
+                email_service.clone(),
+            ),
+            email_service,
+        ),
         db,
         redis_client: Arc::new(Redis::new(redis_client)),
         s3_client: Arc::new(S3::new(
