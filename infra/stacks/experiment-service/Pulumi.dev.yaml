@@ -2,9 +2,7 @@ config:
   aws-native:region: us-east-1
   aws:region: us-east-1
   experiment-service:macro_db_secret_key: macro-db-dev
-  experiment-service:fusionauth_client_id: eb75fe7a-0ef1-4186-96d9-cc62cfb1d10c
+  experiment-service:fusionauth_client_id: fusionauth-api-key-dev
   experiment-service:fusionauth_issuer: fusionauth-dev.macro.com
   experiment-service:jwt_secret_key: fusionauth-jwt-secret-dev
   experiment-service:internal_api_key: document-storage-service-auth-key-dev
-  experiment-service:datadog_api_key:
-    secure: AAABAKc94DsPIxkKqpqVuGLa4UDXyzQXVxRZ/vT+ZdI0V5p3xqsUcseCU2FNNZ5WDrHvE4mNV17yf9nNS2aIkw==

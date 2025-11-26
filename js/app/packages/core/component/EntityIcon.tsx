@@ -265,7 +265,7 @@ export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   canvas: WideDiagram,
   html: WideFileCode,
   channel: WideChannel,
-  company: WideUnknown,
+  company: WideChannel,
   email: WideEmail,
   code: WideFileCode,
   pdf: WideBook,

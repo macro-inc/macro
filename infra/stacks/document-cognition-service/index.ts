@@ -35,7 +35,13 @@ const jwtSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: JWT_SECRET_KEY })
   .apply((secret) => secret.arn);
 
-const FUSIONAUTH_CLIENT_ID = config.require(`fusionauth_client_id`);
+const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
+
+const FUSIONAUTH_CLIENT_ID = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: fusionauthClientIdSecretKey,
+  })
+  .apply((secret) => secret.secretString);
 const FUSIONAUTH_ISSUER = config.require(`fusionauth_issuer`);
 
 const OPEN_ROUTER_API_KEY = aws.secretsmanager

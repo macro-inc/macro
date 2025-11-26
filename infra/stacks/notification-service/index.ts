@@ -31,9 +31,20 @@ const password = aws.secretsmanager
 const AUDIENCE = config.require(`fusionauth_client_id`);
 const ISSUER = config.require(`fusionauth_issuer`);
 
-const APPLE_TEAM_ID = config.require(`apple_team_id`);
-const APPLE_BUNDLE_ID = config.require(`apple_bundle_id`);
-const APNS_KEY_ID = config.require(`apns_key_id`);
+const appleTeamId = config.require(`apple_team_id`);
+const APPLE_TEAM_ID = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: appleTeamId })
+  .apply((secret) => secret.secretString);
+
+const appleBundleId = config.require(`apple_bundle_id`);
+const APPLE_BUNDLE_ID = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: appleBundleId })
+  .apply((secret) => secret.secretString);
+
+const apnsKeyId = config.require(`apns_key_id`);
+const APNS_KEY_ID = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: apnsKeyId })
+  .apply((secret) => secret.secretString);
 const APNS_PRIVATE_KEY = config.requireSecret(`apns_private_key`);
 
 const FCM_SECRET_KEY = config.require(`fcm_secret_key`);
