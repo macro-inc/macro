@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use doppleganger::{Doppleganger, Mirror};
+use frecency::domain::models::AggregateFrecency;
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{PaginatedOpaqueCursor, SimpleSortMethod};
 use serde::{Deserialize, Serialize};
@@ -49,7 +50,12 @@ struct ApiThreadPreviewCursor {
     #[dg(rename = "participants")]
     contacts: Vec<ApiContact>,
     labels: Vec<ApiLabel>,
+    #[dg(map = map_frecency)]
     frecency_score: Option<f64>,
+}
+
+fn map_frecency(f: Option<AggregateFrecency>) -> Option<f64> {
+    f.map(|f| f.data.frecency_score)
 }
 
 #[derive(Debug, ToSchema, Serialize, Deserialize, Doppleganger)]
