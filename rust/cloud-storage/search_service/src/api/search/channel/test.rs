@@ -210,6 +210,8 @@ fn create_channel_history(channel_id: &str) -> ChannelHistoryInfo {
         updated_at: now,
         viewed_at: None,
         interacted_at: None,
+        user_id: "user_1".to_string(),
+        channel_type: "public".to_string(),
     }
 }
 
@@ -226,6 +228,8 @@ fn test_channel_history_timestamps() {
         updated_at: now,
         viewed_at: Some(now),
         interacted_at: Some(now),
+        user_id: "user_1".to_string(),
+        channel_type: "public".to_string(),
     };
 
     channel_histories.insert(channel_uuid, history);
@@ -273,6 +277,8 @@ fn test_channel_history_missing_entry() {
         updated_at: now,
         viewed_at: None,
         interacted_at: None,
+        user_id: "user_1".to_string(),
+        channel_type: "public".to_string(),
     };
 
     channel_histories.insert(different_channel_uuid, history);
@@ -306,6 +312,8 @@ fn test_channel_history_null_viewed_at() {
         updated_at: now,
         viewed_at: None,     // This user has never viewed this channel
         interacted_at: None, // This user has never interacted with this channel
+        user_id: "user_1".to_string(),
+        channel_type: "public".to_string(),
     };
 
     channel_histories.insert(channel_uuid, history);

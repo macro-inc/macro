@@ -120,6 +120,8 @@ pub struct ChannelHistoryInfo {
     pub updated_at: DateTime<Utc>,
     pub viewed_at: Option<DateTime<Utc>>,
     pub interacted_at: Option<DateTime<Utc>>,
+    pub user_id: String,
+    pub channel_type: String,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
