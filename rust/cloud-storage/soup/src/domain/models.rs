@@ -1,12 +1,15 @@
+use email::domain::models::{GetEmailsRequest, PreviewView};
 use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
 use item_filters::ast::EntityFilterAst;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::Entity;
 use models_pagination::{
-    Cursor, CursorVal, Frecency, FrecencyValue, Identify, Query, SimpleSortMethod, SortOn,
+    Cursor, CursorVal, CursorWithValAndFilter, Frecency, FrecencyValue, Identify, Query,
+    SimpleSortMethod, SortOn,
 };
 use models_soup::item::SoupItem;
 use thiserror::Error;
+use uuid::Uuid;
 
 #[derive(Debug, Clone, Copy)]
 pub enum SoupType {
@@ -28,19 +31,18 @@ pub struct SimpleSortRequest<'a> {
 #[derive(Debug)]
 pub(crate) enum SimpleSortQuery {
     /// we dont have anything to filter out
-    NoFilter(Query<String, SimpleSortMethod, ()>),
+    NoFilter(Query<Uuid, SimpleSortMethod, ()>),
     /// we filter out items that DO have a [Frecency] record
-    FilterFrecency(Query<String, SimpleSortMethod, Frecency>),
+    FilterFrecency(Query<Uuid, SimpleSortMethod, Frecency>),
     /// we filter out items based on the input [EntityFilterAst]
-    ItemsFilter(Query<String, SimpleSortMethod, EntityFilterAst>),
+    ItemsFilter(Query<Uuid, SimpleSortMethod, EntityFilterAst>),
     /// we filter out items based on the input [EntityFilterAst] IN ADDITION to ANY items that DO have a [Frecency] score
-    #[allow(dead_code, reason = "this is used in a later PR")]
-    ItemsAndFrecencyFilter(Query<String, SimpleSortMethod, (Frecency, EntityFilterAst)>),
+    ItemsAndFrecencyFilter(Query<Uuid, SimpleSortMethod, (Frecency, EntityFilterAst)>),
 }
 
 impl SimpleSortQuery {
     pub(crate) fn from_entity_cursor(
-        cursor: Query<String, SimpleSortMethod, Option<EntityFilterAst>>,
+        cursor: Query<Uuid, SimpleSortMethod, Option<EntityFilterAst>>,
     ) -> Self {
         match cursor {
             Query::Sort(s, Some(f)) => SimpleSortQuery::ItemsFilter(Query::Sort(s, f)),
@@ -90,8 +92,8 @@ pub struct AdvancedSortParams<'a> {
 }
 
 pub enum SoupQuery {
-    Simple(Query<String, SimpleSortMethod, Option<EntityFilterAst>>),
-    Frecency(Query<String, Frecency, Option<EntityFilterAst>>),
+    Simple(Query<Uuid, SimpleSortMethod, Option<EntityFilterAst>>),
+    Frecency(Query<Uuid, Frecency, Option<EntityFilterAst>>),
 }
 
 impl SoupQuery {
@@ -108,6 +110,36 @@ pub struct SoupRequest {
     pub limit: u16,
     pub cursor: SoupQuery,
     pub user: MacroUserIdStr<'static>,
+    pub email_preview_view: PreviewView,
+    pub link_id: Uuid,
+}
+
+impl SoupRequest {
+    pub(crate) fn build_email_request(&self) -> Option<GetEmailsRequest> {
+        Some(GetEmailsRequest {
+            view: self.email_preview_view.clone(),
+            link_id: self.link_id,
+            macro_id: self.user.clone(),
+            limit: Some(self.limit as u32),
+            query: match &self.cursor {
+                SoupQuery::Simple(Query::Sort(t, _f)) => Some(Query::Sort(*t, ())),
+                SoupQuery::Simple(Query::Cursor(CursorWithValAndFilter {
+                    id,
+                    limit,
+                    val,
+                    filter: _,
+                })) => Some(Query::Cursor(CursorWithValAndFilter {
+                    id: *id,
+                    limit: *limit,
+                    val: val.clone(),
+                    filter: (),
+                })),
+                // we don't yet have sort by frecency implemented for emails yet
+                // so we fallback to viewedupdated
+                SoupQuery::Frecency(_) => None,
+            }?,
+        })
+    }
 }
 
 /// a [SoupItem] with an associated frecency score
@@ -129,9 +161,7 @@ impl Identify for FrecencySoupItem {
 }
 
 impl SortOn<Frecency> for FrecencySoupItem {
-    fn sort_on(
-        sort_type: Frecency,
-    ) -> impl FnOnce(&Self) -> models_pagination::CursorVal<Frecency> {
+    fn sort_on(sort_type: Frecency) -> impl FnMut(&Self) -> models_pagination::CursorVal<Frecency> {
         move |val| CursorVal {
             sort_type,
             // if this record does not have a frecency score we fallback to created_at as the sort
@@ -144,8 +174,8 @@ impl SortOn<Frecency> for FrecencySoupItem {
 }
 
 impl SortOn<SimpleSortMethod> for FrecencySoupItem {
-    fn sort_on(sort: SimpleSortMethod) -> impl FnOnce(&Self) -> CursorVal<SimpleSortMethod> {
-        let cb = SoupItem::sort_on(sort);
+    fn sort_on(sort: SimpleSortMethod) -> impl FnMut(&Self) -> CursorVal<SimpleSortMethod> {
+        let mut cb = SoupItem::sort_on(sort);
         move |v| cb(&v.item)
     }
 }
@@ -156,4 +186,6 @@ pub enum SoupErr {
     FrecencyErr(#[from] FrecencyQueryErr),
     #[error(transparent)]
     SoupDbErr(#[from] anyhow::Error),
+    #[error(transparent)]
+    EmailErr(#[from] email::domain::models::EmailErr),
 }

@@ -9,6 +9,7 @@ use axum::{
     response::IntoResponse,
     routing::{get, post},
 };
+use email::domain::models::PreviewView;
 use item_filters::{
     EntityFilters,
     ast::{EntityFilterAst, ExpandErr},
@@ -25,6 +26,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use thiserror::Error;
 use utoipa::{IntoParams, ToSchema};
+use uuid::Uuid;
 
 #[cfg(test)]
 mod tests;
@@ -139,6 +141,10 @@ where
                 limit: params.limit.unwrap_or(20),
                 cursor,
                 user: macro_user_id,
+                email_preview_view: PreviewView::StandardLabel(
+                    email::domain::models::PreviewViewStandardLabel::Inbox,
+                ),
+                link_id: Uuid::nil(),
             })
             .await?;
 
@@ -245,8 +251,8 @@ pub struct PostSoupRequest {
 }
 
 type SoupCursor = EitherWrapper<
-    CursorExtractor<String, SimpleSortMethod, Option<EntityFilterAst>>,
-    CursorExtractor<String, Frecency, Option<EntityFilterAst>>,
+    CursorExtractor<Uuid, SimpleSortMethod, Option<EntityFilterAst>>,
+    CursorExtractor<Uuid, Frecency, Option<EntityFilterAst>>,
 >;
 
 /// Gets the items the user has access to

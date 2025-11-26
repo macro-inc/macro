@@ -164,7 +164,7 @@ async fn test_get_user_items_expanded_cursor(pool: Pool<Postgres>) -> anyhow::Re
             result.next_cursor.map(|s| {
                 let decoded = s.decode_json().unwrap();
                 models_pagination::Cursor {
-                    id: decoded.id.to_string(),
+                    id: decoded.id,
                     limit: decoded.limit,
                     val: decoded.val,
                     filter: decoded.filter,
@@ -623,7 +623,7 @@ async fn test_no_frecency_expanded_cursor_pagination(pool: Pool<Postgres>) -> an
             result.next_cursor.map(|s| {
                 let decoded = s.decode_json().unwrap();
                 models_pagination::Cursor {
-                    id: decoded.id.to_string(),
+                    id: decoded.id,
                     limit: decoded.limit,
                     val: decoded.val,
                     filter: decoded.filter,
@@ -1603,7 +1603,7 @@ async fn test_cursor_pagination_with_document_filter(db: PgPool) -> anyhow::Resu
             user_id: user_id.copied(),
             limit: 3,
             cursor: Query::Cursor(models_pagination::Cursor {
-                id: cursor_decoded.id.to_string(),
+                id: cursor_decoded.id,
                 limit: cursor_decoded.limit,
                 val: cursor_decoded.val,
                 filter: filters_for_cursor,
@@ -1708,7 +1708,7 @@ async fn test_cursor_pagination_with_combined_filters(db: PgPool) -> anyhow::Res
                 user_id: user_id.copied(),
                 limit: 2,
                 cursor: Query::Cursor(models_pagination::Cursor {
-                    id: cursor_decoded.id.to_string(),
+                    id: cursor_decoded.id,
                     limit: cursor_decoded.limit,
                     val: cursor_decoded.val,
                     filter: filters_for_cursor,
@@ -1803,7 +1803,7 @@ async fn test_cursor_pagination_filter_consistency(db: PgPool) -> anyhow::Result
                 let filters_for_cursor =
                     EntityFilterAst::new_from_filters(entity_filters.clone())?.unwrap();
                 current_query = Query::Cursor(models_pagination::Cursor {
-                    id: cursor_decoded.id.to_string(),
+                    id: cursor_decoded.id,
                     limit: cursor_decoded.limit,
                     val: cursor_decoded.val,
                     filter: filters_for_cursor,
@@ -1911,7 +1911,7 @@ async fn test_cursor_pagination_with_single_item_filter(db: PgPool) -> anyhow::R
                 user_id: user_id.copied(),
                 limit: 5,
                 cursor: Query::Cursor(models_pagination::Cursor {
-                    id: cursor_decoded.id.to_string(),
+                    id: cursor_decoded.id,
                     limit: cursor_decoded.limit,
                     val: cursor_decoded.val,
                     filter: filters_for_cursor,
