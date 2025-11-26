@@ -13,9 +13,9 @@ axum = [
   "models_pagination/axum",
   "models_soup/schema",
 ]
-inbound = ["ports"]
+inbound = ["email/inbound", "ports"]
 outbound = ["ports"]
-ports = ["frecency/ports"]
+ports = ["dep:tokio", "frecency/ports"]
 
 
 [dependencies]
@@ -24,6 +24,7 @@ axum = { workspace = true, optional = true }
 chrono = { workspace = true }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 either = { workspace = true }
+email = { path = "../email", features = ["ports"] }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
 item_filters = { path = "../item_filters" }
@@ -38,6 +39,7 @@ recursion = { workspace = true }
 serde = { workspace = true }
 sqlx = { workspace = true }
 thiserror = { workspace = true }
+tokio = { workspace = true, features = ["macros"], optional = true }
 tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
@@ -51,7 +53,7 @@ http-body-util = { workspace = true }
 item_filters = { path = "../item_filters", features = ["mock"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
-ordered-float = "5"
+ordered-float = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }

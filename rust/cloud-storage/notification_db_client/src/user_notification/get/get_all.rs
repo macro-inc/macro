@@ -112,9 +112,7 @@ pub async fn get_all_user_notifications_by_event_item_ids(
 mod tests {
     use super::*;
     use chrono::DateTime;
-    use models_pagination::{
-        Base64Str, Cursor, CursorVal, CursorWithVal, PaginateOn, TypeEraseCursor,
-    };
+    use models_pagination::{Base64Str, Cursor, CursorVal, PaginateOn, TypeEraseCursor};
     use sqlx::{Pool, Postgres};
 
     #[sqlx::test(fixtures(path = "../../../fixtures", scripts("user_notifications")))]
