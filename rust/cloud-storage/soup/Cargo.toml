@@ -13,7 +13,7 @@ axum = [
   "models_pagination/axum",
   "models_soup/schema",
 ]
-inbound = ["ports"]
+inbound = ["email/inbound", "ports"]
 outbound = ["ports"]
 ports = ["dep:tokio", "frecency/ports"]
 

@@ -110,14 +110,14 @@ pub struct SoupRequest {
     pub limit: u16,
     pub cursor: SoupQuery,
     pub user: MacroUserIdStr<'static>,
-    pub preview_view: PreviewView,
+    pub email_preview_view: PreviewView,
     pub link_id: Uuid,
 }
 
 impl SoupRequest {
     pub(crate) fn build_email_request(&self) -> Option<GetEmailsRequest> {
         Some(GetEmailsRequest {
-            view: self.preview_view.clone(),
+            view: self.email_preview_view.clone(),
             link_id: self.link_id,
             macro_id: self.user.clone(),
             limit: Some(self.limit as u32),

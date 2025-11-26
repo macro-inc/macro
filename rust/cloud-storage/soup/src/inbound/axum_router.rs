@@ -141,7 +141,7 @@ where
                 limit: params.limit.unwrap_or(20),
                 cursor,
                 user: macro_user_id,
-                preview_view: PreviewView::StandardLabel(
+                email_preview_view: PreviewView::StandardLabel(
                     email::domain::models::PreviewViewStandardLabel::Inbox,
                 ),
                 link_id: Uuid::nil(),

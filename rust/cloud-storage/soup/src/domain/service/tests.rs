@@ -119,7 +119,7 @@ async fn it_should_not_query_frecency() {
         NoopEmailService,
     )
     .get_user_soup(SoupRequest {
-        preview_view: PreviewView::StandardLabel(
+        email_preview_view: PreviewView::StandardLabel(
             email::domain::models::PreviewViewStandardLabel::Inbox,
         ),
         link_id: Uuid::new_v4(),
@@ -196,7 +196,7 @@ async fn it_should_query_frecency() {
         NoopEmailService,
     )
     .get_user_soup(SoupRequest {
-        preview_view: PreviewView::StandardLabel(
+        email_preview_view: PreviewView::StandardLabel(
             email::domain::models::PreviewViewStandardLabel::Inbox,
         ),
         link_id: Uuid::new_v4(),
@@ -273,7 +273,7 @@ async fn it_should_sort_frecency_descending() {
         NoopEmailService,
     )
     .get_user_soup(SoupRequest {
-        preview_view: PreviewView::StandardLabel(
+        email_preview_view: PreviewView::StandardLabel(
             email::domain::models::PreviewViewStandardLabel::Inbox,
         ),
         link_id: Uuid::new_v4(),
@@ -360,7 +360,7 @@ async fn frecency_should_fallback() {
 
     let res = SoupImpl::new(soup, frecency, NoopEmailService)
         .get_user_soup(SoupRequest {
-            preview_view: PreviewView::StandardLabel(
+            email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
             link_id: Uuid::new_v4(),
@@ -430,7 +430,7 @@ async fn frecency_should_paginate() {
 
     let res = SoupImpl::new(soup, frecency, NoopEmailService)
         .get_user_soup(SoupRequest {
-            preview_view: PreviewView::StandardLabel(
+            email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
             link_id: Uuid::new_v4(),
@@ -502,7 +502,7 @@ async fn frecency_should_resume_cursor() {
 
     let res = SoupImpl::new(soup, frecency, NoopEmailService)
         .get_user_soup(SoupRequest {
-            preview_view: PreviewView::StandardLabel(
+            email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
             link_id: Uuid::new_v4(),
@@ -590,7 +590,7 @@ async fn frecency_fallback_cursor_should_resume() {
 
     let res = SoupImpl::new(soup, frecency, NoopEmailService)
         .get_user_soup(SoupRequest {
-            preview_view: PreviewView::StandardLabel(
+            email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
             link_id: Uuid::new_v4(),
@@ -655,7 +655,7 @@ async fn cursor_should_return_simple_sort() {
         NoopEmailService,
     )
     .get_user_soup(SoupRequest {
-        preview_view: PreviewView::StandardLabel(
+        email_preview_view: PreviewView::StandardLabel(
             email::domain::models::PreviewViewStandardLabel::Inbox,
         ),
         link_id: Uuid::new_v4(),
@@ -713,7 +713,7 @@ async fn cursor_should_return_frecency() {
 
     let res = SoupImpl::new(soup, frecency, NoopEmailService)
         .get_user_soup(SoupRequest {
-            preview_view: PreviewView::StandardLabel(
+            email_preview_view: PreviewView::StandardLabel(
                 email::domain::models::PreviewViewStandardLabel::Inbox,
             ),
             link_id: Uuid::new_v4(),
