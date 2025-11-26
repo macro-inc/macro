@@ -22,23 +22,39 @@ async fn main() -> anyhow::Result<()> {
 
     // 1. Parse CLI Arguments
     let args: Vec<String> = std::env::args().collect();
-    if args.len() < 2 {
-        anyhow::bail!("Usage: cargo run backfill_entity_names.rs <COMMA_SEPARATED_INDICES>");
-    }
 
-    let indices_arg = &args[1];
-    let target_indices: Vec<SearchEntityType> = indices_arg
-        .split(',')
-        .map(|s| {
-            // Trim whitespace and parse using strum::EnumString derived on SearchEntityType
-            SearchEntityType::from_str(s.trim())
-                .with_context(|| format!("Invalid entity index type: {}", s))
-        })
-        .collect::<anyhow::Result<_>>()?;
+    let target_indices: Vec<SearchEntityType> = if args.len() < 2 {
+        // Default to all supported entity types
+        println!("No indices specified, backfilling all supported types");
+        vec![
+            SearchEntityType::Chats,
+            SearchEntityType::Documents,
+            SearchEntityType::Channels,
+            SearchEntityType::Emails,
+            // Note: Projects is not included as it's not implemented
+        ]
+    } else {
+        let indices_arg = &args[1];
+        indices_arg
+            .split(',')
+            .map(|s| {
+                // Trim whitespace and parse using strum::EnumString derived on SearchEntityType
+                SearchEntityType::from_str(s.trim())
+                    .with_context(|| format!("Invalid entity index type: {}", s))
+            })
+            .collect::<anyhow::Result<_>>()?
+    };
 
     if target_indices.is_empty() {
         println!("No valid indices provided to process.");
         return Ok(());
+    }
+
+    // Check if user is trying to backfill Projects
+    if target_indices.contains(&SearchEntityType::Projects) {
+        anyhow::bail!(
+            "Backfill for 'projects' is not implemented. Supported types: chats, documents, channels, emails"
+        );
     }
 
     println!("Starting backfill for indices: {:?}", target_indices);
@@ -115,7 +131,7 @@ async fn main() -> anyhow::Result<()> {
                 .await?;
             }
             SearchEntityType::Projects => {
-                println!("Backfill logic for 'projects' is not implemented.");
+                unreachable!("Backfill logic for 'projects' is not implemented.");
             }
         }
     }

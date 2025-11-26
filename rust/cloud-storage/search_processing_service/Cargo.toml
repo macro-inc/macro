@@ -9,11 +9,17 @@ version = "0.1.0"
 default = ["processing", "service"]
 processing = []
 service = ["macro_db_client"]
+backfill_names = ["email_db_client", "comms_db_client"]
 
 [[bin]]
 name = "backfill_chat"
 path = "src/bin/backfill_chat.rs"
 required-features = ["service"]
+
+[[bin]]
+name = "backfill_entity_names"
+path = "src/bin/backfill_entity_names.rs"
+required-features = ["backfill_names"]
 
 [[bin]]
 name = "backfill_project"
@@ -33,9 +39,9 @@ aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sqs = { workspace = true }
 axum = { workspace = true }
 chrono = { workspace = true }
-comms_db_client = { path = "../comms_db_client" }
+comms_db_client = { path = "../comms_db_client", optional = true }
 comms_service_client = { path = "../comms_service_client" }
-email_db_client = { path = "../email_db_client" }
+email_db_client = { path = "../email_db_client", optional = true }
 email_service_client = { path = "../email_service_client" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
