@@ -42,6 +42,10 @@ export class EcrImage extends pulumi.ComponentResource {
         imageTagMutability: 'MUTABLE',
         forceDelete: true,
         tags: this.tags,
+        lifecyclePolicy: {
+          // We do not want a lifecycle policy for the repositories
+          skip: true,
+        },
       },
       { parent: this }
     );
