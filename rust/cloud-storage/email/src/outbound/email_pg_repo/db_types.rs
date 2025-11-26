@@ -77,6 +77,7 @@ pub enum MessageListVisibilityDbRow {
     type_name = "email_label_list_visibility_enum",
     rename_all = "PascalCase"
 )]
+#[expect(clippy::enum_variant_names, reason = "Matches names from Gmail API")]
 pub enum LabelListVisibilityDbRow {
     LabelShow,
     LabelShowIfUnread,
