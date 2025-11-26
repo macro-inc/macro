@@ -191,9 +191,6 @@ fn get_safe_css_properties() -> HashSet<&'static str> {
         "white-space",
         "direction",
         "unicode-bidi",
-        // Color & Background
-        "background-color",
-        "opacity",
         // Box Model & Spacing
         "padding",
         "padding-top",
@@ -272,12 +269,10 @@ fn get_safe_css_properties() -> HashSet<&'static str> {
         "mso-padding-alt",
         "mso-margin-top-alt",
         "mso-margin-bottom-alt",
-        // --- SHORTHANDS ---
-        // You have individual sides (padding-top), but standard "padding"
-        // and "background" are often used.
+        // Color & Background
+        "background-color",
+        "opacity",
         "background",
-        // Note: background-image is often blocked by clients by default,
-        // but allowing it in the sanitizer is usually fine as the *client* decides to show it.
         "background-image",
         "background-position",
         "background-repeat",
