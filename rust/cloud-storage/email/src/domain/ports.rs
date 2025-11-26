@@ -1,6 +1,6 @@
 use crate::domain::models::{
     Attachment, AttachmentMacro, Contact, EmailErr, EmailThreadPreview, EnrichedEmailThreadPreview,
-    GetEmailsRequest, PreviewCursorQuery,
+    GetEmailsRequest, Label, PreviewCursorQuery,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{PaginatedCursor, SimpleSortMethod};
@@ -28,6 +28,10 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         thread_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<Contact>, Self::Err>> + Send;
+    fn labels_by_thread_ids(
+        &self,
+        thread_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<Label>, Self::Err>> + Send;
 }
 
 pub trait EmailService: Send + Sync + 'static {

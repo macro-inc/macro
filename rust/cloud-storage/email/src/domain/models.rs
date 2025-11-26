@@ -87,6 +87,7 @@ pub struct EnrichedEmailThreadPreview {
     pub thread: EmailThreadPreview,
     pub attachments: Vec<Attachment>,
     pub attachments_macro: Vec<AttachmentMacro>,
+    pub labels: Vec<Label>,
     pub frecency_score: Option<AggregateFrecency>,
     pub participants: Vec<Contact>,
 }
@@ -192,4 +193,36 @@ pub struct GetEmailsRequest {
     pub macro_id: MacroUserIdStr<'static>,
     pub limit: Option<u32>,
     pub query: Query<Uuid, SimpleSortMethod, ()>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum MessageListVisibility {
+    Show,
+    Hide,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LabelListVisibility {
+    LabelShow,
+    LabelShowIfUnread,
+    LabelHide,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum LabelType {
+    System,
+    User,
+}
+
+#[derive(Debug, Clone)]
+pub struct Label {
+    pub id: Uuid,
+    pub(crate) thread_id: Uuid,
+    pub link_id: Uuid,
+    pub provider_label_id: String,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+    pub message_list_visibility: MessageListVisibility,
+    pub label_list_visibility: LabelListVisibility,
+    pub type_: LabelType,
 }
