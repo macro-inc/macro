@@ -111,7 +111,7 @@ pub async fn send_handler(
     let sender_contact = email_db_client::contacts::get::fetch_contact_by_email(
         &ctx.db,
         link.id,
-        &link.email_address.0.as_ref(),
+        link.email_address.0.as_ref(),
     )
     .await?
     .ok_or(SendMessageError::SenderContactNotFound)?;
@@ -188,43 +188,46 @@ async fn insert_sent_message(
     let link_id = message_to_send.link_id;
 
     // if there isn't already a thread associated with this message, create one
-    if thread_db_id.is_none() {
-        let thread = thread::Thread {
-            db_id: None,
-            provider_id: Some(thread_provider_id.clone().unwrap()), // safe bc it always gets populated in gmail_client
-            link_id,
-            // if we're creating a thread with a sent message, it's not visible in the inbox
-            inbox_visible: true,
-            is_read: true,
-            latest_inbound_message_ts: None,
-            latest_outbound_message_ts: Some(before_send_ts),
-            latest_non_spam_message_ts: Some(before_send_ts),
-            created_at: now,
-            updated_at: now,
-            messages: Vec::new(),
-        };
+    match thread_db_id {
+        None => {
+            let thread = thread::Thread {
+                db_id: None,
+                provider_id: Some(thread_provider_id.clone().unwrap()), // safe bc it always gets populated in gmail_client
+                link_id,
+                // if we're creating a thread with a sent message, it's not visible in the inbox
+                inbox_visible: true,
+                is_read: true,
+                latest_inbound_message_ts: None,
+                latest_outbound_message_ts: Some(before_send_ts),
+                latest_non_spam_message_ts: Some(before_send_ts),
+                created_at: now,
+                updated_at: now,
+                messages: Vec::new(),
+            };
 
-        thread_db_id = Option::from(
-            email_db_client::threads::insert::insert_thread(&mut *tx, &thread, link_id)
-                .await
-                .context("unable to insert thread")?,
-        );
-        message_to_send.thread_db_id = thread_db_id;
-    } else {
-        // need to upsert the thread's provider_id in case it doesn't exist already (e.g. if we are
-        // sending a previously existing draft that is the first message in the thread)
-        email_db_client::threads::update::update_thread_provider_id(
-            tx,
-            thread_db_id.unwrap(),
-            link_id,
-            &thread_provider_id.clone().unwrap(),
-        )
-        .await
-        .context(format!(
-            "Failed to update provider id to {} for thread {}",
-            thread_provider_id.clone().unwrap(),
-            thread_db_id.unwrap()
-        ))?;
+            thread_db_id = Option::from(
+                email_db_client::threads::insert::insert_thread(&mut *tx, &thread, link_id)
+                    .await
+                    .context("unable to insert thread")?,
+            );
+            message_to_send.thread_db_id = thread_db_id;
+        }
+        Some(id) => {
+            // need to upsert the thread's provider_id in case it doesn't exist already (e.g. if we are
+            // sending a previously existing draft that is the first message in the thread)
+            email_db_client::threads::update::update_thread_provider_id(
+                tx,
+                id,
+                link_id,
+                &thread_provider_id.clone().unwrap(),
+            )
+            .await
+            .context(format!(
+                "Failed to update provider id to {} for thread {}",
+                thread_provider_id.clone().unwrap(),
+                id
+            ))?;
+        }
     }
 
     let from_email_id =

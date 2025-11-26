@@ -1,6 +1,6 @@
 use anyhow::anyhow;
 use doppleganger::Mirror;
-use models_email::email::{db, service};
+use models_email::email::service;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 

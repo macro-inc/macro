@@ -2,11 +2,16 @@ use axum::{
     Extension, Router,
     http::{Request, StatusCode},
 };
-use email::domain::{models::EmailErr, ports::EmailService};
+use email::domain::{
+    models::{EmailErr, UserProvider},
+    ports::EmailService,
+};
 use http_body_util::BodyExt;
+use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use model_user::UserContext;
 use serde_json::json;
 use tower::util::ServiceExt;
+use uuid::Uuid;
 
 use crate::{
     domain::{
@@ -34,7 +39,7 @@ struct MockEmail;
 impl EmailService for MockEmail {
     async fn get_email_thread_previews(
         &self,
-        req: email::domain::models::GetEmailsRequest,
+        _req: email::domain::models::GetEmailsRequest,
     ) -> Result<
         models_pagination::PaginatedCursor<
             email::domain::models::EnrichedEmailThreadPreview,
@@ -49,10 +54,19 @@ impl EmailService for MockEmail {
 
     async fn get_link_by_auth_id_and_macro_id(
         &self,
-        auth_id: &str,
-        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        _auth_id: &str,
+        _macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
     ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
-        Err(EmailErr::RepoErr(anyhow::anyhow!("Not implemented")))
+        Ok(Some(email::domain::models::Link {
+            id: Uuid::new_v4(),
+            macro_id: MacroUserIdStr::parse_from_str("macro|example@test.com").unwrap(),
+            fusionauth_user_id: String::new(),
+            email_address: EmailStr::try_from("example@test.com".to_string()).unwrap(),
+            provider: UserProvider::Gmail,
+            is_sync_active: true,
+            created_at: Default::default(),
+            updated_at: Default::default(),
+        }))
     }
 }
 

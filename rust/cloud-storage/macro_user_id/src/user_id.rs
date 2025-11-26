@@ -1,6 +1,4 @@
 //! Module defines the [MacroUserId] and the methods to read the email
-use std::ops::Deref;
-
 use crate::{
     cowlike::{ArcCowStr, CowLike},
     email::{Email, email},
@@ -9,7 +7,7 @@ use crate::{
 };
 use nom::{Finish, IResult, Parser, bytes::complete::tag, character::char};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
+use std::ops::Deref;
 
 #[cfg(test)]
 mod tests;

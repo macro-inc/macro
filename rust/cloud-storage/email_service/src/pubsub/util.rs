@@ -3,7 +3,6 @@ use crate::util::redis::RedisClient;
 use anyhow::anyhow;
 use authentication_service_client::AuthServiceClient;
 use connection_gateway_client::client::ConnectionGatewayClient;
-use macro_user_id::user_id::MacroUserIdStr;
 /// shared utils across different pubsub workers
 use models_email::email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_email::gmail::operations::GmailApiOperation;

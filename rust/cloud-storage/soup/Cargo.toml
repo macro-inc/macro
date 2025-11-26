@@ -11,6 +11,7 @@ axum = [
   "dep:model-error-response",
   "dep:model_user",
   "dep:utoipa",
+  "email/axum",
   "models_pagination/axum",
   "models_soup/schema",
 ]
