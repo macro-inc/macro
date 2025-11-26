@@ -7,8 +7,8 @@ migrate_db $DATABASE_URL:
     cargo sqlx migrate run
 
 [no-cd]
-prepare_db $DATABASE_URL:
-    cargo sqlx prepare
+prepare_db $DATABASE_URL *FLAGS:
+    cargo sqlx prepare -- {{ FLAGS }}
 
 [no-cd]
 drop_db $DATABASE_URL *FLAGS:
