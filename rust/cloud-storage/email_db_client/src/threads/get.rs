@@ -446,6 +446,34 @@ pub async fn get_thread_by_id_and_link_id(
     }
 }
 
+/// Returns a paginated list of thread IDs, sorting by ascending so we don't miss new ones
+#[tracing::instrument(skip(db))]
+pub async fn get_all_thread_ids_paginated(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    limit: i64,
+    offset: i64,
+) -> anyhow::Result<Vec<String>> {
+    let result = sqlx::query!(
+        r#"
+        SELECT
+            id as "thread_id"
+        FROM
+            email_threads
+        ORDER BY
+            created_at ASC
+        LIMIT $1
+        OFFSET $2
+        "#,
+        limit,
+        offset
+    )
+    .map(|row| row.thread_id.to_string())
+    .fetch_all(db)
+    .await?;
+
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
