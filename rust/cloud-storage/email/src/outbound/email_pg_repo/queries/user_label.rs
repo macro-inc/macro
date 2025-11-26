@@ -1,5 +1,4 @@
 use super::super::db_types::*;
-use crate::domain::models::PreviewCursorQuery;
 use models_pagination::{Query, SimpleSortMethod};
 use sqlx::PgPool;
 use uuid::Uuid;

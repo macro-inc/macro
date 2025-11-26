@@ -2,7 +2,7 @@
 //! email queries that filter content based on input AST (EmailLiteral).
 
 use super::db_types::*;
-use crate::domain::models::{PreviewCursorQuery, PreviewView, PreviewViewStandardLabel};
+use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use filter_ast::Expr;
 use item_filters::ast::email::{Email, EmailLiteral};
 use models_pagination::{Query, SimpleSortMethod};
@@ -12,12 +12,8 @@ use uuid::Uuid;
 
 /// Builds SQL WHERE conditions for email filters based on the AST.
 /// Returns a string to be appended to the WHERE clause.
-fn build_email_filter(ast: Option<&Expr<EmailLiteral>>) -> String {
-    let Some(expr) = ast else {
-        return String::new();
-    };
-
-    let formatting = expr.collapse_frames(|frame| match frame {
+fn build_email_filter(ast: &Expr<EmailLiteral>) -> String {
+    let formatting = ast.collapse_frames(|frame| match frame {
         filter_ast::ExprFrame::And(a, b) => format!("({a} AND {b})"),
         filter_ast::ExprFrame::Or(a, b) => format!("({a} OR {b})"),
         filter_ast::ExprFrame::Not(a) => format!("(NOT {a})"),
@@ -166,16 +162,16 @@ fn build_view_thread_filter(view: &PreviewView) -> String {
 fn build_view_message_filter(view: &PreviewView, link_id_param: &str) -> String {
     match view {
         PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox) => {
-            format!(" AND m.is_draft = FALSE")
+            " AND m.is_draft = FALSE".to_string()
         }
         PreviewView::StandardLabel(PreviewViewStandardLabel::Sent) => {
-            format!(" AND m.is_sent = TRUE")
+            " AND m.is_sent = TRUE".to_string()
         }
         PreviewView::StandardLabel(PreviewViewStandardLabel::Drafts) => {
-            format!(" AND m.is_draft = TRUE")
+            " AND m.is_draft = TRUE".to_string()
         }
         PreviewView::StandardLabel(PreviewViewStandardLabel::Starred) => {
-            format!(" AND m.is_starred = TRUE AND m.is_draft = FALSE")
+            " AND m.is_starred = TRUE AND m.is_draft = FALSE".to_string()
         }
         PreviewView::StandardLabel(PreviewViewStandardLabel::All) => {
             // All mail, no specific message filter
@@ -236,7 +232,7 @@ fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
 /// Builds a dynamic email thread query with filters applied
 fn build_query<'a>(
     view: &'a PreviewView,
-    email_filter: Option<&'a Expr<EmailLiteral>>,
+    email_filter: &'a Expr<EmailLiteral>,
 ) -> QueryBuilder<'a, Postgres> {
     let sort_ts_field = get_sort_timestamp_field(view);
     let view_thread_filter = build_view_thread_filter(view);
@@ -384,9 +380,9 @@ fn build_query<'a>(
 ///     view: PreviewView::StandardLabel(PreviewViewStandardLabel::Drafts),
 ///     link_id,
 ///     limit: 50,
-///     query: Query::new(Some(Expr::Literal(EmailLiteral::Sender(
+///     query: Query::new(Expr::Literal(EmailLiteral::Sender(
 ///         Email::Complete(EmailStr::parse_from_str("john@example.com").unwrap().into_owned())
-///     )))),
+///     ))),
 /// };
 /// let results = dynamic_email_thread_cursor(&pool, &query).await?;
 /// ```
@@ -403,12 +399,12 @@ pub(crate) async fn dynamic_email_thread_cursor(
     let (cursor_id, cursor_timestamp) = query.vals();
     let cursor_id_str = cursor_id.as_ref().map(|u| u.to_string());
 
-    // Extract email filter from query if present
+    // Extract email filter from query
     let email_filter = query.filter();
 
-    build_query(&query.view, email_filter)
+    build_query(view, email_filter)
         .build()
-        .bind(query.link_id) // $1
+        .bind(link_id) // $1
         .bind(sort_method_str) // $2
         .bind(query_limit) // $3
         .bind(cursor_timestamp) // $4
@@ -451,7 +447,7 @@ mod tests {
                 .into_owned(),
         );
         let expr = Expr::Literal(EmailLiteral::Sender(email));
-        let result = build_email_filter(Some(&expr));
+        let result = build_email_filter(&expr);
 
         assert!(result.contains("m.from_contact_id"));
         assert!(result.contains("LOWER(c.email_address) = LOWER('test@example.com')"));
@@ -461,7 +457,7 @@ mod tests {
     fn test_build_email_filter_sender_partial() {
         let email = Email::Partial("example".to_string());
         let expr = Expr::Literal(EmailLiteral::Sender(email));
-        let result = build_email_filter(Some(&expr));
+        let result = build_email_filter(&expr);
 
         assert!(result.contains("m.from_contact_id"));
         assert!(result.contains("c.email_address ILIKE '%example%'"));
@@ -475,7 +471,7 @@ mod tests {
                 .into_owned(),
         );
         let expr = Expr::Literal(EmailLiteral::Recipient(email));
-        let result = build_email_filter(Some(&expr));
+        let result = build_email_filter(&expr);
 
         assert!(result.contains("email_message_recipients"));
         assert!(result.contains("recipient_type = 'TO'"));
@@ -490,7 +486,7 @@ mod tests {
                 .into_owned(),
         );
         let expr = Expr::Literal(EmailLiteral::Cc(email));
-        let result = build_email_filter(Some(&expr));
+        let result = build_email_filter(&expr);
 
         assert!(result.contains("recipient_type = 'CC'"));
     }
@@ -503,7 +499,7 @@ mod tests {
                 .into_owned(),
         );
         let expr = Expr::Literal(EmailLiteral::Bcc(email));
-        let result = build_email_filter(Some(&expr));
+        let result = build_email_filter(&expr);
 
         assert!(result.contains("recipient_type = 'BCC'"));
     }
@@ -524,7 +520,7 @@ mod tests {
             Expr::Literal(EmailLiteral::Sender(email1)),
             Expr::Literal(EmailLiteral::Recipient(email2)),
         );
-        let result = build_email_filter(Some(&expr));
+        let result = build_email_filter(&expr);
 
         assert!(result.contains("AND"));
         assert!(result.contains("sender@example.com"));
@@ -547,7 +543,7 @@ mod tests {
             Expr::Literal(EmailLiteral::Sender(email1)),
             Expr::Literal(EmailLiteral::Sender(email2)),
         );
-        let result = build_email_filter(Some(&expr));
+        let result = build_email_filter(&expr);
 
         assert!(result.contains("OR"));
         assert!(result.contains("sender1@example.com"));
@@ -562,7 +558,7 @@ mod tests {
                 .into_owned(),
         );
         let expr = Expr::is_not(Expr::Literal(EmailLiteral::Sender(email)));
-        let result = build_email_filter(Some(&expr));
+        let result = build_email_filter(&expr);
 
         assert!(result.contains("NOT"));
         assert!(result.contains("blocked@example.com"));
@@ -575,12 +571,6 @@ mod tests {
         assert_eq!(escape_like_pattern("test_"), r"test\_");
         assert_eq!(escape_like_pattern(r"test\"), r"test\\");
         assert_eq!(escape_like_pattern(r"test\%_"), r"test\\\%\_");
-    }
-
-    #[test]
-    fn test_build_email_filter_none() {
-        let result = build_email_filter(None);
-        assert_eq!(result, "");
     }
 
     #[test]
