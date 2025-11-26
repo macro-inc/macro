@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            m.thread_id,\n            MIN(m.created_at) as \"earliest_created_at!\",\n            MAX(m.created_at) as \"latest_updated_at!\",\n            uh.updated_at as \"viewed_at?\",\n            m.snippet,\n            m.subject as \"subject?\",\n            l.macro_id\n        FROM email_messages m\n        LEFT JOIN email_user_history uh ON uh.thread_id = m.thread_id AND uh.link_id = $1\n        LEFT JOIN email_links l ON l.id = m.link_id\n        WHERE m.thread_id = ANY($2)\n        AND m.link_id = $1\n        GROUP BY m.thread_id, uh.updated_at, m.snippet, m.subject, l.macro_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "earliest_created_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "latest_updated_at!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 3,
+        "name": "viewed_at?",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "snippet",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "subject?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "macro_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "4fef13bb7ed412b7797054c7886b5f39a2c02943023e41ebb7f24d67804b5f86"
+}
