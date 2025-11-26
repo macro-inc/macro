@@ -305,6 +305,12 @@ pub(crate) async fn search_emails(
                     highlight,
                     goto: Some(SearchGotoContent::Emails(SearchGotoEmail {
                         email_message_id: a.message_id,
+                        bcc: a.bcc,
+                        cc: a.cc,
+                        labels: a.labels,
+                        sent_at: a.sent_at_seconds,
+                        sender: a.sender,
+                        recipients: a.recipients,
                     })),
                 },
             }

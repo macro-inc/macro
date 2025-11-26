@@ -200,7 +200,49 @@ pub struct SplitUnifiedSearchResponseValues {
     pub document: Vec<SearchHit>,
     pub email: Vec<SearchHit>,
     pub project: Vec<SearchHit>,
-    pub name: Vec<SearchHit>,
+}
+
+pub trait SplitUnifiedSearchResponse: Iterator<Item = SearchHit> {
+    fn split_search_response(self) -> SplitUnifiedSearchResponseValues;
+}
+
+impl<T> SplitUnifiedSearchResponse for T
+where
+    T: Iterator<Item = SearchHit>,
+{
+    fn split_search_response(self) -> SplitUnifiedSearchResponseValues {
+        let (channel_message, chat, document, email, project) = self.into_iter().fold(
+            (vec![], vec![], vec![], vec![], vec![]),
+            |(mut channel_message, mut chat, mut document, mut email, mut project), item| {
+                match item.entity_type {
+                    SearchEntityType::Channels => {
+                        channel_message.push(item);
+                    }
+                    SearchEntityType::Chats => {
+                        chat.push(item);
+                    }
+                    SearchEntityType::Documents => {
+                        document.push(item);
+                    }
+                    SearchEntityType::Emails => {
+                        email.push(item);
+                    }
+                    SearchEntityType::Projects => {
+                        project.push(item);
+                    }
+                }
+                (channel_message, chat, document, email, project)
+            },
+        );
+
+        SplitUnifiedSearchResponseValues {
+            channel_message,
+            chat,
+            document,
+            email,
+            project,
+        }
+    }
 }
 
 impl From<Hit<UnifiedSearchIndex>> for SearchHit {
@@ -224,6 +266,10 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     .unwrap_or_default(),
                 goto: Some(SearchGotoContent::Channels(SearchGotoChannel {
                     channel_message_id: a.message_id,
+                    thread_id: a.thread_id,
+                    sender_id: a.sender_id,
+                    created_at: a.created_at_seconds,
+                    updated_at: a.updated_at_seconds,
                 })),
             },
             UnifiedSearchIndex::Document(a) => SearchHit {
@@ -265,6 +311,12 @@ impl From<Hit<UnifiedSearchIndex>> for SearchHit {
                     .unwrap_or_default(),
                 goto: Some(SearchGotoContent::Emails(SearchGotoEmail {
                     email_message_id: a.message_id,
+                    bcc: a.bcc,
+                    cc: a.cc,
+                    labels: a.labels,
+                    sent_at: a.sent_at_seconds,
+                    sender: a.sender,
+                    recipients: a.recipients,
                 })),
             },
             UnifiedSearchIndex::Project(a) => SearchHit {

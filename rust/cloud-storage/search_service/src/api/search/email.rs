@@ -1,6 +1,6 @@
+use crate::api::ApiContext;
 use crate::api::search::simple::SearchError;
-use crate::{api::ApiContext, util};
-use crate::{api::search::simple::simple_email::search_emails, model::EmailOpenSearchResponse};
+use crate::api::search::simple::simple_email::search_emails;
 use axum::{
     Extension,
     extract::{self, State},
@@ -10,9 +10,10 @@ use axum::{
 use model::{response::ErrorResponse, user::UserContext};
 use models_email::service::message::{ThreadHistoryInfo, ThreadHistoryRequest};
 use models_search::email::{
-    EmailSearchMetadata, EmailSearchRequest, EmailSearchResponse, EmailSearchResponseItem,
+    EmailSearchRequest, EmailSearchResponse, EmailSearchResponseItem,
     EmailSearchResponseItemWithMetadata, EmailSearchResult,
 };
+use opensearch_client::search::model::SearchGotoContent;
 use sqlx::types::Uuid;
 use std::collections::HashMap;
 
@@ -23,19 +24,25 @@ use super::SearchPaginationParams;
 pub(in crate::api::search) async fn enrich_emails(
     ctx: &ApiContext,
     user_id: &str,
-    results: Vec<opensearch_client::search::emails::EmailSearchResponse>,
+    results: Vec<opensearch_client::search::model::SearchHit>,
 ) -> Result<Vec<EmailSearchResponseItemWithMetadata>, SearchError> {
+    let results: Vec<opensearch_client::search::model::SearchHit> = results
+        .into_iter()
+        .filter(|r| r.entity_type == models_opensearch::SearchEntityType::Emails)
+        .collect();
+
     if results.is_empty() {
         return Ok(vec![]);
     }
+
     // Extract thread IDs from results
     let thread_ids: Vec<Uuid> = results
         .iter()
         .filter_map(|r| {
-            match Uuid::parse_str(&r.thread_id) {
+            match Uuid::parse_str(&r.entity_id) {
                 Ok(uuid) => Some(uuid),
                 Err(e) => {
-                    tracing::warn!(error=?e, thread_id=?r.thread_id, "Failed to parse thread ID as UUID");
+                    tracing::warn!(error=?e, thread_id=?r.entity_id, "Failed to parse thread ID as UUID");
                     None
                 }
             }
@@ -107,35 +114,69 @@ pub async fn handler(
 }
 
 pub fn construct_search_result(
-    search_results: Vec<opensearch_client::search::emails::EmailSearchResponse>,
+    search_results: Vec<opensearch_client::search::model::SearchHit>,
     thread_histories: HashMap<Uuid, ThreadHistoryInfo>,
 ) -> anyhow::Result<Vec<EmailSearchResponseItemWithMetadata>> {
-    let search_results = search_results
+    // construct entity hit map of id -> vec<hits>
+    let entity_id_hit_map: HashMap<Uuid, Vec<EmailSearchResult>> = search_results
         .into_iter()
-        .map(|inner| EmailOpenSearchResponse { inner })
-        .collect();
-    let result = util::construct_search_result::<
-        EmailOpenSearchResponse,
-        EmailSearchResult,
-        EmailSearchMetadata,
-    >(search_results)?;
-    // To preserve backwards compatibility for now, convert back into old struct
-    let result: Vec<EmailSearchResponseItem> = result.into_iter().map(|a| a.into()).collect();
+        .map(|hit| {
+            let result = if let Some(SearchGotoContent::Emails(goto)) = hit.goto {
+                EmailSearchResult {
+                    message_id: Some(goto.email_message_id),
+                    bcc: goto.bcc,
+                    cc: goto.cc,
+                    labels: goto.labels,
+                    sent_at: goto.sent_at,
+                    sender: Some(goto.sender),
+                    recipients: goto.recipients,
+                    highlight: hit.highlight.into(),
+                    score: hit.score,
+                }
+            } else {
+                // name match
+                EmailSearchResult {
+                    message_id: None,
+                    bcc: vec![],
+                    cc: vec![],
+                    labels: vec![],
+                    sent_at: None,
+                    sender: None,
+                    recipients: vec![],
+                    highlight: hit.highlight.into(),
+                    score: hit.score,
+                }
+            };
+            (hit.entity_id.parse().unwrap(), result)
+        })
+        .fold(HashMap::new(), |mut map, (entity_id, result)| {
+            map.entry(entity_id).or_insert_with(Vec::new).push(result);
+            map
+        });
 
-    let result: Vec<EmailSearchResponseItemWithMetadata> = result
+    // now construct the search results
+    let result: Vec<EmailSearchResponseItemWithMetadata> = entity_id_hit_map
         .into_iter()
-        .map(|item| {
-            let message_uuid = Uuid::parse_str(&item.thread_id).unwrap_or_else(|_| Uuid::nil());
-            let message_history_info = thread_histories
-                .get(&message_uuid)
-                .cloned()
-                .unwrap_or_default();
-            EmailSearchResponseItemWithMetadata {
-                created_at: message_history_info.created_at.timestamp(),
-                updated_at: message_history_info.updated_at.timestamp(),
-                viewed_at: message_history_info.viewed_at.map(|a| a.timestamp()),
-                snippet: message_history_info.snippet,
-                extra: item,
+        .filter_map(|(entity_id, hits)| {
+            if let Some(info) = thread_histories.get(&entity_id) {
+                let info = info.clone();
+                Some(EmailSearchResponseItemWithMetadata {
+                    created_at: info.created_at.timestamp(),
+                    updated_at: info.updated_at.timestamp(),
+                    viewed_at: info.viewed_at.map(|a| a.timestamp()),
+                    snippet: info.snippet,
+                    extra: EmailSearchResponseItem {
+                        id: entity_id.to_string(),
+                        thread_id: entity_id.to_string(),
+                        owner_id: info.user_id.clone(),
+                        user_id: info.user_id,
+                        name: info.subject.clone(),
+                        subject: info.subject,
+                        email_message_search_results: hits,
+                    },
+                })
+            } else {
+                None
             }
         })
         .collect();

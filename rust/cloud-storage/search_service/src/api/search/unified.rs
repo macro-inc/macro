@@ -2,7 +2,7 @@ use super::SearchPaginationParams;
 use crate::api::{
     ApiContext,
     search::{
-        enrich::EnrichSearchResponse,
+        enrich::enrich_search_response,
         simple::{SearchError, simple_unified::perform_unified_search},
     },
 };
@@ -45,6 +45,7 @@ pub async fn handler(
 
     let results = perform_unified_search(&ctx, &user_context, query_params, req).await?;
 
+    // Split the results by entity type
     let SplitUnifiedSearchResponseValues {
         channel_message,
         chat,
@@ -60,20 +61,36 @@ pub async fn handler(
         enriched_project_results,
         enriched_email_results,
     ) = tokio::try_join!(
-        document
-            .into_iter()
-            .enrich_search_response(&ctx, &user_context.user_id),
-        chat.into_iter()
-            .enrich_search_response(&ctx, &user_context.user_id),
-        channel_message
-            .into_iter()
-            .enrich_search_response(&ctx, &user_context.user_id),
-        project
-            .into_iter()
-            .enrich_search_response(&ctx, &user_context.user_id),
-        email
-            .into_iter()
-            .enrich_search_response(&ctx, &user_context.user_id)
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            document,
+            models_opensearch::SearchEntityType::Documents
+        ),
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            chat,
+            models_opensearch::SearchEntityType::Chats
+        ),
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            channel_message,
+            models_opensearch::SearchEntityType::Channels
+        ),
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            project,
+            models_opensearch::SearchEntityType::Projects
+        ),
+        enrich_search_response(
+            &ctx,
+            &user_context.user_id,
+            email,
+            models_opensearch::SearchEntityType::Emails
+        ),
     )
     .map_err(|e| SearchError::InternalError(anyhow::anyhow!("tokio error: {:?}", e)))?;
 

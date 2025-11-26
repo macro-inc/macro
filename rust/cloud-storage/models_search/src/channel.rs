@@ -8,17 +8,21 @@ use utoipa::ToSchema;
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ChannelSearchResult {
     /// The channel message id
-    pub message_id: String,
+    /// This is only prsent if the search result is on the message content
+    pub message_id: Option<String>,
     /// The channel message thread id
     pub thread_id: Option<String>,
     /// The sender id
-    pub sender_id: String,
+    /// This is only prsent if the search result is on the message content
+    pub sender_id: Option<String>,
+    /// When the channel message was created
+    /// This is only prsent if the search result is on the message content
+    pub created_at: Option<i64>,
+    /// When the channel message was last updated
+    /// This is only prsent if the search result is on the message content
+    pub updated_at: Option<i64>,
     /// The highlights for the channel message
     pub highlight: SearchHighlight,
-    /// When the channel message was created
-    pub created_at: i64,
-    /// When the channel message was last updated
-    pub updated_at: i64,
     /// The score of the result
     #[serde(skip_serializing_if = "Option::is_none")]
     pub score: Option<f64>,

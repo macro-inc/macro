@@ -126,12 +126,28 @@ pub struct SearchGotoChat {
 pub struct SearchGotoEmail {
     /// The email message id
     pub email_message_id: String,
+    /// The bcc of the email
+    pub bcc: Vec<String>,
+    /// The cc of the email
+    pub cc: Vec<String>,
+    /// The labels of the email
+    pub labels: Vec<String>,
+    /// The sent_at timestamp of the email
+    pub sent_at: Option<i64>,
+    /// The sender of the email
+    pub sender: String,
+    /// The recipients of the email
+    pub recipients: Vec<String>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SearchGotoChannel {
     /// The channel message id
     pub channel_message_id: String,
+    pub thread_id: Option<String>,
+    pub sender_id: String,
+    pub created_at: i64,
+    pub updated_at: i64,
 }
 
 /// Enum containing structs for all data needed to handle search "goto" in the frontend

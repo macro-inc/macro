@@ -1,11 +1,8 @@
 //! This module is responsible for enriching search results with metadata
 
+use models_opensearch::SearchEntityType;
 use models_search::unified::UnifiedSearchResponseItem;
-use opensearch_client::search::{
-    channels::ChannelMessageSearchResponse, chats::ChatSearchResponse,
-    documents::DocumentSearchResponse, emails::EmailSearchResponse,
-    projects::ProjectSearchResponse,
-};
+use opensearch_client::search::model::SearchHit;
 
 use crate::api::{
     context::ApiContext,
@@ -15,96 +12,48 @@ use crate::api::{
     },
 };
 
-/// Trait to enrich the search results from opensearch with extra data
-pub(super) trait EnrichSearchResponse<T>: Iterator<Item = T> {
-    fn enrich_search_response(
-        self,
-        ctx: &ApiContext,
-        user_id: &str,
-    ) -> impl Future<Output = Result<Vec<UnifiedSearchResponseItem>, SearchError>> + Send;
-}
-
-impl<T> EnrichSearchResponse<DocumentSearchResponse> for T
-where
-    T: Iterator<Item = DocumentSearchResponse> + Send,
-{
-    async fn enrich_search_response(
-        self,
-        ctx: &ApiContext,
-        user_id: &str,
-    ) -> Result<Vec<UnifiedSearchResponseItem>, SearchError> {
-        let response = enrich_documents(ctx, user_id, self.collect()).await?;
-        Ok(response
-            .into_iter()
-            .map(UnifiedSearchResponseItem::Document)
-            .collect())
-    }
-}
-
-impl<T> EnrichSearchResponse<EmailSearchResponse> for T
-where
-    T: Iterator<Item = EmailSearchResponse> + Send,
-{
-    async fn enrich_search_response(
-        self,
-        ctx: &ApiContext,
-        user_id: &str,
-    ) -> Result<Vec<UnifiedSearchResponseItem>, SearchError> {
-        let response = enrich_emails(ctx, user_id, self.collect()).await?;
-        Ok(response
-            .into_iter()
-            .map(UnifiedSearchResponseItem::Email)
-            .collect())
-    }
-}
-
-impl<T> EnrichSearchResponse<ChannelMessageSearchResponse> for T
-where
-    T: Iterator<Item = ChannelMessageSearchResponse> + Send,
-{
-    async fn enrich_search_response(
-        self,
-        ctx: &ApiContext,
-        user_id: &str,
-    ) -> Result<Vec<UnifiedSearchResponseItem>, SearchError> {
-        let response = enrich_channels(ctx, user_id, self.collect()).await?;
-        Ok(response
-            .into_iter()
-            .map(UnifiedSearchResponseItem::Channel)
-            .collect())
-    }
-}
-
-impl<T> EnrichSearchResponse<ChatSearchResponse> for T
-where
-    T: Iterator<Item = ChatSearchResponse> + Send,
-{
-    async fn enrich_search_response(
-        self,
-        ctx: &ApiContext,
-        user_id: &str,
-    ) -> Result<Vec<UnifiedSearchResponseItem>, SearchError> {
-        let response = enrich_chats(ctx, user_id, self.collect()).await?;
-        Ok(response
-            .into_iter()
-            .map(UnifiedSearchResponseItem::Chat)
-            .collect())
-    }
-}
-
-impl<T> EnrichSearchResponse<ProjectSearchResponse> for T
-where
-    T: Iterator<Item = ProjectSearchResponse> + Send,
-{
-    async fn enrich_search_response(
-        self,
-        ctx: &ApiContext,
-        user_id: &str,
-    ) -> Result<Vec<UnifiedSearchResponseItem>, SearchError> {
-        let response = enrich_projects(ctx, user_id, self.collect()).await?;
-        Ok(response
-            .into_iter()
-            .map(UnifiedSearchResponseItem::Project)
-            .collect())
+/// Enriches search results with metadat and converts to UnifiedSearchResponseItem
+pub async fn enrich_search_response(
+    ctx: &ApiContext,
+    user_id: &str,
+    results: Vec<SearchHit>,
+    entity_type: SearchEntityType,
+) -> Result<Vec<UnifiedSearchResponseItem>, SearchError> {
+    match entity_type {
+        SearchEntityType::Documents => {
+            let response = enrich_documents(ctx, user_id, results).await?;
+            Ok(response
+                .into_iter()
+                .map(UnifiedSearchResponseItem::Document)
+                .collect())
+        }
+        SearchEntityType::Emails => {
+            let response = enrich_emails(ctx, user_id, results).await?;
+            Ok(response
+                .into_iter()
+                .map(UnifiedSearchResponseItem::Email)
+                .collect())
+        }
+        SearchEntityType::Channels => {
+            let response = enrich_channels(ctx, user_id, results).await?;
+            Ok(response
+                .into_iter()
+                .map(UnifiedSearchResponseItem::Channel)
+                .collect())
+        }
+        SearchEntityType::Chats => {
+            let response = enrich_chats(ctx, user_id, results).await?;
+            Ok(response
+                .into_iter()
+                .map(UnifiedSearchResponseItem::Chat)
+                .collect())
+        }
+        SearchEntityType::Projects => {
+            let response = enrich_projects(ctx, user_id, results).await?;
+            Ok(response
+                .into_iter()
+                .map(UnifiedSearchResponseItem::Project)
+                .collect())
+        }
     }
 }

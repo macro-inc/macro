@@ -34,6 +34,12 @@ pub struct SearchGotoChat {
 pub struct SearchGotoEmail {
     /// The email message id
     pub email_message_id: String,
+    pub bcc: Vec<String>,
+    pub cc: Vec<String>,
+    pub labels: Vec<String>,
+    pub sent_at: Option<i64>,
+    pub sender: String,
+    pub recipients: Vec<String>,
 }
 
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, ToSchema)]
@@ -70,6 +76,12 @@ impl From<opensearch_client::search::model::SearchGotoContent> for SearchGotoCon
             opensearch_client::search::model::SearchGotoContent::Emails(a) => {
                 SearchGotoContent::Emails(SearchGotoEmail {
                     email_message_id: a.email_message_id,
+                    bcc: a.bcc,
+                    cc: a.cc,
+                    labels: a.labels,
+                    sent_at: a.sent_at,
+                    sender: a.sender,
+                    recipients: a.recipients,
                 })
             }
             opensearch_client::search::model::SearchGotoContent::Channels(a) => {

@@ -15,7 +15,6 @@ use std::sync::Arc;
 mod api;
 mod config;
 mod model;
-mod util;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
