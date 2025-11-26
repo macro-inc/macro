@@ -5,8 +5,10 @@ use super::db_types::*;
 use crate::domain::models::{PreviewCursorQuery, PreviewView, PreviewViewStandardLabel};
 use filter_ast::Expr;
 use item_filters::ast::email::{Email, EmailLiteral};
+use models_pagination::{Query, SimpleSortMethod};
 use recursion::CollapsibleExt;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
+use uuid::Uuid;
 
 /// Builds SQL WHERE conditions for email filters based on the AST.
 /// Returns a string to be appended to the WHERE clause.
@@ -391,17 +393,20 @@ fn build_query<'a>(
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn dynamic_email_thread_cursor(
     pool: &PgPool,
-    query: &PreviewCursorQuery,
+    link_id: &Uuid,
+    limit: u32,
+    view: &PreviewView,
+    query: Query<Uuid, SimpleSortMethod, Expr<EmailLiteral>>,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
-    let query_limit = query.limit as i64;
-    let sort_method_str = query.query.sort_method().to_string();
-    let (cursor_id, cursor_timestamp) = query.query.vals();
+    let query_limit = limit as i64;
+    let sort_method_str = query.sort_method().to_string();
+    let (cursor_id, cursor_timestamp) = query.vals();
     let cursor_id_str = cursor_id.as_ref().map(|u| u.to_string());
 
     // Extract email filter from query if present
-    let email_filter = query.query.filter();
+    let email_filter = query.filter();
 
-    build_query(&query.view, email_filter.as_ref())
+    build_query(&query.view, email_filter)
         .build()
         .bind(query.link_id) // $1
         .bind(sort_method_str) // $2
@@ -440,7 +445,11 @@ mod tests {
 
     #[test]
     fn test_build_email_filter_sender_complete() {
-        let email = Email::Complete(EmailStr::parse_from_str("test@example.com").unwrap().into_owned());
+        let email = Email::Complete(
+            EmailStr::parse_from_str("test@example.com")
+                .unwrap()
+                .into_owned(),
+        );
         let expr = Expr::Literal(EmailLiteral::Sender(email));
         let result = build_email_filter(Some(&expr));
 
@@ -460,7 +469,11 @@ mod tests {
 
     #[test]
     fn test_build_email_filter_recipient() {
-        let email = Email::Complete(EmailStr::parse_from_str("recipient@example.com").unwrap().into_owned());
+        let email = Email::Complete(
+            EmailStr::parse_from_str("recipient@example.com")
+                .unwrap()
+                .into_owned(),
+        );
         let expr = Expr::Literal(EmailLiteral::Recipient(email));
         let result = build_email_filter(Some(&expr));
 
@@ -471,7 +484,11 @@ mod tests {
 
     #[test]
     fn test_build_email_filter_cc() {
-        let email = Email::Complete(EmailStr::parse_from_str("cc@example.com").unwrap().into_owned());
+        let email = Email::Complete(
+            EmailStr::parse_from_str("cc@example.com")
+                .unwrap()
+                .into_owned(),
+        );
         let expr = Expr::Literal(EmailLiteral::Cc(email));
         let result = build_email_filter(Some(&expr));
 
@@ -480,7 +497,11 @@ mod tests {
 
     #[test]
     fn test_build_email_filter_bcc() {
-        let email = Email::Complete(EmailStr::parse_from_str("bcc@example.com").unwrap().into_owned());
+        let email = Email::Complete(
+            EmailStr::parse_from_str("bcc@example.com")
+                .unwrap()
+                .into_owned(),
+        );
         let expr = Expr::Literal(EmailLiteral::Bcc(email));
         let result = build_email_filter(Some(&expr));
 
@@ -489,8 +510,16 @@ mod tests {
 
     #[test]
     fn test_build_email_filter_and() {
-        let email1 = Email::Complete(EmailStr::parse_from_str("sender@example.com").unwrap().into_owned());
-        let email2 = Email::Complete(EmailStr::parse_from_str("recipient@example.com").unwrap().into_owned());
+        let email1 = Email::Complete(
+            EmailStr::parse_from_str("sender@example.com")
+                .unwrap()
+                .into_owned(),
+        );
+        let email2 = Email::Complete(
+            EmailStr::parse_from_str("recipient@example.com")
+                .unwrap()
+                .into_owned(),
+        );
         let expr = Expr::and(
             Expr::Literal(EmailLiteral::Sender(email1)),
             Expr::Literal(EmailLiteral::Recipient(email2)),
@@ -504,8 +533,16 @@ mod tests {
 
     #[test]
     fn test_build_email_filter_or() {
-        let email1 = Email::Complete(EmailStr::parse_from_str("sender1@example.com").unwrap().into_owned());
-        let email2 = Email::Complete(EmailStr::parse_from_str("sender2@example.com").unwrap().into_owned());
+        let email1 = Email::Complete(
+            EmailStr::parse_from_str("sender1@example.com")
+                .unwrap()
+                .into_owned(),
+        );
+        let email2 = Email::Complete(
+            EmailStr::parse_from_str("sender2@example.com")
+                .unwrap()
+                .into_owned(),
+        );
         let expr = Expr::or(
             Expr::Literal(EmailLiteral::Sender(email1)),
             Expr::Literal(EmailLiteral::Sender(email2)),
@@ -519,7 +556,11 @@ mod tests {
 
     #[test]
     fn test_build_email_filter_not() {
-        let email = Email::Complete(EmailStr::parse_from_str("blocked@example.com").unwrap().into_owned());
+        let email = Email::Complete(
+            EmailStr::parse_from_str("blocked@example.com")
+                .unwrap()
+                .into_owned(),
+        );
         let expr = Expr::is_not(Expr::Literal(EmailLiteral::Sender(email)));
         let result = build_email_filter(Some(&expr));
 

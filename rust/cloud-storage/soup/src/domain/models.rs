@@ -115,6 +115,8 @@ pub struct SoupRequest {
 }
 
 impl SoupRequest {
+    /// take the parts of the [SoupRequest] that are only relevant to email
+    /// and move them into a [GetEmailsRequest] if it is possible to create one
     pub(crate) fn build_email_request(&self) -> Option<GetEmailsRequest> {
         Some(GetEmailsRequest {
             view: self.email_preview_view.clone(),
@@ -135,7 +137,6 @@ impl SoupRequest {
                     filter: (),
                 })),
                 // we don't yet have sort by frecency implemented for emails yet
-                // so we fallback to viewedupdated
                 SoupQuery::Frecency(_) => None,
             }?,
         })

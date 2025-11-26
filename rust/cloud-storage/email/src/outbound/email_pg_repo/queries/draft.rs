@@ -1,6 +1,7 @@
 use super::super::db_types::*;
-use crate::domain::models::PreviewCursorQuery;
+use models_pagination::{Query, SimpleSortMethod};
 use sqlx::PgPool;
+use uuid::Uuid;
 
 /// Fetches a paginated list of thread previews for the "Drafts" view.
 /// This view includes all threads that contain at least one draft message, sorted by the
@@ -8,11 +9,13 @@ use sqlx::PgPool;
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn drafts_preview_cursor(
     pool: &PgPool,
-    query: &PreviewCursorQuery,
+    link_id: &Uuid,
+    limit: u32,
+    query: &Query<Uuid, SimpleSortMethod, ()>,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
-    let query_limit = query.limit as i64;
-    let sort_method_str = query.query.sort_method().to_string();
-    let (cursor_id, cursor_timestamp) = query.query.vals();
+    let query_limit = limit as i64;
+    let sort_method_str = query.sort_method().to_string();
+    let (cursor_id, cursor_timestamp) = query.vals();
 
     sqlx::query_as!(
         ThreadPreviewCursorDbRow,
@@ -100,7 +103,7 @@ pub(crate) async fn drafts_preview_cursor(
         LEFT JOIN email_contacts c ON lmp.from_contact_id = c.id
         ORDER BY t.effective_ts DESC, t.updated_at DESC
         "#,
-        query.link_id,            // $1
+        link_id,            // $1
         query_limit,              // $2
         cursor_timestamp,   // $3
         cursor_id,          // $4

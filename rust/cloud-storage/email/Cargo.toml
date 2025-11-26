@@ -25,6 +25,7 @@ axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }
+either = { workspace = true }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
 item_filters = { path = "../item_filters" }
