@@ -22,7 +22,7 @@ macro_user_id = { path = "../macro_user_id" }
 mockall = { workspace = true, optional = true }
 model-entity = { path = "../model-entity" }
 num-traits = { version = "0.2" }
-ordered-float = "5"
+ordered-float = { workspace = true }
 recursion = { workspace = true, optional = true }
 serde = { workspace = true }
 serde_json = { workspace = true, optional = true }

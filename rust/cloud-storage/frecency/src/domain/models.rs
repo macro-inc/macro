@@ -90,6 +90,14 @@ impl<'a> AggregateId<'a> {
             entity: entity.into_owned(),
         }
     }
+
+    /// joins a [AggregateId] with a [FrecencyData] to construct an [AggregateFrecency]
+    pub fn into_aggregate(self, data: FrecencyData) -> AggregateFrecency {
+        AggregateFrecency {
+            id: self.into_owned(),
+            data,
+        }
+    }
 }
 
 /// The aggregated frecency record which is constructed from many [EventRecord]
@@ -108,6 +116,7 @@ pub struct AggregateFrecency {
 
 /// struct which contains the frecency score for a given [AggregateId]
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[non_exhaustive]
 pub struct FrecencyData {
     /// the total number of events that have occurred on this entity
     pub event_count: usize,

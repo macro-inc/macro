@@ -5,7 +5,9 @@ use crate::domain::{
     },
     ports::{SoupOutput, SoupRepo, SoupService},
 };
+use doppleganger::Mirror;
 use either::Either;
+use email::domain::{models::GetEmailsRequest, ports::EmailService};
 use frecency::domain::{
     models::{AggregateId, FrecencyPageRequest, JoinFrecency},
     ports::FrecencyQueryService,
@@ -16,30 +18,35 @@ use model_entity::as_owned::ShallowClone;
 use models_pagination::{
     Cursor, CursorVal, Frecency, FrecencyValue, PaginateOn, Query, SimpleSortMethod,
 };
-use models_soup::item::SoupItem;
+use models_soup::{email_thread::SoupEnrichedEmailThreadPreview, item::SoupItem};
 use std::cmp::Ordering;
+use uuid::Uuid;
 
 #[cfg(test)]
 mod tests;
 
 /// struct which handles the actual implementation of soup with abstracted interfaces for mocking
-pub struct SoupImpl<T, U> {
+pub struct SoupImpl<T, U, V> {
     /// the interface for interacting with the db
     soup_storage: T,
     /// the interface for interacting with frecency
     frecency: U,
+    /// the interface for interacting with email
+    email_service: V,
 }
 
-impl<T, U> SoupImpl<T, U>
+impl<T, U, V> SoupImpl<T, U, V>
 where
     T: SoupRepo,
     anyhow::Error: From<T::Err>,
     U: FrecencyQueryService,
+    V: EmailService,
 {
-    pub fn new(soup_storage: T, frecency: U) -> Self {
+    pub fn new(soup_storage: T, frecency: U, email_service: V) -> Self {
         SoupImpl {
             soup_storage,
             frecency,
+            email_service,
         }
     }
 
@@ -60,6 +67,7 @@ where
                 .await
                 .map_err(anyhow::Error::from)?,
         };
+
         Ok(res.into_iter().map(|item| FrecencySoupItem {
             item,
             frecency_score: None,
@@ -87,7 +95,6 @@ where
     ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
         let len = frecency_items.len();
         let remainder_to_fetch = (limit as usize).saturating_sub(len);
-        dbg!(remainder_to_fetch, len);
 
         let updated_at_soup = self
             .handle_simple_request(
@@ -107,7 +114,7 @@ where
 
     async fn handle_advanced_sort(
         &self,
-        cursor: Query<String, Frecency, Option<EntityFilterAst>>,
+        cursor: Query<Uuid, Frecency, Option<EntityFilterAst>>,
         soup_type: SoupType,
         user: MacroUserIdStr<'static>,
         limit: u16,
@@ -230,34 +237,70 @@ where
             Ordering::Greater | Ordering::Equal => Either::Right(res),
         })
     }
+
+    async fn handle_email_request(
+        &self,
+        req: Option<GetEmailsRequest>,
+    ) -> Result<impl Iterator<Item = FrecencySoupItem>, SoupErr> {
+        let Some(req) = req else {
+            return Ok(Either::Left(None.into_iter()));
+        };
+
+        let emails = self
+            .email_service
+            .get_email_thread_previews(req)
+            .await?
+            .items
+            .into_iter()
+            .map(|mut f| {
+                let frecency_score = f.frecency_score.take();
+                let soup_email = SoupEnrichedEmailThreadPreview::mirror(f);
+                FrecencySoupItem {
+                    item: SoupItem::EmailThread(soup_email),
+                    frecency_score,
+                }
+            });
+        Ok(Either::Right(emails))
+    }
 }
 
-impl<T, U> SoupService for SoupImpl<T, U>
+impl<T, U, V> SoupService for SoupImpl<T, U, V>
 where
     T: SoupRepo,
     anyhow::Error: From<T::Err>,
     U: FrecencyQueryService,
+    V: EmailService,
 {
     async fn get_user_soup(&self, req: SoupRequest) -> Result<SoupOutput, SoupErr> {
         let limit = req.limit.clamp(20, 500);
         let paginate_filter = req.cursor.filter().cloned();
+
+        let email_request = req.build_email_request();
+
         match req.cursor {
             SoupQuery::Simple(cursor) => {
                 let sort_method = *cursor.sort_method();
 
+                let main_soup_fut = self.handle_simple_request(
+                    req.soup_type,
+                    SimpleSortRequest {
+                        limit,
+                        cursor: SimpleSortQuery::from_entity_cursor(cursor),
+                        user_id: req.user,
+                    },
+                );
+
+                let email_soup_fut = self.handle_email_request(email_request);
+
+                let (main_soup, email_soup) = tokio::try_join!(main_soup_fut, email_soup_fut)?;
+
                 Ok(Either::Left(
-                    self.handle_simple_request(
-                        req.soup_type,
-                        SimpleSortRequest {
-                            limit,
-                            cursor: SimpleSortQuery::from_entity_cursor(cursor),
-                            user_id: req.user,
-                        },
-                    )
-                    .await?
-                    .paginate_on(limit.into(), sort_method)
-                    .filter_on(paginate_filter)
-                    .into_page(),
+                    main_soup
+                        .chain(email_soup)
+                        .paginate_on(limit.into(), sort_method)
+                        .filter_on(paginate_filter)
+                        .ensure_sorted()
+                        .into_page(),
                 ))
             }
             SoupQuery::Frecency(cursor) => Ok(Either::Right(

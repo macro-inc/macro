@@ -65,7 +65,7 @@ pub struct CursorVal<C: Sortable> {
 /// defines type to be sortable, sortable types must have an associated [Sortable::Value]
 pub trait Sortable: std::fmt::Debug {
     /// the value which we sort on e.g. Utc timestamp, float, etc
-    type Value: std::fmt::Debug;
+    type Value: std::fmt::Debug + std::cmp::Ord;
 }
 
 /// Intermediary struct which holds information about the page we are going to create.
@@ -76,6 +76,7 @@ pub struct Paginator<Iter, Cb, S, F> {
     cb: Cb,
     sort_on: PhantomData<S>,
     filter_on: F,
+    ensure_sort: bool,
 }
 
 impl<Iter, Cb, S> Paginator<Iter, Cb, S, ()> {
@@ -87,6 +88,7 @@ impl<Iter, Cb, S> Paginator<Iter, Cb, S, ()> {
             cb,
             sort_on,
             filter_on: (),
+            ensure_sort,
         } = self;
         Paginator {
             iter,
@@ -94,6 +96,7 @@ impl<Iter, Cb, S> Paginator<Iter, Cb, S, ()> {
             cb,
             sort_on,
             filter_on: filter,
+            ensure_sort,
         }
     }
 }
@@ -103,7 +106,7 @@ pub trait Paginate: Iterator + Sized {
     /// turn the iterator into a [Paginator]
     fn paginate<Cb, S>(self, limit: usize, cb: Cb) -> Paginator<Self, Cb, S, ()>
     where
-        Cb: FnOnce(&<Self as Iterator>::Item) -> CursorVal<S>,
+        Cb: FnMut(&<Self as Iterator>::Item) -> CursorVal<S>,
         S: Sortable;
 }
 
@@ -114,7 +117,7 @@ pub trait PaginateOn<T: Sortable>: Paginate {
         self,
         limit: usize,
         sort: T,
-    ) -> Paginator<Self, impl FnOnce(&<Self as Iterator>::Item) -> CursorVal<T>, T, ()>
+    ) -> Paginator<Self, impl FnMut(&<Self as Iterator>::Item) -> CursorVal<T>, T, ()>
     where
         <Self as Iterator>::Item: SortOn<T>;
 }
@@ -132,7 +135,7 @@ pub trait Identify {
 /// This should be implemented on the item that we iterate over, for the sortable method T that we are trying to paginate on
 pub trait SortOn<T: Sortable> {
     /// Given the input sort method T, return a function which produces the [CursorVal] for that T, from an input Self
-    fn sort_on(sort: T) -> impl FnOnce(&Self) -> CursorVal<T>;
+    fn sort_on(sort: T) -> impl FnMut(&Self) -> CursorVal<T>;
 }
 
 impl<T> Paginate for T
@@ -151,6 +154,7 @@ where
             cb,
             sort_on: PhantomData,
             filter_on: (),
+            ensure_sort: false,
         }
     }
 }
@@ -163,7 +167,7 @@ where
         self,
         limit: usize,
         sort: T,
-    ) -> Paginator<Self, impl FnOnce(&<Self as Iterator>::Item) -> CursorVal<T>, T, ()>
+    ) -> Paginator<Self, impl FnMut(&<Self as Iterator>::Item) -> CursorVal<T>, T, ()>
     where
         <Self as Iterator>::Item: SortOn<T>,
     {
@@ -186,24 +190,40 @@ impl<Iter, Cb, S, F> Paginator<Iter, Cb, S, F>
 where
     Iter: Iterator,
     Iter::Item: Identify,
-    Cb: FnOnce(&Iter::Item) -> CursorVal<S>,
+    Cb: FnMut(&Iter::Item) -> CursorVal<S>,
     S: Sortable + Serialize,
     S::Value: Serialize,
     F: Serialize,
     <Iter::Item as Identify>::Id: Serialize,
 {
+    /// ensures that the output will be sorted.
+    /// You should not use this in most cases as the ideal scenario is that the database should
+    /// return an already sorted list.
+    /// This is an escape hatch for use when stitching multiple database queries together.
+    pub fn ensure_sorted(mut self) -> Self {
+        self.ensure_sort = true;
+        self
+    }
     /// Turn self into a [PaginatedTypedCursor].
     /// This ensures that the page has the correct number of items and encodes the last element of the page into a base64 json encoded representation of the cursor.
     pub fn into_page(self) -> PaginatedCursor<Iter::Item, <Iter::Item as Identify>::Id, S, F> {
         let Paginator {
             iter,
             limit,
-            cb,
+            mut cb,
             filter_on,
+            ensure_sort,
             ..
         } = self;
 
-        let res: Vec<_> = iter.take(limit).collect();
+        let mut res: Vec<_> = iter.take(limit).collect();
+
+        if ensure_sort {
+            res.sort_by_key(|r| {
+                let cursor = cb(r);
+                cursor.last_val
+            });
+        }
 
         match res.len().cmp(&limit) {
             Ordering::Less => Paginated {

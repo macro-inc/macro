@@ -173,7 +173,7 @@ static SUFFIX: &str = r#"
     WHERE
         ($4::timestamptz IS NULL)
         OR
-        ("sort_ts", "id") < ($4, $5)
+        ("sort_ts", "id"::text) < ($4, $5)
     ORDER BY "sort_ts" DESC, "updated_at" DESC
     LIMIT $3
 "#;
@@ -188,7 +188,7 @@ static SUFFIX_NO_FRECENCY: &str = r#"
         AND (
             ($4::timestamptz IS NULL)
             OR
-            (Combined."sort_ts", Combined."id") < ($4, $5)
+            (Combined."sort_ts", Combined."id"::text) < ($4, $5)
         )
     ORDER BY Combined."sort_ts" DESC, Combined."updated_at" DESC
     LIMIT $3
@@ -461,7 +461,7 @@ pub(crate) struct ExpandedDynamicCursorArgs<'a> {
     /// the limit of items we can return
     pub limit: u16,
     /// the Query that we are attempting to perform
-    pub cursor: Query<String, SimpleSortMethod, EntityFilterAst>,
+    pub cursor: Query<Uuid, SimpleSortMethod, EntityFilterAst>,
     /// whether or not the query should explicitly remove items that DO have
     /// frecency records
     pub exclude_frecency: bool,
@@ -481,6 +481,7 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
     let query_limit = limit as i64;
     let sort_method_str = cursor.sort_method().to_string();
     let (cursor_id, cursor_timestamp) = cursor.vals();
+    let cursor_id_str = cursor_id.as_ref().map(|u| u.to_string());
 
     build_query(cursor.filter(), exclude_frecency)
         .build()
@@ -488,7 +489,7 @@ pub(crate) async fn expanded_dynamic_cursor_soup(
         .bind(sort_method_str)
         .bind(query_limit)
         .bind(cursor_timestamp)
-        .bind(cursor_id)
+        .bind(cursor_id_str)
         .try_map(|row| SoupRow::from_row(&row)?.into_soup_item())
         .fetch_all(db)
         .await
