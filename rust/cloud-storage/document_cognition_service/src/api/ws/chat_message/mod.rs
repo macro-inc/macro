@@ -408,19 +408,6 @@ pub async fn handle_send_chat_message(
                 tracing::error!(error=?err, "failed to convert chat_id to uuid");
             }
         }
-
-        // TODO: remove this once we have fully moved to names index
-        let _ = ctx
-            .sqs_client
-            .send_message_to_search_event_queue(SearchQueueMessage::UpdateChatMessageMetadata(
-                sqs_client::search::chat::UpdateChatMessageMetadata {
-                    chat_id: incoming_message.chat_id.clone(),
-                },
-            ))
-            .await
-            .inspect_err(
-                |err| tracing::error!(error=?err, "failed to send message to search event queue"),
-            );
     }
     ctx.context_provider_client
         .provide_context(user_id, &user_message_id)

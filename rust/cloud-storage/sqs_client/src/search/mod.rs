@@ -2,7 +2,7 @@ use crate::{
     SQS,
     search::{
         channel::{ChannelMessageUpdate, RemoveChannelMessage},
-        chat::{ChatMessage, RemoveChatMessage, UpdateChatMessageMetadata},
+        chat::{ChatMessage, RemoveChatMessage},
         document::{DocumentId, SearchExtractorMessage},
         email::{EmailLinkMessage, EmailMessage, EmailThreadMessage},
         name::EntityName,
@@ -71,11 +71,9 @@ pub enum SearchQueueMessage {
     ExtractDocumentText(SearchExtractorMessage),
     RemoveDocument(DocumentId),
     ExtractSync(SearchExtractorMessage),
-    UpdateDocumentMetadata(DocumentId),
     // Chat
     ChatMessage(ChatMessage),
     RemoveChatMessage(RemoveChatMessage),
-    UpdateChatMessageMetadata(UpdateChatMessageMetadata),
     // Email
     ExtractEmailMessage(EmailMessage),
     RemoveEmailMessage(EmailMessage),
@@ -104,10 +102,6 @@ impl PrimaryId for SearchQueueMessage {
             SearchQueueMessage::RemoveDocument(message) => message.document_id.clone(),
             SearchQueueMessage::ExtractSync(message) => message.document_id.clone(),
             SearchQueueMessage::ChatMessage(message) => message.message_id.clone(), // needs
-            SearchQueueMessage::UpdateChatMessageMetadata(message) => {
-                format!("{}update", message.chat_id.clone())
-            }
-            SearchQueueMessage::UpdateDocumentMetadata(message) => message.document_id.clone(),
             // to be the message id to ensure it's unique for batch
             SearchQueueMessage::RemoveChatMessage(message) => message.chat_id.clone(),
             SearchQueueMessage::ExtractEmailMessage(message)
@@ -142,11 +136,9 @@ impl SearchQueueMessage {
             SearchQueueMessage::ExtractDocumentText(_) => Operation::ExtractText,
             SearchQueueMessage::RemoveDocument(_) => Operation::Remove,
             SearchQueueMessage::ExtractSync(_) => Operation::ExtractSync,
-            SearchQueueMessage::UpdateDocumentMetadata(_) => Operation::UpdateMetadata,
             // Chat
             SearchQueueMessage::ChatMessage(_) => Operation::ExtractText,
             SearchQueueMessage::RemoveChatMessage(_) => Operation::Remove,
-            SearchQueueMessage::UpdateChatMessageMetadata(_) => Operation::UpdateMetadata,
             // Email
             SearchQueueMessage::ExtractEmailMessage(_) => Operation::ExtractText,
             SearchQueueMessage::RemoveEmailMessage(_) => Operation::Remove,
