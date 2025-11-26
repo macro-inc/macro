@@ -1,5 +1,5 @@
 use chrono::{DateTime, Utc};
-use frecency::domain::models::FrecencyQueryErr;
+use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
 use macro_user_id::user_id::MacroUserIdStr;
 use models_pagination::{Identify, Query, SimpleSortMethod, SortOn};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
@@ -82,11 +82,12 @@ pub struct EmailThreadPreview {
 }
 
 #[non_exhaustive]
+#[derive(Debug)]
 pub struct EnrichedEmailThreadPreview {
     pub thread: EmailThreadPreview,
     pub attachments: Vec<Attachment>,
     pub attachments_macro: Vec<AttachmentMacro>,
-    pub frecency_score: Option<f64>,
+    pub frecency_score: Option<AggregateFrecency>,
     pub participants: Vec<Contact>,
 }
 
@@ -101,7 +102,7 @@ impl Identify for EnrichedEmailThreadPreview {
 impl SortOn<SimpleSortMethod> for EnrichedEmailThreadPreview {
     fn sort_on(
         sort: SimpleSortMethod,
-    ) -> impl FnOnce(&Self) -> models_pagination::CursorVal<SimpleSortMethod> {
+    ) -> impl FnMut(&Self) -> models_pagination::CursorVal<SimpleSortMethod> {
         move |v| {
             let val = match sort {
                 SimpleSortMethod::ViewedAt => v.thread.viewed_at.unwrap_or_default(),

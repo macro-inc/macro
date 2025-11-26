@@ -254,7 +254,7 @@ async fn test_get_user_items_unexpanded_cursor(pool: Pool<Postgres>) -> anyhow::
             result.next_cursor.map(|s| {
                 let decoded = s.decode_json().unwrap();
                 models_pagination::Cursor {
-                    id: decoded.id.to_string(),
+                    id: decoded.id,
                     limit: decoded.limit,
                     val: decoded.val,
                     filter: decoded.filter,
