@@ -77,20 +77,6 @@ pub struct EmailSearchMetadata {
     pub user_id: String,
 }
 
-// impl From<SearchResponseItem<EmailSearchResult, EmailSearchMetadata>> for EmailSearchResponseItem {
-//     fn from(response: SearchResponseItem<EmailSearchResult, EmailSearchMetadata>) -> Self {
-//         EmailSearchResponseItem {
-//             id: response.metadata.thread_id.clone(),
-//             owner_id: response.metadata.user_id.clone(),
-//             name: None,
-//             subject: response.metadata.subject,
-//             thread_id: response.metadata.thread_id.clone(),
-//             user_id: response.metadata.user_id.clone(),
-//             email_message_search_results: response.results,
-//         }
-//     }
-// }
-
 /// The document search response object
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct EmailSearchResponse {
