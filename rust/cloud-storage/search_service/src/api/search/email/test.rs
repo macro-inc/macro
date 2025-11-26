@@ -11,6 +11,8 @@ fn create_email_history(thread_id: &str) -> models_email::service::message::Thre
         updated_at: now,
         viewed_at: None,
         snippet: None,
+        user_id: "user1".to_string(),
+        subject: Some("subject".to_string()),
     }
 }
 
