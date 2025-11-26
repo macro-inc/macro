@@ -1,6 +1,5 @@
 use super::super::db_types::*;
 use crate::domain::models::PreviewCursorQuery;
-use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
 /// Fetches a paginated list of thread previews for the "Starred" view.
@@ -11,7 +10,6 @@ use sqlx::PgPool;
 pub(crate) async fn starred_preview_cursor(
     pool: &PgPool,
     query: &PreviewCursorQuery,
-    user_id: MacroUserIdStr<'_>,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
     let query_limit = query.limit as i64;
     let sort_method_str = query.query.sort_method().to_string();

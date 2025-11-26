@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::{EmailFilters, ast::ExpandErr};
 
 /// Possible email values in the ast
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum Email {
     /// A string which is not a valid fully qualified email
     Partial(String),
@@ -14,7 +14,7 @@ pub enum Email {
 }
 
 /// The literal type that can appear in the item filter ast
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum EmailLiteral {
     /// The sender field of the email
     Sender(Email),

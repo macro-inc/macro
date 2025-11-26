@@ -13,6 +13,7 @@ use sqlx::PgPool;
 use uuid::Uuid;
 
 mod db_types;
+mod dynamic;
 mod queries;
 
 #[cfg(test)]
@@ -40,53 +41,30 @@ impl EmailRepo for EmailPgRepo {
         Ok(match query.view {
             PreviewView::StandardLabel(ref label) => match label {
                 PreviewViewStandardLabel::Inbox => {
-                    queries::new_inbox::new_inbox_preview_cursor(
-                        &self.pool,
-                        &query,
-                        user_id.copied(),
-                    )
-                    .await?
+                    queries::new_inbox::new_inbox_preview_cursor(&self.pool, &query).await?
                 }
                 PreviewViewStandardLabel::Sent => {
-                    queries::sent::sent_preview_cursor(&self.pool, &query, user_id.copied()).await?
+                    queries::sent::sent_preview_cursor(&self.pool, &query).await?
                 }
                 PreviewViewStandardLabel::Drafts => {
-                    queries::draft::drafts_preview_cursor(&self.pool, &query, user_id.copied())
-                        .await?
+                    queries::draft::drafts_preview_cursor(&self.pool, &query).await?
                 }
                 PreviewViewStandardLabel::Starred => {
-                    queries::starred::starred_preview_cursor(&self.pool, &query, user_id.copied())
-                        .await?
+                    queries::starred::starred_preview_cursor(&self.pool, &query).await?
                 }
                 PreviewViewStandardLabel::All => {
-                    queries::all_mail::all_mail_preview_cursor(&self.pool, &query, user_id.copied())
-                        .await?
+                    queries::all_mail::all_mail_preview_cursor(&self.pool, &query).await?
                 }
                 PreviewViewStandardLabel::Important => {
-                    queries::important::important_preview_cursor(
-                        &self.pool,
-                        &query,
-                        user_id.copied(),
-                    )
-                    .await?
+                    queries::important::important_preview_cursor(&self.pool, &query).await?
                 }
                 PreviewViewStandardLabel::Other => {
-                    queries::other_inbox::other_inbox_preview_cursor(
-                        &self.pool,
-                        &query,
-                        user_id.copied(),
-                    )
-                    .await?
+                    queries::other_inbox::other_inbox_preview_cursor(&self.pool, &query).await?
                 }
             },
             PreviewView::UserLabel(ref label_name) => {
-                queries::user_label::user_label_preview_cursor(
-                    &self.pool,
-                    &query,
-                    label_name,
-                    user_id.copied(),
-                )
-                .await?
+                queries::user_label::user_label_preview_cursor(&self.pool, &query, label_name)
+                    .await?
             }
         }
         .into_iter()

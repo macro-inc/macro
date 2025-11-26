@@ -1,5 +1,6 @@
 use chrono::{DateTime, Utc};
 use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
+use item_filters::ast::email::EmailLiteral;
 use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use models_pagination::{Identify, Query, SimpleSortMethod, SortOn};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
@@ -16,7 +17,7 @@ pub struct PreviewCursorQuery {
     pub view: PreviewView,
     pub link_id: Uuid,
     pub limit: u32,
-    pub query: Query<Uuid, SimpleSortMethod, ()>,
+    pub query: Query<Uuid, SimpleSortMethod, Option<Expr<EmailLiteral>>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString, Display)]

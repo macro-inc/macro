@@ -25,12 +25,15 @@ axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }
+filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency" }
+item_filters = { path = "../item_filters" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }
 model-error-response = { path = "../model-error-response", optional = true }
 model_user = { path = "../model_user", optional = true }
 models_pagination = { path = "../models_pagination" }
+recursion = { workspace = true }
 schemars = { workspace = true, optional = true, features = ["uuid1"] }
 serde = { workspace = true }
 serde_with = { workspace = true }
@@ -43,5 +46,5 @@ utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 
 [dev-dependencies]
-macro_db_migrator = { path = "../macro_db_migrator"}
+macro_db_migrator = { path = "../macro_db_migrator" }
 serde_json = { workspace = true }

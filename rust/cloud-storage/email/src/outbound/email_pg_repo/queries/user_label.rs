@@ -1,6 +1,5 @@
 use super::super::db_types::*;
 use crate::domain::models::PreviewCursorQuery;
-use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 
 /// Fetches a paginated list of thread previews for a user label.
@@ -12,7 +11,6 @@ pub(crate) async fn user_label_preview_cursor(
     pool: &PgPool,
     query: &PreviewCursorQuery,
     label_name: &str,
-    user_id: MacroUserIdStr<'_>,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
     let query_limit = query.limit as i64;
     let sort_method_str = query.query.sort_method().to_string();
