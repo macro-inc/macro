@@ -2834,6 +2834,7 @@ dependencies = [
  "chrono",
  "doppleganger",
  "frecency",
+ "macro_db_migrator",
  "macro_user_id",
  "model-entity",
  "model-error-response",

@@ -14,6 +14,7 @@ use uuid::Uuid;
 
 mod db_types;
 mod queries;
+mod test;
 
 #[derive(Clone)]
 pub struct EmailPgRepo {

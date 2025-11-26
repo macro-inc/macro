@@ -5,7 +5,6 @@ use crate::domain::models::{
 use chrono::{DateTime, Utc};
 use doppleganger::Doppleganger;
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
-use sqlx::FromRow;
 use uuid::Uuid;
 
 #[derive(Doppleganger)]
@@ -94,7 +93,7 @@ pub enum LabelTypeDbRow {
 
 #[derive(Doppleganger)]
 #[dg(forward = Label)]
-#[derive(FromRow, Debug, Clone)]
+#[derive(Debug, Clone)]
 pub struct LabelDbRow {
     pub id: Uuid,
     pub thread_id: Uuid,
@@ -104,7 +103,6 @@ pub struct LabelDbRow {
     pub created_at: DateTime<Utc>,
     pub message_list_visibility: MessageListVisibilityDbRow,
     pub label_list_visibility: LabelListVisibilityDbRow,
-    #[sqlx(rename = "type")]
     pub type_: LabelTypeDbRow,
 }
 
