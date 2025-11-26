@@ -2,10 +2,9 @@
 //! email queries that filter content based on input AST (EmailLiteral).
 
 use super::db_types::*;
-use crate::domain::models::PreviewCursorQuery;
+use crate::domain::models::{PreviewCursorQuery, PreviewView, PreviewViewStandardLabel};
 use filter_ast::Expr;
 use item_filters::ast::email::{Email, EmailLiteral};
-use macro_user_id::user_id::MacroUserIdStr;
 use recursion::CollapsibleExt;
 use sqlx::{PgPool, Postgres, QueryBuilder, Row};
 
@@ -124,8 +123,123 @@ fn escape_like_pattern(s: &str) -> String {
         .replace('_', r"\_")
 }
 
+/// Builds thread-level WHERE conditions based on the view type
+fn build_view_thread_filter(view: &PreviewView) -> String {
+    match view {
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox) => {
+            " AND t.inbox_visible = TRUE AND t.latest_inbound_message_ts IS NOT NULL".to_string()
+        }
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Sent) => {
+            " AND t.latest_outbound_message_ts IS NOT NULL".to_string()
+        }
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Drafts) => {
+            // Drafts are filtered at message level, no thread filter needed
+            String::new()
+        }
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Starred) => {
+            // Starred threads are those with at least one starred message
+            // This is handled in a different way in the original query
+            String::new()
+        }
+        PreviewView::StandardLabel(PreviewViewStandardLabel::All) => {
+            // All mail, no additional filter
+            String::new()
+        }
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Important) => {
+            // Important threads have at least one message with IMPORTANT label
+            String::new()
+        }
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Other) => {
+            // Other inbox: inbox_visible but not in primary (no IMPORTANT or CATEGORY_PERSONAL)
+            " AND t.inbox_visible = TRUE".to_string()
+        }
+        PreviewView::UserLabel(_label_name) => {
+            // User labels are filtered at message level
+            String::new()
+        }
+    }
+}
+
+/// Builds message-level WHERE conditions based on the view type
+fn build_view_message_filter(view: &PreviewView, link_id_param: &str) -> String {
+    match view {
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox) => {
+            format!(" AND m.is_draft = FALSE")
+        }
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Sent) => {
+            format!(" AND m.is_sent = TRUE")
+        }
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Drafts) => {
+            format!(" AND m.is_draft = TRUE")
+        }
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Starred) => {
+            format!(" AND m.is_starred = TRUE AND m.is_draft = FALSE")
+        }
+        PreviewView::StandardLabel(PreviewViewStandardLabel::All) => {
+            // All mail, no specific message filter
+            String::new()
+        }
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Important) => {
+            format!(
+                r#" AND EXISTS (
+                    SELECT 1 FROM email_message_labels ml
+                    JOIN email_labels l ON ml.label_id = l.id
+                    WHERE ml.message_id = m.id
+                    AND l.name = 'IMPORTANT'
+                    AND l.link_id = {}
+                )"#,
+                link_id_param
+            )
+        }
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Other) => {
+            format!(
+                r#" AND NOT EXISTS (
+                    SELECT 1 FROM email_message_labels ml
+                    JOIN email_labels l ON ml.label_id = l.id
+                    WHERE ml.message_id = m.id
+                    AND l.name IN ('IMPORTANT', 'CATEGORY_PERSONAL')
+                    AND l.link_id = {}
+                )"#,
+                link_id_param
+            )
+        }
+        PreviewView::UserLabel(label_name) => {
+            format!(
+                r#" AND EXISTS (
+                    SELECT 1 FROM email_message_labels ml
+                    JOIN email_labels l ON ml.label_id = l.id
+                    WHERE ml.message_id = m.id
+                    AND l.name = '{}'
+                    AND l.link_id = {}
+                )"#,
+                label_name, link_id_param
+            )
+        }
+    }
+}
+
+/// Returns the appropriate timestamp field to use for sorting based on the view
+fn get_sort_timestamp_field(view: &PreviewView) -> &'static str {
+    match view {
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Sent) => {
+            "t.latest_outbound_message_ts"
+        }
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox) => {
+            "t.latest_inbound_message_ts"
+        }
+        _ => "t.latest_non_spam_message_ts",
+    }
+}
+
 /// Builds a dynamic email thread query with filters applied
-fn build_query(email_filter: Option<&Expr<EmailLiteral>>) -> QueryBuilder<'_, Postgres> {
+fn build_query<'a>(
+    view: &'a PreviewView,
+    email_filter: Option<&'a Expr<EmailLiteral>>,
+) -> QueryBuilder<'a, Postgres> {
+    let sort_ts_field = get_sort_timestamp_field(view);
+    let view_thread_filter = build_view_thread_filter(view);
+    let view_message_filter = build_view_message_filter(view, "t.link_id");
+
     let mut builder = sqlx::QueryBuilder::new(
         r#"
         SELECT
@@ -162,26 +276,46 @@ fn build_query(email_filter: Option<&Expr<EmailLiteral>>) -> QueryBuilder<'_, Po
                 t.link_id,
                 t.inbox_visible,
                 t.is_read,
-                t.latest_non_spam_message_ts AS created_at,
-                t.latest_non_spam_message_ts AS updated_at,
+        "#,
+    );
+
+    // Add the appropriate timestamp fields based on view
+    builder.push(format!(
+        r#"
+                {} AS created_at,
+                {} AS updated_at,
                 uh.updated_at AS viewed_at,
                 CASE $2 -- sort_method_str
                     WHEN 'viewed_at' THEN COALESCE(uh."updated_at", '1970-01-01 00:00:00+00')
-                    WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, t.latest_non_spam_message_ts)
-                    ELSE t.latest_non_spam_message_ts
+                    WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, {})
+                    ELSE {}
                 END AS effective_ts
             FROM email_threads t
             LEFT JOIN email_user_history uh ON uh.thread_id = t.id AND uh.link_id = t.link_id
             WHERE
                 t.link_id = $1
-              AND t.latest_non_spam_message_ts IS NOT NULL
+        "#,
+        sort_ts_field, sort_ts_field, sort_ts_field, sort_ts_field
+    ));
 
+    // Add view-specific thread filters
+    if !view_thread_filter.is_empty() {
+        builder.push(view_thread_filter);
+    }
+
+    builder.push(
+        r#"
               -- Cursor logic
               AND (($4::timestamptz IS NULL) OR (
                   CASE $2 -- sort_method_str
                       WHEN 'viewed_at' THEN COALESCE(uh."updated_at", '1970-01-01 00:00:00+00')
-                      WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, t.latest_non_spam_message_ts)
-                      ELSE t.latest_non_spam_message_ts
+        "#,
+    );
+
+    builder.push(format!(
+        r#"
+                      WHEN 'viewed_updated' THEN COALESCE(uh.updated_at, {})
+                      ELSE {}
                   END, t.id
               ) < ($4::timestamptz, $5::uuid))
             ORDER BY effective_ts DESC, t.updated_at DESC
@@ -201,7 +335,13 @@ fn build_query(email_filter: Option<&Expr<EmailLiteral>>) -> QueryBuilder<'_, Po
                 WHERE ml.message_id = m.id AND l.name = 'TRASH' AND l.link_id = t.link_id
               )
         "#,
-    );
+        sort_ts_field, sort_ts_field
+    ));
+
+    // Add view-specific message filters
+    if !view_message_filter.is_empty() {
+        builder.push(view_message_filter);
+    }
 
     // Add dynamic email filters
     let filter_sql = build_email_filter(email_filter);
@@ -224,20 +364,34 @@ fn build_query(email_filter: Option<&Expr<EmailLiteral>>) -> QueryBuilder<'_, Po
 }
 
 /// Fetches a paginated list of thread previews with dynamic filtering based on EmailLiteral AST.
-/// This function provides a flexible alternative to the hardcoded view-specific queries.
+/// This function provides a flexible alternative to the hardcoded view-specific queries,
+/// combining view-specific filters (Inbox, Sent, Drafts, etc.) with custom email filters
+/// (sender, recipient, cc, bcc).
 ///
 /// # Arguments
 /// * `pool` - Database connection pool
-/// * `query` - Preview cursor query containing link_id, limit, cursor, and filter AST
-/// * `user_id` - The user making the request
+/// * `query` - Preview cursor query containing view, link_id, limit, cursor, and filter AST
 ///
 /// # Returns
-/// A vector of ThreadPreviewCursorDbRow matching the filter criteria
+/// A vector of ThreadPreviewCursorDbRow matching the view and filter criteria
+///
+/// # Example
+/// ```ignore
+/// // Get drafts from a specific sender
+/// let query = PreviewCursorQuery {
+///     view: PreviewView::StandardLabel(PreviewViewStandardLabel::Drafts),
+///     link_id,
+///     limit: 50,
+///     query: Query::new(Some(Expr::Literal(EmailLiteral::Sender(
+///         Email::Complete(EmailStr::parse_from_str("john@example.com").unwrap().into_owned())
+///     )))),
+/// };
+/// let results = dynamic_email_thread_cursor(&pool, &query).await?;
+/// ```
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn dynamic_email_thread_cursor(
     pool: &PgPool,
     query: &PreviewCursorQuery,
-    _user_id: MacroUserIdStr<'_>,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
     let query_limit = query.limit as i64;
     let sort_method_str = query.query.sort_method().to_string();
@@ -247,7 +401,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
     // Extract email filter from query if present
     let email_filter = query.query.filter();
 
-    build_query(email_filter.as_ref())
+    build_query(&query.view, email_filter.as_ref())
         .build()
         .bind(query.link_id) // $1
         .bind(sort_method_str) // $2
@@ -386,5 +540,72 @@ mod tests {
     fn test_build_email_filter_none() {
         let result = build_email_filter(None);
         assert_eq!(result, "");
+    }
+
+    #[test]
+    fn test_build_view_thread_filter_inbox() {
+        let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+        let result = build_view_thread_filter(&view);
+        assert!(result.contains("inbox_visible = TRUE"));
+        assert!(result.contains("latest_inbound_message_ts IS NOT NULL"));
+    }
+
+    #[test]
+    fn test_build_view_thread_filter_sent() {
+        let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
+        let result = build_view_thread_filter(&view);
+        assert!(result.contains("latest_outbound_message_ts IS NOT NULL"));
+    }
+
+    #[test]
+    fn test_build_view_message_filter_drafts() {
+        let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Drafts);
+        let result = build_view_message_filter(&view, "$1");
+        assert!(result.contains("is_draft = TRUE"));
+    }
+
+    #[test]
+    fn test_build_view_message_filter_starred() {
+        let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Starred);
+        let result = build_view_message_filter(&view, "$1");
+        assert!(result.contains("is_starred = TRUE"));
+        assert!(result.contains("is_draft = FALSE"));
+    }
+
+    #[test]
+    fn test_build_view_message_filter_important() {
+        let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Important);
+        let result = build_view_message_filter(&view, "$1");
+        assert!(result.contains("IMPORTANT"));
+        assert!(result.contains("EXISTS"));
+    }
+
+    #[test]
+    fn test_build_view_message_filter_user_label() {
+        let view = PreviewView::UserLabel("MyLabel".to_string());
+        let result = build_view_message_filter(&view, "$1");
+        assert!(result.contains("MyLabel"));
+        assert!(result.contains("EXISTS"));
+    }
+
+    #[test]
+    fn test_get_sort_timestamp_field_sent() {
+        let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
+        let result = get_sort_timestamp_field(&view);
+        assert_eq!(result, "t.latest_outbound_message_ts");
+    }
+
+    #[test]
+    fn test_get_sort_timestamp_field_inbox() {
+        let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
+        let result = get_sort_timestamp_field(&view);
+        assert_eq!(result, "t.latest_inbound_message_ts");
+    }
+
+    #[test]
+    fn test_get_sort_timestamp_field_default() {
+        let view = PreviewView::StandardLabel(PreviewViewStandardLabel::All);
+        let result = get_sort_timestamp_field(&view);
+        assert_eq!(result, "t.latest_non_spam_message_ts");
     }
 }
