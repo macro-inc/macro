@@ -154,6 +154,7 @@ log = "0.4.26"
 mockall = "0.13"
 nom = "8"
 openssl = { version = "0.10.71", features = ["vendored"] }
+ordered-float = "5"
 pdfium-render = { version = "0.8.28" }
 rand = "0.9.0"
 recursion = "0.5.4"

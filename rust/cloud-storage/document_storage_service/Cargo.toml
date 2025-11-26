@@ -111,8 +111,7 @@ zip = { workspace = true }
 [dev-dependencies]
 cool_asserts = "2"
 frecency = { path = "../frecency", features = ["mock"] }
-ordered-float = "5"
-
+ordered-float = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["comms_service", "connection_gateway"]

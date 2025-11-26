@@ -53,7 +53,7 @@ http-body-util = { workspace = true }
 item_filters = { path = "../item_filters", features = ["mock"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 mockall = { workspace = true }
-ordered-float = "5"
+ordered-float = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }

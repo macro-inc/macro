@@ -15,7 +15,7 @@ base64 = { workspace = true }
 chrono = { workspace = true }
 either = { workspace = true }
 model-error-response = { path = "../model-error-response", optional = true }
-ordered-float = { version = "5" }
+ordered-float = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
