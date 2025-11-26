@@ -1,12 +1,23 @@
+use std::convert::Infallible;
+
 use recursion::{Collapsible, Expandable, MappableFrame, PartiallyApplied};
 use serde::{Deserialize, Serialize};
 
-pub trait TryExpandNode: Iterator {
+pub trait TryExpandNode: Iterator + Sized {
     fn try_expand<U, E>(
         self,
         cb: impl FnMut(<Self as Iterator>::Item) -> Result<U, E>,
         fold: impl Fn(Expr<U>, Expr<U>) -> Expr<U>,
     ) -> Result<Option<Expr<U>>, E>;
+
+    fn expand<U>(
+        self,
+        mut cb: impl FnMut(<Self as Iterator>::Item) -> U,
+        fold: impl Fn(Expr<U>, Expr<U>) -> Expr<U>,
+    ) -> Option<Expr<U>> {
+        self.try_expand(move |v| Result::<U, Infallible>::Ok(cb(v)), fold)
+            .unwrap()
+    }
 }
 
 impl<I> TryExpandNode for I
