@@ -50,7 +50,7 @@ jobs:
       - name: clippy
         run: |
           cd rust/cloud-storage
-          cargo clippy
+          cargo clippy --all-features
 
   test:
     needs: path-check
@@ -93,6 +93,7 @@ jobs:
         run: |
           cargo install just --force
           cargo install sqlx-cli --force
+          cargo install cargo-nextest --force
       - name: prepare tests
         run: |
           just rust/cloud-storage/setup_test_envs
@@ -100,7 +101,7 @@ jobs:
       - name: run tests
         run: |
           cd rust/cloud-storage
-          cargo test
+          cargo nextest run --all-features
 
   diff-check:
     needs: path-check
