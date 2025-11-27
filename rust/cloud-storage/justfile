@@ -42,7 +42,6 @@ setup_test_envs:
     echo "DATABASE_URL={{ MACRODB }}" >> ./macro_db_client/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./email_db_client/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./comms_db_client/.env
-    echo "DATABASE_URL={{ MACRODB }}" >> ./contacts_db_client/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./document_cognition_service/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./document_text_extractor/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./organization_retention_handler/.env

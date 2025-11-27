@@ -2,4 +2,3 @@
 !/target/lambda
 !/target/lambda/docx-unzip-handler/bootstrap.zip
 .env*
-!.env.sample

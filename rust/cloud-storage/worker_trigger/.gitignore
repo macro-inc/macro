@@ -2,4 +2,3 @@
 !/target/lambda
 !/target/lambda/worker-trigger/bootstrap.zip
 .env*
-!.env.sample
