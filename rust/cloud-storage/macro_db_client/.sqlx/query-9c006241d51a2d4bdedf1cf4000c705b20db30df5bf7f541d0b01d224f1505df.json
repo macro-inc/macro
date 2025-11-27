@@ -1,0 +1,82 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            m.\"id\" as message_id,\n            m.\"content\",\n            m.\"createdAt\" as \"date!: DateTime<Utc>\",\n            c.\"name\" as conversation_title,\n            a.\"attachmentId\" as \"attachment_id?\",\n            d.\"summary\" as \"ds_summary?\",\n            d.\"version_id\" as \"ds_version_id?\",\n            d.\"createdAt\" as \"ds_created_at?: DateTime<Utc>\",\n            d.\"document_id\" as \"ds_document_id?\",\n            d.\"id\" as \"ds_id?\",\n            m.\"chatId\" as \"chat_id\"\n        FROM \"ChatMessage\" m\n        LEFT JOIN \"Chat\" c\n            ON c.\"id\" = m.\"chatId\"\n        LEFT JOIN \"ChatAttachment\" a\n            ON m.id = a.\"messageId\"\n        LEFT JOIN LATERAL (\n            SELECT DISTINCT ON (ds.\"document_id\")\n                ds.*\n            FROM \"DocumentSummary\" ds\n            WHERE ds.\"document_id\" = a.\"attachmentId\"\n            ORDER BY ds.\"document_id\", ds.\"createdAt\" DESC\n        ) d ON true\n        WHERE\n            m.\"chatId\" = $1\n        ORDER BY m.\"createdAt\" DESC;\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "content",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 2,
+        "name": "date!: DateTime<Utc>",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 3,
+        "name": "conversation_title",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "attachment_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "ds_summary?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "ds_version_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "ds_created_at?: DateTime<Utc>",
+        "type_info": "Timestamp"
+      },
+      {
+        "ordinal": 8,
+        "name": "ds_document_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "ds_id?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 10,
+        "name": "chat_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "9c006241d51a2d4bdedf1cf4000c705b20db30df5bf7f541d0b01d224f1505df"
+}

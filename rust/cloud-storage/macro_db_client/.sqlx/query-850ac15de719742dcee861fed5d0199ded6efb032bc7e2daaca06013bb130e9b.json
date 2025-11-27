@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            bp.id as id,\n            bp.sha as sha,\n            bp.path as path\n        FROM\n            \"BomPart\" bp\n        WHERE\n            bp.\"documentBomId\" = $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "sha",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "path",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "850ac15de719742dcee861fed5d0199ded6efb032bc7e2daaca06013bb130e9b"
+}

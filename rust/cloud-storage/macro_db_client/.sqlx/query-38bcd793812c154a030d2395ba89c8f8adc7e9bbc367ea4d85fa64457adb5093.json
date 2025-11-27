@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO \"EmailInsightsBackfillBatch\" (\n            id, \n            \"insightsBackfillJobId\", \n            \"sqsMessageId\",\n            \"threadIds\", \n            \"totalThreads\", \n            status,\n            \"queuedAt\",\n            \"createdAt\",\n            \"updatedAt\"\n        ) VALUES (\n            $1, $2, $3, $4, $5, 'Queued'::\"insights_backfill_batch_status\", NOW(), NOW(), NOW()\n        )\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text",
+        "TextArray",
+        "Int4"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "38bcd793812c154a030d2395ba89c8f8adc7e9bbc367ea4d85fa64457adb5093"
+}

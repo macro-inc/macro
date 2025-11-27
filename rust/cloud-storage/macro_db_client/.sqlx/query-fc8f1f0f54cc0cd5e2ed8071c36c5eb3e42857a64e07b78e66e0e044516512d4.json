@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT DISTINCT u.\"id\" as \"user_id\"\n        FROM \"User\" u\n        INNER JOIN \"UserInsights\" ui ON u.\"id\" = ui.\"userId\"\n        LEFT JOIN \"UserInsightBatch\" uib ON u.\"id\" = uib.\"userId\"\n        WHERE \n            ui.\"generated\" = true\n            AND ui.\"createdAt\" > COALESCE(uib.\"createdAt\", '1970-01-01'::timestamptz)\n        OR \n            uib.\"expiresAt\" <= NOW()\n        ORDER BY u.\"id\"\n        LIMIT $1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "fc8f1f0f54cc0cd5e2ed8071c36c5eb3e42857a64e07b78e66e0e044516512d4"
+}
