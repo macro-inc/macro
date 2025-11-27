@@ -30,9 +30,9 @@ export function createBucket({
     forceDestroy: stack !== 'prod',
     versioning: enableVersioning
       ? {
-          enabled: true,
-          mfaDelete: false,
-        }
+        enabled: true,
+        mfaDelete: false,
+      }
       : undefined,
     // Enable transfer acceleration for our production bucket for SPEEDZ
     accelerationStatus: transferAcceleration ? 'Enabled' : undefined,
@@ -46,15 +46,19 @@ export function createBucket({
         maxAgeSeconds: 3000,
       },
     ],
-    loggings:
-      stack === 'prod'
-        ? [
-            {
-              targetBucket: 'macro-logging-bucket',
-              targetPrefix: `${bucketName}/`,
-            },
-          ]
-        : undefined,
+    logging: stack === 'prod' ? {
+      targetBucket: 'macro-logging-bucket',
+      targetPrefix: `${bucketName}/`,
+    } : undefined,
+    // loggings:
+    //   stack === 'prod'
+    //     ? [
+    //         {
+    //           targetBucket: 'macro-logging-bucket',
+    //           targetPrefix: `${bucketName}/`,
+    //         },
+    //       ]
+    //     : undefined,
   });
 }
 
