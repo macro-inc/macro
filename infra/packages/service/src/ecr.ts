@@ -1,3 +1,4 @@
+import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
 
@@ -40,8 +41,33 @@ export class EcrImage extends pulumi.ComponentResource {
         forceDelete: true,
         tags: this.tags,
         lifecyclePolicy: {
-          // We do not want a lifecycle policy for the repositories
+          // We do not want the default lifecycle policy for the repositories
           skip: true,
+        },
+      },
+      { parent: this }
+    );
+
+    new aws.ecr.LifecyclePolicy(
+      `${repositoryId}-lifecycle-policy`,
+      {
+        repository: this.ecr.repository.id,
+        policy: {
+          rules: [
+            {
+              rulePriority: 1,
+              description: 'remove untagged images older than 1 day',
+              selection: {
+                tagStatus: 'untagged',
+                countType: 'sinceImagePushed',
+                countUnit: 'days',
+                countNumber: 1,
+              },
+              action: {
+                type: 'expire',
+              },
+            },
+          ],
         },
       },
       { parent: this }

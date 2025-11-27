@@ -18,8 +18,9 @@ import {
 const BASE_NAME = 'organization-service';
 const BASE_PATH = '../../../rust/cloud-storage';
 
-export const SERVICE_DOMAIN_NAME = `organization-service${stack === 'prod' ? '' : `-${stack}`
-  }.${BASE_DOMAIN}`;
+export const SERVICE_DOMAIN_NAME = `organization-service${
+  stack === 'prod' ? '' : `-${stack}`
+}.${BASE_DOMAIN}`;
 
 type CreateOrganizationServiceArgs = {
   cloudStorageClusterName: pulumi.Output<string> | string;
@@ -231,10 +232,11 @@ export class OrganizationService extends pulumi.ComponentResource {
           },
           runtimePlatform: {
             operatingSystemFamily: `${platform.family.toUpperCase()}`,
-            cpuArchitecture: `${platform.architecture === 'amd64'
+            cpuArchitecture: `${
+              platform.architecture === 'amd64'
                 ? 'X86_64'
                 : platform.architecture.toUpperCase()
-              }`,
+            }`,
           },
         },
         desiredCount: 1,
