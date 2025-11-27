@@ -17,7 +17,6 @@ async fn main() -> anyhow::Result<()> {
     let env = Environment::new_or_prod();
     MacroEntrypoint::new(env).init();
 
-    // comment
     let secretsmanager_client =
         secretsmanager_client::SecretsManager::new(aws_sdk_secretsmanager::Client::new(
             &aws_config::defaults(aws_config::BehaviorVersion::latest())
