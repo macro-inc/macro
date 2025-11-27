@@ -32,6 +32,15 @@ pub trait EmailRepo: Send + Sync + 'static {
         &self,
         thread_ids: &[Uuid],
     ) -> impl Future<Output = Result<Vec<Label>, Self::Err>> + Send;
+    fn threads_with_known_senders(
+        &self,
+        user_email: &str,
+        thread_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
+    fn threads_with_tabular_messages(
+        &self,
+        thread_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
 }
 
 pub trait EmailService: Send + Sync + 'static {

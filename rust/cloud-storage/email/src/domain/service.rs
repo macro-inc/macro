@@ -13,8 +13,8 @@ use std::collections::HashMap;
 use uuid::Uuid;
 
 pub struct EmailServiceImpl<T, U> {
-    email_repo: T,
-    frecency_service: U,
+    pub(crate) email_repo: T,
+    pub(crate) frecency_service: U,
 }
 
 impl<T, U> EmailServiceImpl<T, U>

@@ -122,6 +122,19 @@ impl SortOn<SimpleSortMethod> for EnrichedEmailThreadPreview {
     }
 }
 
+// derived metadata for the email thread that the FE uses for filtering
+#[derive(Debug, Clone)]
+pub struct EmailThreadPreviewMetadata {
+    // if user has previously emailed this sender
+    pub known_sender: bool,
+    // if any email contains a <table> html tag
+    pub tabular: bool,
+    // if any email contains a calendar invite
+    pub calendar_invite: bool,
+    // if the sender is a generic email
+    pub generic_sender: bool,
+}
+
 #[derive(Debug, Clone)]
 #[non_exhaustive]
 pub struct Attachment {

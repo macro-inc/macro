@@ -227,4 +227,69 @@ impl EmailRepo for EmailPgRepo {
         .map(LabelDbRow::mirror)
         .collect())
     }
+
+    async fn threads_with_known_senders(
+        &self,
+        user_email: &str,
+        thread_ids: &[Uuid],
+    ) -> Result<Vec<Uuid>, Self::Err> {
+        // Returns thread IDs where the user has emailed at least one sender in the thread
+        let result = sqlx::query_scalar!(
+            r#"
+        WITH user_link AS (
+            SELECT id as link_id, email_address
+            FROM email_links
+            WHERE email_address = $1
+            LIMIT 1
+        ),
+        -- Get all email addresses the user has previously sent messages to
+        previously_contacted AS (
+            SELECT DISTINCT c.email_address
+            FROM email_messages m
+            JOIN email_message_recipients mr ON m.id = mr.message_id
+            JOIN email_contacts c ON mr.contact_id = c.id
+            CROSS JOIN user_link
+            WHERE m.link_id = user_link.link_id
+                AND m.is_sent = true
+                AND c.email_address != user_link.email_address
+        )
+        -- Find threads where any sender is in the previously contacted list
+        SELECT DISTINCT m.thread_id
+        FROM email_messages m
+        JOIN email_contacts c ON m.from_contact_id = c.id
+        WHERE m.thread_id = ANY($2)
+            AND EXISTS (
+                SELECT 1
+                FROM previously_contacted pc
+                WHERE pc.email_address = c.email_address
+            )
+        "#,
+            user_email,
+            thread_ids
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(result)
+    }
+
+    async fn threads_with_tabular_messages(
+        &self,
+        thread_ids: &[Uuid],
+    ) -> Result<Vec<Uuid>, Self::Err> {
+        // Returns thread IDs where at least one message in the thread has an html table element
+        let result = sqlx::query_scalar!(
+            r#"
+        SELECT DISTINCT thread_id
+        FROM email_messages
+        WHERE thread_id = ANY($1)
+            AND body_html_sanitized LIKE '%<table%'
+        "#,
+            thread_ids
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(result)
+    }
 }
