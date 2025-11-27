@@ -2,10 +2,6 @@ import type { BlockName } from '@core/block';
 import { type EntityType, NotificationType } from '@core/types';
 import type { NotificationEventType } from '@service-notification/generated/schemas';
 import type { TypedNotification } from './notification-metadata';
-import type {
-  DocumentNameResolver,
-  UserNameResolver,
-} from './notification-resolvers';
 
 export type NotificationData = {
   actor?: { id: string };

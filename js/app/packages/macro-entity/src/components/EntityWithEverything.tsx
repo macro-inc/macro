@@ -3,7 +3,7 @@ import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { TOKENS } from '@core/hotkey/tokens';
 import { matches } from '@core/util/match';
 import CheckIcon from '@icon/regular/check.svg';
-import { notificationWithMetadata } from '@notifications';
+import { tryToTypedNotification } from '@notifications';
 import { useEmail, useUserId } from '@service-gql/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
@@ -612,9 +612,7 @@ export function EntityWithEverything(
                   }
 
                   const metadata =
-                    notificationWithMetadata(
-                      notification
-                    )?.notificationMetadata;
+                    tryToTypedNotification(notification)?.notificationMetadata;
                   if (
                     !metadata ||
                     !('messageContent' in metadata) ||
@@ -635,9 +633,7 @@ export function EntityWithEverything(
                   }
 
                   const metadata =
-                    notificationWithMetadata(
-                      notification
-                    )?.notificationMetadata;
+                    tryToTypedNotification(notification)?.notificationMetadata;
                   if (
                     !metadata ||
                     !('messageContent' in metadata) ||

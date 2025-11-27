@@ -1,5 +1,5 @@
 import type { BlockName } from '@core/block';
-import { ResizeZoneCtx } from '@core/component/Resize/types';
+import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import type {
   BlockInstanceHandle,
   BlockOrchestrator,

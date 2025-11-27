@@ -1,6 +1,13 @@
+import type { SplitManager } from '@app/component/split-layout/layoutManager';
 import { getFaviconUrl } from '@app/util/favicon';
 import { markdownToPlainText } from '@lexical-core';
+import type { UnifiedNotification } from '@service-notification/client';
 import { themeReactive } from '../block-theme/signals/themeReactive';
+import type {
+  PlatformNotificationState,
+} from './components/PlatformNotificationProvider';
+import { tryToTypedNotification } from './notification-metadata';
+import { openNotification } from './notification-navigation';
 import {
   extractNotificationData,
   type NotificationData,
@@ -11,11 +18,6 @@ import {
   type DocumentNameResolver,
   type UserNameResolver,
 } from './notification-resolvers';
-import type { PlatformNotificationInterface, PlatformNotificationState } from './components/PlatformNotificationProvider';
-import { notificationWithMetadata } from './notification-metadata';
-import type { UnifiedNotification } from '@service-notification/client';
-import type { SplitManager } from '@app/component/split-layout/layoutManager';
-import { openNotification } from './notification-navigation';
 
 /// the interface for a singular notification on this device
 export interface PlatformNotificationHandle {
@@ -80,7 +82,7 @@ export async function maybeHandlePlatformNotification(
   notificationInterface: PlatformNotificationState,
   splitLayoutManager: SplitManager
 ) {
-  const nm = notificationWithMetadata(notification);
+  const nm = tryToTypedNotification(notification);
   if (!nm) return;
   const data = extractNotificationData(nm);
   if (data === 'no_extractor' || data === 'no_extracted_data') return;
@@ -95,7 +97,10 @@ export async function maybeHandlePlatformNotification(
     let notificationHandle = await notificationInterface.showNotification(
       platformNotificationData
     );
-    if (notificationHandle !== 'not-granted' && notificationHandle !== 'disabled-in-ui') {
+    if (
+      notificationHandle !== 'not-granted' &&
+      notificationHandle !== 'disabled-in-ui'
+    ) {
       notificationHandle.onClick(() => {
         openNotification(nm, splitLayoutManager);
       });

@@ -10,7 +10,7 @@ import {
   For,
   Show,
 } from 'solid-js';
-import { notificationWithMetadata } from '../notification-metadata';
+import { tryToTypedNotification } from '../notification-metadata';
 import {
   extractNotificationData,
   NOTIFICATION_LABEL_BY_TYPE,
@@ -18,7 +18,7 @@ import {
 } from '../notification-preview';
 import {
   maybeHandlePlatformNotification,
-  PlatformNotificationData,
+  type PlatformNotificationData,
   toPlatformNotificationData,
 } from '../notification-platform';
 import {
@@ -30,7 +30,7 @@ import type { UnifiedNotification } from '../types';
 import { createMockWebsocket } from '../utils/mock-websocket';
 import {
   PlatformNotificationProvider,
-  PlatformNotificationState,
+  type PlatformNotificationState,
   usePlatformNotificationState,
 } from './PlatformNotificationProvider';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -54,7 +54,7 @@ function groupNotificationsByType(
 function extractTypedNotificationData(
   notification: UnifiedNotification
 ): NotificationData | null {
-  const typed = notificationWithMetadata(notification);
+  const typed = tryToTypedNotification(notification);
   if (!typed) return null;
   const data = extractNotificationData(typed);
   if (data === 'no_extractor' || data === 'no_extracted_data') return null;

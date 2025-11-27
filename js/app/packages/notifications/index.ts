@@ -52,10 +52,9 @@ export {
   isNewEmail,
   isNotificationWithMetadata,
   isRejectTeamInvite,
-  notificationWithMetadata,
+  tryToTypedNotification,
 } from './notification-metadata';
-export type { NavigationActions } from './notification-navigation';
-export { navigateToNotification } from './notification-navigation';
+export { openNotification } from './notification-navigation';
 export type {
   PlatformNotificationData,
   PlatformNotificationHandle,
@@ -65,9 +64,7 @@ export {
   extractNotificationData,
   NOTIFICATION_LABEL_BY_TYPE,
 } from './notification-preview';
-export type { 
-  toPlatformNotificationData,
- } from './notification-platform';
+export type { toPlatformNotificationData } from './notification-platform';
 export type {
   DocumentNameResolver,
   NotificationBlockNameResolver,

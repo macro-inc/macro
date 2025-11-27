@@ -264,11 +264,15 @@ export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     if (notifInterface === 'not-supported') return;
     const layoutManager = globalSplitManager();
     if (!layoutManager) return;
-    maybeHandlePlatformNotification(notification, notifInterface, layoutManager);
-  }
+    maybeHandlePlatformNotification(
+      notification,
+      notifInterface,
+      layoutManager
+    );
+  };
   const notificationSource = createNotificationSource(
     connectionGatewayWebsocket,
-    onNotification,
+    onNotification
   );
 
   const emailActive = useEmailLinksStatus();

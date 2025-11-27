@@ -23,15 +23,6 @@ import {
   type Store,
   unwrap,
 } from 'solid-js/store';
-import { notificationWithMetadata } from './notification-metadata';
-import {
-  extractNotificationData,
-  toBrowserNotification,
-} from './notification-preview';
-import {
-  DefaultDocumentNameResolver,
-  DefaultUserNameResolver,
-} from './notification-resolvers';
 import { fetchNotificationsForEntities } from './queries/entities-notifications-query';
 import { createMutedEntitiesQuery } from './queries/muted-entities-query';
 import {

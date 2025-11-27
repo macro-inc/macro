@@ -172,7 +172,7 @@ export type UnifiedNotificationWithMetadata<
   T extends keyof NotificationMetadataByType = keyof NotificationMetadataByType,
 > = TypedNotification<T>;
 
-export function notificationWithMetadata(
+export function tryToTypedNotification(
   notification: UnifiedNotification
 ): TypedNotification<NotificationEventType> | null {
   if (!isNotificationWithMetadata(notification)) return null;
