@@ -56,30 +56,25 @@ pub enum ExpandErr {
     MacroIdErr(#[from] macro_user_id::error::ParseErr),
 }
 
-/// Describes a bundle of filters that should be applied across different entity types
-#[derive(Debug, Serialize, Deserialize)]
-#[non_exhaustive]
-pub struct EntityFilterInner {
-    /// the filters that should be applied to the document entity
-    #[serde(default)]
-    pub document_filter: Option<Expr<DocumentLiteral>>,
-    /// the filters that should be applied to the project entity
-    #[serde(default)]
-    pub project_filter: Option<Expr<ProjectLiteral>>,
-    /// the filters that should be applied to the chat entity
-    #[serde(default)]
-    pub chat_filter: Option<Expr<ChatLiteral>>,
-    /// the filters that should be applied to the email entity
-    #[serde(default)]
-    pub email_filter: Option<Expr<EmailLiteral>>,
-}
+/// type alias for a maybe empty, cheaply cloneable ast literal tree
+pub type LiteralTree<T> = Option<Arc<Expr<T>>>;
 
-/// wrapper over [EntityFilterInner] which gives us cheaper clones
+/// Describes a bundle of filters that should be applied across different entity types
 #[derive(Debug, Serialize, Deserialize, Clone)]
 #[non_exhaustive]
 pub struct EntityFilterAst {
-    /// we wrap the inner type in an arc to avoid large allocations when cloning boxed values
-    pub inner: Arc<EntityFilterInner>,
+    /// the filters that should be applied to the document entity
+    #[serde(default)]
+    pub document_filter: LiteralTree<DocumentLiteral>,
+    /// the filters that should be applied to the project entity
+    #[serde(default)]
+    pub project_filter: LiteralTree<ProjectLiteral>,
+    /// the filters that should be applied to the chat entity
+    #[serde(default)]
+    pub chat_filter: LiteralTree<ChatLiteral>,
+    /// the filters that should be applied to the email entity
+    #[serde(default)]
+    pub email_filter: LiteralTree<EmailLiteral>,
 }
 
 impl EntityFilterAst {
@@ -88,13 +83,13 @@ impl EntityFilterAst {
         if entity_filter.is_empty() {
             return Ok(None);
         }
-        Ok(Some(Self {
-            inner: Arc::new(EntityFilterInner {
-                document_filter: DocumentFilters::expand_ast(entity_filter.document_filters)?,
-                project_filter: ProjectFilters::expand_ast(entity_filter.project_filters)?,
-                chat_filter: ChatFilters::expand_ast(entity_filter.chat_filters)?,
-                email_filter: EmailFilters::expand_ast(entity_filter.email_filters)?,
-            }),
+        Ok(Some(EntityFilterAst {
+            document_filter: DocumentFilters::expand_ast(entity_filter.document_filters)?
+                .map(Arc::new),
+            project_filter: ProjectFilters::expand_ast(entity_filter.project_filters)?
+                .map(Arc::new),
+            chat_filter: ChatFilters::expand_ast(entity_filter.chat_filters)?.map(Arc::new),
+            email_filter: EmailFilters::expand_ast(entity_filter.email_filters)?.map(Arc::new),
         }))
     }
 
@@ -102,24 +97,22 @@ impl EntityFilterAst {
     #[cfg(feature = "mock")]
     pub fn mock_empty() -> Self {
         Self {
-            inner: Arc::new(EntityFilterInner {
-                document_filter: None,
-                project_filter: None,
-                chat_filter: None,
-                email_filter: None,
-            }),
+            document_filter: None,
+            project_filter: None,
+            chat_filter: None,
+            email_filter: None,
         }
     }
 }
 
 impl IsEmpty for EntityFilterAst {
     fn is_empty(&self) -> bool {
-        let EntityFilterInner {
+        let EntityFilterAst {
             document_filter,
             project_filter,
             chat_filter,
             email_filter,
-        } = &*self.inner;
+        } = self;
         document_filter.is_none()
             && project_filter.is_none()
             && chat_filter.is_none()

@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use super::*;
 use crate::domain::models::{LabelType, PreviewView, PreviewViewStandardLabel};
 use crate::domain::ports::EmailRepo;
@@ -153,10 +155,13 @@ async fn test_dynamic_query_inbox_view(pool: Pool<Postgres>) -> anyhow::Result<(
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox);
     let limit = 50;
     // Use a broad filter that matches most emails
-    let filter = Expr::Literal(EmailLiteral::Sender(Email::Partial("example.com".to_string())));
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Partial(
+        "example.com".to_string(),
+    ))));
     let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
 
-    let results = dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
     // Should get inbox messages (threads 1, 4, 5, 7)
     assert_eq!(
@@ -184,10 +189,13 @@ async fn test_dynamic_query_sent_view(pool: Pool<Postgres>) -> anyhow::Result<()
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Sent);
     let limit = 50;
-    let filter = Expr::Literal(EmailLiteral::Sender(Email::Partial("example.com".to_string())));
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Partial(
+        "example.com".to_string(),
+    ))));
     let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
 
-    let results = dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
     // Should get sent messages (thread 2)
     assert_eq!(results.len(), 1, "Sent view should return 1 thread");
@@ -207,10 +215,13 @@ async fn test_dynamic_query_drafts_view(pool: Pool<Postgres>) -> anyhow::Result<
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Drafts);
     let limit = 50;
-    let filter = Expr::Literal(EmailLiteral::Sender(Email::Partial("example.com".to_string())));
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Partial(
+        "example.com".to_string(),
+    ))));
     let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
 
-    let results = dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
     // Should get draft messages (thread 3)
     assert_eq!(results.len(), 1, "Drafts view should return 1 thread");
@@ -231,10 +242,13 @@ async fn test_dynamic_query_starred_view(pool: Pool<Postgres>) -> anyhow::Result
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Starred);
     let limit = 50;
-    let filter = Expr::Literal(EmailLiteral::Sender(Email::Partial("example.com".to_string())));
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Partial(
+        "example.com".to_string(),
+    ))));
     let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
 
-    let results = dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
     // Should get starred messages (thread 4)
     assert_eq!(results.len(), 1, "Starred view should return 1 thread");
@@ -254,10 +268,13 @@ async fn test_dynamic_query_important_view(pool: Pool<Postgres>) -> anyhow::Resu
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let view = PreviewView::StandardLabel(PreviewViewStandardLabel::Important);
     let limit = 50;
-    let filter = Expr::Literal(EmailLiteral::Sender(Email::Partial("example.com".to_string())));
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Partial(
+        "example.com".to_string(),
+    ))));
     let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
 
-    let results = dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
     // Should get important messages (thread 5)
     assert_eq!(results.len(), 1, "Important view should return 1 thread");
@@ -281,10 +298,13 @@ async fn test_dynamic_query_user_label_view(pool: Pool<Postgres>) -> anyhow::Res
     let link_id = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
     let view = PreviewView::UserLabel("Work".to_string());
     let limit = 50;
-    let filter = Expr::Literal(EmailLiteral::Sender(Email::Partial("example.com".to_string())));
+    let filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Partial(
+        "example.com".to_string(),
+    ))));
     let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter);
 
-    let results = dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
     // Should get messages with "Work" label (thread 6)
     assert_eq!(results.len(), 1, "User label view should return 1 thread");
@@ -306,12 +326,13 @@ async fn test_dynamic_query_with_sender_filter(pool: Pool<Postgres>) -> anyhow::
     let limit = 50;
 
     // Filter for emails from john@example.com
-    let email_filter = Expr::Literal(EmailLiteral::Sender(Email::Complete(
+    let email_filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Complete(
         EmailStr::parse_from_str("john@example.com")?.into_owned(),
-    )));
+    ))));
     let query = Query::new(None, SimpleSortMethod::UpdatedAt, email_filter);
 
-    let results = dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
     // Should get messages from john@example.com (threads 1, 2, 5)
     assert!(
@@ -339,12 +360,13 @@ async fn test_dynamic_query_with_partial_sender_filter(pool: Pool<Postgres>) -> 
     let limit = 50;
 
     // Filter for emails from anyone at example.com
-    let email_filter = Expr::Literal(EmailLiteral::Sender(Email::Partial(
+    let email_filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Partial(
         "example.com".to_string(),
-    )));
+    ))));
     let query = Query::new(None, SimpleSortMethod::UpdatedAt, email_filter);
 
-    let results = dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
     // Should get all messages since all contacts are from example.com
     assert!(
@@ -365,12 +387,13 @@ async fn test_dynamic_query_with_recipient_filter(pool: Pool<Postgres>) -> anyho
     let limit = 50;
 
     // Filter for emails to alice@example.com
-    let email_filter = Expr::Literal(EmailLiteral::Recipient(Email::Complete(
+    let email_filter = Arc::new(Expr::Literal(EmailLiteral::Recipient(Email::Complete(
         EmailStr::parse_from_str("alice@example.com")?.into_owned(),
-    )));
+    ))));
     let query = Query::new(None, SimpleSortMethod::UpdatedAt, email_filter);
 
-    let results = dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
     // Should get messages to alice@example.com (threads 1, 3, 5, 7)
     assert!(
@@ -391,12 +414,13 @@ async fn test_dynamic_query_with_cc_filter(pool: Pool<Postgres>) -> anyhow::Resu
     let limit = 50;
 
     // Filter for emails with bob@example.com in CC
-    let email_filter = Expr::Literal(EmailLiteral::Cc(Email::Complete(
+    let email_filter = Arc::new(Expr::Literal(EmailLiteral::Cc(Email::Complete(
         EmailStr::parse_from_str("bob@example.com")?.into_owned(),
-    )));
+    ))));
     let query = Query::new(None, SimpleSortMethod::UpdatedAt, email_filter);
 
-    let results = dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
     // Should get messages with bob@example.com in CC (thread 7)
     assert_eq!(results.len(), 1, "Should return 1 thread with CC to bob");
@@ -418,12 +442,13 @@ async fn test_dynamic_query_inbox_with_sender_filter(pool: Pool<Postgres>) -> an
     let limit = 50;
 
     // Combine Inbox view with sender filter
-    let email_filter = Expr::Literal(EmailLiteral::Sender(Email::Complete(
+    let email_filter = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Complete(
         EmailStr::parse_from_str("john@example.com")?.into_owned(),
-    )));
+    ))));
     let query = Query::new(None, SimpleSortMethod::UpdatedAt, email_filter);
 
-    let results = dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
     // Should get inbox messages from john@example.com (threads 1, 5)
     assert_eq!(
@@ -455,12 +480,13 @@ async fn test_dynamic_query_drafts_with_recipient_filter(
     let limit = 50;
 
     // Combine Drafts view with recipient filter
-    let email_filter = Expr::Literal(EmailLiteral::Recipient(Email::Complete(
+    let email_filter = Arc::new(Expr::Literal(EmailLiteral::Recipient(Email::Complete(
         EmailStr::parse_from_str("alice@example.com")?.into_owned(),
-    )));
+    ))));
     let query = Query::new(None, SimpleSortMethod::UpdatedAt, email_filter);
 
-    let results = dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
     // Should get draft messages to alice@example.com (thread 3)
     assert_eq!(
@@ -483,17 +509,18 @@ async fn test_dynamic_query_with_and_filter(pool: Pool<Postgres>) -> anyhow::Res
     let limit = 50;
 
     // Filter for emails from john@example.com AND to alice@example.com
-    let email_filter = Expr::and(
+    let email_filter = Arc::new(Expr::and(
         Expr::Literal(EmailLiteral::Sender(Email::Complete(
             EmailStr::parse_from_str("john@example.com")?.into_owned(),
         ))),
         Expr::Literal(EmailLiteral::Recipient(Email::Complete(
             EmailStr::parse_from_str("alice@example.com")?.into_owned(),
         ))),
-    );
+    ));
     let query = Query::new(None, SimpleSortMethod::UpdatedAt, email_filter);
 
-    let results = dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
     // Should get messages from john to alice (threads 1, 5)
     assert!(
@@ -514,17 +541,18 @@ async fn test_dynamic_query_with_or_filter(pool: Pool<Postgres>) -> anyhow::Resu
     let limit = 50;
 
     // Filter for emails from john@example.com OR jane@example.com
-    let email_filter = Expr::or(
+    let email_filter = Arc::new(Expr::or(
         Expr::Literal(EmailLiteral::Sender(Email::Complete(
             EmailStr::parse_from_str("john@example.com")?.into_owned(),
         ))),
         Expr::Literal(EmailLiteral::Sender(Email::Complete(
             EmailStr::parse_from_str("jane@example.com")?.into_owned(),
         ))),
-    );
+    ));
     let query = Query::new(None, SimpleSortMethod::UpdatedAt, email_filter);
 
-    let results = dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+    let results =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
     // Should get messages from john or jane
     assert!(
@@ -545,9 +573,12 @@ async fn test_dynamic_query_pagination(pool: Pool<Postgres>) -> anyhow::Result<(
     let limit = 2;
 
     // First page with limit 2
-    let filter1 = Expr::Literal(EmailLiteral::Sender(Email::Partial("example.com".to_string())));
+    let filter1 = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Partial(
+        "example.com".to_string(),
+    ))));
     let query = Query::new(None, SimpleSortMethod::UpdatedAt, filter1);
-    let first_page = dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
+    let first_page =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query).await?;
 
     assert_eq!(first_page.len(), 2, "Should return 2 results");
 
@@ -557,8 +588,12 @@ async fn test_dynamic_query_pagination(pool: Pool<Postgres>) -> anyhow::Result<(
     let cursor_id = last_item.id;
 
     // Second page using cursor
-    let filter2 = Expr::Literal(EmailLiteral::Sender(Email::Partial("example.com".to_string())));
-    let filter3 = Expr::Literal(EmailLiteral::Sender(Email::Partial("example.com".to_string())));
+    let filter2 = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Partial(
+        "example.com".to_string(),
+    ))));
+    let filter3 = Arc::new(Expr::Literal(EmailLiteral::Sender(Email::Partial(
+        "example.com".to_string(),
+    ))));
     let cursor = Cursor {
         id: cursor_id,
         limit: 2,
@@ -569,7 +604,8 @@ async fn test_dynamic_query_pagination(pool: Pool<Postgres>) -> anyhow::Result<(
         filter: filter2,
     };
     let query2 = Query::new(Some(cursor), SimpleSortMethod::UpdatedAt, filter3);
-    let second_page = dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query2).await?;
+    let second_page =
+        dynamic::dynamic_email_thread_cursor(&pool, &link_id, limit, &view, query2).await?;
 
     assert!(
         second_page.len() > 0,

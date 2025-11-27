@@ -1,6 +1,8 @@
 //! This module exposes a dynamic query builder for email threads which can build specific
 //! email queries that filter content based on input AST (EmailLiteral).
 
+use std::sync::Arc;
+
 use super::db_types::*;
 use crate::domain::models::{PreviewView, PreviewViewStandardLabel};
 use filter_ast::Expr;
@@ -392,7 +394,7 @@ pub(crate) async fn dynamic_email_thread_cursor(
     link_id: &Uuid,
     limit: u32,
     view: &PreviewView,
-    query: Query<Uuid, SimpleSortMethod, Expr<EmailLiteral>>,
+    query: Query<Uuid, SimpleSortMethod, Arc<Expr<EmailLiteral>>>,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
     let query_limit = limit as i64;
     let sort_method_str = query.sort_method().to_string();

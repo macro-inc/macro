@@ -58,14 +58,11 @@ where
 
         let limit = limit.unwrap_or_default().clamp(MIN_PAGE, MAX_PAGE);
 
-        // Convert query to support email filters (currently no filter, so use None)
-        let email_query = query.map_filter(|_| None);
-
         let query = PreviewCursorQuery {
             view,
             link_id,
             limit,
-            query: email_query,
+            query,
         };
 
         let previews = self

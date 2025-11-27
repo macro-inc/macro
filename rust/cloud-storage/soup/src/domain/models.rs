@@ -124,17 +124,20 @@ impl SoupRequest {
             macro_id: self.user.clone(),
             limit: Some(self.limit as u32),
             query: match &self.cursor {
-                SoupQuery::Simple(Query::Sort(t, _f)) => Some(Query::Sort(*t, ())),
+                SoupQuery::Simple(Query::Sort(t, f)) => Some(Query::Sort(
+                    *t,
+                    f.as_ref().and_then(|f| f.email_filter.clone()),
+                )),
                 SoupQuery::Simple(Query::Cursor(CursorWithValAndFilter {
                     id,
                     limit,
                     val,
-                    filter: _,
+                    filter,
                 })) => Some(Query::Cursor(CursorWithValAndFilter {
                     id: *id,
                     limit: *limit,
                     val: val.clone(),
-                    filter: (),
+                    filter: filter.as_ref().and_then(|f| f.email_filter.clone()),
                 })),
                 // we don't yet have sort by frecency implemented for emails yet
                 SoupQuery::Frecency(_) => None,
