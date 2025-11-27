@@ -15,8 +15,8 @@ import {
   extractNotificationData,
   NOTIFICATION_LABEL_BY_TYPE,
   type NotificationData,
-  toBrowserNotification,
 } from '../notification-preview';
+import { toPlatformNotificationData } from '../notification-platform';
 import {
   DefaultDocumentNameResolver,
   DefaultUserNameResolver,
@@ -150,7 +150,7 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
   createEffect(() => {
     const notifData = data();
     if (notifData) {
-      toBrowserNotification(
+      toPlatformNotificationData(
         notifData,
         DefaultUserNameResolver,
         DefaultDocumentNameResolver
@@ -530,7 +530,7 @@ function PlaygroundContent() {
     const data = extractTypedNotificationData(notification);
     if (!data) return;
 
-    const browserNotif = await toBrowserNotification(
+    const browserNotif = await toPlatformNotificationData(
       data,
       DefaultUserNameResolver,
       DefaultDocumentNameResolver

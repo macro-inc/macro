@@ -29,15 +29,14 @@ export interface NotificationMetadataByType {
 export type UnifiedNotificationMetadata =
   NotificationMetadataByType[keyof NotificationMetadataByType];
 
-export type TypedNotification<T extends NotificationEventType> = Omit<
-  UnifiedNotification,
-  'notificationEventType' | 'notificationMetadata'
-> & {
-  notificationEventType: T;
-  notificationMetadata: T extends keyof NotificationMetadataByType
-    ? NotificationMetadataByType[T]
-    : never;
-};
+export type TypedNotification<T extends NotificationEventType = NotificationEventType> = {
+  [K in T]: Omit<UnifiedNotification, 'notificationEventType' | 'notificationMetadata'> & {
+    notificationEventType: K;
+    notificationMetadata: K extends keyof NotificationMetadataByType
+      ? NotificationMetadataByType[K]
+      : never;
+  };
+}[T];
 
 export function isItemSharedUser(
   n: UnifiedNotification

@@ -10,6 +10,10 @@ import {
   useContext,
 } from 'solid-js';
 import { createTabLeaderSignal } from '../notification-election';
+import type {
+  PlatformNotificationData,
+  PlatformNotificationHandle,
+} from '../notification-platform';
 
 type NotGranted = 'not-granted';
 
@@ -19,21 +23,14 @@ export interface PlatformNotificationInterface {
   requestPermission: () => Promise<NotificationPermission>;
   getCurrentPermission: () => Promise<NotificationPermission>;
   showNotification: (
-    title: string,
-    options?: NotificationOptions
-  ) => Promise<AppNotification | NotGranted>;
+    data: PlatformNotificationData
+  ) => Promise<PlatformNotificationHandle | NotGranted>;
   unregisterNotifications: () => Promise<void>;
 }
 
 export type CreateAppNotificationInterface = (
   setDisabled: () => Promise<void>
 ) => PlatformNotificationInterface;
-
-/// the interface for a singular notification on this device
-export interface AppNotification {
-  onClick: (cb: () => void) => void;
-  close: () => void;
-}
 
 export type NotificationUnsupported = 'not-supported';
 
@@ -59,7 +56,7 @@ function createDefaultBrowserInterface(
       return window.Notification.requestPermission();
     },
     getCurrentPermission,
-    showNotification: async (title, opts) => {
+    showNotification: async (data: PlatformNotificationData) => {
       if (!isLeader()) {
         // treat as no-op
         return 'not-granted';
@@ -69,17 +66,16 @@ function createDefaultBrowserInterface(
         return 'not-granted';
       }
 
-      return createBrowserNotication(title, opts);
+      return createBrowserNotication(data);
     },
     unregisterNotifications,
   };
 }
 
 function createBrowserNotication(
-  title: string,
-  opts?: NotificationOptions
-): AppNotification {
-  const notif = new Notification(title, opts);
+  data: PlatformNotificationData
+): PlatformNotificationHandle {
+  const notif = new Notification(data.title, data.options);
 
   return {
     onClick: (cb) => {
@@ -114,14 +110,13 @@ export function usePlatformNotifications():
 type UiDisabled = 'disabled-in-ui';
 export type UserSetting = 'allowed' | UiDisabled;
 
-interface PlatformNotificationState {
+export interface PlatformNotificationState {
   permission: Resource<NotificationPermission | UiDisabled>;
   requestPermission: () => Promise<NotificationPermission>;
   unregisterNotification: () => Promise<void>;
   showNotification: (
-    title: string,
-    opts: NotificationOptions
-  ) => Promise<AppNotification | NotGranted | UiDisabled>;
+    data: PlatformNotificationData
+  ) => Promise<PlatformNotificationHandle | NotGranted | UiDisabled>;
 }
 
 export const NotificationStateContext = createContext<
@@ -179,9 +174,8 @@ function PlatformNotificationState(props: {
   }
 
   async function showNotification(
-    title: string,
-    opts: NotificationOptions
-  ): Promise<AppNotification | NotGranted | UiDisabled> {
+    data: PlatformNotificationData
+  ): Promise<PlatformNotificationHandle | NotGranted | UiDisabled> {
     const manuallyDisabled = props.manuallyDisabled();
     if (manuallyDisabled === 'disabled-in-ui') {
       return manuallyDisabled;
@@ -191,7 +185,7 @@ function PlatformNotificationState(props: {
       return 'not-granted';
     }
 
-    return await platformNotif.showNotification(title, opts);
+    return await platformNotif.showNotification(data);
   }
 
   return (

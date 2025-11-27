@@ -84,7 +84,7 @@ const QUERY_LIMIT = 500;
 
 export function createNotificationSource(
   ws: ConnectionGatewayWebsocket,
-  onNotification?: (title: string, opts: NotificationOptions) => void
+  onNotification?: (notification: UnifiedNotification) => void
 ): NotificationSource {
   const [store, setStore] = createStore<NotificationStoreInner>({});
   const notifications = createMemo(() =>
@@ -165,25 +165,6 @@ export function createNotificationSource(
     reconcileNotifications(unwrap(notificationsQuery.data));
   });
 
-  const maybeHandleBrowserNotification = async (
-    notification: UnifiedNotification
-  ) => {
-    const nm = notificationWithMetadata(notification);
-    if (!nm) return;
-    const data = extractNotificationData(nm);
-    if (data === 'no_extractor' || data === 'no_extracted_data') return;
-
-    const browserNotification = await toBrowserNotification(
-      data,
-      DefaultUserNameResolver,
-      DefaultDocumentNameResolver
-    );
-
-    if (browserNotification) {
-      onNotification?.(browserNotification.title, browserNotification);
-    }
-  };
-
   createSocketEffect(ws, (wsData) => {
     if (wsData.type !== NOTIFICATION_EVENT_TYPE) {
       return;
@@ -195,7 +176,7 @@ export function createNotificationSource(
       console.error('Failed to parse notification', wsData.data, e);
       return;
     }
-    maybeHandleBrowserNotification(parsedNotification);
+    onNotification?.(parsedNotification);
 
     refetchAndReconcileNotifications([parsedNotification]);
   });

@@ -129,6 +129,8 @@ export type SplitManager = {
 
   toggleSpotlightSplit: (id: SplitId) => void;
 
+  getOrchestrator: () => BlockOrchestrator;
+
   /**
    * Reconcile the splits with the provided list of splits.
    * Useful for when the url changes.
@@ -681,5 +683,6 @@ export function createSplitLayout(
     returnFocus: () => dispatchEvent(SplitEvent.ReturnFocus, undefined),
     resizeContext,
     setResizeContext,
+    getOrchestrator: () => orchestrator,
   };
 }
