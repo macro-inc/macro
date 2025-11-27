@@ -58,13 +58,13 @@ export { openNotification } from './notification-navigation';
 export type {
   PlatformNotificationData,
   PlatformNotificationHandle,
+  toPlatformNotificationData,
 } from './notification-platform';
 export type { NotificationData } from './notification-preview';
 export {
   extractNotificationData,
   NOTIFICATION_LABEL_BY_TYPE,
 } from './notification-preview';
-export type { toPlatformNotificationData } from './notification-platform';
 export type {
   DocumentNameResolver,
   NotificationBlockNameResolver,

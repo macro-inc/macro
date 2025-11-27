@@ -3,9 +3,7 @@ import { getFaviconUrl } from '@app/util/favicon';
 import { markdownToPlainText } from '@lexical-core';
 import type { UnifiedNotification } from '@service-notification/client';
 import { themeReactive } from '../block-theme/signals/themeReactive';
-import type {
-  PlatformNotificationState,
-} from './components/PlatformNotificationProvider';
+import type { PlatformNotificationState } from './components/PlatformNotificationProvider';
 import { tryToTypedNotification } from './notification-metadata';
 import { openNotification } from './notification-navigation';
 import {

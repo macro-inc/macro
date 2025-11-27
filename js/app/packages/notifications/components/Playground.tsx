@@ -1,3 +1,4 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import { TextButton } from '@core/component/TextButton';
@@ -12,15 +13,15 @@ import {
 } from 'solid-js';
 import { tryToTypedNotification } from '../notification-metadata';
 import {
-  extractNotificationData,
-  NOTIFICATION_LABEL_BY_TYPE,
-  type NotificationData,
-} from '../notification-preview';
-import {
   maybeHandlePlatformNotification,
   type PlatformNotificationData,
   toPlatformNotificationData,
 } from '../notification-platform';
+import {
+  extractNotificationData,
+  NOTIFICATION_LABEL_BY_TYPE,
+  type NotificationData,
+} from '../notification-preview';
 import {
   DefaultDocumentNameResolver,
   DefaultUserNameResolver,
@@ -33,7 +34,6 @@ import {
   type PlatformNotificationState,
   usePlatformNotificationState,
 } from './PlatformNotificationProvider';
-import { globalSplitManager } from '@app/signal/splitLayout';
 
 type NotificationsByType = Map<string, UnifiedNotification[]>;
 
