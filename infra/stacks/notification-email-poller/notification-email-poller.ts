@@ -24,7 +24,7 @@ type WorkerArgs = {
 export class Worker extends pulumi.ComponentResource {
   public role: aws.iam.Role;
   public ecr: awsx.ecr.Repository;
-  public image: pulumi.Output<aws.ecr.GetImageResult>;
+  public image: awsx.ecr.Image;
   public taskDefinition: awsx.ecs.FargateTaskDefinition;
   tags: { [key: string]: string };
   constructor(
