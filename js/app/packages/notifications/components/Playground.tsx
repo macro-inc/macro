@@ -16,7 +16,11 @@ import {
   NOTIFICATION_LABEL_BY_TYPE,
   type NotificationData,
 } from '../notification-preview';
-import { toPlatformNotificationData } from '../notification-platform';
+import {
+  maybeHandlePlatformNotification,
+  PlatformNotificationData,
+  toPlatformNotificationData,
+} from '../notification-platform';
 import {
   DefaultDocumentNameResolver,
   DefaultUserNameResolver,
@@ -26,8 +30,10 @@ import type { UnifiedNotification } from '../types';
 import { createMockWebsocket } from '../utils/mock-websocket';
 import {
   PlatformNotificationProvider,
+  PlatformNotificationState,
   usePlatformNotificationState,
 } from './PlatformNotificationProvider';
+import { globalSplitManager } from '@app/signal/splitLayout';
 
 type NotificationsByType = Map<string, UnifiedNotification[]>;
 
@@ -527,30 +533,33 @@ function PlaygroundContent() {
   const handleTestNotification = async (notification: UnifiedNotification) => {
     if (platformNotif === 'not-supported') return;
 
-    const data = extractTypedNotificationData(notification);
-    if (!data) return;
-
-    const browserNotif = await toPlatformNotificationData(
-      data,
-      DefaultUserNameResolver,
-      DefaultDocumentNameResolver
-    );
-
-    if (!browserNotif) return;
-
-    const result = await platformNotif.showNotification(
-      browserNotif.title,
-      browserNotif
-    );
-
-    if (result === 'not-granted' || result === 'disabled-in-ui') {
-      if (
-        typeof Notification !== 'undefined' &&
-        Notification.permission === 'granted'
-      ) {
-        new Notification(browserNotif.title, browserNotif);
+    console.log('test notification', notification);
+    const onNotification = (notification: UnifiedNotification) => {
+      const layoutManager = globalSplitManager();
+      if (!layoutManager) {
+        console.warn('no layout manager');
+        return;
       }
-    }
+      maybeHandlePlatformNotification(
+        notification,
+        {
+          showNotification: async (data: PlatformNotificationData) => {
+            const notif = new Notification(data.title, data.options);
+            return {
+              onClick: (cb: any) => {
+                notif.addEventListener('click', cb);
+              },
+              close: () => {
+                notif.close();
+              },
+            };
+          },
+        } as PlatformNotificationState,
+        layoutManager
+      );
+    };
+
+    onNotification(notification);
   };
 
   const isLoading = () => notificationSource.isLoading();

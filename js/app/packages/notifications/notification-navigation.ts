@@ -161,7 +161,7 @@ function getSupportedHandler(
     .with(
       { notificationEventType: 'new_email' },
       (n) => async (lm: SplitManager) => {
-        openSplitIfNotOpen(lm, 'email', n.eventItemId);
+        openSplitIfNotOpen(lm, 'email', n.notificationMetadata.threadId);
       }
     )
     .with(
