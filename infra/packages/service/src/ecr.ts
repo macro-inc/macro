@@ -1,12 +1,10 @@
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
-import * as docker_build from '@pulumi/docker-build';
-import { CacheMode, Platform } from '@pulumi/docker-build';
 import * as pulumi from '@pulumi/pulumi';
 
 export class EcrImage extends pulumi.ComponentResource {
   public ecr: awsx.ecr.Repository;
-  public image: pulumi.Output<aws.ecr.GetImageResult>;
+  public image: awsx.ecr.Image;
   public tags: { [key: string]: string };
 
   constructor(
@@ -43,85 +41,49 @@ export class EcrImage extends pulumi.ComponentResource {
         forceDelete: true,
         tags: this.tags,
         lifecyclePolicy: {
-          // We do not want a lifecycle policy for the repositories
+          // We do not want the default lifecycle policy for the repositories
           skip: true,
         },
       },
       { parent: this }
     );
 
-    const useExistingImage = process.env.USE_EXISTING_IMAGE === 'true';
-
-    if (useExistingImage) {
-      console.log('Using existing ECR image (tag: local) for service');
-      // Use the already-pushed image in ECR by tag
-      this.image = pulumi.output(
-        aws.ecr.getImage({
-          repositoryName,
-          imageTag: 'local',
-        })
-      );
-    } else {
-      const platformStr = `${platform.family}/${platform.architecture}`;
-      if (!Object.values(Platform).includes(platformStr as any)) {
-        throw new Error(`Unsupported platform: ${platformStr}`);
-      }
-      let platformEnum = platformStr as Platform;
-
-      const authToken = this.ecr.repository.registryId.apply((registryId) =>
-        aws.ecr.getAuthorizationToken({
-          registryId,
-        })
-      );
-      const repositoryUrl = this.ecr.url;
-
-      // Build and push Docker image to ECR
-      const image = new docker_build.Image(imageId, {
-        buildArgs,
-        noCache: process.env.CACHE === 'false',
-        cacheFrom: [
-          {
-            registry: {
-              ref: pulumi.interpolate`${this.ecr.url}:cache`,
+    new aws.ecr.LifecyclePolicy(
+      `${repositoryId}-lifecycle-policy`,
+      {
+        repository: this.ecr.repository.id,
+        policy: {
+          rules: [
+            {
+              rulePriority: 1,
+              description: 'remove untagged images older than 1 day',
+              selection: {
+                tagStatus: 'untagged',
+                countType: 'sinceImagePushed',
+                countUnit: 'days',
+                countNumber: 1,
+              },
+              action: {
+                type: 'expire',
+              },
             },
-          },
-        ],
-        cacheTo: [
-          {
-            registry: {
-              mode: CacheMode.Max,
-              imageManifest: true,
-              ociMediaTypes: true,
-              ref: pulumi.interpolate`${repositoryUrl}:cache`,
-            },
-          },
-        ],
-        context: {
-          location: imagePath,
+          ],
         },
-        dockerfile: dockerfile
-          ? { location: `${imagePath}/${dockerfile}` }
-          : undefined,
-        platforms: [platformEnum],
-        push: true,
-        registries: [
-          {
-            address: repositoryUrl,
-            password: authToken.apply((authToken) => authToken.password),
-            username: authToken.apply((authToken) => authToken.userName),
-          },
-        ],
-        tags: [pulumi.interpolate`${repositoryUrl}:latest`],
-      });
+      },
+      { parent: this }
+    );
 
-      this.image = pulumi
-        .all([image.digest, this.ecr.repository.name])
-        .apply(([digest, repositoryName]) =>
-          aws.ecr.getImage({
-            repositoryName,
-            imageDigest: digest,
-          })
-        );
-    }
+    this.image = new awsx.ecr.Image(
+      imageId,
+      {
+        imageTag: 'latest',
+        context: imagePath,
+        platform: `${platform.family}/${platform.architecture}`,
+        dockerfile: dockerfile ? `${imagePath}/${dockerfile}` : undefined,
+        repositoryUrl: this.ecr.url,
+        args: buildArgs,
+      },
+      { parent: this }
+    );
   }
 }
