@@ -84,6 +84,6 @@ export class EcrImage extends pulumi.ComponentResource {
         args: buildArgs,
       },
       { parent: this }
-    )
+    );
   }
 }
