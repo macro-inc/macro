@@ -182,7 +182,7 @@ pub async fn upload_single_attachment(
     attachment: &mut service::attachment::Attachment,
     attachment_data: Vec<u8>,
 ) -> anyhow::Result<String> {
-    if cfg!(feature = "disable_attachment_upload") {
+    if cfg!(not(feature = "attachment_upload")) {
         attachment.data_url = Some("https://example.com/mock-url".to_string());
         return Ok("https://example.com/mock-url".to_string());
     }

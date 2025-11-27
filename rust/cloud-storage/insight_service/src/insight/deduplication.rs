@@ -245,16 +245,16 @@ impl InsightDeduplicator {
     }
 
     /// Calculate edit distance between two strings
+    #[expect(
+        clippy::needless_range_loop,
+        reason = "clippy's suggestion here is bad"
+    )]
     fn calculate_edit_distance(&self, s1: &str, s2: &str) -> usize {
         let len1 = s1.len();
         let len2 = s2.len();
         let mut matrix = vec![vec![0; len2 + 1]; len1 + 1];
 
         // Initialize first row and column
-        #[expect(
-            clippy::needless_range_loop,
-            reason = "clippy's suggestion here is bad"
-        )]
         for i in 0..=len1 {
             matrix[i][0] = i;
         }

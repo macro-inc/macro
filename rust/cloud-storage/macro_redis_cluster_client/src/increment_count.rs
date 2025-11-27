@@ -1,8 +1,7 @@
+use super::{SHA_COUNT_KEY_PREFIX, SHA_DELETE_BUCKET};
 use anyhow::Context;
 use redis::AsyncCommands;
 use tracing::instrument;
-
-use super::{SHA_COUNT_KEY_PREFIX, SHA_DELETE_BUCKET};
 
 #[instrument(skip(client))]
 pub(crate) async fn increment_count(

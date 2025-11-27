@@ -72,11 +72,12 @@ pub async fn complete_transaction_with_processing_error<T>(
 /// Send message to connection gateway to trigger email refresh if user is active on FE
 #[tracing::instrument(skip(client), level = "debug")]
 pub async fn cg_refresh_email(client: &ConnectionGatewayClient, macro_id: &str, event_type: &str) {
-    #[cfg(not(feature = "disable_connection_gateway"))]
-    let _ = client
-        .refresh_email(macro_id, event_type)
-        .await
-        .inspect_err(|e| tracing::error!(macro_id = %macro_id, "Failed to refresh email: {e}"));
+    if cfg!(feature = "connection_gateway") {
+        let _ = client
+            .refresh_email(macro_id, event_type)
+            .await
+            .inspect_err(|e| tracing::error!(macro_id = %macro_id, "Failed to refresh email: {e}"));
+    }
 }
 
 pub async fn fetch_access_token_for_link(

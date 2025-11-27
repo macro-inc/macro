@@ -16,8 +16,7 @@ pub(in crate::service::s3) async fn put_presigned_url(
     sha: &str,
     content_type: ContentType,
 ) -> anyhow::Result<String> {
-    #[cfg(feature = "local")]
-    {
+    if cfg!(feature = "local") {
         return Ok("fake".to_string());
     }
     // Allows the app 2 minutes to grab the document

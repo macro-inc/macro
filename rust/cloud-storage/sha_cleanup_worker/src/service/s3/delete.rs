@@ -8,8 +8,7 @@ pub(in crate::service::s3) async fn delete_objects(
     bucket: &str,
     objects: Vec<String>,
 ) -> Result<(), anyhow::Error> {
-    #[cfg(feature = "local")]
-    {
+    if cfg!(feature = "local") {
         return Ok(());
     }
     const MAX_DELETE_OBJECTS: usize = 1000;
@@ -51,8 +50,7 @@ pub(in crate::service::s3) async fn delete_object(
     bucket: &str,
     key: &str,
 ) -> Result<(), anyhow::Error> {
-    #[cfg(feature = "local")]
-    {
+    if cfg!(feature = "local") {
         return Ok(());
     }
 

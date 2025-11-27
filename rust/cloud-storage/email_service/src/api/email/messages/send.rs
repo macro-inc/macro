@@ -212,12 +212,12 @@ async fn insert_sent_message(
             );
             message_to_send.thread_db_id = thread_db_id;
         }
-        Some(id) => {
+        Some(thread_db_id) => {
             // need to upsert the thread's provider_id in case it doesn't exist already (e.g. if we are
             // sending a previously existing draft that is the first message in the thread)
             email_db_client::threads::update::update_thread_provider_id(
                 tx,
-                id,
+                thread_db_id,
                 link_id,
                 &thread_provider_id.clone().unwrap(),
             )
@@ -225,7 +225,7 @@ async fn insert_sent_message(
             .context(format!(
                 "Failed to update provider id to {} for thread {}",
                 thread_provider_id.clone().unwrap(),
-                id
+                thread_db_id
             ))?;
         }
     }

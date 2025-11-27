@@ -8,8 +8,7 @@ pub(in crate::service::s3) async fn copy_document(
     source_key: &str,
     destination_key: &str,
 ) -> anyhow::Result<()> {
-    #[cfg(feature = "local")]
-    {
+    if cfg!(feature = "local") {
         return Ok(());
     }
 
