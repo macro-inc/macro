@@ -81,8 +81,8 @@ export class WorkerTrigger extends pulumi.ComponentResource {
           ],
         }),
         managedPolicyArns: [
-          aws.iam.ManagedPolicies.AWSLambdaBasicExecutionRole,
-          aws.iam.ManagedPolicies.AWSLambdaRole,
+          aws.iam.ManagedPolicy.AWSLambdaBasicExecutionRole,
+          aws.iam.ManagedPolicy.AWSLambdaRole,
           ecsAccessPolicy.arn,
         ],
         tags,
