@@ -17,14 +17,12 @@ export function setupReplicationBucket() {
         enabled: true,
         mfaDelete: false,
       },
-      loggings:
+      logging:
         stack === 'prod'
-          ? [
-              {
-                targetBucket: 'macro-access-log-bucket-uswest2',
-                targetPrefix: `${bucketName}-${stack}`,
-              },
-            ]
+          ? {
+              targetBucket: 'macro-access-log-bucket-uswest2',
+              targetPrefix: `${bucketName}-${stack}`,
+            }
           : undefined,
     },
     { provider: replicationRegion }

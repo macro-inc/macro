@@ -53,15 +53,6 @@ export function createBucket({
             targetPrefix: `${bucketName}/`,
           }
         : undefined,
-    // loggings:
-    //   stack === 'prod'
-    //     ? [
-    //         {
-    //           targetBucket: 'macro-logging-bucket',
-    //           targetPrefix: `${bucketName}/`,
-    //         },
-    //       ]
-    //     : undefined,
   });
 }
 
