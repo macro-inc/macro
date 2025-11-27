@@ -1,4 +1,5 @@
 MACRODB := "postgres://user:password@localhost:5432/macrodb"
+DATABASE_URL := "postgres://user:password@localhost:5432"
 
 check:
     RUSTFLAGS=-Dwarnings RUSTDOCFLAGS=-Dwarnings CARGO_TERM_COLOR=always SQLX_OFFLINE=true cargo check
@@ -35,7 +36,8 @@ build_lambdas:
 
 # Copies over necessary .env files for sqlx tests
 setup_test_envs:
-    echo "DATABASE_URL={{ MACRODB }}" >> ./notification_db_client/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}/notificationdb" >> ./notification_db_client/.env
+    echo "DATABASE_URL={{ DATABASE_URL }}/contacts" >> ./contacts_db_client/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./properties_db_client/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./macro_db_client/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./email_db_client/.env
