@@ -1,6 +1,8 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { getMacroApiToken } from '@service-auth/fetch';
 import {
   ConstantBackoff,
+  type UrlResolver,
   type Websocket,
   WebsocketBuilder,
   WebsocketEvent,
@@ -20,7 +22,13 @@ const HEARTBEAT_INTERVAL = 300000;
  */
 const HEARTBEAT_TIMEOUT = 5000;
 
-export const ws = new WebsocketBuilder(SERVER_HOSTS['websocket-service'])
+const getUrl: UrlResolver = async () => {
+  const token = await getMacroApiToken();
+  const baseUrl = SERVER_HOSTS['websocket-service'];
+  return `${baseUrl}?token=${token}`;
+};
+
+export const ws = new WebsocketBuilder(getUrl)
   .withBackoff(new ConstantBackoff(1500))
   .withHeartbeat({
     pingMessage: JSON.stringify({ action: 'wsping' }),
