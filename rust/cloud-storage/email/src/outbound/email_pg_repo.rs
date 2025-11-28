@@ -314,29 +314,31 @@ impl EmailRepo for EmailPgRepo {
         Ok(sqlx::query_as!(
             IntermediateThreadMetadataDbRow,
             r#"
-        SELECT
-            m.thread_id,
-            -- Check if any message in thread has table HTML
-            COALESCE(bool_or(m.body_html_sanitized LIKE '%<table%'), false) as "has_table!",
-            -- Check if any message has calendar invite attachment
-            COALESCE(bool_or(a.mime_type = 'application/ics'), false) as "has_calendar_invite!",
-            -- Collect all unique sender emails in the thread
-            COALESCE(
-                array_agg(DISTINCT c.email_address) FILTER (WHERE c.email_address IS NOT NULL),
-                ARRAY[]::text[]
-            ) as "sender_emails!: Vec<String>"
-        FROM email_messages m
-        LEFT JOIN email_contacts c ON m.from_contact_id = c.id
-        LEFT JOIN email_attachments a ON m.id = a.message_id
-        WHERE m.thread_id = ANY($1)
-        GROUP BY m.thread_id
-        "#,
+            SELECT
+                m.thread_id,
+                -- Check if any message in thread has table HTML
+                COALESCE(bool_or(m.body_html_sanitized LIKE '%<table%'), false) as "has_table!",
+                -- Check if any message has calendar invite attachment
+                COALESCE(bool_or(has_calendar.has_invite), false) as "has_calendar_invite!",
+                -- Collect all unique sender emails in the thread
+                COALESCE(array_agg(DISTINCT c.email_address), ARRAY[]::text[]) as "sender_emails!: Vec<String>"
+            FROM email_messages m
+            LEFT JOIN email_contacts c ON m.from_contact_id = c.id
+            LEFT JOIN LATERAL (
+                SELECT true as has_invite
+                FROM email_attachments a
+                WHERE a.message_id = m.id AND a.mime_type = 'application/ics'
+                LIMIT 1
+            ) has_calendar ON true
+            WHERE m.thread_id = ANY($1)
+            GROUP BY m.thread_id
+            "#,
             thread_ids
         )
-        .fetch_all(&self.pool)
-        .await?
-        .into_iter()
-        .map(crate::outbound::email_pg_repo::IntermediateThreadMetadataDbRow::mirror)
-        .collect())
+            .fetch_all(&self.pool)
+            .await?
+            .into_iter()
+            .map(crate::outbound::email_pg_repo::IntermediateThreadMetadataDbRow::mirror)
+            .collect())
     }
 }
