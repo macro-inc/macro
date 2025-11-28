@@ -17,4 +17,4 @@ export default defineConfig({
     globals: true,
     setupFiles: [resolve(__dirname, './vitest.setup.ts')],
   },
-});
+} as any);
