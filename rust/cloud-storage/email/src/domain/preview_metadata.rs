@@ -18,7 +18,7 @@ where
         previews: &[EmailThreadPreview],
         link_id: &Uuid,
     ) -> Result<HashMap<Uuid, EmailThreadPreviewMetadata>, T::Err> {
-        let thread_ids: Vec<Uuid> = previews.iter().map(|p| p.id.clone()).collect();
+        let thread_ids: Vec<Uuid> = previews.iter().map(|p| p.id).collect();
 
         let (known_senders_threads, thread_metadata) = tokio::join!(
             self.email_repo
