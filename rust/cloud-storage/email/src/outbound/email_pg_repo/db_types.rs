@@ -1,6 +1,6 @@
 use crate::domain::models::{
     Attachment, AttachmentMacro, EmailThreadPreview, IntermediateThreadMetadata, Label,
-    LabelListVisibility, LabelType, MessageListVisibility, Link
+    LabelListVisibility, LabelType, Link, MessageListVisibility,
 };
 use chrono::{DateTime, Utc};
 use doppleganger::{Doppleganger, Mirror};

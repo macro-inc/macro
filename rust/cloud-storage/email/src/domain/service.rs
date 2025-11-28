@@ -12,6 +12,7 @@ use macro_user_id::cowlike::CowLike;
 use model_entity::EntityType;
 use models_pagination::{CollectBy, PaginateOn, PaginatedCursor, SimpleSortMethod};
 use std::collections::HashMap;
+use std::time::Instant;
 use uuid::Uuid;
 
 #[derive(Clone)]
@@ -83,6 +84,7 @@ where
             ids: ids.as_slice(),
         };
 
+        let start = Instant::now();
         let (
             attachment_map_result,
             macro_attachment_map_result,
@@ -91,14 +93,51 @@ where
             metadata_result,
             frecency_scores,
         ) = tokio::join!(
-            self.email_repo.attachments_by_thread_ids(&thread_ids),
-            self.email_repo.macro_attachments_by_thread_ids(&thread_ids),
-            self.email_repo.contacts_by_thread_ids(&thread_ids),
-            self.email_repo.labels_by_thread_ids(&thread_ids),
-            self.get_preview_metadata(&previews, &link_id),
-            self.frecency_service
-                .get_frecencies_by_ids(frecency_request)
+            async {
+                let start = Instant::now();
+                let result = self.email_repo.attachments_by_thread_ids(&thread_ids).await;
+                tracing::info!("attachments_by_thread_ids took {:?}", start.elapsed());
+                result
+            },
+            async {
+                let start = Instant::now();
+                let result = self
+                    .email_repo
+                    .macro_attachments_by_thread_ids(&thread_ids)
+                    .await;
+                tracing::info!("macro_attachments_by_thread_ids took {:?}", start.elapsed());
+                result
+            },
+            async {
+                let start = Instant::now();
+                let result = self.email_repo.contacts_by_thread_ids(&thread_ids).await;
+                tracing::info!("contacts_by_thread_ids took {:?}", start.elapsed());
+                result
+            },
+            async {
+                let start = Instant::now();
+                let result = self.email_repo.labels_by_thread_ids(&thread_ids).await;
+                tracing::info!("labels_by_thread_ids took {:?}", start.elapsed());
+                result
+            },
+            async {
+                let start = Instant::now();
+                let result = self.get_preview_metadata(&previews, &link_id).await;
+                tracing::info!("get_preview_metadata took {:?}", start.elapsed());
+                result
+            },
+            async {
+                let start = Instant::now();
+                let result = self
+                    .frecency_service
+                    .get_frecencies_by_ids(frecency_request)
+                    .await;
+                tracing::info!("get_frecencies_by_ids took {:?}", start.elapsed());
+                result
+            }
         );
+
+        tracing::info!("Total join time: {:?}", start.elapsed());
 
         let mut attachment_map = attachment_map_result
             .map_err(anyhow::Error::from)?
