@@ -25,6 +25,7 @@ axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }
+email_utils = { path = "../email_utils" }
 frecency = { path = "../frecency" }
 macro_user_id = { path = "../macro_user_id" }
 model-entity = { path = "../model-entity" }

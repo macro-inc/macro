@@ -2835,6 +2835,7 @@ dependencies = [
  "axum-extra",
  "chrono",
  "doppleganger",
+ "email_utils",
  "frecency",
  "macro_db_migrator",
  "macro_user_id",

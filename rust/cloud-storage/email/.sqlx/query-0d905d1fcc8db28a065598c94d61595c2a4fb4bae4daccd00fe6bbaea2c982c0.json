@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            m.thread_id,\n            -- Check if any message in thread has table HTML\n            COALESCE(bool_or(m.body_html_sanitized LIKE '%<table%'), false) as \"has_table!\",\n            -- Check if any message has calendar invite attachment\n            COALESCE(bool_or(a.mime_type = 'application/ics'), false) as \"has_calendar_invite!\",\n            -- Collect all unique sender emails in the thread\n            COALESCE(\n                array_agg(DISTINCT c.email_address) FILTER (WHERE c.email_address IS NOT NULL),\n                ARRAY[]::text[]\n            ) as \"sender_emails!: Vec<String>\"\n        FROM email_messages m\n        LEFT JOIN email_contacts c ON m.from_contact_id = c.id\n        LEFT JOIN email_attachments a ON m.id = a.message_id\n        WHERE m.thread_id = ANY($1)\n        GROUP BY m.thread_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "has_table!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "has_calendar_invite!",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "sender_emails!: Vec<String>",
+        "type_info": "VarcharArray"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "0d905d1fcc8db28a065598c94d61595c2a4fb4bae4daccd00fe6bbaea2c982c0"
+}

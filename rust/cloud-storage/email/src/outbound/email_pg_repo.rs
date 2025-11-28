@@ -1,4 +1,4 @@
-use crate::domain::models::Label;
+use crate::domain::models::{IntermediateThreadMetadata, Label};
 use crate::domain::{
     models::{
         Attachment, AttachmentMacro, Contact, EmailThreadPreview, Link, PreviewCursorQuery,
@@ -102,7 +102,7 @@ impl EmailRepo for EmailPgRepo {
         Ok(sqlx::query_as!(
             AttachmentDbRow,
             r#"
-            SELECT 
+            SELECT
                 a.id,
                 a.message_id,
                 a.provider_attachment_id,
@@ -112,13 +112,13 @@ impl EmailRepo for EmailPgRepo {
                 a.content_id,
                 a.created_at,
                 m.thread_id
-            FROM 
+            FROM
                 email_attachments a
             JOIN
                 email_messages m ON a.message_id = m.id
-            WHERE 
+            WHERE
                 m.thread_id = ANY($1)
-            ORDER BY 
+            ORDER BY
                 a.created_at ASC
             "#,
             thread_ids
@@ -259,5 +259,84 @@ impl EmailRepo for EmailPgRepo {
             .map(|v| v.try_into_model())
             .transpose()
             .map_err(|e| sqlx::Error::Decode(Box::new(e)))
+    }
+
+    async fn threads_with_known_senders(
+        &self,
+        link_id: &Uuid,
+        thread_ids: &[Uuid],
+    ) -> Result<Vec<Uuid>, Self::Err> {
+        // Returns thread IDs where the user has emailed at least one sender in the thread
+        let result = sqlx::query_scalar!(
+            r#"
+        WITH user_link AS (
+            SELECT id as link_id, email_address
+            FROM email_links
+            WHERE id = $1
+            LIMIT 1
+        ),
+        -- Get all email addresses the user has previously sent messages to
+        previously_contacted AS (
+            SELECT DISTINCT c.email_address
+            FROM email_messages m
+            JOIN email_message_recipients mr ON m.id = mr.message_id
+            JOIN email_contacts c ON mr.contact_id = c.id
+            CROSS JOIN user_link
+            WHERE m.link_id = user_link.link_id
+                AND m.is_sent = true
+                AND c.email_address != user_link.email_address
+        )
+        -- Find threads where any sender is in the previously contacted list
+        SELECT DISTINCT m.thread_id
+        FROM email_messages m
+        JOIN email_contacts c ON m.from_contact_id = c.id
+        WHERE m.thread_id = ANY($2)
+            AND EXISTS (
+                SELECT 1
+                FROM previously_contacted pc
+                WHERE pc.email_address = c.email_address
+            )
+        "#,
+            link_id,
+            thread_ids
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(result)
+    }
+
+    async fn thread_metadata_by_thread_ids(
+        &self,
+        thread_ids: &[Uuid],
+    ) -> Result<Vec<IntermediateThreadMetadata>, Self::Err> {
+        // Returns thread metadata for the provided thread IDs.
+        Ok(sqlx::query_as!(
+            IntermediateThreadMetadataDbRow,
+            r#"
+        SELECT
+            m.thread_id,
+            -- Check if any message in thread has table HTML
+            COALESCE(bool_or(m.body_html_sanitized LIKE '%<table%'), false) as "has_table!",
+            -- Check if any message has calendar invite attachment
+            COALESCE(bool_or(a.mime_type = 'application/ics'), false) as "has_calendar_invite!",
+            -- Collect all unique sender emails in the thread
+            COALESCE(
+                array_agg(DISTINCT c.email_address) FILTER (WHERE c.email_address IS NOT NULL),
+                ARRAY[]::text[]
+            ) as "sender_emails!: Vec<String>"
+        FROM email_messages m
+        LEFT JOIN email_contacts c ON m.from_contact_id = c.id
+        LEFT JOIN email_attachments a ON m.id = a.message_id
+        WHERE m.thread_id = ANY($1)
+        GROUP BY m.thread_id
+        "#,
+            thread_ids
+        )
+        .fetch_all(&self.pool)
+        .await?
+        .into_iter()
+        .map(crate::outbound::email_pg_repo::IntermediateThreadMetadataDbRow::mirror)
+        .collect())
     }
 }

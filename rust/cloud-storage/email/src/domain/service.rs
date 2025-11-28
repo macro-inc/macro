@@ -16,8 +16,8 @@ use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct EmailServiceImpl<T, U> {
-    email_repo: T,
-    frecency_service: U,
+    pub(crate) email_repo: T,
+    pub(crate) frecency_service: U,
 }
 
 impl<T, U> EmailServiceImpl<T, U>
@@ -88,12 +88,14 @@ where
             macro_attachment_map_result,
             participant_result,
             labels_result,
+            metadata_result,
             frecency_scores,
         ) = tokio::join!(
             self.email_repo.attachments_by_thread_ids(&thread_ids),
             self.email_repo.macro_attachments_by_thread_ids(&thread_ids),
             self.email_repo.contacts_by_thread_ids(&thread_ids),
             self.email_repo.labels_by_thread_ids(&thread_ids),
+            self.get_preview_metadata(&previews, &link_id),
             self.frecency_service
                 .get_frecencies_by_ids(frecency_request)
         );
@@ -114,6 +116,7 @@ where
             .map_err(anyhow::Error::from)?
             .into_iter()
             .group_by(|v| v.thread_id);
+        let mut metadata_map = metadata_result.map_err(anyhow::Error::from)?;
 
         let mut frecency_scores_map: HashMap<AggregateId<'static>, FrecencyData> =
             frecency_scores?.into_inner();
@@ -131,6 +134,7 @@ where
                     attachments_macro: macro_attachment_map.remove(&thread.id).unwrap_or_default(),
                     labels: labels_map.remove(&thread.id).unwrap_or_default(),
                     participants: participant_map.remove(&thread.id).unwrap_or_default(),
+                    metadata: metadata_map.remove(&thread.id).unwrap_or_default(),
                     frecency_score: frecency_scores_map
                         .remove(&id)
                         .map(|data| id.into_aggregate(data)),

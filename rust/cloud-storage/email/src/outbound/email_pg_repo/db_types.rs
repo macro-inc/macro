@@ -1,6 +1,6 @@
 use crate::domain::models::{
-    Attachment, AttachmentMacro, EmailThreadPreview, Label, LabelListVisibility, LabelType, Link,
-    MessageListVisibility,
+    Attachment, AttachmentMacro, EmailThreadPreview, IntermediateThreadMetadata, Label,
+    LabelListVisibility, LabelType, MessageListVisibility, Link
 };
 use chrono::{DateTime, Utc};
 use doppleganger::{Doppleganger, Mirror};
@@ -106,6 +106,17 @@ pub struct LabelDbRow {
     pub message_list_visibility: MessageListVisibilityDbRow,
     pub label_list_visibility: LabelListVisibilityDbRow,
     pub type_: LabelTypeDbRow,
+}
+
+/// database values needed to build thread preview metadata
+#[derive(Doppleganger)]
+#[dg(forward = IntermediateThreadMetadata)]
+#[derive(Debug, Clone)]
+pub struct IntermediateThreadMetadataDbRow {
+    pub thread_id: Uuid,
+    pub has_table: bool,
+    pub has_calendar_invite: bool,
+    pub sender_emails: Vec<String>,
 }
 
 impl ThreadPreviewCursorDbRow {

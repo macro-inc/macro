@@ -235,7 +235,7 @@ const emailService = new EmailService('email-service', {
   containerEnvVars: [
     {
       name: 'RUST_LOG',
-      value: `email_service=${stack === 'prod' ? 'debug' : 'debug'},email_db_client=${stack === 'prod' ? 'info' : 'debug'},gmail_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info,insight_service_client=${stack === 'prod' ? 'info' : 'debug'}`,
+      value: `email=${stack === 'prod' ? 'debug' : 'debug'},email_service=${stack === 'prod' ? 'debug' : 'debug'},email_db_client=${stack === 'prod' ? 'info' : 'debug'},gmail_client=${stack === 'prod' ? 'info' : 'debug'},tower_http=info,insight_service_client=${stack === 'prod' ? 'info' : 'debug'}`,
     },
     {
       name: 'ENVIRONMENT',
