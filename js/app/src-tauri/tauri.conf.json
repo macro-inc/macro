@@ -2,12 +2,12 @@
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "macro",
   "version": "0.1.0",
-  "identifier": "com.tauri.dev",
+  "identifier": "com.macro.dev",
   "build": {
     "frontendDist": "../packages/app/dist",
     "devUrl": "http://localhost:3000",
-    "beforeDevCommand": "bun dev",
-    "beforeBuildCommand": "bun run build"
+    "beforeDevCommand": "bun run dev:tauri",
+    "beforeBuildCommand": "bun run build:tauri"
   },
   "app": {
     "windows": [
