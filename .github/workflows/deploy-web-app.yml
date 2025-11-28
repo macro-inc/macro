@@ -57,6 +57,8 @@ jobs:
           ref: ${{ github.ref_name }}
       - name: Setup
         uses: ./.github/actions/setup-reqs-web
+        with:
+          npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
       - name: Build
         working-directory: js/app
         run: bun run build:${{ inputs.environment }}

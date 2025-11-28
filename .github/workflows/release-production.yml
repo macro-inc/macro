@@ -35,6 +35,8 @@ jobs:
         uses: actions/checkout@v5
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
+        with:
+          npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
       - name: Build for Production
         working-directory: js/app
         run: bun run build:prod
@@ -60,6 +62,8 @@ jobs:
         uses: actions/checkout@v5
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
+        with:
+          npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
       - name: Download Build Artifact
         uses: actions/download-artifact@v5
         with:
