@@ -158,21 +158,6 @@ function getAssetsPath(mode: string, command: string): string {
   }
 }
 
-function getGqlService(mode: string): string {
-  if (process.env.LOCAL_GQL_SERVER === 'true') {
-    console.log('Using Local GQL server');
-    return 'http://localhost:8080/graphql/';
-  }
-
-  if (mode === 'development') {
-    console.log('Using Dev GQL server');
-    return 'https://api-dev.macro.com/graphql/';
-  }
-
-  console.log('Using Prod GQL server');
-  return 'https://api.macro.com/graphql/';
-}
-
 function defineEnv(mode: string, command: string, platform: AppPlatform) {
   return {
     'import.meta.env.__APP_VERSION__': JSON.stringify(
@@ -180,11 +165,6 @@ function defineEnv(mode: string, command: string, platform: AppPlatform) {
     ),
     'import.meta.env.VITE_PLATFORM': JSON.stringify(platform),
     'import.meta.env.ASSETS_PATH': JSON.stringify(getAssetsPath(mode, command)),
-    'import.meta.env.__LOCAL_GQL_SERVER__':
-      process.env.LOCAL_GQL_SERVER === 'true',
-    'import.meta.env.__MACRO_GQL_SERVICE__': JSON.stringify(
-      getGqlService(mode)
-    ),
     'import.meta.env.__LOCAL_DOCKER__': process.env.LOCAL_DOCKER === 'true',
     'import.meta.env.__LOCAL_JWT__': JSON.stringify(process.env.LOCAL_JWT),
   };
