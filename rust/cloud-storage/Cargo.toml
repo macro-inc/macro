@@ -89,6 +89,9 @@ members = [
   "properties_service",
   "properties_service_client",
   "roles_and_permissions",
+  "rpc/axum_rpc",
+  "rpc/axum_rpc_emit",
+  "rpc/axum_rpc_parse",
   "s3_client",
   "scribe",
   "search_processing_service",
@@ -146,6 +149,7 @@ ego-tree = "0.6.2"
 either = "1"
 futures = "0.3.31"
 hex = "0.4.3"
+http = "1"
 http-body-util = "0.1.2"
 jsonwebtoken = "9.3.1"
 lambda_runtime = "0.13.0"
@@ -156,11 +160,13 @@ nom = "8"
 openssl = { version = "0.10.71", features = ["vendored"] }
 ordered-float = "5"
 pdfium-render = { version = "0.8.28" }
+quote = "1"
 rand = "0.9.0"
 recursion = "0.5.4"
 redis = "0.29.0"
 regex = "1.11.1"
 reqwest = { version = "0.12.12", features = ["json"] }
+reqwest-middleware = { git = "https://github.com/seanaye/reqwest-middleware" }
 schemars = { version = "1.0.4", features = ["chrono04"] }
 serde = { version = "1.0.214", features = ["derive"] }
 serde_dynamo = { version = "4", features = ["aws-sdk-dynamodb+1"] }
@@ -190,6 +196,7 @@ tower-http = { version = "0.6.1", features = [
 tracing = "0.1.41"
 tracing-subscriber = { version = "0.3.20", features = ["env-filter", "json"] }
 tracing-tree = "0.4.0"
+unsynn = "0.3"
 urlencoding = "2.1.3"
 utoipa = { version = "5.2.0", features = [
   "axum_extras",
@@ -212,6 +219,7 @@ bzip2 = { version = "0.5.1", default-features = false, features = [
 ] }
 derive_builder = "0.20.2"
 doppleganger = "0.5"
+js-sys = "0.3"
 once_cell = "1.21.3"
 scraper = "0.18"
 strum_macros = "0.27.1"
