@@ -1,0 +1,35 @@
+import type { Property } from '@core/component/Properties/types';
+import { PropertyDataTypeIcon } from '@core/component/Properties/utils';
+import { cornerClip } from '@core/util/clipPath';
+
+type BooleanPropertyPillProps = {
+  property: Property & { valueType: 'BOOLEAN' };
+};
+
+/**
+ * Pill for boolean properties
+ * Only shows when value is true (false = no pill displayed)
+ */
+export function BooleanPropertyPill(props: BooleanPropertyPillProps) {
+  // Don't show pill for false or null values
+  if (!props.property.value) return null;
+
+  return (
+    <div
+      class="p-px bg-edge box-border h-fit flex items-center"
+      style={{ 'clip-path': cornerClip('0.2rem', 0, 0, 0) }}
+    >
+      <div
+        class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted bg-panel box-border"
+        style={{ 'clip-path': cornerClip('calc(0.2rem - 0.5px)', 0, 0, 0) }}
+      >
+        <PropertyDataTypeIcon
+          property={{
+            data_type: 'BOOLEAN',
+          }}
+        />
+        <span class="truncate max-w-[120px]">{props.property.displayName}</span>
+      </div>
+    </div>
+  );
+}
