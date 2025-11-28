@@ -37,6 +37,8 @@ on:
         required: true
       DD_WEB_APP_TOKEN:
         required: true
+      SEGMENT_WRITE_KEY:
+        required: true
 
 concurrency:
   group: ${{ github.workflow }}-web-app-${{ inputs.environment }}
@@ -66,6 +68,7 @@ jobs:
           VITE_DD_WEB_APP_ID: ${{ secrets.DD_WEB_APP_ID }}
           VITE_DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
           VITE_DD_HASH: ${{ github.sha }}
+          VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY }}
       - name: Install infra dependencies
         run: |
           cd infra
