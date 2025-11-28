@@ -39,6 +39,7 @@ jobs:
       DD_WEB_APP_ID: ${{ secrets.DD_WEB_APP_ID }}
       DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
       SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
+      NPMRC_GH_TOKEN: ${{ secrets.NPMRC_GH_TOKEN }}
 
   deploy_web_services:
     needs: [check-to-deploy]

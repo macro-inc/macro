@@ -39,6 +39,8 @@ on:
         required: true
       SEGMENT_WRITE_KEY:
         required: true
+      NPMRC_GH_TOKEN:
+        required: true
 
 concurrency:
   group: ${{ github.workflow }}-web-app-${{ inputs.environment }}
