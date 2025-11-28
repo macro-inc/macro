@@ -1,4 +1,5 @@
 import { EntityIcon } from '@core/component/EntityIcon';
+import type { Property } from '@core/component/Properties/types';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { TOKENS } from '@core/hotkey/tokens';
 import { matches } from '@core/util/match';
@@ -41,6 +42,7 @@ import type {
   WithSearch,
 } from '../types/search';
 import type { EntityClickEvent, EntityClickHandler } from './Entity';
+import { PropertyPills } from './PropertyPills';
 
 function UnreadIndicator(props: { active?: boolean }) {
   return (
@@ -134,7 +136,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   onMouseLeave?: () => void;
   onFocusIn?: () => void;
   onContextMenu?: () => void;
-  properties?: Record<string, string>;
+  properties?: Property[];
   contentPlacement?: 'middle' | 'bottom-row';
   unreadIndicatorActive?: boolean;
   fadeIfRead?: boolean;
@@ -404,6 +406,15 @@ export function EntityWithEverything(
     };
   };
 
+  /**
+   * Properties for this entity
+   * TODO - @danielkweon: Once endpoint includes properties, remove temp data and use: props.displayProperties ?? []
+   */
+  const properties = (): Property[] => {
+    // Use real properties if provided, otherwise use temp data for testing
+    return props.properties ?? [];
+  };
+
   return (
     <div
       use:draggable
@@ -520,6 +531,11 @@ export function EntityWithEverything(
           }}
         >
           <div class="flex flex-row items-center justify-end gap-2 min-w-0">
+            <div class="flex flex-row items-center justify-end w-fit h-full pr-3">
+              <Show when={properties().length > 0}>
+                <PropertyPills properties={properties()} />
+              </Show>
+            </div>
             <Show when={sharedData()}>
               {(shared) => (
                 <Tooltip
