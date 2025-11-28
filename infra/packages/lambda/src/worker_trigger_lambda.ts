@@ -4,7 +4,7 @@ import { stack } from '@shared';
 import { get_coparse_api_vpc } from '@vpc';
 
 // Path to worker trigger lambda as if we are in the stack package
-const HANDLER_BASE = '../../../';
+const HANDLER_BASE = '../../../rust/cloud-storage';
 const ZIP_LOCATION = `${HANDLER_BASE}/target/lambda/worker-trigger/bootstrap.zip`;
 
 const coparse_api_vpc = get_coparse_api_vpc();
