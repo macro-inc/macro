@@ -25,6 +25,7 @@
           cargo-udeps
           cargo-lambda
           cargo-deny
+          cargo-nextest
           pkg-config
           just
           just-lsp

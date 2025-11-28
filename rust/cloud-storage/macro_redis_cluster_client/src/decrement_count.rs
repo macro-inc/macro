@@ -105,6 +105,7 @@ mod tests {
     use redis::Commands;
 
     #[tokio::test]
+    #[ignore = "Redis cluster doesn't exist in CI"]
     async fn test_decrement_count() {
         let redis_client = redis::cluster::ClusterClient::new(vec!["redis://localhost:6369"])
             .expect("could not connect to redis client");
@@ -173,6 +174,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Redis cluster doesn't exist in CI"]
     async fn test_decrement_counts() {
         let redis_client = redis::cluster::ClusterClient::new(vec!["redis://localhost:6369"])
             .expect("could not connect to redis client");
