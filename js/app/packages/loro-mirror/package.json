@@ -32,7 +32,8 @@
     },
     "pnpm": {
         "overrides": {
-            "brace-expansion": "^2.0.1"
+            "brace-expansion": "^2.0.1",
+            "js-yaml": "4.1.1"
         }
     }
 }
