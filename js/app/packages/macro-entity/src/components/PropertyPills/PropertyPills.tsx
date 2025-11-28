@@ -3,11 +3,13 @@ import {
   formatPropertyValue,
   PropertyDataTypeIcon,
 } from '@core/component/Properties/utils';
+import { Tooltip } from '@core/component/Tooltip';
 import { cornerClip } from '@core/util/clipPath';
 import { For, Match, Show, Switch } from 'solid-js';
 import { BooleanPropertyPill } from './BooleanPropertyPill';
 import { EntityPropertyPill } from './EntityPropertyPill';
 import { LinkPropertyPill } from './LinkPropertyPill';
+import { PropertyPillTooltip } from './PropertyPillTooltip';
 
 type PropertyPillsProps = {
   properties: Property[];
@@ -72,25 +74,87 @@ const TextPropertyPill = (props: PropertyPillProps) => {
   if (!value) return null;
 
   return (
-    <div
-      class="p-px bg-edge box-border h-fit flex items-center"
-      style={{ 'clip-path': cornerClip('0.2rem', 0, 0, 0) }}
+    <Tooltip
+      tooltip={<TextTooltipContent property={props.property} />}
+      floatingOptions={{
+        offset: 4,
+        flip: true,
+        shift: { padding: 8 },
+      }}
     >
       <div
-        class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted bg-panel box-border"
-        style={{ 'clip-path': cornerClip('calc(0.2rem - 0.5px)', 0, 0, 0) }}
+        class="p-px bg-edge box-border h-fit flex items-center"
+        style={{ 'clip-path': cornerClip('0.2rem', 0, 0, 0) }}
       >
-        <PropertyDataTypeIcon
-          property={{
-            data_type: props.property.valueType,
-            specific_entity_type: props.property.specificEntityType,
-          }}
-        />
-        <span class="truncate max-w-[120px]" title={value}>
-          {value}
-        </span>
+        <div
+          class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted bg-panel box-border"
+          style={{ 'clip-path': cornerClip('calc(0.2rem - 0.5px)', 0, 0, 0) }}
+        >
+          <PropertyDataTypeIcon
+            property={{
+              data_type: props.property.valueType,
+              specific_entity_type: props.property.specificEntityType,
+            }}
+          />
+          <span class="truncate max-w-[120px]" title={value}>
+            {value}
+          </span>
+        </div>
       </div>
-    </div>
+    </Tooltip>
+  );
+};
+
+const TextTooltipContent = (props: { property: Property }) => {
+  const getValues = (): string[] => {
+    const { property } = props;
+    if (property.value === null || property.value === undefined) return [];
+
+    if (
+      (property.valueType === 'SELECT_STRING' ||
+        property.valueType === 'SELECT_NUMBER') &&
+      Array.isArray(property.value)
+    ) {
+      return property.value.map((v) => formatPropertyValue(property, v));
+    }
+
+    if (property.valueType === 'DATE' && property.value instanceof Date) {
+      return [formatPropertyValue(property, property.value)];
+    }
+
+    if (property.valueType === 'NUMBER' && typeof property.value === 'number') {
+      return [formatPropertyValue(property, property.value)];
+    }
+
+    if (property.valueType === 'STRING' && typeof property.value === 'string') {
+      return property.value ? [property.value] : [];
+    }
+
+    return [];
+  };
+
+  return (
+    <PropertyPillTooltip property={props.property}>
+      <div class="flex items-center gap-1.5 flex-wrap">
+        <For each={getValues()}>
+          {(value) => (
+            <div
+              class="p-px bg-edge box-border h-fit w-fit flex items-center"
+              style={{ 'clip-path': cornerClip('0.2rem', 0, 0, 0) }}
+            >
+              <div
+                class="inline-flex items-center px-2 py-1 text-xs leading-none text-ink-muted bg-panel box-border"
+                style={{
+                  'clip-path': cornerClip('calc(0.2rem - 0.5px)', 0, 0, 0),
+                }}
+              >
+                <span class="truncate max-w-[150px]">{value}</span>
+              </div>
+            </div>
+          )}
+        </For>
+      </div>
+    </PropertyPillTooltip>
   );
 };
 
