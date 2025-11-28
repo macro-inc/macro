@@ -8,17 +8,21 @@ use utoipa::ToSchema;
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct ChannelSearchResult {
     /// The channel message id
-    pub message_id: String,
+    /// This is only prsent if the search result is on the message content
+    pub message_id: Option<String>,
     /// The channel message thread id
     pub thread_id: Option<String>,
     /// The sender id
-    pub sender_id: String,
+    /// This is only prsent if the search result is on the message content
+    pub sender_id: Option<String>,
+    /// When the channel message was created
+    /// This is only prsent if the search result is on the message content
+    pub created_at: Option<i64>,
+    /// When the channel message was last updated
+    /// This is only prsent if the search result is on the message content
+    pub updated_at: Option<i64>,
     /// The highlights for the channel message
     pub highlight: SearchHighlight,
-    /// When the channel message was created
-    pub created_at: i64,
-    /// When the channel message was last updated
-    pub updated_at: i64,
     /// The score of the result
     #[serde(skip_serializing_if = "Option::is_none")]
     pub score: Option<f64>,
@@ -145,25 +149,6 @@ pub struct SimpleChannelSearchReponseBaseItem<T> {
 
 pub type SimpleChannelSearchReponseItem =
     SimpleChannelSearchReponseBaseItem<crate::TimestampSeconds>;
-
-impl From<opensearch_client::search::channels::ChannelMessageSearchResponse>
-    for SimpleChannelSearchReponseItem
-{
-    fn from(response: opensearch_client::search::channels::ChannelMessageSearchResponse) -> Self {
-        Self {
-            channel_id: response.channel_id,
-            channel_type: response.channel_type,
-            org_id: response.org_id,
-            message_id: response.message_id,
-            thread_id: response.thread_id,
-            sender_id: response.sender_id,
-            mentions: response.mentions,
-            created_at: response.created_at.into(),
-            updated_at: response.updated_at.into(),
-            highlight: response.highlight.into(),
-        }
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleChannelSearchResponse {

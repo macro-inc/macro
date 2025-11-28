@@ -2,8 +2,7 @@ use crate::api::search::{SearchPaginationParams, simple::SearchError};
 use axum::{
     Extension,
     extract::{self, State},
-    http::StatusCode,
-    response::{IntoResponse, Json, Response},
+    response::Json,
 };
 use item_filters::DocumentFilters;
 use model::{
@@ -11,7 +10,10 @@ use model::{
     response::ErrorResponse,
     user::UserContext,
 };
-use models_search::document::{DocumentSearchRequest, SimpleDocumentSearchResponse};
+use models_search::{
+    SimpleSearchResponse,
+    document::{DocumentSearchRequest, SimpleDocumentSearchResponse},
+};
 use opensearch_client::search::documents::DocumentSearchArgs;
 
 use crate::api::ApiContext;
@@ -39,18 +41,14 @@ pub async fn handler(
     user_context: Extension<UserContext>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<DocumentSearchRequest>,
-) -> Result<Response, SearchError> {
+) -> Result<Json<SimpleSearchResponse>, SearchError> {
     tracing::info!("simple_document_search");
 
     let results = search_documents(&ctx, user_context.user_id.as_str(), &query_params, req).await?;
 
-    Ok((
-        StatusCode::OK,
-        Json(SimpleDocumentSearchResponse {
-            results: results.into_iter().map(|a| a.into()).collect(),
-        }),
-    )
-        .into_response())
+    Ok(Json(SimpleSearchResponse {
+        results: results.into_iter().map(|a| a.into()).collect(),
+    }))
 }
 
 pub(in crate::api::search) struct FilterDocumentResponse {
@@ -176,7 +174,7 @@ pub(in crate::api::search) async fn search_documents(
     user_id: &str,
     query_params: &SearchPaginationParams,
     req: DocumentSearchRequest,
-) -> Result<Vec<opensearch_client::search::documents::DocumentSearchResponse>, SearchError> {
+) -> Result<Vec<opensearch_client::search::model::SearchHit>, SearchError> {
     if user_id.is_empty() {
         return Err(SearchError::NoUserId);
     }

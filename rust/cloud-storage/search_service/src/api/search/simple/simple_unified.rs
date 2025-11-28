@@ -14,9 +14,12 @@ use axum::{
     response::Json,
 };
 use model::{response::ErrorResponse, user::UserContext};
-use models_search::unified::{
-    SimpleUnifiedSearchResponse, UnifiedSearchIndex, UnifiedSearchRequest,
-    generate_unified_search_indices,
+use models_search::{
+    SimpleSearchResponse,
+    unified::{
+        SimpleUnifiedSearchResponse, UnifiedSearchIndex, UnifiedSearchRequest,
+        generate_unified_search_indices,
+    },
 };
 use opensearch_client::search::unified::UnifiedSearchArgs;
 
@@ -28,7 +31,7 @@ pub(in crate::api::search) async fn perform_unified_search(
     user_context: &UserContext,
     query_params: SearchPaginationParams,
     req: UnifiedSearchRequest,
-) -> Result<Vec<opensearch_client::search::unified::UnifiedSearchResponse>, SearchError> {
+) -> Result<Vec<opensearch_client::search::model::SearchHit>, SearchError> {
     let user_id = &user_context.user_id;
     let user_organization_id = user_context.organization_id;
     let search_on = req.search_on;
@@ -188,12 +191,12 @@ pub async fn handler(
     user_context: Extension<UserContext>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<UnifiedSearchRequest>,
-) -> Result<Json<SimpleUnifiedSearchResponse>, SearchError> {
+) -> Result<Json<SimpleSearchResponse>, SearchError> {
     tracing::info!("simple_unified_search");
 
     let results = perform_unified_search(&ctx, &user_context, query_params, req).await?;
 
     let results = results.into_iter().map(|a| a.into()).collect();
 
-    Ok(Json(SimpleUnifiedSearchResponse { results }))
+    Ok(Json(SimpleSearchResponse { results }))
 }

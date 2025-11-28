@@ -1,4 +1,4 @@
-use crate::{MatchType, SearchHighlight, SearchOn, SearchResponseItem};
+use crate::{MatchType, SearchHighlight, SearchOn};
 use item_filters::EmailFilters;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -8,19 +8,24 @@ use utoipa::ToSchema;
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct EmailSearchResult {
     /// The email message id.
-    pub message_id: String,
-    pub subject: Option<String>,
-    pub sender: String,
+    /// This is only present if the search result is on the message content
+    pub message_id: Option<String>,
+    /// The sender
+    /// This is only present if the search result is on the message content
+    pub sender: Option<String>,
+    /// This is only present if the search result is on the message content
     pub recipients: Vec<String>,
+    /// This is only present if the search result is on the message content
     pub cc: Vec<String>,
+    /// This is only present if the search result is on the message content
     pub bcc: Vec<String>,
+    /// This is only present if the search result is on the message content
     pub labels: Vec<String>,
+    /// When the email message was sent
+    /// This is only present if the search result is on the message content
+    pub sent_at: Option<i64>,
     /// The highlights for the email message
     pub highlight: SearchHighlight,
-    /// When the search email message was last updated
-    pub updated_at: i64,
-    /// When the email message was sent
-    pub sent_at: Option<i64>,
     /// The score of the result
     #[serde(skip_serializing_if = "Option::is_none")]
     pub score: Option<f64>,
@@ -36,6 +41,10 @@ pub struct EmailSearchResponseItem {
     /// email threads don't have names, but keeping this here for consistency with other search items
     pub name: Option<String>,
     pub owner_id: String,
+
+    /// The subject of the email
+    /// This is only present if the search result is on the message content
+    pub subject: Option<String>,
 
     /// The id of the email thread
     pub thread_id: String,
@@ -66,19 +75,6 @@ pub struct EmailSearchMetadata {
     pub thread_id: String,
     /// The id of the owner of the email thread
     pub user_id: String,
-}
-
-impl From<SearchResponseItem<EmailSearchResult, EmailSearchMetadata>> for EmailSearchResponseItem {
-    fn from(response: SearchResponseItem<EmailSearchResult, EmailSearchMetadata>) -> Self {
-        EmailSearchResponseItem {
-            id: response.metadata.thread_id.clone(),
-            owner_id: response.metadata.user_id.clone(),
-            name: None,
-            thread_id: response.metadata.thread_id.clone(),
-            user_id: response.metadata.user_id.clone(),
-            email_message_search_results: response.results,
-        }
-    }
 }
 
 /// The document search response object
@@ -144,28 +140,6 @@ pub struct SimpleEmailSearchResponseBaseItem<T> {
 }
 
 pub type SimpleEmailSearchResponseItem = SimpleEmailSearchResponseBaseItem<crate::TimestampSeconds>;
-
-impl From<opensearch_client::search::emails::EmailSearchResponse>
-    for SimpleEmailSearchResponseItem
-{
-    fn from(response: opensearch_client::search::emails::EmailSearchResponse) -> Self {
-        Self {
-            thread_id: response.thread_id,
-            message_id: response.message_id,
-            sender: response.sender,
-            recipients: response.recipients,
-            cc: response.cc,
-            bcc: response.bcc,
-            labels: response.labels,
-            link_id: response.link_id,
-            user_id: response.user_id,
-            updated_at: response.updated_at.into(),
-            sent_at: response.sent_at.map(|t| t.into()),
-            subject: response.subject,
-            highlight: response.highlight.into(),
-        }
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleEmailSearchResponse {

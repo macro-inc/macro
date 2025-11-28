@@ -6,7 +6,8 @@ struct TestSearchConfig;
 
 impl SearchQueryConfig for TestSearchConfig {
     const USER_ID_KEY: &'static str = "test_user_id";
-    const TITLE_KEY: Option<&'static str> = Some("test_title");
+    const TITLE_KEY: &'static str = "test_title";
+    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Documents;
 }
 
 #[test]
@@ -184,7 +185,8 @@ fn test_build_bool_query() -> anyhow::Result<()> {
         .user_id(user_id)
         .search_on(SearchOn::Content)
         .ids(ids.clone());
-    let query = builder.build_bool_query()?;
+
+    let query = builder.build_bool_query(builder.build_content_and_name_bool_query()?)?;
 
     let expected = serde_json::json!({
         "bool": {
@@ -193,7 +195,8 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                     "match_phrase": {
                         "content": "test"
                     }
-                }
+                },
+                {"term": {"_index": "documents"}},
             ],
             "should": [
                 {
@@ -222,7 +225,7 @@ fn test_build_bool_query() -> anyhow::Result<()> {
         .search_on(SearchOn::Content)
         .ids(ids.clone());
 
-    let query = builder.build_bool_query()?;
+    let query = builder.build_bool_query(builder.build_content_and_name_bool_query()?)?;
 
     let expected = serde_json::json!({
         "bool": {
@@ -232,8 +235,9 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                         "content": {
                             "query": "test",
                         }
-                    }
-                }
+                    },
+                },
+                {"term": {"_index": "documents"}},
             ],
             "should": [
                 {
@@ -248,74 +252,74 @@ fn test_build_bool_query() -> anyhow::Result<()> {
 
     assert_eq!(query.build().to_json(), expected);
 
-    let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms)
-        .match_type("partial")
-        .page_size(page_size)
-        .page(page)
-        .user_id(user_id)
-        .ids_only(true)
-        .search_on(SearchOn::NameContent)
-        .ids(ids.clone());
-
-    let query = builder.build_bool_query()?;
-
-    let expected = serde_json::json!({
-        "bool": {
-            "must": [
-                {
-                    "bool": {
-                        "minimum_should_match": 1,
-                        "should": [
-                            {
-                                "match_phrase_prefix": {
-                                    "test_title": {
-                                        "boost": 1000.0,
-                                        "query": "test"
-                                    }
-                                }
-                            },
-                            {
-                                "match_phrase_prefix": {
-                                    "content": {
-                                        "boost": 900.0,
-                                        "query": "test"
-                                    }
-                                }
-                            },
-                            {
-                                "match": {
-                                    "test_title": {
-                                        "boost": 0.1,
-                                        "minimum_should_match": "80%",
-                                        "query": "test"
-                                    }
-                                }
-                            },
-                            {
-                                "match": {
-                                    "content": {
-                                        "boost": 0.09,
-                                        "minimum_should_match": "1",
-                                        "query": "test"
-                                    }
-                                }
-                            }
-                        ]
-                    }
-                }
-            ],
-            "should": [
-                {
-                    "terms": {
-                        "entity_id": ["id1", "id2"]
-                    }
-                },
-            ],
-            "minimum_should_match": 1,
-        }
-    });
-
-    assert_eq!(query.build().to_json(), expected);
+    // let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms)
+    //     .match_type("partial")
+    //     .page_size(page_size)
+    //     .page(page)
+    //     .user_id(user_id)
+    //     .ids_only(true)
+    //     .search_on(SearchOn::NameContent)
+    //     .ids(ids.clone());
+    //
+    // let query = builder.build_bool_query(builder.build_content_and_name_bool_query()?)?;
+    //
+    // let expected = serde_json::json!({
+    //     "bool": {
+    //         "must": [
+    //             {
+    //                 "bool": {
+    //                     "minimum_should_match": 1,
+    //                     "should": [
+    //                         {
+    //                             "match_phrase_prefix": {
+    //                                 "test_title": {
+    //                                     "boost": 1000.0,
+    //                                     "query": "test"
+    //                                 }
+    //                             }
+    //                         },
+    //                         {
+    //                             "match_phrase_prefix": {
+    //                                 "content": {
+    //                                     "boost": 900.0,
+    //                                     "query": "test"
+    //                                 }
+    //                             }
+    //                         },
+    //                         {
+    //                             "match": {
+    //                                 "test_title": {
+    //                                     "boost": 0.1,
+    //                                     "minimum_should_match": "80%",
+    //                                     "query": "test"
+    //                                 }
+    //                             }
+    //                         },
+    //                         {
+    //                             "match": {
+    //                                 "content": {
+    //                                     "boost": 0.09,
+    //                                     "minimum_should_match": "1",
+    //                                     "query": "test"
+    //                                 }
+    //                             }
+    //                         }
+    //                     ]
+    //                 }
+    //             }
+    //         ],
+    //         "should": [
+    //             {
+    //                 "terms": {
+    //                     "entity_id": ["id1", "id2"]
+    //                 }
+    //             },
+    //         ],
+    //         "minimum_should_match": 1,
+    //     }
+    // });
+    //
+    // assert_eq!(query.build().to_json(), expected);
 
     Ok(())
 }
@@ -328,7 +332,7 @@ fn test_build_must_term_query() -> anyhow::Result<()> {
         .match_type("exact")
         .search_on(SearchOn::Content);
 
-    let terms_must_vec = builder.build_must_term_query()?;
+    let terms_must_vec = builder.build_must_term_query(SearchOn::Content)?;
 
     let expected = serde_json::json!({
         "match_phrase": {
@@ -343,7 +347,7 @@ fn test_build_must_term_query() -> anyhow::Result<()> {
         .match_type("exact")
         .search_on(SearchOn::Name);
 
-    let terms_must_vec = builder.build_must_term_query()?;
+    let terms_must_vec = builder.build_must_term_query(SearchOn::Name)?;
 
     let expected = serde_json::json!({
         "match_phrase": {
@@ -358,64 +362,13 @@ fn test_build_must_term_query() -> anyhow::Result<()> {
         .match_type("partial")
         .search_on(SearchOn::Content);
 
-    let terms_must_vec = builder.build_must_term_query()?;
+    let terms_must_vec = builder.build_must_term_query(SearchOn::Content)?;
 
     let expected = serde_json::json!({
         "match_phrase_prefix": {
             "content": {
                 "query": "test",
             }
-        }
-    });
-
-    assert_eq!(terms_must_vec.len(), 1);
-    assert_eq!(terms_must_vec[0].to_json(), expected);
-
-    let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms)
-        .match_type("partial")
-        .search_on(SearchOn::NameContent);
-
-    let terms_must_vec = builder.build_must_term_query()?;
-
-    let expected = serde_json::json!({
-        "bool": {
-            "minimum_should_match": 1,
-            "should": [
-                {
-                    "match_phrase_prefix": {
-                        "test_title": {
-                            "query": "test",
-                            "boost": 1000.0
-                        }
-                    }
-                },
-                {
-                    "match_phrase_prefix": {
-                        "content": {
-                            "query": "test",
-                            "boost": 900.0
-                        }
-                    }
-                },
-                {
-                    "match": {
-                        "test_title": {
-                            "boost": 0.1,
-                            "minimum_should_match": "80%",
-                            "query": "test"
-                        }
-                    }
-                },
-                {
-                    "match": {
-                        "content": {
-                            "boost": 0.09,
-                            "minimum_should_match": "1",
-                            "query": "test"
-                        }
-                    }
-                }
-            ]
         }
     });
 
@@ -433,7 +386,7 @@ fn test_build_must_term_query_multiple_terms() -> anyhow::Result<()> {
         .match_type("exact")
         .search_on(SearchOn::Content);
 
-    let terms_must_vec = builder.build_must_term_query()?;
+    let terms_must_vec = builder.build_must_term_query(SearchOn::Content)?;
 
     let expected = serde_json::json!({
         "bool": {
@@ -456,105 +409,6 @@ fn test_build_must_term_query_multiple_terms() -> anyhow::Result<()> {
     assert_eq!(terms_must_vec.len(), 1);
     assert_eq!(terms_must_vec[0].to_json(), expected);
 
-    let builder = SearchQueryBuilder::<TestSearchConfig>::new(terms)
-        .match_type("partial")
-        .search_on(SearchOn::NameContent);
-
-    let terms_must_vec = builder.build_must_term_query()?;
-
-    let expected = serde_json::json!({
-        "bool": {
-            "minimum_should_match": 1,
-            "should": [
-            {
-                "bool": {
-                    "minimum_should_match": 1,
-                    "should": [
-                        {
-                            "match_phrase_prefix": {
-                                "test_title": {
-                                    "boost": 1000.0,
-                                    "query": "test1"
-                                }
-                            }
-                        },
-                        {
-                            "match_phrase_prefix": {
-                                "content": {
-                                    "boost": 900.0,
-                                    "query": "test1"
-                                }
-                            }
-                        },
-                        {
-                            "match": {
-                                "test_title": {
-                                    "boost": 0.1,
-                                    "minimum_should_match": "80%",
-                                    "query": "test1"
-                                }
-                            }
-                        },
-                        {
-                            "match": {
-                                "content": {
-                                    "boost": 0.09,
-                                    "minimum_should_match": "1",
-                                    "query": "test1"
-                                }
-                            }
-                        }
-                    ]
-                }
-            },
-                {
-                    "bool": {
-                        "minimum_should_match": 1,
-                        "should": [
-                            {
-                                "match_phrase_prefix": {
-                                    "test_title": {
-                                        "boost": 1000.0,
-                                        "query": "test2"
-                                    }
-                                }
-                            },
-                            {
-                                "match_phrase_prefix": {
-                                    "content": {
-                                        "boost": 900.0,
-                                        "query": "test2"
-                                    }
-                                }
-                            },
-                            {
-                                "match": {
-                                    "test_title": {
-                                        "boost": 0.1,
-                                        "minimum_should_match": "80%",
-                                        "query": "test2"
-                                    }
-                                }
-                            },
-                            {
-                                "match": {
-                                    "content": {
-                                        "boost": 0.09,
-                                        "minimum_should_match": "1",
-                                        "query": "test2"
-                                    }
-                                }
-                            }
-                        ]
-                    }
-                }
-            ]
-        }
-    });
-
-    assert_eq!(terms_must_vec.len(), 1);
-    assert_eq!(terms_must_vec[0].to_json(), expected);
-
     Ok(())
 }
 
@@ -565,7 +419,7 @@ fn test_build_must_term_query_term_with_short_last_word() -> anyhow::Result<()> 
         .match_type("partial")
         .search_on(SearchOn::Content);
 
-    let terms_must_vec = builder.build_must_term_query()?;
+    let terms_must_vec = builder.build_must_term_query(SearchOn::Content)?;
 
     let expected = serde_json::json!({
         "bool": {

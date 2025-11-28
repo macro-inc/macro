@@ -7,29 +7,24 @@ use crate::{
         builder::SearchQueryConfig,
         channels::{
             ChannelMessageIndex, ChannelMessageQueryBuilder, ChannelMessageSearchArgs,
-            ChannelMessageSearchConfig, ChannelMessageSearchResponse,
+            ChannelMessageSearchConfig,
         },
-        chats::{
-            ChatIndex, ChatQueryBuilder, ChatSearchArgs, ChatSearchConfig, ChatSearchResponse,
-        },
+        chats::{ChatIndex, ChatQueryBuilder, ChatSearchArgs, ChatSearchConfig},
         documents::{
             DocumentIndex, DocumentQueryBuilder, DocumentSearchArgs, DocumentSearchConfig,
-            DocumentSearchResponse,
         },
-        emails::{
-            EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig, EmailSearchResponse,
+        emails::{EmailIndex, EmailQueryBuilder, EmailSearchArgs, EmailSearchConfig},
+        model::{
+            DefaultSearchResponse, Hit, MacroEm, NameIndex, SearchGotoChannel, SearchGotoChat,
+            SearchGotoContent, SearchGotoDocument, SearchGotoEmail, SearchHit, parse_highlight_hit,
         },
-        model::{DefaultSearchResponse, Hit, MacroEm, parse_highlight_hit},
-        projects::{
-            ProjectIndex, ProjectQueryBuilder, ProjectSearchArgs, ProjectSearchConfig,
-            ProjectSearchResponse,
-        },
+        projects::{ProjectIndex, ProjectQueryBuilder, ProjectSearchArgs, ProjectSearchConfig},
         query::Keys,
     },
 };
 
 use crate::SearchOn;
-use models_opensearch::{SearchEntityType, SearchIndex};
+use models_opensearch::SearchEntityType;
 use opensearch_query_builder::*;
 
 #[derive(Debug, Default, Clone)]
@@ -196,52 +191,44 @@ pub(crate) enum UnifiedSearchIndex {
     Chat(ChatIndex),
     Email(EmailIndex),
     Project(ProjectIndex),
-}
-
-#[derive(Debug)]
-pub enum UnifiedSearchResponse {
-    ChannelMessage(ChannelMessageSearchResponse),
-    Chat(ChatSearchResponse),
-    Document(DocumentSearchResponse),
-    Email(EmailSearchResponse),
-    Project(ProjectSearchResponse),
+    Name(NameIndex),
 }
 
 pub struct SplitUnifiedSearchResponseValues {
-    pub channel_message: Vec<ChannelMessageSearchResponse>,
-    pub chat: Vec<ChatSearchResponse>,
-    pub document: Vec<DocumentSearchResponse>,
-    pub email: Vec<EmailSearchResponse>,
-    pub project: Vec<ProjectSearchResponse>,
+    pub channel_message: Vec<SearchHit>,
+    pub chat: Vec<SearchHit>,
+    pub document: Vec<SearchHit>,
+    pub email: Vec<SearchHit>,
+    pub project: Vec<SearchHit>,
 }
 
-pub trait SplitUnifiedSearchResponse: Iterator<Item = UnifiedSearchResponse> {
+pub trait SplitUnifiedSearchResponse: Iterator<Item = SearchHit> {
     fn split_search_response(self) -> SplitUnifiedSearchResponseValues;
 }
 
 impl<T> SplitUnifiedSearchResponse for T
 where
-    T: Iterator<Item = UnifiedSearchResponse>,
+    T: Iterator<Item = SearchHit>,
 {
     fn split_search_response(self) -> SplitUnifiedSearchResponseValues {
         let (channel_message, chat, document, email, project) = self.into_iter().fold(
             (vec![], vec![], vec![], vec![], vec![]),
             |(mut channel_message, mut chat, mut document, mut email, mut project), item| {
-                match item {
-                    UnifiedSearchResponse::ChannelMessage(a) => {
-                        channel_message.push(a);
+                match item.entity_type {
+                    SearchEntityType::Channels => {
+                        channel_message.push(item);
                     }
-                    UnifiedSearchResponse::Chat(a) => {
-                        chat.push(a);
+                    SearchEntityType::Chats => {
+                        chat.push(item);
                     }
-                    UnifiedSearchResponse::Document(a) => {
-                        document.push(a);
+                    SearchEntityType::Documents => {
+                        document.push(item);
                     }
-                    UnifiedSearchResponse::Email(a) => {
-                        email.push(a);
+                    SearchEntityType::Emails => {
+                        email.push(item);
                     }
-                    UnifiedSearchResponse::Project(a) => {
-                        project.push(a);
+                    SearchEntityType::Projects => {
+                        project.push(item);
                     }
                 }
                 (channel_message, chat, document, email, project)
@@ -258,72 +245,57 @@ where
     }
 }
 
-impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
+impl From<Hit<UnifiedSearchIndex>> for SearchHit {
     fn from(index: Hit<UnifiedSearchIndex>) -> Self {
         match index.source {
-            UnifiedSearchIndex::ChannelMessage(a) => {
-                UnifiedSearchResponse::ChannelMessage(ChannelMessageSearchResponse {
-                    channel_id: a.entity_id,
-                    channel_type: a.channel_type,
-                    org_id: a.org_id,
-                    message_id: a.message_id,
+            UnifiedSearchIndex::ChannelMessage(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::Channels,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: ChannelMessageSearchConfig::TITLE_KEY,
+                                content_key: ChannelMessageSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: Some(SearchGotoContent::Channels(SearchGotoChannel {
+                    channel_message_id: a.message_id,
                     thread_id: a.thread_id,
                     sender_id: a.sender_id,
-                    mentions: a.mentions,
                     created_at: a.created_at_seconds,
                     updated_at: a.updated_at_seconds,
-                    score: index.score,
-                    highlight: index
-                        .highlight
-                        .map(|h| {
-                            parse_highlight_hit(
-                                h,
-                                Keys {
-                                    title_key: ChannelMessageSearchConfig::TITLE_KEY,
-                                    content_key: ChannelMessageSearchConfig::CONTENT_KEY,
-                                },
-                            )
-                        })
-                        .unwrap_or_default(),
-                })
-            }
-            UnifiedSearchIndex::Document(a) => {
-                UnifiedSearchResponse::Document(DocumentSearchResponse {
-                    document_id: a.entity_id,
-                    document_name: a.document_name,
+                })),
+            },
+            UnifiedSearchIndex::Document(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::Documents,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: DocumentSearchConfig::TITLE_KEY,
+                                content_key: DocumentSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: Some(SearchGotoContent::Documents(SearchGotoDocument {
                     node_id: a.node_id,
                     raw_content: a.raw_content,
-                    owner_id: a.owner_id,
-                    file_type: a.file_type,
-                    updated_at: a.updated_at_seconds,
-                    score: index.score,
-                    highlight: index
-                        .highlight
-                        .map(|h| {
-                            parse_highlight_hit(
-                                h,
-                                Keys {
-                                    title_key: DocumentSearchConfig::TITLE_KEY,
-                                    content_key: DocumentSearchConfig::CONTENT_KEY,
-                                },
-                            )
-                        })
-                        .unwrap_or_default(),
-                })
-            }
-            UnifiedSearchIndex::Email(a) => UnifiedSearchResponse::Email(EmailSearchResponse {
-                thread_id: a.entity_id,
-                message_id: a.message_id,
-                subject: a.subject,
-                sender: a.sender,
-                recipients: a.recipients,
-                cc: a.cc,
-                bcc: a.bcc,
-                labels: a.labels,
-                link_id: a.link_id,
-                user_id: a.user_id,
-                updated_at: a.updated_at_seconds,
-                sent_at: a.sent_at_seconds,
+                })),
+            },
+            UnifiedSearchIndex::Email(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::Emails,
                 score: index.score,
                 highlight: index
                     .highlight
@@ -337,35 +309,37 @@ impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
                         )
                     })
                     .unwrap_or_default(),
-            }),
-            UnifiedSearchIndex::Project(a) => {
-                UnifiedSearchResponse::Project(ProjectSearchResponse {
-                    project_id: a.entity_id,
-                    user_id: a.user_id,
-                    project_name: a.project_name,
-                    created_at: a.created_at_seconds,
-                    updated_at: a.updated_at_seconds,
-                    score: index.score,
-                    highlight: index
-                        .highlight
-                        .map(|h| {
-                            parse_highlight_hit(
-                                h,
-                                Keys {
-                                    title_key: ProjectSearchConfig::TITLE_KEY,
-                                    content_key: ProjectSearchConfig::CONTENT_KEY,
-                                },
-                            )
-                        })
-                        .unwrap_or_default(),
-                })
-            }
-            UnifiedSearchIndex::Chat(a) => UnifiedSearchResponse::Chat(ChatSearchResponse {
-                chat_id: a.entity_id,
-                chat_message_id: a.chat_message_id,
-                user_id: a.user_id,
-                role: a.role,
-                title: a.title,
+                goto: Some(SearchGotoContent::Emails(SearchGotoEmail {
+                    email_message_id: a.message_id,
+                    bcc: a.bcc,
+                    cc: a.cc,
+                    labels: a.labels,
+                    sent_at: a.sent_at_seconds,
+                    sender: a.sender,
+                    recipients: a.recipients,
+                })),
+            },
+            UnifiedSearchIndex::Project(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::Projects,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: ProjectSearchConfig::TITLE_KEY,
+                                content_key: ProjectSearchConfig::CONTENT_KEY,
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: None,
+            },
+            UnifiedSearchIndex::Chat(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: SearchEntityType::Chats,
                 score: index.score,
                 highlight: index
                     .highlight
@@ -379,8 +353,29 @@ impl From<Hit<UnifiedSearchIndex>> for UnifiedSearchResponse {
                         )
                     })
                     .unwrap_or_default(),
-                updated_at: a.updated_at_seconds,
-            }),
+                goto: Some(SearchGotoContent::Chats(SearchGotoChat {
+                    chat_message_id: a.chat_message_id,
+                    role: a.role,
+                })),
+            },
+            UnifiedSearchIndex::Name(a) => SearchHit {
+                entity_id: a.entity_id,
+                entity_type: a.entity_type,
+                score: index.score,
+                highlight: index
+                    .highlight
+                    .map(|h| {
+                        parse_highlight_hit(
+                            h,
+                            Keys {
+                                title_key: "name",
+                                content_key: "",
+                            },
+                        )
+                    })
+                    .unwrap_or_default(),
+                goto: None,
+            },
         }
     }
 }
@@ -391,18 +386,18 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         return Err(OpensearchClientError::EmptySearchIndices);
     }
     // Build out the title keys that we could need for highlighting
-    let mut title_keys: Vec<Option<&'static str>> = vec![];
+    let mut title_keys: HashSet<&'static str> = HashSet::new();
     for index in &args.search_indices {
         match index {
-            SearchEntityType::Channels => title_keys.push(ChannelMessageSearchConfig::TITLE_KEY),
-            SearchEntityType::Chats => title_keys.push(ChatSearchConfig::TITLE_KEY),
-            SearchEntityType::Documents => title_keys.push(DocumentSearchConfig::TITLE_KEY),
-            SearchEntityType::Emails => title_keys.push(EmailSearchConfig::TITLE_KEY),
-            SearchEntityType::Projects => title_keys.push(ProjectSearchConfig::TITLE_KEY),
-        }
+            SearchEntityType::Channels => title_keys.insert(ChannelMessageSearchConfig::TITLE_KEY),
+            SearchEntityType::Chats => title_keys.insert(ChatSearchConfig::TITLE_KEY),
+            SearchEntityType::Documents => title_keys.insert(DocumentSearchConfig::TITLE_KEY),
+            SearchEntityType::Emails => title_keys.insert(EmailSearchConfig::TITLE_KEY),
+            SearchEntityType::Projects => title_keys.insert(ProjectSearchConfig::TITLE_KEY),
+        };
     }
 
-    let title_keys: Vec<&'static str> = title_keys.into_iter().flatten().collect();
+    let title_keys: Vec<&'static str> = title_keys.into_iter().collect();
 
     let mut bool_query = BoolQueryBuilder::new();
     bool_query.minimum_should_match(1);
@@ -410,17 +405,17 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     if args.search_indices.contains(&SearchEntityType::Documents) {
         let document_search_args: DocumentSearchArgs = args.clone().into();
         let document_query_builder: DocumentQueryBuilder = document_search_args.into();
-        let mut document_bool_query = document_query_builder.build_bool_query()?;
-        document_bool_query.must(QueryType::term("_index", SearchIndex::Documents.as_ref()));
-        bool_query.should(document_bool_query.build().into());
+        let document_bool_query = document_query_builder.build_bool_query()?;
+        let query_type: QueryType = document_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
     }
 
     if args.search_indices.contains(&SearchEntityType::Emails) {
         let email_search_args: EmailSearchArgs = args.clone().into();
         let email_query_builder: EmailQueryBuilder = email_search_args.into();
-        let mut email_bool_query = email_query_builder.build_bool_query()?;
-        email_bool_query.must(QueryType::term("_index", SearchIndex::Emails.as_ref()));
-        bool_query.should(email_bool_query.build().into());
+        let email_bool_query = email_query_builder.build_bool_query()?;
+        let query_type: QueryType = email_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
     }
 
     // We can only search over channels if we are not explicitly searching by name
@@ -429,25 +424,27 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
         let channel_message_search_args: ChannelMessageSearchArgs = args.clone().into();
         let channel_message_query_builder: ChannelMessageQueryBuilder =
             channel_message_search_args.into();
-        let mut channel_message_bool_query = channel_message_query_builder.build_bool_query()?;
-        channel_message_bool_query.must(QueryType::term("_index", SearchIndex::Channels.as_ref()));
-        bool_query.should(channel_message_bool_query.build().into());
+        let channel_message_bool_query = channel_message_query_builder.build_bool_query()?;
+        let query_type: QueryType = channel_message_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
     }
 
     if args.search_indices.contains(&SearchEntityType::Chats) {
         let chat_search_args: ChatSearchArgs = args.clone().into();
         let chat_query_builder: ChatQueryBuilder = chat_search_args.into();
-        let mut chat_bool_query = chat_query_builder.build_bool_query()?;
-        chat_bool_query.must(QueryType::term("_index", SearchIndex::Chats.as_ref()));
-        bool_query.should(chat_bool_query.build().into());
+        let chat_bool_query = chat_query_builder.build_bool_query()?;
+        let query_type: QueryType = chat_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
     }
 
-    if args.search_indices.contains(&SearchEntityType::Projects) {
+    if args.search_indices.contains(&SearchEntityType::Projects)
+        && args.search_on != SearchOn::Content
+    {
         let project_search_args: ProjectSearchArgs = args.clone().into();
         let project_query_builder: ProjectQueryBuilder = project_search_args.into();
-        let mut project_bool_query = project_query_builder.build_bool_query()?;
-        project_bool_query.must(QueryType::term("_index", SearchIndex::Projects.as_ref()));
-        bool_query.should(project_bool_query.build().into());
+        let project_bool_query = project_query_builder.build_bool_query()?;
+        let query_type: QueryType = project_bool_query.build().into();
+        bool_query.should(query_type.to_owned());
     }
 
     // create the search request
@@ -456,23 +453,14 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
     search_request_builder.from(args.page * args.page_size);
     search_request_builder.size(args.page_size);
 
-    if args.collapse || args.search_on == SearchOn::NameContent || args.search_on == SearchOn::Name
-    {
+    if args.collapse {
         search_request_builder.collapse(Collapse::new("entity_id"));
-    }
-
-    if args.search_on == SearchOn::NameContent {
-        search_request_builder.track_total_hits(true);
-        search_request_builder.add_agg(
-            "total_uniques",
-            AggregationType::Cardinality(CardinalityAggregation::new("entity_id")),
-        );
     }
 
     // Build sort
     let sort = vec![
         SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
-        SortType::Field(FieldSort::new("entity_id", SortOrder::Asc)),
+        SortType::Field(FieldSort::new("entity_id", SortOrder::Desc)),
     ];
 
     for sort in sort {
@@ -539,35 +527,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
 
     let query_object = bool_query.build();
 
-    let built_query: QueryType = match args.search_on {
-        SearchOn::Name | SearchOn::Content => query_object.into(),
-        SearchOn::NameContent => {
-            if args.disable_recency {
-                query_object.into()
-            } else {
-                let mut function_score_query = FunctionScoreQueryBuilder::new();
-
-                function_score_query.query(query_object.into());
-
-                function_score_query.function(ScoreFunction {
-                    function: ScoreFunctionType::Gauss(DecayFunction {
-                        field: "updated_at_seconds".into(),
-                        origin: Some("now".into()),
-                        scale: "21d".into(),
-                        offset: Some("3d".into()),
-                        decay: Some(0.5),
-                    }),
-                    filter: None,
-                    weight: Some(1.3),
-                });
-
-                function_score_query.boost_mode(BoostMode::Multiply);
-                function_score_query.score_mode(ScoreMode::Multiply);
-
-                function_score_query.build().into()
-            }
-        }
-    };
+    let built_query: QueryType = query_object.into();
 
     search_request_builder.query(built_query);
 
@@ -578,7 +538,7 @@ fn build_unified_search_request(args: &UnifiedSearchArgs) -> Result<SearchReques
 pub(crate) async fn search_unified(
     client: &opensearch::OpenSearch,
     args: UnifiedSearchArgs,
-) -> Result<Vec<UnifiedSearchResponse>> {
+) -> Result<Vec<SearchHit>> {
     let search_request = build_unified_search_request(&args)?.to_json();
 
     let search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.as_ref()).collect();

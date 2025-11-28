@@ -1,6 +1,9 @@
 use opensearch_query_builder::{BoolQueryBuilder, QueryType, WildcardQuery};
 
-pub fn should_wildcard_field_query_builder(field: &str, values: &[String]) -> QueryType<'static> {
+pub fn should_wildcard_field_query_builder<'a>(
+    field: &'a str,
+    values: &'a [String],
+) -> QueryType<'a> {
     let mut should_query = BoolQueryBuilder::new();
     should_query.minimum_should_match(1);
     let wildcard_queries: Vec<WildcardQuery> = values

@@ -5863,9 +5863,9 @@ dependencies = [
 
 [[package]]
 name = "opensearch_query_builder"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fad14f01f6fddacf5c28f40c08384e206f68ecb135e253b01bcb5fd3af531472"
+checksum = "3f4d171bfc21961e61231a8b8f7b06d34befb4152627d1c6b591aadd621c4681"
 dependencies = [
  "serde",
  "serde_json",
@@ -7413,6 +7413,7 @@ dependencies = [
  "macro_middleware",
  "model",
  "models_email",
+ "models_opensearch",
  "models_search",
  "opensearch_client",
  "secretsmanager_client",

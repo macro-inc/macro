@@ -2,8 +2,7 @@ use crate::api::search::{SearchPaginationParams, simple::SearchError};
 use axum::{
     Extension,
     extract::{self, State},
-    http::StatusCode,
-    response::{IntoResponse, Json, Response},
+    response::Json,
 };
 use item_filters::ProjectFilters;
 use model::{
@@ -11,8 +10,8 @@ use model::{
     response::ErrorResponse,
     user::UserContext,
 };
-use models_search::SearchOn;
 use models_search::project::{ProjectSearchRequest, SimpleProjectSearchResponse};
+use models_search::{SearchOn, SimpleSearchResponse};
 use opensearch_client::search::projects::ProjectSearchArgs;
 
 use crate::api::ApiContext;
@@ -40,18 +39,14 @@ pub async fn handler(
     user_context: Extension<UserContext>,
     extract::Query(query_params): extract::Query<SearchPaginationParams>,
     extract::Json(req): extract::Json<ProjectSearchRequest>,
-) -> Result<Response, SearchError> {
+) -> Result<Json<SimpleSearchResponse>, SearchError> {
     tracing::info!("simple_project_search");
 
     let results = search_projects(&ctx, user_context.user_id.as_str(), &query_params, req).await?;
 
-    Ok((
-        StatusCode::OK,
-        Json(SimpleProjectSearchResponse {
-            results: results.into_iter().map(|a| a.into()).collect(),
-        }),
-    )
-        .into_response())
+    Ok(Json(SimpleSearchResponse {
+        results: results.into_iter().map(|a| a.into()).collect(),
+    }))
 }
 
 pub(in crate::api::search) struct FilterProjectResponse {
@@ -147,7 +142,7 @@ pub(in crate::api::search) async fn search_projects(
     user_id: &str,
     query_params: &SearchPaginationParams,
     req: ProjectSearchRequest,
-) -> Result<Vec<opensearch_client::search::projects::ProjectSearchResponse>, SearchError> {
+) -> Result<Vec<opensearch_client::search::model::SearchHit>, SearchError> {
     // content search is not applicable for projects
     if req.search_on == SearchOn::Content {
         return Ok(Vec::new());

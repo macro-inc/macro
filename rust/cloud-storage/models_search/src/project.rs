@@ -119,21 +119,6 @@ pub struct SimpleProjectSearchResponseBaseItem<T> {
 pub type SimpleProjectSearchResponseItem =
     SimpleProjectSearchResponseBaseItem<crate::TimestampSeconds>;
 
-impl From<opensearch_client::search::projects::ProjectSearchResponse>
-    for SimpleProjectSearchResponseItem
-{
-    fn from(response: opensearch_client::search::projects::ProjectSearchResponse) -> Self {
-        Self {
-            project_id: response.project_id,
-            updated_at: response.updated_at.into(),
-            created_at: response.created_at.into(),
-            project_name: response.project_name,
-            user_id: response.user_id,
-            highlight: response.highlight.into(),
-        }
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleProjectSearchResponse {
     /// List containing results from projects.

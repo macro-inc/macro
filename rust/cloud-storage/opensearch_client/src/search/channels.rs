@@ -3,13 +3,16 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{DefaultSearchResponse, Highlight, parse_highlight_hit},
+        model::{
+            DefaultSearchResponse, NameIndex, SearchGotoChannel, SearchGotoContent, SearchHit,
+            parse_highlight_hit,
+        },
         query::Keys,
     },
 };
 
 use crate::SearchOn;
-use models_opensearch::SearchIndex;
+use models_opensearch::{SearchEntityType, SearchIndex};
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, QueryType, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
     ToOpenSearchJson,
@@ -30,21 +33,11 @@ pub(crate) struct ChannelMessageIndex {
     pub updated_at_seconds: i64,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct ChannelMessageSearchResponse {
-    pub channel_id: String,
-    pub channel_type: String,
-    pub org_id: Option<i64>,
-    pub message_id: String,
-    pub thread_id: Option<String>,
-    pub sender_id: String,
-    pub mentions: Vec<String>,
-    pub created_at: i64,
-    pub updated_at: i64,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub score: Option<f64>,
-    /// Contains the highlight matches for the channel name and content
-    pub highlight: Highlight,
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+pub(crate) enum ChannelMessageNameIndex {
+    Name(NameIndex),
+    ChannelMessage(ChannelMessageIndex),
 }
 
 #[derive(Default)]
@@ -52,9 +45,10 @@ pub(crate) struct ChannelMessageSearchConfig;
 
 impl SearchQueryConfig for ChannelMessageSearchConfig {
     const USER_ID_KEY: &'static str = "sender_id";
-    const TITLE_KEY: Option<&'static str> = None;
+    const TITLE_KEY: &'static str = "name";
+    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Channels;
 
-    fn default_sort_types() -> Vec<SortType<'static>> {
+    fn default_sort_types<'a>() -> Vec<SortType<'a>> {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
@@ -108,32 +102,42 @@ impl ChannelMessageQueryBuilder {
     }
 
     /// Builds the main bool query for the index
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
-        // Build the main bool query containing all terms and any other filters
-        let mut bool_query = self.inner.build_bool_query()?;
+    pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
+        let mut content_and_name_bool_queries = self.inner.build_content_and_name_bool_query()?;
 
         // CUSTOM ATTRIBUTES SECTION
+        if self.inner.search_on == SearchOn::Content
+            || self.inner.search_on == SearchOn::NameContent
+        {
+            let mut bool_query = content_and_name_bool_queries
+                .content_bool_query
+                .ok_or(OpensearchClientError::BoolQueryNotBuilt)?;
 
-        // Add thread_ids to must clause if provided
-        if !self.thread_ids.is_empty() {
-            bool_query.must(QueryType::terms("thread_id", self.thread_ids.clone()));
-        }
+            // Add thread_ids to must clause if provided
+            if !self.thread_ids.is_empty() {
+                bool_query.must(QueryType::terms("thread_id", self.thread_ids.clone()));
+            }
 
-        // Add mentions to must clause if provided
-        if !self.mentions.is_empty() {
-            bool_query.must(QueryType::terms("mentions", self.mentions.clone()));
-        }
+            // Add mentions to must clause if provided
+            if !self.mentions.is_empty() {
+                bool_query.must(QueryType::terms("mentions", self.mentions.clone()));
+            }
 
-        // Add sender_ids to must clause if provided
-        if !self.sender_ids.is_empty() {
-            bool_query.must(QueryType::terms("sender_id", self.sender_ids.clone()));
+            // Add sender_ids to must clause if provided
+            if !self.sender_ids.is_empty() {
+                bool_query.must(QueryType::terms("sender_id", self.sender_ids.clone()));
+            }
+
+            content_and_name_bool_queries.content_bool_query = Some(bool_query);
         }
         // END CUSTOM ATTRIBUTES SECTION
+
+        let bool_query = self.inner.build_bool_query(content_and_name_bool_queries)?;
 
         Ok(bool_query)
     }
 
-    fn build_search_request(&self) -> Result<SearchRequest<'static>> {
+    fn build_search_request<'a>(&'a self) -> Result<SearchRequest<'a>> {
         let bool_query = self.build_bool_query()?;
 
         // Build the search request with the bool query
@@ -192,7 +196,7 @@ impl ChannelMessageSearchArgs {
 pub(crate) async fn search_channel_messages(
     client: &opensearch::OpenSearch,
     args: ChannelMessageSearchArgs,
-) -> Result<Vec<ChannelMessageSearchResponse>> {
+) -> Result<Vec<SearchHit>> {
     let query_body = args.build()?;
 
     let response = client
@@ -212,7 +216,7 @@ pub(crate) async fn search_channel_messages(
             details: e.to_string(),
         })?;
 
-    let result: DefaultSearchResponse<ChannelMessageIndex> = serde_json::from_slice(&bytes)
+    let result: DefaultSearchResponse<ChannelMessageNameIndex> = serde_json::from_slice(&bytes)
         .map_err(|e| OpensearchClientError::SearchDeserializationFailed {
             details: e.to_string(),
             raw_body: String::from_utf8_lossy(&bytes).to_string(),
@@ -222,18 +226,8 @@ pub(crate) async fn search_channel_messages(
         .hits
         .hits
         .into_iter()
-        .map(|hit| ChannelMessageSearchResponse {
-            channel_id: hit.source.entity_id,
-            channel_type: hit.source.channel_type,
-            org_id: hit.source.org_id,
-            message_id: hit.source.message_id,
-            thread_id: hit.source.thread_id,
-            sender_id: hit.source.sender_id,
-            mentions: hit.source.mentions,
-            created_at: hit.source.created_at_seconds,
-            updated_at: hit.source.updated_at_seconds,
-            score: hit.score,
-            highlight: hit
+        .map(|hit| {
+            let highlight = hit
                 .highlight
                 .map(|h| {
                     parse_highlight_hit(
@@ -244,7 +238,30 @@ pub(crate) async fn search_channel_messages(
                         },
                     )
                 })
-                .unwrap_or_default(),
+                .unwrap_or_default();
+
+            match hit.source {
+                ChannelMessageNameIndex::Name(a) => SearchHit {
+                    entity_id: a.entity_id,
+                    entity_type: a.entity_type,
+                    score: hit.score,
+                    highlight,
+                    goto: None,
+                },
+                ChannelMessageNameIndex::ChannelMessage(a) => SearchHit {
+                    entity_id: a.entity_id,
+                    entity_type: SearchEntityType::Channels,
+                    score: hit.score,
+                    highlight,
+                    goto: Some(SearchGotoContent::Channels(SearchGotoChannel {
+                        channel_message_id: a.message_id,
+                        thread_id: a.thread_id,
+                        sender_id: a.sender_id,
+                        created_at: a.created_at_seconds,
+                        updated_at: a.updated_at_seconds,
+                    })),
+                },
+            }
         })
         .collect())
 }

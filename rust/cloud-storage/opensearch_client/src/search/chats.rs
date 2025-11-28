@@ -3,14 +3,17 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{DefaultSearchResponse, Highlight, parse_highlight_hit},
+        model::{
+            DefaultSearchResponse, NameIndex, SearchGotoChat, SearchGotoContent, SearchHit,
+            parse_highlight_hit,
+        },
         query::Keys,
         utils::should_wildcard_field_query_builder,
     },
 };
 
 use crate::SearchOn;
-use models_opensearch::SearchIndex;
+use models_opensearch::{SearchEntityType, SearchIndex};
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
     ToOpenSearchJson,
@@ -28,25 +31,21 @@ pub(crate) struct ChatIndex {
     pub content: String,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct ChatSearchResponse {
-    pub chat_id: String,
-    pub chat_message_id: String,
-    pub user_id: String,
-    pub role: String,
-    pub updated_at: i64,
-    pub title: String,
-    pub score: Option<f64>,
-    pub highlight: Highlight,
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+pub(crate) enum ChatNameIndex {
+    Name(NameIndex),
+    Chat(ChatIndex),
 }
 
 pub(crate) struct ChatSearchConfig;
 
 impl SearchQueryConfig for ChatSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
-    const TITLE_KEY: Option<&'static str> = Some("title");
+    const TITLE_KEY: &'static str = "name";
+    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Chats;
 
-    fn default_sort_types() -> Vec<SortType<'static>> {
+    fn default_sort_types<'a>() -> Vec<SortType<'a>> {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
@@ -87,23 +86,33 @@ impl ChatQueryBuilder {
         self
     }
 
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
-        let mut bool_query = self.inner.build_bool_query()?;
+    pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
+        let mut content_and_name_bool_queries = self.inner.build_content_and_name_bool_query()?;
 
         // CUSTOM ATTRIBUTES SECTION
+        if self.inner.search_on == SearchOn::Content
+            || self.inner.search_on == SearchOn::NameContent
+        {
+            let mut bool_query = content_and_name_bool_queries
+                .content_bool_query
+                .ok_or(OpensearchClientError::BoolQueryNotBuilt)?;
 
-        // If role is provided, add them to the must query
-        if !self.role.is_empty() {
-            let should_query = should_wildcard_field_query_builder("role", &self.role);
-            bool_query.must(should_query);
+            // Add role to must clause if provided
+            if !self.role.is_empty() {
+                let should_query = should_wildcard_field_query_builder("role", &self.role);
+                bool_query.must(should_query);
+            }
+
+            content_and_name_bool_queries.content_bool_query = Some(bool_query);
         }
-
         // END CUSTOM ATTRIBUTES SECTION
+
+        let bool_query = self.inner.build_bool_query(content_and_name_bool_queries)?;
 
         Ok(bool_query)
     }
 
-    fn build_search_request(&self) -> Result<SearchRequest<'static>> {
+    fn build_search_request<'a>(&'a self) -> Result<SearchRequest<'a>> {
         let bool_query = self.build_bool_query()?;
 
         // Build the search request with the bool query
@@ -157,7 +166,7 @@ impl ChatSearchArgs {
 pub(crate) async fn search_chats(
     client: &opensearch::OpenSearch,
     args: ChatSearchArgs,
-) -> Result<Vec<ChatSearchResponse>> {
+) -> Result<Vec<SearchHit>> {
     let query_body = args.build()?;
 
     let response = client
@@ -177,25 +186,20 @@ pub(crate) async fn search_chats(
             details: e.to_string(),
         })?;
 
-    let result: DefaultSearchResponse<ChatIndex> = serde_json::from_slice(&bytes).map_err(|e| {
-        OpensearchClientError::SearchDeserializationFailed {
-            details: e.to_string(),
-            raw_body: String::from_utf8_lossy(&bytes).to_string(),
-        }
-    })?;
+    let result: DefaultSearchResponse<ChatNameIndex> =
+        serde_json::from_slice(&bytes).map_err(|e| {
+            OpensearchClientError::SearchDeserializationFailed {
+                details: e.to_string(),
+                raw_body: String::from_utf8_lossy(&bytes).to_string(),
+            }
+        })?;
 
     Ok(result
         .hits
         .hits
         .into_iter()
-        .map(|hit| ChatSearchResponse {
-            chat_id: hit.source.entity_id,
-            chat_message_id: hit.source.chat_message_id,
-            user_id: hit.source.user_id,
-            role: hit.source.role,
-            title: hit.source.title,
-            score: hit.score,
-            highlight: hit
+        .map(|hit| {
+            let highlight = hit
                 .highlight
                 .map(|h| {
                     parse_highlight_hit(
@@ -206,8 +210,27 @@ pub(crate) async fn search_chats(
                         },
                     )
                 })
-                .unwrap_or_default(),
-            updated_at: hit.source.updated_at_seconds,
+                .unwrap_or_default();
+
+            match hit.source {
+                ChatNameIndex::Name(a) => SearchHit {
+                    entity_id: a.entity_id,
+                    entity_type: a.entity_type,
+                    score: hit.score,
+                    highlight,
+                    goto: None,
+                },
+                ChatNameIndex::Chat(a) => SearchHit {
+                    entity_id: a.entity_id,
+                    entity_type: SearchEntityType::Chats,
+                    score: hit.score,
+                    highlight,
+                    goto: Some(SearchGotoContent::Chats(SearchGotoChat {
+                        chat_message_id: a.chat_message_id,
+                        role: a.role,
+                    })),
+                },
+            }
         })
         .collect())
 }
