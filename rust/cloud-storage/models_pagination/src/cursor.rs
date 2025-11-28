@@ -455,3 +455,38 @@ impl<I, T: Sortable, F> Query<I, T, F> {
         }
     }
 }
+
+impl<I, T, F> Query<I, T, Option<F>>
+where
+    T: Sortable,
+{
+    /// Factors out an [Option] from the filter, splitting the type into an [Either]
+    pub fn split_option(self) -> Either<Query<I, T, ()>, Query<I, T, F>> {
+        match self {
+            Query::Sort(t, None) => Either::Left(Query::Sort(t, ())),
+            Query::Sort(t, Some(f)) => Either::Right(Query::Sort(t, f)),
+            Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter: None,
+            }) => Either::Left(Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter: (),
+            })),
+            Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter: Some(f),
+            }) => Either::Right(Query::Cursor(Cursor {
+                id,
+                limit,
+                val,
+                filter: f,
+            })),
+        }
+    }
+}

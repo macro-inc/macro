@@ -2,29 +2,16 @@
 //! This crate contains all filters for various item types to be used in soup/search.
 
 use non_empty::IsEmpty;
-use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use strum::{Display, EnumString};
-use utoipa::ToSchema;
 
 pub mod ast;
 
 /// Fields that can be searched on in search queries
-#[derive(
-    Serialize,
-    Deserialize,
-    Debug,
-    ToSchema,
-    Copy,
-    Clone,
-    EnumString,
-    Display,
-    PartialEq,
-    JsonSchema,
-    Default,
-)]
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, EnumString, Display, PartialEq, Default)]
 #[serde(rename_all = "snake_case")]
 #[strum(serialize_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub enum SearchOn {
     /// Search on the name/title field only
     Name,
@@ -36,7 +23,8 @@ pub enum SearchOn {
 }
 
 /// The document filters used to filter down what documents you search over.
-#[derive(Debug, Serialize, Deserialize, ToSchema, Default, PartialEq, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub struct DocumentFilters {
     /// Document file types to search. Examples: ['pdf'], ['md', 'txt']. Empty to search all file types.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -72,7 +60,8 @@ impl IsEmpty for DocumentFilters {
 }
 
 /// The chat filters used to filter down what chats you search over.
-#[derive(Debug, Serialize, Deserialize, ToSchema, Default, PartialEq, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub struct ChatFilters {
     /// Chat message roles to search. Examples: ['user'], ['assistant']. Empty to search all roles.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -104,7 +93,8 @@ impl IsEmpty for ChatFilters {
 }
 
 /// The email filters used to filter down what emails you search over.
-#[derive(Debug, Serialize, Deserialize, ToSchema, Default, PartialEq, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub struct EmailFilters {
     /// Email sender addresses to filter by. Examples: ['user@example.com']. Empty to search all senders.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -133,7 +123,8 @@ impl IsEmpty for EmailFilters {
 }
 
 /// The channel message filters used to filter down what channel messages you search over.
-#[derive(Debug, Serialize, Deserialize, ToSchema, Default, PartialEq, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub struct ChannelFilters {
     /// Channel thread IDs to search within. Examples: ['thread123']. Empty to search all threads.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -170,7 +161,8 @@ impl IsEmpty for ChannelFilters {
 }
 
 /// The project filters used to filter down what projects you search over.
-#[derive(Debug, Serialize, Deserialize, ToSchema, Default, PartialEq, Clone, JsonSchema)]
+#[derive(Debug, Serialize, Deserialize, Default, PartialEq, Clone)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub struct ProjectFilters {
     /// Project IDs to search within. Examples: ['project1']. Empty to search all accessible projects.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
@@ -192,7 +184,8 @@ impl IsEmpty for ProjectFilters {
 }
 
 /// a bundle of all of the filters for each entity type
-#[derive(Debug, Clone, Default, Deserialize, ToSchema)]
+#[derive(Debug, Clone, Default, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema, schemars::JsonSchema))]
 pub struct EntityFilters {
     /// the bundled [ProjectFilters]
     #[serde(default)]
