@@ -98,6 +98,7 @@
     "@thisbeyond/solid-dnd": "^0.7.5",
     "async-lock": "^1.4.1",
     "async-mutex": "^0.5.0",
+    "brace-expansion": "^4.0.1",
     "cmdk-solid": "^1.1.2",
     "codemirror": "^6.0.2",
     "colorjs.io": "^0.5.2",
