@@ -1,3 +1,4 @@
+export { CustomScrollbar } from './components/CustomScrollbar';
 export { Entity, type EntityClickHandler } from './components/Entity';
 export { EntityWrapper } from './components/EntityWrapper';
 export { createFilter } from './components/Filter';

@@ -27,6 +27,7 @@ import {
 } from '@core/signal/blockElement';
 import { blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
+import { CustomScrollbar } from '@macro-entity';
 import { invalidateUserQuota } from '@service-auth/userQuota';
 import { cognitionWebsocketServiceClient } from '@service-cognition/client';
 import { createCallback } from '@solid-primitives/rootless';
@@ -173,18 +174,25 @@ export function Chat(props: { data: ChatData }) {
     hasRun = true;
   });
 
+  let scrollContainerRef!: HTMLDivElement;
+
   return (
     <DragDropWrapper
       class="size-full bg-panel overscroll-none overflow-hidden flex flex-col"
       uploadQueue={uploadQueue}
     >
       <TopBar />
-      <div class="size-full flex-1 min-h-0 p-2">
-        <div data-chat-scroll class="h-full min-h-0 overflow-auto">
+      <div class="relative flex-1 min-h-0 p-2">
+        <div
+          data-chat-scroll
+          class="absolute inset-0 overflow-auto scrollbar-hidden"
+          ref={scrollContainerRef}
+        >
           <div class="mx-auto w-full max-w-3xl">
             <ChatMessages />
           </div>
         </div>
+        <CustomScrollbar scrollContainer={() => scrollContainerRef} />
       </div>
       <Show when={!disabled()}>
         <div class="flex w-full justify-center pb-2 px-4">
