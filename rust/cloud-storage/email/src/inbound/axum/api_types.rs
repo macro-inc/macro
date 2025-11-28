@@ -185,13 +185,13 @@ pub enum ApiLabelType {
 #[cfg_attr(feature = "ai_schema", derive(schemars::JsonSchema))]
 #[dg(backward = EmailThreadPreviewMetadata)]
 pub struct APIEmailThreadPreviewMetadata {
-    // if user has previously emailed this sender
+    // if user has previously emailed any sender in the thread
     pub known_sender: bool,
     // if any email contains a <table> html tag
     pub tabular: bool,
     // if any email contains a calendar invite
     pub calendar_invite: bool,
-    // if the sender is a generic email
+    // if any sender in the thread is a generic email
     pub generic_sender: bool,
 }
 
