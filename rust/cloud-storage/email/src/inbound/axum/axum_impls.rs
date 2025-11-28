@@ -1,19 +1,21 @@
-use std::str::FromStr;
-
+use crate::{
+    domain::{
+        models::{EmailErr, Link, PreviewView},
+        ports::EmailService,
+    },
+    inbound::{ApiSortMethod, EmailPreviewState},
+};
 use axum::{
     RequestPartsExt, async_trait,
-    extract::{FromRequestParts, Path, rejection::PathRejection},
+    extract::{FromRef, FromRequestParts, Path, rejection::PathRejection},
     http::{StatusCode, request::Parts},
     response::{IntoResponse, Response},
 };
+use axum_extra::extract::Cached;
+use model_user::axum_extractor::{MacroUserExtractor, UserExtractorErr};
+use std::{marker::PhantomData, str::FromStr};
 use thiserror::Error;
 use utoipa::{IntoParams, ToSchema};
-use uuid::Uuid;
-
-use crate::{
-    domain::models::{EmailErr, PreviewView},
-    inbound::ApiSortMethod,
-};
 
 #[derive(Debug, Error)]
 pub enum GetPreviewsCursorError {
@@ -42,9 +44,6 @@ impl IntoResponse for GetPreviewsCursorError {
     }
 }
 
-#[derive(Debug, Clone)]
-pub struct LinkUuid(pub Uuid);
-
 pub(crate) struct PreviewViewExtractor(pub PreviewView);
 
 #[async_trait]
@@ -67,4 +66,60 @@ pub struct GetPreviewsCursorParams {
     pub limit: Option<u32>,
     /// Sort method. Options are viewed_at, created_at, updated_at, viewed_updated. Defaults to viewed_updated.
     pub sort_method: Option<ApiSortMethod>,
+}
+
+pub struct EmailLinkExtractor<U>(pub Link, pub PhantomData<U>);
+
+impl<U> Clone for EmailLinkExtractor<U> {
+    fn clone(&self) -> Self {
+        Self(self.0.clone(), PhantomData)
+    }
+}
+
+#[derive(Debug, Error)]
+pub enum EmailLinkErr {
+    #[error("Internal server error")]
+    DbErr(#[from] crate::domain::models::EmailErr),
+    #[error("Email link not found")]
+    NotFound,
+    #[error(transparent)]
+    UserErr(#[from] UserExtractorErr),
+}
+
+impl IntoResponse for EmailLinkErr {
+    fn into_response(self) -> Response {
+        if let EmailLinkErr::UserErr(u) = self {
+            return u.into_response();
+        }
+        let status = match &self {
+            EmailLinkErr::DbErr(_) | EmailLinkErr::UserErr(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            EmailLinkErr::NotFound => StatusCode::NOT_FOUND,
+        };
+
+        (status, self.to_string()).into_response()
+    }
+}
+
+#[async_trait]
+impl<S, U> FromRequestParts<S> for EmailLinkExtractor<U>
+where
+    EmailPreviewState<U>: FromRef<S>,
+    U: EmailService,
+    S: Send + Sync + 'static,
+{
+    type Rejection = EmailLinkErr;
+
+    async fn from_request_parts(parts: &mut Parts, state: &S) -> Result<Self, Self::Rejection> {
+        let Cached(MacroUserExtractor {
+            macro_user_id,
+            user_context,
+            ..
+        }) = parts.extract_with_state(state).await?;
+        let res = <EmailPreviewState<U>>::from_ref(state)
+            .inner
+            .get_link_by_auth_id_and_macro_id(&user_context.fusion_user_id, macro_user_id)
+            .await?
+            .ok_or(EmailLinkErr::NotFound)?;
+        Ok(Self(res, PhantomData))
+    }
 }

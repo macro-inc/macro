@@ -13,40 +13,22 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
         .route(
             "/",
-            post(send::send_handler)
-                .layer(axum::middleware::from_fn_with_state(
-                    state.clone(),
-                    crate::api::middleware::gmail_token::attach_gmail_token,
-                ))
-                .layer(axum::middleware::from_fn_with_state(
-                    state.clone(),
-                    crate::api::middleware::link::attach_link_context,
-                )),
+            post(send::send_handler).layer(axum::middleware::from_fn_with_state(
+                state.clone(),
+                crate::api::middleware::gmail_token::attach_gmail_token,
+            )),
         )
         .route(
             "/labels",
-            patch(labels::handler)
-                .layer(axum::middleware::from_fn_with_state(
-                    state.clone(),
-                    crate::api::middleware::gmail_token::attach_gmail_token,
-                ))
-                .layer(axum::middleware::from_fn_with_state(
-                    state.clone(),
-                    crate::api::middleware::link::attach_link_context,
-                )),
-        )
-        .route(
-            "/:id",
-            get(get::handler).layer(axum::middleware::from_fn_with_state(
+            patch(labels::handler).layer(axum::middleware::from_fn_with_state(
                 state.clone(),
-                crate::api::middleware::link::attach_link_context,
+                crate::api::middleware::gmail_token::attach_gmail_token,
             )),
         )
-        .route(
-            "/batch",
-            post(get::batch_handler).layer(axum::middleware::from_fn_with_state(
-                state,
-                crate::api::middleware::link::attach_link_context,
-            )),
-        )
+        .route("/batch", post(get::batch_handler))
+        .layer(axum::middleware::from_fn_with_state(
+            state.email_service,
+            crate::api::middleware::link::attach_link_context,
+        ))
+        .route("/:id", get(get::handler))
 }

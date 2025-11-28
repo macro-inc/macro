@@ -132,7 +132,7 @@ pub async fn get_thread_handler(
     let access_level = if thread.link_id != link.id {
         // call will fail if user doesn't have an access level. otherwise, we can return the thread
         ctx.dss_client
-            .get_thread_access_level(&link.macro_id, &thread.db_id.unwrap().to_string())
+            .get_thread_access_level(link.macro_id.as_ref(), &thread.db_id.unwrap().to_string())
             .await
             .map_err(|e| {
                 tracing::error!(error=?e, "unable to get access level for thread for user");

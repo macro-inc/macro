@@ -27,6 +27,7 @@ type DssSoupState = SoupRouterState<
         FrecencyQueryServiceImpl<FrecencyPgStorage>,
         EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>>,
     >,
+    EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>>,
 >;
 
 #[derive(Clone, FromRef)]

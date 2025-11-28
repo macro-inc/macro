@@ -86,7 +86,7 @@ pub async fn fetch_access_token_for_link(
 ) -> anyhow::Result<String> {
     let cache_key = TokenCacheKey {
         fusion_user_id: link.fusionauth_user_id.clone(),
-        macro_id: link.macro_id.clone(),
+        macro_id: link.macro_id.to_string(),
         provider: link.provider,
     };
 

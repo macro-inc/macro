@@ -1,20 +1,23 @@
 use anyhow::{Context, anyhow};
-use models_email::email::db::link::UserProvider;
+use doppleganger::Mirror;
 use models_email::gmail::history::{GmailHistory, GmailHistoryDb};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
+
+use crate::links::types::DbUserProvider;
 
 #[tracing::instrument(skip(pool), level = "info")]
 pub async fn fetch_history_id_for_link(
     pool: &PgPool,
     email_address: &str,
-    provider: UserProvider,
+    provider: models_email::service::link::UserProvider,
 ) -> anyhow::Result<Option<String>> {
     if email_address.is_empty() {
         return Err(anyhow!("Email address cannot be empty"));
     }
 
     let normalized_email = email_address.to_lowercase();
+    let db_provider = DbUserProvider::mirror(provider);
 
     let result = sqlx::query!(
         r#"
@@ -24,7 +27,7 @@ pub async fn fetch_history_id_for_link(
         WHERE l.email_address = $1 AND l.provider = $2
         "#,
         normalized_email,
-        provider as _
+        db_provider as _
     )
     .fetch_optional(pool)
     .await
@@ -32,7 +35,7 @@ pub async fn fetch_history_id_for_link(
         format!(
             "Failed to fetch history_id for email {} and provider {}",
             email_address,
-            provider.as_str()
+            db_provider.as_str()
         )
     })?;
 

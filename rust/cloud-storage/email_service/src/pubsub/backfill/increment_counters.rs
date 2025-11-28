@@ -123,7 +123,9 @@ async fn handle_attachment_upload(
     job_id: Uuid,
 ) -> Result<(), ProcessingError> {
     // temporarily only enabling for macro emails for testing
-    if !link.macro_id.ends_with("@macro.com") || cfg!(feature = "disable_attachment_upload") {
+    if !link.macro_id.as_ref().ends_with("@macro.com")
+        || cfg!(feature = "disable_attachment_upload")
+    {
         return Ok(());
     }
 
@@ -172,7 +174,7 @@ async fn handle_contacts_sync(ctx: &PubSubContext, link: &Link) -> Result<(), Pr
         link.macro_id
     );
 
-    let mut users = vec![link.macro_id.clone()];
+    let mut users = vec![link.macro_id.to_string()];
     users.extend(
         email_addresses
             .iter()
@@ -235,7 +237,9 @@ async fn handle_thread_completed(
         })?;
 
     // temporarily only for macro emails, for testing
-    if link.macro_id.ends_with("@macro.com") && !cfg!(feature = "disable_attachment_upload") {
+    if link.macro_id.as_ref().ends_with("@macro.com")
+        && !cfg!(feature = "disable_attachment_upload")
+    {
         let attachments =
             email_db_client::attachments::provider::upload::fetch_thread_attachments_for_backfill(
                 &ctx.db,

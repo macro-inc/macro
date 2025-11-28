@@ -1,7 +1,10 @@
 use anyhow::anyhow;
-use models_email::email::{db, service};
+use doppleganger::Mirror;
+use models_email::email::service;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
+
+use crate::links::types::DbUserProvider;
 
 struct LinkId {
     id: Uuid,
@@ -19,11 +22,19 @@ pub async fn upsert_link(
     if service_link.fusionauth_user_id.is_empty() {
         return Err(anyhow!("FusionAuth User ID cannot be empty"));
     }
-    if service_link.email_address.is_empty() {
-        return Err(anyhow!("Email address cannot be empty"));
-    }
 
-    let db_link: db::link::Link = service_link.into();
+    let service::link::Link {
+        id,
+        macro_id,
+        fusionauth_user_id,
+        email_address,
+        provider,
+        is_sync_active,
+        created_at,
+        updated_at,
+    } = service_link;
+
+    let db_provider = DbUserProvider::mirror(provider);
 
     let result = sqlx::query_as!(
         LinkId,
@@ -36,18 +47,26 @@ pub async fn upsert_link(
             updated_at = NOW()
         RETURNING id
         "#,
-        db_link.id,
-        db_link.macro_id,
-        db_link.fusionauth_user_id,
-        db_link.email_address,
-        db_link.provider as _,
-        db_link.is_sync_active
+        id,
+        macro_id.as_ref(),
+        fusionauth_user_id,
+        email_address.0.as_ref(),
+        db_provider as _,
+        is_sync_active
     )
         .fetch_one(pool)
         .await?;
 
-    let mut service_link: service::link::Link = db_link.into();
-    service_link.id = result.id;
+    let service_link = service::link::Link {
+        id: result.id,
+        macro_id,
+        fusionauth_user_id,
+        email_address,
+        provider,
+        is_sync_active,
+        created_at,
+        updated_at,
+    };
 
     let _ = sqlx::query!(
         r#"

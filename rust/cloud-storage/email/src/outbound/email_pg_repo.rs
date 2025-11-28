@@ -1,8 +1,8 @@
 use crate::domain::models::Label;
 use crate::domain::{
     models::{
-        Attachment, AttachmentMacro, Contact, EmailThreadPreview, PreviewCursorQuery, PreviewView,
-        PreviewViewStandardLabel,
+        Attachment, AttachmentMacro, Contact, EmailThreadPreview, Link, PreviewCursorQuery,
+        PreviewView, PreviewViewStandardLabel, UserProvider,
     },
     ports::EmailRepo,
 };
@@ -226,5 +226,38 @@ impl EmailRepo for EmailPgRepo {
         .into_iter()
         .map(LabelDbRow::mirror)
         .collect())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn link_by_fusionauth_and_macro_id(
+        &self,
+        fusionauth_user_id: &str,
+        macro_id: MacroUserIdStr<'_>,
+        provider: UserProvider,
+    ) -> Result<Option<Link>, Self::Err> {
+        let provider: DbUserProvider = match provider {
+            UserProvider::Gmail => DbUserProvider::Gmail,
+        };
+
+        let db_link = sqlx::query_as!(
+            db_types::DbLink,
+            r#"
+            SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
+                   is_sync_active, created_at, updated_at
+            FROM email_links
+            WHERE fusionauth_user_id = $1 AND macro_id = $2 AND provider = $3
+            LIMIT 1
+            "#,
+            fusionauth_user_id,
+            macro_id.as_ref(),
+            provider as _
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        db_link
+            .map(|v| v.try_into_model())
+            .transpose()
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))
     }
 }

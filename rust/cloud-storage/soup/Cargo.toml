@@ -7,9 +7,11 @@ version = "0.1.0"
 [features]
 axum = [
   "dep:axum",
+  "dep:axum-extra",
   "dep:model-error-response",
   "dep:model_user",
   "dep:utoipa",
+  "email/axum",
   "models_pagination/axum",
   "models_soup/schema",
 ]
@@ -21,6 +23,7 @@ ports = ["dep:tokio", "frecency/ports"]
 [dependencies]
 anyhow = { workspace = true }
 axum = { workspace = true, optional = true }
+axum-extra = { workspace = true, optional = true }
 chrono = { workspace = true }
 doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 either = { workspace = true }

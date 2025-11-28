@@ -85,7 +85,7 @@ pub async fn update_thread_metadata(
     // notify search-service about the new thread
     let search_message = SearchQueueMessage::ExtractEmailThreadMessage(EmailThreadMessage {
         thread_id: p.thread_db_id.clone().to_string(),
-        macro_user_id: link.macro_id.clone(),
+        macro_user_id: link.macro_id.to_string(),
     });
 
     ctx.sqs_client
