@@ -59,6 +59,7 @@ export const TOKENS = {
     nextThread: 'email.nextThread',
     previousThread: 'email.previousThread',
     send: 'email.send',
+    sendAndMarkDone: 'email.sendAndMarkDone',
     archive: 'email.archive',
     reply: 'email.reply',
     replyAll: 'email.replyAll',

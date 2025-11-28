@@ -581,6 +581,7 @@ export function Email(props: EmailProps) {
         setFocusedMessageId,
         filteredMessages,
         threadData: props.threadData,
+        archiveThread,
       }}
     >
       <EmailFormContextProvider>
