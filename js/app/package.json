@@ -190,5 +190,8 @@
     "@lexical/markdown@0.32.1": "patches/@lexical%2Fmarkdown@0.32.1.patch",
     "virtua@0.41.5": "patches/virtua@0.41.5.patch",
     "@kobalte/core@0.13.11": "patches/@kobalte%2Fcore@0.13.11.patch"
+  },
+  "overrides": {
+    "cross-spawn": "7.0.6"
   }
 }
