@@ -170,7 +170,7 @@
     "storybook": "^9.1.5",
     "storybook-solidjs-vite": "^9.0.3",
     "typescript": "^5.9.3",
-    "vite": "^6.3.5",
+    "vite": "^6.4.1",
     "vite-plugin-solid": "^2.11.8",
     "vite-plugin-solid-svg": "^0.8.1",
     "vite-tsconfig-paths": "^5.1.4"

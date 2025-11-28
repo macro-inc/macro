@@ -85,7 +85,7 @@ export default defineConfig(({ command, mode }) => {
               entryFileNames: '[name]-[hash].js',
             },
       },
-      assetsInlineLimit: (filePath) => {
+      assetsInlineLimit: (filePath: string) => {
         if (filePath.includes('.wasm')) return false;
         if (filePath.includes('/lok/')) return false;
       },
@@ -137,7 +137,7 @@ export default defineConfig(({ command, mode }) => {
         ],
       },
     },
-  };
+  } as any;
 });
 
 function define(mode: string, command: string) {
