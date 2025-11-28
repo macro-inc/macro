@@ -18,10 +18,11 @@ name = "backfill_useritemaccess"
 path = "src/bin/backfill_useritemaccess/mod.rs"
 
 [features]
-disable_connection_gateway = []
-disable_location_check = []
+connection_gateway = []
+default = ["connection_gateway", "location_check"]
 local = ["local_auth"]
 local_auth = ["macro_middleware/local_auth"]
+location_check = []
 
 [dependencies]
 anyhow = { workspace = true }

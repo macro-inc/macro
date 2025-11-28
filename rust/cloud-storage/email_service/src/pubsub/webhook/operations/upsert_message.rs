@@ -180,7 +180,7 @@ async fn handle_attachment_upload(
 ) -> result::Result<(), ProcessingError> {
     // temporarily only for macro emails, for testing purposes
     if !link.macro_id.0.as_ref().ends_with("@macro.com")
-        || cfg!(feature = "disable_attachment_upload")
+        || cfg!(not(feature = "attachment_upload"))
         || message_attachment_count == 0
     {
         return Ok(());
@@ -238,7 +238,7 @@ async fn handle_contacts_sync(
     provider_message_id: &str,
 ) -> result::Result<(), ProcessingError> {
     // if the user sent the message, upsert contacts for its recipients in contacts-service.
-    if !cfg!(feature = "disable_contacts_sync") || !is_sent || recipient_emails.is_empty() {
+    if cfg!(feature = "contacts_sync") || !is_sent || recipient_emails.is_empty() {
         return Ok(());
     }
 

@@ -1,5 +1,6 @@
 mod run_task;
 use aws_sdk_ecs as ecs;
+use lambda_runtime::tracing;
 #[allow(unused_imports)]
 use mockall::automock;
 
@@ -26,6 +27,10 @@ impl ECSClient {
         cluster: &str,
         subnets: Vec<String>,
     ) -> Result<(), anyhow::Error> {
+        if cfg!(feature = "local") {
+            tracing::trace!("task");
+            return Ok(());
+        }
         run_task::run_task(&self.inner, task_definition, cluster, subnets).await
     }
 }

@@ -23,7 +23,7 @@ pub async fn store_threads_images(
     db: &PgPool,
     sfs_client: &StaticFileServiceClient,
 ) {
-    if cfg!(feature = "disable_sfs_map") {
+    if cfg!(not(feature = "sfs_map")) {
         return;
     }
 
@@ -504,8 +504,8 @@ mod tests {
         );
 
         // Specifically test that data URLs and CID URLs are excluded
-        assert!(!result.contains(&"data:image/png;base64,iVBORw0KGgo".to_string()));
-        assert!(!result.contains(&"cid:content-id-12345".to_string()));
+        assert!(!result.contains("data:image/png;base64,iVBORw0KGgo"));
+        assert!(!result.contains("cid:content-id-12345"));
 
         // Verify deduplication works
         let duplicate_count = result
@@ -604,46 +604,41 @@ mod tests {
         assert_eq!(result, expected_urls);
     }
 
-    #[cfg(test)]
-    mod tests {
-        use super::*;
-        use std::collections::HashMap;
+    #[test]
+    fn test_rewrite_html_image_links_with_src_and_srcset() {
+        // Create a mapping of original URLs to SFS URLs
+        let mut url_map = HashMap::new();
+        url_map.insert(
+            "https://example.com/image1.jpg".to_string(),
+            "https://static-file-service.macro.com/f123/image1.jpg".to_string(),
+        );
+        url_map.insert(
+            "https://example.com/small.jpg".to_string(),
+            "https://static-file-service.macro.com/f124/small.jpg".to_string(),
+        );
+        url_map.insert(
+            "https://example.com/medium.jpg".to_string(),
+            "https://static-file-service.macro.com/f125/medium.jpg".to_string(),
+        );
+        url_map.insert(
+            "https://example.com/large.jpg".to_string(),
+            "https://static-file-service.macro.com/f126/large.jpg".to_string(),
+        );
+        url_map.insert(
+            "https://picsum.photos/600/300".to_string(),
+            "https://static-file-service.macro.com/f127/picsum600.jpg".to_string(),
+        );
+        url_map.insert(
+            "https://picsum.photos/320/160".to_string(),
+            "https://static-file-service.macro.com/f128/picsum320.jpg".to_string(),
+        );
+        url_map.insert(
+            "https://picsum.photos/480/240".to_string(),
+            "https://static-file-service.macro.com/f129/picsum480.jpg".to_string(),
+        );
 
-        #[test]
-        fn test_rewrite_html_image_links_with_src_and_srcset() {
-            // Create a mapping of original URLs to SFS URLs
-            let mut url_map = HashMap::new();
-            url_map.insert(
-                "https://example.com/image1.jpg".to_string(),
-                "https://static-file-service.macro.com/f123/image1.jpg".to_string(),
-            );
-            url_map.insert(
-                "https://example.com/small.jpg".to_string(),
-                "https://static-file-service.macro.com/f124/small.jpg".to_string(),
-            );
-            url_map.insert(
-                "https://example.com/medium.jpg".to_string(),
-                "https://static-file-service.macro.com/f125/medium.jpg".to_string(),
-            );
-            url_map.insert(
-                "https://example.com/large.jpg".to_string(),
-                "https://static-file-service.macro.com/f126/large.jpg".to_string(),
-            );
-            url_map.insert(
-                "https://picsum.photos/600/300".to_string(),
-                "https://static-file-service.macro.com/f127/picsum600.jpg".to_string(),
-            );
-            url_map.insert(
-                "https://picsum.photos/320/160".to_string(),
-                "https://static-file-service.macro.com/f128/picsum320.jpg".to_string(),
-            );
-            url_map.insert(
-                "https://picsum.photos/480/240".to_string(),
-                "https://static-file-service.macro.com/f129/picsum480.jpg".to_string(),
-            );
-
-            // HTML with both src and srcset attributes
-            let original_html = r#"<!DOCTYPE html>
+        // HTML with both src and srcset attributes
+        let original_html = r#"<!DOCTYPE html>
 <html>
 <body>
     <h1>Test Email</h1>
@@ -675,61 +670,53 @@ mod tests {
 </body>
 </html>"#;
 
-            // Call the function to test
-            let result = rewrite_html_image_links(original_html, &url_map).unwrap();
+        // Call the function to test
+        let result = rewrite_html_image_links(original_html, &url_map).unwrap();
 
-            // Check for specific macro.com URLs in the result
-            assert!(
-                result.contains("src=\"https://static-file-service.macro.com/f123/image1.jpg\"")
-            );
-            assert!(
-                result
-                    .contains("srcset=\"https://static-file-service.macro.com/f124/small.jpg 320w")
-            );
-            assert!(result.contains("https://static-file-service.macro.com/f125/medium.jpg 800w"));
-            assert!(
-                result.contains("https://static-file-service.macro.com/f126/large.jpg 1200w\"")
-            );
-            assert!(
-                result.contains("src=\"https://static-file-service.macro.com/f127/picsum600.jpg\"")
-            );
-            assert!(result.contains(
-                "srcset=\"https://static-file-service.macro.com/f128/picsum320.jpg 320w"
-            ));
-            assert!(
-                result.contains("https://static-file-service.macro.com/f129/picsum480.jpg 480w")
-            );
-            assert!(
-                result.contains("https://static-file-service.macro.com/f127/picsum600.jpg 600w\"")
-            );
+        // Check for specific macro.com URLs in the result
+        assert!(result.contains("src=\"https://static-file-service.macro.com/f123/image1.jpg\""));
+        assert!(
+            result.contains("srcset=\"https://static-file-service.macro.com/f124/small.jpg 320w")
+        );
+        assert!(result.contains("https://static-file-service.macro.com/f125/medium.jpg 800w"));
+        assert!(result.contains("https://static-file-service.macro.com/f126/large.jpg 1200w\""));
+        assert!(
+            result.contains("src=\"https://static-file-service.macro.com/f127/picsum600.jpg\"")
+        );
+        assert!(
+            result
+                .contains("srcset=\"https://static-file-service.macro.com/f128/picsum320.jpg 320w")
+        );
+        assert!(result.contains("https://static-file-service.macro.com/f129/picsum480.jpg 480w"));
+        assert!(result.contains("https://static-file-service.macro.com/f127/picsum600.jpg 600w\""));
 
-            // URLs not in the map should remain unchanged
-            assert!(result.contains("src=\"https://example.com/not-in-map.jpg\""));
-            assert!(result.contains("https://example.com/not-in-map-1.jpg 800w"));
-        }
+        // URLs not in the map should remain unchanged
+        assert!(result.contains("src=\"https://example.com/not-in-map.jpg\""));
+        assert!(result.contains("https://example.com/not-in-map-1.jpg 800w"));
+    }
 
-        #[test]
-        fn test_rewrite_html_image_links_with_complex_srcset() {
-            let mut url_map = HashMap::new();
-            url_map.insert(
-                "https://example.com/img-1x.jpg".to_string(),
-                "https://static-file-service.macro.com/a1b2c3/img-1x.jpg".to_string(),
-            );
-            url_map.insert(
-                "https://example.com/img-2x.jpg".to_string(),
-                "https://static-file-service.macro.com/d4e5f6/img-2x.jpg".to_string(),
-            );
-            url_map.insert(
-                "https://example.com/img-3x.jpg".to_string(),
-                "https://static-file-service.macro.com/g7h8i9/img-3x.jpg".to_string(),
-            );
-            url_map.insert(
-                "https://example.com/img-4x.jpg".to_string(),
-                "https://static-file-service.macro.com/j0k1l2/img-4x.jpg".to_string(),
-            );
+    #[test]
+    fn test_rewrite_html_image_links_with_complex_srcset() {
+        let mut url_map = HashMap::new();
+        url_map.insert(
+            "https://example.com/img-1x.jpg".to_string(),
+            "https://static-file-service.macro.com/a1b2c3/img-1x.jpg".to_string(),
+        );
+        url_map.insert(
+            "https://example.com/img-2x.jpg".to_string(),
+            "https://static-file-service.macro.com/d4e5f6/img-2x.jpg".to_string(),
+        );
+        url_map.insert(
+            "https://example.com/img-3x.jpg".to_string(),
+            "https://static-file-service.macro.com/g7h8i9/img-3x.jpg".to_string(),
+        );
+        url_map.insert(
+            "https://example.com/img-4x.jpg".to_string(),
+            "https://static-file-service.macro.com/j0k1l2/img-4x.jpg".to_string(),
+        );
 
-            // Test with density descriptors and unusual formatting
-            let original_html = r#"<!DOCTYPE html>
+        // Test with density descriptors and unusual formatting
+        let original_html = r#"<!DOCTYPE html>
 <html>
 <body>
     <!-- Srcset with density descriptors -->
@@ -749,51 +736,42 @@ mod tests {
 </body>
 </html>"#;
 
-            let result = rewrite_html_image_links(original_html, &url_map).unwrap();
+        let result = rewrite_html_image_links(original_html, &url_map).unwrap();
 
-            // Check density descriptors are preserved with macro.com URLs
-            assert!(
-                result.contains(
-                    "srcset=\"https://static-file-service.macro.com/a1b2c3/img-1x.jpg 1x"
-                )
-            );
-            assert!(result.contains("https://static-file-service.macro.com/d4e5f6/img-2x.jpg 2x"));
-            assert!(
-                result.contains("https://static-file-service.macro.com/g7h8i9/img-3x.jpg 3x\"")
-            );
+        // Check density descriptors are preserved with macro.com URLs
+        assert!(
+            result.contains("srcset=\"https://static-file-service.macro.com/a1b2c3/img-1x.jpg 1x")
+        );
+        assert!(result.contains("https://static-file-service.macro.com/d4e5f6/img-2x.jpg 2x"));
+        assert!(result.contains("https://static-file-service.macro.com/g7h8i9/img-3x.jpg 3x\""));
 
-            // Check unusual formatting is normalized but descriptors preserved
-            assert!(
-                result.contains(
-                    "srcset=\"https://static-file-service.macro.com/a1b2c3/img-1x.jpg 1x, "
-                )
-            );
-            assert!(
-                result.contains("https://static-file-service.macro.com/d4e5f6/img-2x.jpg 2x, ")
-            );
-            assert!(
-                result.contains("https://static-file-service.macro.com/j0k1l2/img-4x.jpg 4x\"")
-            );
-        }
+        // Check unusual formatting is normalized but descriptors preserved
+        assert!(
+            result
+                .contains("srcset=\"https://static-file-service.macro.com/a1b2c3/img-1x.jpg 1x, ")
+        );
+        assert!(result.contains("https://static-file-service.macro.com/d4e5f6/img-2x.jpg 2x, "));
+        assert!(result.contains("https://static-file-service.macro.com/j0k1l2/img-4x.jpg 4x\""));
+    }
 
-        #[test]
-        fn test_rewrite_html_image_links_with_multiple_img_tags() {
-            let mut url_map = HashMap::new();
-            url_map.insert(
-                "https://example.com/banner.jpg".to_string(),
-                "https://static-file-service.macro.com/files/banner-12345.jpg".to_string(),
-            );
-            url_map.insert(
-                "https://example.com/logo.png".to_string(),
-                "https://static-file-service.macro.com/files/logo-67890.png".to_string(),
-            );
-            url_map.insert(
-                "https://example.com/profile.jpg".to_string(),
-                "https://static-file-service.macro.com/files/profile-abcde.jpg".to_string(),
-            );
+    #[test]
+    fn test_rewrite_html_image_links_with_multiple_img_tags() {
+        let mut url_map = HashMap::new();
+        url_map.insert(
+            "https://example.com/banner.jpg".to_string(),
+            "https://static-file-service.macro.com/files/banner-12345.jpg".to_string(),
+        );
+        url_map.insert(
+            "https://example.com/logo.png".to_string(),
+            "https://static-file-service.macro.com/files/logo-67890.png".to_string(),
+        );
+        url_map.insert(
+            "https://example.com/profile.jpg".to_string(),
+            "https://static-file-service.macro.com/files/profile-abcde.jpg".to_string(),
+        );
 
-            // Test with multiple img tags in complex HTML structure
-            let original_html = r#"<!DOCTYPE html>
+        // Test with multiple img tags in complex HTML structure
+        let original_html = r#"<!DOCTYPE html>
 <html>
 <head>
     <title>Test Multiple Images</title>
@@ -816,40 +794,36 @@ mod tests {
 </body>
 </html>"#;
 
-            let result = rewrite_html_image_links(original_html, &url_map).unwrap();
+        let result = rewrite_html_image_links(original_html, &url_map).unwrap();
 
-            // Check all images are rewritten with macro.com URLs
-            assert!(
-                result
-                    .contains("src=\"https://static-file-service.macro.com/files/logo-67890.png\"")
-            );
-            assert!(
-                result.contains(
-                    "src=\"https://static-file-service.macro.com/files/banner-12345.jpg\""
-                )
-            );
-            assert!(
-                result.contains(
-                    "src=\"https://static-file-service.macro.com/files/profile-abcde.jpg\""
-                )
-            );
+        // Check all images are rewritten with macro.com URLs
+        assert!(
+            result.contains("src=\"https://static-file-service.macro.com/files/logo-67890.png\"")
+        );
+        assert!(
+            result.contains("src=\"https://static-file-service.macro.com/files/banner-12345.jpg\"")
+        );
+        assert!(
+            result
+                .contains("src=\"https://static-file-service.macro.com/files/profile-abcde.jpg\"")
+        );
 
-            // Check HTML structure is preserved
-            assert!(result.contains("<header>"));
-            assert!(result.contains("<article>"));
-            assert!(result.contains("<div class=\"profile\">"));
-        }
+        // Check HTML structure is preserved
+        assert!(result.contains("<header>"));
+        assert!(result.contains("<article>"));
+        assert!(result.contains("<div class=\"profile\">"));
+    }
 
-        #[test]
-        fn test_rewrite_html_image_links_with_no_matches() {
-            let mut url_map = HashMap::new();
-            url_map.insert(
-                "https://example.com/not-in-html.jpg".to_string(),
-                "https://static-file-service.macro.com/not-in-html-uuid.jpg".to_string(),
-            );
+    #[test]
+    fn test_rewrite_html_image_links_with_no_matches() {
+        let mut url_map = HashMap::new();
+        url_map.insert(
+            "https://example.com/not-in-html.jpg".to_string(),
+            "https://static-file-service.macro.com/not-in-html-uuid.jpg".to_string(),
+        );
 
-            // Test with no matching URLs
-            let original_html = r#"<!DOCTYPE html>
+        // Test with no matching URLs
+        let original_html = r#"<!DOCTYPE html>
 <html>
 <body>
     <img src="https://example.com/image1.jpg" alt="Image 1">
@@ -859,20 +833,20 @@ mod tests {
 </body>
 </html>"#;
 
-            let result = rewrite_html_image_links(original_html, &url_map).unwrap();
+        let result = rewrite_html_image_links(original_html, &url_map).unwrap();
 
-            // Original HTML should be unchanged
-            assert!(result.contains("src=\"https://example.com/image1.jpg\""));
-            assert!(result.contains("src=\"https://example.com/image2.jpg\""));
-            assert!(result.contains("srcset=\"https://example.com/image2-small.jpg 320w,"));
-            assert!(result.contains("https://example.com/image2-large.jpg 800w\""));
-        }
+        // Original HTML should be unchanged
+        assert!(result.contains("src=\"https://example.com/image1.jpg\""));
+        assert!(result.contains("src=\"https://example.com/image2.jpg\""));
+        assert!(result.contains("srcset=\"https://example.com/image2-small.jpg 320w,"));
+        assert!(result.contains("https://example.com/image2-large.jpg 800w\""));
+    }
 
-        #[test]
-        fn test_rewrite_html_image_links_with_empty_map() {
-            let url_map = HashMap::new();
+    #[test]
+    fn test_rewrite_html_image_links_with_empty_map() {
+        let url_map = HashMap::new();
 
-            let original_html = r#"<!DOCTYPE html>
+        let original_html = r#"<!DOCTYPE html>
 <html>
 <body>
     <img src="https://example.com/image.jpg" alt="Image">
@@ -881,22 +855,22 @@ mod tests {
 </body>
 </html>"#;
 
-            let result = rewrite_html_image_links(original_html, &url_map).unwrap();
+        let result = rewrite_html_image_links(original_html, &url_map).unwrap();
 
-            // Original HTML should be unchanged
-            assert_eq!(result, original_html);
-        }
+        // Original HTML should be unchanged
+        assert_eq!(result, original_html);
+    }
 
-        #[test]
-        fn test_rewrite_html_image_links_maintains_other_attributes() {
-            let mut url_map = HashMap::new();
-            url_map.insert(
-                "https://example.com/image.jpg".to_string(),
-                "https://static-file-service.macro.com/cache/image-uuid123.jpg".to_string(),
-            );
+    #[test]
+    fn test_rewrite_html_image_links_maintains_other_attributes() {
+        let mut url_map = HashMap::new();
+        url_map.insert(
+            "https://example.com/image.jpg".to_string(),
+            "https://static-file-service.macro.com/cache/image-uuid123.jpg".to_string(),
+        );
 
-            // Test that other attributes are preserved
-            let original_html = r#"<!DOCTYPE html>
+        // Test that other attributes are preserved
+        let original_html = r#"<!DOCTYPE html>
 <html>
 <body>
     <img src="https://example.com/image.jpg"
@@ -910,82 +884,85 @@ mod tests {
 </body>
 </html>"#;
 
-            let result = rewrite_html_image_links(original_html, &url_map).unwrap();
+        let result = rewrite_html_image_links(original_html, &url_map).unwrap();
 
-            // Check URL is rewritten with macro.com URL
-            assert!(
-                result.contains(
-                    "src=\"https://static-file-service.macro.com/cache/image-uuid123.jpg\""
-                )
-            );
+        // Check URL is rewritten with macro.com URL
+        assert!(
+            result
+                .contains("src=\"https://static-file-service.macro.com/cache/image-uuid123.jpg\"")
+        );
 
-            // Check other attributes are preserved
-            assert!(result.contains("alt=\"Description\""));
-            assert!(result.contains("width=\"300\""));
-            assert!(result.contains("height=\"200\""));
-            assert!(result.contains("loading=\"lazy\""));
-            assert!(result.contains("class=\"responsive-image\""));
-            assert!(result.contains("id=\"hero-image\""));
-            assert!(result.contains("data-custom=\"value\""));
-        }
+        // Check other attributes are preserved
+        assert!(result.contains("alt=\"Description\""));
+        assert!(result.contains("width=\"300\""));
+        assert!(result.contains("height=\"200\""));
+        assert!(result.contains("loading=\"lazy\""));
+        assert!(result.contains("class=\"responsive-image\""));
+        assert!(result.contains("id=\"hero-image\""));
+        assert!(result.contains("data-custom=\"value\""));
+    }
 
-        #[test]
-        fn test_rewrite_html_image_links_with_whitespace_in_urls() {
-            let mut url_map = HashMap::new();
-            url_map.insert(
-                "https://example.com/image.jpg".to_string(),
-                "https://static-file-service.macro.com/whitespace-test/image.jpg".to_string(),
-            );
+    #[test]
+    fn test_rewrite_html_image_links_with_whitespace_in_urls() {
+        let mut url_map = HashMap::new();
+        url_map.insert(
+            "https://example.com/image.jpg".to_string(),
+            "https://static-file-service.macro.com/whitespace-test/image.jpg".to_string(),
+        );
 
-            // Test with whitespace in URLs
-            let original_html = r#"<!DOCTYPE html>
+        // Test with whitespace in URLs
+        let original_html = r#"<!DOCTYPE html>
 <html>
 <body>
     <img src="  https://example.com/image.jpg  " alt="Image with whitespace">
 </body>
 </html>"#;
 
-            let result = rewrite_html_image_links(original_html, &url_map).unwrap();
+        let result = rewrite_html_image_links(original_html, &url_map).unwrap();
 
-            // Check URL is rewritten despite whitespace with macro.com URL
-            assert!(result.contains(
+        // Check URL is rewritten despite whitespace with macro.com URL
+        assert!(
+            result.contains(
                 "src=\"https://static-file-service.macro.com/whitespace-test/image.jpg\""
-            ));
-        }
+            )
+        );
+    }
 
-        #[test]
-        fn test_rewrite_html_image_links_with_malformed_html() {
-            let mut url_map = HashMap::new();
-            url_map.insert(
-                "https://example.com/image.jpg".to_string(),
-                "https://static-file-service.macro.com/malformed/image-abc123.jpg".to_string(),
-            );
+    #[test]
+    fn test_rewrite_html_image_links_with_malformed_html() {
+        let mut url_map = HashMap::new();
+        url_map.insert(
+            "https://example.com/image.jpg".to_string(),
+            "https://static-file-service.macro.com/malformed/image-abc123.jpg".to_string(),
+        );
 
-            // Test with malformed HTML
-            let malformed_html = r#"<img src="https://example.com/image.jpg" alt="Unclosed tag"
+        // Test with malformed HTML
+        let malformed_html = r#"<img src="https://example.com/image.jpg" alt="Unclosed tag"
 <p>Missing closing tag
 <div>Nested unclosed tags
 <img src="https://example.com/image.jpg">"#;
 
-            // The function should still work with malformed HTML
-            let result = rewrite_html_image_links(malformed_html, &url_map).unwrap();
+        // The function should still work with malformed HTML
+        let result = rewrite_html_image_links(malformed_html, &url_map).unwrap();
 
-            // Check URL is still rewritten with macro.com URL
-            assert!(result.contains(
+        // Check URL is still rewritten with macro.com URL
+        assert!(
+            result.contains(
                 "src=\"https://static-file-service.macro.com/malformed/image-abc123.jpg\""
-            ));
-        }
+            )
+        );
+    }
 
-        #[test]
-        fn test_rewrite_html_image_links_with_html_entities() {
-            let mut url_map = HashMap::new();
-            url_map.insert(
-                "https://example.com/image.jpg".to_string(),
-                "https://static-file-service.macro.com/entities-test/image-xyz789.jpg".to_string(),
-            );
+    #[test]
+    fn test_rewrite_html_image_links_with_html_entities() {
+        let mut url_map = HashMap::new();
+        url_map.insert(
+            "https://example.com/image.jpg".to_string(),
+            "https://static-file-service.macro.com/entities-test/image-xyz789.jpg".to_string(),
+        );
 
-            // Test with HTML entities in the document
-            let html_with_entities = r#"<!DOCTYPE html>
+        // Test with HTML entities in the document
+        let html_with_entities = r#"<!DOCTYPE html>
 <html>
 <body>
     <p>Text with &amp; entity and &quot;quotes&quot;</p>
@@ -993,32 +970,30 @@ mod tests {
 </body>
 </html>"#;
 
-            let result = rewrite_html_image_links(html_with_entities, &url_map).unwrap();
+        let result = rewrite_html_image_links(html_with_entities, &url_map).unwrap();
 
-            // Check URL is rewritten with macro.com URL and entities are preserved
-            assert!(result.contains(
-                "src=\"https://static-file-service.macro.com/entities-test/image-xyz789.jpg\""
-            ));
-            assert!(result.contains("&amp; entity"));
-            assert!(result.contains("&quot;quotes&quot;"));
-        }
+        // Check URL is rewritten with macro.com URL and entities are preserved
+        assert!(result.contains(
+            "src=\"https://static-file-service.macro.com/entities-test/image-xyz789.jpg\""
+        ));
+        assert!(result.contains("&amp; entity"));
+        assert!(result.contains("&quot;quotes&quot;"));
+    }
 
-        #[test]
-        fn test_rewrite_html_image_links_with_multiple_srcset_attributes() {
-            let mut url_map = HashMap::new();
-            url_map.insert(
-                "https://example.com/image-1.jpg".to_string(),
-                "https://static-file-service.macro.com/multi-srcset/image-1-uuid456.jpg"
-                    .to_string(),
-            );
-            url_map.insert(
-                "https://example.com/image-2.jpg".to_string(),
-                "https://static-file-service.macro.com/multi-srcset/image-2-uuid789.jpg"
-                    .to_string(),
-            );
+    #[test]
+    fn test_rewrite_html_image_links_with_multiple_srcset_attributes() {
+        let mut url_map = HashMap::new();
+        url_map.insert(
+            "https://example.com/image-1.jpg".to_string(),
+            "https://static-file-service.macro.com/multi-srcset/image-1-uuid456.jpg".to_string(),
+        );
+        url_map.insert(
+            "https://example.com/image-2.jpg".to_string(),
+            "https://static-file-service.macro.com/multi-srcset/image-2-uuid789.jpg".to_string(),
+        );
 
-            // Multiple img tags with srcset
-            let original_html = r#"<!DOCTYPE html>
+        // Multiple img tags with srcset
+        let original_html = r#"<!DOCTYPE html>
 <html>
 <body>
     <img srcset="https://example.com/image-1.jpg 1x" alt="First image">
@@ -1026,43 +1001,47 @@ mod tests {
 </body>
 </html>"#;
 
-            let result = rewrite_html_image_links(original_html, &url_map).unwrap();
+        let result = rewrite_html_image_links(original_html, &url_map).unwrap();
 
-            // Check both srcsets are rewritten with macro.com URLs
-            assert!(result.contains("srcset=\"https://static-file-service.macro.com/multi-srcset/image-1-uuid456.jpg 1x\""));
-            assert!(result.contains("srcset=\"https://static-file-service.macro.com/multi-srcset/image-2-uuid789.jpg 1x\""));
-        }
+        // Check both srcsets are rewritten with macro.com URLs
+        assert!(result.contains(
+            "srcset=\"https://static-file-service.macro.com/multi-srcset/image-1-uuid456.jpg 1x\""
+        ));
+        assert!(result.contains(
+            "srcset=\"https://static-file-service.macro.com/multi-srcset/image-2-uuid789.jpg 1x\""
+        ));
+    }
 
-        #[test]
-        fn test_rewrite_html_image_links_with_realistic_email_template() {
-            let mut url_map = HashMap::new();
-            url_map.insert(
-                "https://example.com/header-logo.png".to_string(),
-                "https://static-file-service.macro.com/email/header-logo-e7d9f2.png".to_string(),
-            );
-            url_map.insert(
-                "https://example.com/hero-small.jpg".to_string(),
-                "https://static-file-service.macro.com/email/hero-small-a1b2c3.jpg".to_string(),
-            );
-            url_map.insert(
-                "https://example.com/hero-medium.jpg".to_string(),
-                "https://static-file-service.macro.com/email/hero-medium-d4e5f6.jpg".to_string(),
-            );
-            url_map.insert(
-                "https://example.com/hero-large.jpg".to_string(),
-                "https://static-file-service.macro.com/email/hero-large-g7h8i9.jpg".to_string(),
-            );
-            url_map.insert(
-                "https://example.com/product-1.jpg".to_string(),
-                "https://static-file-service.macro.com/email/product-1-j0k1l2.jpg".to_string(),
-            );
-            url_map.insert(
-                "https://example.com/footer-logo.png".to_string(),
-                "https://static-file-service.macro.com/email/footer-logo-m3n4p5.png".to_string(),
-            );
+    #[test]
+    fn test_rewrite_html_image_links_with_realistic_email_template() {
+        let mut url_map = HashMap::new();
+        url_map.insert(
+            "https://example.com/header-logo.png".to_string(),
+            "https://static-file-service.macro.com/email/header-logo-e7d9f2.png".to_string(),
+        );
+        url_map.insert(
+            "https://example.com/hero-small.jpg".to_string(),
+            "https://static-file-service.macro.com/email/hero-small-a1b2c3.jpg".to_string(),
+        );
+        url_map.insert(
+            "https://example.com/hero-medium.jpg".to_string(),
+            "https://static-file-service.macro.com/email/hero-medium-d4e5f6.jpg".to_string(),
+        );
+        url_map.insert(
+            "https://example.com/hero-large.jpg".to_string(),
+            "https://static-file-service.macro.com/email/hero-large-g7h8i9.jpg".to_string(),
+        );
+        url_map.insert(
+            "https://example.com/product-1.jpg".to_string(),
+            "https://static-file-service.macro.com/email/product-1-j0k1l2.jpg".to_string(),
+        );
+        url_map.insert(
+            "https://example.com/footer-logo.png".to_string(),
+            "https://static-file-service.macro.com/email/footer-logo-m3n4p5.png".to_string(),
+        );
 
-            // Realistic email template with multiple images
-            let original_html = r#"<!DOCTYPE html>
+        // Realistic email template with multiple images
+        let original_html = r#"<!DOCTYPE html>
 <html>
 <head>
     <title>Monthly Newsletter</title>
@@ -1095,30 +1074,35 @@ mod tests {
 </body>
 </html>"#;
 
-            let result = rewrite_html_image_links(original_html, &url_map).unwrap();
+        let result = rewrite_html_image_links(original_html, &url_map).unwrap();
 
-            // Check all URLs are replaced with macro.com URLs
-            assert!(result.contains(
-                "src=\"https://static-file-service.macro.com/email/header-logo-e7d9f2.png\""
-            ));
-            assert!(result.contains(
-                "src=\"https://static-file-service.macro.com/email/hero-medium-d4e5f6.jpg\""
-            ));
-            assert!(result.contains(
-                "srcset=\"https://static-file-service.macro.com/email/hero-small-a1b2c3.jpg 320w,"
-            ));
-            assert!(result.contains(
+        // Check all URLs are replaced with macro.com URLs
+        assert!(result.contains(
+            "src=\"https://static-file-service.macro.com/email/header-logo-e7d9f2.png\""
+        ));
+        assert!(result.contains(
+            "src=\"https://static-file-service.macro.com/email/hero-medium-d4e5f6.jpg\""
+        ));
+        assert!(result.contains(
+            "srcset=\"https://static-file-service.macro.com/email/hero-small-a1b2c3.jpg 320w,"
+        ));
+        assert!(
+            result.contains(
                 "https://static-file-service.macro.com/email/hero-medium-d4e5f6.jpg 600w,"
-            ));
-            assert!(result.contains(
+            )
+        );
+        assert!(
+            result.contains(
                 "https://static-file-service.macro.com/email/hero-large-g7h8i9.jpg 1200w\""
-            ));
-            assert!(result.contains(
+            )
+        );
+        assert!(
+            result.contains(
                 "src=\"https://static-file-service.macro.com/email/product-1-j0k1l2.jpg\""
-            ));
-            assert!(result.contains(
-                "src=\"https://static-file-service.macro.com/email/footer-logo-m3n4p5.png\""
-            ));
-        }
+            )
+        );
+        assert!(result.contains(
+            "src=\"https://static-file-service.macro.com/email/footer-logo-m3n4p5.png\""
+        ));
     }
 }

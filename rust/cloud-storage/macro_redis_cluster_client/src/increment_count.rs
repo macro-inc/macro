@@ -1,8 +1,7 @@
+use super::{SHA_COUNT_KEY_PREFIX, SHA_DELETE_BUCKET};
 use anyhow::Context;
 use redis::AsyncCommands;
 use tracing::instrument;
-
-use super::{SHA_COUNT_KEY_PREFIX, SHA_DELETE_BUCKET};
 
 #[instrument(skip(client))]
 pub(crate) async fn increment_count(
@@ -73,6 +72,7 @@ mod tests {
     use redis::Commands;
 
     #[tokio::test]
+    #[ignore = "Redis cluster doesn't exist in CI"]
     async fn test_increment_count() {
         let redis_client = redis::cluster::ClusterClient::new(vec!["redis://localhost:6369"])
             .expect("could not connect to redis client");
@@ -101,6 +101,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Redis cluster doesn't exist in CI"]
     async fn test_increment_counts() {
         let redis_client = redis::cluster::ClusterClient::new(vec!["redis://localhost:6369"])
             .expect("could not connect to redis client");

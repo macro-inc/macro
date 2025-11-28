@@ -8,8 +8,7 @@ pub(in crate::service::s3) async fn delete_objects(
     bucket: &str,
     objects: Vec<String>,
 ) -> anyhow::Result<()> {
-    #[cfg(feature = "local")]
-    {
+    if cfg!(feature = "local") {
         return Ok(());
     }
 
@@ -46,8 +45,7 @@ pub(in crate::service::s3) async fn delete_document(
     user_id: &str,
     document_id: &str,
 ) -> anyhow::Result<()> {
-    #[cfg(feature = "local")]
-    {
+    if cfg!(feature = "local") {
         return Ok(());
     }
 

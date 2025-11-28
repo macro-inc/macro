@@ -22,12 +22,17 @@ name = "backfill_search"
 path = "src/bin/backfill_search/backfill_search.rs"
 
 [features]
-disable_attachment_upload = []
-disable_connection_gateway = []
-disable_contacts_sync = []
-disable_gmail_webhook_auth = []
-disable_sfs_map = []
+attachment_upload = []
+connection_gateway = []
+contacts_sync = []
+default = [
+  "attachment_upload",
+  "connection_gateway",
+  "contacts_sync",
+  "sfs_map",
+]
 local_queue = []
+sfs_map = []
 
 [dependencies]
 anyhow = { workspace = true }

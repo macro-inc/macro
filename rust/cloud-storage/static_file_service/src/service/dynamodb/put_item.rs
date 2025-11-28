@@ -54,6 +54,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Dynamodb doesn't exist in CI"]
     async fn test_put_item_with_transaction() -> Result<()> {
         let client = create_test_client().await?;
         let test_id = "test_transaction_id";
@@ -122,6 +123,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Dynamodb doesn't exist in CI"]
     async fn test_put_item_idempotency() -> Result<()> {
         let client = create_test_client().await?;
         let test_id = "test_idempotency_id";

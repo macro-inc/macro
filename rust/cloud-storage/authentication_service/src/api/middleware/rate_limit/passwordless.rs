@@ -27,8 +27,7 @@ pub(in crate::api) async fn handler(
     req: Request,
     next: Next,
 ) -> Result<Response, Response> {
-    #[cfg(feature = "disable_rate_limit")]
-    {
+    if cfg!(not(feature = "rate_limit")) {
         tracing::trace!("rate limit disabled");
         return Ok(next.run(req).await);
     }
