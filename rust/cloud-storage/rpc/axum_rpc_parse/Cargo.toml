@@ -1,0 +1,11 @@
+[package]
+edition = "2024"
+name = "axum_rpc_parse"
+version = "0.1.0"
+
+[dependencies]
+quote = "1.0.42"
+unsynn = "0.3"
+
+[dev-dependencies]
+cool_asserts = "2"
