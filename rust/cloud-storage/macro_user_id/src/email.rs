@@ -113,6 +113,15 @@ pub struct EmailStr<'a>(pub Email<ArcCowStr<'a>>);
 
 impl<'a> doppleganger::Primitive for EmailStr<'a> {}
 
+impl<'a> EmailStr<'a> {
+    /// parse the inner value from the input string
+    pub fn parse_from_str(s: &'a str) -> Result<Self, ParseErr> {
+        <Email<ArcCowStr>>::parse_from_str(s)
+            .map(EmailStr)
+            .map_err(ParseErr::from)
+    }
+}
+
 impl TryFrom<String> for EmailStr<'static> {
     type Error = ParseErr;
 

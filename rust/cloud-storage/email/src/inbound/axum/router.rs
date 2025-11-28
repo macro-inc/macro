@@ -86,13 +86,15 @@ async fn cursor_handler<T: EmailService>(
                 link_id: link.id,
                 macro_id: macro_user.macro_user_id,
                 limit: params.limit,
-                query: cursor.into_query(
-                    params
-                        .sort_method
-                        .map(|v| v.into_simple_sort())
-                        .unwrap_or(SimpleSortMethod::ViewedUpdated),
-                    (),
-                ),
+                query: cursor
+                    .into_query(
+                        params
+                            .sort_method
+                            .map(|v| v.into_simple_sort())
+                            .unwrap_or(SimpleSortMethod::ViewedUpdated),
+                        (),
+                    )
+                    .map_filter(|_| None),
             })
             .await?
             .type_erase(),
