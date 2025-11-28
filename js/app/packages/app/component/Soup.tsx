@@ -10,7 +10,6 @@ import { Button } from '@core/component/FormControls/Button';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { ENABLE_FOLDER_UPLOAD } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { BlockOrchestrator } from '@core/orchestrator';
@@ -370,7 +369,6 @@ export function Soup() {
           setIsDragging(true);
         },
         onDragEnd: () => setIsDragging(false),
-        folder: ENABLE_FOLDER_UPLOAD,
       }}
     >
       <Show when={isDragging() || droppable.isActiveDroppable}>

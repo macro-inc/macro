@@ -4,7 +4,6 @@ import { PROJECT_VIEWCONFIG_BASE } from '@app/component/ViewConfig';
 import { getIsSpecialProject } from '@block-project/isSpecial';
 import { useBlockId } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
-import { ENABLE_FOLDER_UPLOAD } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { fileSelector } from '@core/directive/fileSelector';
 import {
@@ -121,7 +120,6 @@ const Block: Component = () => {
             handleFileFolderDrop(fileEntries, folderEntries, handleFileUpload);
           },
           disabled: isSpecialProject,
-          folder: ENABLE_FOLDER_UPLOAD,
         }}
       >
         <Show when={isDragging() && !isSpecialProject}>
@@ -131,12 +129,7 @@ const Block: Component = () => {
               Upload to {name() ?? 'folder'}
             </h3>
             <p class="text-sm text-ink-muted">
-              <Show
-                when={ENABLE_FOLDER_UPLOAD}
-                fallback="Drop files here to upload"
-              >
-                Drop files or folders here to upload
-              </Show>
+              Drop files or folders here to upload
             </p>
           </div>
         </Show>

@@ -1,4 +1,5 @@
 import { toast } from '@core/component/Toast/Toast';
+import { extractFileSystemEntries } from '@core/util/dataTransfer';
 import { fileExtension } from '@service-storage/util/filename';
 import { type Accessor, onCleanup } from 'solid-js';
 
@@ -150,24 +151,10 @@ export function fileDrop(
     options?.onMouseUp?.(e.pageX, e.pageY);
 
     // Check for directories using dataTransfer.items
-    const items = e.dataTransfer?.items;
-    if (items && items.length > 0) {
-      let hasDirectory = false;
-      for (let i = 0; i < items.length; i++) {
-        const item = items[i];
-        if (item.kind === 'file') {
-          const entry = item.webkitGetAsEntry();
-          if (entry?.isDirectory) {
-            hasDirectory = true;
-            break;
-          }
-        }
-      }
-
-      if (hasDirectory) {
-        toast.failure('Folder upload not supported here');
-        return;
-      }
+    const { directoryEntries } = extractFileSystemEntries(e.dataTransfer);
+    if (directoryEntries.length > 0) {
+      toast.failure('Folder upload not supported here');
+      return;
     }
 
     const files = e.dataTransfer?.files;

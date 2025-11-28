@@ -7,10 +7,11 @@ import { SplitToolbarLeft } from '@app/component/split-layout/components/SplitTo
 import { isInBlock } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-import { fileDrop } from '@core/directive/fileDrop';
+import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import { useDisplayName, type WithCustomUserInput } from '@core/user';
+import { handleFileFolderDrop } from '@core/util/upload';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import {
@@ -20,7 +21,7 @@ import {
 import { handleFileUpload } from '../utils/inputAttachments';
 import { DraftChannelInput } from './ChannelInput';
 
-false && fileDrop;
+false && fileFolderDrop;
 
 export function ChannelCompose() {
   const [channelName, setChannelName] = createSignal<string>('');
@@ -110,16 +111,15 @@ export function ChannelCompose() {
       </SplitToolbarLeft>
       <div
         class="relative flex flex-col w-full h-full panel"
-        use:fileDrop={{
-          onDrop: (files) => {
-            const inputAttachmentsStoreObj = {
-              store: channelInputAttachmentsStore,
-              setStore: setChannelInputAttachmentsStore,
-              key: 'draft',
-            };
-            handleFileUpload(files, inputAttachmentsStoreObj, () => {
-              setIsDraggingOverChannel(false);
-            });
+        use:fileFolderDrop={{
+          onDrop: (files, folders) => {
+            handleFileFolderDrop(files, folders, (uploadEntries) =>
+              handleFileUpload(uploadEntries, {
+                store: channelInputAttachmentsStore,
+                setStore: setChannelInputAttachmentsStore,
+                key: 'draft',
+              })
+            );
           },
           onDragStart: () => {
             setIsDraggedOver(true);

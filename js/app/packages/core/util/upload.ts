@@ -81,7 +81,7 @@ export type UploadInput = File | UploadFileEntry;
 const getFileName = (file: File) =>
   filenameWithoutExtension(file.name) ?? file.name;
 
-const isFileUploadEntry = (
+export const isFileUploadEntry = (
   file: File | UploadFileEntry
 ): file is UploadFileEntry => 'isFolder' in file;
 
