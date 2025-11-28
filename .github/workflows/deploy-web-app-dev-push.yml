@@ -38,6 +38,7 @@ jobs:
       DD_API_KEY: ${{ secrets.DD_API_KEY }}
       DD_WEB_APP_ID: ${{ secrets.DD_WEB_APP_ID }}
       DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
+      SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
 
   deploy_web_services:
     needs: [check-to-deploy]

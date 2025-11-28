@@ -44,6 +44,7 @@ jobs:
           VITE_DD_WEB_APP_ID: ${{ secrets.DD_WEB_APP_ID }}
           VITE_DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
           VITE_DD_HASH: ${{ github.sha }}
+          VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
