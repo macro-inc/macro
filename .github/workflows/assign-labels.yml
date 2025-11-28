@@ -16,7 +16,7 @@ jobs:
           fetch-depth: 0
       - name: Get changed files
         id: changed-files
-        uses: tj-actions/changed-files@v44
+        uses: tj-actions/changed-files@v47
       - name: Label based on paths
         uses: actions/github-script@v7
         with:
