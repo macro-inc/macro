@@ -13,12 +13,6 @@ pub struct ChatMessage {
 }
 
 #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
-pub struct UpdateChatMessageMetadata {
-    /// The chat id
-    pub chat_id: String,
-}
-
-#[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq, Eq)]
 pub struct RemoveChatMessage {
     /// The chat id to remove
     pub chat_id: String,

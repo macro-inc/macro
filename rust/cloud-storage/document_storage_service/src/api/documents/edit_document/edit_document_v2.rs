@@ -13,7 +13,7 @@ use model::{
 use models_opensearch::SearchEntityType;
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
 use models_permissions::share_permission::access_level::AccessLevel;
-use sqs_client::search::{SearchQueueMessage, document::DocumentId, name::EntityName};
+use sqs_client::search::{SearchQueueMessage, name::EntityName};
 use tracing::Instrument;
 
 pub async fn edit_document(
@@ -102,18 +102,6 @@ pub async fn edit_document(
                         EntityName {
                             entity_id: document_id,
                             entity_type: SearchEntityType::Documents,
-                        },
-                    ))
-                    .await
-                    .inspect_err(|e| {
-                        tracing::error!(error=?e, "SEARCH_QUEUE unable to enqueue message");
-                    });
-
-                // TODO: remove once we have fully moved to names index
-                let _ = sqs_client
-                    .send_message_to_search_event_queue(SearchQueueMessage::UpdateDocumentMetadata(
-                        DocumentId {
-                            document_id: document_id.to_string(),
                         },
                     ))
                     .await
