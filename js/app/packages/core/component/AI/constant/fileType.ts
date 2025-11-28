@@ -323,6 +323,7 @@ export const SUPPORTED_ATTACHMENT_EXTENSIONS = [
 export const SUPPORTED_CHAT_ATTACHMENT_BLOCKS: BlockName[] = [
   'image',
   'channel',
+  'email',
   'write',
   'pdf',
   'md',
