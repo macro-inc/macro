@@ -4,12 +4,19 @@ use crate::domain::{
 };
 use axum::{
     Json, Router,
-    extract::{Query, State},
+    extract::{FromRef, Query, State},
     http::StatusCode,
     response::IntoResponse,
     routing::{get, post},
 };
-use email::domain::models::PreviewView;
+use axum_extra::extract::Cached;
+use email::{
+    domain::{
+        models::{Link, PreviewView},
+        ports::EmailService,
+    },
+    inbound::{EmailLinkExtractor, EmailPreviewState},
+};
 use item_filters::{
     EntityFilters,
     ast::{EntityFilterAst, ExpandErr},
@@ -73,31 +80,42 @@ pub struct SoupPage {
     next_cursor: Option<String>,
 }
 
-pub struct SoupRouterState<T> {
+pub struct SoupRouterState<T, U> {
     service: Arc<T>,
+    email: EmailPreviewState<U>,
 }
 
-impl<T> Clone for SoupRouterState<T> {
+impl<T, U> Clone for SoupRouterState<T, U> {
     fn clone(&self) -> Self {
         Self {
             service: self.service.clone(),
+            email: self.email.clone(),
         }
     }
 }
 
-impl<T> SoupRouterState<T>
+impl<T, U> FromRef<SoupRouterState<T, U>> for EmailPreviewState<U> {
+    fn from_ref(input: &SoupRouterState<T, U>) -> Self {
+        input.email.clone()
+    }
+}
+
+impl<T, U> SoupRouterState<T, U>
 where
     T: SoupService,
+    U: EmailService,
 {
-    pub fn new(service: T) -> Self {
+    pub fn new(service: T, email: U) -> Self {
         SoupRouterState {
             service: Arc::new(service),
+            email: EmailPreviewState::new(email),
         }
     }
 
     async fn handle(
         &self,
         macro_user_id: MacroUserIdStr<'static>,
+        email_link: Link,
         PostSoupRequest { filters, params }: PostSoupRequest,
         cursor: SoupCursor,
     ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr> {
@@ -144,7 +162,7 @@ where
                 email_preview_view: PreviewView::StandardLabel(
                     email::domain::models::PreviewViewStandardLabel::Inbox,
                 ),
-                link_id: Uuid::nil(),
+                link_id: email_link.id,
             })
             .await?;
 
@@ -154,9 +172,10 @@ where
     }
 }
 
-pub fn soup_router<T, S>(state: SoupRouterState<T>) -> Router<S>
+pub fn soup_router<T, U, S>(state: SoupRouterState<T, U>) -> Router<S>
 where
     T: SoupService,
+    U: EmailService,
     S: Send + Sync,
 {
     Router::new()
@@ -221,18 +240,21 @@ impl IntoResponse for SoupHandlerErr {
             (status = 500, body=ErrorResponse),
     )
 )]
-pub async fn get_soup_handler<T>(
-    State(service): State<SoupRouterState<T>>,
-    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
+pub async fn get_soup_handler<T, U>(
+    State(service): State<SoupRouterState<T, U>>,
+    Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
+    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<U>>,
     Query(params): Query<Params>,
     cursor: SoupCursor,
 ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
 where
     T: SoupService,
+    U: EmailService,
 {
     service
         .handle(
             macro_user_id,
+            link,
             PostSoupRequest {
                 params,
                 filters: Default::default(),
@@ -268,16 +290,18 @@ type SoupCursor = EitherWrapper<
             (status = 500, body=ErrorResponse),
     )
 )]
-pub async fn post_soup_handler<T>(
-    State(service): State<SoupRouterState<T>>,
-    MacroUserExtractor { macro_user_id, .. }: MacroUserExtractor,
+pub async fn post_soup_handler<T, U>(
+    State(service): State<SoupRouterState<T, U>>,
+    Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
+    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<U>>,
     cursor: SoupCursor,
     Json(post_soup_request): Json<PostSoupRequest>,
 ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
 where
     T: SoupService,
+    U: EmailService,
 {
     service
-        .handle(macro_user_id, post_soup_request, cursor)
+        .handle(macro_user_id, link, post_soup_request, cursor)
         .await
 }

@@ -1,10 +1,7 @@
 //! This crate provides the utilities to compute aggregate frecency scores from some input event
 use chrono::{DateTime, Utc};
 use item_filters::ast::EntityFilterAst;
-use macro_user_id::{
-    cowlike::CowLike,
-    user_id::{MacroUserIdStr, ParseErr},
-};
+use macro_user_id::{cowlike::CowLike, error::ParseErr, user_id::MacroUserIdStr};
 use model_entity::{
     Entity, TrackAction, TrackingData,
     as_owned::{IntoOwned, ShallowClone},

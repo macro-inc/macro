@@ -1,7 +1,7 @@
 use crate::domain::ports::MockSoupRepo;
 use chrono::Days;
 use cool_asserts::assert_matches;
-use email::domain::models::{EnrichedEmailThreadPreview, PreviewView};
+use email::domain::models::{EmailErr, EnrichedEmailThreadPreview, PreviewView};
 use frecency::domain::models::FrecencyPageResponse;
 use frecency::domain::ports::MockFrecencyQueryService;
 use frecency::domain::services::FrecencyQueryServiceImpl;
@@ -31,6 +31,14 @@ impl EmailService for NoopEmailService {
             .into_iter()
             .paginate_on(0, SimpleSortMethod::CreatedAt)
             .into_page())
+    }
+
+    async fn get_link_by_auth_id_and_macro_id(
+        &self,
+        _auth_id: &str,
+        _macro_id: MacroUserIdStr<'_>,
+    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
     }
 }
 

@@ -130,7 +130,7 @@ pub async fn fetch_pubsub_gmail_token(
 ) -> result::Result<String, ProcessingError> {
     let cache_key = cache::TokenCacheKey::new(
         &link.fusionauth_user_id,
-        &link.macro_id,
+        link.macro_id.0.as_ref(),
         UserProvider::Gmail,
     );
 

@@ -4,10 +4,7 @@ use axum::{
     http::{StatusCode, request::Parts},
     response::IntoResponse,
 };
-use macro_user_id::{
-    cowlike::CowLike,
-    user_id::{MacroUserIdStr, ParseErr},
-};
+use macro_user_id::{cowlike::CowLike, error::ParseErr, user_id::MacroUserIdStr};
 use thiserror::Error;
 
 use crate::UserContext;
@@ -30,6 +27,7 @@ impl IntoResponse for UserExtractorErr {
 }
 
 #[non_exhaustive]
+#[derive(Clone)]
 pub struct MacroUserExtractor {
     pub macro_user_id: MacroUserIdStr<'static>,
     pub user_context: UserContext,

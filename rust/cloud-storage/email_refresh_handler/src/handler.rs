@@ -5,8 +5,14 @@ use lambda_runtime::{
     Error, LambdaEvent,
     tracing::{self},
 };
-use models_email::email::db::link::UserProvider;
 use models_email::email::service::pubsub::RefreshMessage;
+use sqlx::Type;
+
+#[derive(Type, Debug, Clone, Copy)]
+#[sqlx(type_name = "email_user_provider_enum", rename_all = "UPPERCASE")]
+pub enum DbUserProvider {
+    Gmail,
+}
 
 #[tracing::instrument(skip(ctx, _event))]
 pub async fn handler(
@@ -14,7 +20,7 @@ pub async fn handler(
     _event: LambdaEvent<EventBridgeEvent>,
 ) -> Result<(), Error> {
     let current_hour = chrono::Utc::now().hour() as i32;
-    let provider_filter = UserProvider::Gmail;
+    let provider_filter = DbUserProvider::Gmail;
 
     // uses the index idx_links_active_provider_hash_bucket
     let notifications = sqlx::query_as!(

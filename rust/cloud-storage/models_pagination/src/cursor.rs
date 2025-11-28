@@ -68,6 +68,11 @@ pub trait Sortable: std::fmt::Debug {
     type Value: std::fmt::Debug + std::cmp::Ord;
 }
 
+enum Direction {
+    Asc,
+    Desc,
+}
+
 /// Intermediary struct which holds information about the page we are going to create.
 /// The only use for this struct is to call [Paginator::into_page]
 pub struct Paginator<Iter, Cb, S, F> {
@@ -76,7 +81,7 @@ pub struct Paginator<Iter, Cb, S, F> {
     cb: Cb,
     sort_on: PhantomData<S>,
     filter_on: F,
-    ensure_sort: bool,
+    ensure_sort: Option<Direction>,
 }
 
 impl<Iter, Cb, S> Paginator<Iter, Cb, S, ()> {
@@ -154,7 +159,7 @@ where
             cb,
             sort_on: PhantomData,
             filter_on: (),
-            ensure_sort: false,
+            ensure_sort: None,
         }
     }
 }
@@ -200,8 +205,20 @@ where
     /// You should not use this in most cases as the ideal scenario is that the database should
     /// return an already sorted list.
     /// This is an escape hatch for use when stitching multiple database queries together.
-    pub fn ensure_sorted(mut self) -> Self {
-        self.ensure_sort = true;
+    ///
+    /// This will sort the entries in ascending order
+    pub fn sort_asc(mut self) -> Self {
+        self.ensure_sort = Some(Direction::Asc);
+        self
+    }
+    /// ensures that the output will be sorted.
+    /// You should not use this in most cases as the ideal scenario is that the database should
+    /// return an already sorted list.
+    /// This is an escape hatch for use when stitching multiple database queries together.
+    ///
+    /// This will sort the entries in descending order
+    pub fn sort_desc(mut self) -> Self {
+        self.ensure_sort = Some(Direction::Desc);
         self
     }
     /// Turn self into a [PaginatedTypedCursor].
@@ -218,10 +235,13 @@ where
 
         let mut res: Vec<_> = iter.take(limit).collect();
 
-        if ensure_sort {
+        if let Some(sort) = ensure_sort {
             res.sort_by_key(|r| {
                 let cursor = cb(r);
-                cursor.last_val
+                match sort {
+                    Direction::Asc => Either::Left(cursor.last_val),
+                    Direction::Desc => Either::Right(std::cmp::Reverse(cursor.last_val)),
+                }
             });
         }
 
