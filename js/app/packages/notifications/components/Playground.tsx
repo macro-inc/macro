@@ -1,3 +1,4 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import { TextButton } from '@core/component/TextButton';
@@ -10,12 +11,16 @@ import {
   For,
   Show,
 } from 'solid-js';
-import { notificationWithMetadata } from '../notification-metadata';
+import { tryToTypedNotification } from '../notification-metadata';
+import {
+  maybeHandlePlatformNotification,
+  type PlatformNotificationData,
+  toPlatformNotificationData,
+} from '../notification-platform';
 import {
   extractNotificationData,
   NOTIFICATION_LABEL_BY_TYPE,
   type NotificationData,
-  toBrowserNotification,
 } from '../notification-preview';
 import {
   DefaultDocumentNameResolver,
@@ -26,6 +31,7 @@ import type { UnifiedNotification } from '../types';
 import { createMockWebsocket } from '../utils/mock-websocket';
 import {
   PlatformNotificationProvider,
+  type PlatformNotificationState,
   usePlatformNotificationState,
 } from './PlatformNotificationProvider';
 
@@ -48,7 +54,7 @@ function groupNotificationsByType(
 function extractTypedNotificationData(
   notification: UnifiedNotification
 ): NotificationData | null {
-  const typed = notificationWithMetadata(notification);
+  const typed = tryToTypedNotification(notification);
   if (!typed) return null;
   const data = extractNotificationData(typed);
   if (data === 'no_extractor' || data === 'no_extracted_data') return null;
@@ -150,7 +156,7 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
   createEffect(() => {
     const notifData = data();
     if (notifData) {
-      toBrowserNotification(
+      toPlatformNotificationData(
         notifData,
         DefaultUserNameResolver,
         DefaultDocumentNameResolver
@@ -527,30 +533,33 @@ function PlaygroundContent() {
   const handleTestNotification = async (notification: UnifiedNotification) => {
     if (platformNotif === 'not-supported') return;
 
-    const data = extractTypedNotificationData(notification);
-    if (!data) return;
-
-    const browserNotif = await toBrowserNotification(
-      data,
-      DefaultUserNameResolver,
-      DefaultDocumentNameResolver
-    );
-
-    if (!browserNotif) return;
-
-    const result = await platformNotif.showNotification(
-      browserNotif.title,
-      browserNotif
-    );
-
-    if (result === 'not-granted' || result === 'disabled-in-ui') {
-      if (
-        typeof Notification !== 'undefined' &&
-        Notification.permission === 'granted'
-      ) {
-        new Notification(browserNotif.title, browserNotif);
+    console.log('test notification', notification);
+    const onNotification = (notification: UnifiedNotification) => {
+      const layoutManager = globalSplitManager();
+      if (!layoutManager) {
+        console.warn('no layout manager');
+        return;
       }
-    }
+      maybeHandlePlatformNotification(
+        notification,
+        {
+          showNotification: async (data: PlatformNotificationData) => {
+            const notif = new Notification(data.title, data.options);
+            return {
+              onClick: (cb: any) => {
+                notif.addEventListener('click', cb);
+              },
+              close: () => {
+                notif.close();
+              },
+            };
+          },
+        } as PlatformNotificationState,
+        layoutManager
+      );
+    };
+
+    onNotification(notification);
   };
 
   const isLoading = () => notificationSource.isLoading();

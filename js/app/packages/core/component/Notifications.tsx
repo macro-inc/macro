@@ -1,17 +1,15 @@
-import { useGlobalBlockOrchestrator } from '@app/component/GlobalAppState';
-import { useSplitLayout } from '@app/component/split-layout/layout';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import type { Entity } from '@core/types';
 import { formatDate } from '@core/util/date';
 import { useSplitNavigationHandler } from '@core/util/useSplitNavigationHandler';
 import {
-  extractNotificationData,
   NOTIFICATION_LABEL_BY_TYPE,
   type NotificationSource,
-  navigateToNotification,
-  notificationWithMetadata,
+  tryToTypedNotification,
   type UnifiedNotification,
 } from '@notifications';
+import { openNotification } from '@notifications/notification-navigation';
 import { createMemo, For, Show } from 'solid-js';
 
 export type NotificationsProps = {
@@ -30,37 +28,12 @@ export function Notifications(props: NotificationsProps) {
     });
   });
 
-  const { replaceSplit, insertSplit } = useSplitLayout();
-  const blockOrchestrator = useGlobalBlockOrchestrator();
-
-  const messageLocation = async (
-    channelId: string,
-    messageId: string,
-    threadId?: string
-  ) => {
-    const blockHandle = await blockOrchestrator.getBlockHandle(channelId);
-    await blockHandle?.goToLocationFromParams({
-      message_id: messageId,
-      thread_id: threadId,
-    });
-  };
-
   const handleNotificationClick = async (notification: UnifiedNotification) => {
-    const typed = notificationWithMetadata(notification);
-    if (!typed) return;
+    const splitManager = globalSplitManager();
+    const typed = tryToTypedNotification(notification);
+    if (!typed || !splitManager) return;
 
-    const data = extractNotificationData(typed);
-    if (data === 'no_extractor' || data === 'no_extracted_data') return;
-
-    navigateToNotification({
-      actions: {
-        insertSplit,
-        replaceSplit,
-        messageLocation,
-      },
-      data,
-    });
-
+    openNotification(typed, splitManager);
     await props.notificationSource.markAsRead(notification);
   };
 

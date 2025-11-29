@@ -2,10 +2,6 @@ import type { BlockName } from '@core/block';
 import { type EntityType, NotificationType } from '@core/types';
 import type { NotificationEventType } from '@service-notification/generated/schemas';
 import type { TypedNotification } from './notification-metadata';
-import type {
-  DocumentNameResolver,
-  UserNameResolver,
-} from './notification-resolvers';
 
 export type NotificationData = {
   actor?: { id: string };
@@ -233,52 +229,4 @@ export function extractNotificationData<T extends NotificationEventType>(
   const extractor = extractors[notification.notificationEventType];
   if (!extractor) return 'no_extractor';
   return extractor(notification as any) ?? 'no_extracted_data';
-}
-
-export interface BrowserNotificationPreview {
-  title: string;
-  body: string;
-  icon: string;
-}
-
-import { getFaviconUrl } from '@app/util/favicon';
-import { markdownToPlainText } from '@lexical-core';
-import { themeReactive } from '../block-theme/signals/themeReactive';
-
-const USER_NAME_FALLBACK = 'Someone';
-const DOCUMENT_NAME_FALLBACK = 'Something';
-
-function getAccentColorForIcon(): string {
-  const { l, c, h } = themeReactive.a0;
-  return `oklch(${l[0]()} ${c[0]()} ${h[0]()}deg)`;
-}
-
-export async function toBrowserNotification(
-  data: NotificationData,
-  resolveUserName: UserNameResolver,
-  resolveDocumentName: DocumentNameResolver
-): Promise<BrowserNotificationPreview | null> {
-  if (!data) return null;
-
-  const actor =
-    (data.actor ? await resolveUserName(data.actor.id) : undefined) ??
-    USER_NAME_FALLBACK;
-
-  const showTarget = data.target?.show ?? false;
-
-  const targetName =
-    data.target?.name ??
-    (data.target?.id
-      ? await resolveDocumentName(data.target.id, data.target.type)
-      : undefined) ??
-    DOCUMENT_NAME_FALLBACK;
-
-  const accentColor = getAccentColorForIcon();
-  const icon = getFaviconUrl(accentColor);
-
-  return {
-    title: `${actor}${showTarget ? ` <${targetName}>` : ''}`,
-    body: data.content ? markdownToPlainText(data.content) : `${data.action}`,
-    icon,
-  };
 }

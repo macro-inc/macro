@@ -66,7 +66,7 @@ import {
   isChannelMention,
   isChannelMessageReply,
   isChannelMessageSend,
-  notificationWithMetadata,
+  tryToTypedNotification,
   type UnifiedNotification,
   useNotificationsForEntity,
 } from '@notifications';
@@ -1359,7 +1359,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       : undefined
                   }
                   onClickNotification={(notifiedEntity) => {
-                    const notification = notificationWithMetadata(
+                    const notification = tryToTypedNotification(
                       notifiedEntity.notification
                     );
                     if (!notification) return;

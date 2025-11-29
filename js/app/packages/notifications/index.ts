@@ -6,7 +6,6 @@ export {
   EmailDebouncedReadMarker,
 } from './components/DebouncedNotificationReadMarker';
 export type {
-  AppNotification,
   CreateAppNotificationInterface,
   NotificationUnsupported,
   PlatformNotificationInterface,
@@ -53,15 +52,18 @@ export {
   isNewEmail,
   isNotificationWithMetadata,
   isRejectTeamInvite,
-  notificationWithMetadata,
+  tryToTypedNotification,
 } from './notification-metadata';
-export type { NavigationActions } from './notification-navigation';
-export { navigateToNotification } from './notification-navigation';
+export { openNotification } from './notification-navigation';
+export type {
+  PlatformNotificationData,
+  PlatformNotificationHandle,
+  toPlatformNotificationData,
+} from './notification-platform';
 export type { NotificationData } from './notification-preview';
 export {
   extractNotificationData,
   NOTIFICATION_LABEL_BY_TYPE,
-  toBrowserNotification,
 } from './notification-preview';
 export type {
   DocumentNameResolver,

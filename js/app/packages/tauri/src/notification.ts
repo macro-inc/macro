@@ -1,5 +1,5 @@
 import type {
-  AppNotification,
+  PlatformNotificationHandle,
   PlatformNotificationInterface,
 } from '@notifications';
 import {
@@ -23,21 +23,21 @@ export function createTauriNotificationInterface(
       return await requestPermission();
     },
     getCurrentPermission: getCur,
-    showNotification: async (title, opts) => {
+    showNotification: async (data) => {
       const granted = await getCur();
 
       if (granted !== 'granted') {
         return 'not-granted';
       }
 
-      if (!opts) {
-        sendNotification(title);
+      if (!data.options) {
+        sendNotification(data.title);
         return createTauriNotification();
       }
-      const { body, icon, ...rest } = opts;
+      const { body, icon, ...rest } = data.options;
 
       sendNotification({
-        title,
+        title: data.title,
         body,
         icon,
         extra: {
@@ -50,7 +50,7 @@ export function createTauriNotificationInterface(
   };
 }
 
-function createTauriNotification(): AppNotification {
+function createTauriNotification(): PlatformNotificationHandle {
   return {
     onClick: (_cb) => {
       console.warn(

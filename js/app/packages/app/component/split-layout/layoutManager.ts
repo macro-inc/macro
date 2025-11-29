@@ -1,5 +1,5 @@
 import type { BlockName } from '@core/block';
-import { ResizeZoneCtx } from '@core/component/Resize/types';
+import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import type {
   BlockInstanceHandle,
   BlockOrchestrator,
@@ -128,6 +128,8 @@ export type SplitManager = {
   unSpotlightSplit: () => void;
 
   toggleSpotlightSplit: (id: SplitId) => void;
+
+  getOrchestrator: () => BlockOrchestrator;
 
   /**
    * Reconcile the splits with the provided list of splits.
@@ -681,5 +683,6 @@ export function createSplitLayout(
     returnFocus: () => dispatchEvent(SplitEvent.ReturnFocus, undefined),
     resizeContext,
     setResizeContext,
+    getOrchestrator: () => orchestrator,
   };
 }

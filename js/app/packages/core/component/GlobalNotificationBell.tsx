@@ -1,16 +1,11 @@
-import {
-  useGlobalBlockOrchestrator,
-  useGlobalNotificationSource,
-} from '@app/component/GlobalAppState';
-import { useSplitLayout } from '@app/component/split-layout/layout';
+import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { NotificationRenderer } from '@core/component/NotificationRenderer';
 import Bell from '@icon/regular/bell.svg';
 import {
-  extractNotificationData,
-  type NavigationActions,
   type NotificationSource,
-  navigateToNotification,
-  notificationWithMetadata,
+  openNotification,
+  tryToTypedNotification,
   useUnreadNotifications,
 } from '@notifications';
 import { Show } from 'solid-js';
@@ -21,8 +16,6 @@ export type GlobalNotificationBellProps = {
 };
 
 export function GlobalNotificationBell(props: GlobalNotificationBellProps) {
-  const blockOrchestrator = useGlobalBlockOrchestrator();
-  const { insertSplit, replaceSplit } = useSplitLayout();
   const allUnreadNotifications = useUnreadNotifications(
     props.notificationSource
   );
@@ -38,42 +31,16 @@ export function GlobalNotificationBell(props: GlobalNotificationBellProps) {
   const mostRecent = () =>
     unreadNotifications().sort((a, b) => b.createdAt - a.createdAt)[0];
 
-  const messageLocation = async (
-    channelId: string,
-    messageId: string,
-    threadId?: string
-  ) => {
-    const blockHandle = await blockOrchestrator.getBlockHandle(channelId);
-    await blockHandle?.goToLocationFromParams({
-      message_id: messageId,
-      thread_id: threadId,
-    });
-  };
-
   const handleNotificationClick = async () => {
     const notification = mostRecent();
 
     if (!notification) return;
 
-    const nm = notificationWithMetadata(notification);
-    if (!nm) return;
+    const nm = tryToTypedNotification(notification);
+    const layoutManager = globalSplitManager();
+    if (!nm || !layoutManager) return;
 
-    const notificationData = extractNotificationData(nm);
-    if (typeof notificationData === 'string') {
-      notificationSource.markAsRead(notification);
-      return;
-    }
-
-    const actions: NavigationActions = {
-      insertSplit,
-      replaceSplit,
-      messageLocation,
-    };
-
-    navigateToNotification({
-      data: notificationData,
-      actions,
-    });
+    openNotification(nm, layoutManager);
 
     notificationSource.markAsRead(notification);
 
