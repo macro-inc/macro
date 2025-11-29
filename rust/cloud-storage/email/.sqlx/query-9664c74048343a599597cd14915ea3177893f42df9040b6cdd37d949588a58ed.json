@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH user_link AS (\n            SELECT id as link_id, email_address\n            FROM email_links\n            WHERE id = $1\n            LIMIT 1\n        ),\n        -- Get all email addresses the user has previously sent messages to\n        previously_contacted AS (\n            SELECT DISTINCT c.email_address\n            FROM email_messages m\n            JOIN email_message_recipients mr ON m.id = mr.message_id\n            JOIN email_contacts c ON mr.contact_id = c.id\n            CROSS JOIN user_link\n            WHERE m.link_id = user_link.link_id\n                AND m.is_sent = true\n                AND c.email_address != user_link.email_address\n        )\n        -- Find threads where any sender is in the previously contacted list\n        SELECT DISTINCT m.thread_id\n        FROM email_messages m\n        JOIN email_contacts c ON m.from_contact_id = c.id\n        WHERE m.thread_id = ANY($2)\n            AND EXISTS (\n                SELECT 1\n                FROM previously_contacted pc\n                WHERE pc.email_address = c.email_address\n            )\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "9664c74048343a599597cd14915ea3177893f42df9040b6cdd37d949588a58ed"
+}

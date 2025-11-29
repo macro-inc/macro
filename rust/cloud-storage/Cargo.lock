@@ -2836,6 +2836,7 @@ dependencies = [
  "chrono",
  "doppleganger",
  "either",
+ "email_utils",
  "filter_ast",
  "frecency",
  "item_filters",
