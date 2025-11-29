@@ -95,6 +95,14 @@ static CLEANER: Lazy<Builder<'static>> = Lazy::new(|| {
         "font",
         "center",
         "style",
+        "dl",
+        "dt",
+        "dd",
+        "caption",
+        "map",
+        "area", // Maps
+        "details",
+        "summary", // Modern
     ]);
 
     cleaner.filter_style_properties(get_safe_css_properties());
@@ -121,11 +129,13 @@ static CLEANER: Lazy<Builder<'static>> = Lazy::new(|| {
     ]);
 
     // Tag-specific attributes
-    cleaner.add_tag_attributes("a", &["href", "title", "target"]);
+    // 'name' is used for anchor links within the email (e.g., Table of Contents)
+    cleaner.add_tag_attributes("a", &["href", "title", "target", "name"]);
     cleaner.add_tag_attributes(
         "img",
         &[
             "src", "alt", "title", "width", "height", "border", "align", "vspace", "hspace",
+            "srcset", "sizes",
         ],
     );
     cleaner.add_tag_attributes("font", &["color", "size", "face"]);
@@ -141,6 +151,13 @@ static CLEANER: Lazy<Builder<'static>> = Lazy::new(|| {
             "width", "height", "align", "valign", "bgcolor", "colspan", "rowspan", "nowrap",
         ],
     ); // Add common TH attrs
+    // Used to restart numbering or change type (A, a, I, i)
+    cleaner.add_tag_attributes("ol", &["start", "type"]);
+    cleaner.add_tag_attributes("img", &["usemap"]);
+    // Essential for image maps to function
+    cleaner.add_tag_attributes("map", &["name"]);
+    cleaner.add_tag_attributes("area", &["shape", "coords", "href", "alt", "target"]);
+    cleaner.add_tag_attributes("details", &["open"]);
 
     // Link safety and url schemes
     let mut allowed_schemes = HashSet::new();
@@ -148,6 +165,8 @@ static CLEANER: Lazy<Builder<'static>> = Lazy::new(|| {
     allowed_schemes.insert("https");
     allowed_schemes.insert("mailto");
     allowed_schemes.insert("cid");
+    allowed_schemes.insert("tel");
+    allowed_schemes.insert("sms");
     cleaner.url_schemes(allowed_schemes);
     cleaner
 });
@@ -172,9 +191,6 @@ fn get_safe_css_properties() -> HashSet<&'static str> {
         "white-space",
         "direction",
         "unicode-bidi",
-        // Color & Background
-        "background-color",
-        "opacity",
         // Box Model & Spacing
         "padding",
         "padding-top",
@@ -227,6 +243,44 @@ fn get_safe_css_properties() -> HashSet<&'static str> {
         // Lists
         "list-style-type",
         "list-style-position",
+        // --- FLEXBOX (Safe and essential for modern email) ---
+        "flex",
+        "flex-basis",
+        "flex-direction",
+        "flex-flow",
+        "flex-grow",
+        "flex-shrink",
+        "flex-wrap",
+        "align-content",
+        "align-items",
+        "align-self",
+        "justify-content",
+        "order",
+        "gap",
+        // --- TYPOGRAPHY EXTENSIONS ---
+        "word-break",
+        "overflow-wrap", // Essential for preventing long URLs from breaking layout
+        "line-break",
+        // --- MICROSOFT OUTLOOK SPECIFICS ---
+        // These are safe logic-wise and essential for Outlook rendering.
+        // There are many, but these are the most common layout fixers:
+        "mso-line-height-rule",
+        "mso-hide",
+        "mso-padding-alt",
+        "mso-margin-top-alt",
+        "mso-margin-bottom-alt",
+        // Color & Background
+        "background-color",
+        "opacity",
+        "background",
+        "background-image",
+        "background-position",
+        "background-repeat",
+        "background-size",
+        // Essential for reliable box model calculations in responsive email
+        "box-sizing",
+        // List shorthand is often used instead of list-style-type
+        "list-style",
     ])
 }
 

@@ -6,6 +6,7 @@ version = "0.1.0"
 
 [features]
 mock = []
+schema = ["dep:schemars", "dep:utoipa"]
 
 [dependencies]
 chrono = { workspace = true }
@@ -13,12 +14,12 @@ filter_ast = { path = "../filter_ast" }
 macro_user_id = { path = "../macro_user_id" }
 model_file_type = { path = "../model_file_type" }
 non_empty = { path = "../non_empty" }
-schemars = { workspace = true }
+schemars = { workspace = true, optional = true }
 serde = { workspace = true, features = ["rc"] }
 serde_json = { workspace = true }
 strum = { workspace = true }
 thiserror = { workspace = true }
-utoipa = { workspace = true }
+utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
 
 [dev-dependencies]

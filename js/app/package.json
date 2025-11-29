@@ -98,6 +98,7 @@
     "@thisbeyond/solid-dnd": "^0.7.5",
     "async-lock": "^1.4.1",
     "async-mutex": "^0.5.0",
+    "brace-expansion": "^4.0.1",
     "cmdk-solid": "^1.1.2",
     "codemirror": "^6.0.2",
     "colorjs.io": "^0.5.2",
@@ -169,7 +170,7 @@
     "storybook": "^9.1.5",
     "storybook-solidjs-vite": "^9.0.3",
     "typescript": "^5.9.3",
-    "vite": "^6.3.5",
+    "vite": "^6.4.1",
     "vite-plugin-solid": "^2.11.8",
     "vite-plugin-solid-svg": "^0.8.1",
     "vite-tsconfig-paths": "^5.1.4"
@@ -190,5 +191,8 @@
     "@lexical/markdown@0.32.1": "patches/@lexical%2Fmarkdown@0.32.1.patch",
     "virtua@0.41.5": "patches/virtua@0.41.5.patch",
     "@kobalte/core@0.13.11": "patches/@kobalte%2Fcore@0.13.11.patch"
+  },
+  "overrides": {
+    "cross-spawn": "7.0.6"
   }
 }

@@ -11,4 +11,4 @@ export default defineConfig({
     environment: 'jsdom',
     globals: true,
   },
-});
+} as any);

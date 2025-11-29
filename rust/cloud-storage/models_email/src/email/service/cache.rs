@@ -1,4 +1,4 @@
-use crate::email::db::link::UserProvider;
+use crate::email::service::link::UserProvider;
 
 /// A key for caching OAuth tokens in Redis
 #[derive(Debug, Clone, PartialEq, Eq)]

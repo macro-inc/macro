@@ -1,19 +1,22 @@
 use crate::domain::models::Label;
 use crate::domain::{
     models::{
-        Attachment, AttachmentMacro, Contact, EmailThreadPreview, PreviewCursorQuery, PreviewView,
-        PreviewViewStandardLabel,
+        Attachment, AttachmentMacro, Contact, EmailThreadPreview, Link, PreviewCursorQuery,
+        PreviewView, PreviewViewStandardLabel, UserProvider,
     },
     ports::EmailRepo,
 };
 use db_types::*;
 use doppleganger::{Doppleganger, Mirror};
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use either::Either;
+use macro_user_id::user_id::MacroUserIdStr;
 use sqlx::PgPool;
 use uuid::Uuid;
 
 mod db_types;
+mod dynamic;
 mod queries;
+
 #[cfg(test)]
 mod test;
 
@@ -36,54 +39,67 @@ impl EmailRepo for EmailPgRepo {
         query: PreviewCursorQuery,
         user_id: MacroUserIdStr<'static>,
     ) -> Result<Vec<EmailThreadPreview>, Self::Err> {
-        Ok(match query.view {
-            PreviewView::StandardLabel(ref label) => match label {
-                PreviewViewStandardLabel::Inbox => {
-                    queries::new_inbox::new_inbox_preview_cursor(
-                        &self.pool,
-                        &query,
-                        user_id.copied(),
-                    )
+        let PreviewCursorQuery {
+            view,
+            link_id,
+            limit,
+            query,
+        } = query;
+
+        let query = query.split_option();
+
+        Ok(match (view, query) {
+            (view, Either::Right(dynamic_query)) => {
+                dynamic::dynamic_email_thread_cursor(
+                    &self.pool,
+                    &link_id,
+                    limit,
+                    &view,
+                    dynamic_query,
+                )
+                .await?
+            }
+            (PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox), Either::Left(query)) => {
+                queries::new_inbox::new_inbox_preview_cursor(&self.pool, &link_id, limit, &query)
                     .await?
-                }
-                PreviewViewStandardLabel::Sent => {
-                    queries::sent::sent_preview_cursor(&self.pool, &query, user_id.copied()).await?
-                }
-                PreviewViewStandardLabel::Drafts => {
-                    queries::draft::drafts_preview_cursor(&self.pool, &query, user_id.copied())
-                        .await?
-                }
-                PreviewViewStandardLabel::Starred => {
-                    queries::starred::starred_preview_cursor(&self.pool, &query, user_id.copied())
-                        .await?
-                }
-                PreviewViewStandardLabel::All => {
-                    queries::all_mail::all_mail_preview_cursor(&self.pool, &query, user_id.copied())
-                        .await?
-                }
-                PreviewViewStandardLabel::Important => {
-                    queries::important::important_preview_cursor(
-                        &self.pool,
-                        &query,
-                        user_id.copied(),
-                    )
+            }
+            (PreviewView::StandardLabel(PreviewViewStandardLabel::Sent), Either::Left(query)) => {
+                queries::sent::sent_preview_cursor(&self.pool, &link_id, limit, &query).await?
+            }
+            (PreviewView::StandardLabel(PreviewViewStandardLabel::Drafts), Either::Left(query)) => {
+                queries::draft::drafts_preview_cursor(&self.pool, &link_id, limit, &query).await?
+            }
+            (
+                PreviewView::StandardLabel(PreviewViewStandardLabel::Starred),
+                Either::Left(query),
+            ) => {
+                queries::starred::starred_preview_cursor(&self.pool, &link_id, limit, &query)
                     .await?
-                }
-                PreviewViewStandardLabel::Other => {
-                    queries::other_inbox::other_inbox_preview_cursor(
-                        &self.pool,
-                        &query,
-                        user_id.copied(),
-                    )
+            }
+            (PreviewView::StandardLabel(PreviewViewStandardLabel::All), Either::Left(query)) => {
+                queries::all_mail::all_mail_preview_cursor(&self.pool, &link_id, limit, &query)
                     .await?
-                }
-            },
-            PreviewView::UserLabel(ref label_name) => {
+            }
+            (
+                PreviewView::StandardLabel(PreviewViewStandardLabel::Important),
+                Either::Left(query),
+            ) => {
+                queries::important::important_preview_cursor(&self.pool, &link_id, limit, &query)
+                    .await?
+            }
+            (PreviewView::StandardLabel(PreviewViewStandardLabel::Other), Either::Left(query)) => {
+                queries::other_inbox::other_inbox_preview_cursor(
+                    &self.pool, &link_id, limit, &query,
+                )
+                .await?
+            }
+            (PreviewView::UserLabel(label_name), Either::Left(query)) => {
                 queries::user_label::user_label_preview_cursor(
                     &self.pool,
+                    &link_id,
+                    limit,
                     &query,
-                    label_name,
-                    user_id.copied(),
+                    &label_name,
                 )
                 .await?
             }
@@ -226,5 +242,38 @@ impl EmailRepo for EmailPgRepo {
         .into_iter()
         .map(LabelDbRow::mirror)
         .collect())
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn link_by_fusionauth_and_macro_id(
+        &self,
+        fusionauth_user_id: &str,
+        macro_id: MacroUserIdStr<'_>,
+        provider: UserProvider,
+    ) -> Result<Option<Link>, Self::Err> {
+        let provider: DbUserProvider = match provider {
+            UserProvider::Gmail => DbUserProvider::Gmail,
+        };
+
+        let db_link = sqlx::query_as!(
+            db_types::DbLink,
+            r#"
+            SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
+                   is_sync_active, created_at, updated_at
+            FROM email_links
+            WHERE fusionauth_user_id = $1 AND macro_id = $2 AND provider = $3
+            LIMIT 1
+            "#,
+            fusionauth_user_id,
+            macro_id.as_ref(),
+            provider as _
+        )
+        .fetch_optional(&self.pool)
+        .await?;
+
+        db_link
+            .map(|v| v.try_into_model())
+            .transpose()
+            .map_err(|e| sqlx::Error::Decode(Box::new(e)))
     }
 }

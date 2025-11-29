@@ -81,7 +81,7 @@ pub async fn disable_handler(
         .redis_client
         .delete_gmail_access_token(&TokenCacheKey {
             fusion_user_id: link.fusionauth_user_id.clone(),
-            macro_id: link.macro_id.clone(),
+            macro_id: link.macro_id.to_string(),
             provider: UserProvider::Gmail,
         })
         .await
@@ -122,7 +122,7 @@ pub async fn disable_handler(
             .send_message_to_search_event_queue(SearchQueueMessage::RemoveEmailLink(
                 EmailLinkMessage {
                     link_id: link_context_cloned.id.to_string(),
-                    macro_user_id: link_context_cloned.macro_id.clone(),
+                    macro_user_id: link_context_cloned.macro_id.to_string(),
                 },
             ))
             .await
@@ -135,11 +135,11 @@ pub async fn disable_handler(
 
         let email_info = EmailInfo::LinkDeleted(LinkDeletedPayload {
             link_id: link_context_cloned.id.to_string(),
-            email_address: link_context_cloned.email_address.clone(),
+            email_address: link_context_cloned.email_address.0.as_ref().to_string(),
         });
 
         let insights_message = GenerateEmailInsightContext {
-            macro_user_id: link_context_cloned.macro_id.clone(),
+            macro_user_id: link_context_cloned.macro_id.to_string(),
             info: email_info,
         };
 

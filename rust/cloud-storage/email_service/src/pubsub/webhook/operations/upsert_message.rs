@@ -141,7 +141,7 @@ pub async fn upsert_message(
     // trigger FE inbox refresh
     cg_refresh_email(
         &ctx.connection_gateway_client,
-        &link.macro_id,
+        link.macro_id.as_ref(),
         "upsert_message",
     )
     .await;
@@ -179,7 +179,7 @@ async fn handle_attachment_upload(
     message_attachment_count: usize,
 ) -> result::Result<(), ProcessingError> {
     // temporarily only for macro emails, for testing purposes
-    if !link.macro_id.ends_with("@macro.com")
+    if !link.macro_id.0.as_ref().ends_with("@macro.com")
         || cfg!(feature = "disable_attachment_upload")
         || message_attachment_count == 0
     {
@@ -249,7 +249,7 @@ async fn handle_contacts_sync(
     );
 
     // Create users list starting with the sender, then all recipients
-    let mut users = vec![link.macro_id.clone()];
+    let mut users = vec![link.macro_id.to_string()];
     users.extend(
         recipient_emails
             .iter()
@@ -295,12 +295,12 @@ async fn generate_email_insights_for_new_messages(
         // Use the correct macro_user_id for each message
         let macro_user_id = link.macro_id.clone();
         user_messages
-            .entry(macro_user_id)
+            .entry(macro_user_id.to_string())
             .or_default()
             .push(NewMessagePayload {
                 thread_id,
                 message_id,
-                user_email: link.email_address.clone(),
+                user_email: link.email_address.0.as_ref().to_string(),
             });
     }
 
@@ -509,7 +509,7 @@ async fn notify_for_new_messages(
                     .map(|(message_id, _thread_id)| {
                         SearchQueueMessage::ExtractEmailMessage(EmailMessage {
                             message_id: message_id.to_string(),
-                            macro_user_id: link.macro_id.clone(),
+                            macro_user_id: link.macro_id.to_string(),
                         })
                     })
                     .collect(),
@@ -576,7 +576,7 @@ async fn send_notifications(
 
         let notification_metadata = NewEmailMetadata {
             sender,
-            to_email: link.email_address.to_string(),
+            to_email: link.email_address.0.as_ref().to_string(),
             thread_id: message.thread_db_id.to_string(),
             subject: message.subject.unwrap_or_default(),
             snippet: message.snippet.unwrap_or_default(),
@@ -585,8 +585,8 @@ async fn send_notifications(
         let notification_queue_message = NotificationQueueMessage {
             notification_entity: NotificationEntity::new_email(message.db_id.to_string()),
             notification_event: NotificationEvent::NewEmail(notification_metadata),
-            sender_id: Some(link.macro_id.clone()),
-            recipient_ids: Some(vec![link.macro_id.clone()]),
+            sender_id: Some(link.macro_id.to_string()),
+            recipient_ids: Some(vec![link.macro_id.to_string()]),
             is_important_v0: Some(false),
         };
 

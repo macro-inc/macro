@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 use std::str::FromStr;
 use uuid::Uuid;
 
-/// the literal type that can appear in the item filer ast
+/// the literal type that can appear in the item filter ast
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub enum DocumentLiteral {
     /// this node value filters by [FileType]

@@ -1,56 +1,17 @@
 use anyhow::{Context, anyhow};
-use models_email::email::db;
+use doppleganger::Mirror;
 use models_email::email::service::link;
+use models_email::service;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
 
-/// fetches a link given a fusionauth_user_id macro_id and provider.
-pub async fn fetch_link_by_fusionauth_and_macro_id(
-    pool: &PgPool,
-    fusionauth_user_id: &str,
-    macro_id: &str,
-    provider: db::link::UserProvider,
-) -> anyhow::Result<Option<link::Link>> {
-    if fusionauth_user_id.is_empty() {
-        return Err(anyhow!("Fusion Auth user ID cannot be empty"));
-    }
-
-    if macro_id.is_empty() {
-        return Err(anyhow!("Macro ID cannot be empty"));
-    }
-
-    let provider_display = provider.as_str();
-
-    let db_link = sqlx::query_as!(
-        db::link::Link,
-        r#"
-        SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
-               is_sync_active, created_at, updated_at
-        FROM email_links
-        WHERE fusionauth_user_id = $1 AND macro_id = $2 AND provider = $3
-        LIMIT 1
-        "#,
-        fusionauth_user_id,
-        macro_id,
-        provider as _
-    )
-    .fetch_optional(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch link for fusionauth_user_id {}, macro_id {} and provider {}",
-            fusionauth_user_id, macro_id, provider_display
-        )
-    })?;
-
-    Ok(db_link.map(Into::into))
-}
+use crate::links::types::{DbLink, DbUserProvider};
 
 /// fetches a link given an email address and provider.
 pub async fn fetch_link_by_email(
     pool: &PgPool,
     email_address: &str,
-    provider: db::link::UserProvider,
+    provider: service::link::UserProvider,
 ) -> anyhow::Result<Option<link::Link>> {
     if email_address.is_empty() {
         return Err(anyhow!("Email address cannot be empty"));
@@ -59,7 +20,7 @@ pub async fn fetch_link_by_email(
     let provider_display = provider.as_str();
 
     let db_link = sqlx::query_as!(
-        db::link::Link,
+        DbLink,
         r#"
         SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
                is_sync_active, created_at, updated_at
@@ -68,7 +29,7 @@ pub async fn fetch_link_by_email(
         LIMIT 1
         "#,
         email_address,
-        provider as _
+        DbUserProvider::mirror(provider) as _
     )
     .fetch_optional(pool)
     .await
@@ -79,7 +40,7 @@ pub async fn fetch_link_by_email(
         )
     })?;
 
-    Ok(db_link.map(Into::into))
+    Ok(db_link.map(service::link::Link::try_from).transpose()?)
 }
 
 /// fetches email_links given a macro_id.
@@ -93,7 +54,7 @@ pub async fn fetch_link_by_macro_id(
     }
 
     let db_link = sqlx::query_as!(
-        db::link::Link,
+        DbLink,
         r#"
         SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
                is_sync_active, created_at, updated_at 
@@ -109,7 +70,7 @@ pub async fn fetch_link_by_macro_id(
     .with_context(|| format!("Failed to fetch link for macro_id {}", macro_id))?;
 
     // Convert DB link to service link if it exists
-    Ok(db_link.map(Into::into))
+    Ok(db_link.map(service::link::Link::try_from).transpose()?)
 }
 
 /// fetches email_links given a fusionauth_user_id. a fusionauth_user_id can have multiple email_links, each with a unique macro_id
@@ -123,7 +84,7 @@ pub async fn fetch_links_by_fusionauth_user_id(
     }
 
     let db_links = sqlx::query_as!(
-        db::link::Link,
+        DbLink,
         r#"
         SELECT id, fusionauth_user_id, macro_id, email_address, provider as "provider: _",
                is_sync_active, created_at, updated_at
@@ -143,9 +104,12 @@ pub async fn fetch_links_by_fusionauth_user_id(
     })?;
 
     // Convert DB email_links to service email_links
-    let service_links = db_links.into_iter().map(Into::into).collect();
+    let service_links: Result<Vec<_>, _> = db_links
+        .into_iter()
+        .map(service::link::Link::try_from)
+        .collect();
 
-    Ok(service_links)
+    Ok(service_links?)
 }
 
 /// Fetches a link by its ID.
@@ -153,7 +117,7 @@ pub async fn fetch_links_by_fusionauth_user_id(
 #[tracing::instrument(skip(pool), level = "info")]
 pub async fn fetch_link_by_id(pool: &PgPool, link_id: Uuid) -> anyhow::Result<Option<link::Link>> {
     let db_link = sqlx::query_as!(
-        db::link::Link,
+        DbLink,
         r#"
         SELECT id, macro_id, fusionauth_user_id, email_address, provider as "provider: _",
                is_sync_active, created_at, updated_at
@@ -166,5 +130,5 @@ pub async fn fetch_link_by_id(pool: &PgPool, link_id: Uuid) -> anyhow::Result<Op
     .await
     .with_context(|| format!("Failed to fetch link with ID {}", link_id))?;
 
-    Ok(db_link.map(Into::into))
+    Ok(db_link.map(link::Link::try_from).transpose()?)
 }

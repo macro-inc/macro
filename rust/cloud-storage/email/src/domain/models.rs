@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use frecency::domain::models::{AggregateFrecency, FrecencyQueryErr};
-use macro_user_id::user_id::MacroUserIdStr;
+use item_filters::ast::{LiteralTree, email::EmailLiteral};
+use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use models_pagination::{Identify, Query, SimpleSortMethod, SortOn};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
 use std::str::FromStr;
@@ -16,7 +17,7 @@ pub struct PreviewCursorQuery {
     pub view: PreviewView,
     pub link_id: Uuid,
     pub limit: u32,
-    pub query: Query<Uuid, SimpleSortMethod, ()>,
+    pub query: Query<Uuid, SimpleSortMethod, LiteralTree<EmailLiteral>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, EnumString, Display)]
@@ -192,7 +193,7 @@ pub struct GetEmailsRequest {
     pub link_id: Uuid,
     pub macro_id: MacroUserIdStr<'static>,
     pub limit: Option<u32>,
-    pub query: Query<Uuid, SimpleSortMethod, ()>,
+    pub query: Query<Uuid, SimpleSortMethod, LiteralTree<EmailLiteral>>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -225,4 +226,30 @@ pub struct Label {
     pub message_list_visibility: MessageListVisibility,
     pub label_list_visibility: LabelListVisibility,
     pub type_: LabelType,
+}
+
+/// The provider of this email
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UserProvider {
+    Gmail,
+}
+
+impl UserProvider {
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            UserProvider::Gmail => "GMAIL",
+        }
+    }
+}
+
+#[derive(Clone)]
+pub struct Link {
+    pub id: Uuid,
+    pub macro_id: MacroUserIdStr<'static>,
+    pub fusionauth_user_id: String,
+    pub email_address: EmailStr<'static>,
+    pub provider: UserProvider,
+    pub is_sync_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
 }

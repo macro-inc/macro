@@ -132,7 +132,7 @@ async fn create_dss_document_record(
     };
 
     dss_client
-        .create_document_internal(request, &link.macro_id)
+        .create_document_internal(request, link.macro_id.0.as_ref())
         .await
         .context("Failed to create document record in DSS")
 }

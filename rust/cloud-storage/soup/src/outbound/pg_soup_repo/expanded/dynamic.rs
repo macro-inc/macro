@@ -267,23 +267,19 @@ fn build_query(filter_ast: &EntityFilterAst, exclude_frecency: bool) -> QueryBui
 
     // Document clause
     builder.push(DOCUMENT_CLAUSE);
-    builder.push(build_document_filter(
-        filter_ast.inner.document_filter.as_ref(),
-    ));
+    builder.push(build_document_filter(filter_ast.document_filter.as_deref()));
 
     builder.push(" UNION ALL ");
 
     // Chat clause
     builder.push(CHAT_CLAUSE);
-    builder.push(build_chat_filter(filter_ast.inner.chat_filter.as_ref()));
+    builder.push(build_chat_filter(filter_ast.chat_filter.as_deref()));
 
     builder.push(" UNION ALL ");
 
     // Project clause
     builder.push(PROJECT_CLAUSE);
-    builder.push(build_project_filter(
-        filter_ast.inner.project_filter.as_ref(),
-    ));
+    builder.push(build_project_filter(filter_ast.project_filter.as_deref()));
 
     builder.push(") ");
 
