@@ -1598,6 +1598,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       />
                     </section>
                   </Show>
+                  <Show when={ENABLE_PROPERTY_DISPLAY_CONTROL}>
+                    <section class="gap-1 grid p-2">
+                      <span class="font-medium text-xs">Property</span>
+                      <div class="text-xs text-ink-muted">Coming soon...</div>
+                    </section>
+                  </Show>
                 </div>
               </div>
             </DropdownMenu>
