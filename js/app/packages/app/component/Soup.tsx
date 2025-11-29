@@ -394,7 +394,7 @@ export function Soup() {
         >
           <Tabs
             ref={tabsRef}
-            class="@container/soup flex flex-col gap-1 size-full overflow-x-clip"
+            class="@container/soup [container-type:inline-size] flex flex-col gap-1 size-full overflow-x-clip"
             classList={{
               'border-r border-edge-muted': preview(),
               'pt-2 pb-0': showHelpDrawer().has(selectedView()),

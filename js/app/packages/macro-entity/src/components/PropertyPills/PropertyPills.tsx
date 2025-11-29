@@ -26,7 +26,7 @@ export const PropertyPills = (props: PropertyPillsProps) => {
 
   return (
     <Show when={props.properties.length > 0}>
-      <div class="flex items-center gap-1 flex-wrap justify-end">
+      <div class="flex items-center gap-1 justify-end">
         <For each={displayProperties()}>
           {(property) => <PropertyPill property={property} />}
         </For>
@@ -65,7 +65,10 @@ const PropertyPill = (props: PropertyPillProps) => {
 };
 
 /**
- * Pill for String, Number, Date, Select types
+ * Pill - shows icon + text when wide, icon only when narrow
+ * Uses @container/soup from Soup.tsx
+ * - >= @3xl (~768px): full (icon + text)
+ * - < @3xl: compact (icon only)
  */
 const TextPropertyPill = (props: PropertyPillProps) => {
   const displayValue = () => formatPillValue(props.property);
@@ -83,11 +86,11 @@ const TextPropertyPill = (props: PropertyPillProps) => {
       }}
     >
       <div
-        class="p-px bg-edge box-border h-fit flex items-center"
+        class="p-px bg-edge box-border h-fit flex items-center shrink-0"
         style={{ 'clip-path': cornerClip('0.2rem', 0, 0, 0) }}
       >
         <div
-          class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted bg-panel box-border"
+          class="inline-flex items-center gap-1.5 p-1.5 @3xl/soup:px-2 @3xl/soup:py-1 text-xs leading-none text-ink-muted bg-panel box-border"
           style={{ 'clip-path': cornerClip('calc(0.2rem - 0.5px)', 0, 0, 0) }}
         >
           <PropertyDataTypeIcon
@@ -95,8 +98,9 @@ const TextPropertyPill = (props: PropertyPillProps) => {
               data_type: props.property.valueType,
               specific_entity_type: props.property.specificEntityType,
             }}
+            class="size-3.5 shrink-0"
           />
-          <span class="truncate max-w-[120px]" title={value}>
+          <span class="truncate max-w-[100px] hidden @3xl/soup:inline">
             {value}
           </span>
         </div>
@@ -105,6 +109,9 @@ const TextPropertyPill = (props: PropertyPillProps) => {
   );
 };
 
+/**
+ * Tooltip content for a property pill
+ */
 const TextTooltipContent = (props: { property: Property }) => {
   const getValues = (): string[] => {
     const { property } = props;
