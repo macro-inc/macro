@@ -531,11 +531,11 @@ export function EntityWithEverything(
           }}
         >
           <div class="flex flex-row items-center justify-end gap-2 min-w-0">
-            <div class="flex flex-row items-center justify-end w-fit h-full pr-3">
-              <Show when={properties().length > 0}>
+            <Show when={properties().length > 0}>
+              <div class="pr-2 overflow-hidden shrink min-w-0">
                 <PropertyPills properties={properties()} />
-              </Show>
-            </div>
+              </div>
+            </Show>
             <Show when={sharedData()}>
               {(shared) => (
                 <Tooltip

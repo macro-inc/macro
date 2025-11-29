@@ -81,22 +81,24 @@ const SingleLinkPill = (props: SingleLinkPillProps) => {
         style={{ 'clip-path': cornerClip('0.2rem', 0, 0, 0) }}
       >
         <div
-          class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted bg-panel box-border"
+          class="inline-flex items-center gap-1.5 p-1.5 @3xl/soup:px-2 @3xl/soup:py-1 text-xs leading-none text-ink-muted bg-panel box-border"
           style={{ 'clip-path': cornerClip('calc(0.2rem - 0.5px)', 0, 0, 0) }}
         >
           <Show
             when={faviconUrl() && !imageError()}
-            fallback={<LinkIcon class="size-4 text-ink-muted" />}
+            fallback={<LinkIcon class="size-4 text-ink-muted shrink-0" />}
           >
             <img
               src={faviconUrl()!}
-              class="size-4 object-cover rounded"
+              class="size-4 object-cover rounded shrink-0"
               crossorigin="anonymous"
               alt=""
               onError={() => setImageError(true)}
             />
           </Show>
-          <span class="truncate max-w-[100px]">{title()}</span>
+          <span class="truncate max-w-[100px] hidden @3xl/soup:inline">
+            {title()}
+          </span>
         </div>
       </div>
     </Tooltip>
@@ -170,15 +172,16 @@ const MultiLinkPill = (props: MultiLinkPillProps) => {
         style={{ 'clip-path': cornerClip('0.2rem', 0, 0, 0) }}
       >
         <div
-          class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted bg-panel box-border"
+          class="inline-flex items-center gap-1.5 p-1.5 @3xl/soup:px-2 @3xl/soup:py-1 text-xs leading-none text-ink-muted bg-panel box-border"
           style={{ 'clip-path': cornerClip('calc(0.2rem - 0.5px)', 0, 0, 0) }}
         >
           <PropertyDataTypeIcon
             property={{
               data_type: 'LINK',
             }}
+            class="size-3.5 shrink-0"
           />
-          <span class="truncate max-w-[120px]">
+          <span class="truncate max-w-[120px] hidden @3xl/soup:inline">
             {props.property.displayName} ({props.urls.length})
           </span>
         </div>
