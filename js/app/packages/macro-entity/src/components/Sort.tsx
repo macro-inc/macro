@@ -1,9 +1,13 @@
+import SortAscendingIcon from '@phosphor-icons/core/assets/regular/sort-ascending.svg';
+import SortDescendingIcon from '@phosphor-icons/core/assets/regular/sort-descending.svg';
 import { SegmentedControl } from 'core/component/FormControls/SegmentControls';
+import { ToggleButton } from 'core/component/FormControls/ToggleButton';
 import {
   type Accessor,
   createMemo,
   createSignal,
   type JSX,
+  Show,
   type Signal,
 } from 'solid-js';
 import type { EntityComparator, EntityData } from '../types/entity';
@@ -139,15 +143,49 @@ export function createSort<
     return sortFn as InferSortFn<Options>;
   });
 
+  const [sortOrder, setSortOrder] = createSignal<'ascending' | 'descending'>(
+    'descending'
+  );
+
+  const isSortProperty = createMemo(() => {
+    return false;
+  });
+
   const SortComponent: SortComponent = (props) => (
-    <SegmentedControl
-      label="Sort"
-      value={sortType()}
-      onChange={setSortType}
-      list={sortOptions}
-      size={props.size}
-      disabled={disabled?.()}
-    />
+    <div class="flex flex-col gap-2">
+      <span class="text-xs font-medium">Sort</span>
+      <div class="flex items-center justify-between gap-2">
+        <Show
+          when={isSortProperty()}
+          fallback={
+            <SegmentedControl
+              value={sortType()}
+              onChange={setSortType}
+              list={sortOptions}
+              size={props.size}
+              disabled={disabled?.()}
+            />
+          }
+        >
+          <div class="flex">
+            <ToggleButton
+              size="SM"
+              pressed={sortOrder() === 'descending'}
+              onChange={() => setSortOrder('descending')}
+            >
+              <SortDescendingIcon class="size-4" />
+            </ToggleButton>
+            <ToggleButton
+              size="SM"
+              pressed={sortOrder() === 'ascending'}
+              onChange={() => setSortOrder('ascending')}
+            >
+              <SortAscendingIcon class="size-4" />
+            </ToggleButton>
+          </div>
+        </Show>
+      </div>
+    </div>
   );
 
   return {
