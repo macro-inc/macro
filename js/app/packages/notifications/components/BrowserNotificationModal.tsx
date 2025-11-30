@@ -29,6 +29,7 @@ function useBrowserNotificationModal() {
     return (
       permission !== undefined &&
       permission !== 'granted' &&
+      permission !== 'denied' &&
       permission !== 'disabled-in-ui'
     );
   });
