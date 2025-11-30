@@ -2,6 +2,7 @@ import ClockIcon from '@phosphor-icons/core/assets/regular/clock.svg';
 import LightningIcon from '@phosphor-icons/core/assets/regular/lightning.svg';
 import SortAscendingIcon from '@phosphor-icons/core/assets/regular/sort-ascending.svg';
 import SortDescendingIcon from '@phosphor-icons/core/assets/regular/sort-descending.svg';
+import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
 import { propertiesServiceClient } from '@service-properties/client';
 import { SegmentedControl } from 'core/component/FormControls/SegmentControls';
 import { ToggleButton } from 'core/component/FormControls/ToggleButton';
@@ -299,24 +300,39 @@ export function createSort<
     'descending'
   );
 
-  const isSortProperty = createMemo(() => {
-    // TODO: Implement isSortProperty
-    return false;
+  const [selectedProperty, setSelectedProperty] =
+    createSignal<PropertyDefinitionFlat | null>(null);
+
+  const isSortedByProperty = createMemo(() => {
+    return selectedProperty() !== null;
   });
 
-  const handleSelectProperty = (_property: PropertyDefinitionFlat) => {
-    // TODO: Implement property selection
+  const handleSelectProperty = (property: PropertyDefinitionFlat) => {
+    setSelectedProperty(property);
+  };
+
+  const handleClearProperty = () => {
+    setSelectedProperty(null);
+  };
+
+  const handleSelectSystemSort = (value: string) => {
+    handleClearProperty();
+    setSortType(value);
   };
 
   type SystemSortPillsProps = {
     sortType: Accessor<string>;
     onSelect: (value: string) => void;
     disabled?: Accessor<boolean>;
+    isSortedByProperty: Accessor<boolean>;
   };
 
   const SystemSortPills: Component<SystemSortPillsProps> = (props) => {
     const pillClass =
-      'inline-flex w-fit min-h-[24px] items-center gap-1.5 px-2 py-1 text-xs font-mono border cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+      'inline-flex w-fit min-h-[24px] items-center gap-1.5 px-2 py-1 text-xs font-mono border cursor-pointer';
+
+    const isSelected = (value: string) =>
+      !props.isSortedByProperty() && props.sortType() === value;
 
     return (
       <div class="flex flex-wrap gap-1">
@@ -326,9 +342,9 @@ export function createSort<
           disabled={props.disabled?.()}
           class={pillClass}
           classList={{
-            'bg-ink text-panel border-ink': props.sortType() === 'viewed_at',
+            'bg-ink text-panel border-ink': isSelected('viewed_at'),
             'bg-transparent text-ink border-edge hover:bg-hover':
-              props.sortType() !== 'viewed_at',
+              !isSelected('viewed_at'),
           }}
         >
           <ClockIcon class="size-3.5" />
@@ -340,9 +356,9 @@ export function createSort<
           disabled={props.disabled?.()}
           class={pillClass}
           classList={{
-            'bg-ink text-panel border-ink': props.sortType() === 'updated_at',
+            'bg-ink text-panel border-ink': isSelected('updated_at'),
             'bg-transparent text-ink border-edge hover:bg-hover':
-              props.sortType() !== 'updated_at',
+              !isSelected('updated_at'),
           }}
         >
           <ClockIcon class="size-3.5" />
@@ -354,9 +370,9 @@ export function createSort<
           disabled={props.disabled?.()}
           class={pillClass}
           classList={{
-            'bg-ink text-panel border-ink': props.sortType() === 'created_at',
+            'bg-ink text-panel border-ink': isSelected('created_at'),
             'bg-transparent text-ink border-edge hover:bg-hover':
-              props.sortType() !== 'created_at',
+              !isSelected('created_at'),
           }}
         >
           <ClockIcon class="size-3.5" />
@@ -368,9 +384,9 @@ export function createSort<
           disabled={props.disabled?.()}
           class={pillClass}
           classList={{
-            'bg-ink text-panel border-ink': props.sortType() === 'frecency',
+            'bg-ink text-panel border-ink': isSelected('frecency'),
             'bg-transparent text-ink border-edge hover:bg-hover':
-              props.sortType() !== 'frecency',
+              !isSelected('frecency'),
           }}
         >
           <LightningIcon class="size-3.5" />
@@ -383,21 +399,35 @@ export function createSort<
   const SortComponent: SortComponent = (_props) => (
     <div class="flex flex-col gap-2">
       <span class="text-xs font-medium">Sort</span>
-      <div class="flex items-center justify-between gap-2">
-        <Show
-          when={isSortProperty()}
-          fallback={
-            <div class="flex flex-col w-full gap-2">
-              <SystemSortPills
-                sortType={sortType}
-                onSelect={setSortType}
-                disabled={disabled}
-              />
-              <PropertySortSearch onSelectProperty={handleSelectProperty} />
+      <SystemSortPills
+        sortType={sortType}
+        onSelect={handleSelectSystemSort}
+        disabled={disabled}
+        isSortedByProperty={isSortedByProperty}
+      />
+      <Show
+        when={isSortedByProperty()}
+        fallback={
+          <div class="w-full">
+            <PropertySortSearch onSelectProperty={handleSelectProperty} />
+          </div>
+        }
+      >
+        <div class="flex items-center gap-2">
+          <div class="flex max-w-[200px]">
+            <div class="flex items-center gap-1.5 px-2 py-1 text-xs font-mono border bg-ink text-panel border-ink min-w-0 overflow-hidden">
+              <ClockIcon class="size-3.5 shrink-0" />
+              <span class="truncate">{selectedProperty()!.display_name}</span>
             </div>
-          }
-        >
-          <div class="flex">
+            <button
+              type="button"
+              onClick={handleClearProperty}
+              class="px-1 bg-edge-muted hover:opacity-70 transition-opacity shrink-0 border border-ink"
+            >
+              <XIcon class="size-3.5" />
+            </button>
+          </div>
+          <div class="flex shrink-0">
             <ToggleButton
               size="SM"
               pressed={sortOrder() === 'descending'}
@@ -413,8 +443,8 @@ export function createSort<
               <SortAscendingIcon class="size-4" />
             </ToggleButton>
           </div>
-        </Show>
-      </div>
+        </div>
+      </Show>
     </div>
   );
 
