@@ -2,22 +2,171 @@ import ClockIcon from '@phosphor-icons/core/assets/regular/clock.svg';
 import LightningIcon from '@phosphor-icons/core/assets/regular/lightning.svg';
 import SortAscendingIcon from '@phosphor-icons/core/assets/regular/sort-ascending.svg';
 import SortDescendingIcon from '@phosphor-icons/core/assets/regular/sort-descending.svg';
+import { propertiesServiceClient } from '@service-properties/client';
 import { SegmentedControl } from 'core/component/FormControls/SegmentControls';
 import { ToggleButton } from 'core/component/FormControls/ToggleButton';
+import type { PropertyDefinitionFlat } from 'core/component/Properties/types';
+import { PropertyDataTypeIcon } from 'core/component/Properties/utils/PropertyDataTypeIcon';
+import { isErr } from 'core/util/maybeResult';
 import {
   type Accessor,
   type Component,
+  createEffect,
   createMemo,
   createSignal,
+  For,
   type JSX,
+  onCleanup,
+  onMount,
   Show,
   type Signal,
 } from 'solid-js';
+
 import type { EntityComparator, EntityData } from '../types/entity';
 import type { WithNotification } from '../types/notification';
 
 export function Sort() {
   return <SegmentedControl list={['Notified', 'Updated', 'Viewed']} />;
+}
+
+type PropertySortSearchProps = {
+  onSelectProperty?: (property: PropertyDefinitionFlat) => void;
+};
+
+function PropertySortSearch(props: PropertySortSearchProps) {
+  const [availableProperties, setAvailableProperties] = createSignal<
+    PropertyDefinitionFlat[]
+  >([]);
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const [isDropdownOpen, setIsDropdownOpen] = createSignal(false);
+
+  let searchInputRef!: HTMLInputElement;
+  let dropdownRef!: HTMLDivElement;
+  let containerRef!: HTMLDivElement;
+
+  const fetchAvailableProperties = async () => {
+    try {
+      const result = await propertiesServiceClient.listProperties({
+        scope: 'all',
+        include_options: false,
+      });
+
+      if (isErr(result)) {
+        return;
+      }
+
+      const [, data] = result;
+      const properties = Array.isArray(data) ? data : [];
+      setAvailableProperties(properties);
+    } catch (_apiError) {
+      // Silently fail
+    }
+  };
+
+  // Filter to only sortable properties
+  const sortableProperties = createMemo(() => {
+    return availableProperties().filter((property) => {
+      if (
+        ['BOOLEAN', 'ENTITY', 'LINK', 'STRING'].includes(property.data_type) ||
+        property.is_multi_select
+      )
+        return false;
+      return true;
+    });
+  });
+
+  const filteredProperties = createMemo(() => {
+    const query = searchQuery().toLowerCase().trim();
+    const properties = sortableProperties();
+
+    if (!query) return properties;
+
+    return properties.filter((property) => {
+      const name = property.display_name.toLowerCase();
+      return name.includes(query);
+    });
+  });
+
+  const handleSelectProperty = (property: PropertyDefinitionFlat) => {
+    props.onSelectProperty?.(property);
+    setSearchQuery('');
+    setIsDropdownOpen(false);
+  };
+
+  onMount(() => {
+    fetchAvailableProperties();
+  });
+
+  // Close dropdown when clicking outside
+  createEffect(() => {
+    if (!isDropdownOpen()) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+
+      const isInsideContainer = containerRef?.contains(target);
+      const isInsideDropdown = dropdownRef?.contains(target);
+
+      if (!isInsideContainer && !isInsideDropdown) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    onCleanup(() => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    });
+  });
+
+  return (
+    <div ref={containerRef} class="relative w-full">
+      <input
+        ref={searchInputRef}
+        type="text"
+        value={searchQuery()}
+        onInput={(e) => {
+          setSearchQuery(e.currentTarget.value);
+          setIsDropdownOpen(true);
+        }}
+        onFocus={() => setIsDropdownOpen(true)}
+        placeholder="Search Properties..."
+        class="w-full px-2 py-1 font-mono text-xs text-ink placeholder-ink-muted bg-transparent border border-edge focus:ring-2 focus:ring-accent/50 focus:border-accent"
+      />
+      <Show when={isDropdownOpen()}>
+        <div
+          ref={dropdownRef}
+          class="absolute left-0 right-0 top-full mt-1 z-[100] border border-edge bg-menu shadow-lg max-h-48 overflow-y-auto font-mono"
+        >
+          <Show
+            when={filteredProperties().length > 0}
+            fallback={
+              <div class="px-3 py-2 text-xs text-ink-muted text-center">
+                No sortable properties found
+              </div>
+            }
+          >
+            <For each={filteredProperties()}>
+              {(property) => (
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSelectProperty(property);
+                  }}
+                  class="w-full px-2 py-1.5 text-xs text-ink hover:bg-hover flex items-center gap-2 text-left"
+                >
+                  <PropertyDataTypeIcon property={property} />
+                  <span class="truncate flex-1">{property.display_name}</span>
+                </button>
+              )}
+            </For>
+          </Show>
+        </div>
+      </Show>
+    </div>
+  );
 }
 
 type DefaultSortType = 'important' | 'updatedAt' | 'viewedAt' | 'frecency';
@@ -151,8 +300,13 @@ export function createSort<
   );
 
   const isSortProperty = createMemo(() => {
+    // TODO: Implement isSortProperty
     return false;
   });
+
+  const handleSelectProperty = (_property: PropertyDefinitionFlat) => {
+    // TODO: Implement property selection
+  };
 
   type SystemSortPillsProps = {
     sortType: Accessor<string>;
@@ -233,11 +387,14 @@ export function createSort<
         <Show
           when={isSortProperty()}
           fallback={
-            <SystemSortPills
-              sortType={sortType}
-              onSelect={setSortType}
-              disabled={disabled}
-            />
+            <div class="flex flex-col w-full gap-2">
+              <SystemSortPills
+                sortType={sortType}
+                onSelect={setSortType}
+                disabled={disabled}
+              />
+              <PropertySortSearch onSelectProperty={handleSelectProperty} />
+            </div>
           }
         >
           <div class="flex">
