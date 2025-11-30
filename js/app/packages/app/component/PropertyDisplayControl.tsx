@@ -345,18 +345,10 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
 
       <div
         ref={containerRef}
-        class="flex flex-col
-                border border-edge
-                w-full max-w-full
-                focus-within:ring-2 focus-within:ring-accent/50 focus-within:border-accent"
+        class="flex flex-col gap-1 w-full max-w-full border border-edge focus-within:ring-2 focus-within:ring-accent/50 focus-within:border-accent"
       >
         <Show when={selectedProperties().length > 0}>
-          <div
-            class="w-full h-fit
-                   flex flex-wrap items-start justify-start
-                   gap-1
-                   px-1.5 pt-1.5 pb-0.5"
-          >
+          <div class="w-full h-fit px-1 pt-1 flex flex-wrap items-start justify-start gap-1">
             <For each={selectedProperties()}>
               {(property) => (
                 <PropertyPill
@@ -368,7 +360,7 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
           </div>
         </Show>
 
-        <div class="px-1 py-0.5 relative">
+        <div class="relative w-full">
           <input
             ref={searchInputRef}
             type="text"
@@ -379,11 +371,7 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
             }}
             onFocus={() => setIsDropdownOpen(true)}
             placeholder="Search Properties..."
-            class="w-full
-                   px-2 py-1
-                   font-mono text-xs
-                   text-ink placeholder-ink-muted
-                   bg-transparent"
+            class="w-full px-2 py-1 font-mono text-xs text-ink placeholder-ink-muted bg-transparent"
           />
 
           <PropertyDropdown
