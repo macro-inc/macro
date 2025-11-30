@@ -1,3 +1,4 @@
+import { ENABLE_PROPERTY_DISPLAY_CONTROL } from '@core/constant/featureFlags';
 import ClockIcon from '@phosphor-icons/core/assets/regular/clock.svg';
 import LightningIcon from '@phosphor-icons/core/assets/regular/lightning.svg';
 import SortAscendingIcon from '@phosphor-icons/core/assets/regular/sort-ascending.svg';
@@ -22,7 +23,6 @@ import {
   Show,
   type Signal,
 } from 'solid-js';
-
 import type { EntityComparator, EntityData } from '../types/entity';
 import type { WithNotification } from '../types/notification';
 
@@ -405,45 +405,47 @@ export function createSort<
         disabled={disabled}
         isSortedByProperty={isSortedByProperty}
       />
-      <Show
-        when={isSortedByProperty()}
-        fallback={
-          <div class="w-full">
-            <PropertySortSearch onSelectProperty={handleSelectProperty} />
-          </div>
-        }
-      >
-        <div class="flex items-center gap-2">
-          <div class="flex max-w-[200px]">
-            <div class="flex items-center gap-1.5 px-2 py-1 text-xs font-mono border bg-ink text-panel border-ink min-w-0 overflow-hidden">
-              <ClockIcon class="size-3.5 shrink-0" />
-              <span class="truncate">{selectedProperty()!.display_name}</span>
+      <Show when={ENABLE_PROPERTY_DISPLAY_CONTROL}>
+        <Show
+          when={isSortedByProperty()}
+          fallback={
+            <div class="w-full">
+              <PropertySortSearch onSelectProperty={handleSelectProperty} />
             </div>
-            <button
-              type="button"
-              onClick={handleClearProperty}
-              class="px-1 bg-edge-muted hover:opacity-70 transition-opacity shrink-0 border border-ink"
-            >
-              <XIcon class="size-3.5" />
-            </button>
+          }
+        >
+          <div class="flex items-center gap-2">
+            <div class="flex max-w-[200px]">
+              <div class="flex items-center gap-1.5 px-2 py-1 text-xs font-mono border bg-ink text-panel border-ink min-w-0 overflow-hidden">
+                <ClockIcon class="size-3.5 shrink-0" />
+                <span class="truncate">{selectedProperty()!.display_name}</span>
+              </div>
+              <button
+                type="button"
+                onClick={handleClearProperty}
+                class="px-1 bg-edge-muted hover:opacity-70 transition-opacity shrink-0 border border-ink"
+              >
+                <XIcon class="size-3.5" />
+              </button>
+            </div>
+            <div class="flex shrink-0">
+              <ToggleButton
+                size="SM"
+                pressed={sortOrder() === 'descending'}
+                onChange={() => setSortOrder('descending')}
+              >
+                <SortDescendingIcon class="size-4" />
+              </ToggleButton>
+              <ToggleButton
+                size="SM"
+                pressed={sortOrder() === 'ascending'}
+                onChange={() => setSortOrder('ascending')}
+              >
+                <SortAscendingIcon class="size-4" />
+              </ToggleButton>
+            </div>
           </div>
-          <div class="flex shrink-0">
-            <ToggleButton
-              size="SM"
-              pressed={sortOrder() === 'descending'}
-              onChange={() => setSortOrder('descending')}
-            >
-              <SortDescendingIcon class="size-4" />
-            </ToggleButton>
-            <ToggleButton
-              size="SM"
-              pressed={sortOrder() === 'ascending'}
-              onChange={() => setSortOrder('ascending')}
-            >
-              <SortAscendingIcon class="size-4" />
-            </ToggleButton>
-          </div>
-        </div>
+        </Show>
       </Show>
     </div>
   );
