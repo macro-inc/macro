@@ -1,9 +1,12 @@
+import ClockIcon from '@phosphor-icons/core/assets/regular/clock.svg';
+import LightningIcon from '@phosphor-icons/core/assets/regular/lightning.svg';
 import SortAscendingIcon from '@phosphor-icons/core/assets/regular/sort-ascending.svg';
 import SortDescendingIcon from '@phosphor-icons/core/assets/regular/sort-descending.svg';
 import { SegmentedControl } from 'core/component/FormControls/SegmentControls';
 import { ToggleButton } from 'core/component/FormControls/ToggleButton';
 import {
   type Accessor,
+  type Component,
   createMemo,
   createSignal,
   type JSX,
@@ -151,19 +154,89 @@ export function createSort<
     return false;
   });
 
-  const SortComponent: SortComponent = (props) => (
+  type SystemSortPillsProps = {
+    sortType: Accessor<string>;
+    onSelect: (value: string) => void;
+    disabled?: Accessor<boolean>;
+  };
+
+  const SystemSortPills: Component<SystemSortPillsProps> = (props) => {
+    const pillClass =
+      'inline-flex w-fit min-h-[24px] items-center gap-1.5 px-2 py-1 text-xs font-mono border cursor-pointer transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
+
+    return (
+      <div class="flex flex-wrap gap-1">
+        <button
+          type="button"
+          onClick={() => props.onSelect('viewed_at')}
+          disabled={props.disabled?.()}
+          class={pillClass}
+          classList={{
+            'bg-ink text-panel border-ink': props.sortType() === 'viewed_at',
+            'bg-transparent text-ink border-edge hover:bg-hover':
+              props.sortType() !== 'viewed_at',
+          }}
+        >
+          <ClockIcon class="size-3.5" />
+          Viewed
+        </button>
+        <button
+          type="button"
+          onClick={() => props.onSelect('updated_at')}
+          disabled={props.disabled?.()}
+          class={pillClass}
+          classList={{
+            'bg-ink text-panel border-ink': props.sortType() === 'updated_at',
+            'bg-transparent text-ink border-edge hover:bg-hover':
+              props.sortType() !== 'updated_at',
+          }}
+        >
+          <ClockIcon class="size-3.5" />
+          Updated
+        </button>
+        <button
+          type="button"
+          onClick={() => props.onSelect('created_at')}
+          disabled={props.disabled?.()}
+          class={pillClass}
+          classList={{
+            'bg-ink text-panel border-ink': props.sortType() === 'created_at',
+            'bg-transparent text-ink border-edge hover:bg-hover':
+              props.sortType() !== 'created_at',
+          }}
+        >
+          <ClockIcon class="size-3.5" />
+          Created
+        </button>
+        <button
+          type="button"
+          onClick={() => props.onSelect('frecency')}
+          disabled={props.disabled?.()}
+          class={pillClass}
+          classList={{
+            'bg-ink text-panel border-ink': props.sortType() === 'frecency',
+            'bg-transparent text-ink border-edge hover:bg-hover':
+              props.sortType() !== 'frecency',
+          }}
+        >
+          <LightningIcon class="size-3.5" />
+          Frecency
+        </button>
+      </div>
+    );
+  };
+
+  const SortComponent: SortComponent = (_props) => (
     <div class="flex flex-col gap-2">
       <span class="text-xs font-medium">Sort</span>
       <div class="flex items-center justify-between gap-2">
         <Show
           when={isSortProperty()}
           fallback={
-            <SegmentedControl
-              value={sortType()}
-              onChange={setSortType}
-              list={sortOptions}
-              size={props.size}
-              disabled={disabled?.()}
+            <SystemSortPills
+              sortType={sortType}
+              onSelect={setSortType}
+              disabled={disabled}
             />
           }
         >
