@@ -1,10 +1,9 @@
-import { IconButton } from '@core/component/IconButton';
 import type { PropertyDefinitionFlat } from '@core/component/Properties/types';
 import { PropertyDataTypeIcon } from '@core/component/Properties/utils';
 import { ERROR_MESSAGES } from '@core/component/Properties/utils/errorHandling';
 import { toast } from '@core/component/Toast/Toast';
 import { isErr } from '@core/util/maybeResult';
-import DeleteIcon from '@icon/bold/x-bold.svg';
+import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { Accessor, Component } from 'solid-js';
 import {
@@ -111,42 +110,30 @@ const SuggestedPill: Component<SuggestedPillProps> = (props) => {
 };
 
 const PropertyPill: Component<PropertyPillProps> = (props) => {
-  const [isHovered, setIsHovered] = createSignal(false);
-
   return (
-    <div
-      class="relative inline-flex max-w-[140px] shrink-0"
-      onMouseEnter={() => setIsHovered(true)}
-      onMouseLeave={() => setIsHovered(false)}
-    >
+    <div class="inline-flex max-w-[200px] shrink-0">
       <div
-        class="w-full min-h-[24px]
-               inline-flex items-center gap-2
+        class="min-h-[24px]
+               inline-flex items-center gap-1.5
                px-2 py-1
                text-xs text-ink
                bg-transparent hover:bg-hover
                border border-edge
-               cursor-pointer"
+               min-w-0 overflow-hidden"
       >
-        <PropertyDataTypeIcon property={props.property} />
-        <span class="truncate flex-1 font-mono">
-          {props.property.display_name}
-        </span>
-        <Show when={isHovered()}>
-          <div class="absolute right-1 inset-y-0 flex items-center">
-            <IconButton
-              icon={DeleteIcon}
-              theme="clear"
-              size="xs"
-              class="!text-failure !bg-[#2a2a2a] hover:!bg-[#444444] !cursor-pointer !w-4 !h-4 !min-w-4 !min-h-4"
-              onClick={(e) => {
-                e.stopPropagation();
-                props.onRemove();
-              }}
-            />
-          </div>
-        </Show>
+        <PropertyDataTypeIcon property={props.property} class="shrink-0" />
+        <span class="truncate font-mono">{props.property.display_name}</span>
       </div>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          props.onRemove();
+        }}
+        class="px-1 bg-edge-muted hover:opacity-70 transition-opacity shrink-0 border border-edge"
+      >
+        <XIcon class="size-3.5" />
+      </button>
     </div>
   );
 };
