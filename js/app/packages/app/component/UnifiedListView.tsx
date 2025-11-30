@@ -1246,9 +1246,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       disabled
                     />
                   </section>
-                  <section class="p-2">
-                    <SortComponent size="SM" />
-                  </section>
                   <section class="gap-1 grid p-2">
                     <ToggleSwitch
                       size="SM"
@@ -1262,6 +1259,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       checked={showUnreadIndicator()}
                       onChange={setShowUnreadIndicator}
                     />
+                  </section>
+                  <section class="p-2">
+                    <SortComponent size="SM" />
                   </section>
                   <Show when={ENABLE_PROPERTY_DISPLAY_CONTROL}>
                     <section class="p-2">
