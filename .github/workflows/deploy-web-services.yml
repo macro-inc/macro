@@ -51,6 +51,8 @@ jobs:
           aws-region: us-east-1
       - name: Setup
         uses: ./.github/actions/setup-reqs-web
+        with:
+          npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
       - name: Install infra dependencies
         run: |
           cd infra

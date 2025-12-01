@@ -330,7 +330,7 @@ async fn main() -> anyhow::Result<()> {
         dss_client: Arc::new(dss_client),
         jwt_args,
         internal_auth_key: LocalOrRemoteSecret::Local(internal_auth_key),
-        email_cursor_service: EmailPreviewState::new(EmailServiceImpl::new(
+        email_service: EmailPreviewState::new(EmailServiceImpl::new(
             EmailPgRepo::new(db.clone()),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db)),
         )),

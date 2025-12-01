@@ -1,6 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
+import { QueueAlarms } from './queue_alarms';
 
 type Args = {
   // The maximum receive count of a message before it's sent to DLQ
@@ -65,7 +66,7 @@ export class Queue extends pulumi.ComponentResource {
       queueName,
       {
         name: queueName,
-        redrivePolicy: this.dlq.arn.apply((arn) =>
+        redrivePolicy: this.dlq.arn.apply((arn: string) =>
           JSON.stringify({
             deadLetterTargetArn: arn,
             maxReceiveCount: maxReceiveCount ?? 5,
@@ -76,6 +77,12 @@ export class Queue extends pulumi.ComponentResource {
         tags,
       },
       { parent: this, dependsOn: [this.dlq] }
+    );
+
+    new QueueAlarms(
+      'queue-alarms',
+      { queue: this.queue, tags },
+      { parent: this }
     );
   }
 }

@@ -23,7 +23,7 @@ pub async fn process_macro_id(
         return Ok(());
     }
 
-    let mut users = vec![link.macro_id.clone()];
+    let mut users = vec![link.macro_id.to_string()];
     users.extend(
         contact_emails
             .iter()

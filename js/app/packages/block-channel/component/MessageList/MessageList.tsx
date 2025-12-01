@@ -12,6 +12,7 @@ import {
   createMessageListContextLookup,
   type MessageListContextLookup,
 } from '@block-channel/utils/listContext';
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { TextButton } from '@core/component/TextButton';
 import { observedSize } from '@core/directive/observedSize';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
@@ -39,7 +40,6 @@ import {
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
-import { CustomScrollbar } from '../../../macro-entity/src/components/CustomScrollbar';
 import { MessageContainer } from '../Message/MessageContainer';
 import { ReplyInputsPortaler } from '../ReplyInputsPortaler';
 

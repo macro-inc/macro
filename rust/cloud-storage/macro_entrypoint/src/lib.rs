@@ -38,8 +38,8 @@ impl MacroEntrypoint {
 
     /// consume self, initialize this binary, and return a proof that it was initialized [InitializedEntrypoint]
     pub fn init(self) -> InitializedEntrypoint {
-        std::panic::set_hook(Box::new(tracing_panic::panic_hook));
         dotenv::dotenv().ok();
+        std::panic::set_hook(Box::new(tracing_panic::panic_hook));
 
         match (self.env, self.local) {
             (Environment::Local, LocalOptions { tree_tracing: None }) => {

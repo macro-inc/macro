@@ -125,7 +125,7 @@ pub async fn update_labels(
         // tell FE to refresh user's inbox
         cg_refresh_email(
             &ctx.connection_gateway_client,
-            &link.macro_id,
+            link.macro_id.as_ref(),
             "update_labels",
         )
         .await;

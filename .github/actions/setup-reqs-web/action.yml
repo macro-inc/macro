@@ -5,8 +5,8 @@ inputs:
     description: Install Playwright and cache
     required: false
     default: ''
-  npmrc-gh-token:
-    description: GitHub token for npm registry authentication
+  npm-rc-token:
+    description: NPM RC Token
     required: false
     default: ''
 
@@ -16,11 +16,21 @@ runs:
     - name: Setup Bun
       uses: oven-sh/setup-bun@v2
 
+    - name: Setup bunfig.toml
+      working-directory: js/app
+      shell: bash
+      run: |
+        touch bunfig.toml
+        echo "[run]" >> bunfig.toml
+        echo "bun = true" >> bunfig.toml
+        echo "[install]" >> bunfig.toml
+        echo "linker = \"hoisted\"" >> bunfig.toml
+        echo "[install.scopes]" >> bunfig.toml
+        echo "macro-inc = { token = \"${{ inputs.npm-rc-token }}\", url = \"https://npm.pkg.github.com\" }" >> bunfig.toml
+
     - name: Install Dependencies
       shell: bash
       working-directory: js/app
-      env:
-        GITHUB_NPM_REGISTRY_AUTH_TOKEN: ${{ inputs.npmrc-gh-token }}
       run: |
         bun install --frozen-lockfile
         bun add -g npm

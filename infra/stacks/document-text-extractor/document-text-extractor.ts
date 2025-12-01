@@ -1,6 +1,7 @@
 import { Lambda } from '@lambda';
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import { QueueAlarms } from '@resources';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
 
 const BASE_NAME = 'document-text-extractor';
@@ -95,6 +96,12 @@ export class DocumentTextExtractorLambda extends pulumi.ComponentResource {
       { parent: this }
     );
 
+    new QueueAlarms(
+      'queue-alarms',
+      { queue: this.queue, tags },
+      { parent: this }
+    );
+
     this.role = new aws.iam.Role(
       `${BASE_NAME}-role`,
       {
@@ -112,10 +119,10 @@ export class DocumentTextExtractorLambda extends pulumi.ComponentResource {
           ],
         }),
         managedPolicyArns: [
-          aws.iam.ManagedPolicies.AWSLambdaBasicExecutionRole,
-          aws.iam.ManagedPolicies.AWSLambdaRole,
-          aws.iam.ManagedPolicies.AWSLambdaVPCAccessExecutionRole,
-          aws.iam.ManagedPolicies.CloudWatchLogsFullAccess,
+          aws.iam.ManagedPolicy.AWSLambdaBasicExecutionRole,
+          aws.iam.ManagedPolicy.AWSLambdaRole,
+          aws.iam.ManagedPolicy.AWSLambdaVPCAccessExecutionRole,
+          aws.iam.ManagedPolicy.CloudWatchLogsFullAccess,
           s3Policy.arn,
         ],
         tags: this.tags,

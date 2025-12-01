@@ -1,9 +1,15 @@
 import type { BlockName } from '@core/block';
+import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import type {
   BlockInstanceHandle,
   BlockOrchestrator,
 } from '@core/orchestrator';
-import { type Accessor, createMemo, type JSXElement } from 'solid-js';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  type JSXElement,
+} from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
 import { resolveComponent } from './componentRegistry';
 import { createHistory, type History } from './history';
@@ -102,6 +108,7 @@ export type SplitManager = {
   readonly activeSplitId: Accessor<SplitId | undefined>;
   readonly lastActiveSplitId: Accessor<SplitId | undefined>;
   readonly events: Accessor<SplitEventWithType>;
+  readonly resizeContext: Accessor<ResizeZoneCtx | undefined>;
 
   // methods
   /** Get a split by its split id */
@@ -121,6 +128,8 @@ export type SplitManager = {
   unSpotlightSplit: () => void;
 
   toggleSpotlightSplit: (id: SplitId) => void;
+
+  getOrchestrator: () => BlockOrchestrator;
 
   /**
    * Reconcile the splits with the provided list of splits.
@@ -147,6 +156,9 @@ export type SplitManager = {
 
   /** A function to return focus to the most recent split. */
   returnFocus: () => void;
+
+  /** Set the layout resize context from the component tree. */
+  setResizeContext: (cts: ResizeZoneCtx) => void;
 } & UrlCapabilities;
 
 export type SplitHandle = {
@@ -240,6 +252,8 @@ export function createSplitLayout(
     spotlightId: undefined,
     events: [],
   });
+
+  const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
 
   const [splitNamesById, setSplitNamesById] = createStore<{
     [id: SplitId]: string;
@@ -667,5 +681,8 @@ export function createSplitLayout(
     toggleSpotlightSplit,
     tabTitle,
     returnFocus: () => dispatchEvent(SplitEvent.ReturnFocus, undefined),
+    resizeContext,
+    setResizeContext,
+    getOrchestrator: () => orchestrator,
   };
 }

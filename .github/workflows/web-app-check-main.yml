@@ -22,7 +22,6 @@ jobs:
             should_run:
               - 'js/app/package.json'
               - 'js/app/bun.lock'
-              - 'js/app/bunfig.toml'
               - 'js/app/packages/**'
               - 'js/app/src/**'
               - '.github/actions/setup-reqs-web/**'
@@ -39,7 +38,7 @@ jobs:
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
         with:
-          npmrc-gh-token: ${{ secrets.NPMRC_GH_TOKEN }}
+          npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
       - name: Generate API Types
         working-directory: js/app
         run: bun run gen-api
@@ -79,7 +78,7 @@ jobs:
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
         with:
-          npmrc-gh-token: ${{ secrets.NPMRC_GH_TOKEN }}
+          npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
       - name: Check Tailwind Classes
         working-directory: js/app
         run: bun run check-tailwind
@@ -95,7 +94,7 @@ jobs:
       - name: Setup
         uses: ./.github/actions/setup-reqs-web
         with:
-          npmrc-gh-token: ${{ secrets.NPMRC_GH_TOKEN }}
+          npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
       - name: Test
         working-directory: js/app
         run: bunx vitest
@@ -127,7 +126,7 @@ jobs:
       - name: Setup
         uses: ./.github/actions/setup-reqs-web
         with:
-          npmrc-gh-token: ${{ secrets.NPMRC_GH_TOKEN }}
+          npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
       - name: Build
         working-directory: js/app
         run: bun run build

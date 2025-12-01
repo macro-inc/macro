@@ -1,7 +1,7 @@
 use crate::model::Activity;
 use anyhow::{Context, Result};
 use chrono::{DateTime, Utc};
-use model::comms::{ChannelHistoryInfo, UserActivityForChannel};
+use model::comms::{ChannelHistoryInfo, ChannelType, UserActivityForChannel};
 use sqlx::{Pool, Postgres};
 use std::collections::HashMap;
 use uuid::Uuid;
@@ -108,7 +108,9 @@ pub async fn get_channel_history_info(
             c.created_at as "created_at!",
             c.updated_at as "updated_at!",
             uh.viewed_at as "viewed_at?",
-            uh.interacted_at as "interacted_at?"
+            uh.interacted_at as "interacted_at?",
+            c.owner_id as "user_id",
+            c.channel_type AS "channel_type: ChannelType"
         FROM
             comms_channels c
         LEFT JOIN
@@ -134,6 +136,8 @@ pub async fn get_channel_history_info(
                 updated_at: row.updated_at,
                 viewed_at: row.viewed_at.map(|dt| dt.and_utc()),
                 interacted_at: row.interacted_at.map(|dt| dt.and_utc()),
+                user_id: row.user_id,
+                channel_type: row.channel_type.to_string(),
             };
             (row.item_id, info)
         })

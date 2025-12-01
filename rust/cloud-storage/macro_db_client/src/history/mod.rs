@@ -118,7 +118,7 @@ pub async fn get_user_history(db: &Pool<Postgres>, user_id: &str) -> anyhow::Res
                 r.name,
                 r.created_at,
                 r.updated_at,
-                None, // Will never be deleted
+                r.deleted_at,
                 r.sha,
                 r.file_type,
                 r.document_family_id,
@@ -137,7 +137,7 @@ pub async fn get_user_history(db: &Pool<Postgres>, user_id: &str) -> anyhow::Res
             r.name,
             r.created_at,
             r.updated_at,
-            None, // Will never be deleted
+            r.deleted_at,
             r.project_id,
             r.is_persistent,
         ))),
@@ -147,7 +147,7 @@ pub async fn get_user_history(db: &Pool<Postgres>, user_id: &str) -> anyhow::Res
             r.name,
             r.created_at,
             r.updated_at,
-            None, // Will never be deleted
+            r.deleted_at,
             r.project_id,
         ))),
         _ => Err(sqlx::Error::TypeNotFound {

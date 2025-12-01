@@ -68,9 +68,9 @@ export class SearchUploadHandler extends pulumi.ComponentResource {
           ],
         }),
         managedPolicyArns: [
-          aws.iam.ManagedPolicies.AWSLambdaBasicExecutionRole,
-          aws.iam.ManagedPolicies.AWSLambdaRole,
-          aws.iam.ManagedPolicies.CloudWatchLogsFullAccess,
+          aws.iam.ManagedPolicy.AWSLambdaBasicExecutionRole,
+          aws.iam.ManagedPolicy.AWSLambdaRole,
+          aws.iam.ManagedPolicy.CloudWatchLogsFullAccess,
           sqsPolicy.arn,
         ],
         tags: this.tags,

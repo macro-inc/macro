@@ -35,6 +35,8 @@ jobs:
         uses: actions/checkout@v5
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
+        with:
+          npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
       - name: Build for Production
         working-directory: js/app
         run: bun run build:prod
@@ -42,6 +44,7 @@ jobs:
           VITE_DD_WEB_APP_ID: ${{ secrets.DD_WEB_APP_ID }}
           VITE_DD_WEB_APP_TOKEN: ${{ secrets.DD_WEB_APP_TOKEN }}
           VITE_DD_HASH: ${{ github.sha }}
+          VITE_SEGMENT_WRITE_KEY: ${{ secrets.SEGMENT_WRITE_KEY_PRODUCTION }}
       - name: Upload Build Artifact
         uses: actions/upload-artifact@v4
         with:
@@ -60,6 +63,8 @@ jobs:
         uses: actions/checkout@v5
       - name: Setup Prereqs
         uses: ./.github/actions/setup-reqs-web
+        with:
+          npm-rc-token: ${{ secrets.NPMRC_GH_TOKEN }}
       - name: Download Build Artifact
         uses: actions/download-artifact@v5
         with:

@@ -1,10 +1,7 @@
 //! This crate provides the utilities to compute aggregate frecency scores from some input event
 use chrono::{DateTime, Utc};
 use item_filters::ast::EntityFilterAst;
-use macro_user_id::{
-    cowlike::CowLike,
-    user_id::{MacroUserIdStr, ParseErr},
-};
+use macro_user_id::{cowlike::CowLike, error::ParseErr, user_id::MacroUserIdStr};
 use model_entity::{
     Entity, TrackAction, TrackingData,
     as_owned::{IntoOwned, ShallowClone},
@@ -90,6 +87,14 @@ impl<'a> AggregateId<'a> {
             entity: entity.into_owned(),
         }
     }
+
+    /// joins a [AggregateId] with a [FrecencyData] to construct an [AggregateFrecency]
+    pub fn into_aggregate(self, data: FrecencyData) -> AggregateFrecency {
+        AggregateFrecency {
+            id: self.into_owned(),
+            data,
+        }
+    }
 }
 
 /// The aggregated frecency record which is constructed from many [EventRecord]
@@ -108,6 +113,7 @@ pub struct AggregateFrecency {
 
 /// struct which contains the frecency score for a given [AggregateId]
 #[derive(Debug, Serialize, Deserialize, Clone)]
+#[non_exhaustive]
 pub struct FrecencyData {
     /// the total number of events that have occurred on this entity
     pub event_count: usize,

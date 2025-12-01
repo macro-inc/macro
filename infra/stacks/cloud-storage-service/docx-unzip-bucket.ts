@@ -179,6 +179,7 @@ export function attachPolicyToDocxUnzipBucket({
         's3:GetReplicationConfiguration',
         's3:GetLifecycleConfiguration',
         's3:GetInventoryConfiguration',
+        's3:PutBucketNotification',
       ],
       Resource: [
         pulumi.interpolate`${bucket.arn}`,
