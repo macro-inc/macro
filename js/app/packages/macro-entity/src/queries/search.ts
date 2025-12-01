@@ -20,11 +20,7 @@ import { useHistory } from '@service-storage/history';
 import { useInfiniteQuery } from '@tanstack/solid-query';
 import { type Accessor, createMemo } from 'solid-js';
 import type { EntityData } from '../types/entity';
-import type {
-  FileTypeWithLocation,
-  SearchLocation,
-  WithSearch,
-} from '../types/search';
+import type { ContentHitData, SearchData, WithSearch } from '../types/search';
 import type { EntityInfiniteQuery } from './entity';
 import { queryKeys } from './key';
 
@@ -37,73 +33,86 @@ type InnerSearchResult =
   | ChannelSearchResult
   | ProjectSearchResult;
 
-const getLocationHighlights = (
-  innerResults: DocumentSearchResult[],
-  fileType: FileTypeWithLocation,
-  searchQuery: string
-) => {
-  const contentHighlights = innerResults.flatMap((r) => {
-    const contents = r.highlight.content ?? [];
+type TypedInnerSearchResult =
+  | { results: InnerSearchResult[]; type?: undefined }
+  | { results: DocumentSearchResult[]; type: 'pdf'; searchQuery: string }
+  | { results: DocumentSearchResult[]; type: 'md' }
+  | { results: ChannelSearchResult[]; type: 'channel' };
 
-    return contents.map((content) => {
-      const mergedContent = mergeAdjacentMacroEmTags(content);
-      let location: SearchLocation | undefined;
-      switch (fileType) {
-        case 'md':
-          location = { type: 'md' as const, nodeId: r.node_id };
-          break;
-        case 'pdf':
-          try {
-            const searchPage = parseInt(r.node_id);
-            location = {
+export const isSearchEntity = <T extends EntityData>(
+  entity: T
+): entity is WithSearch<T> => 'search' in entity;
+
+const getSearchData = (data: TypedInnerSearchResult): SearchData => {
+  let contentHitData: ContentHitData[] = [];
+
+  switch (data.type) {
+    case 'channel': {
+      contentHitData = data.results.flatMap((r) => {
+        const contents = r.highlight.content ?? [];
+        return contents.map((content) => ({
+          type: 'channel' as const,
+          id: r.message_id,
+          content: mergeAdjacentMacroEmTags(content),
+          senderId: r.sender_id,
+          sentAt: r.created_at,
+          location: {
+            type: 'channel' as const,
+            messageId: r.message_id,
+          },
+        }));
+      });
+      break;
+    }
+    case 'pdf': {
+      contentHitData = data.results.flatMap((r) => {
+        const contents = r.highlight.content ?? [];
+        return contents.map((content) => {
+          const mergedContent = mergeAdjacentMacroEmTags(content);
+          return {
+            type: 'pdf' as const,
+            content: mergeAdjacentMacroEmTags(content),
+            location: {
               type: 'pdf' as const,
-              searchPage,
+              searchPage: Number(r.node_id),
               searchSnippet: extractSearchSnippet(mergedContent),
-              searchRawQuery: searchQuery,
+              searchRawQuery: data.searchQuery,
               highlightTerms: extractSearchTerms(mergedContent),
-            };
-          } catch (_e) {
-            console.error('Cannot parse pdf serach info', r);
-            location = undefined;
-          }
-          break;
-      }
+            },
+          };
+        });
+      });
+      break;
+    }
+    case 'md': {
+      contentHitData = data.results.flatMap((r) => {
+        const contents = r.highlight.content ?? [];
+        return contents.map((content) => ({
+          type: 'md' as const,
+          content: mergeAdjacentMacroEmTags(content),
+          location: { type: 'md' as const, nodeId: r.node_id },
+        }));
+      });
+      break;
+    }
+    default: {
+      contentHitData = data.results.flatMap((r) => {
+        const contents = r.highlight.content ?? [];
+        return contents.map((content) => ({
+          content: mergeAdjacentMacroEmTags(content),
+          location: undefined,
+        }));
+      });
+    }
+  }
 
-      return {
-        content: mergedContent,
-        location,
-      };
-    });
-  });
-
-  const nameHighlight = innerResults.at(0)?.highlight.name ?? null;
-
-  return {
-    nameHighlight: nameHighlight
-      ? mergeAdjacentMacroEmTags(nameHighlight)
-      : null,
-    contentHighlights: contentHighlights.length > 0 ? contentHighlights : null,
-    source: 'service' as const,
-  };
-};
-
-const getHighlights = (innerResults: InnerSearchResult[]) => {
-  const contentHighlights = innerResults.flatMap((r) => {
-    const contents = r.highlight.content ?? [];
-
-    return contents.map((content) => ({
-      content: mergeAdjacentMacroEmTags(content),
-      location: undefined,
-    }));
-  });
-
-  const nameHighlight = innerResults.at(0)?.highlight.name ?? null;
+  const nameHighlight = data.results.at(0)?.highlight.name ?? null;
 
   return {
     nameHighlight: nameHighlight
       ? mergeAdjacentMacroEmTags(nameHighlight)
       : null,
-    contentHighlights: contentHighlights.length > 0 ? contentHighlights : null,
+    contentHitData: contentHitData.length > 0 ? contentHitData : null,
     source: 'service' as const,
   };
 };
@@ -123,13 +132,23 @@ const useMapSearchResponseItem = () => {
         if (!result.metadata || result.metadata.deleted_at) return;
         const searchFileType =
           result.file_type === 'docx' ? 'pdf' : result.file_type;
-        const search = ['md', 'pdf'].includes(searchFileType)
-          ? getLocationHighlights(
-              result.document_search_results,
-              searchFileType as FileTypeWithLocation,
-              searchQuery
-            )
-          : getHighlights(result.document_search_results);
+        let search: SearchData;
+        if (searchFileType === 'md') {
+          search = getSearchData({
+            results: result.document_search_results,
+            type: 'md',
+          });
+        } else if (searchFileType === 'pdf') {
+          search = getSearchData({
+            results: result.document_search_results,
+            type: 'pdf',
+            searchQuery,
+          });
+        } else {
+          search = getSearchData({
+            results: result.document_search_results,
+          });
+        }
         return {
           type: 'document',
           id: result.document_id,
@@ -149,7 +168,9 @@ const useMapSearchResponseItem = () => {
           console.error('Email result not found', result);
           return;
         }
-        const search = getHighlights(result.email_message_search_results);
+        const search = getSearchData({
+          results: result.email_message_search_results,
+        });
         return {
           type: 'email',
           id: result.thread_id,
@@ -167,7 +188,9 @@ const useMapSearchResponseItem = () => {
       }
       case 'chat': {
         if (!result.metadata || result.metadata.deleted_at) return;
-        const search = getHighlights(result.chat_search_results);
+        const search = getSearchData({
+          results: result.chat_search_results,
+        });
         let name = result.name;
         if (!name || name === 'New Chat') {
           const chat = history().find((item) => item.id === result.chat_id);
@@ -191,23 +214,13 @@ const useMapSearchResponseItem = () => {
           (c) => c.id === result.channel_id
         );
 
-        // TODO: serialize correctly from backend
-        const latestMessage = channelWithLatest?.latest_message
-          ? {
-              content: channelWithLatest.latest_message.content,
-              senderId: channelWithLatest.latest_message.sender_id,
-              createdAt:
-                new Date(
-                  channelWithLatest.latest_message.created_at
-                ).getTime() / 1000,
-            }
-          : undefined;
-
-        const search = getHighlights(result.channel_message_search_results);
+        const search = getSearchData({
+          type: 'channel',
+          results: result.channel_message_search_results,
+        });
 
         return {
           type: 'channel',
-          // TODO: distinguish channel name match from channel message match
           id: result.channel_id,
           name: channelWithLatest?.name ?? '',
           ownerId: result.owner_id ?? '',
@@ -215,14 +228,16 @@ const useMapSearchResponseItem = () => {
           updatedAt: result.metadata?.updated_at,
           channelType: result.channel_type as ChannelType,
           interactedAt: result.metadata?.interacted_at ?? undefined,
-          latestMessage,
           search,
         };
       }
 
       case 'project': {
         if (!result.metadata || result.metadata.deleted_at) return;
-        const search = getHighlights(result.project_search_results);
+        const search = getSearchData({
+          results: result.project_search_results,
+        });
+
         return {
           type: 'project',
           id: result.id,

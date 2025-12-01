@@ -1,7 +1,9 @@
-import { Tooltip } from '@core/component/Tooltip';
+import { EntityIcon } from '@core/component/EntityIcon';
+import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
+import { TOKENS } from '@core/hotkey/tokens';
 import { matches } from '@core/util/match';
 import CheckIcon from '@icon/regular/check.svg';
-import { notificationWithMetadata } from '@notifications';
+import { tryToTypedNotification } from '@notifications';
 import { useEmail, useUserId } from '@service-gql/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
@@ -29,9 +31,14 @@ import {
   isProjectContainedEntity,
   type ProjectContainedEntity,
 } from '../queries/project';
+import { isSearchEntity } from '../queries/search';
 import type { EntityData, ProjectEntity } from '../types/entity';
 import type { Notification, WithNotification } from '../types/notification';
-import type { WithSearch } from '../types/search';
+import type {
+  ChannelContentHitData,
+  ContentHitData,
+  WithSearch,
+} from '../types/search';
 import type { EntityClickEvent, EntityClickHandler } from './Entity';
 
 function UnreadIndicator(props: { active?: boolean }) {
@@ -59,6 +66,46 @@ function SharedBadge(props: { ownerId: string }) {
     <div class="font-mono font-medium user-select-none uppercase flex items-center text-ink-extra-muted p-0.5 gap-1 text-[0.625rem] rounded-full border border-edge-muted pr-2">
       <UserIcon id={props.ownerId} size="xs" />
       shared
+    </div>
+  );
+}
+
+function GenericContentHit(props: { data: ContentHitData }) {
+  return (
+    <div class="text-sm text-ink-muted truncate flex items-center">
+      <StaticMarkdown
+        markdown={props.data.content}
+        theme={unifiedListMarkdownTheme}
+        singleLine={true}
+      />
+    </div>
+  );
+}
+
+function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
+  const [userName] = useDisplayName(props.data.senderId);
+  const formattedDate = createFormattedDate(props.data.sentAt);
+
+  return (
+    <div class="flex gap-2 items-center min-w-0">
+      <div class="flex size-5 shrink-0 items-center justify-center">
+        <UserIcon id={props.data.senderId} size="xs" />
+      </div>
+      <div class="flex gap-2 text-sm w-full min-w-0 overflow-hidden items-baseline">
+        <div class="text-sm shrink-0 truncate min-w-0 font-medium">
+          {userName()}
+        </div>
+        <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted">
+          {formattedDate()}
+        </div>
+        <div class="text-sm text-ink-muted truncate flex items-center flex-1 min-w-0">
+          <StaticMarkdown
+            markdown={props.data.content}
+            theme={unifiedListMarkdownTheme}
+            singleLine={true}
+          />
+        </div>
+      </div>
     </div>
   );
 }
@@ -160,11 +207,11 @@ export function EntityWithEverything(
   };
 
   const searchHighlightName = () =>
-    'search' in props.entity && props.entity.search.nameHighlight;
+    isSearchEntity(props.entity) && props.entity.search.nameHighlight;
 
-  const contentHighlights = () => {
-    if (!('search' in props.entity)) return [];
-    return props.entity.search.contentHighlights ?? [];
+  const contentHitData = () => {
+    if (!isSearchEntity(props.entity)) return [];
+    return props.entity.search.contentHitData ?? [];
   };
 
   const EntityTitle = () => {
@@ -257,7 +304,7 @@ export function EntityWithEverything(
       props.entity.type === 'channel' ? props.entity : null
     );
 
-    const lastMessageContent = createMemo(
+    const latestMessageContent = createMemo(
       () => channelEntity()?.latestMessage?.content
     );
 
@@ -267,6 +314,15 @@ export function EntityWithEverything(
       const [userName] = useDisplayName(senderId);
       return userName();
     });
+
+    const showLatestMessageInfo = () => {
+      return (
+        !props.showUnrollNotifications &&
+        props.entity.type === 'channel' &&
+        !isSearchEntity(props.entity) &&
+        !!props.entity.latestMessage?.content
+      );
+    };
 
     return (
       <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden">
@@ -288,25 +344,24 @@ export function EntityWithEverything(
             </Show>
           </span>
 
-          <Show when={!props.showUnrollNotifications}>
+          <Show when={showLatestMessageInfo()}>
             <div class="flex items-center gap-1">
               {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
               <span class="font-medium shrink-0 truncate">
                 {userNameFromSender()}
               </span>
             </div>
-          </Show>
-
-          <Show when={!props.showUnrollNotifications && lastMessageContent()}>
-            {(lastMessageContent) => (
-              <div class="truncate shrink grow opacity-60 flex items-center">
-                <StaticMarkdown
-                  markdown={lastMessageContent()}
-                  theme={unifiedListMarkdownTheme}
-                  singleLine={true}
-                />
-              </div>
-            )}
+            <Show when={latestMessageContent()}>
+              {(lastMessageContent) => (
+                <div class="truncate shrink grow opacity-60 flex items-center">
+                  <StaticMarkdown
+                    markdown={lastMessageContent().trim()}
+                    theme={unifiedListMarkdownTheme}
+                    singleLine={true}
+                  />
+                </div>
+              )}
+            </Show>
           </Show>
         </span>
       </div>
@@ -484,32 +539,43 @@ export function EntityWithEverything(
                 );
               }}
             </Show>
-            <Show when={props.selected}>
-              <button
-                class="absolute top-1 right-1 flex items-center justify-center size-8 bg-panel border border-edge-muted hover:bg-accent hover:text-panel"
-                onClick={() => {
-                  props.onClickRowAction?.(props.entity, 'done');
-                }}
-                ref={setActionButtonRef}
-                data-blocks-navigation
-              >
-                <CheckIcon class="w-4 h-4 pointer-events-none" />
-              </button>
+            <Show when={props.highlighted && props.onClickRowAction}>
+              <div class="absolute top-1 right-1 items-center flex">
+                <Tooltip
+                  tooltip={
+                    <LabelAndHotKey
+                      label="Mark as done"
+                      hotkeyToken={TOKENS.entity.action.markDone}
+                    />
+                  }
+                >
+                  <button
+                    class="bg-panel flex items-center justify-center size-8 border border-edge-muted hover:bg-accent hover:text-panel"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      props.onClickRowAction?.(props.entity, 'done');
+                    }}
+                    ref={setActionButtonRef}
+                    data-blocks-navigation
+                  >
+                    <CheckIcon class="w-4 h-4 pointer-events-none" />
+                  </button>
+                </Tooltip>
+              </div>
             </Show>
           </div>
         </div>
-        {/* Content Highlights from Search */}
-        <Show when={contentHighlights().length > 0}>
+        {/* Content Hits from Search */}
+        <Show when={contentHitData().length > 0}>
           <div class="relative row-2 grid gap-2 col-2 col-end-4 pb-2">
-            <For each={contentHighlights()}>
-              {(highlight) => (
-                <div class="text-sm text-ink-muted truncate flex items-center">
-                  <StaticMarkdown
-                    markdown={highlight.content}
-                    theme={unifiedListMarkdownTheme}
-                    singleLine={true}
-                  />
-                </div>
+            <For each={contentHitData()}>
+              {(data) => (
+                <Show
+                  when={data.type === 'channel' && data}
+                  fallback={<GenericContentHit data={data} />}
+                >
+                  {(data) => <ChannelMessageContentHit data={data()} />}
+                </Show>
               )}
             </For>
           </div>
@@ -519,7 +585,7 @@ export function EntityWithEverything(
           when={
             props.showUnrollNotifications &&
             hasNotifications() &&
-            contentHighlights().length === 0
+            contentHitData().length === 0
           }
         >
           <div class="relative col-2 col-end-4 200 pb-2 gap-2">
@@ -541,9 +607,7 @@ export function EntityWithEverything(
                   }
 
                   const metadata =
-                    notificationWithMetadata(
-                      notification
-                    )?.notificationMetadata;
+                    tryToTypedNotification(notification)?.notificationMetadata;
                   if (
                     !metadata ||
                     !('messageContent' in metadata) ||
@@ -564,9 +628,7 @@ export function EntityWithEverything(
                   }
 
                   const metadata =
-                    notificationWithMetadata(
-                      notification
-                    )?.notificationMetadata;
+                    tryToTypedNotification(notification)?.notificationMetadata;
                   if (
                     !metadata ||
                     !('messageContent' in metadata) ||
@@ -576,7 +638,7 @@ export function EntityWithEverything(
 
                   return (
                     <StaticMarkdown
-                      markdown={metadata.messageContent}
+                      markdown={metadata.messageContent.trim()}
                       theme={unifiedListMarkdownTheme}
                       singleLine={true}
                     />
@@ -674,12 +736,7 @@ function DirectMessageIcon(props: { entity: EntityData }) {
       ? (props.entity.particpantIds ?? []).filter((id) => id !== userId()).at(0)
       : undefined;
 
-  const Fallback = () => (
-    <Dynamic
-      component={getIconConfig('directMessage').icon}
-      class={`flex size-full ${getIconConfig('directMessage').foreground}`}
-    />
-  );
+  const Fallback = () => <EntityIcon targetType="directMessage" />;
 
   return (
     <div class="bg-panel size-5 rounded-full p-[2px]">

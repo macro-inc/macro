@@ -1,3 +1,4 @@
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
@@ -56,6 +57,7 @@ import {
 } from './command/state';
 import { useGlobalNotificationSource } from './GlobalAppState';
 import type { SplitHandle } from './split-layout/layoutManager';
+import { globalRemoveFromSplitHistory } from './split-layout/layoutUtils';
 import {
   createEntityActionRegistry,
   type EntityActionRegistry,
@@ -84,7 +86,7 @@ export type UnifiedListContext = {
   actionRegistry: EntityActionRegistry;
 };
 
-const DEFAULT_VIEW_ID: View = 'all';
+const DEFAULT_VIEW_ID: View = 'inbox';
 
 const DEFAULT_VIEW_IDS_SET = new Set(VIEWCONFIG_DEFAULTS_IDS);
 
@@ -169,6 +171,9 @@ function createViewData(
       unrollNotifications:
         viewProps?.display?.unrollNotifications ??
         VIEWCONFIG_BASE.display.unrollNotifications,
+      displayProperties:
+        viewProps?.display?.displayProperties ??
+        VIEWCONFIG_BASE.display.displayProperties,
       limit: viewProps?.display?.limit,
     },
     sort: {
@@ -318,7 +323,7 @@ export function createNavigationEntityListShortcut({
     },
     {
       testEnabled: (entity) => {
-        if (entity.type === 'email') return true;
+        if (entity.type === 'email' || entity.type === 'channel') return true;
         if (entityHasUnreadNotifications(notificationSource, entity))
           return true;
         return false;
@@ -328,6 +333,7 @@ export function createNavigationEntityListShortcut({
 
   registerHotkey({
     hotkey: ['e'],
+    hotkeyToken: TOKENS.entity.action.markDone,
     scopeId: entityHotkeyScope,
     description: 'Mark done',
     condition: () =>
@@ -364,6 +370,13 @@ export function createNavigationEntityListShortcut({
           entities: entitiesToDelete,
           onFinish: () => {
             afterEntityAction(next, true);
+            const splitManager = globalSplitManager();
+            if (splitManager) {
+              const entityIdSet = new Set(entitiesToDelete.map(({ id }) => id));
+              globalRemoveFromSplitHistory(splitManager, (entry) =>
+                entityIdSet.has(entry.id)
+              );
+            }
           },
           onCancel: () => {
             afterEntityAction(prev);
@@ -389,6 +402,7 @@ export function createNavigationEntityListShortcut({
 
   registerHotkey({
     hotkey: ['delete', 'backspace'],
+    hotkeyToken: TOKENS.entity.action.delete,
     scopeId: splitHotkeyScope,
     description: () =>
       viewData().selectedEntities.length > 1 ? 'Delete items' : 'Delete item',
@@ -453,6 +467,7 @@ export function createNavigationEntityListShortcut({
 
   registerHotkey({
     scopeId: splitHotkeyScope,
+    hotkeyToken: TOKENS.entity.action.rename,
     description: () =>
       viewData().selectedEntities.length > 1 ? 'Rename items' : 'Rename item',
     condition: () =>
@@ -498,6 +513,7 @@ export function createNavigationEntityListShortcut({
 
   registerHotkey({
     scopeId: splitHotkeyScope,
+    hotkeyToken: TOKENS.entity.action.copy,
     description: () =>
       viewData().selectedEntities.length > 1 ? 'Copy items' : 'Copy item',
     condition: () =>
@@ -519,7 +535,7 @@ export function createNavigationEntityListShortcut({
   });
 
   // ---------------------------------------------------------------------------
-  // MOVE TO PROJECT
+  // MOVE TO FOLDER
   // ---------------------------------------------------------------------------
   actionRegistry.register(
     'move_to_project',
@@ -552,10 +568,11 @@ export function createNavigationEntityListShortcut({
 
   registerHotkey({
     scopeId: splitHotkeyScope,
+    hotkeyToken: TOKENS.entity.action.moveToFolder,
     description: () =>
       viewData().selectedEntities.length > 1
-        ? 'Move items to project'
-        : 'Move item to project',
+        ? 'Move items to folder'
+        : 'Move item to folder',
     condition: () =>
       isViewingList() &&
       actionRegistry.isActionEnabled(

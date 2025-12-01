@@ -104,7 +104,7 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
       />
       <Divider />
       <MenuItemInner action="rename" label="Rename" />
-      <MenuItemInner action="move_to_project" label="Move to Project" />
+      <MenuItemInner action="move_to_project" label="Move to folder" />
       <MenuItemInner action="copy" label="Copy" />
       <Divider />
       <div class="text-failure-ink w-full">

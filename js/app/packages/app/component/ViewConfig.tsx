@@ -75,6 +75,7 @@ export type DisplayOptions = {
   layout: 'compact' | 'expanded' | 'visual';
   unrollNotifications: boolean;
   showUnreadIndicator: boolean;
+  displayProperties: string[];
   limit?: number;
 };
 
@@ -121,6 +122,7 @@ export const VIEWCONFIG_BASE: ViewConfigBase = {
     layout: 'compact',
     unrollNotifications: false,
     showUnreadIndicator: false,
+    displayProperties: [],
     limit: 100,
   },
 };
@@ -143,6 +145,7 @@ export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
     layout: 'compact',
     unrollNotifications: false,
     showUnreadIndicator: true,
+    displayProperties: [],
     limit: 100,
   },
 };

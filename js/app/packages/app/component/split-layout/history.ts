@@ -9,6 +9,7 @@ export type History<T extends object> = {
   canGoForward: () => boolean;
   push: (next: T) => void;
   merge: (next: T) => void;
+  remove: (predicate: (item: T) => boolean) => T | null;
 };
 
 const inc = (x: number) => x + 1;
@@ -63,6 +64,38 @@ export function createHistory<T extends object>(): History<T> {
     return items[index()];
   };
 
+  const remove = (predicate: (item: T) => boolean) => {
+    const prevItems = items;
+    const prevIndex = index();
+
+    let newIndex = prevIndex;
+    const nextItems: T[] = [];
+
+    for (let i = 0; i < prevItems.length; i++) {
+      const item = prevItems[i];
+      if (predicate(item)) {
+        if (i < prevIndex) {
+          newIndex -= 1;
+        }
+        continue;
+      }
+      nextItems.push(item);
+    }
+
+    if (nextItems.length === 0) {
+      items = [];
+      setIndex(-1);
+      return null;
+    }
+
+    if (newIndex >= nextItems.length) {
+      newIndex = nextItems.length - 1;
+    }
+
+    items = nextItems;
+    setIndex(newIndex);
+    return items[newIndex] ?? null;
+  };
   return {
     get items() {
       return items;
@@ -76,5 +109,6 @@ export function createHistory<T extends object>(): History<T> {
     forward,
     canGoBack,
     canGoForward,
+    remove,
   };
 }

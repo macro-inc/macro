@@ -1,18 +1,46 @@
 use crate::domain::ports::MockSoupRepo;
 use chrono::Days;
 use cool_asserts::assert_matches;
+use email::domain::models::{EmailErr, EnrichedEmailThreadPreview, PreviewView};
 use frecency::domain::models::FrecencyPageResponse;
 use frecency::domain::ports::MockFrecencyQueryService;
 use frecency::domain::services::FrecencyQueryServiceImpl;
 use frecency::{domain::models::AggregateFrecency, outbound::mock::MockFrecencyStorage};
 use model_entity::EntityType;
-use models_pagination::{Cursor, CursorVal, FrecencyValue, SimpleSortMethod, TypeEraseCursor};
+use models_pagination::{
+    Cursor, CursorVal, FrecencyValue, PaginatedCursor, SimpleSortMethod, TypeEraseCursor,
+};
 use models_soup::document::SoupDocument;
 use ordered_float::OrderedFloat;
 use sqlx::types::chrono::{DateTime, Utc};
 use uuid::Uuid;
 
 use super::*;
+
+struct NoopEmailService;
+
+impl EmailService for NoopEmailService {
+    async fn get_email_thread_previews(
+        &self,
+        _req: email::domain::models::GetEmailsRequest,
+    ) -> Result<
+        PaginatedCursor<EnrichedEmailThreadPreview, Uuid, SimpleSortMethod, ()>,
+        email::domain::models::EmailErr,
+    > {
+        Ok(Option::<EnrichedEmailThreadPreview>::None
+            .into_iter()
+            .paginate_on(0, SimpleSortMethod::CreatedAt)
+            .into_page())
+    }
+
+    async fn get_link_by_auth_id_and_macro_id(
+        &self,
+        _auth_id: &str,
+        _macro_id: MacroUserIdStr<'_>,
+    ) -> Result<Option<email::domain::models::Link>, email::domain::models::EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("not implemented")))
+    }
+}
 
 fn soup_document(id: &str) -> SoupDocument {
     // Create a deterministic UUID from the string ID
@@ -96,8 +124,13 @@ async fn it_should_not_query_frecency() {
     let res = SoupImpl::new(
         soup_mock,
         FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailService,
     )
     .get_user_soup(SoupRequest {
+        email_preview_view: PreviewView::StandardLabel(
+            email::domain::models::PreviewViewStandardLabel::Inbox,
+        ),
+        link_id: Uuid::new_v4(),
         soup_type: SoupType::UnExpanded,
         limit: 0,
         cursor: SoupQuery::Simple(Query::Sort(SimpleSortMethod::ViewedUpdated, None)),
@@ -165,16 +198,24 @@ async fn it_should_query_frecency() {
             Box::pin(async move { res })
         });
 
-    let res = SoupImpl::new(soup_mock, FrecencyQueryServiceImpl::new(frecency_mock))
-        .get_user_soup(SoupRequest {
-            soup_type: SoupType::UnExpanded,
-            limit: u16::MAX,
-            cursor: SoupQuery::Frecency(Query::Sort(Frecency, None)),
-            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
-        })
-        .await
-        .unwrap()
-        .type_erase();
+    let res = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(frecency_mock),
+        NoopEmailService,
+    )
+    .get_user_soup(SoupRequest {
+        email_preview_view: PreviewView::StandardLabel(
+            email::domain::models::PreviewViewStandardLabel::Inbox,
+        ),
+        link_id: Uuid::new_v4(),
+        soup_type: SoupType::UnExpanded,
+        limit: u16::MAX,
+        cursor: SoupQuery::Frecency(Query::Sort(Frecency, None)),
+        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+    })
+    .await
+    .unwrap()
+    .type_erase();
 
     dbg!(&res);
 
@@ -234,16 +275,24 @@ async fn it_should_sort_frecency_descending() {
             Box::pin(async move { res })
         });
 
-    let res = SoupImpl::new(soup_mock, FrecencyQueryServiceImpl::new(frecency_mock))
-        .get_user_soup(SoupRequest {
-            soup_type: SoupType::UnExpanded,
-            limit: u16::MAX,
-            cursor: SoupQuery::Frecency(Query::Sort(Frecency, None)),
-            user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
-        })
-        .await
-        .unwrap()
-        .type_erase();
+    let res = SoupImpl::new(
+        soup_mock,
+        FrecencyQueryServiceImpl::new(frecency_mock),
+        NoopEmailService,
+    )
+    .get_user_soup(SoupRequest {
+        email_preview_view: PreviewView::StandardLabel(
+            email::domain::models::PreviewViewStandardLabel::Inbox,
+        ),
+        link_id: Uuid::new_v4(),
+        soup_type: SoupType::UnExpanded,
+        limit: u16::MAX,
+        cursor: SoupQuery::Frecency(Query::Sort(Frecency, None)),
+        user: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
+    })
+    .await
+    .unwrap()
+    .type_erase();
 
     dbg!(&res);
 
@@ -270,7 +319,7 @@ async fn frecency_should_fallback() {
                 AggregateFrecency::new_mock(
                     EntityType::Document
                         .with_entity_string(uuid::Uuid::from_u128(v as u128).to_string()),
-                    v.into(),
+                    v as f64,
                 )
             });
             let res = Ok(FrecencyPageResponse::new_mock(iter));
@@ -317,8 +366,12 @@ async fn frecency_should_fallback() {
             Box::pin(async move { res })
         });
 
-    let res = SoupImpl::new(soup, frecency)
+    let res = SoupImpl::new(soup, frecency, NoopEmailService)
         .get_user_soup(SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Uuid::new_v4(),
             soup_type: SoupType::UnExpanded,
             limit: 100,
             cursor: SoupQuery::Frecency(Query::Sort(Frecency, None)),
@@ -383,8 +436,12 @@ async fn frecency_should_paginate() {
             Box::pin(async move { Ok(vec) })
         });
 
-    let res = SoupImpl::new(soup, frecency)
+    let res = SoupImpl::new(soup, frecency, NoopEmailService)
         .get_user_soup(SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Uuid::new_v4(),
             soup_type: SoupType::UnExpanded,
             limit: 100,
             cursor: SoupQuery::Frecency(Query::Sort(Frecency, None)),
@@ -451,12 +508,16 @@ async fn frecency_should_resume_cursor() {
             Box::pin(async move { Ok(vec) })
         });
 
-    let res = SoupImpl::new(soup, frecency)
+    let res = SoupImpl::new(soup, frecency, NoopEmailService)
         .get_user_soup(SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Uuid::new_v4(),
             soup_type: SoupType::UnExpanded,
             limit: 100,
             cursor: SoupQuery::Frecency(Query::Cursor(Cursor {
-                id: Uuid::from_u128(5).to_string(),
+                id: Uuid::from_u128(5),
                 limit: 100,
                 val: CursorVal {
                     sort_type: Frecency,
@@ -515,8 +576,8 @@ async fn frecency_fallback_cursor_should_resume() {
                 } => {
                 let expected_time = <DateTime<Utc>>::default() + Days::new(5);
                 assert_eq!(last_val, &expected_time);
-                let expected_uuid_str = Uuid::from_u128(100).to_string();
-                assert_eq!(id, &expected_uuid_str);
+                let expected_uuid = Uuid::from_u128(100);
+                assert_eq!(id, &expected_uuid);
                 true
             })
         })
@@ -535,12 +596,16 @@ async fn frecency_fallback_cursor_should_resume() {
             Box::pin(async move { res })
         });
 
-    let res = SoupImpl::new(soup, frecency)
+    let res = SoupImpl::new(soup, frecency, NoopEmailService)
         .get_user_soup(SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Uuid::new_v4(),
             soup_type: SoupType::UnExpanded,
             limit: 100,
             cursor: SoupQuery::Frecency(Query::Cursor(Cursor {
-                id: Uuid::from_u128(100).to_string(),
+                id: Uuid::from_u128(100),
                 limit: 100,
                 val: CursorVal {
                     sort_type: Frecency,
@@ -595,8 +660,13 @@ async fn cursor_should_return_simple_sort() {
     let res = SoupImpl::new(
         soup_mock,
         FrecencyQueryServiceImpl::new(MockFrecencyStorage::new()),
+        NoopEmailService,
     )
     .get_user_soup(SoupRequest {
+        email_preview_view: PreviewView::StandardLabel(
+            email::domain::models::PreviewViewStandardLabel::Inbox,
+        ),
+        link_id: Uuid::new_v4(),
         soup_type: SoupType::UnExpanded,
         limit: 0,
         cursor: SoupQuery::Simple(Query::Sort(SimpleSortMethod::ViewedUpdated, None)),
@@ -649,8 +719,12 @@ async fn cursor_should_return_frecency() {
             Box::pin(async move { Ok(vec) })
         });
 
-    let res = SoupImpl::new(soup, frecency)
+    let res = SoupImpl::new(soup, frecency, NoopEmailService)
         .get_user_soup(SoupRequest {
+            email_preview_view: PreviewView::StandardLabel(
+                email::domain::models::PreviewViewStandardLabel::Inbox,
+            ),
+            link_id: Uuid::new_v4(),
             soup_type: SoupType::UnExpanded,
             limit: 100,
             cursor: SoupQuery::Frecency(Query::Sort(Frecency, None)),

@@ -2,10 +2,7 @@ import {
   useGlobalBlockOrchestrator,
   useGlobalNotificationSource,
 } from '@app/component/GlobalAppState';
-import {
-  emailRefetchInterval,
-  useEmailLinksStatus,
-} from '@app/signal/emailAuth';
+import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
 import { Button } from '@core/component/FormControls/Button';
@@ -15,12 +12,17 @@ import { ToggleButton } from '@core/component/FormControls/ToggleButton';
 import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { IconButton } from '@core/component/IconButton';
 import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
+import { getSuggestedProperties } from '@core/component/Properties/utils';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import {
   blockAcceptsFileExtension,
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
-import { ENABLE_SOUP_FROM_FILTER } from '@core/constant/featureFlags';
+import {
+  ENABLE_PROPERTY_DISPLAY_CONTROL,
+  ENABLE_SOUP_FROM_FILTER,
+} from '@core/constant/featureFlags';
+import { emailRefetchInterval, useEmailLinksStatus } from '@core/email-link';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -49,6 +51,7 @@ import {
   type EntityFilter,
   type EntityType,
   importantFilterFn,
+  isSearchEntity,
   notDoneFilterFn,
   type SortOption,
   sortByCreatedAt,
@@ -63,8 +66,7 @@ import {
   isChannelMention,
   isChannelMessageReply,
   isChannelMessageSend,
-  markNotificationsForEntityAsDone,
-  notificationWithMetadata,
+  tryToTypedNotification,
   type UnifiedNotification,
   useNotificationsForEntity,
 } from '@notifications';
@@ -117,6 +119,7 @@ import {
 import { EntityActionsMenuItems } from './EntityActionsMenuItems';
 import { EntityModal } from './EntityModal/EntityModal';
 import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
+import { PropertyDisplayControl } from './PropertyDisplayControl';
 import { useUpsertSavedViewMutation } from './Soup';
 import {
   SplitToolbarLeft,
@@ -126,7 +129,6 @@ import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { EmptyState } from './UnifiedListEmptyState';
 import {
-  archiveEmail,
   type DisplayOptions,
   type DocumentTypeFilter,
   type FilterOptions,
@@ -387,6 +389,28 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     );
   };
 
+  const displayProperties = createMemo(
+    () =>
+      view()?.display?.displayProperties ??
+      defaultDisplayOptions.displayProperties
+  );
+  const setDisplayProperties = (
+    properties: DisplayOptions['displayProperties']
+  ) => {
+    setViewDataStore(
+      selectedView(),
+      'display',
+      'displayProperties',
+      properties
+    );
+  };
+
+  // Suggested properties reactive to filter type
+  const suggestedProperties = createMemo(() => {
+    const types = entityTypeFilter();
+    return getSuggestedProperties(types);
+  });
+
   const rawSearchText = createMemo<string>(() => view()?.searchText ?? '');
   const searchText = createMemo(() => rawSearchText()?.trim() ?? '');
   const [isSearchLoading, setIsSearchLoading] = createSignal(false);
@@ -439,7 +463,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               ...result.item,
               search: {
                 nameHighlight: result.nameHighlight,
-                contentHighlights: null,
+                contentHitData: null,
                 source: 'local',
               },
             } as WithNotification<WithSearch<EntityData>>;
@@ -770,20 +794,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const notificationSource = useGlobalNotificationSource();
   const markEntityAsDone = (entity: EntityData) => {
-    if (emailView() === 'inbox') {
-      if (entity.type === 'email') {
-        archiveEmail(entity.id, {
-          isDone: entity.done,
-          optimisticallyExclude: true,
-        });
-      }
+    const actions = unifiedListContext.actionRegistry;
+    if (actions.isActionEnabled('mark_as_done', entity)) {
+      actions.execute('mark_as_done', entity);
       return true;
     }
-    if (entity.type === 'email') {
-      archiveEmail(entity.id, { isDone: entity.done });
-    }
-    markNotificationsForEntityAsDone(notificationSource, entity);
-    return true;
+    return false;
   };
 
   const { replaceOrInsertSplit, insertSplit } = useSplitLayout();
@@ -876,35 +892,34 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       ? insertSplit({ type: blockName, id })
       : replaceOrInsertSplit({ type: blockName, id });
 
-    const location =
-      'search' in entity && entity.search.contentHighlights?.at(0)?.location;
-    if (location) {
-      handle?.activate();
-      const blockHandle = await blockOrchestrator.getBlockHandle(id);
-      switch (location.type) {
-        case 'md':
-          await blockHandle?.goToLocationFromParams({
-            [MD_PARAMS.nodeId]: location.nodeId,
-          });
-          break;
-        case 'pdf':
-          console.log('go to pdf location', location);
-          await blockHandle?.goToLocationFromParams({
-            [PDF_PARAMS.searchPage]: location.searchPage.toString(),
-            [PDF_PARAMS.searchRawQuery]: location.searchRawQuery,
-            [PDF_PARAMS.searchHighlightTerms]: JSON.stringify(
-              location.highlightTerms
-            ),
-            [PDF_PARAMS.searchSnippet]: location.searchSnippet,
-          });
-          break;
-      }
-    } else {
-      handle?.activate();
+    handle?.activate();
+
+    if (!isSearchEntity(entity)) return;
+
+    const location = entity.search.contentHitData?.at(0)?.location;
+    if (!location) return;
+
+    const blockHandle = await blockOrchestrator.getBlockHandle(id);
+    switch (location.type) {
+      case 'md':
+        await blockHandle?.goToLocationFromParams({
+          [MD_PARAMS.nodeId]: location.nodeId,
+        });
+        break;
+      case 'pdf':
+        await blockHandle?.goToLocationFromParams({
+          [PDF_PARAMS.searchPage]: location.searchPage.toString(),
+          [PDF_PARAMS.searchRawQuery]: location.searchRawQuery,
+          [PDF_PARAMS.searchHighlightTerms]: JSON.stringify(
+            location.highlightTerms
+          ),
+          [PDF_PARAMS.searchSnippet]: location.searchSnippet,
+        });
+        break;
     }
   };
 
-  const entityClickHandler: EntityClickHandler<EntityData> = (
+  const entityClickHandler: EntityClickHandler<EntityData> = async (
     entity,
     event,
     options
@@ -920,7 +935,17 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const handle = event.altKey
       ? insertSplit({ type: entity.type, id: entity.id })
       : replaceOrInsertSplit({ type: entity.type, id: entity.id });
+
     handle?.activate();
+
+    if (entity.type === 'channel' && isSearchEntity(entity)) {
+      const location = entity.search.contentHitData?.at(0)?.location;
+      if (!location) return;
+      const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
+      await blockHandle?.goToLocationFromParams({
+        [CHANNEL_PARAMS.message]: location.messageId,
+      });
+    }
   };
 
   const StyledTriggerLabel = (props: ParentProps) => {
@@ -1238,6 +1263,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       onChange={setShowUnreadIndicator}
                     />
                   </section>
+                  <Show when={ENABLE_PROPERTY_DISPLAY_CONTROL}>
+                    <section class="p-2">
+                      <PropertyDisplayControl
+                        selectedPropertyIds={displayProperties}
+                        setSelectedPropertyIds={setDisplayProperties}
+                        suggestedProperties={suggestedProperties()}
+                      />
+                    </section>
+                  </Show>
                 </div>
               </div>
             </DropdownMenu>
@@ -1312,13 +1346,20 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   entity={innerProps.entity}
                   timestamp={timestamp()}
                   onClick={entityClickHandler}
-                  onClickRowAction={(entity, type) => {
-                    if (type === 'done') {
-                      markEntityAsDone?.(entity);
-                    }
-                  }}
+                  onClickRowAction={
+                    unifiedListContext.actionRegistry.isActionEnabled(
+                      'mark_as_done',
+                      innerProps.entity
+                    )
+                      ? (entity, type) => {
+                          if (type === 'done') {
+                            markEntityAsDone?.(entity);
+                          }
+                        }
+                      : undefined
+                  }
                   onClickNotification={(notifiedEntity) => {
-                    const notification = notificationWithMetadata(
+                    const notification = tryToTypedNotification(
                       notifiedEntity.notification
                     );
                     if (!notification) return;
@@ -1562,7 +1603,9 @@ const EntityTypeToggle = (props: {
         })
       }
     >
-      <span class="uppercase">{props.type}</span>
+      <span class="uppercase">
+        {props.type === 'project' ? 'folder' : props.type}
+      </span>
     </ToggleButton>
   );
 };

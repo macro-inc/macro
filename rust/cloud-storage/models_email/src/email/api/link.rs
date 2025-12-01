@@ -1,6 +1,7 @@
 use crate::api::settings::Settings;
 use crate::service;
 use chrono::{DateTime, Utc};
+use macro_user_id::{email::EmailStr, user_id::MacroUserIdStr};
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 use uuid::Uuid;
@@ -25,10 +26,10 @@ impl std::fmt::Display for UserProvider {
     }
 }
 
-impl From<crate::email::db::link::UserProvider> for UserProvider {
-    fn from(provider: crate::email::db::link::UserProvider) -> Self {
+impl From<crate::email::service::link::UserProvider> for UserProvider {
+    fn from(provider: crate::email::service::link::UserProvider) -> Self {
         match provider {
-            crate::email::db::link::UserProvider::Gmail => UserProvider::Gmail,
+            crate::email::service::link::UserProvider::Gmail => UserProvider::Gmail,
         }
     }
 }
@@ -36,9 +37,11 @@ impl From<crate::email::db::link::UserProvider> for UserProvider {
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct Link {
     pub id: Uuid,
-    pub macro_id: String,
+    #[schema(value_type = String)]
+    pub macro_id: MacroUserIdStr<'static>,
     pub fusionauth_user_id: String,
-    pub email_address: String,
+    #[schema(value_type = String)]
+    pub email_address: EmailStr<'static>,
     pub provider: UserProvider,
     pub is_sync_active: bool,
     pub signature: Option<String>,

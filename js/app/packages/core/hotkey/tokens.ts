@@ -36,6 +36,13 @@ export const TOKENS = {
       end: 'entity.jump.end',
     },
     open: 'entity.open',
+    action: {
+      markDone: 'entity.action.markDone',
+      delete: 'entity.action.delete',
+      rename: 'entity.action.rename',
+      moveToFolder: 'entity.action.moveToFolder',
+      copy: 'entity.action.copy',
+    },
   },
 
   // code block

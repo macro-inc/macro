@@ -12,6 +12,10 @@ import {
   type UploadInput,
   uploadFiles,
 } from '@core/util/upload';
+import {
+  queryKeys,
+  useQueryClient as useEntityQueryClient,
+} from '@macro-entity';
 import Files from '@phosphor-icons/core/duotone/files-duotone.svg?component-solid';
 import { refetchResources } from '@service-storage/util/refetchResources';
 import { toast } from 'core/component/Toast/Toast';
@@ -35,6 +39,7 @@ const Block: Component = () => {
   const projectId = useBlockId();
   const isSpecialProject = getIsSpecialProject(projectId);
   const name = () => projectBlockDataSignal()?.projectMetadata.name;
+  const entityQueryClient = useEntityQueryClient();
 
   const handleFileUpload = async (files: UploadInput[]) => {
     if (files.length === 0) return;
@@ -55,6 +60,9 @@ const Block: Component = () => {
       // show documents that were immediately uploaded
       const successfulUploads = uploads.filter((result) => !result.pending);
       if (successfulUploads.length > 0) {
+        entityQueryClient.invalidateQueries({
+          queryKey: queryKeys.all.dss,
+        });
         refetchResources();
       }
 
@@ -65,6 +73,9 @@ const Block: Component = () => {
         .map((result) => result.projectId);
       if (pendingFolderUploads.length > 0) {
         await Promise.all(pendingFolderUploads);
+        entityQueryClient.invalidateQueries({
+          queryKey: queryKeys.all.dss,
+        });
         refetchResources();
       }
     } catch (error) {

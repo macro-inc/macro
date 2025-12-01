@@ -6,6 +6,9 @@ export * from './entityConversion';
 export * from './errorHandling';
 export * from './focus';
 export * from './formatting';
+// Export icon component
+export { PropertyDataTypeIcon } from './PropertyDataTypeIcon';
 export * from './position';
+export * from './suggestedProperties';
 export * from './typeGuards';
 export * from './validation';

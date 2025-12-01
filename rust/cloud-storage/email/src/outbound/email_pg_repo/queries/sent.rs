@@ -1,7 +1,7 @@
 use super::super::db_types::*;
-use crate::domain::models::PreviewCursorQuery;
-use macro_user_id::user_id::MacroUserIdStr;
+use models_pagination::{Query, SimpleSortMethod};
 use sqlx::PgPool;
+use uuid::Uuid;
 
 /// Fetches a paginated list of thread previews for the "Sent" view.
 /// This view includes all threads (archived or not) sorted by the timestamp
@@ -10,12 +10,13 @@ use sqlx::PgPool;
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn sent_preview_cursor(
     pool: &PgPool,
-    query: &PreviewCursorQuery,
-    user_id: MacroUserIdStr<'_>,
+    link_id: &Uuid,
+    limit: u32,
+    query: &Query<Uuid, SimpleSortMethod, ()>,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
-    let query_limit = query.limit as i64;
-    let sort_method_str = query.query.sort_method().to_string();
-    let (cursor_id, cursor_timestamp) = query.query.vals();
+    let query_limit = limit as i64;
+    let sort_method_str = query.sort_method().to_string();
+    let (cursor_id, cursor_timestamp) = query.vals();
 
     sqlx::query_as!(
         ThreadPreviewCursorDbRow,
@@ -103,7 +104,7 @@ pub(crate) async fn sent_preview_cursor(
         -- Final ordering is preserved because the input `t` is already sorted.
         ORDER BY t.effective_ts DESC, t.updated_at DESC
         "#,
-        query.link_id,            // $1
+        link_id,            // $1
         query_limit,              // $2
         cursor_timestamp,   // $3
         cursor_id,          // $4

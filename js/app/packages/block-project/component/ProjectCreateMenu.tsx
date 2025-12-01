@@ -155,7 +155,7 @@ function MenuContent(props: { projectId: string }) {
         }),
     },
     {
-      label: 'Project',
+      label: 'Folder',
       blockName: 'project' as BlockName,
       hotkeyToken: TOKENS.create.project,
       Icon: () => (
@@ -170,7 +170,7 @@ function MenuContent(props: { projectId: string }) {
               name: 'New Project',
               parentId: props.projectId,
             });
-            if (!result) throw new Error('Failed to create project');
+            if (!result) throw new Error('Failed to create folder');
             return result;
           },
         }),

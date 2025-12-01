@@ -25,16 +25,12 @@
           cargo-udeps
           cargo-lambda
           cargo-deny
-          prisma-engines
-          prisma
           pkg-config
           just
           just-lsp
           taplo
-          go
-          gopls
           bun
-          yarn
+          pnpm
           sqlx-cli
           typescript-language-server
           nodejs_24
@@ -68,10 +64,6 @@
           buildInputs = packages ++ libraries;
           LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";
           PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
-          PRISMA_SCHEMA_ENGINE_BINARY = "${pkgs.prisma-engines}/bin/schema-engine";
-          PRISMA_QUERY_ENGINE_BINARY = "${pkgs.prisma-engines}/bin/query-engine";
-          PRISMA_QUERY_ENGINE_LIBRARY = "${pkgs.prisma-engines}/lib/libquery_engine.node";
-          PRISMA_FMT_BINARY = "${pkgs.prisma-engines}/bin/prisma-fmt";
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
           BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
         };

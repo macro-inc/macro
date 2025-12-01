@@ -76,7 +76,7 @@ pub async fn handler(
                 .send_message_to_search_event_queue(SearchQueueMessage::RemoveEmailLink(
                     EmailLinkMessage {
                         link_id: link.id.to_string(),
-                        macro_user_id,
+                        macro_user_id: macro_user_id.to_string(),
                     },
                 ))
                 .await

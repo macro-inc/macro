@@ -1,9 +1,15 @@
 import type { BlockName } from '@core/block';
+import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import type {
   BlockInstanceHandle,
   BlockOrchestrator,
 } from '@core/orchestrator';
-import { type Accessor, createMemo, type JSXElement } from 'solid-js';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  type JSXElement,
+} from 'solid-js';
 import { createStore, produce, reconcile } from 'solid-js/store';
 import { resolveComponent } from './componentRegistry';
 import { createHistory, type History } from './history';
@@ -102,6 +108,7 @@ export type SplitManager = {
   readonly activeSplitId: Accessor<SplitId | undefined>;
   readonly lastActiveSplitId: Accessor<SplitId | undefined>;
   readonly events: Accessor<SplitEventWithType>;
+  readonly resizeContext: Accessor<ResizeZoneCtx | undefined>;
 
   // methods
   /** Get a split by its split id */
@@ -121,6 +128,8 @@ export type SplitManager = {
   unSpotlightSplit: () => void;
 
   toggleSpotlightSplit: (id: SplitId) => void;
+
+  getOrchestrator: () => BlockOrchestrator;
 
   /**
    * Reconcile the splits with the provided list of splits.
@@ -147,6 +156,9 @@ export type SplitManager = {
 
   /** A function to return focus to the most recent split. */
   returnFocus: () => void;
+
+  /** Set the layout resize context from the component tree. */
+  setResizeContext: (cts: ResizeZoneCtx) => void;
 } & UrlCapabilities;
 
 export type SplitHandle = {
@@ -157,6 +169,7 @@ export type SplitHandle = {
     cb: (payload: SplitEventPayload[SplitEvent.ContentChange]) => void
   ) => void;
   replace: (next: SplitContent, mergeHistory?: boolean) => void;
+  removeFromHistory: (predicate: (content: SplitContent) => boolean) => void;
   toggleSpotlight: (force?: boolean) => void;
   setDisplayName: (name: string) => void;
   canGoForward: () => boolean;
@@ -212,15 +225,6 @@ function sameNonComponentIdentity(a: SplitContent, b: SplitContent): boolean {
   return a.id === b.id;
 }
 
-function _findDuplicateSplit(
-  splits: SplitState[],
-  content: SplitContent
-): SplitState | null {
-  return (
-    splits.find((s) => sameNonComponentIdentity(s.content, content)) ?? null
-  );
-}
-
 function isDuplicateSplit(
   splits: SplitState[],
   content: SplitContent
@@ -248,6 +252,8 @@ export function createSplitLayout(
     spotlightId: undefined,
     events: [],
   });
+
+  const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
 
   const [splitNamesById, setSplitNamesById] = createStore<{
     [id: SplitId]: string;
@@ -362,6 +368,20 @@ export function createSplitLayout(
     reattach(split, next);
   }
 
+  function removeFromHistory(
+    id: SplitId,
+    predicate: (content: SplitContent) => boolean
+  ) {
+    const i = state.splits.findIndex((s) => s.id === id);
+    if (i < 0) return console.error(`Split with id ${id} not found`);
+
+    const split = state.splits[i];
+    const next = split.history.remove(predicate);
+    if (!next) return;
+
+    reattach(split, next);
+  }
+
   /**
    * Replace the content of a split with the provided content. If mergeHistory is true, the current history index will be replaced with the new content.
    */
@@ -469,6 +489,9 @@ export function createSplitLayout(
       goForward: () => forward(currentSplit.id),
       replace: (next, mergeHistory = false) =>
         replace(currentSplit.id, next, mergeHistory),
+      removeFromHistory: (predicate: (content: SplitContent) => boolean) => {
+        removeFromHistory(currentSplit.id, predicate);
+      },
       close: () => {
         // If there's only one split and it's the default split, then no-op
         if (state.splits.length <= 1) {
@@ -658,5 +681,8 @@ export function createSplitLayout(
     toggleSpotlightSplit,
     tabTitle,
     returnFocus: () => dispatchEvent(SplitEvent.ReturnFocus, undefined),
+    resizeContext,
+    setResizeContext,
+    getOrchestrator: () => orchestrator,
   };
 }

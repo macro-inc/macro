@@ -1,10 +1,7 @@
 mod ai_request;
 mod toolset;
 
-use crate::api::ws::connection::{
-    MESSAGE_ABORT_MAP, add_partial_message_part, clear_partial_message, register_partial_message,
-    ws_send,
-};
+use crate::api::ws::connection::{MESSAGE_ABORT_MAP, ws_send};
 use crate::core::model::FALLBACK_MODEL;
 use crate::model::chats::ChatResponse;
 use crate::model::ws::{StreamError, StreamWebSocketError};
@@ -12,7 +9,6 @@ use crate::{
     api::{
         context::ApiContext,
         utils::{log, search},
-        ws::connection::write_partial_message,
     },
     model::ws::{FromWebSocketMessage, SendChatMessagePayload},
     service::{ai::name::maybe_rename_chat, get_chat::get_chat},
@@ -107,7 +103,6 @@ pub async fn stream_chat_response(
 ) -> Result<StreamChatResponse, ai::types::AiError> {
     if MESSAGE_ABORT_MAP.contains_key(stream_id) {
         MESSAGE_ABORT_MAP.remove(stream_id);
-        // No database cleanup needed since we don't create partial messages until disconnect
         return Ok(StreamChatResponse {
             new_messages: Vec::new(), // Return empty for aborted streams
         });
@@ -133,9 +128,6 @@ pub async fn stream_chat_response(
         .send_message(request, request_context, user_id.to_owned())
         .await?;
 
-    // Register potential partial message with connection for disconnect-based saving
-    register_partial_message(connection_id, message_id, chat_id, Some(model.to_string()));
-
     // Process the stream completely
     let mut usage_reqs = vec![];
     let mut is_first_token = false;
@@ -149,8 +141,6 @@ pub async fn stream_chat_response(
         // Abort streaming for a message if it has been stopped
         if MESSAGE_ABORT_MAP.contains_key(stream_id) {
             MESSAGE_ABORT_MAP.remove(stream_id);
-            write_partial_message(connection_id, &context).await;
-            // No database cleanup needed since we don't create partial messages until disconnect
             return Ok(StreamChatResponse {
                 new_messages: Vec::new(), // Return empty for aborted streams
             });
@@ -164,9 +154,6 @@ pub async fn stream_chat_response(
                 }
 
                 let message_part = AssistantMessagePart::Text { text: content };
-
-                // Add part to partial message tracking for disconnect-based saving
-                add_partial_message_part(connection_id, message_part.clone());
 
                 // Send to websocket
                 let response = FromWebSocketMessage::ChatMessageResponse {
@@ -183,9 +170,6 @@ pub async fn stream_chat_response(
                     json: call.json,
                     id: call.id,
                 };
-
-                // Add part to partial message tracking for disconnect-based saving
-                add_partial_message_part(connection_id, message_part.clone());
 
                 let response = FromWebSocketMessage::ChatMessageResponse {
                     stream_id: stream_id.to_string(),
@@ -211,9 +195,6 @@ pub async fn stream_chat_response(
             StreamPart::ToolResponse(ai::tool::types::ToolResponse::Json { id, json, name }) => {
                 let message_part = AssistantMessagePart::ToolCallResponseJson { name, json, id };
 
-                // Add part to partial message tracking for disconnect-based saving
-                add_partial_message_part(connection_id, message_part.clone());
-
                 ws_send(
                     sender,
                     FromWebSocketMessage::ChatMessageResponse {
@@ -235,9 +216,6 @@ pub async fn stream_chat_response(
                     id,
                 };
 
-                // Add part to partial message tracking for disconnect-based saving
-                add_partial_message_part(connection_id, message_part.clone());
-
                 ws_send(
                     sender,
                     FromWebSocketMessage::ChatMessageResponse {
@@ -254,9 +232,6 @@ pub async fn stream_chat_response(
 
     // Explicitly drop the stream to release the mutable borrow
     drop(stream);
-
-    // Clear partial message tracking since stream completed successfully
-    clear_partial_message(connection_id);
 
     // Get new messages - no finalization needed since we only save on disconnect
     let new_messages = chat.get_new_conversation_messages();

@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            id as \"channel_id\"\n        FROM\n            comms_channels\n        ORDER BY\n            created_at ASC\n        LIMIT $1\n        OFFSET $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "channel_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Int8",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "b5578ab6da001f418fe8ff216616b79eb80caf8e2677fcf4e7127151060a50ea"
+}

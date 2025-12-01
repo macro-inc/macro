@@ -94,7 +94,7 @@ pub async fn handler(
 
     validation::validate_replying_to_id(&ctx.db, &mut draft, &link).await?;
 
-    let from_email = link.email_address.as_str();
+    let from_email = link.email_address.0.as_ref();
 
     let mut tx = ctx.db.begin().await?;
 

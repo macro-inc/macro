@@ -302,7 +302,11 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-      <Resize.Zone direction="horizontal" gutter={gutterSize()}>
+      <Resize.Zone
+        direction="horizontal"
+        gutter={gutterSize()}
+        captureResizeCtx={splitManager.setResizeContext}
+      >
         <For each={ids()}>
           {(id, index) => (
             <Resize.Panel id={id} minSize={400}>

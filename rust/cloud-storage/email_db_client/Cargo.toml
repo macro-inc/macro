@@ -7,8 +7,10 @@ version = "0.1.0"
 [dependencies]
 anyhow = { workspace = true }
 chrono = { workspace = true }
-email_utils = { path = "../email_utils"}
+doppleganger = { workspace = true }
+email_utils = { path = "../email_utils" }
 futures = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 models_email = { path = "../models_email" }
 models_pagination = { path = "../models_pagination" }

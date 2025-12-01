@@ -46,7 +46,11 @@ pub async fn fetch_gmail_access_token_from_link(
     auth_service_client: &AuthServiceClient,
 ) -> anyhow::Result<String> {
     // Create the cache key using the extracted email
-    let key = TokenCacheKey::new(&link.fusionauth_user_id, &link.macro_id, link.provider);
+    let key = TokenCacheKey::new(
+        &link.fusionauth_user_id,
+        link.macro_id.0.as_ref(),
+        link.provider,
+    );
 
     fetch_gmail_access_token(&key, redis_client, auth_service_client).await
 }

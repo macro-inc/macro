@@ -1,5 +1,5 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
-import { useEmailLinksStatus } from '@app/signal/emailAuth';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { setHotkeyRoot, useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
@@ -12,6 +12,7 @@ import {
   ENABLE_WEBSOCKET_DEBUGGER,
   PROD_MODE_ENV,
 } from '@core/constant/featureFlags';
+import { useEmailLinksStatus } from '@core/email-link';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
@@ -22,8 +23,10 @@ import { isTauri, MaybeTauriProvider } from '@macro/tauri';
 import { createEmailSource, Provider as EntityProvider } from '@macro-entity';
 import {
   createNotificationSource,
+  type UnifiedNotification,
   usePlatformNotificationState,
 } from '@notifications';
+import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
 import { setUser, useObserveRouting } from '@observability';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { gqlServiceClient } from '@service-gql/client';
@@ -60,6 +63,7 @@ import { useSoundHover } from '../util/soundHover';
 import { updateCookie } from '../util/updateCookie';
 import { Login } from './auth/Login';
 import { LOGIN_COOKIE_AGE, setCookie } from './auth/Shared';
+import { makeEmailAuthComponents } from './EmailAuth';
 import { GlobalAppStateProvider } from './GlobalAppState';
 import { Layout } from './Layout';
 import MacroJump from './MacroJump';
@@ -176,11 +180,24 @@ function NotFound() {
   return '';
 }
 
+const { EmailSignUp, EmailCallback, CALLBACK_PATH } = makeEmailAuthComponents({
+  callbackPath: '/email-signup-callback',
+  successPath: '/',
+});
+
 const ROUTES: RouteDefinition[] = [
   LAYOUT_ROUTE,
   {
     path: '/',
     component: BasePathComponent,
+  },
+  {
+    path: '/signup',
+    component: EmailSignUp,
+  },
+  {
+    path: CALLBACK_PATH,
+    component: EmailCallback,
   },
   {
     path: '/login/popup/success',
@@ -245,11 +262,20 @@ const ROUTES: RouteDefinition[] = [
 export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   // Initialize global notification helpers
   const notifInterface = usePlatformNotificationState();
+
+  const onNotification = (notification: UnifiedNotification) => {
+    if (notifInterface === 'not-supported') return;
+    const layoutManager = globalSplitManager();
+    if (!layoutManager) return;
+    maybeHandlePlatformNotification(
+      notification,
+      notifInterface,
+      layoutManager
+    );
+  };
   const notificationSource = createNotificationSource(
     connectionGatewayWebsocket,
-    notifInterface === 'not-supported'
-      ? undefined
-      : notifInterface.showNotification
+    onNotification
   );
 
   const emailActive = useEmailLinksStatus();

@@ -352,7 +352,7 @@ export const BulkMoveToProjectView = (props: {
 
         props.onFinish();
       } catch (error) {
-        console.error('Failed to move entities to project:', error);
+        console.error('Failed to move entities to folder:', error);
       }
     }
   };
@@ -363,12 +363,12 @@ export const BulkMoveToProjectView = (props: {
   return (
     <div ref={rootScopeId}>
       <BulkEditEntityModalTitle
-        title={`Move ${entityCount()} ${entityText()} to project`}
+        title={`Move ${entityCount()} ${entityText()} to folder`}
       />
       <div class="mb-4">
         <input
           type="text"
-          placeholder="Search projects..."
+          placeholder="Search folders..."
           value={searchQuery()}
           onInput={(e) => setSearchQuery(e.target.value)}
           class="w-full px-3 py-2 border border-edge bg-menu text-ink focus:outline-none focus:border-accent"
