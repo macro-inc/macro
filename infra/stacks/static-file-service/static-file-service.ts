@@ -10,11 +10,7 @@ import {
 } from '@resources';
 import { ALLOWED_ORIGINS } from '@resources/resources/cors';
 import { EcrImage } from '@service';
-import {
-  BASE_DOMAIN,
-  CLOUD_TRAIL_SNS_TOPIC_ARN,
-  MACRO_SUBDOMAIN_CERT,
-} from '@shared';
+import { BASE_DOMAIN, MACRO_SUBDOMAIN_CERT } from '@shared';
 import { StaticFileCloudFront } from './distribution';
 
 const stack = pulumi.getStack();

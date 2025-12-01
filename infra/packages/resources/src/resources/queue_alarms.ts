@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
+import { CLOUD_TRAIL_SNS_TOPIC_ARN } from '@shared';
 
 type Args = {
   // The queue to create alarms for
@@ -27,23 +27,25 @@ export class QueueAlarms extends pulumi.ComponentResource {
   ) {
     super('my:components:QueueAlarms', name, { tags: args.tags }, opts);
 
-    const { queue, approximateAgeOfOldestMessageEvaluationPeriods, approximateAgeOfOldestMessageThreshold } = args;
+    const { queue } = args;
 
     const tags = { ...args.tags, queue: queue.name };
 
+    const approximateAgeOfOldestMessageEvaluationPeriods = args.approximateAgeOfOldestMessageEvaluationPeriods ?? 60;
+    const approximateAgeOfOldestMessageThreshold = args.approximateAgeOfOldestMessageThreshold ?? 120; // 2 minutes
 
     // alarm for monitoring ApproximateAgeOfOldestMessage
     this.queueApproximateAgeOfOldestMessageAlarm = new aws.cloudwatch.MetricAlarm(
-      'approximate-age-of-oldest-message-alarm',
+      'aaoom-alarm',
       {
-        name: `${queue.name}-queue-approximate-age-of-oldest-message-alarm-${stack}`,
+        alarmDescription: `Alarm when ${queue.name} has approximate age of oldest message over ${approximateAgeOfOldestMessageThreshold}s for ${approximateAgeOfOldestMessageEvaluationPeriods}s.`,
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 1,
         metricName: 'ApproximateAgeOfOldestMessage',
         namespace: 'AWS/SQS',
-        period: approximateAgeOfOldestMessageEvaluationPeriods ?? 60,
+        period: approximateAgeOfOldestMessageEvaluationPeriods,
         statistic: 'Average',
-        threshold: approximateAgeOfOldestMessageThreshold ?? 120, // 2 minutes
+        threshold: approximateAgeOfOldestMessageThreshold,
         dimensions: {
           QueueName: queue.name,
         },
