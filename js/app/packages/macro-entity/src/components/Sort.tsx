@@ -289,19 +289,6 @@ export function createSort<
     context?.sortTypeSignal ??
     createSignal<Options[number]['value']>(defaultSortOption);
 
-  const sortFn = createMemo<InferSortFn<Options>>(() => {
-    const sortBy = sortType();
-    const sortFn = sortOptions.find(
-      (option) => option.value === sortBy
-    )?.sortFn;
-    if (!sortFn) {
-      console.error(`Sort function for ${sortBy} not found`);
-      return ((_, __) => 0) as InferSortFn<Options>;
-    }
-
-    return sortFn as InferSortFn<Options>;
-  });
-
   // Use external signals if provided, otherwise local state
   const [localSortOrder, setLocalSortOrder] = createSignal<
     'ascending' | 'descending'
@@ -318,6 +305,24 @@ export function createSort<
     localPropertyId,
     setLocalPropertyId,
   ];
+
+  const sortFn = createMemo<InferSortFn<Options>>(() => {
+    // If property sort is active, return no-op (backend handles sorting)
+    if (propertyId()) {
+      return ((_, __) => 0) as InferSortFn<Options>;
+    }
+
+    const sortBy = sortType();
+    const sortFn = sortOptions.find(
+      (option) => option.value === sortBy
+    )?.sortFn;
+    if (!sortFn) {
+      console.error(`Sort function for ${sortBy} not found`);
+      return ((_, __) => 0) as InferSortFn<Options>;
+    }
+
+    return sortFn as InferSortFn<Options>;
+  });
 
   // Track the full property object for display (fetched when needed)
   const [selectedProperty, setSelectedProperty] =
