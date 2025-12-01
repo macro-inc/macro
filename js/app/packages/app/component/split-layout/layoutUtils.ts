@@ -83,8 +83,5 @@ export function globalRemoveFromSplitHistory(
  */
 export function isInboxOpen(manager: SplitManager): boolean {
   const split = manager.getSplitByContent('component', 'unified-list');
-  if (!split) return false;
-  const meta = split.meta();
-  if (meta?.kind !== 'unified-list') return false;
-  return meta.viewId === 'inbox';
+  return split?.meta()?.viewId === 'inbox';
 }

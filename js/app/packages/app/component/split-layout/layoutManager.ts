@@ -11,7 +11,11 @@ import {
   type JSXElement,
 } from 'solid-js';
 import { createStore, produce, reconcile, type Store } from 'solid-js/store';
-import { type ComponentMeta, resolveComponent } from './componentRegistry';
+import {
+  type ComponentMeta,
+  type ComponentMetaMap,
+  resolveComponent,
+} from './componentRegistry';
 import { createHistory, type History } from './history';
 
 const ENABLE_DEFAULT_ALWAYS_IN_HISTORY = true;
@@ -148,10 +152,13 @@ export type SplitManager = {
   hasSplit: (type: BlockName | 'component', id: string) => boolean;
 
   /** Get a potential split id by its content type and id */
-  getSplitByContent: (
-    type: BlockName | 'component',
-    id: string
-  ) => SplitHandle | undefined;
+  getSplitByContent: {
+    <K extends keyof ComponentMetaMap>(
+      type: 'component',
+      id: K
+    ): SplitHandle<ComponentMetaMap[K]> | undefined;
+    (type: BlockName | 'component', id: string): SplitHandle | undefined;
+  };
 
   /** Get a reactive string that is the display name of the active split. */
   tabTitle: () => string | undefined;
@@ -163,7 +170,7 @@ export type SplitManager = {
   setResizeContext: (cts: ResizeZoneCtx) => void;
 } & UrlCapabilities;
 
-export type SplitHandle = {
+export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   unregisterContentChangeListener: (
     cb: (payload: SplitEventPayload[SplitEvent.ContentChange]) => void
   ) => void;
@@ -189,9 +196,9 @@ export type SplitHandle = {
   reset: () => void;
   id: SplitId;
   /** Component metadata store (only available for component splits) */
-  meta: () => Store<ComponentMeta> | undefined;
+  meta: () => Store<TMeta> | undefined;
   /** Update component metadata (only available for component splits) */
-  updateMeta: ((data: Omit<ComponentMeta, 'kind'>) => void) | undefined;
+  updateMeta: ((data: Omit<TMeta, 'kind'>) => void) | undefined;
 } & UrlCapabilities;
 
 function newSplitId(): SplitId {

@@ -15,6 +15,10 @@ export type UnifiedListMeta = {
 
 export type ComponentMeta = UnifiedListMeta | { kind?: undefined };
 
+export type ComponentMetaMap = {
+  'unified-list': UnifiedListMeta;
+};
+
 type ComponentRegistration = {
   factory: ComponentFactory;
   initialMeta?: ComponentMeta;
