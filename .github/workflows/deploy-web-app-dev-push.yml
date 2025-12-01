@@ -31,8 +31,8 @@ jobs:
       notify: false
       environment: dev
     secrets:
-      AWS_DEPLOYMENT_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
-      AWS_DEPLOYMENT_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
       DD_APP_KEY: ${{ secrets.DD_APP_KEY }}
       DD_API_KEY: ${{ secrets.DD_API_KEY }}
@@ -49,6 +49,6 @@ jobs:
       notify: false
       environment: dev
     secrets:
-      AWS_DEPLOYMENT_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
-      AWS_DEPLOYMENT_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      AWS_ACCESS_KEY: ${{ secrets.AWS_ACCESS_KEY }}
+      AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       PULUMI_ACCESS_TOKEN: ${{ secrets.PULUMI_ACCESS_TOKEN }}
