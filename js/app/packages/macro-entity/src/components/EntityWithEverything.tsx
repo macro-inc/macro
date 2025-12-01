@@ -232,7 +232,7 @@ export function EntityWithEverything(
           return ['me'];
         }
         const namesSet = new Set<string>();
-        
+
         props.entity.participants?.forEach((participant) => {
           if (!participant.email) return;
           if (me && participant.email === me) return;
