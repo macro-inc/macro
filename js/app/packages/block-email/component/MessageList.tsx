@@ -44,8 +44,11 @@ export function MessageList(props: MessageListProps) {
         {(message, index) => {
           return (
             <MessageContainer
+              isFirstMessage={index() === 0}
+              isLastMessage={
+                index() === (context.filteredMessages().length ?? 0) - 1
+              }
               message={message}
-              index={index}
               expandedMessageBodyIds={expandedMessageBodyIds}
               setExpandedMessageBodyIds={setExpandedMessageBodyIds}
             />
