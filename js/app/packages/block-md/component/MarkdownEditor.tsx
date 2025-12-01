@@ -142,6 +142,8 @@ import { normalizeEnterPlugin } from 'core/component/LexicalMarkdown/plugins/nor
 import {
   autoRegister,
   lazyRegister,
+  registerEditorWidthObserver,
+  registerInternalLayoutShiftListener,
   registerRootEventListener,
 } from 'core/component/LexicalMarkdown/plugins/shared/utils';
 import { createMethodRegistration } from 'core/orchestrator';
@@ -631,6 +633,18 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     })
   );
 
+  const observeClickTargetHeight = () => {
+    const blockEl = blockElement();
+    if (!blockEl) {
+      setClickTargetHeight(EDITOR_PADDING_BOTTOM);
+      return;
+    }
+    const blockBottom = blockEl.getBoundingClientRect().bottom;
+    const targetHeight =
+      blockBottom - mountRef.getBoundingClientRect().bottom - 40;
+    setClickTargetHeight(Math.max(targetHeight, EDITOR_PADDING_BOTTOM));
+  };
+
   onMount(() => {
     setMdStore('selection', lexicalWrapper.selection);
     editor.setRootElement(mountRef);
@@ -643,21 +657,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       })
     );
 
-    // watch the height of the content editable to set the height of
-    // the focus target
-    const editorRefObserver = new ResizeObserver(() => {
-      const blockEl = blockElement();
-      if (!blockEl) {
-        setClickTargetHeight(EDITOR_PADDING_BOTTOM);
-        return;
-      }
-      const blockBottom =
-        blockEl?.getBoundingClientRect().bottom ?? window.innerHeight;
-
-      const targetHeight =
-        blockBottom - mountRef.getBoundingClientRect().bottom - 40;
-      setClickTargetHeight(Math.max(targetHeight, EDITOR_PADDING_BOTTOM));
-    });
+    const editorRefObserver = new ResizeObserver(observeClickTargetHeight);
 
     editorRefObserver.observe(mountRef);
     onCleanup(() => {
@@ -665,12 +665,15 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     });
   });
 
-  // better focus in handling. preserves selection on regain focus!
   autoRegister(
+    // better focus in handling. preserves selection on regain focus!
     registerRootEventListener(editor, 'focusin', (e) => {
       e.preventDefault();
       editor.focus(undefined, { defaultSelection: 'rootStart' });
-    })
+    }),
+
+    // adjust click target height on layout shift
+    registerInternalLayoutShiftListener(editor, observeClickTargetHeight)
   );
 
   const additionalCleanups: Array<() => void> = [];
@@ -932,7 +935,10 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         <FocusClickTarget
           editor={editor}
           editorFocus={editorFocus}
-          style={{ height: `${clickTargetHeight()}px` }}
+          style={{
+            height: `${clickTargetHeight()}px`,
+            'background-color': 'yellow',
+          }}
         />
         <Show when={isBlankMarkdown()}>
           <div class="pointer-events-none text-ink-placeholder absolute top-0">
