@@ -3,7 +3,6 @@ export const URL_PARAMS = {
   message: 'message_id',
 };
 
-
 // The index of the last message in a collapsed thread that will be shown
 export const COLLAPSED_THREAD_INDEX_CUTOFF = 2;
 
