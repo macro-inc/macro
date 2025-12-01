@@ -8,7 +8,7 @@ pub async fn update_live_comment_state(
     document_id: &str,
     message: AnnotationIncrementalUpdate<'_>,
 ) -> () {
-    if cfg!(feature = "disable_connection_gateway") {
+    if cfg!(not(feature = "connection_gateway")) {
         tracing::info!("bypassing connection gateway");
     } else {
         let entities = vec![EntityType::Document.with_entity_str(document_id)];

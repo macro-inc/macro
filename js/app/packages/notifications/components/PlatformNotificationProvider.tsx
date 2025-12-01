@@ -207,7 +207,8 @@ export function PlatformNotificationProvider(props: {
   overrideDefault?: CreateAppNotificationInterface;
 }) {
   const [manuallyDisabled, setManuallyDisabled] = makePersisted(
-    createSignal<UserSetting>('allowed')
+    createSignal<UserSetting>('allowed'),
+    { name: 'notification-manually-disabled' }
   );
 
   const setDisabled = async () => {

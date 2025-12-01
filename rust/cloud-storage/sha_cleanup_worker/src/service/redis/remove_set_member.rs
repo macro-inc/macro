@@ -53,6 +53,7 @@ mod tests {
     use redis::Commands;
 
     #[tokio::test]
+    #[ignore = "Redis cluster doesn't exist in CI"]
     async fn test_remove_set_member() -> Result<(), anyhow::Error> {
         let redis_client = redis::cluster::ClusterClient::new(vec!["redis://localhost:6369"])
             .expect("could not connect to redis client");
@@ -90,6 +91,7 @@ mod tests {
     }
 
     #[tokio::test]
+    #[ignore = "Redis cluster doesn't exist in CI"]
     async fn test_remove_set_members() -> Result<(), anyhow::Error> {
         let redis_client = redis::cluster::ClusterClient::new(vec!["redis://localhost:6369"])
             .expect("could not connect to redis client");

@@ -1,7 +1,6 @@
 pub mod url_parsers;
 
 use anyhow::{Context, Error};
-use http::StatusCode;
 use scraper::{Html, Selector};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -24,6 +23,7 @@ pub struct GetUnfurlResponse {
     pub favicon_url: Option<String>,
 }
 
+#[cfg_attr(feature = "mock", expect(dead_code))]
 fn no_tag(tag: &str) -> Error {
     anyhow::anyhow!(format!("Missing expected tag: [{}]", tag))
 }
@@ -67,6 +67,7 @@ fn parse_document(html_content: &str, url: &Url) -> Result<HashMap<String, Strin
     Ok(meta_tags)
 }
 
+#[cfg_attr(feature = "mock", expect(dead_code))]
 fn find_favicon(document: &Html, base_url: &Url) -> Option<String> {
     let links_selector = Selector::parse("link").ok()?;
 
@@ -96,6 +97,8 @@ pub async fn extract_meta_tags(
 ) -> Result<HashMap<String, String>, Box<dyn std::error::Error + Send + Sync>> {
     // Fetch the HTML content
     // TODO: how to handle malicious input?
+
+    use http::StatusCode;
     let url = Url::parse(url).context("invalid url")?;
 
     let response = reqwest::get(url.clone()).await?;

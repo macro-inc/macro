@@ -75,6 +75,11 @@ export {
   DefaultNotificationBlockNameResolver,
   DefaultUserNameResolver,
 } from './notification-resolvers';
+export type {
+  NotificationSettings,
+  SupportedNotificationSettings,
+} from './notification-settings';
+export { useNotificationSettings } from './notification-settings';
 export type { NotificationSource } from './notification-source';
 export { createNotificationSource } from './notification-source';
 export { fetchNotificationsForEntities } from './queries/entities-notifications-query';
