@@ -109,7 +109,7 @@ function SplitPreviewToggle() {
         icon={SplitIcon}
         theme={preview() ? 'accent' : 'current'}
         tooltip={{
-          label: preview() ? 'Split View' : 'Full View',
+          label: !preview() ? 'Split View (Preview)' : 'Full View (List)',
           hotkeyToken: TOKENS.unifiedList.togglePreview,
         }}
         onClick={() => setPreview((prev) => !prev)}
