@@ -8,6 +8,7 @@ use email_db_client::threads::get::get_outbound_threads_by_thread_ids;
 use email_utils::dedupe_emails;
 use futures::future::join_all;
 use insight_service_client::InsightContextProvider;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::contacts::ConnectionsMessage;
 use model::insight_context::email_insights::{
     EMAIL_INSIGHT_PROVIDER_SOURCE_NAME, EmailInfo, GenerateEmailInsightContext, NewMessagePayload,
@@ -573,7 +574,9 @@ async fn send_notifications(
                 .unwrap_or_else(|| contact.email.clone())
         });
 
-        let sender_id = sender_contact.map(|contact| format!("macro|{}", contact.email));
+        let sender_id = sender_contact
+            .and_then(|contact| MacroUserIdStr::try_from_email(&contact.email).ok())
+            .map(|id| id.to_string());
 
         let notification_metadata = NewEmailMetadata {
             sender,
