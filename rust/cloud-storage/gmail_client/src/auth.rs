@@ -119,6 +119,7 @@ mod tests {
     use anyhow::Context;
 
     #[tokio::test]
+    #[ignore = "Jwt env var is not available in CI"]
     async fn test_verify_real_google_jwt() -> anyhow::Result<()> {
         let gmail_client = super::GmailClient::new("hello".to_string());
 

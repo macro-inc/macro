@@ -1,7 +1,5 @@
 mod run_task;
 use aws_sdk_ecs as ecs;
-#[allow(unused_imports)]
-use mockall::automock;
 
 #[cfg(not(test))]
 pub use ECSClient as ECS;
@@ -14,7 +12,7 @@ pub struct ECSClient {
     inner: ecs::Client,
 }
 
-#[cfg_attr(test, automock)]
+#[cfg_attr(test, mockall::automock)]
 impl ECSClient {
     pub fn new(inner: ecs::Client) -> Self {
         Self { inner }

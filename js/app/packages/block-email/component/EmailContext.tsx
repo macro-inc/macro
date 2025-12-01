@@ -30,6 +30,7 @@ export type EmailContextValue = {
   setFocusedMessageId: Setter<string | undefined>;
   filteredMessages: Accessor<MessageWithBodyReplyless[]>;
   threadData: Accessor<Thread | undefined>;
+  archiveThread: () => boolean;
 };
 
 const EmailContext = createContext<EmailContextValue>();

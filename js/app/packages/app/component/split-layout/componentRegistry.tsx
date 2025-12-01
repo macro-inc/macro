@@ -1,28 +1,58 @@
 import { ChannelCompose } from '@block-channel/component/Compose';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { DEV_MODE_ENV, LOCAL_ONLY } from '@core/constant/featureFlags';
+import type { ViewId } from '@core/types/view';
 import { type JSXElement, lazy } from 'solid-js';
 import { EmailCompose } from '../../../block-email/component/Compose';
 import { Soup } from '../Soup';
 
 export type ComponentFactory = (params?: Record<string, any>) => JSXElement;
 
-const REGISTRY = new Map<
-  string,
-  (params?: Record<string, any>) => JSXElement
->();
+export type UnifiedListMeta = {
+  kind: 'unified-list';
+  viewId: ViewId;
+};
 
-export function registerComponent(name: string, factory: ComponentFactory) {
-  REGISTRY.set(name, factory);
+export type ComponentMeta = UnifiedListMeta | { kind?: undefined };
+
+export type ComponentMetaMap = {
+  'unified-list': UnifiedListMeta;
+};
+
+type ComponentRegistration = {
+  factory: ComponentFactory;
+  initialMeta?: ComponentMeta;
+};
+
+const REGISTRY = new Map<string, ComponentRegistration>();
+
+export function registerComponent<T extends Omit<ComponentMeta, 'kind'>>(
+  name: string,
+  factory: ComponentFactory,
+  initialMeta?: T
+) {
+  const metaWithKind = initialMeta ? { kind: name, ...initialMeta } : undefined;
+  REGISTRY.set(name, { factory, initialMeta: metaWithKind as ComponentMeta });
 }
 
-export function resolveComponent(name: string, params?: Record<string, any>) {
-  const factory = REGISTRY.get(name);
-  if (!factory) throw new Error(`Component '${name}' not registered`);
-  return () => factory(params);
+export type ResolvedComponent = {
+  element: () => JSXElement;
+  initialMeta?: ComponentMeta;
+};
+
+export function resolveComponent(
+  name: string,
+  params?: Record<string, any>
+): ResolvedComponent {
+  const registration = REGISTRY.get(name);
+  if (!registration) throw new Error(`Component '${name}' not registered`);
+  return {
+    element: () => registration.factory(params),
+    initialMeta: registration.initialMeta,
+  };
 }
 
-registerComponent('unified-list', () => <Soup />);
+registerComponent('unified-list', () => <Soup />, { viewId: 'inbox' });
 registerComponent('loading', () => <LoadingBlock />);
 registerComponent('channel-compose', () => <ChannelCompose />);
 registerComponent('email-compose', () => <EmailCompose />);

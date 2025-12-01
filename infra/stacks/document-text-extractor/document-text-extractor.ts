@@ -1,6 +1,7 @@
 import { Lambda } from '@lambda';
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import { QueueAlarms } from '@resources';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
 
 const BASE_NAME = 'document-text-extractor';
@@ -92,6 +93,12 @@ export class DocumentTextExtractorLambda extends pulumi.ComponentResource {
         ),
         tags,
       },
+      { parent: this }
+    );
+
+    new QueueAlarms(
+      'queue-alarms',
+      { queue: this.queue, tags },
       { parent: this }
     );
 

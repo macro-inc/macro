@@ -11,6 +11,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { ChannelWithParticipants } from '@core/user';
 import PlusIcon from '@icon/regular/plus.svg?component-solid';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
+import { type EmailEntity, useEmails } from '@macro-entity';
 import type {
   AttachmentType,
   ChannelType,
@@ -32,7 +33,8 @@ type ActiveTabAttachmentProps = {
 function convertSplitToAttachment(
   split: SplitContent,
   item: BasicDocument | null,
-  channel: ChannelWithParticipants | null = null
+  channel: ChannelWithParticipants | null = null,
+  email: EmailEntity | null = null
 ): Attachment | null {
   let metadata: Attachment['metadata'];
   let attachmentType: AttachmentType;
@@ -60,6 +62,15 @@ function convertSplitToAttachment(
       };
       attachmentType = 'channel';
       break;
+    case 'email':
+      if (!email) return null;
+      const emailSubject = email.name || 'No Subject';
+      metadata = {
+        type: 'email',
+        email_subject: emailSubject,
+      };
+      attachmentType = 'email';
+      break;
     default:
       if (!item) return null;
       const documentName = item.name || 'Document';
@@ -86,6 +97,7 @@ function AddContextDropdown(props: {
     split: SplitContent;
     item: BasicDocument | null;
     channel: ChannelWithParticipants | null;
+    email: EmailEntity | null;
   }>;
   onAddAttachment: (attachment: Attachment) => void;
   onAddAll: (attachments: Attachment[]) => void;
@@ -95,9 +107,10 @@ function AddContextDropdown(props: {
     split: SplitContent;
     item: BasicDocument | null;
     channel: ChannelWithParticipants | null;
+    email: EmailEntity | null;
   }) => {
-    const { split, item, channel } = tabData;
-    const attachment = convertSplitToAttachment(split, item, channel);
+    const { split, item, channel, email } = tabData;
+    const attachment = convertSplitToAttachment(split, item, channel, email);
     if (attachment) {
       props.onAddAttachment(attachment);
     }
@@ -114,8 +127,8 @@ function AddContextDropdown(props: {
   const handleAddAll = () => {
     const attachments: Attachment[] = [];
     for (const tabData of unattachedTabs()) {
-      const { split, item, channel } = tabData;
-      const attachment = convertSplitToAttachment(split, item, channel);
+      const { split, item, channel, email } = tabData;
+      const attachment = convertSplitToAttachment(split, item, channel, email);
       if (attachment) {
         attachments.push(attachment);
       }
@@ -130,11 +143,13 @@ function AddContextDropdown(props: {
     >
       <For each={unattachedTabs()}>
         {(tabData, index) => {
-          const { split, item, channel } = tabData;
+          const { split, item, channel, email } = tabData;
 
           let name: string | undefined;
           if (split.type === 'channel') {
             name = channel?.name ?? undefined;
+          } else if (split.type === 'email') {
+            name = email?.name ?? undefined;
           } else {
             name = item?.name;
           }
@@ -183,6 +198,7 @@ export function ActiveTabAttachment(props: ActiveTabAttachmentProps) {
   const history = useHistory();
   const channelsContext = useChannelsContext();
   const channels = () => channelsContext.channels();
+  const emails = useEmails();
 
   // Get valid active tabs using createMemo
   const validActiveTabs = createMemo(() => {
@@ -192,14 +208,16 @@ export function ActiveTabAttachment(props: ActiveTabAttachmentProps) {
     const splits = splitManager.splits();
     const historyItems = history();
     const channelList = channels();
+    const emailList = emails();
 
-    // Deduplicate by type:id key and resolve names from history/channels
+    // Deduplicate by type:id key and resolve names from history/channels/emails
     const uniqueSplits = new Map<
       string,
       {
         split: SplitContent;
         item: BasicDocument | null;
         channel: ChannelWithParticipants | null;
+        email: EmailEntity | null;
       }
     >();
 
@@ -214,6 +232,24 @@ export function ActiveTabAttachment(props: ActiveTabAttachmentProps) {
 
       const key = `${split.content.type}:${split.content.id}`;
       if (!uniqueSplits.has(key)) {
+        // For email splits, find in email list
+        if (split.content.type === 'email') {
+          const emailItem = emailList.find(
+            (email) => email.id === split.content.id
+          );
+          if (!emailItem) {
+            continue;
+          }
+
+          uniqueSplits.set(key, {
+            split: split.content,
+            item: null,
+            channel: null,
+            email: emailItem,
+          });
+          continue;
+        }
+
         // Find matching item in history
         const historyItem =
           historyItems.find((item) => item.id === split.content.id) || null;
@@ -232,6 +268,7 @@ export function ActiveTabAttachment(props: ActiveTabAttachmentProps) {
           split: split.content,
           item: historyItem,
           channel: channelItem,
+          email: null,
         });
       }
     }
@@ -247,8 +284,13 @@ export function ActiveTabAttachment(props: ActiveTabAttachmentProps) {
     if (tabs.length > 0 && !hasAutoAttached()) {
       const attachments: Attachment[] = [];
       for (const tabData of tabs) {
-        const { split, item, channel } = tabData;
-        const attachment = convertSplitToAttachment(split, item, channel);
+        const { split, item, channel, email } = tabData;
+        const attachment = convertSplitToAttachment(
+          split,
+          item,
+          channel,
+          email
+        );
         if (attachment) {
           attachments.push(attachment);
         }

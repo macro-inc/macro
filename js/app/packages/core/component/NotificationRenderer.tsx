@@ -4,7 +4,7 @@ import { useDisplayName } from '@core/user/displayName';
 import { formatDate } from '@core/util/date';
 import {
   extractNotificationData,
-  notificationWithMetadata,
+  tryToTypedNotification,
   type UnifiedNotification,
 } from '@notifications';
 import { Show } from 'solid-js';
@@ -15,7 +15,7 @@ type NotificationRendererProps = {
 };
 
 export function NotificationRenderer(props: NotificationRendererProps) {
-  const typed = () => notificationWithMetadata(props.notification);
+  const typed = () => tryToTypedNotification(props.notification);
   const data = () => {
     const t = typed();
     if (!t) return null;

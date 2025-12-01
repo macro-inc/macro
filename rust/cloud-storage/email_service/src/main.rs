@@ -295,7 +295,7 @@ async fn main() -> anyhow::Result<()> {
         .await;
     });
 
-    if !cfg!(feature = "disable_sfs_map") {
+    if cfg!(feature = "sfs_map") {
         for worker in sfs_uploader_workers {
             let db_sfs_uploader = db.clone();
             let sfs_client_sfs_uploader = sfs_client.clone();

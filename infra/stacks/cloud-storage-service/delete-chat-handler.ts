@@ -1,11 +1,12 @@
 import { Lambda } from '@lambda';
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import { QueueAlarms } from '@resources';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
 
-const LAMBA_BASE_NAME = 'delete_chat_handler';
+const LAMBDA_BASE_NAME = 'delete_chat_handler';
 const CLOUD_STORAGE_BASE = `../../../rust/cloud-storage`;
-const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${LAMBA_BASE_NAME}/bootstrap.zip`;
+const ZIP_LOCATION = `${CLOUD_STORAGE_BASE}/target/lambda/${LAMBDA_BASE_NAME}/bootstrap.zip`;
 
 export type DeleteChatHandlerEnvVars = {
   DATABASE_URL: pulumi.Output<string> | string;
@@ -41,7 +42,7 @@ export class DeleteChatHandler extends pulumi.ComponentResource {
 
     // Create queue and DLQ
     this.dlq = new aws.sqs.Queue(
-      `${LAMBA_BASE_NAME}-dlq-${stack}`,
+      `${LAMBDA_BASE_NAME}-dlq-${stack}`,
       {
         name: `delete-chat-handler-dlq-${stack}`,
         messageRetentionSeconds: 1209600,
@@ -53,7 +54,7 @@ export class DeleteChatHandler extends pulumi.ComponentResource {
     new aws.cloudwatch.MetricAlarm(
       'dlq-alarm',
       {
-        name: `${LAMBA_BASE_NAME}-dlq-alarm-${stack}`,
+        name: `${LAMBDA_BASE_NAME}-dlq-alarm-${stack}`,
         comparisonOperator: 'GreaterThanThreshold',
         evaluationPeriods: 1,
         metricName: 'ApproximateNumberOfMessagesVisible',
@@ -71,7 +72,7 @@ export class DeleteChatHandler extends pulumi.ComponentResource {
     );
 
     this.queue = new aws.sqs.Queue(
-      `${LAMBA_BASE_NAME}-queue-${stack}`,
+      `${LAMBDA_BASE_NAME}-queue-${stack}`,
       {
         name: `delete-chat-handler-queue-${stack}`,
         redrivePolicy: this.dlq.arn.apply((arn) =>
@@ -85,8 +86,14 @@ export class DeleteChatHandler extends pulumi.ComponentResource {
       { parent: this, dependsOn: [this.dlq] }
     );
 
+    new QueueAlarms(
+      'queue-alarms',
+      { queue: this.queue, tags },
+      { parent: this }
+    );
+
     const sqsPolicy = new aws.iam.Policy(
-      `${LAMBA_BASE_NAME}-sqs-policy`,
+      `${LAMBDA_BASE_NAME}-sqs-policy`,
       {
         policy: pulumi.output({
           Version: '2012-10-17',
@@ -108,9 +115,9 @@ export class DeleteChatHandler extends pulumi.ComponentResource {
     );
 
     this.role = new aws.iam.Role(
-      `${LAMBA_BASE_NAME}-role`,
+      `${LAMBDA_BASE_NAME}-role`,
       {
-        name: `${LAMBA_BASE_NAME}-role-${stack}`,
+        name: `${LAMBDA_BASE_NAME}-role-${stack}`,
         assumeRolePolicy: JSON.stringify({
           Version: '2012-10-17',
           Statement: [
@@ -136,9 +143,9 @@ export class DeleteChatHandler extends pulumi.ComponentResource {
     );
 
     const deleteChatLambda = new Lambda<DeleteChatHandlerEnvVars>(
-      `${LAMBA_BASE_NAME}-lambda`,
+      `${LAMBDA_BASE_NAME}-lambda`,
       {
-        baseName: LAMBA_BASE_NAME,
+        baseName: LAMBDA_BASE_NAME,
         handlerBase: CLOUD_STORAGE_BASE,
         zipLocation: ZIP_LOCATION,
         vpc,
@@ -181,9 +188,9 @@ export class DeleteChatHandler extends pulumi.ComponentResource {
 
   setupLambdaAlarms() {
     new aws.cloudwatch.MetricAlarm(
-      `${LAMBA_BASE_NAME}-throttle-alarm`,
+      `${LAMBDA_BASE_NAME}-throttle-alarm`,
       {
-        name: `${LAMBA_BASE_NAME}-throttle-count-${stack}`,
+        name: `${LAMBDA_BASE_NAME}-throttle-count-${stack}`,
         metricName: 'Throttles',
         namespace: 'AWS/Lambda',
         statistic: 'Sum',
@@ -194,7 +201,7 @@ export class DeleteChatHandler extends pulumi.ComponentResource {
         dimensions: {
           FunctionName: this.lambda.name,
         },
-        alarmDescription: `Alarm when ${LAMBA_BASE_NAME} lambda experiences throttling.`,
+        alarmDescription: `Alarm when ${LAMBDA_BASE_NAME} lambda experiences throttling.`,
         actionsEnabled: true,
         alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
         tags: this.tags,
@@ -203,9 +210,9 @@ export class DeleteChatHandler extends pulumi.ComponentResource {
     );
 
     new aws.cloudwatch.MetricAlarm(
-      `${LAMBA_BASE_NAME}-error-alarm`,
+      `${LAMBDA_BASE_NAME}-error-alarm`,
       {
-        name: `${LAMBA_BASE_NAME}-error-count-${stack}`,
+        name: `${LAMBDA_BASE_NAME}-error-count-${stack}`,
         metricName: 'Errors',
         namespace: 'AWS/Lambda',
         statistic: 'Sum',
@@ -216,7 +223,7 @@ export class DeleteChatHandler extends pulumi.ComponentResource {
         dimensions: {
           FunctionName: this.lambda.name,
         },
-        alarmDescription: `Alarm when ${LAMBA_BASE_NAME} lambda experiences errors.`,
+        alarmDescription: `Alarm when ${LAMBDA_BASE_NAME} lambda experiences errors.`,
         actionsEnabled: true,
         alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
         tags: this.tags,

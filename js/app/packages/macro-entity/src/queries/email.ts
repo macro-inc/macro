@@ -77,10 +77,10 @@ export function createEmailsInfiniteQuery(
       select: (data) =>
         data.pages.flatMap(({ items }) =>
           items.map((email): EmailEntity => {
-            const participantEmails = email.contacts.map(
-              (p) => p.emailAddress ?? ''
-            );
-            const participantNames = email.contacts.map((p) => p.name ?? '');
+            const participants = email.contacts.map((p) => ({
+              email: p.emailAddress ?? '',
+              name: p.name ?? '',
+            }));
 
             return {
               ...email,
@@ -91,8 +91,7 @@ export function createEmailsInfiniteQuery(
               snippet: email.snippet ?? undefined,
               isImportant: email.isImportant ?? false,
               done: !email.inboxVisible,
-              participantEmails,
-              participantNames,
+              participants,
               senderEmail: email.senderEmail ?? undefined,
               senderName: email.senderName ?? email.senderEmail ?? undefined,
             };

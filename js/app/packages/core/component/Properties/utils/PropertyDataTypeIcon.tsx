@@ -4,11 +4,11 @@ import ChatIcon from '@icon/regular/chat.svg';
 import CheckSquareIcon from '@icon/regular/check-square.svg';
 import FileIcon from '@icon/regular/file.svg';
 import FolderIcon from '@icon/regular/folder.svg';
-import GlobeIcon from '@icon/regular/globe.svg';
 import HashIcon from '@icon/regular/hash.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import ListBulletIcon from '@icon/regular/list-bullets.svg';
 import PencilIcon from '@icon/regular/pencil.svg';
+import SimpleTagIcon from '@icon/regular/tag-simple.svg';
 import UserCircleIcon from '@icon/regular/user-circle.svg';
 import type { Component } from 'solid-js';
 import type { PropertyDefinitionFlat } from '../types';
@@ -39,7 +39,7 @@ export const PropertyDataTypeIcon: Component<PropertyDataTypeIconProps> = (
       case 'CHANNEL':
         return <HashIcon class={ICON_CLASSES} />;
       default:
-        return <GlobeIcon class={ICON_CLASSES} />;
+        return <SimpleTagIcon class={ICON_CLASSES} />;
     }
   }
 
