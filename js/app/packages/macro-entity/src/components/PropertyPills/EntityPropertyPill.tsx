@@ -14,8 +14,17 @@ import ChannelIcon from '@icon/duotone/hash-duotone.svg';
 import UserDuotoneIcon from '@icon/duotone/user-duotone.svg';
 import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
+import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { For, Show } from 'solid-js';
 import { PropertyPillTooltip } from './PropertyPillTooltip';
+
+/** Entity types that require preview lookup for name/icon resolution */
+const PREVIEWABLE_ENTITY_TYPES: EntityType[] = [
+  EntityType.DOCUMENT,
+  EntityType.PROJECT,
+  EntityType.CHAT,
+  EntityType.CHANNEL,
+];
 
 type EntityPropertyPillProps = {
   property: Property & { valueType: 'ENTITY' };
@@ -54,9 +63,8 @@ const SingleEntityPill = (props: SingleEntityPillProps) => {
   const entityType = () => props.entity.entity_type;
   const entityId = () => props.entity.entity_id;
 
-  // Get preview for items that need it
-  const previewTypes = ['DOCUMENT', 'PROJECT', 'CHAT', 'CHANNEL'];
-  const needsPreview = () => previewTypes.includes(entityType());
+  const needsPreview = () =>
+    PREVIEWABLE_ENTITY_TYPES.includes(entityType() as EntityType);
 
   const [preview] = useItemPreview({
     id: needsPreview() ? entityId() : '',
@@ -274,9 +282,8 @@ const EntityValuePill = (props: EntityValuePillProps) => {
   const entityType = () => props.entity.entity_type;
   const entityId = () => props.entity.entity_id;
 
-  // Get preview for items that need it
-  const previewTypes = ['DOCUMENT', 'PROJECT', 'CHAT', 'CHANNEL'];
-  const needsPreview = () => previewTypes.includes(entityType());
+  const needsPreview = () =>
+    PREVIEWABLE_ENTITY_TYPES.includes(entityType() as EntityType);
 
   const [preview] = useItemPreview({
     id: needsPreview() ? entityId() : '',
