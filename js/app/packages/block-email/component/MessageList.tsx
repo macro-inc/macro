@@ -1,5 +1,5 @@
 import { CircleSpinner } from '@core/component/CircleSpinner';
-import { For, Show } from 'solid-js';
+import { createSelector, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useEmailContext } from './EmailContext';
 import { MessageContainer } from './MessageContainer';
@@ -14,6 +14,14 @@ export function MessageList(props: MessageListProps) {
   const [expandedMessageBodyIds, setExpandedMessageBodyIds] = createStore<
     Record<string, boolean>
   >({});
+  const isFocusedSelector = createSelector(
+    context.focusedMessageId,
+    (a, b) => !!a && !!b && a === b
+  );
+  const isTargetSelector = createSelector(
+    context.activeTargetMessageId,
+    (a, b) => !!a && !!b && a === b
+  );
 
   return (
     <div
@@ -48,6 +56,8 @@ export function MessageList(props: MessageListProps) {
               isLastMessage={
                 index() === (context.filteredMessages().length ?? 0) - 1
               }
+              isFocused={isFocusedSelector(message.db_id ?? undefined)}
+              isTarget={isTargetSelector(message.db_id ?? undefined)}
               message={message}
               expandedMessageBodyIds={expandedMessageBodyIds}
               setExpandedMessageBodyIds={setExpandedMessageBodyIds}

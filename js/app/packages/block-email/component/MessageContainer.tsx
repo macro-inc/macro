@@ -17,6 +17,8 @@ interface MessageContainerProps {
   setExpandedMessageBodyIds: SetStoreFunction<Record<string, boolean>>;
   isFirstMessage: boolean;
   isLastMessage: boolean;
+  isFocused: boolean;
+  isTarget: boolean;
 }
 
 export function MessageContainer(props: MessageContainerProps) {
@@ -41,19 +43,11 @@ export function MessageContainer(props: MessageContainerProps) {
     return props.expandedMessageBodyIds[props.message.db_id ?? ''];
   });
 
-  const isFocused = createMemo(() => {
-    return props.message.db_id === context.focusedMessageId();
-  });
-
   const isNewMessage = createMemo(() => {
     return (
       props.message.labels.find((l) => l.provider_label_id === 'UNREAD') !==
       undefined
     );
-  });
-
-  const isTarget = createMemo(() => {
-    return context.activeTargetMessageId() === props.message.db_id;
   });
 
   // Hide attachments that are referenced in inline images
@@ -99,17 +93,17 @@ export function MessageContainer(props: MessageContainerProps) {
       <div class="macro-message-width w-full">
         <Message
           id={props.message.db_id ?? undefined}
-          focused={isFocused()}
+          focused={props.isFocused}
           isFirstMessage={props.isFirstMessage}
           isLastMessage={props.isLastMessage}
           senderId={props.message.from?.email}
           isNewMessage={isNewMessage()}
-          isTarget={isTarget()}
+          isTarget={props.isTarget}
         >
           <Message.TopBar>
             <EmailMessageTopBar
               message={props.message}
-              focused={isFocused()}
+              focused={props.isFocused}
               setExpandedMessageBodyIds={props.setExpandedMessageBodyIds}
               isBodyExpanded={isBodyExpanded}
               expandedHeader={expandedHeader}
