@@ -79,16 +79,15 @@ jobs:
       - uses: runs-on/action@v1
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-rust
-      - uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cargo/bin/
-            ~/.cargo/registry/index/
-            ~/.cargo/registry/cache/
-            ~/.cargo/git/db/
-          key: ${{ runner.os }}-cargo-${{ hashFiles('rust/cloud-storage/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+      - uses: runs-on/cache/restore@v4
+        path: |
+          ~/.cargo/bin/
+          ~/.cargo/registry/index/
+          ~/.cargo/registry/cache/
+          ~/.cargo/git/db/
+        key: ${{ runner.os }}-cargo-${{ hashFiles('rust/cloud-storage/Cargo.lock') }}
+        restore-keys: |
+          ${{ runner.os }}-cargo-
       - name: install dependencies
         run: |
           cargo install just --force
