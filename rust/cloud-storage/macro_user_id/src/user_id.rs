@@ -89,6 +89,13 @@ impl<'a> MacroUserIdStr<'a> {
     }
 }
 
+impl MacroUserIdStr<'static> {
+    /// Create a MacroUserIdStr from an email address by prepending "macro|"
+    pub fn try_from_email(email: &str) -> Result<Self, ParseErr> {
+        Self::try_from(format!("{}|{}", MACRO_PREFIX, email))
+    }
+}
+
 impl TryFrom<String> for MacroUserIdStr<'static> {
     type Error = ParseErr;
 

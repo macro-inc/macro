@@ -8,6 +8,7 @@ use email_db_client::threads::get::get_outbound_threads_by_thread_ids;
 use email_utils::dedupe_emails;
 use futures::future::join_all;
 use insight_service_client::InsightContextProvider;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::contacts::ConnectionsMessage;
 use model::insight_context::email_insights::{
     EMAIL_INSIGHT_PROVIDER_SOURCE_NAME, EmailInfo, GenerateEmailInsightContext, NewMessagePayload,
@@ -180,7 +181,7 @@ async fn handle_attachment_upload(
 ) -> result::Result<(), ProcessingError> {
     // temporarily only for macro emails, for testing purposes
     if !link.macro_id.0.as_ref().ends_with("@macro.com")
-        || cfg!(feature = "disable_attachment_upload")
+        || cfg!(not(feature = "attachment_upload"))
         || message_attachment_count == 0
     {
         return Ok(());
@@ -238,7 +239,7 @@ async fn handle_contacts_sync(
     provider_message_id: &str,
 ) -> result::Result<(), ProcessingError> {
     // if the user sent the message, upsert contacts for its recipients in contacts-service.
-    if !cfg!(feature = "disable_contacts_sync") || !is_sent || recipient_emails.is_empty() {
+    if cfg!(feature = "contacts_sync") || !is_sent || recipient_emails.is_empty() {
         return Ok(());
     }
 
@@ -562,17 +563,20 @@ async fn send_notifications(
             })?;
 
     for message in notifiable_messages {
-        // value is the sender's name if they have one, else their email address
-        let sender = if let Some(from_id) = message.from_contact_id {
-            sender_contacts.get(&from_id).map(|contact| {
-                contact
-                    .name
-                    .clone()
-                    .unwrap_or_else(|| contact.email.clone())
-            })
-        } else {
-            None
-        };
+        let sender_contact = message
+            .from_contact_id
+            .and_then(|from_id| sender_contacts.get(&from_id));
+
+        let sender = sender_contact.map(|contact| {
+            contact
+                .name
+                .clone()
+                .unwrap_or_else(|| contact.email.clone())
+        });
+
+        let sender_id = sender_contact
+            .and_then(|contact| MacroUserIdStr::try_from_email(&contact.email).ok())
+            .map(|id| id.to_string());
 
         let notification_metadata = NewEmailMetadata {
             sender,
@@ -585,7 +589,7 @@ async fn send_notifications(
         let notification_queue_message = NotificationQueueMessage {
             notification_entity: NotificationEntity::new_email(message.db_id.to_string()),
             notification_event: NotificationEvent::NewEmail(notification_metadata),
-            sender_id: Some(link.macro_id.to_string()),
+            sender_id,
             recipient_ids: Some(vec![link.macro_id.to_string()]),
             is_important_v0: Some(false),
         };

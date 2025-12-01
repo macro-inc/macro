@@ -109,41 +109,37 @@ const TextPropertyPill = (props: PropertyPillProps) => {
   );
 };
 
-/**
- * Tooltip content for a property pill
- */
+const getValues = (property: Property): string[] => {
+  if (property.value === null || property.value === undefined) return [];
+
+  if (
+    (property.valueType === 'SELECT_STRING' ||
+      property.valueType === 'SELECT_NUMBER') &&
+    Array.isArray(property.value)
+  ) {
+    return property.value.map((v) => formatPropertyValue(property, v));
+  }
+
+  if (property.valueType === 'DATE' && property.value instanceof Date) {
+    return [formatPropertyValue(property, property.value)];
+  }
+
+  if (property.valueType === 'NUMBER' && typeof property.value === 'number') {
+    return [formatPropertyValue(property, property.value)];
+  }
+
+  if (property.valueType === 'STRING' && typeof property.value === 'string') {
+    return property.value ? [property.value] : [];
+  }
+
+  return [];
+};
+
 const TextTooltipContent = (props: { property: Property }) => {
-  const getValues = (): string[] => {
-    const { property } = props;
-    if (property.value === null || property.value === undefined) return [];
-
-    if (
-      (property.valueType === 'SELECT_STRING' ||
-        property.valueType === 'SELECT_NUMBER') &&
-      Array.isArray(property.value)
-    ) {
-      return property.value.map((v) => formatPropertyValue(property, v));
-    }
-
-    if (property.valueType === 'DATE' && property.value instanceof Date) {
-      return [formatPropertyValue(property, property.value)];
-    }
-
-    if (property.valueType === 'NUMBER' && typeof property.value === 'number') {
-      return [formatPropertyValue(property, property.value)];
-    }
-
-    if (property.valueType === 'STRING' && typeof property.value === 'string') {
-      return property.value ? [property.value] : [];
-    }
-
-    return [];
-  };
-
   return (
     <PropertyPillTooltip property={props.property}>
       <div class="flex items-center gap-1.5 flex-wrap">
-        <For each={getValues()}>
+        <For each={getValues(props.property)}>
           {(value) => (
             <div
               class="p-px bg-edge box-border h-fit w-fit flex items-center"

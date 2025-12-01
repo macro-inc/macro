@@ -4,7 +4,7 @@ import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { TOKENS } from '@core/hotkey/tokens';
 import { matches } from '@core/util/match';
 import CheckIcon from '@icon/regular/check.svg';
-import { notificationWithMetadata } from '@notifications';
+import { tryToTypedNotification } from '@notifications';
 import { useEmail, useUserId } from '@service-gql/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
@@ -267,7 +267,9 @@ export function EntityWithEverything(
           <div class="flex w-[20cqw] gap-2 font-semibold shrink-0">
             {/* Sender Name */}
             <div class="truncate">
-              {displayedNames() ?? props.entity.senderName}
+              {displayedNames() ??
+                props.entity.senderName ??
+                props.entity.senderEmail?.split('@')[0]}
             </div>
             {/* Sender Email Address */}
             {/* <Show
@@ -628,9 +630,7 @@ export function EntityWithEverything(
                   }
 
                   const metadata =
-                    notificationWithMetadata(
-                      notification
-                    )?.notificationMetadata;
+                    tryToTypedNotification(notification)?.notificationMetadata;
                   if (
                     !metadata ||
                     !('messageContent' in metadata) ||
@@ -651,9 +651,7 @@ export function EntityWithEverything(
                   }
 
                   const metadata =
-                    notificationWithMetadata(
-                      notification
-                    )?.notificationMetadata;
+                    tryToTypedNotification(notification)?.notificationMetadata;
                   if (
                     !metadata ||
                     !('messageContent' in metadata) ||

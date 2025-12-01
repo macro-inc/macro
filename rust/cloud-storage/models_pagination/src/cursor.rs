@@ -233,17 +233,21 @@ where
             ..
         } = self;
 
-        let mut res: Vec<_> = iter.take(limit).collect();
-
-        if let Some(sort) = ensure_sort {
-            res.sort_by_key(|r| {
-                let cursor = cb(r);
-                match sort {
-                    Direction::Asc => Either::Left(cursor.last_val),
-                    Direction::Desc => Either::Right(std::cmp::Reverse(cursor.last_val)),
-                }
-            });
-        }
+        let res = match ensure_sort {
+            Some(sort) => {
+                let mut res: Vec<_> = iter.collect();
+                res.sort_by_key(|r| {
+                    let cursor = cb(r);
+                    match sort {
+                        Direction::Asc => Either::Left(cursor.last_val),
+                        Direction::Desc => Either::Right(std::cmp::Reverse(cursor.last_val)),
+                    }
+                });
+                res.truncate(limit);
+                res
+            }
+            None => iter.take(limit).collect(),
+        };
 
         match res.len().cmp(&limit) {
             Ordering::Less => Paginated {

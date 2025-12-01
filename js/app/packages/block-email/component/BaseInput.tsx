@@ -7,6 +7,7 @@ import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core
 import type { UserMentionRecord } from '@core/component/LexicalMarkdown/component/menu/MentionsMenu';
 import { DropdownMenuContent, MenuItem } from '@core/component/Menu';
 import { RecipientSelector } from '@core/component/RecipientSelector';
+import { TextButton } from '@core/component/TextButton';
 import { toast } from '@core/component/Toast/Toast';
 import { Tooltip } from '@core/component/Tooltip';
 import { fileDrop } from '@core/directive/fileDrop';
@@ -15,9 +16,12 @@ import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
 import { useDisplayName } from '@core/user';
 import { isErr, isOk } from '@core/util/maybeResult';
+import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
 import Forward from '@icon/regular/arrow-bend-up-right.svg';
+import CaretDown from '@icon/regular/caret-down.svg';
+import CheckIcon from '@icon/regular/check.svg';
 import DotsThree from '@icon/regular/dots-three.svg';
 import Plus from '@icon/regular/plus.svg';
 import TextAa from '@icon/regular/text-aa.svg';
@@ -25,8 +29,6 @@ import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { DocumentMentionInfo } from '@lexical-core';
 import { logger } from '@observability';
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import { emailClient } from '@service-email/client';
 import type {
   AttachmentMacro,
@@ -131,6 +133,7 @@ export function BaseInput(props: {
   preloadedHtml?: string;
   preloadedAttachments?: AttachmentMacro[];
   sideEffectOnSend?: (newMessageId: MessageToSendDbId | null) => void;
+  onSendAndMarkDone?: () => void;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }) {
@@ -162,7 +165,6 @@ export function BaseInput(props: {
   const [bccRef, setBccRef] = createSignal<HTMLInputElement>();
   const [showCc, setShowCc] = createSignal<boolean>();
   const [showBcc, setShowBcc] = createSignal<boolean>();
-
   const [savedDraftId, setSavedDraftId] = createSignal<
     MessageToSendDbId | undefined
   >(props.draft?.db_id ?? undefined);
@@ -352,8 +354,8 @@ export function BaseInput(props: {
     useHotkeyDOMScope('compose-message');
   let composeContainerRef: HTMLDivElement | undefined;
 
-  const sendEmail = async () => {
-    if (isPendingSend() || isPendingUpload()) return;
+  const sendEmail = async (): Promise<boolean> => {
+    if (isPendingSend() || isPendingUpload()) return false;
     setIsPendingSend(true);
     const to = form().recipients.to.map(convertEmailRecipientToContactInfo);
     const cc = form().recipients.cc.map(convertEmailRecipientToContactInfo);
@@ -361,7 +363,8 @@ export function BaseInput(props: {
 
     if ((to?.length ?? 0) + (cc?.length ?? 0) + (bcc?.length ?? 0) === 0) {
       toast.failure('Email failed to send. No recipients provided');
-      return;
+      setIsPendingSend(false);
+      return false;
     }
 
     const currentThread = ctx.threadData();
@@ -370,13 +373,15 @@ export function BaseInput(props: {
     if (!currentThread && !newMessage) {
       logger.error(new Error("Can't send email, no email thread found"));
       toast.failure('Email failed to send');
-      return;
+      setIsPendingSend(false);
+      return false;
     }
 
     if (newMessage && currentThread) {
       toast.failure('Email failed to send');
       logger.error('New message and thread cannot be provided together');
-      return;
+      setIsPendingSend(false);
+      return false;
     }
 
     let linkId: string | undefined = currentThread?.link_id;
@@ -385,7 +390,8 @@ export function BaseInput(props: {
       if (isErr(maybeFallbackLinks) || maybeFallbackLinks[1].links.length < 1) {
         toast.failure('Email failed to send');
         logger.error('No links found');
-        return;
+        setIsPendingSend(false);
+        return false;
       }
       linkId = maybeFallbackLinks[1].links[0].id;
     }
@@ -394,7 +400,10 @@ export function BaseInput(props: {
       replyType: effectiveReplyType(),
       replyingTo: props.replyingTo(),
     });
-    if (!prepared) return;
+    if (!prepared) {
+      setIsPendingSend(false);
+      return false;
+    }
 
     const response = await emailClient.sendMessage({
       message: {
@@ -423,11 +432,22 @@ export function BaseInput(props: {
       if (props.sideEffectOnSend) {
         props.sideEffectOnSend(message.db_id ?? null);
       }
+      setIsPendingSend(false);
+      return true;
     } else {
       toast.failure('Failed to send email');
+      setIsPendingSend(false);
+      return false;
     }
+  };
 
-    setIsPendingSend(false);
+  const sendEmailAndMarkDone = async () => {
+    if (isPendingSend() || isPendingUpload()) return;
+    const success = await sendEmail();
+    // Call onSendAndMarkDone after successful send
+    if (success && props.onSendAndMarkDone) {
+      props.onSendAndMarkDone();
+    }
   };
 
   const resetState = () => {
@@ -502,7 +522,7 @@ export function BaseInput(props: {
       attachComposeHotkeys(composeContainerRef);
 
       registerHotkey({
-        hotkey: 'cmd+enter',
+        hotkey: 'shift+cmd+enter',
         scopeId: composeHotkeyScope,
         description: 'Send email',
         keyDownHandler: () => {
@@ -511,6 +531,19 @@ export function BaseInput(props: {
         },
         runWithInputFocused: true,
         hotkeyToken: TOKENS.email.send,
+        displayPriority: 9,
+      });
+
+      registerHotkey({
+        hotkey: 'cmd+enter',
+        scopeId: composeHotkeyScope,
+        description: 'Send and mark done',
+        keyDownHandler: () => {
+          sendEmailAndMarkDone();
+          return true;
+        },
+        runWithInputFocused: true,
+        hotkeyToken: TOKENS.email.sendAndMarkDone,
         displayPriority: 10,
       });
     }
@@ -776,7 +809,7 @@ export function BaseInput(props: {
           />
         </div>
         <Show when={!form().replyAppended()}>
-          <div class="flex flex-row items-center space-x-2">
+          <div class="p-2 flex flex-row items-center space-x-2">
             <IconButton
               theme="clear"
               icon={DotsThree}
@@ -828,28 +861,46 @@ export function BaseInput(props: {
               />
             </Show>
           </div>
-          <button
-            disabled={isPendingUpload() || isPendingSend()}
-            onClick={() => {
-              sendEmail();
-            }}
-            class="text-ink-muted bg-transparent rounded-full hover:scale-110! transition ease-in-out delay-150 flex flex-col justify-center items-center"
-          >
-            <div class="bg-transparent rounded-full size-8 flex flex-row justify-center items-center">
+          <div class="flex flex-row items-center">
+            <TextButton
+              theme="base"
+              disabled={isPendingUpload() || isPendingSend()}
+              onClick={() => {
+                sendEmailAndMarkDone();
+              }}
+              tooltip={{
+                label: 'Send and mark done',
+                hotkeyToken: TOKENS.email.sendAndMarkDone,
+              }}
+            >
               <Show
                 when={!isPendingUpload() && !isPendingSend()}
                 fallback={
                   <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
                 }
               >
-                <ArrowFatLineUp
-                  width={20}
-                  height={20}
-                  class="!text-accent-ink !fill-accent"
-                />
+                <div class="flex flex-row items-center gap-0.5">
+                  <span>Send + </span>
+                  <CheckIcon class="size-[1lh]" />
+                </div>
               </Show>
-            </div>
-          </button>
+            </TextButton>
+            <DropdownMenu>
+              <DropdownMenu.Trigger>
+                <div class="w-8 min-h-8 flex justify-center items-center h-full border-r border-t border-b border-edge">
+                  <CaretDown class="size-4 text-edge" />
+                </div>
+              </DropdownMenu.Trigger>
+              <DropdownMenuContent>
+                <MenuItem
+                  text="Send without marking done"
+                  onClick={() => {
+                    sendEmail();
+                  }}
+                />
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
     </div>

@@ -3,6 +3,7 @@
 
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import { QueueAlarms } from '@resources';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
 
 const BASE_NAME = 'delete-document-handler';
@@ -69,6 +70,12 @@ export class DeleteDocumentHandler extends pulumi.ComponentResource {
         tags,
       },
       { parent: this, dependsOn: [this.dlq] }
+    );
+
+    new QueueAlarms(
+      'queue-alarms',
+      { queue: this.queue, tags },
+      { parent: this }
     );
   }
 }

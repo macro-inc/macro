@@ -117,7 +117,7 @@ pub async fn get_thread_handler(
 ) -> Result<Response, GetThreadError> {
     let p = process_get_thread_params(&query_params);
 
-    let thread = email_db_client::threads::get::fetch_thread_with_messages_paginated(
+    let mut thread = email_db_client::threads::get::fetch_thread_with_messages_paginated(
         &ctx.db, thread_id, p.offset, p.limit,
     )
     .await
@@ -131,13 +131,17 @@ pub async fn get_thread_handler(
     // if the requester doesn't own the thread, check if it has been shared with the requester
     let access_level = if thread.link_id != link.id {
         // call will fail if user doesn't have an access level. otherwise, we can return the thread
-        ctx.dss_client
+        let access_level = ctx
+            .dss_client
             .get_thread_access_level(link.macro_id.as_ref(), &thread.db_id.unwrap().to_string())
             .await
             .map_err(|e| {
                 tracing::error!(error=?e, "unable to get access level for thread for user");
                 GetThreadError::ThreadNotFound
-            })?
+            })?;
+        // don't include the owner's drafts if it's a shared thread
+        thread.messages.retain(|m| !m.is_draft);
+        access_level
     } else {
         // it's the user's thread
         AccessLevel::Owner
