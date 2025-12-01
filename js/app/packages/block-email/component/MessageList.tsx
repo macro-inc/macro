@@ -15,15 +15,13 @@ export function MessageList(props: MessageListProps) {
     Record<string, boolean>
   >({});
 
-  const isScrollingToMessage = props.isScrollingToMessage;
-
   return (
     <div
       class="pt-3 w-full flex-1 flex flex-col items-center overflow-y-scroll overflow-x-hidden suppress-css-brackets"
       ref={context.setMessagesRef}
       onscroll={(e) => {
         // Don't load more if we're programmatically scrolling to a message
-        if (isScrollingToMessage() || !props.initialLoadComplete) return;
+        if (props.isScrollingToMessage() || !props.initialLoadComplete) return;
 
         const threshold = 300;
         const isNearBeginning = e.currentTarget.scrollTop <= threshold;
