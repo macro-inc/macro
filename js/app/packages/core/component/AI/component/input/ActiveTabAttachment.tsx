@@ -11,8 +11,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { ChannelWithParticipants } from '@core/user';
 import PlusIcon from '@icon/regular/plus.svg?component-solid';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import type { EmailEntity } from '@macro-entity';
-import { useEmails } from '@macro-entity';
+import { type EmailEntity, useEmails } from '@macro-entity';
 import type {
   AttachmentType,
   ChannelType,
@@ -235,8 +234,9 @@ export function ActiveTabAttachment(props: ActiveTabAttachmentProps) {
       if (!uniqueSplits.has(key)) {
         // For email splits, find in email list
         if (split.content.type === 'email') {
-          const emailItem =
-            emailList.find((email) => email.id === split.content.id) || null;
+          const emailItem = emailList.find(
+            (email) => email.id === split.content.id
+          );
           if (!emailItem) {
             continue;
           }
