@@ -562,12 +562,10 @@ async fn send_notifications(
             })?;
 
     for message in notifiable_messages {
-        // Get sender contact info for both display name and sender_id
         let sender_contact = message
             .from_contact_id
             .and_then(|from_id| sender_contacts.get(&from_id));
 
-        // Display name: prefer name, fallback to email
         let sender = sender_contact.map(|contact| {
             contact
                 .name
@@ -575,7 +573,6 @@ async fn send_notifications(
                 .unwrap_or_else(|| contact.email.clone())
         });
 
-        // Use email sender's address so the recipient isn't filtered out
         let sender_id = sender_contact.map(|contact| format!("macro|{}", contact.email));
 
         let notification_metadata = NewEmailMetadata {
