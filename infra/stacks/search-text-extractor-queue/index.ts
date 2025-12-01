@@ -53,5 +53,22 @@ const queue = new aws.sqs.Queue(
   { dependsOn: [dlq] }
 );
 
+// alarm for monitoring ApproximateAgeOfOldestMessage
+new aws.cloudwatch.MetricAlarm('approximate-age-of-oldest-message-alarm', {
+  name: `${BASE_NAME}-queue-approximate-age-of-oldest-message-alarm-${stack}`,
+  comparisonOperator: 'GreaterThanThreshold',
+  evaluationPeriods: 1,
+  metricName: 'ApproximateAgeOfOldestMessage',
+  namespace: 'AWS/SQS',
+  period: 60,
+  statistic: 'Average',
+  threshold: 120, // 2 minutes
+  dimensions: {
+    QueueName: queue.name,
+  },
+  alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
+  tags,
+});
+
 export const searchTextExtractorQueueArn = pulumi.interpolate`${queue.arn}`;
 export const searchTextExtractorQueueName = pulumi.interpolate`${queue.name}`;
