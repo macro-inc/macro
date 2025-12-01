@@ -81,6 +81,7 @@ export const TOKENS = {
   split: {
     close: 'split.close',
     goCommand: 'split.goCommand',
+    goHome: 'split.goHome',
     go: {
       home: 'split.go.home',
       email: 'split.go.email',
@@ -93,11 +94,16 @@ export const TOKENS = {
       back: 'split.go.back',
       forward: 'split.go.forward',
     },
+    showHelpDrawer: 'split.showHelpDrawer',
+  },
+
+  window: {
+    close: 'window.close',
+    createNewSplit: 'window.createNewSplit',
     spotlight: {
       toggle: 'split.spotlight.toggle',
       close: 'split.spotlight.close',
     },
-    showHelpDrawer: 'split.showHelpDrawer',
   },
 
   // canvas

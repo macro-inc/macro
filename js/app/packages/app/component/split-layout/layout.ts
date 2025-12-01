@@ -67,10 +67,19 @@ export function useSplitLayout() {
     splitPanelContext.handle.reset();
   }
 
+  function getSplitCount() {
+    const splitManager = globalSplitManager();
+    if (!splitManager) {
+      return 0;
+    }
+    return splitManager.splits().length;
+  }
+
   return {
     replaceOrInsertSplit: replaceOrInsertSplit,
     replaceSplit: replaceSplit,
     insertSplit: insertSplit,
     resetSplit: resetSplit,
+    getSplitCount: getSplitCount,
   };
 }

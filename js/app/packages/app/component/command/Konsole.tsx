@@ -41,6 +41,7 @@ import {
   konsoleOpen,
   lastCommandTime,
   rawQuery,
+  setKonsoleOpen,
   setLastCommandTime,
   setRawQuery,
   toggleKonsoleVisibility,
@@ -275,6 +276,18 @@ export function KommandMenuInner(props: {
     runWithInputFocused: true,
   });
 
+  registerHotkey({
+    hotkey: 'escape',
+    scopeId: konsoleHotkeyScopeId,
+    description: 'Close command menu',
+    keyDownHandler: () => {
+      setKonsoleOpen(false);
+      return true;
+    },
+    runWithInputFocused: true,
+    hide: true
+  })
+  
   const CommandKItemWrapper = (props: {
     index: number;
     item: CommandItemCard;

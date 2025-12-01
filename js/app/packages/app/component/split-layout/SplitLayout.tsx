@@ -353,6 +353,11 @@ function SplitPanel(props: SplitPanelProps) {
     setSelectedView: (view) => unifiedListContext.setSelectedView(view),
     replaceSplit: splitLayoutHelpers.replaceSplit,
     splitName: () => props.handle.displayName(),
+    getSplitCount: () => splitLayoutHelpers.getSplitCount(),
+    isNotUnifiedList: () => {
+      const content = props.handle.content();
+      return !(content.type === 'component' && content.id === 'unified-list');
+    },
   });
   createNavigationEntityListShortcut({
     splitHandle: props.handle,

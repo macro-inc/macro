@@ -29,6 +29,7 @@ import {
 import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
 import { fireVisor, resetVisor } from './Visor';
 import { openWhichKey, setOpenWhichKey } from './WhichKey';
+import { useSplitLayout } from './split-layout/layout';
 
 export default function GlobalShortcuts() {
   const [_, setBigChatOpen] = useBigChat();
@@ -116,7 +117,20 @@ export default function GlobalShortcuts() {
     },
     runWithInputFocused: true,
   });
-
+  
+  const { insertSplit } = useSplitLayout();
+  registerHotkey({
+    hotkeyToken: TOKENS.global.createNewSplit,
+    hotkey: 'cmd+\\',
+    scopeId: 'global',
+    description: 'Create new split',
+    keyDownHandler: () => {
+      insertSplit({ type: 'component', id: 'unified-list' });
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+  
   const openInstructions = useOpenInstructionsMd();
   registerHotkey({
     hotkeyToken: TOKENS.global.instructions,

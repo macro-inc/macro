@@ -22,6 +22,8 @@ export function registerSplitHotkeys({
   setSelectedView,
   replaceSplit,
   splitName,
+  getSplitCount,
+  isNotUnifiedList,
 }: {
   splitHotkeyScope: string;
   insertSplit: (content: SplitContent) => void;
@@ -34,6 +36,8 @@ export function registerSplitHotkeys({
   setSelectedView: (view: ViewId) => void;
   replaceSplit: (content: SplitContent) => void;
   splitName: () => string;
+  getSplitCount: () => number;
+  isNotUnifiedList: () => boolean;
 }) {
   const windowScope = registerHotkey({
     scopeId: splitHotkeyScope,
@@ -59,6 +63,19 @@ export function registerSplitHotkeys({
   registerHotkey({
     scopeId: windowScope.commandScopeId,
     hotkey: 'w',
+    condition: () => getSplitCount() > 1,
+    description: `Close split`,
+    keyDownHandler: () => {
+      closeSplit();
+      return true;
+    },
+    hotkeyToken: TOKENS.window.close,
+  });
+
+  registerHotkey({
+    scopeId: splitHotkeyScope,
+    hotkey: 'cmd+w',
+    condition: () => getSplitCount() > 1,
     description: `Close split`,
     keyDownHandler: () => {
       closeSplit();
@@ -70,7 +87,7 @@ export function registerSplitHotkeys({
   registerHotkey({
     scopeId: windowScope.commandScopeId,
     hotkey: 'm',
-    hotkeyToken: TOKENS.split.spotlight.toggle,
+    hotkeyToken: TOKENS.window.spotlight.toggle,
     description: () => `Maximize ${splitName()}`,
     keyDownHandler: () => {
       toggleSpotlight();
@@ -126,6 +143,19 @@ export function registerSplitHotkeys({
       return true;
     },
     hotkeyToken: TOKENS.split.go.home,
+  });
+
+  registerHotkey({
+    scopeId: splitHotkeyScope,
+    hotkey: 'h',
+    description: 'Go home',
+    condition: isNotUnifiedList,
+    keyDownHandler: () => {
+      replaceSplit({ type: 'component', id: 'unified-list' });
+      return true;
+    },
+    hotkeyToken: TOKENS.split.goHome,
+    displayPriority: 8,
   });
 
   registerHotkey({

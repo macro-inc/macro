@@ -64,7 +64,7 @@ function SplitSpotlightButton() {
         icon={context.handle.isSpotLight() ? CollapseIcon : ExpandIcon}
         theme="current"
         tooltip={{
-          hotkeyToken: TOKENS.split.spotlight.toggle,
+          hotkeyToken: TOKENS.window.spotlight.toggle,
           label: context.handle.isSpotLight()
             ? 'Minimize Split'
             : 'Spotlight Split',
