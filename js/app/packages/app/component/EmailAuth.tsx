@@ -54,7 +54,6 @@ function EmailCallback(props: Pick<EmailAuthParams, 'successPath'>) {
       };
 
       await initEmailLink().match(onSuccess, (err) => {
-        console.log(err);
         if (err.tag === 'AlreadyInitialized') {
           onSuccess();
           return;
