@@ -79,7 +79,7 @@ function elementKeyToDomRect(editor: LexicalEditor, key: NodeKey) {
 }
 
 /**
- * Get an instersion point from a drag event.DOMRect
+ * Get an insertion point from a drag event.DOMRect
  */
 export function calculateInsertPoint(
   editor: LexicalEditor,

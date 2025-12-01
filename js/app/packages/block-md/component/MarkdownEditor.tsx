@@ -122,6 +122,7 @@ import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
+import { forceDssRuleset, uploadFile } from '@core/util/upload';
 import WarningIcon from '@icon/regular/warning.svg';
 import {
   $createDocumentMentionNode,
@@ -142,7 +143,6 @@ import { normalizeEnterPlugin } from 'core/component/LexicalMarkdown/plugins/nor
 import {
   autoRegister,
   lazyRegister,
-  registerEditorWidthObserver,
   registerInternalLayoutShiftListener,
   registerRootEventListener,
 } from 'core/component/LexicalMarkdown/plugins/shared/utils';
@@ -168,7 +168,6 @@ import {
 } from '../signal/generateSignal';
 import { blockDataSignal, mdStore } from '../signal/markdownBlockData';
 import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
-
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
 
@@ -204,12 +203,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     ...blockNameToFileExtensions.image,
     ...HEIC_EXTENSIONS,
   ];
-  const IMAGE_MIME_TYPES_HEIC = [
-    ...blockNameToMimeTypes.image,
-    ...HEIC_MIME_TYPES,
-  ];
   const VIDEO_EXTENSIONS = blockNameToFileExtensions.video;
-  const VIDEO_MIME_TYPES = blockNameToMimeTypes.video;
 
   const blockHandle = blockHandleSignal.get;
   createMethodRegistration(blockHandle, {
@@ -283,8 +277,9 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   setMdStore('editor', editor);
   setMdStore('plugins', plugins);
+
   const [editorFocus, setEditorFocus] = createSignal(false);
-  editorFocusSignal(editor, setEditorFocus);
+  autoRegister(editorFocusSignal(editor, setEditorFocus));
 
   const mentionsMenuOperations = createMenuOperations();
   const emojiMenuOperations = createMenuOperations();
@@ -318,10 +313,34 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       } else if (ext != null && VIDEO_EXTENSIONS.includes(ext)) {
         const res = await addMediaFromFile(editor, file, 'video');
         success = res.success;
+      } else {
+        const res = await uploadFile(file, 'dss');
+        if (!res.failed && !res.pending && res.type === 'document') {
+          success = true;
+          const mentionId = await trackMention(
+            blockId,
+            'document',
+            res.documentId
+          );
+          // editor.update(() => {
+          //   const mention = $createDocumentMentionNode({
+          //     documentId: res.id,
+          //     documentName: res.item.name,
+          //     blockName: res.blockName,
+          //     mentionUuid: mentionId,
+          //   });
+          //   if (position === 'before') {
+          //     $insertWrappedBefore(key, mention);
+          //   } else {
+          //     $insertWrappedAfter(key, mention);
+          //   }
+          //   mention.selectEnd();
+          // });
+        }
       }
 
       if (!success) {
-        toast.failure('Invalid attachment file(s)');
+        toast.failure('Invalid file for upload');
       }
     }
   };
@@ -897,11 +916,6 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         class="relative"
         ref={editorContainerRef}
         use:fileDrop={{
-          acceptedMimeTypes: [...IMAGE_MIME_TYPES_HEIC, ...VIDEO_MIME_TYPES],
-          acceptedFileExtensions: [
-            ...IMAGE_EXTENSIONS_HEIC,
-            ...VIDEO_EXTENSIONS,
-          ],
           onDrop: (files, event) => {
             onDropFiles(files, event);
           },
