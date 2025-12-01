@@ -29,6 +29,7 @@ import {
   createEffect,
   createMemo,
   createSignal,
+  on,
   onMount,
   Show,
   untrack,
@@ -217,24 +218,22 @@ export function Email(props: EmailProps) {
 
   let targetTimeoutId: ReturnType<typeof setTimeout> | undefined;
 
-  createEffect(() => {
-    const target = targetMessageId();
-
-    if (targetTimeoutId) {
-      clearTimeout(targetTimeoutId);
-      targetTimeoutId = undefined;
-    }
-
-    if (target && typeof target === 'string') {
-      setActiveTargetMessageId(target);
-      targetTimeoutId = setTimeout(() => {
-        setActiveTargetMessageId(undefined);
+  createEffect(
+    on(targetMessageId, (target: string | undefined) => {
+      if (targetTimeoutId) {
+        clearTimeout(targetTimeoutId);
         targetTimeoutId = undefined;
-      }, TARGET_MESSAGE_ACTIVE_TIME);
-    } else {
-      setActiveTargetMessageId(undefined);
-    }
-  });
+      }
+
+      if (target) {
+        setActiveTargetMessageId(target);
+        targetTimeoutId = setTimeout(() => {
+          setActiveTargetMessageId(undefined);
+          targetTimeoutId = undefined;
+        }, TARGET_MESSAGE_ACTIVE_TIME);
+      }
+    })
+  );
 
   const blockHandle = blockHandleSignal.get;
   createMethodRegistration(blockHandle, {
