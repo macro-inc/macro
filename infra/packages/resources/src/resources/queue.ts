@@ -1,6 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
+import { QueueAlarms } from './queue_alarms';
 
 type Args = {
   // The maximum receive count of a message before it's sent to DLQ
@@ -78,25 +79,6 @@ export class Queue extends pulumi.ComponentResource {
       { parent: this, dependsOn: [this.dlq] }
     );
 
-    // alarm for monitoring ApproximateAgeOfOldestMessage
-    new aws.cloudwatch.MetricAlarm(
-      'approximate-age-of-oldest-message-alarm',
-      {
-        name: `${name}-queue-approximate-age-of-oldest-message-alarm-${stack}`,
-        comparisonOperator: 'GreaterThanThreshold',
-        evaluationPeriods: 1,
-        metricName: 'ApproximateAgeOfOldestMessage',
-        namespace: 'AWS/SQS',
-        period: 60,
-        statistic: 'Average',
-        threshold: 120, // 2 minutes
-        dimensions: {
-          QueueName: this.queue.name,
-        },
-        alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
-        tags: this.tags,
-      },
-      { parent: this }
-    );
+    new QueueAlarms('queue-alarms', { queue: this.queue, tags }, { parent: this });
   }
 }

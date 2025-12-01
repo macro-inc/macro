@@ -5,6 +5,7 @@ import {
   DATADOG_API_KEY,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
+  QueueAlarms,
   serviceLoadBalancer,
 } from '@resources';
 import { ALLOWED_ORIGINS } from '@resources/resources/cors';
@@ -360,6 +361,7 @@ export class StaticFileService extends pulumi.ComponentResource {
         },
       ],
     });
+
     const queueQueue = new aws.sqs.Queue('queue', {
       name: queueName,
       policy: queue.apply((queue) => queue.json),
@@ -367,21 +369,11 @@ export class StaticFileService extends pulumi.ComponentResource {
       tags: this.tags,
     });
 
-    new aws.cloudwatch.MetricAlarm(
-      'queue-approximate-number-of-messages-visible-alarm',
+    new QueueAlarms(
+      'queue-alarms',
       {
-        name: `${queueName}-approximate-number-of-messages-visible-alarm-${stack}`,
-        comparisonOperator: 'GreaterThanThreshold',
-        evaluationPeriods: 1,
-        metricName: 'ApproximateNumberOfMessagesVisible',
-        namespace: 'AWS/SQS',
-        period: 60,
-        statistic: 'Average',
-        threshold: 0,
-        dimensions: {
-          QueueName: queueQueue.name,
-        },
-        alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
+        queue: queueQueue,
+        approximateAgeOfOldestMessageThreshold: 240,
         tags: this.tags,
       },
       { parent: this }

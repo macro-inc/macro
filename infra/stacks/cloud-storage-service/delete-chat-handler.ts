@@ -1,6 +1,7 @@
 import { Lambda } from '@lambda';
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import { QueueAlarms } from '@resources';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
 
 const LAMBDA_BASE_NAME = 'delete_chat_handler';
@@ -85,23 +86,9 @@ export class DeleteChatHandler extends pulumi.ComponentResource {
       { parent: this, dependsOn: [this.dlq] }
     );
 
-    new aws.cloudwatch.MetricAlarm(
-      'queue-approximate-number-of-messages-visible-alarm',
-      {
-        name: `${LAMBDA_BASE_NAME}-queue-approximate-number-of-messages-visible-alarm-${stack}`,
-        comparisonOperator: 'GreaterThanThreshold',
-        evaluationPeriods: 1,
-        metricName: 'ApproximateNumberOfMessagesVisible',
-        namespace: 'AWS/SQS',
-        period: 60,
-        statistic: 'Average',
-        threshold: 0,
-        dimensions: {
-          QueueName: this.queue.name,
-        },
-        alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
-        tags,
-      },
+    new QueueAlarms(
+      'queue-alarms',
+      { queue: this.queue, tags },
       { parent: this }
     );
 

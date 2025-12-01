@@ -20,3 +20,5 @@ export {
   createServiceRole,
   createShaCleanupWorkerRole,
 } from './resources/role';
+
+export { QueueAlarms } from './resources/queue_alarms';
