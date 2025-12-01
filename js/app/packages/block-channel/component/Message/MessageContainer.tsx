@@ -253,7 +253,7 @@ export function MessageContainer(props: MessageProps) {
 
   const shouldShowFirstReply = createMemo(() => {
     return (
-      !props.threadChildren &&
+      !props.threadChildren?.length &&
       props.threadViewStore[message.id ?? '']?.hasActiveReply
     );
   });
