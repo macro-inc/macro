@@ -186,8 +186,8 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
             </div>
             <BrowserNotificationPreview
               title={browserNotif()!.title}
-              body={browserNotif()!.body}
-              icon={browserNotif()!.icon}
+              body={browserNotif()!.options.body}
+              icon={browserNotif()!.options.icon}
             />
           </div>
 
@@ -533,7 +533,6 @@ function PlaygroundContent() {
   const handleTestNotification = async (notification: UnifiedNotification) => {
     if (platformNotif === 'not-supported') return;
 
-    console.log('test notification', notification);
     const onNotification = (notification: UnifiedNotification) => {
       const layoutManager = globalSplitManager();
       if (!layoutManager) {

@@ -60,6 +60,10 @@ async function openChannelNotification(
 ) {
   const channelId = notification.eventItemId;
   const messageId = notification.notificationMetadata.messageId;
+  const threadId =
+    'threadId' in notification.notificationMetadata
+      ? notification.notificationMetadata.threadId
+      : undefined;
   openSplitIfNotOpen(layoutManager, 'channel', channelId);
 
   const orchestrator = layoutManager.getOrchestrator();
@@ -67,8 +71,8 @@ async function openChannelNotification(
   const handle = await orchestrator.getBlockHandle(channelId, 'channel');
 
   handle?.goToLocationFromParams({
-    messageId,
-    threadId: channelId,
+    message_id: messageId,
+    thread_id: threadId,
   });
 }
 
