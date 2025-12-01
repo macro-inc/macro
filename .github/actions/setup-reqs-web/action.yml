@@ -5,6 +5,10 @@ inputs:
     description: Install Playwright and cache
     required: false
     default: ''
+  npmrc-gh-token:
+    description: GitHub token for npm registry authentication
+    required: false
+    default: ''
 
 runs:
   using: composite
@@ -16,7 +20,7 @@ runs:
       shell: bash
       working-directory: js/app
       env:
-        GITHUB_NPM_REGISTRY_AUTH_TOKEN: ${{ github.token }}
+        GITHUB_NPM_REGISTRY_AUTH_TOKEN: ${{ inputs.npmrc-gh-token }}
       run: |
         bun install --frozen-lockfile
         bun add -g npm
