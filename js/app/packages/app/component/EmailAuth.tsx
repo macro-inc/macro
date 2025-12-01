@@ -34,7 +34,7 @@ export function makeEmailAuthComponents(params: EmailAuthParams) {
 
 function EmailCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   const navigate = useNavigate();
-  const { query, maybeSync } = useEmailLinks();
+  const { query, initEmailLink } = useEmailLinks();
 
   const onSuccessfulAuth = async () => {
     await updateUserAuth();
@@ -45,14 +45,23 @@ function EmailCallback(props: Pick<EmailAuthParams, 'successPath'>) {
 
   whenSettled(
     query,
-    async (links) => {
-      let result = maybeSync(links);
-      if (result) {
-        toast.success('Syncing emails', 'this might take a while');
-      }
-      onSuccessfulAuth();
-      navigate(props.successPath, {
-        replace: true,
+    async () => {
+      const onSuccess = () => {
+        onSuccessfulAuth();
+        navigate(props.successPath, {
+          replace: true,
+        });
+      };
+
+      await initEmailLink().match(onSuccess, (err) => {
+        if (err.tag === 'AlreadyInitialized') {
+          onSuccess();
+          return;
+        }
+        toast.failure(
+          'Failed to connect email',
+          'Please email contact@macro.com'
+        );
       });
     },
     (error) => {
