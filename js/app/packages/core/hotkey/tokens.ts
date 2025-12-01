@@ -94,8 +94,6 @@ export const TOKENS = {
       email: 'split.go.email',
       inbox: 'split.go.inbox',
       docs: 'split.go.docs',
-      focusSplitRight: 'split.go.focusSplitRight',
-      focusSplitLeft: 'split.go.focusSplitLeft',
       toggleRightPanel: 'split.go.toggleRightPanel',
       macroJump: 'split.go.macroJump',
       back: 'split.go.back',
@@ -111,6 +109,8 @@ export const TOKENS = {
       toggle: 'split.spotlight.toggle',
       close: 'split.spotlight.close',
     },
+    focusSplitRight: 'window.focusSplitRight',
+    focusSplitLeft: 'window.focusSplitLeft',
   },
 
   // canvas

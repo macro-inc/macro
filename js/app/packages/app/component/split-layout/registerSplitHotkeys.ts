@@ -189,9 +189,9 @@ export function registerSplitHotkeys({
   });
 
   registerHotkey({
-    hotkeyToken: TOKENS.split.go.focusSplitRight,
-    hotkey: ['arrowright', 'tab'],
-    scopeId: goScopeId,
+    hotkeyToken: TOKENS.window.focusSplitRight,
+    hotkey: ['arrowright', 'tab', 'l'],
+    scopeId: windowScope.commandScopeId,
     description: 'Focus split right',
     keyDownHandler: () => {
       focusAdjacentSplit('right');
@@ -200,9 +200,9 @@ export function registerSplitHotkeys({
   });
 
   registerHotkey({
-    hotkeyToken: TOKENS.split.go.focusSplitLeft,
-    hotkey: ['arrowleft', 'shift+tab'],
-    scopeId: goScopeId,
+    hotkeyToken: TOKENS.window.focusSplitLeft,
+    hotkey: ['arrowleft', 'shift+tab', 'h'],
+    scopeId: windowScope.commandScopeId,
     description: 'Focus split left',
     keyDownHandler: () => {
       focusAdjacentSplit('left');
