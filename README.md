@@ -16,7 +16,7 @@
 </td>
 <td>
 <strong>Email</strong><br>
-Full email client with keyboard-driven triage, instant search, and Gmail/Outlook sync.
+Full email client with keyboard-driven triage, instant search, and Gmail sync.
 </td>
 </tr>
 
@@ -168,17 +168,17 @@ For feature requests, please email contact@macro.com
 We're hiring! If you're interested in working on macro, please email teo@macro.com
 
 
-## License
+# License
 
 All rights reserved.
 The contents of this repository are provided for viewing purposes only.
 You may not use, copy, modify, distribute, or create derivative works from this code without explicit written permission from Macro.
 
-PROJECT DIRECTION
+## PROJECT DIRECTION
 
 We intend to open-source most of the codebase under a copy-left license in the future, with a separate Enterprise Edition (EE) component. We’re actively exploring the best way to do this while preserving a high-quality commercial product and a sustainable ecosystem.
 
-CONTRIBUTIONS
+## CONTRIBUTIONS
 
 We’re not accepting external contributions yet.
 Feel free to explore the code and follow progress, but please do not submit PRs or attempt to reuse the code at this time.
