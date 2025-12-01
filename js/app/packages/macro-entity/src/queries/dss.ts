@@ -256,6 +256,11 @@ const selectData: (
           }
 
           if (item.tag === 'emailThread') {
+            const participants = item.data.participants?.map((p) => ({
+              email: p.emailAddress ?? '',
+              name: p.name ?? '',
+            }));
+
             return {
               ...item.data,
               senderEmail: item.data.senderEmail ?? undefined,
@@ -266,6 +271,7 @@ const selectData: (
               name: item.data.name || 'Email Thread',
               frecencyScore: item.frecency_score,
               viewedAt: item.data.viewedAt ?? undefined,
+              participants,
             };
           }
 
