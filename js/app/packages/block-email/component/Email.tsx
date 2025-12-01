@@ -212,6 +212,7 @@ export function Email(props: EmailProps) {
   const [isContainerFilled, setIsContainerFilled] = createSignal(false);
   const [hasHandledTarget, setHasHandledTarget] = createSignal(false);
 
+  // this signal modifies active highlight state of the target message
   const [activeTargetMessageId, setActiveTargetMessageId] = createSignal<
     string | undefined
   >();
@@ -237,7 +238,7 @@ export function Email(props: EmailProps) {
 
   const blockHandle = blockHandleSignal.get;
   createMethodRegistration(blockHandle, {
-    goToLocationFromParams: async (params: Record<string, any>) => {
+    goToLocationFromParams: (params: Record<string, any>) => {
       if (params[URL_PARAMS.messageId]) {
         setTargetMessageId(undefined);
         setTimeout(() => {
