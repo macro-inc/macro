@@ -157,7 +157,6 @@ export function EmailMessageBody(props: EmailMessageBodyProps) {
         });
       } else if (parsedHTML().hasTable) {
         const contentWrapper = root.querySelector('div');
-        console.log('contentWrapper', contentWrapper);
         if (contentWrapper instanceof HTMLElement) {
           contentWrapper.style.setProperty(
             'background-color',
