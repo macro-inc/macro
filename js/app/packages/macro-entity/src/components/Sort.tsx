@@ -258,6 +258,7 @@ export function createSort<T extends EntityData, S extends string>(context: {
 };
 export function createSort<T extends EntityData, S extends string>(context: {
   sortOptions: SortOption<T, S>[];
+  defaultSortOption?: S;
   sortTypeSignal: Signal<S>;
   propertyIdSignal?: Signal<string | null>;
   sortOrderSignal?: Signal<'ascending' | 'descending'>;
@@ -356,12 +357,15 @@ export function createSort<
   const handleClearProperty = () => {
     setPropertyId(null);
     setSelectedProperty(null);
+    setSortOrder('descending');
+    setSortType(defaultSortOption);
   };
 
   const handleSelectSystemSort = (value: string) => {
-    handleClearProperty();
-    setSortType(value);
+    setPropertyId(null);
+    setSelectedProperty(null);
     setSortOrder('descending');
+    setSortType(value);
   };
 
   type SystemSortPillsProps = {
