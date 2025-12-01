@@ -2,6 +2,7 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import { createMethodRegistration } from '@core/orchestrator';
+import { createActiveTarget } from '@core/signal/activeTarget';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -29,7 +30,6 @@ import {
   createEffect,
   createMemo,
   createSignal,
-  on,
   onMount,
   Show,
   untrack,
@@ -212,28 +212,9 @@ export function Email(props: EmailProps) {
   const [isContainerFilled, setIsContainerFilled] = createSignal(false);
   const [hasHandledTarget, setHasHandledTarget] = createSignal(false);
 
-  // this signal modifies active highlight state of the target message
-  const [activeTargetMessageId, setActiveTargetMessageId] = createSignal<
-    string | undefined
-  >();
-
-  let targetTimeoutId: ReturnType<typeof setTimeout> | undefined;
-
-  createEffect(
-    on(targetMessageId, (target: string | undefined) => {
-      if (targetTimeoutId) {
-        clearTimeout(targetTimeoutId);
-        targetTimeoutId = undefined;
-      }
-
-      if (target) {
-        setActiveTargetMessageId(target);
-        targetTimeoutId = setTimeout(() => {
-          setActiveTargetMessageId(undefined);
-          targetTimeoutId = undefined;
-        }, TARGET_MESSAGE_ACTIVE_TIME);
-      }
-    })
+  const activeTargetMessageId = createActiveTarget(
+    targetMessageId,
+    TARGET_MESSAGE_ACTIVE_TIME
   );
 
   const blockHandle = blockHandleSignal.get;
