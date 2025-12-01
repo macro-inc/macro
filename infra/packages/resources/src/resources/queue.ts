@@ -65,7 +65,7 @@ export class Queue extends pulumi.ComponentResource {
       queueName,
       {
         name: queueName,
-        redrivePolicy: this.dlq.arn.apply((arn) =>
+        redrivePolicy: this.dlq.arn.apply((arn: string) =>
           JSON.stringify({
             deadLetterTargetArn: arn,
             maxReceiveCount: maxReceiveCount ?? 5,
@@ -76,6 +76,27 @@ export class Queue extends pulumi.ComponentResource {
         tags,
       },
       { parent: this, dependsOn: [this.dlq] }
+    );
+
+    // alarm for monitoring ApproximateAgeOfOldestMessage
+    new aws.cloudwatch.MetricAlarm(
+      'approximate-age-of-oldest-message-alarm',
+      {
+        name: `${name}-queue-approximate-age-of-oldest-message-alarm-${stack}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'ApproximateAgeOfOldestMessage',
+        namespace: 'AWS/SQS',
+        period: 60,
+        statistic: 'Average',
+        threshold: 120, // 2 minutes
+        dimensions: {
+          QueueName: this.queue.name,
+        },
+        alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
+        tags: this.tags,
+      },
+      { parent: this }
     );
   }
 }
