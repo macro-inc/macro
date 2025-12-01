@@ -1,10 +1,13 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
+import { createMethodRegistration } from '@core/orchestrator';
+import { createActiveTarget } from '@core/signal/activeTarget';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
 } from '@core/signal/blockElement';
+import { blockHandleSignal } from '@core/signal/load';
 import {
   type ContactInfo,
   isPersonEmailContact,
@@ -32,6 +35,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
+import { URL_PARAMS } from '../constants';
 import { isScrollingToMessage } from '../signal/scrollState';
 import type { createThreadMessagesResource } from '../signal/threadMessages';
 import { useThreadNavigation } from '../signal/threadNavigation';
@@ -64,7 +68,17 @@ export function Email(props: EmailProps) {
   const blockElement = blockElementSignal.get;
 
   const [searchParams] = useSearchParams();
-  const targetMessageId = () => searchParams.message_id; // reactive
+  const searchParamsMessageId = () => {
+    if (typeof searchParams.message_id === 'string') {
+      return searchParams.message_id;
+    } else if (Array.isArray(searchParams.message_id)) {
+      return searchParams.message_id[0];
+    }
+    return undefined;
+  };
+  const [targetMessageId, setTargetMessageId] = createSignal<
+    string | undefined
+  >(searchParamsMessageId());
 
   const filteredMessages = createMemo(() => {
     return (
@@ -197,6 +211,21 @@ export function Email(props: EmailProps) {
   const [focusedMessageId, setFocusedMessageId] = createSignal<string>();
   const [isContainerFilled, setIsContainerFilled] = createSignal(false);
   const [hasHandledTarget, setHasHandledTarget] = createSignal(false);
+
+  const activeTargetMessageId = createActiveTarget(targetMessageId);
+
+  const blockHandle = blockHandleSignal.get;
+  createMethodRegistration(blockHandle, {
+    goToLocationFromParams: (params: Record<string, any>) => {
+      if (params[URL_PARAMS.messageId]) {
+        setTargetMessageId(undefined);
+        setTimeout(() => {
+          setTargetMessageId(params[URL_PARAMS.messageId]);
+          setHasHandledTarget(false);
+        }, 0);
+      }
+    },
+  });
 
   // ============================================
   // SCROLLING LOGIC HELPER FUNCTIONS
@@ -360,7 +389,7 @@ export function Email(props: EmailProps) {
   // This effect handles scrolling to a specific message (if provided via URL) or scrolling to the last message by default
   // This effect should only run once.
   createEffect(() => {
-    if (untrack(hasHandledTarget)) return;
+    if (hasHandledTarget()) return;
     const resource = props.threadMessagesResource();
     if (!resource) return;
     // Check if initial loading is complete
@@ -383,8 +412,8 @@ export function Email(props: EmailProps) {
     // Mark as handled to prevent re-running
     setHasHandledTarget(true);
 
-    // Check for target message in URL
-    const targetMessageId_ = untrack(targetMessageId);
+    // Check for target message
+    const targetMessageId_ = targetMessageId();
     if (targetMessageId_ && typeof targetMessageId_ !== 'string') return;
 
     if (targetMessageId_) {
@@ -582,6 +611,7 @@ export function Email(props: EmailProps) {
         filteredMessages,
         threadData: props.threadData,
         archiveThread,
+        activeTargetMessageId,
       }}
     >
       <EmailFormContextProvider>
