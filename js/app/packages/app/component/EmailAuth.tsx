@@ -58,7 +58,10 @@ function EmailCallback(props: Pick<EmailAuthParams, 'successPath'>) {
           onSuccess();
           return;
         }
-        toast.failure('Failed to connect email', 'Please email contact@macro.com');
+        toast.failure(
+          'Failed to connect email',
+          'Please email contact@macro.com'
+        );
       });
     },
     (error) => {
