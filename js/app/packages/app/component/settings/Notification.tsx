@@ -1,14 +1,12 @@
 import { TabContent } from '@core/component/TabContent';
 import { Switch } from '@kobalte/core/switch';
 import { Show } from 'solid-js';
-import { usePlatformNotificationState } from '@notifications';
+import { useNotificationSettings } from '@notifications';
 
 export function Notification() {
-  const notificationState = usePlatformNotificationState();
+  const settings = useNotificationSettings();
 
-  // this property is not reactive nor should it be
-  if (notificationState === 'not-supported')
-    return <NotificationNotSupported />;
+  if (!settings.isSupported) return <NotificationNotSupported />;
 
   return (
     <TabContent title="Notifications">
@@ -16,12 +14,8 @@ export function Notification() {
         <div class="flex items-center justify-between mt-2">
           <div class="text-sm">Notifications</div>
           <Switch
-            checked={notificationState.permission.latest === 'granted'}
-            onChange={(enabled) =>
-              enabled
-                ? notificationState.requestPermission()
-                : notificationState.unregisterNotification()
-            }
+            checked={settings.isEnabled()}
+            onChange={settings.toggle}
             class="focus-bracket-within"
           >
             <Switch.Input class="sr-only" />
@@ -34,10 +28,8 @@ export function Notification() {
         <div
           class="transition-all transition-discrete"
           classList={{
-            'hidden opacity-0':
-              notificationState.permission.latest !== 'granted',
-            'block opacity-100 starting:opacity-0':
-              notificationState.permission.latest === 'granted',
+            'hidden opacity-0': !settings.isEnabled(),
+            'block opacity-100 starting:opacity-0': settings.isEnabled(),
           }}
         >
           <Show when={import.meta.env.MODE === 'development'}>

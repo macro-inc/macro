@@ -138,6 +138,40 @@ export function usePlatformNotificationState():
   return res;
 }
 
+export type NotificationSettings =
+  | {
+      isSupported: true;
+      isEnabled: () => boolean;
+      toggle: (enabled: boolean) => Promise<void>;
+    }
+  | {
+      isSupported: false;
+    };
+
+export function useNotificationSettings(): NotificationSettings {
+  const state = usePlatformNotificationState();
+
+  if (state === 'not-supported') {
+    return { isSupported: false };
+  }
+
+  const isEnabled = () => state.permission.latest === 'granted';
+
+  const toggle = async (enabled: boolean) => {
+    if (enabled) {
+      await state.requestPermission();
+    } else {
+      await state.unregisterNotification();
+    }
+  };
+
+  return {
+    isSupported: true,
+    isEnabled,
+    toggle,
+  };
+}
+
 function PlatformNotificationState(props: {
   children: JSX.Element;
   manuallyDisabled: Accessor<UserSetting>;
@@ -207,7 +241,8 @@ export function PlatformNotificationProvider(props: {
   overrideDefault?: CreateAppNotificationInterface;
 }) {
   const [manuallyDisabled, setManuallyDisabled] = makePersisted(
-    createSignal<UserSetting>('allowed')
+    createSignal<UserSetting>('allowed'),
+    { name: 'notification-manually-disabled' }
   );
 
   const setDisabled = async () => {

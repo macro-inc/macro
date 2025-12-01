@@ -7,11 +7,13 @@ export {
 } from './components/DebouncedNotificationReadMarker';
 export type {
   CreateAppNotificationInterface,
+  NotificationSettings,
   NotificationUnsupported,
   PlatformNotificationInterface,
 } from './components/PlatformNotificationProvider';
 export {
   PlatformNotificationProvider,
+  useNotificationSettings,
   usePlatformNotificationState,
 } from './components/PlatformNotificationProvider';
 export { NotificationsPlayground } from './components/Playground';
