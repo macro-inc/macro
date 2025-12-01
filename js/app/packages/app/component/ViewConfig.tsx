@@ -66,7 +66,7 @@ export type FilterOptions = {
   fromFilter?: WithCustomUserInput<'user' | 'contact'>[];
 };
 
-export type BuiltinSortBy =
+export type SystemSortOption =
   | 'updated_at'
   | 'created_at'
   | 'viewed_at'
@@ -75,7 +75,7 @@ export type BuiltinSortBy =
 export type SortOptions = {
   sortOrder: 'ascending' | 'descending';
 } & (
-  | { type: 'builtin'; sortBy: BuiltinSortBy }
+  | { type: 'systemSortOption'; sortBy: SystemSortOption }
   | { type: 'property'; propertyId: string }
 );
 
@@ -115,7 +115,7 @@ export type ViewConfigEnhanced = {
 
 export const VIEWCONFIG_BASE: ViewConfigBase = {
   sort: {
-    type: 'builtin',
+    type: 'systemSortOption',
     sortBy: 'updated_at',
     sortOrder: 'ascending',
   },
@@ -139,7 +139,7 @@ export const VIEWCONFIG_BASE: ViewConfigBase = {
 export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
   viewType: 'project',
   sort: {
-    type: 'builtin',
+    type: 'systemSortOption',
     sortBy: 'viewed_at',
     sortOrder: 'descending',
   },
@@ -285,7 +285,7 @@ export const VIEWCONFIG_FILTER_FILETYPE_OPTIONS: readonly FilterOptions['documen
   ['md', 'code', 'image', 'canvas', 'pdf', 'unknown'] as const;
 export const VIEWCONFIG_DISPLAY_LAYOUT_OPTIONS: readonly DisplayOptions['layout'][] =
   ['compact', 'expanded', 'visual'] as const;
-export const VIEWCONFIG_SORT_BY: readonly BuiltinSortBy[] = [
+export const VIEWCONFIG_SORT_BY: readonly SystemSortOption[] = [
   'updated_at',
   'created_at',
   'viewed_at',

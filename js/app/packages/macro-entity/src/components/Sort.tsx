@@ -18,6 +18,7 @@ import {
   createSignal,
   For,
   type JSX,
+  on,
   onCleanup,
   onMount,
   Show,
@@ -258,6 +259,8 @@ export function createSort<T extends EntityData, S extends string>(context: {
 export function createSort<T extends EntityData, S extends string>(context: {
   sortOptions: SortOption<T, S>[];
   sortTypeSignal: Signal<S>;
+  propertyIdSignal?: Signal<string | null>;
+  sortOrderSignal?: Signal<'ascending' | 'descending'>;
   disabled?: Accessor<boolean>;
 }): {
   sortFn: Accessor<InferSortFn<SortOption<T, S>[]>>;
@@ -269,6 +272,8 @@ export function createSort<
   sortOptions: Options;
   defaultSortOption?: Options[number]['value'];
   sortTypeSignal?: Signal<Options[number]['value']>;
+  propertyIdSignal?: Signal<string | null>;
+  sortOrderSignal?: Signal<'ascending' | 'descending'>;
   disabled?: Accessor<boolean>;
 }): {
   sortFn: Accessor<InferSortFn<Options>>;
@@ -296,28 +301,67 @@ export function createSort<
     return sortFn as InferSortFn<Options>;
   });
 
-  const [sortOrder, setSortOrder] = createSignal<'ascending' | 'descending'>(
-    'descending'
-  );
+  // Use external signals if provided, otherwise local state
+  const [localSortOrder, setLocalSortOrder] = createSignal<
+    'ascending' | 'descending'
+  >('descending');
+  const [sortOrder, setSortOrder] = context?.sortOrderSignal ?? [
+    localSortOrder,
+    setLocalSortOrder,
+  ];
 
+  const [localPropertyId, setLocalPropertyId] = createSignal<string | null>(
+    null
+  );
+  const [propertyId, setPropertyId] = context?.propertyIdSignal ?? [
+    localPropertyId,
+    setLocalPropertyId,
+  ];
+
+  // Track the full property object for display (fetched when needed)
   const [selectedProperty, setSelectedProperty] =
     createSignal<PropertyDefinitionFlat | null>(null);
 
+  // Fetch property details when propertyId changes
+  createEffect(
+    on(propertyId, (id) => {
+      if (id) {
+        // Fetch property details
+        propertiesServiceClient
+          .listProperties({ scope: 'all', include_options: false })
+          .then((result) => {
+            if (isErr(result)) return;
+            const [, data] = result;
+            const properties = Array.isArray(data) ? data : [];
+            const property = properties.find((p) => p.id === id);
+            if (property) {
+              setSelectedProperty(property);
+            }
+          });
+      } else {
+        setSelectedProperty(null);
+      }
+    })
+  );
+
   const isSortedByProperty = createMemo(() => {
-    return selectedProperty() !== null;
+    return propertyId() !== null;
   });
 
   const handleSelectProperty = (property: PropertyDefinitionFlat) => {
+    setPropertyId(property.id);
     setSelectedProperty(property);
   };
 
   const handleClearProperty = () => {
+    setPropertyId(null);
     setSelectedProperty(null);
   };
 
   const handleSelectSystemSort = (value: string) => {
     handleClearProperty();
     setSortType(value);
+    setSortOrder('descending');
   };
 
   type SystemSortPillsProps = {
@@ -416,10 +460,21 @@ export function createSort<
         >
           <div class="flex items-center gap-2">
             <div class="flex max-w-[200px]">
-              <div class="flex items-center gap-1.5 px-2 py-1 text-xs font-mono border bg-ink text-panel border-ink min-w-0 overflow-hidden">
-                <ClockIcon class="size-3.5 shrink-0" />
-                <span class="truncate">{selectedProperty()!.display_name}</span>
-              </div>
+              <Show
+                when={selectedProperty()}
+                fallback={
+                  <div class="flex items-center gap-1.5 px-2 py-1 text-xs font-mono border border-failure bg-failure/10 text-failure min-w-0 overflow-hidden">
+                    <span class="truncate">Property not found</span>
+                  </div>
+                }
+              >
+                <div class="flex items-center gap-1.5 px-2 py-1 text-xs font-mono border bg-ink text-panel border-ink min-w-0 overflow-hidden">
+                  <ClockIcon class="size-3.5 shrink-0" />
+                  <span class="truncate">
+                    {selectedProperty()?.display_name}
+                  </span>
+                </div>
+              </Show>
               <button
                 type="button"
                 onClick={handleClearProperty}
@@ -428,22 +483,24 @@ export function createSort<
                 <XIcon class="size-3.5" />
               </button>
             </div>
-            <div class="flex shrink-0">
-              <ToggleButton
-                size="SM"
-                pressed={sortOrder() === 'descending'}
-                onChange={() => setSortOrder('descending')}
-              >
-                <SortDescendingIcon class="size-4" />
-              </ToggleButton>
-              <ToggleButton
-                size="SM"
-                pressed={sortOrder() === 'ascending'}
-                onChange={() => setSortOrder('ascending')}
-              >
-                <SortAscendingIcon class="size-4" />
-              </ToggleButton>
-            </div>
+            <Show when={selectedProperty()}>
+              <div class="flex shrink-0">
+                <ToggleButton
+                  size="SM"
+                  pressed={sortOrder() === 'descending'}
+                  onChange={() => setSortOrder('descending')}
+                >
+                  <SortDescendingIcon class="size-4" />
+                </ToggleButton>
+                <ToggleButton
+                  size="SM"
+                  pressed={sortOrder() === 'ascending'}
+                  onChange={() => setSortOrder('ascending')}
+                >
+                  <SortAscendingIcon class="size-4" />
+                </ToggleButton>
+              </div>
+            </Show>
           </div>
         </Show>
       </Show>

@@ -101,6 +101,7 @@ import {
   type ParentProps,
   type Setter,
   Show,
+  type Signal,
 } from 'solid-js';
 import { createStore, type SetStoreFunction, unwrap } from 'solid-js/store';
 import { EntityWithEverything } from '../../macro-entity/src/components/EntityWithEverything';
@@ -135,6 +136,7 @@ import {
   isConfigEqual,
   KNOWN_FILE_TYPES,
   type SortOptions,
+  type SystemSortOption,
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_IDS,
   VIEWCONFIG_DEFAULTS_IDS_ENUM,
@@ -163,7 +165,7 @@ const sortOptions = [
     label: 'Frecency',
     sortFn: sortByFrecencyScore,
   },
-] satisfies SortOption<EntityData, SortOptions['sortBy']>[];
+] satisfies SortOption<EntityData, SystemSortOption>[];
 
 export type UnifiedListViewProps = {
   defaultFilterOptions?: Partial<FilterOptions>;
@@ -839,7 +841,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const { SortComponent, sortFn: entitySort } = createSort({
     sortOptions,
-    sortTypeSignal: [sortType, setSortType],
+    sortTypeSignal: [sortType, setSortType] as Signal<SystemSortOption>,
+    propertyIdSignal: [propertyId, setPropertyId] as Signal<string | null>,
+    sortOrderSignal: [sortOrder, setSortOrder] as Signal<
+      'ascending' | 'descending'
+    >,
     disabled: isSearchActive,
   });
 
@@ -1020,6 +1026,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     });
   };
 
+  // Set initialConfig when it's not present (on load or after save/refetch)
   createEffect(() => {
     const view_ = view();
     if (!view_) return;
