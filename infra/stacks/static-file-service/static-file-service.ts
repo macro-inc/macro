@@ -9,7 +9,11 @@ import {
 } from '@resources';
 import { ALLOWED_ORIGINS } from '@resources/resources/cors';
 import { EcrImage } from '@service';
-import { BASE_DOMAIN, MACRO_SUBDOMAIN_CERT } from '@shared';
+import {
+  BASE_DOMAIN,
+  CLOUD_TRAIL_SNS_TOPIC_ARN,
+  MACRO_SUBDOMAIN_CERT,
+} from '@shared';
 import { StaticFileCloudFront } from './distribution';
 
 const stack = pulumi.getStack();
@@ -362,6 +366,26 @@ export class StaticFileService extends pulumi.ComponentResource {
       receiveWaitTimeSeconds: 20,
       tags: this.tags,
     });
+
+    new aws.cloudwatch.MetricAlarm(
+      'queue-approximate-number-of-messages-visible-alarm',
+      {
+        name: `${queueName}-approximate-number-of-messages-visible-alarm-${stack}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'ApproximateNumberOfMessagesVisible',
+        namespace: 'AWS/SQS',
+        period: 60,
+        statistic: 'Average',
+        threshold: 0,
+        dimensions: {
+          QueueName: queueQueue.name,
+        },
+        alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
+        tags: this.tags,
+      },
+      { parent: this }
+    );
 
     new aws.s3.BucketNotification('bucket_notification', {
       bucket: staticFilesBucket.id,

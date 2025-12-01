@@ -70,5 +70,26 @@ export class DeleteDocumentHandler extends pulumi.ComponentResource {
       },
       { parent: this, dependsOn: [this.dlq] }
     );
+
+    // approximate age of oldest message alarm for the queue
+    new aws.cloudwatch.MetricAlarm(
+      `${BASE_NAME}-approximate-age-of-oldest-message-alarm`,
+      {
+        name: `${BASE_NAME}-approximate-age-of-oldest-message-alarm-${stack}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'ApproximateAgeOfOldestMessage',
+        namespace: 'AWS/SQS',
+        period: 60,
+        statistic: 'Average',
+        threshold: 120, // 2 minutes
+        dimensions: {
+          QueueName: this.queue.name,
+        },
+        alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
+        tags: this.tags,
+      },
+      { parent: this }
+    );
   }
 }

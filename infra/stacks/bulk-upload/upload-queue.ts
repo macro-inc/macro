@@ -64,5 +64,25 @@ export class BulkUploadQueue extends pulumi.ComponentResource {
       },
       { parent: this, dependsOn: [this.dlq] }
     );
+
+    new aws.cloudwatch.MetricAlarm(
+      'queue-approximate-number-of-messages-visible-alarm',
+      {
+        name: `bulk-upload-queue-approximate-number-of-messages-visible-alarm-${stack}`,
+        comparisonOperator: 'GreaterThanThreshold',
+        evaluationPeriods: 1,
+        metricName: 'ApproximateNumberOfMessagesVisible',
+        namespace: 'AWS/SQS',
+        period: 60,
+        statistic: 'Average',
+        threshold: 0,
+        dimensions: {
+          QueueName: this.queue.name,
+        },
+        alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
+        tags,
+      },
+      { parent: this }
+    );
   }
 }
