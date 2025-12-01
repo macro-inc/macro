@@ -337,6 +337,12 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
     })
   );
 
+  createEffect(() => {
+    const blurFn = props.onBlur;
+    if (!blurFn) return;
+    autoRegister(registerRootEventListener(editor, 'blur', blurFn));
+  });
+
   return (
     <LexicalWrapperContext.Provider value={props.lexicalWrapper}>
       <div class="relative w-full min-h-8">
