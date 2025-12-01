@@ -562,17 +562,21 @@ async fn send_notifications(
             })?;
 
     for message in notifiable_messages {
-        // value is the sender's name if they have one, else their email address
-        let sender = if let Some(from_id) = message.from_contact_id {
-            sender_contacts.get(&from_id).map(|contact| {
-                contact
-                    .name
-                    .clone()
-                    .unwrap_or_else(|| contact.email.clone())
-            })
-        } else {
-            None
-        };
+        // Get sender contact info for both display name and sender_id
+        let sender_contact = message
+            .from_contact_id
+            .and_then(|from_id| sender_contacts.get(&from_id));
+
+        // Display name: prefer name, fallback to email
+        let sender = sender_contact.map(|contact| {
+            contact
+                .name
+                .clone()
+                .unwrap_or_else(|| contact.email.clone())
+        });
+
+        // Use email sender's address so the recipient isn't filtered out
+        let sender_id = sender_contact.map(|contact| format!("macro|{}", contact.email));
 
         let notification_metadata = NewEmailMetadata {
             sender,
@@ -585,7 +589,7 @@ async fn send_notifications(
         let notification_queue_message = NotificationQueueMessage {
             notification_entity: NotificationEntity::new_email(message.db_id.to_string()),
             notification_event: NotificationEvent::NewEmail(notification_metadata),
-            sender_id: Some(link.macro_id.to_string()),
+            sender_id,
             recipient_ids: Some(vec![link.macro_id.to_string()]),
             is_important_v0: Some(false),
         };
