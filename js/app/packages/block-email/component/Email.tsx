@@ -239,8 +239,11 @@ export function Email(props: EmailProps) {
   createMethodRegistration(blockHandle, {
     goToLocationFromParams: async (params: Record<string, any>) => {
       if (params[URL_PARAMS.messageId]) {
-        setTargetMessageId(params[URL_PARAMS.messageId]);
-        setHasHandledTarget(false);
+        setTargetMessageId(undefined);
+        setTimeout(() => {
+          setTargetMessageId(params[URL_PARAMS.messageId]);
+          setHasHandledTarget(false);
+        }, 0);
       }
     },
   });
@@ -407,7 +410,7 @@ export function Email(props: EmailProps) {
   // This effect handles scrolling to a specific message (if provided via URL) or scrolling to the last message by default
   // This effect should only run once.
   createEffect(() => {
-    if (untrack(hasHandledTarget)) return;
+    if (hasHandledTarget()) return;
     const resource = props.threadMessagesResource();
     if (!resource) return;
     // Check if initial loading is complete
@@ -430,8 +433,8 @@ export function Email(props: EmailProps) {
     // Mark as handled to prevent re-running
     setHasHandledTarget(true);
 
-    // Check for target message in URL
-    const targetMessageId_ = untrack(targetMessageId);
+    // Check for target message
+    const targetMessageId_ = targetMessageId();
     if (targetMessageId_ && typeof targetMessageId_ !== 'string') return;
 
     if (targetMessageId_) {

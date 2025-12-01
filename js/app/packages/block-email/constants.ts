@@ -1,5 +1,4 @@
 export const URL_PARAMS = {
-  threadId: 'thread_id',
   messageId: 'message_id',
 };
 

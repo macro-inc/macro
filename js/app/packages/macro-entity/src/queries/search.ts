@@ -38,7 +38,7 @@ type TypedInnerSearchResult =
   | { results: DocumentSearchResult[]; type: 'pdf'; searchQuery: string }
   | { results: DocumentSearchResult[]; type: 'md' }
   | { results: ChannelSearchResult[]; type: 'channel' }
-  | { results: EmailSearchResult[]; threadId: string; type: 'email' };
+  | { results: EmailSearchResult[]; type: 'email' };
 
 export const isSearchEntity = <T extends EntityData>(
   entity: T
@@ -104,7 +104,6 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           content: mergeAdjacentMacroEmTags(content),
           location: {
             type: 'email' as const,
-            threadId: data.threadId,
             messageId: r.message_id,
           },
         }));
@@ -185,7 +184,6 @@ const useMapSearchResponseItem = () => {
         }
         const search = getSearchData({
           results: result.email_message_search_results,
-          threadId: result.thread_id,
           type: 'email',
         });
         return {

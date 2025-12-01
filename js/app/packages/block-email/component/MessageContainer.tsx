@@ -112,6 +112,7 @@ export function MessageContainer(props: MessageContainerProps) {
     <div class="shrink-0 flex justify-center w-full">
       <div class="macro-message-width w-full">
         <Message
+          id={props.message.db_id ?? undefined}
           focused={isFocused()}
           isFirstMessage={isFirstMessage()}
           isLastMessage={isLastMessage()}

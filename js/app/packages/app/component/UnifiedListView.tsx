@@ -955,7 +955,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       case 'email': {
         const blockHandle = await blockOrchestrator.getBlockHandle(entity.id);
         await blockHandle?.goToLocationFromParams({
-          [EMAIL_PARAMS.threadId]: location.threadId,
           [EMAIL_PARAMS.messageId]: location.messageId,
         });
         break;

@@ -20,7 +20,6 @@ type ChannelMessageHighlightLocation = {
 
 type EmailMessageHighlightLocation = {
   type: 'email';
-  threadId: string;
   messageId: string;
 };
 
