@@ -478,7 +478,10 @@ export function createSort<
                 }
               >
                 <div class="flex items-center gap-1.5 px-2 py-1 text-xs font-mono border bg-ink text-panel border-ink min-w-0 overflow-hidden">
-                  <ClockIcon class="size-3.5 shrink-0" />
+                  <PropertyDataTypeIcon
+                    property={selectedProperty()!}
+                    class="text-panel size-3.5 shrink-0"
+                  />
                   <span class="truncate">
                     {selectedProperty()?.display_name}
                   </span>
