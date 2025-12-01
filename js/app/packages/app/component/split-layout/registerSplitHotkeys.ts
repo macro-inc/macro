@@ -6,6 +6,7 @@ import {
 } from '@core/signal/layout';
 import type { ViewId } from '@core/types/view';
 import { registerHotkey } from 'core/hotkey/hotkeys';
+import { globalSplitManager } from '../../signal/splitLayout';
 import { fireMacroJump } from '../MacroJump';
 import type { SplitContent } from './layoutManager';
 import { focusAdjacentSplit } from './layoutUtils';
@@ -39,6 +40,10 @@ export function registerSplitHotkeys({
   getSplitCount: () => number;
   isNotUnifiedList: () => boolean;
 }) {
+  const splitManager = globalSplitManager();
+  const canFit = () =>
+    splitManager?.resizeContext()?.canFit({ minSize: 400 }) ?? true;
+
   const windowScope = registerHotkey({
     scopeId: splitHotkeyScope,
     hotkey: 'w',
@@ -50,10 +55,11 @@ export function registerSplitHotkeys({
   });
 
   registerHotkey({
-    hotkeyToken: TOKENS.global.createNewSplit,
+    hotkeyToken: TOKENS.window.createNewSplit,
     hotkey: '\\',
     scopeId: windowScope.commandScopeId,
     description: 'Create new split',
+    condition: canFit,
     keyDownHandler: () => {
       insertSplit({ type: 'component', id: 'unified-list' });
       return true;

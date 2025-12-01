@@ -19,6 +19,7 @@ import {
   toggleGutterSize,
 } from '../../block-theme/signals/themeSignals';
 import { applyTheme } from '../../block-theme/utils/themeUtils';
+import { globalSplitManager } from '../signal/splitLayout';
 import { playSound } from '../util/sound';
 import {
   konsoleOpen,
@@ -27,12 +28,15 @@ import {
   toggleKonsoleVisibility,
 } from './command/state';
 import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
+import { useSplitLayout } from './split-layout/layout';
 import { fireVisor, resetVisor } from './Visor';
 import { openWhichKey, setOpenWhichKey } from './WhichKey';
-import { useSplitLayout } from './split-layout/layout';
 
 export default function GlobalShortcuts() {
   const [_, setBigChatOpen] = useBigChat();
+
+  const canFit = () =>
+    globalSplitManager()?.resizeContext()?.canFit({ minSize: 400 }) ?? true;
 
   const handleCommandMenu = () => {
     const wasOpen = konsoleOpen();
@@ -117,20 +121,21 @@ export default function GlobalShortcuts() {
     },
     runWithInputFocused: true,
   });
-  
+
   const { insertSplit } = useSplitLayout();
   registerHotkey({
     hotkeyToken: TOKENS.global.createNewSplit,
     hotkey: 'cmd+\\',
     scopeId: 'global',
     description: 'Create new split',
+    condition: canFit,
     keyDownHandler: () => {
       insertSplit({ type: 'component', id: 'unified-list' });
       return true;
     },
     runWithInputFocused: true,
   });
-  
+
   const openInstructions = useOpenInstructionsMd();
   registerHotkey({
     hotkeyToken: TOKENS.global.instructions,
