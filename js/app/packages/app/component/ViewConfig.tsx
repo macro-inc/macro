@@ -167,7 +167,10 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     hotkeyOptions: {
       e: (entity, extra) => {
         if (entity.type === 'email') {
-          archiveEmail(entity.id, { isDone: entity.done });
+          archiveEmail(entity.id, {
+            isDone: entity.done,
+            optimisticallyExclude: true,
+          });
         }
         if (extra?.notificationSource) {
           markNotificationsForEntityAsDone(extra.notificationSource, entity);

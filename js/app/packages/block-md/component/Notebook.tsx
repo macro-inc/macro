@@ -32,7 +32,8 @@ import {
   untrack,
 } from 'solid-js';
 import { FrontMatterProperties } from './FrontMatterProperties';
-import { InstructionsMarkdownEditor, MarkdownEditor } from './MarkdownEditor';
+import { InstructionsEditor } from './InstructionsEditor';
+import { MarkdownEditor } from './MarkdownEditor';
 import { TitleEditor } from './TitleEditor';
 
 const NoteTargetWidth = 768;
@@ -314,7 +315,7 @@ export function InstructionsNotebook() {
       ref={notebookRef}
     >
       <div class="grow max-w-3xl pt-12 min-w-0 mx-auto" ref={contentRef}>
-        <InstructionsMarkdownEditor />
+        <InstructionsEditor />
       </div>
     </div>
   );
