@@ -229,28 +229,24 @@ export function EntityWithEverything(
         if (props.entity.type !== 'email') return [];
         const me = userEmail();
         const participantNames = props.entity.participantNames ?? [];
-        return (
-          props.entity.participantEmails?.reduce<string[]>(
-            (acc, email, idx) => {
-              if (me && email === me) return acc;
-              const macroFirstName = macroDisplayNames[idx]?.().split(' ')[0];
-              const participantFirstName = participantNames[idx].split(' ')[0];
-              if (macroFirstName && !isLikelyEmail(macroFirstName)) {
-                acc.push(macroFirstName);
-              } else if (
-                isLikelyEmail(macroFirstName) &&
-                participantFirstName &&
-                !isLikelyEmail(participantFirstName)
-              ) {
-                acc.push(participantFirstName);
-              } else {
-                acc.push(email.split('@')[0]);
-              }
-              return acc;
-            },
-            []
-          ) ?? []
-        );
+        const namesSet = new Set<string>();
+        props.entity.participantEmails?.forEach((email, idx) => {
+          if (me && email === me) return;
+          const macroFirstName = macroDisplayNames[idx]?.().split(' ')[0];
+          const participantFirstName = participantNames[idx].split(' ')[0];
+          if (macroFirstName && !isLikelyEmail(macroFirstName)) {
+            namesSet.add(macroFirstName);
+          } else if (
+            isLikelyEmail(macroFirstName) &&
+            participantFirstName &&
+            !isLikelyEmail(participantFirstName)
+          ) {
+            namesSet.add(participantFirstName);
+          } else {
+            namesSet.add(email.split('@')[0]);
+          }
+        });
+        return Array.from(namesSet);
       });
 
       const displayedNames = () => {
