@@ -1,8 +1,5 @@
 mod run_task;
 use aws_sdk_ecs as ecs;
-use lambda_runtime::tracing;
-#[allow(unused_imports)]
-use mockall::automock;
 
 #[cfg(not(test))]
 pub use ECSClient as ECS;
@@ -15,7 +12,7 @@ pub struct ECSClient {
     inner: ecs::Client,
 }
 
-#[cfg_attr(test, automock)]
+#[cfg_attr(test, mockall::automock)]
 impl ECSClient {
     pub fn new(inner: ecs::Client) -> Self {
         Self { inner }
@@ -27,10 +24,6 @@ impl ECSClient {
         cluster: &str,
         subnets: Vec<String>,
     ) -> Result<(), anyhow::Error> {
-        if cfg!(feature = "local") {
-            tracing::trace!("task");
-            return Ok(());
-        }
         run_task::run_task(&self.inner, task_definition, cluster, subnets).await
     }
 }
