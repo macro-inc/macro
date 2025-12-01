@@ -1,7 +1,7 @@
 import { useIsAuthenticated } from '@core/auth';
 import { Dialog } from '@kobalte/core/dialog';
 import { createMemo } from 'solid-js';
-import { useNotificationSettings } from './PlatformNotificationProvider';
+import { useNotificationSettings } from '../notification-settings';
 
 export const BrowserNotificationModal = () => {
   const isAuthenticated = useIsAuthenticated();
