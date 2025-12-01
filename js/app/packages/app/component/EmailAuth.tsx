@@ -58,7 +58,7 @@ function EmailCallback(props: Pick<EmailAuthParams, 'successPath'>) {
           onSuccess();
           return;
         }
-        toast.failure('Failed to initialize email link');
+        toast.failure('Failed to connect email', 'Please email contact@macro.com');
       });
     },
     (error) => {
