@@ -219,31 +219,38 @@ export function EntityWithEverything(
 
   const EntityTitle = () => {
     if (props.entity.type === 'email') {
-      const macroDisplayNames =
-        props.entity.participantEmails?.map((email) => {
-          return useDisplayName(emailToId(email))[0];
-        }) ?? [];
       const isLikelyEmail = (value?: string) =>
         typeof value === 'string' && value.includes('@');
+
       const combinedParticipantFirstNames = createMemo(() => {
         if (props.entity.type !== 'email') return [];
         const me = userEmail();
-        const participantNames = props.entity.participantNames ?? [];
+        if (
+          props.entity.participants?.length === 1 &&
+          props.entity.participants?.[0].email === me
+        ) {
+          return ['me'];
+        }
         const namesSet = new Set<string>();
-        props.entity.participantEmails?.forEach((email, idx) => {
-          if (me && email === me) return;
-          const macroFirstName = macroDisplayNames[idx]?.().split(' ')[0];
-          const participantFirstName = participantNames[idx].split(' ')[0];
+
+        props.entity.participants?.forEach((participant) => {
+          if (!participant.email) return;
+          if (me && participant.email === me) return;
+          const macroDisplayName = useDisplayName(
+            emailToId(participant.email)
+          )[0]?.();
+          const macroFirstName = macroDisplayName?.split(' ')[0];
+          const participantFirstName = participant.name?.split(' ')[0] ?? '';
           if (macroFirstName && !isLikelyEmail(macroFirstName)) {
             namesSet.add(macroFirstName);
           } else if (
-            isLikelyEmail(macroFirstName) &&
             participantFirstName &&
             !isLikelyEmail(participantFirstName)
           ) {
             namesSet.add(participantFirstName);
           } else {
-            namesSet.add(email.split('@')[0]);
+            const emailName = participant.email.split('@')[0];
+            namesSet.add(emailName);
           }
         });
         return Array.from(namesSet);
@@ -251,10 +258,9 @@ export function EntityWithEverything(
 
       const displayedNames = () => {
         const names = combinedParticipantFirstNames();
-        if (names.length <= 3 && names.length > 0) return names.join(', ');
-        if (names.length > 3)
-          return `${names[0]} .. ${names[names.length - 2]}, ${names[names.length - 1]}`;
-        return undefined;
+        if (!names || names.length === 0) return undefined;
+        if (names.length <= 3) return names.join(', ');
+        return `${names[0]} .. ${names[names.length - 2]}, ${names[names.length - 1]}`;
       };
 
       return (
