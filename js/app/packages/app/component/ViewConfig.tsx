@@ -167,7 +167,9 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     hotkeyOptions: {
       e: (entity, extra) => {
         if (entity.type === 'email') {
-          archiveEmail(entity.id, { isDone: entity.done });
+          archiveEmail(entity.id, {
+            isDone: entity.done,
+          });
         }
         if (extra?.notificationSource) {
           markNotificationsForEntityAsDone(extra.notificationSource, entity);
@@ -297,24 +299,50 @@ export async function archiveEmail(
   id: string,
   options: { isDone: boolean; optimisticallyExclude?: boolean }
 ) {
-  // optimistic update
-  await queryClient.cancelQueries({ queryKey: queryKeys.all.email });
+  await Promise.all([
+    queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
+    queryClient.cancelQueries({ queryKey: queryKeys.all.dss }),
+  ]);
 
-  const previous = queryClient.getQueriesData<{
+  const previousEmail = queryClient.getQueriesData<{
     pages: { items: EntityData[] }[];
   }>({
     queryKey: queryKeys.all.email,
   });
+  const previousEmailThreadItemFromDss = queryClient.getQueriesData<{
+    pages: { items: EntityData[] }[];
+  }>({
+    queryKey: queryKeys.all.dss,
+  });
 
-  const applyOptimistic = (data?: { pages: { items: EntityData[] }[] }) => {
+  const applyOptimistic = (data?: {
+    pages: { items: (EntityData | { data: EntityData })[] }[];
+  }) => {
     if (!data) return data;
+
     return {
       ...data,
       pages: data.pages.map((page) => ({
         ...page,
         items: options.optimisticallyExclude
-          ? page.items.filter((item) => item.id !== id)
+          ? page.items.filter((item) => {
+              if ('data' in item) {
+                return item.data.id !== id;
+              }
+              return item.id !== id;
+            })
           : page.items.map((item) => {
+              if ('data' in item) {
+                return item.data.id === id
+                  ? {
+                      ...item,
+                      data: {
+                        ...item.data,
+                        inboxVisible: false,
+                      },
+                    }
+                  : item;
+              }
               return item.id === id
                 ? {
                     ...item,
@@ -326,7 +354,10 @@ export async function archiveEmail(
     };
   };
 
-  for (const [key, data] of previous) {
+  for (const [key, data] of [
+    ...previousEmailThreadItemFromDss,
+    ...previousEmail,
+  ]) {
     queryClient.setQueryData(key, applyOptimistic(data));
   }
 
@@ -335,12 +366,18 @@ export async function archiveEmail(
     await emailClient.flagArchived({ value: !options.isDone, id });
   } catch (_err) {
     // rollback on error
-    for (const [key, data] of previous) {
+    for (const [key, data] of previousEmail) {
+      queryClient.setQueryData(key, data);
+    }
+    for (const [key, data] of previousEmailThreadItemFromDss) {
       queryClient.setQueryData(key, data);
     }
   } finally {
     // revalidate
-    await queryClient.invalidateQueries({ queryKey: queryKeys.all.email });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.all.dss }),
+    ]);
   }
 }
 

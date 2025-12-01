@@ -7,10 +7,9 @@ import { openEmailAuthPopup } from '@core/auth/email';
 import { isErr } from '@core/util/maybeResult';
 import { queryKeys } from '@macro-entity';
 import { emailClient } from '@service-email/client';
-import type { Link } from '@service-email/generated/schemas/link';
 import { updateUserInfo } from '@service-gql/client';
 import { useQuery } from '@tanstack/solid-query';
-import { err, okAsync, type Result, ResultAsync } from 'neverthrow';
+import { err, okAsync, ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { queryClient } from '../../macro-entity/src/queries/client';
 
@@ -58,33 +57,7 @@ function invalidateEmailLinks() {
   }));
 }
 
-/** Arbitrary threshold in ms between created_at and updated_at */
-const CREATED_UPDATED_AT_THRESHOLD = 1_000;
-
-/**
- * Try and determine if the link is the first time it was created
- * by checking if the created_at and updated_at are within the threshold
- */
-function isFirstTimeEmailLink(link: Link) {
-  const createdAt = new Date(link.created_at);
-  const updatedAt = new Date(link.updated_at);
-
-  return (
-    createdAt.getTime() - updatedAt.getTime() < CREATED_UPDATED_AT_THRESHOLD
-  );
-}
-
-/** Returns true if the link needs to be synced */
-function linkNeedsSync(link: Link) {
-  return link.is_sync_active === false && isFirstTimeEmailLink(link);
-}
-
-/** Returns true if any of the links need to be synced */
-function anyLinksNeedSync(links: Link[]) {
-  return links.some(linkNeedsSync);
-}
-
-type EmailSyncError =
+type EmailInitError =
   /** The email link has already been initialized*/
   | { tag: 'AlreadyInitialized' }
   | { tag: 'FailedToInitialize'; message: string };
@@ -94,23 +67,27 @@ type EmailSyncError =
  *
  * @returns ok if syncing was started, err if syncing failed
  */
-async function syncEmails(): Promise<Result<void, EmailSyncError>> {
-  const initResult = await emailClient.init();
-
-  if (isErr(initResult)) {
-    const [errors] = initResult;
-    const badRequestError = errors.find((err) => err.code === '400');
-    return err(
-      badRequestError
-        ? { tag: 'AlreadyInitialized' as const }
-        : {
-            tag: 'FailedToInitialize' as const,
-            message: 'Failed to initialize',
-          }
-    );
-  }
-
-  return okAsync(undefined);
+function initEmailLink(): ResultAsync<void, EmailInitError> {
+  return ResultAsync.fromSafePromise(emailClient.init()).andThen(
+    (initResult) => {
+      if (isErr(initResult)) {
+        const [errors] = initResult;
+        const badRequestError = errors.find(
+          // TODO: this is cope but seems like error.code not being set correctly
+          (e) => e.code === '400' || e.message.includes('400')
+        );
+        return err(
+          badRequestError
+            ? { tag: 'AlreadyInitialized' as const }
+            : {
+                tag: 'FailedToInitialize' as const,
+                message: 'Failed to initialize',
+              }
+        );
+      }
+      return okAsync(undefined);
+    }
+  );
 }
 
 /**
@@ -140,20 +117,6 @@ function startEmailPolling() {
  */
 function stopEmailPolling() {
   setEmailRefetchInterval(undefined);
-}
-
-/**
- * Starts syncing and polling emails if there is a new link
- *
- * @returns true if syncing emails was started
- */
-function maybeStartEmailSync(links: Link[]): boolean {
-  if (!anyLinksNeedSync(links)) {
-    return false;
-  }
-  syncEmails();
-  startEmailPolling();
-  return true;
 }
 
 /**
@@ -189,7 +152,7 @@ function connectEmail(): ResultAsync<void, TimeoutError> {
  */
 export function useEmailLinks() {
   const invalidations = async () => {
-    // invalidateEmailLinks();
+    invalidateEmailLinks();
     await updateUserAuth();
     await updateUserInfo();
   };
@@ -199,9 +162,14 @@ export function useEmailLinks() {
   return {
     query: query,
     status: useEmailLinksStatus(),
-    connect: () => connectEmail().andTee(invalidations),
+    initEmailLink: () =>
+      initEmailLink().map(startEmailPolling).map(invalidations),
+    connect: () =>
+      connectEmail()
+        .andThen(initEmailLink)
+        .map(startEmailPolling)
+        .andTee(invalidations),
     disconnect: () => disconnectEmail().andTee(invalidations),
-    maybeSync: maybeStartEmailSync,
     invalidate: () => invalidateEmailLinks(),
     refetchInterval: emailRefetchInterval,
   };

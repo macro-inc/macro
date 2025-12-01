@@ -100,7 +100,9 @@ export async function maybeHandlePlatformNotification(
       notificationHandle !== 'disabled-in-ui'
     ) {
       notificationHandle.onClick(() => {
+        window.focus();
         openNotification(nm, splitLayoutManager);
+        notificationHandle.close();
       });
     }
   }
