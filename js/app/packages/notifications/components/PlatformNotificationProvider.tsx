@@ -138,11 +138,19 @@ export function usePlatformNotificationState():
   return res;
 }
 
+const PROMPT_DISMISSED_KEY = 'notification-prompt-dismissed';
+
 export type NotificationSettings =
   | {
       isSupported: true;
+      /** Whether notifications are currently enabled (granted and not disabled in UI) */
       isEnabled: () => boolean;
+      /** Toggle notifications on/off */
       toggle: (enabled: boolean) => Promise<void>;
+      /** Whether the enable prompt should be shown (permission not yet decided, not dismissed) */
+      shouldPrompt: () => boolean;
+      /** Dismiss the enable prompt */
+      dismissPrompt: () => void;
     }
   | {
       isSupported: false;
@@ -155,6 +163,10 @@ export function useNotificationSettings(): NotificationSettings {
     return { isSupported: false };
   }
 
+  const [isPromptDismissed, setIsPromptDismissed] = createSignal(
+    !!localStorage.getItem(PROMPT_DISMISSED_KEY)
+  );
+
   const isEnabled = () => state.permission.latest === 'granted';
 
   const toggle = async (enabled: boolean) => {
@@ -165,10 +177,28 @@ export function useNotificationSettings(): NotificationSettings {
     }
   };
 
+  const shouldPrompt = () => {
+    if (isPromptDismissed()) return false;
+    const permission = state.permission();
+    return (
+      permission !== undefined &&
+      permission !== 'granted' &&
+      permission !== 'denied' &&
+      permission !== 'disabled-in-ui'
+    );
+  };
+
+  const dismissPrompt = () => {
+    localStorage.setItem(PROMPT_DISMISSED_KEY, 'true');
+    setIsPromptDismissed(true);
+  };
+
   return {
     isSupported: true,
     isEnabled,
     toggle,
+    shouldPrompt,
+    dismissPrompt,
   };
 }
 
