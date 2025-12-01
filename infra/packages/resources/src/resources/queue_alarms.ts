@@ -31,28 +31,31 @@ export class QueueAlarms extends pulumi.ComponentResource {
 
     const tags = { ...args.tags, queue: queue.name };
 
-    const approximateAgeOfOldestMessageEvaluationPeriods = args.approximateAgeOfOldestMessageEvaluationPeriods ?? 60;
-    const approximateAgeOfOldestMessageThreshold = args.approximateAgeOfOldestMessageThreshold ?? 120; // 2 minutes
+    const approximateAgeOfOldestMessageEvaluationPeriods =
+      args.approximateAgeOfOldestMessageEvaluationPeriods ?? 60;
+    const approximateAgeOfOldestMessageThreshold =
+      args.approximateAgeOfOldestMessageThreshold ?? 120; // 2 minutes
 
     // alarm for monitoring ApproximateAgeOfOldestMessage
-    this.queueApproximateAgeOfOldestMessageAlarm = new aws.cloudwatch.MetricAlarm(
-      'aaoom-alarm',
-      {
-        alarmDescription: `Alarm when ${queue.name} has approximate age of oldest message over ${approximateAgeOfOldestMessageThreshold}s for ${approximateAgeOfOldestMessageEvaluationPeriods}s.`,
-        comparisonOperator: 'GreaterThanThreshold',
-        evaluationPeriods: 1,
-        metricName: 'ApproximateAgeOfOldestMessage',
-        namespace: 'AWS/SQS',
-        period: approximateAgeOfOldestMessageEvaluationPeriods,
-        statistic: 'Average',
-        threshold: approximateAgeOfOldestMessageThreshold,
-        dimensions: {
-          QueueName: queue.name,
+    this.queueApproximateAgeOfOldestMessageAlarm =
+      new aws.cloudwatch.MetricAlarm(
+        'aaoom-alarm',
+        {
+          alarmDescription: `Alarm when ${queue.name} has approximate age of oldest message over ${approximateAgeOfOldestMessageThreshold}s for ${approximateAgeOfOldestMessageEvaluationPeriods}s.`,
+          comparisonOperator: 'GreaterThanThreshold',
+          evaluationPeriods: 1,
+          metricName: 'ApproximateAgeOfOldestMessage',
+          namespace: 'AWS/SQS',
+          period: approximateAgeOfOldestMessageEvaluationPeriods,
+          statistic: 'Average',
+          threshold: approximateAgeOfOldestMessageThreshold,
+          dimensions: {
+            QueueName: queue.name,
+          },
+          alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
+          tags,
         },
-        alarmActions: [CLOUD_TRAIL_SNS_TOPIC_ARN],
-        tags,
-      },
-      { parent: this }
-    );
+        { parent: this }
+      );
   }
 }

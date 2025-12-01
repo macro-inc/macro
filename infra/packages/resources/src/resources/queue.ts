@@ -79,6 +79,10 @@ export class Queue extends pulumi.ComponentResource {
       { parent: this, dependsOn: [this.dlq] }
     );
 
-    new QueueAlarms('queue-alarms', { queue: this.queue, tags }, { parent: this });
+    new QueueAlarms(
+      'queue-alarms',
+      { queue: this.queue, tags },
+      { parent: this }
+    );
   }
 }
