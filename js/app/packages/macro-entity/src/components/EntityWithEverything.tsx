@@ -265,7 +265,9 @@ export function EntityWithEverything(
           <div class="flex w-[20cqw] gap-2 font-semibold shrink-0">
             {/* Sender Name */}
             <div class="truncate">
-              {displayedNames() ?? props.entity.senderName}
+              {displayedNames() ??
+                props.entity.senderName ??
+                props.entity.senderEmail?.split('@')[0]}
             </div>
             {/* Sender Email Address */}
             {/* <Show
