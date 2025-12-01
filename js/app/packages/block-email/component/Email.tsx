@@ -35,7 +35,7 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { TARGET_MESSAGE_ACTIVE_TIME, URL_PARAMS } from '../constants';
+import { URL_PARAMS } from '../constants';
 import { isScrollingToMessage } from '../signal/scrollState';
 import type { createThreadMessagesResource } from '../signal/threadMessages';
 import { useThreadNavigation } from '../signal/threadNavigation';
@@ -212,10 +212,7 @@ export function Email(props: EmailProps) {
   const [isContainerFilled, setIsContainerFilled] = createSignal(false);
   const [hasHandledTarget, setHasHandledTarget] = createSignal(false);
 
-  const activeTargetMessageId = createActiveTarget(
-    targetMessageId,
-    TARGET_MESSAGE_ACTIVE_TIME
-  );
+  const activeTargetMessageId = createActiveTarget(targetMessageId);
 
   const blockHandle = blockHandleSignal.get;
   createMethodRegistration(blockHandle, {
