@@ -215,7 +215,12 @@ export function MessageContainer(props: MessageProps) {
 
   // A message can be the last message if it's 1. the last message or 2. in the last thread at the collapsed thread index cutoff and the thread is not expanded
   const isLastMessage = createMemo(() => {
-    return (props.index() === props.orderedMessages().length - 1 || (props.listContext.isInLastThread && !props.threadViewStore[message.thread_id ?? '']?.threadExpanded && props.listContext.threadIndex === COLLAPSED_THREAD_INDEX_CUTOFF));
+    return (
+      props.index() === props.orderedMessages().length - 1 ||
+      (props.listContext.isInLastThread &&
+        !props.threadViewStore[message.thread_id ?? '']?.threadExpanded &&
+        props.listContext.threadIndex === COLLAPSED_THREAD_INDEX_CUTOFF)
+    );
   });
 
   // currently arbitrarily limiting thread depth to 1, in the future we may want to support deeper threads

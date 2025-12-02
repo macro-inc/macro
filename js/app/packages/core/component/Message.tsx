@@ -185,7 +185,9 @@ export const NestedConnectorLines: Component<NestedConnectorLinesProps> = (
   }
 
   return (
-    <div class="absolute left-0 top-0 w-full h-full z-1 pointer-events-none">{NestedLines}</div>
+    <div class="absolute left-0 top-0 w-full h-full z-1 pointer-events-none">
+      {NestedLines}
+    </div>
   );
 };
 
