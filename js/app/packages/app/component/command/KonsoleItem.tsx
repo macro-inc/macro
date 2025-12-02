@@ -116,9 +116,9 @@ type KonsoleCategory = {
   visible: boolean;
 };
 
-const [categories, setCategories] = createStore<KonsoleCategory[]>(
-  DEFAULT_CATEGORIES.slice()
-);
+const [categories, setCategories] = createStore<KonsoleCategory[]>([
+  ...DEFAULT_CATEGORIES,
+]);
 
 export const searchCategories = {
   getCategoryIndex(name: DefaultCategoryNames | (string & {})) {
