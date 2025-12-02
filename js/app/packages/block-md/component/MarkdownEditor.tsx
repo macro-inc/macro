@@ -969,7 +969,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         <FocusClickTarget
           editor={editor}
           editorFocus={editorFocus}
-          style={{ height: `${clickTargetHeight()}px`, background: 'orange' }}
+          style={{ height: `${clickTargetHeight()}px` }}
         />
         <Show when={isBlankMarkdown()}>
           <div class="pointer-events-none text-ink-placeholder absolute top-0">
