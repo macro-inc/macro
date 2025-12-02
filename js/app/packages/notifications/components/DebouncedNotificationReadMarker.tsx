@@ -6,6 +6,10 @@ import {
   markNotificationsForEntityAsRead,
 } from '../notification-helpers';
 import type { NotificationSource } from '../notification-source';
+import { queryClient } from '../../macro-entity/src/queries/client';
+import { queryKeys } from '@macro-entity';
+import { ApiPaginatedThreadCursor } from '@service-email/generated/schemas';
+import { InfiniteData, partialMatchKey } from '@tanstack/solid-query';
 
 const DEFAULT_DEBOUNCE_TIME = 2_000;
 
@@ -114,9 +118,49 @@ export function EmailDebouncedReadMarker(props: {
     <DebouncedMarker
       debounceTime={props.debounceTime}
       debouncedFn={() => {
-        markNotificationForEntityIdAsRead(
-          props.notificationSource,
-          props.threadId
+        queryClient.setQueriesData(
+          {
+            predicate(query) {
+              return partialMatchKey(
+                query.queryKey,
+                queryKeys.email({
+                  infinite: true,
+                  limit: 100,
+                  view: 'inbox',
+                })
+              );
+            },
+          },
+          (
+            prev:
+              | InfiniteData<ApiPaginatedThreadCursor>
+              | ApiPaginatedThreadCursor
+              | undefined
+          ) => {
+            if (!prev) return;
+
+            if ('pageParams' in prev) {
+              return {
+                ...prev,
+                pages: prev.pages.map((p) => ({
+                  ...p,
+                  items: p.items.map((item) => {
+                    if (item.id !== props.threadId) return item;
+                    return {
+                      ...item,
+                      isRead: true,
+                    };
+                  }),
+                })),
+              };
+            }
+
+            return prev.items.map((item) => {
+              if (item.id !== props.threadId) return item;
+
+              return { ...item, isRead: true };
+            });
+          }
         );
         emailClient.markThreadAsSeen({
           thread_id: props.threadId,
