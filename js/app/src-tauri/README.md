@@ -49,3 +49,15 @@ extra routes, or mount native-only UI. Pair those checks with the
 `MaybeTauriProvider` from `@macro/tauri` to keep native-specific wiring
 localized while rendering everything through the shared `packages/app` entry
 point.
+
+## Notifications
+
+Native notifications are implemented for both desktop and iOS with deep linking support:
+
+- **iOS**: Push notifications fully support tap-to-navigate via deep links (`macro://` URLs)
+- **Desktop**: Notifications include deep link metadata but click handling is not yet available
+  - Current Tauri notification plugin (v2) doesn't expose onClick callbacks
+  - Desktop users can see notifications but must manually navigate to content
+  - Future plugin updates may enable click-to-navigate functionality
+
+Notification priorities are automatically set based on type (mentions, shares, DMs receive higher priority).

@@ -148,6 +148,9 @@ function NotificationItem(props: {
 }
 
 function BrowserFormat(props: { notification: UnifiedNotification }) {
+  const typedNotification = createMemo(() =>
+    tryToTypedNotification(props.notification)
+  );
   const data = createMemo(() =>
     extractTypedNotificationData(props.notification)
   );
@@ -155,8 +158,10 @@ function BrowserFormat(props: { notification: UnifiedNotification }) {
 
   createEffect(() => {
     const notifData = data();
-    if (notifData) {
+    const typed = typedNotification();
+    if (notifData && typed) {
       toPlatformNotificationData(
+        typed,
         notifData,
         DefaultUserNameResolver,
         DefaultDocumentNameResolver

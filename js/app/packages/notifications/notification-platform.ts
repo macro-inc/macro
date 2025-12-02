@@ -37,6 +37,7 @@ function getAccentColorForIcon(): string {
 }
 
 export async function toPlatformNotificationData(
+  nm: ReturnType<typeof tryToTypedNotification>,
   data: NotificationData,
   resolveUserName: UserNameResolver,
   resolveDocumentName: DocumentNameResolver
@@ -64,6 +65,7 @@ export async function toPlatformNotificationData(
     options: {
       body: data.content ? markdownToPlainText(data.content) : `${data.action}`,
       icon,
+      data: nm,
     },
   };
 }
@@ -86,6 +88,7 @@ export async function maybeHandlePlatformNotification(
   if (data === 'no_extractor' || data === 'no_extracted_data') return;
 
   const platformNotificationData = await toPlatformNotificationData(
+    nm,
     data,
     DefaultUserNameResolver,
     DefaultDocumentNameResolver

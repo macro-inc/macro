@@ -12,6 +12,7 @@ import {
   PlatformNotificationProvider,
 } from '@notifications';
 import { notificationServiceClient } from '@service-notification/client';
+import { useNavigate } from '@solidjs/router';
 import { makePersisted } from '@solid-primitives/storage';
 import {
   type Accessor,
@@ -29,6 +30,7 @@ function usePushNotifications(
   deviceType: 'ios',
   onPushNotification?: (event: NotificationEvent) => void
 ) {
+  const navigate = useNavigate();
   const [systemPermission, { refetch }] = createResource(checkPermissions);
 
   const [registrationResult, setRegistrationResult] = makePersisted(
@@ -90,9 +92,40 @@ function usePushNotifications(
     setRegistrationResult(undefined);
   }
 
+  function handleNotificationTap(payload: Record<string, string>) {
+    const deepLinkUrl = payload.deepLinkUrl;
+
+    if (!deepLinkUrl) {
+      console.warn('notification tap but no deep link URL');
+      return;
+    }
+
+    try {
+      const url = new URL(deepLinkUrl);
+      const path = url.pathname;
+      const query = url.search.slice(1);
+
+      if (query) {
+        navigate(`${path}?${query}`);
+      } else {
+        navigate(path);
+      }
+    } catch (err) {
+      console.error('failed to parse notification deep link:', err);
+    }
+  }
+
   createEffect(() => {
-    if (!registrationResult()?.success || !onPushNotification) return;
-    watchNotifications(onPushNotification).then(console.info);
+    if (!registrationResult()?.success) return;
+    watchNotifications((event) => {
+      if (event.type === 'BACKGROUND_TAP' || event.type === 'FOREGROUND_TAP') {
+        handleNotificationTap(event.payload);
+      }
+
+      if (onPushNotification) {
+        onPushNotification(event);
+      }
+    }).then(console.info);
   });
 
   return {

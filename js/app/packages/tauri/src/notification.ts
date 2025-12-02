@@ -7,6 +7,10 @@ import {
   requestPermission,
   sendNotification,
 } from '@tauri-apps/plugin-notification';
+import {
+  generateDeepLinkUrl,
+  isHighPriorityNotification,
+} from './notification-helpers';
 
 export function createTauriNotificationInterface(
   setDisabled: () => Promise<void>
@@ -34,16 +38,33 @@ export function createTauriNotificationInterface(
         sendNotification(data.title);
         return createTauriNotification();
       }
-      const { body, icon, ...rest } = data.options;
 
-      sendNotification({
-        title: data.title,
-        body,
-        icon,
-        extra: {
-          ...rest,
-        },
-      });
+      const fullNotification = data.options.data;
+
+      if (fullNotification) {
+        const deepLinkUrl = generateDeepLinkUrl(fullNotification);
+
+        sendNotification({
+          title: data.title,
+          body: data.options.body,
+          icon: data.options.icon,
+          extra: {
+            deepLinkUrl: deepLinkUrl ?? undefined,
+          },
+        });
+      } else {
+        const { body, icon, ...rest } = data.options;
+
+        sendNotification({
+          title: data.title,
+          body,
+          icon,
+          extra: {
+            ...rest,
+          },
+        });
+      }
+
       return createTauriNotification();
     },
     unregisterNotifications: setDisabled,
