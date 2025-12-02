@@ -22,7 +22,6 @@ import { platformFetch } from 'core/util/platformFetch';
 import type { GetItemsSoupParams } from 'service-storage/generated/schemas/getItemsSoupParams';
 import type { SoupPage } from 'service-storage/generated/schemas/soupPage';
 import { useInstructionsMdIdQuery } from 'service-storage/instructionsMd';
-import { syncServiceClient } from 'service-sync/client';
 import type { Accessor } from 'solid-js';
 import type {
   ChatEntity,
