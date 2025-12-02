@@ -207,6 +207,9 @@ function allItemFilter(item: CombinedEntity): boolean {
   ) {
     return false;
   }
+  if (item.kind === 'item' && item.data.deletedAt) {
+    return false;
+  }
   return true;
 }
 

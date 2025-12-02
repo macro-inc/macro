@@ -64,6 +64,9 @@ export function useCommandItems() {
         if (FILTER_PERSISTENT_CHATS && item.type === 'chat') {
           return !item.isPersistent;
         }
+        if (item.deletedAt) {
+          return false;
+        }
         return true;
       })
       .map((item) => ({
