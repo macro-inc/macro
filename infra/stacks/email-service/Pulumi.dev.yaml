@@ -15,6 +15,8 @@ config:
   email-service:backfill_queue_max_messages: 1
   email-service:webhook_queue_workers: 25
   email-service:webhook_queue_max_messages: 1
+  email-service:webhook_retry_queue_workers: 15
+  email-service:webhook_retry_queue_max_messages: 1
   email-service:sfs_uploader_workers: 3
   email-service:presigned_url_ttl_secs: 3600
   email-service:gmail_gcp_queue: gmail-gcp-queue-dev
