@@ -30,7 +30,6 @@
     "opener:default",
     "deep-link:default",
     "websocket:default",
-    "safe-area-insets:default",
     "notification:default",
     "notifications:default",
     "os:default"

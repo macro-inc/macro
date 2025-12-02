@@ -78,7 +78,6 @@ pub fn run() {
     {
         // register mobile specific plugins
         builder = builder
-            .plugin(tauri_plugin_safe_area_insets::init())
             .plugin(tauri_plugin_notifications::init());
     }
 
@@ -308,8 +307,7 @@ impl<R: Runtime> Plugin<R> for MacroNavigationPlugin {
         if !allowed_internal {
             // we are navigating somewhere external to the app
             // open in system default browser
-            // spawn a detached thread to avoid blocking,
-            // on android this panics if called on the main thread
+            // spawn a detached thread to avoid blocking
             let app_handle = webview.app_handle().clone();
             let url = url.clone();
             std::thread::spawn(move || {

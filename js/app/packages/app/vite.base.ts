@@ -11,7 +11,7 @@ import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { version } from './package.json';
 
-const PLATFORMS = ['web', 'desktop', 'ios', 'android'] as const;
+const PLATFORMS = ['web', 'desktop', 'ios'] as const;
 
 export type AppPlatform = (typeof PLATFORMS)[number];
 

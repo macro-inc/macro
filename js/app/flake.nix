@@ -19,28 +19,7 @@
         pkgs = import nixpkgs {
           system = system;
           config.allowUnfree = true;
-          config.android_sdk.accept_license = true;
         };
-
-        android_sdk =
-          (pkgs.androidenv.composeAndroidPackages {
-            platformVersions = [
-              "34"
-              "36"
-            ];
-            buildToolsVersions = [
-              "35.0.0"
-            ];
-            ndkVersions = [ "26.3.11579264" ];
-            includeNDK = true;
-            useGoogleAPIs = false;
-            useGoogleTVAddOns = false;
-            includeEmulator = true;
-            includeSystemImages = true;
-            systemImageTypes = [ "google_apis_playstore" ];
-            abiVersions = [ "x86_64" ];
-            includeSources = false;
-          }).androidsdk;
 
         packages = with pkgs; [
           curl
@@ -73,15 +52,8 @@
               complete.clippy
               complete.rustfmt
               complete.rust-analyzer
-              targets.aarch64-linux-android.latest.rust-std
-              targets.armv7-linux-androideabi.latest.rust-std
-              targets.i686-linux-android.latest.rust-std
-              targets.x86_64-linux-android.latest.rust-std
             ]
           )
-
-          android_sdk
-          jdk
         ];
 
         libraries = with pkgs; [
@@ -103,9 +75,6 @@
 
           LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}:$LD_LIBRARY_PATH";
           XDG_DATA_DIRS = "${pkgs.gsettings-desktop-schemas}/share/gsettings-schemas/${pkgs.gsettings-desktop-schemas.name}:${pkgs.gtk3}/share/gsettings-schemas/${pkgs.gtk3.name}:$XDG_DATA_DIRS";
-          ANDROID_HOME = "${android_sdk}/libexec/android-sdk";
-          NDK_HOME = "${android_sdk}/libexec/android-sdk/ndk/26.3.11579264";
-          GRADLE_OPTS = "-Dorg.gradle.project.android.aapt2FromMavenOverride=${android_sdk}/libexec/android-sdk/build-tools/35.0.0/aapt2";
           GIO_MODULE_DIR = "${pkgs.glib-networking}/lib/gio/modules/";
         };
       }

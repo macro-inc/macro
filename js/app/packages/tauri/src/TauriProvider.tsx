@@ -6,63 +6,23 @@ import {
 import type { RouteSectionProps } from '@solidjs/router';
 import { type OsType, type as osType } from '@tauri-apps/plugin-os';
 import {
-  type Accessor,
   createContext,
-  createSignal,
   type JSX,
-  onMount,
   useContext,
 } from 'solid-js';
-import { getInsets, type Insets } from 'tauri-plugin-safe-area-insets';
 import { useTauriNavigationEffect } from './navigation';
 import { MaybePushNotificationRegistration } from './PushNotification';
 
-type NotAndroid = 'not-android';
-
 interface TauriContextValue {
   os: OsType;
-  runtimeInsets: Accessor<Insets | NotAndroid>;
 }
 
 const TauriContext = createContext<TauriContextValue | undefined>(undefined);
 
 function TauriProvider(props: { children: JSX.Element }) {
-  // we only care about this value on android.
-  // ios should use the env(safe-area-inset-top) css properties
-  // this css is not reliably set on android
-  const [insets, setInsets] = createSignal<NotAndroid | Insets>(
-    'not-android' as const
-  );
-
   const value: TauriContextValue = {
-    runtimeInsets: insets,
     os: osType(),
   };
-
-  onMount(() => {
-    if (value.os === 'android') {
-      getInsets().then((insets) => {
-        setInsets(insets);
-        // Set CSS variables for Tauri insets
-        document.documentElement.style.setProperty(
-          '--tauri-inset-top',
-          `${insets.top}px`
-        );
-        document.documentElement.style.setProperty(
-          '--tauri-inset-bottom',
-          `${insets.bottom}px`
-        );
-        document.documentElement.style.setProperty(
-          '--tauri-inset-left',
-          `${insets.left}px`
-        );
-        document.documentElement.style.setProperty(
-          '--tauri-inset-right',
-          `${insets.right}px`
-        );
-      });
-    }
-  });
 
   return (
     <TauriContext.Provider value={value}>

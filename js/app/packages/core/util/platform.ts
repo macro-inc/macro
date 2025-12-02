@@ -1,11 +1,10 @@
-export type MacroPlatform = 'web' | 'desktop' | 'ios' | 'android';
-export type NativeMobilePlatform = Extract<MacroPlatform, 'ios' | 'android'>;
+export type MacroPlatform = 'web' | 'desktop' | 'ios';
+export type NativeMobilePlatform = Extract<MacroPlatform, 'ios'>;
 
 const VALID_PLATFORMS: ReadonlyArray<MacroPlatform> = [
   'web',
   'desktop',
   'ios',
-  'android',
 ];
 
 function resolveBuildPlatform(): MacroPlatform {
@@ -28,7 +27,7 @@ export function isPlatform(target: MacroPlatform | MacroPlatform[]): boolean {
 }
 
 export function isMobilePlatform(): boolean {
-  return isPlatform(['ios', 'android']);
+  return isPlatform('ios');
 }
 
 export function isDesktopPlatform(): boolean {

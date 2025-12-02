@@ -21,7 +21,6 @@ You will need the following dependencies installed on your system to develop in 
 1. The [rust programming language](https://rust-lang.org/tools/install/)
 1. The [Tauri CLI](https://v2.tauri.app/reference/cli/)
 1. The [bun](https://bun.sh/) runtime
-1. *For Android Development* The [Android Studio IDE](https://developer.android.com/studio)
 1. *For iOS Development* [XCode](https://developer.apple.com/xcode/) for MacOS
 
 If you do not want to manage these dependencies manually, it is recommended to use `nix develop`
@@ -36,9 +35,6 @@ In the nix shell the cli is installed for the cargo package manager.
 
 Run the Desktop App for your host operating system
   > `cargo tauri dev`
-
-Run the Android App
-  > `cargo tauri android dev`
 
 Run the iOS App (note: I haven't had the chance to test this yet)
   > `cargo tauri ios dev`

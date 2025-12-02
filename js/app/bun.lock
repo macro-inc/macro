@@ -1,5 +1,6 @@
 {
   "lockfileVersion": 1,
+  "configVersion": 0,
   "workspaces": {
     "": {
       "name": "@coparse/monorepo",
@@ -95,7 +96,6 @@
         "tab-election": "^4.2.8",
         "tabbable": "^6.2.0",
         "tailwindcss": "^4.1.14",
-        "tauri-plugin-safe-area-insets": "^0.1.0",
         "three": "^0.178.0",
         "ts-pattern": "^5.9.0",
         "tslog": "^4.9.3",
@@ -3425,8 +3425,6 @@
     "tapable": ["tapable@2.2.1", "", {}, "sha512-GNzQvQTOIP6RyTfE2Qxb8ZVlNmw0n88vp1szwWRimP02mnTsx3Wtn5qRdqY9w2XduFNUgvOwhNnQsjwCp+kqaQ=="],
 
     "tar": ["tar@7.5.1", "", { "dependencies": { "@isaacs/fs-minipass": "^4.0.0", "chownr": "^3.0.0", "minipass": "^7.1.2", "minizlib": "^3.1.0", "yallist": "^5.0.0" } }, "sha512-nlGpxf+hv0v7GkWBK2V9spgactGOp0qvfWRxUMjqHyzrt3SgwE48DIv/FhqPHJYLHpgW1opq3nERbz5Anq7n1g=="],
-
-    "tauri-plugin-safe-area-insets": ["tauri-plugin-safe-area-insets@0.1.0", "", { "dependencies": { "@tauri-apps/api": ">=2.0.0-beta.6" } }, "sha512-NhtxSQdU7+laTJiO4WZFlTB1CBzRlNE5EuHflGAGXS55fiwOkkaWztfNishFQO+eZtb9i5jLHX3Yho48lnqcRQ=="],
 
     "teeny-request": ["teeny-request@9.0.0", "", { "dependencies": { "http-proxy-agent": "^5.0.0", "https-proxy-agent": "^5.0.0", "node-fetch": "^2.6.9", "stream-events": "^1.0.5", "uuid": "^9.0.0" } }, "sha512-resvxdc6Mgb7YEThw6G6bExlXKkv6+YbuzGg9xuXxSgxJF7Ozs+o8Y9+2R3sArdWdW8nOokoQb1yrpFB0pQK2g=="],
 

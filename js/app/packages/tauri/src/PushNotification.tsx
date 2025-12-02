@@ -26,7 +26,7 @@ import { createTauriNotificationInterface } from './notification';
 import { useExpectTauri } from './TauriProvider';
 
 function usePushNotifications(
-  deviceType: 'android' | 'ios',
+  deviceType: 'ios',
   onPushNotification?: (event: NotificationEvent) => void
 ) {
   const [systemPermission, { refetch }] = createResource(checkPermissions);
@@ -115,7 +115,7 @@ export function MaybePushNotificationRegistration(props: {
 }) {
   const { os } = useExpectTauri();
 
-  if (os !== 'android' && os !== 'ios') {
+  if (os !== 'ios') {
     return (
       <PushNotificationContext.Provider value={'not-supported'}>
         <PlatformNotificationProvider

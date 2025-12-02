@@ -134,7 +134,6 @@
     "tab-election": "^4.2.8",
     "tabbable": "^6.2.0",
     "tailwindcss": "^4.1.14",
-    "tauri-plugin-safe-area-insets": "^0.1.0",
     "three": "^0.178.0",
     "ts-pattern": "^5.9.0",
     "tslog": "^4.9.3",

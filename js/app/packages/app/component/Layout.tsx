@@ -114,7 +114,7 @@ export function Layout(props: RouteSectionProps) {
   attachGlobalDOMScope(document.body);
 
   return (
-    <div class="relative pb-[max(env(safe-area-inset-bottom),var(--tauri-inset-bottom))] pt-[max(env(safe-area-inset-top),var(--tauri-inset-top))] flex flex-col justify-between w-dvw h-dvh">
+    <div class="relative pb-[env(safe-area-inset-bottom)] pt-[env(safe-area-inset-top)] flex flex-col justify-between w-dvw h-dvh">
       <Show when={isAuthenticated()}>
         <GlobalShortcuts />
         <Settings />

@@ -11,5 +11,4 @@ export type DeviceType = typeof DeviceType[keyof typeof DeviceType];
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const DeviceType = {
   ios: 'ios',
-  android: 'android',
 } as const;

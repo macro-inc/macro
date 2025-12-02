@@ -12,9 +12,6 @@ cargo tauri dev
 
 # iOS simulator
 cargo tauri ios dev
-
-# Android emulator
-cargo tauri android dev
 ```
 
 Tauri sets `TAURI_ENV_PLATFORM` before executing `beforeDevCommand`
@@ -25,7 +22,6 @@ the correct Vite config:
 | -------------------- | ------------------------- | ------------------------- |
 | `macos`/`windows`/`linux` (default) | `dev:desktop`     | `desktop`              |
 | `ios`                | `dev:ios`           | `ios`               |
-| `android`            | `dev:android`       | `android`           |
 
 You can override the dev server host for devices/emulators by exporting
 `TAURI_DEV_HOST` before running `cargo tauri …`.
@@ -36,9 +32,8 @@ You can override the dev server host for devices/emulators by exporting
 # Desktop bundle
 cargo tauri build
 
-# iOS / Android release artifacts
+# iOS release artifacts
 cargo tauri ios build
-cargo tauri android build
 ```
 
 The `beforeBuildCommand` is `bun run build:tauri`, which uses the same
