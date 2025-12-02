@@ -86,7 +86,7 @@ function createEmailItems(email: UnifiedSearchResponseItem): CommandItemCard[] {
           name: email.name ?? '',
           sender: result.sender!,
           timestamp: new Date(
-            (result.sent_at ?? email.updated_at) * 1000
+            convertSecondsToMillis(result.sent_at ?? email.updated_at)
           ).toISOString(),
           is_read: !result.labels.includes('UNREAD'),
           // TODO: This should be the attachments from the email, need to update the search service to return them
