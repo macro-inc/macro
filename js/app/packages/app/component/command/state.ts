@@ -2,7 +2,7 @@ import { createControlledOpenSignal } from '@core/util/createControlledOpenSigna
 import { debounce } from '@solid-primitives/scheduled';
 import { createEffect, createSignal, untrack } from 'solid-js';
 
-const SEARCH_SERVICE_DEBOUNCE_MS = 300;
+const SEARCH_SERVICE_DEBOUNCE_MS = 200;
 const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 10;
 
 export const [konsoleOpen, setKonsoleOpen] = createControlledOpenSignal();
