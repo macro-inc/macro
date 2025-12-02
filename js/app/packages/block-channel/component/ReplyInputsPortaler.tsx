@@ -119,9 +119,12 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
       )}
     >
       {(threadId) => {
+        // This create effect maintains focus on reply inputs when the mount target changes due to new messages in the thread coming in
+        // TODO: this should only fire if this reply input was focused
         createEffect((prev) => {
           if (
             props.threadViewStore[threadId].replyInputMountTarget &&
+            prev &&
             prev !== props.threadViewStore[threadId].replyInputMountTarget
           ) {
             props.setThreadViewStore(threadId, (prev) => ({
