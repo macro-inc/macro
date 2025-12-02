@@ -37,7 +37,7 @@ pub async fn get_simple_message_by_provider_and_link(
         r#"
         SELECT
             m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.replying_to_id, 
-            m.provider_history_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject,
+            m.provider_history_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
             m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,
             NULL::TEXT as body_text,
             NULL::TEXT as body_html_sanitized,
@@ -79,7 +79,7 @@ pub async fn get_simple_message(
         r#"
         SELECT
             m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.replying_to_id,
-            m.provider_history_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject,
+            m.provider_history_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
             m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,
             NULL::TEXT as body_text,
             NULL::TEXT as body_html_sanitized,
@@ -125,7 +125,7 @@ pub async fn get_simple_messages_batch(
         r#"
         SELECT
             m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.replying_to_id,
-            m.provider_history_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject,
+            m.provider_history_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
             m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,
             NULL::TEXT as body_text,
             NULL::TEXT as body_html_sanitized,
@@ -181,6 +181,7 @@ where
             m.snippet,
             m.size_estimate,
             m.subject,
+            m.from_name,
             m.from_contact_id,
             m.sent_at,
             m.has_attachments,
@@ -234,7 +235,7 @@ pub async fn get_first_simple_message_draft(
         r#"
         SELECT
             m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.provider_history_id,
-            m.replying_to_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject,
+            m.replying_to_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
             m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,
             NULL::TEXT as body_text,
             NULL::TEXT as body_html_sanitized,

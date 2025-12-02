@@ -23,7 +23,7 @@ pub async fn get_parsed_message_by_id(
         r#"
         SELECT
             m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.provider_history_id,
-            m.replying_to_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject,
+            m.replying_to_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
             m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,
             NULL::TEXT as body_text,
             NULL::TEXT as body_html_sanitized,
@@ -51,9 +51,8 @@ pub async fn get_parsed_message_by_id(
     };
 
     let message_ids: Vec<Uuid> = vec![db_message.id];
-    let sender_ids: Vec<Uuid> = vec![db_message.from_contact_id.unwrap_or_default()];
 
-    let senders_map = contacts::get::get_contacts_map(&mut *conn, &sender_ids)
+    let senders_map = contacts::get::get_senders_contacts_map(&mut *conn, &message_ids)
         .await
         .context("Failed to fetch senders in bulk")?;
 
@@ -96,7 +95,7 @@ pub async fn get_parsed_messages_by_id_batch(
         r#"
         SELECT
             m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.provider_history_id,
-            m.replying_to_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject,
+            m.replying_to_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,
             m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,
             m.body_text as body_text,
             m.body_html_sanitized as body_html_sanitized,
@@ -117,12 +116,8 @@ pub async fn get_parsed_messages_by_id_batch(
     }
 
     let message_ids: Vec<Uuid> = db_messages.iter().map(|m| m.id).collect();
-    let sender_ids: Vec<Uuid> = db_messages
-        .iter()
-        .filter_map(|m| m.from_contact_id)
-        .collect();
 
-    let senders_map = contacts::get::get_contacts_map(&mut *conn, &sender_ids)
+    let senders_map = contacts::get::get_senders_contacts_map(&mut *conn, &message_ids)
         .await
         .context("Failed to fetch senders in bulk")?;
 
@@ -192,6 +187,7 @@ pub async fn get_paginated_parsed_messages_by_thread_id(
             snippet,
             size_estimate,
             subject,
+            from_name,
             from_contact_id,
             sent_at,
             has_attachments,
@@ -224,12 +220,8 @@ pub async fn get_paginated_parsed_messages_by_thread_id(
     }
 
     let message_ids: Vec<Uuid> = db_messages.iter().map(|m| m.id).collect();
-    let sender_ids: Vec<Uuid> = db_messages
-        .iter()
-        .filter_map(|m| m.from_contact_id)
-        .collect();
 
-    let senders_map = contacts::get::get_contacts_map(&mut *conn, &sender_ids)
+    let senders_map = contacts::get::get_senders_contacts_map(&mut *conn, &message_ids)
         .await
         .context("Failed to fetch senders in bulk")?;
 

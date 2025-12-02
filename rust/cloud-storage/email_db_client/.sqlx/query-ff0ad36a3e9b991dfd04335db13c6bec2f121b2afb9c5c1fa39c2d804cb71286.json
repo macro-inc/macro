@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT \n            id,\n            provider_id,\n            global_id,\n            thread_id,\n            provider_thread_id,\n            replying_to_id,\n            link_id,\n            provider_history_id,\n            internal_date_ts,\n            snippet,\n            size_estimate,\n            subject,\n            from_contact_id,\n            sent_at,\n            has_attachments,\n            is_read,\n            is_starred,\n            is_sent,\n            is_draft,\n            body_text,\n            body_html_sanitized,\n            body_macro,\n            headers_jsonb,\n            created_at,\n            updated_at\n        FROM email_messages\n        WHERE thread_id = $1\n        ORDER BY internal_date_ts DESC\n        LIMIT $2 OFFSET $3\n        ",
+  "query": "\n        SELECT\n            m.id, m.provider_id, m.global_id, m.link_id, m.thread_id, m.provider_thread_id, m.provider_history_id,\n            m.replying_to_id, m.internal_date_ts, m.snippet, m.size_estimate, m.subject, m.from_name,\n            m.from_contact_id, m.sent_at, m.has_attachments, m.is_read, m.is_starred, m.is_sent, m.is_draft,\n            NULL::TEXT as body_text,\n            NULL::TEXT as body_html_sanitized,\n            NULL::TEXT as body_macro,\n            m.headers_jsonb, m.created_at, m.updated_at\n        FROM email_messages m\n        WHERE m.link_id = $1\n          AND m.is_draft = true\n          AND jsonb_path_exists(\n              m.headers_jsonb,\n              '$[*] ? (@.\"Macro-In-Reply-To\" == $macro_uuid)'::jsonpath,\n              jsonb_build_object('macro_uuid', $2::text)\n          )\n        ORDER BY m.created_at DESC\n        LIMIT 1\n        ",
   "describe": {
     "columns": [
       {
@@ -20,28 +20,28 @@
       },
       {
         "ordinal": 3,
-        "name": "thread_id",
-        "type_info": "Uuid"
-      },
-      {
-        "ordinal": 4,
-        "name": "provider_thread_id",
-        "type_info": "Text"
-      },
-      {
-        "ordinal": 5,
-        "name": "replying_to_id",
-        "type_info": "Uuid"
-      },
-      {
-        "ordinal": 6,
         "name": "link_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 7,
+        "ordinal": 4,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "provider_thread_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
         "name": "provider_history_id",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 7,
+        "name": "replying_to_id",
+        "type_info": "Uuid"
       },
       {
         "ordinal": 8,
@@ -65,66 +65,71 @@
       },
       {
         "ordinal": 12,
+        "name": "from_name",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 13,
         "name": "from_contact_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 13,
+        "ordinal": 14,
         "name": "sent_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 14,
+        "ordinal": 15,
         "name": "has_attachments",
         "type_info": "Bool"
       },
       {
-        "ordinal": 15,
+        "ordinal": 16,
         "name": "is_read",
         "type_info": "Bool"
       },
       {
-        "ordinal": 16,
+        "ordinal": 17,
         "name": "is_starred",
         "type_info": "Bool"
       },
       {
-        "ordinal": 17,
+        "ordinal": 18,
         "name": "is_sent",
         "type_info": "Bool"
       },
       {
-        "ordinal": 18,
+        "ordinal": 19,
         "name": "is_draft",
         "type_info": "Bool"
       },
       {
-        "ordinal": 19,
+        "ordinal": 20,
         "name": "body_text",
         "type_info": "Text"
       },
       {
-        "ordinal": 20,
+        "ordinal": 21,
         "name": "body_html_sanitized",
         "type_info": "Text"
       },
       {
-        "ordinal": 21,
+        "ordinal": 22,
         "name": "body_macro",
         "type_info": "Text"
       },
       {
-        "ordinal": 22,
+        "ordinal": 23,
         "name": "headers_jsonb",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 23,
+        "ordinal": 24,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 24,
+        "ordinal": 25,
         "name": "updated_at",
         "type_info": "Timestamptz"
       }
@@ -132,8 +137,7 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Int8",
-        "Int8"
+        "Text"
       ]
     },
     "nullable": [
@@ -141,8 +145,6 @@
       true,
       true,
       false,
-      true,
-      true,
       false,
       true,
       true,
@@ -151,18 +153,21 @@
       true,
       true,
       true,
-      false,
-      false,
-      false,
-      false,
-      false,
       true,
       true,
       true,
+      false,
+      false,
+      false,
+      false,
+      false,
+      null,
+      null,
+      null,
       true,
       false,
       false
     ]
   },
-  "hash": "6278cb7d3caf31a77cf7fd40317f4a02670acbea117b13853a5b263b96a58fd8"
+  "hash": "ff0ad36a3e9b991dfd04335db13c6bec2f121b2afb9c5c1fa39c2d804cb71286"
 }
