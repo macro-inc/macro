@@ -111,7 +111,7 @@ pub struct SoupRequest {
     pub cursor: SoupQuery,
     pub user: MacroUserIdStr<'static>,
     pub email_preview_view: PreviewView,
-    pub link_id: Uuid,
+    pub link_id: Option<Uuid>,
 }
 
 impl SoupRequest {
@@ -120,7 +120,7 @@ impl SoupRequest {
     pub(crate) fn build_email_request(&self) -> Option<GetEmailsRequest> {
         Some(GetEmailsRequest {
             view: self.email_preview_view.clone(),
-            link_id: self.link_id,
+            link_id: self.link_id?,
             macro_id: self.user.clone(),
             limit: Some(self.limit as u32),
             query: match &self.cursor {
