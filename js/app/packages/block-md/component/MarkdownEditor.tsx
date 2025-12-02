@@ -142,7 +142,6 @@ import { normalizeEnterPlugin } from 'core/component/LexicalMarkdown/plugins/nor
 import {
   autoRegister,
   lazyRegister,
-  registerInternalLayoutShiftListener,
   registerRootEventListener,
 } from 'core/component/LexicalMarkdown/plugins/shared/utils';
 import { createMethodRegistration } from 'core/orchestrator';
