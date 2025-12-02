@@ -30,7 +30,7 @@ export function ChannelCompose() {
   const [isValidChannelDrag] = isInBlock()
     ? isValidChannelDragSignal
     : createSignal(true);
-  const [isDraggingOverChannel, setIsDraggingOverChannel] = isInBlock()
+  const [isDraggingOverChannel, _setIsDraggingOverChannel] = isInBlock()
     ? isDraggingOverChannelSignal
     : createSignal(false);
 
