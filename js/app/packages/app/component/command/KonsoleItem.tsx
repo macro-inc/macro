@@ -160,7 +160,7 @@ export const searchCategories = {
   },
   findNextCategoryIndex(category: number, backwards: boolean): number {
     let candidateCategory = -1;
-    const length = categories.length;
+    const length = this.listVisible().length;
     for (let i = 1; i < length; i++) {
       if (backwards) {
         candidateCategory = category - i;
