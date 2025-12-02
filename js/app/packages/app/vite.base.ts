@@ -11,7 +11,7 @@ import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { version } from './package.json';
 
-const PLATFORMS = ['web', 'desktop', 'ios', 'android'] as const;
+const PLATFORMS = ['web', 'desktop', 'ios'] as const;
 
 export type AppPlatform = (typeof PLATFORMS)[number];
 
@@ -81,17 +81,17 @@ export const createAppViteConfig = ({
           },
           output: NO_MINIFY
             ? {
-              // remove hashes from output paths
-              // https://github.com/vitejs/vite/issues/378
-              entryFileNames: `assets/[name].js`,
-              chunkFileNames: `assets/[name].js`,
-              assetFileNames: `assets/[name].[ext]`,
-            }
+                // remove hashes from output paths
+                // https://github.com/vitejs/vite/issues/378
+                entryFileNames: `assets/[name].js`,
+                chunkFileNames: `assets/[name].js`,
+                assetFileNames: `assets/[name].[ext]`,
+              }
             : {
-              format: 'es',
-              chunkFileNames: '[name]-[hash].js',
-              entryFileNames: '[name]-[hash].js',
-            },
+                format: 'es',
+                chunkFileNames: '[name]-[hash].js',
+                entryFileNames: '[name]-[hash].js',
+              },
         },
         assetsInlineLimit: (filePath) => {
           if (filePath.includes('.wasm')) return false;
