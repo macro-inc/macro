@@ -4,7 +4,7 @@ import { createMemo, createSignal, onCleanup, onMount, Show } from 'solid-js';
 import { isRightPanelOpen, useToggleRightPanel } from '@core/signal/layout';
 import { ENABLE_DOCK_NOTITIFCATIONS, ENABLE_JACK_IN } from '@core/constant/featureFlags';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
-import SplitIcon from '@icon/regular/square-split-horizontal.svg';
+import SplitIcon from '@macro-icons/new-split.svg';
 import { useGlobalNotificationSource } from '../GlobalAppState';
 import IconPower from '@phosphor-icons/core/regular/power.svg';
 import MacroCreateIcon from '@macro-icons/macro-create-b.svg';

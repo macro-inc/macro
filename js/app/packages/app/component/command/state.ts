@@ -1,8 +1,9 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { debounce } from '@solid-primitives/scheduled';
+import { debouncedDependent } from '@core/util/debounce';
 import { createEffect, createSignal, untrack } from 'solid-js';
 
-const COMMAND_DEBOUNCE_MS = 300;
+const SEARCH_SERVICE_DEBOUNCE_MS = 200;
+const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 10;
 
 export const [konsoleOpen, setKonsoleOpen] = createControlledOpenSignal();
 export const toggleKonsoleVisibility = () => {
@@ -13,10 +14,17 @@ export const toggleKonsoleVisibility = () => {
 
 export const [lastCommandTime, setLastCommandTime] = createSignal(Date.now());
 
-export const [rawQuery, immediatelySetRawQuery] = createSignal('');
-export const setRawQuery = debounce((term: string) => {
-  immediatelySetRawQuery(term);
-}, COMMAND_DEBOUNCE_MS);
+export const [rawQuery, setRawQuery] = createSignal('');
+
+export const debouncedSearchServiceQuery = debouncedDependent(
+  rawQuery,
+  SEARCH_SERVICE_DEBOUNCE_MS
+);
+export const debouncedLocalQuery = debouncedDependent(
+  rawQuery,
+  LOCAL_FUZZY_SEARCH_DEBOUNCE_MS
+);
+
 export const resetQuery = () => setRawQuery('');
 
 // If we aren't in default mode,
@@ -24,15 +32,15 @@ export const resetQuery = () => setRawQuery('');
 // so we remove it.
 // THIS IS WHAT YOU SHOULD USE FOR MOST "WHAT DID THE USER TYPE IN?" THINGS,
 // the exception being actually checking for sigils.
-export function cleanQuery() {
-  const query = rawQuery();
+export function cleanQuery(query?: string) {
+  const q = query ?? rawQuery();
   const mode = getModeConfig(currentKonsoleMode());
 
-  if (mode.sigil && query.startsWith(mode.sigil)) {
-    return query.slice(mode.sigil.length);
+  if (mode.sigil && q.startsWith(mode.sigil)) {
+    return q.slice(mode.sigil.length);
   }
 
-  return query;
+  return q;
 }
 
 export const COMMAND_MODES = [
@@ -64,7 +72,7 @@ export const setKonsoleMode = (
   const mode = getModeConfig(id);
 
   if (mode.id !== DEFAULT_MODE.id && query.startsWith(mode.sigil)) return;
-  immediatelySetRawQuery(mode.sigil + cleanQuery());
+  setRawQuery(mode.sigil + cleanQuery());
 };
 
 export const resetKonsoleMode = () => setKonsoleMode(DEFAULT_MODE.id);

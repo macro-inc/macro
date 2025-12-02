@@ -10,8 +10,12 @@ import {
   createSignal,
   type JSXElement,
 } from 'solid-js';
-import { createStore, produce, reconcile } from 'solid-js/store';
-import { resolveComponent } from './componentRegistry';
+import { createStore, produce, reconcile, type Store } from 'solid-js/store';
+import {
+  type ComponentMeta,
+  type ComponentMetaMap,
+  resolveComponent,
+} from './componentRegistry';
 import { createHistory, type History } from './history';
 
 const ENABLE_DEFAULT_ALWAYS_IN_HISTORY = true;
@@ -47,6 +51,8 @@ type ComponentMount = {
   kind: 'component';
   name: string;
   element: ElementFn;
+  meta: Store<ComponentMeta>;
+  updateMeta: (data: Omit<ComponentMeta, 'kind'>) => void;
 };
 
 export type SplitMount = BlockMount | ComponentMount;
@@ -146,10 +152,13 @@ export type SplitManager = {
   hasSplit: (type: BlockName | 'component', id: string) => boolean;
 
   /** Get a potential split id by its content type and id */
-  getSplitByContent: (
-    type: BlockName | 'component',
-    id: string
-  ) => SplitHandle | undefined;
+  getSplitByContent: {
+    <K extends keyof ComponentMetaMap>(
+      type: 'component',
+      id: K
+    ): SplitHandle<ComponentMetaMap[K]> | undefined;
+    (type: BlockName | 'component', id: string): SplitHandle | undefined;
+  };
 
   /** Get a reactive string that is the display name of the active split. */
   tabTitle: () => string | undefined;
@@ -161,7 +170,7 @@ export type SplitManager = {
   setResizeContext: (cts: ResizeZoneCtx) => void;
 } & UrlCapabilities;
 
-export type SplitHandle = {
+export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   unregisterContentChangeListener: (
     cb: (payload: SplitEventPayload[SplitEvent.ContentChange]) => void
   ) => void;
@@ -186,6 +195,10 @@ export type SplitHandle = {
   close: () => void;
   reset: () => void;
   id: SplitId;
+  /** Component metadata store (only available for component splits) */
+  meta: () => Store<TMeta> | undefined;
+  /** Update component metadata (only available for component splits) */
+  updateMeta: ((data: Omit<TMeta, 'kind'>) => void) | undefined;
 } & UrlCapabilities;
 
 function newSplitId(): SplitId {
@@ -199,8 +212,20 @@ function createPinnedMount(
   content: SplitContent
 ): SplitMount {
   if (content.type === 'component') {
-    const element = resolveComponent(content.id, content.params);
-    return { kind: 'component', name: content.id, element };
+    const resolved = resolveComponent(content.id, content.params);
+    const [meta, setMeta] = createStore<ComponentMeta>(
+      resolved.initialMeta ?? {}
+    );
+    const updateMeta = (data: Omit<ComponentMeta, 'kind'>) => {
+      setMeta({ kind: content.id, ...data } as ComponentMeta);
+    };
+    return {
+      kind: 'component',
+      name: content.id,
+      element: resolved.element,
+      meta,
+      updateMeta,
+    };
   }
 
   const handle = orchestrator.createBlockInstance(content.type, content.id);
@@ -535,6 +560,14 @@ export function createSplitLayout(
           }
         }
       },
+      meta: () =>
+        currentSplit.mount.kind === 'component'
+          ? currentSplit.mount.meta
+          : undefined,
+      updateMeta:
+        currentSplit.mount.kind === 'component'
+          ? currentSplit.mount.updateMeta
+          : undefined,
     };
   };
 

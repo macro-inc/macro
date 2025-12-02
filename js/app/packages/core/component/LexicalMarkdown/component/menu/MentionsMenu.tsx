@@ -207,6 +207,9 @@ function allItemFilter(item: CombinedEntity): boolean {
   ) {
     return false;
   }
+  if (item.kind === 'item' && item.data.deletedAt) {
+    return false;
+  }
   return true;
 }
 
@@ -730,7 +733,7 @@ export function MentionsMenu(props: {
     const orgUsers = useOrganizationUsers();
     const contacts = useContacts();
     users = createMemo(() =>
-      mergeByKey('id', contacts(), orgUsers())
+      mergeByKey('email', orgUsers(), contacts())
         .map(entityMapper('user'))
         .filter(allItemFilter)
     );

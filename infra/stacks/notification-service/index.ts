@@ -28,7 +28,13 @@ const password = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
-const AUDIENCE = config.require(`fusionauth_client_id`);
+const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
+const AUDIENCE = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: fusionauthClientIdSecretKey,
+  })
+  .apply((secret) => secret.secretString);
+
 const ISSUER = config.require(`fusionauth_issuer`);
 
 const appleTeamId = config.require(`apple_team_id`);

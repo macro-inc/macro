@@ -5,6 +5,7 @@ import {
   DATADOG_API_KEY,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
+  QueueAlarms,
   serviceLoadBalancer,
 } from '@resources';
 import { ALLOWED_ORIGINS } from '@resources/resources/cors';
@@ -356,12 +357,23 @@ export class StaticFileService extends pulumi.ComponentResource {
         },
       ],
     });
+
     const queueQueue = new aws.sqs.Queue('queue', {
       name: queueName,
       policy: queue.apply((queue) => queue.json),
       receiveWaitTimeSeconds: 20,
       tags: this.tags,
     });
+
+    new QueueAlarms(
+      'queue-alarms',
+      {
+        queue: queueQueue,
+        approximateAgeOfOldestMessageThreshold: 240,
+        tags: this.tags,
+      },
+      { parent: this }
+    );
 
     new aws.s3.BucketNotification('bucket_notification', {
       bucket: staticFilesBucket.id,

@@ -76,6 +76,8 @@ pub struct SQS {
     insight_context_queue: Option<String>,
     #[cfg(feature = "gmail")]
     gmail_webhook_queue: Option<String>,
+    #[cfg(feature = "gmail")]
+    gmail_webhook_retry_queue: Option<String>,
     #[cfg(feature = "email")]
     email_refresh_queue: Option<String>,
     #[cfg(feature = "email")]
@@ -110,6 +112,8 @@ impl SQS {
             insight_context_queue: None,
             #[cfg(feature = "gmail")]
             gmail_webhook_queue: None,
+            #[cfg(feature = "gmail")]
+            gmail_webhook_retry_queue: None,
             #[cfg(feature = "email")]
             email_refresh_queue: None,
             #[cfg(feature = "email")]

@@ -10,8 +10,7 @@ pub(in crate::service::s3) async fn get_presigned_url(
     bucket: &str,
     key: &str,
 ) -> anyhow::Result<String> {
-    #[cfg(feature = "local")]
-    {
+    if cfg!(feature = "local") {
         return Ok("fake".to_string());
     }
 

@@ -9,12 +9,6 @@ pub(in crate::service::ecs) async fn run_task(
     cluster: &str,
     subnets: Vec<String>,
 ) -> Result<(), anyhow::Error> {
-    #[cfg(feature = "local")]
-    {
-        tracing::trace!("task");
-        return Ok(());
-    }
-
     let aws_vpc_configuration: AwsVpcConfiguration = AwsVpcConfiguration::builder()
         .set_subnets(Some(subnets))
         .assign_public_ip(AssignPublicIp::Disabled)

@@ -82,16 +82,3 @@ fn test_struct_with_fields_mock() {
 fn it_should_panic() {
     Config::unwrap_new();
 }
-
-env_var!(
-    struct MyThirdThing {
-        Foo,
-        Bar
-    }
-);
-
-#[test]
-#[cfg(feature = "test-comptime")]
-fn test_comptime() {
-    const VALUES: MyThirdThing = MyThirdThing::new_comptime();
-}

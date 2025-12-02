@@ -55,11 +55,14 @@ pub async fn gmail_message(
         return Ok(());
     }
 
-    // ensure user's labels are synced before we start processing changes
+    // ensure user's labels are synced before we start processing changes.
     check_gmail_rate_limit(
         &ctx.redis_client,
         link.id,
         GmailApiOperation::LabelsList,
+        // don't retry if rate limited, just wait until the next inbox update comes in. if we're
+        // rate limited it's likely because of a large previous inbox update, so let that get
+        // fully processed before the next one.
         false,
     )
     .await?;
@@ -80,6 +83,9 @@ pub async fn gmail_message(
         &ctx.redis_client,
         link.id,
         GmailApiOperation::HistoryList,
+        // don't retry if rate limited, just wait until the next inbox update comes in. if we're
+        // rate limited it's likely because of a large previous inbox update, so let that get
+        // fully processed before the next one.
         false,
     )
     .await?;

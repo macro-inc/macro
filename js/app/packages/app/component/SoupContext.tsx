@@ -179,10 +179,7 @@ function createViewData(
         VIEWCONFIG_BASE.display.displayProperties,
       limit: viewProps?.display?.limit,
     },
-    sort: {
-      sortBy: viewProps?.sort?.sortBy ?? VIEWCONFIG_BASE.sort.sortBy,
-      sortOrder: viewProps?.sort?.sortOrder ?? VIEWCONFIG_BASE.sort.sortOrder,
-    },
+    sort: viewProps?.sort ?? VIEWCONFIG_BASE.sort,
     highlightedId: undefined,
     selectedEntity: undefined,
     scrollOffset: undefined,
@@ -1018,7 +1015,7 @@ export function createNavigationEntityListShortcut({
 
       if (hasSelection) {
         setKonsoleMode('SELECTION_MODIFICATION');
-        const selectionIndex = searchCategories.getCateoryIndex('Selection');
+        const selectionIndex = searchCategories.getCategoryIndex('Selection');
 
         if (selectionIndex === undefined) return false;
 
