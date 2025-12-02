@@ -232,19 +232,19 @@ export function KommandMenuInner(props: {
     ];
   };
 
+  const isFullTextSearch = createMemo(
+    () => currentKonsoleMode() === 'FULL_TEXT_SEARCH'
+  );
+
   // choose which items to display, based on which menu is open
   const filteredItems = createMemo(() => {
-    if (currentKonsoleMode() === 'FULL_TEXT_SEARCH')
-      return ([] as CommandItemCard[])
-        .concat(paginatedSearch.items())
-        .concat(loadMoreItem())
-        .map((item: CommandItemCard) => hydrateChannel(item, channelLookup()))
-        .filter((item: CommandItemCard) => {
-          return filterItemByCategory(item);
-        });
-    return searchItems().filter((item: CommandItemCard) => {
-      return filterItemByCategory(item);
-    });
+    if (isFullTextSearch()) {
+      return [...paginatedSearch.items(), ...loadMoreItem()]
+        .map((item) => hydrateChannel(item, channelLookup()))
+        .filter(filterItemByCategory);
+    }
+
+    return searchItems().filter(filterItemByCategory);
   });
 
   const itemAction = useCommandItemAction({ setCommandScopeCommands });
