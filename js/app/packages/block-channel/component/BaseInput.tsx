@@ -5,7 +5,6 @@ import {
 import type { sendMessage } from '@block-channel/signal/channel';
 import { handleFileUpload } from '@block-channel/utils/inputAttachments';
 import { isInBlock } from '@core/block';
-import { handleFoldersInput } from '@core/client/zipWorkerClient';
 import { BrightJoins } from '@core/component/BrightJoins';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
@@ -117,7 +116,7 @@ export function BaseInput(props: BaseInputProps) {
     ? isValidChannelDragSignal
     : createSignal(false);
 
-  const [isDraggingOverChannel, setIsDraggingOverChannel] = isInBlock()
+  const [isDraggingOverChannel, _setIsDraggingOverChannel] = isInBlock()
     ? isDraggingOverChannelSignal
     : createSignal(false);
 
@@ -360,36 +359,12 @@ export function BaseInput(props: BaseInputProps) {
     files: FileSystemFileEntry[],
     directories: FileSystemDirectoryEntry[]
   ) {
-    // If any directories present, ignore raw files to avoid phantom duplicates
-    const filesToUse = directories.length > 0 ? [] : files;
-
-    const zippedPromises = handleFoldersInput(directories);
-    const zipped = await Promise.all(zippedPromises);
-    const dirEntries: UploadInput[] = zipped
-      .filter((f): f is File => !!f)
-      .map((file) => ({ file, isFolder: true }));
-    const fileEntryPromises = filesToUse.map(
-      (entry) =>
-        new Promise<File>((resolve, reject) => {
-          entry.file(
-            (f) => resolve(f),
-            (err) => reject(err)
-          );
-        })
-    );
-    const plainFiles = await Promise.all(fileEntryPromises);
-    const fileEntries: UploadInput[] = plainFiles.map((file) => ({
-      file,
-      isFolder: false,
-    }));
-    const entries: UploadInput[] = [...fileEntries, ...dirEntries];
-    let uploadedCount = 0;
-    handleFileUpload(entries, props.inputAttachments, () => {
-      uploadedCount++;
-      if (uploadedCount === entries.length) {
+    const onFilesReady = (uploadEntries: UploadInput[]) => {
+      handleFileUpload(uploadEntries, props.inputAttachments, (_attachment) => {
         props.onChange(markdownState());
-      }
-    });
+      });
+    };
+    return handleFileFolderDrop(files, directories, onFilesReady);
   }
 
   const videoAttachments = () =>
