@@ -9,8 +9,8 @@ use super::user::post_get_names;
 
 // needs to be public in api crate for swagger
 mod google_access_token;
-mod remove_link;
 mod post_get_existing_users;
+mod remove_link;
 
 pub fn router() -> Router<ApiContext> {
     Router::new()
