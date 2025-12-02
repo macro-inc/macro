@@ -43,7 +43,6 @@ import {
   debouncedLocalQuery,
   debouncedSearchServiceQuery,
   getModeConfig,
-  immediatelySetRawQuery,
   konsoleOpen,
   lastCommandTime,
   rawQuery,
@@ -72,7 +71,7 @@ export function KommandMenu() {
       if (now - lastCommandTime() >= TIME_THRESHOLD) {
         const mode = getModeConfig(untrack(currentKonsoleMode));
         // keep the sigil (e.g., '%' for FULL_TEXT_SEARCH) so mode doesn’t flip
-        immediatelySetRawQuery(mode.sigil);
+        setRawQuery(mode.sigil);
         setCommandCategoryIndex(0);
       }
     }

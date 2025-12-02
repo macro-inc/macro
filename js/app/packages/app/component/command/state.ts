@@ -1,5 +1,5 @@
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
-import { debounce } from '@solid-primitives/scheduled';
+import { debouncedDependent } from '@core/util/debounce';
 import { createEffect, createSignal, untrack } from 'solid-js';
 
 const SEARCH_SERVICE_DEBOUNCE_MS = 200;
@@ -14,26 +14,16 @@ export const toggleKonsoleVisibility = () => {
 
 export const [lastCommandTime, setLastCommandTime] = createSignal(Date.now());
 
-const [debouncedSearchServiceQuery, _setDebouncedAsyncQuery] = createSignal('');
-const setDebouncedAsyncQuery = debounce(
-  _setDebouncedAsyncQuery,
+export const [rawQuery, setRawQuery] = createSignal('');
+
+export const debouncedSearchServiceQuery = debouncedDependent(
+  rawQuery,
   SEARCH_SERVICE_DEBOUNCE_MS
 );
-
-const [debouncedLocalQuery, _setDebouncedLocalQuery] = createSignal('');
-const setDebouncedLocalQuery = debounce(
-  _setDebouncedLocalQuery,
+export const debouncedLocalQuery = debouncedDependent(
+  rawQuery,
   LOCAL_FUZZY_SEARCH_DEBOUNCE_MS
 );
-
-export const [rawQuery, immediatelySetRawQuery] = createSignal('');
-export const setRawQuery = (term: string) => {
-  immediatelySetRawQuery(term);
-  setDebouncedAsyncQuery(term);
-  setDebouncedLocalQuery(term);
-};
-
-export { debouncedSearchServiceQuery, debouncedLocalQuery };
 
 export const resetQuery = () => setRawQuery('');
 
@@ -82,7 +72,7 @@ export const setKonsoleMode = (
   const mode = getModeConfig(id);
 
   if (mode.id !== DEFAULT_MODE.id && query.startsWith(mode.sigil)) return;
-  immediatelySetRawQuery(mode.sigil + cleanQuery());
+  setRawQuery(mode.sigil + cleanQuery());
 };
 
 export const resetKonsoleMode = () => setKonsoleMode(DEFAULT_MODE.id);
