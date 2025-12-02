@@ -7,7 +7,6 @@ import {
 } from 'lexical';
 
 type FilePastePluginProps = {
-  onPasteFiles?: (files: File[]) => void;
   onPasteFilesAndDirs?: (
     files: FileSystemFileEntry[],
     directories: FileSystemDirectoryEntry[]
@@ -27,7 +26,6 @@ function registerFilePastePlugin(
         const data = event.clipboardData;
         if (!data) return false;
 
-        const filesFromClipboard = Array.from(data.files || []);
         const { fileEntries, directoryEntries } =
           extractFileSystemEntries(data);
 
@@ -44,14 +42,6 @@ function registerFilePastePlugin(
           }
           props.onPasteFilesAndDirs(fileEntries, []);
           return true;
-        }
-
-        // Backwards compatibility: fall back to files list (no directory support)
-        if (props.onPasteFiles) {
-          if (filesFromClipboard.length > 0) {
-            props.onPasteFiles(filesFromClipboard);
-            return true;
-          }
         }
 
         return false;
