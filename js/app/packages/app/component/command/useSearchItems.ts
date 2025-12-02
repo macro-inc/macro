@@ -28,7 +28,6 @@ function createDocumentItems(
   )
     return [];
 
-  // TODO: de-duplicate: see logic in useDocumentItems
   for (const result of doc.document_search_results) {
     const isContentHit = !!result.node_id;
     if (!isContentHit) continue;
@@ -72,7 +71,6 @@ function createEmailItems(email: UnifiedSearchResponseItem): CommandItemCard[] {
 
   if (email.email_message_search_results.length === 0) return [];
 
-  // TODO: de-duplicate: see logic in useEmailItems
   for (const result of email.email_message_search_results) {
     // NOTE: this should already be true for command k since its a content search
     // but this is a safety check
@@ -119,7 +117,6 @@ function createChatItems(chat: UnifiedSearchResponseItem): CommandItemCard[] {
   )
     return [];
 
-  // TODO: de-duplicate: see logic in useChatItems
   for (const result of chat.chat_search_results) {
     const isContentHit = !!result.chat_message_id;
     if (!isContentHit) continue;
