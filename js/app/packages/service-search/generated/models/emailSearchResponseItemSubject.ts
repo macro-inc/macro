@@ -6,7 +6,7 @@
  */
 
 /**
- * When the email message was sent
+ * The subject of the email
 This is only present if the search result is on the message content
  */
-export type EmailSearchResultSentAt = number | null;
+export type EmailSearchResponseItemSubject = string | null;

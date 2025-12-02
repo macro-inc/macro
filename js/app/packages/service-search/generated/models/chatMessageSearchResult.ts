@@ -4,23 +4,23 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ChatMessageSearchResultChatMessageId } from './chatMessageSearchResultChatMessageId';
 import type { SearchHighlight } from './searchHighlight';
+import type { ChatMessageSearchResultRole } from './chatMessageSearchResultRole';
 import type { ChatMessageSearchResultScore } from './chatMessageSearchResultScore';
 
 /**
  * A chat match for a given message id
  */
 export interface ChatMessageSearchResult {
-  /** The chat message id for the chat */
-  chat_message_id: string;
+  /** The chat message id for the chat
+This is only present if the search match was on the chat message content */
+  chat_message_id?: ChatMessageSearchResultChatMessageId;
   /** The highlights for the chat message */
   highlight: SearchHighlight;
-  /** The role of the chat message */
-  role: string;
+  /** The role of the chat message
+This is only present if the search match was on the chat message content */
+  role?: ChatMessageSearchResultRole;
   /** The score of the result */
   score?: ChatMessageSearchResultScore;
-  /** The title of the chat */
-  title: string;
-  /** When the search chat was last updated */
-  updated_at: number;
 }

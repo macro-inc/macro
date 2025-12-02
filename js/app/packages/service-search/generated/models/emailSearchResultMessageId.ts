@@ -6,7 +6,7 @@
  */
 
 /**
- * When the email message was sent
+ * The email message id.
 This is only present if the search result is on the message content
  */
-export type EmailSearchResultSentAt = number | null;
+export type EmailSearchResultMessageId = string | null;
