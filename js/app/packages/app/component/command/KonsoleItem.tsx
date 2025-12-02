@@ -446,7 +446,7 @@ function getCommandItemBlockName(
 }
 
 function getCommandItemName(item: CommandItemCard): string {
-  return item.data.name!;
+  return item.data.name;
 }
 
 export function filterItemByCategory(item: CommandItemCard) {
