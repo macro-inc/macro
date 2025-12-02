@@ -353,7 +353,7 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
           </div>
         </Show>
 
-        <div class="relative w-full">
+        <div class="relative flex w-full">
           <MagnifyingGlassIcon class="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-ink-muted pointer-events-none" />
           <input
             ref={searchInputRef}
