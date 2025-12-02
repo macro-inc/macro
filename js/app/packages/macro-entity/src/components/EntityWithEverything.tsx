@@ -14,6 +14,7 @@ import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
 import { emailToId, useDisplayName } from 'core/user';
 import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
+import { syncServiceClient } from 'service-sync/client';
 import type { ParentProps, Ref } from 'solid-js';
 import {
   createDeferred,
@@ -216,6 +217,15 @@ export function EntityWithEverything(
     if (!isSearchEntity(props.entity)) return [];
     return props.entity.search.contentHitData ?? [];
   };
+
+  onMount(() => {
+    if (props.entity.type === 'document' && props.entity.fileType === 'md') {
+      syncServiceClient.safeWakeup(props.entity.id);
+      onCleanup(() => {
+        syncServiceClient.cancelWakeup(props.entity.id);
+      });
+    }
+  });
 
   const EntityTitle = () => {
     if (props.entity.type === 'email') {

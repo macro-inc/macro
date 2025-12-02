@@ -3,6 +3,7 @@ import { PropertyDataTypeIcon } from '@core/component/Properties/utils';
 import { ERROR_MESSAGES } from '@core/component/Properties/utils/errorHandling';
 import { toast } from '@core/component/Toast/Toast';
 import { isErr } from '@core/util/maybeResult';
+import MagnifyingGlassIcon from '@phosphor-icons/core/assets/regular/magnifying-glass.svg';
 import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
 import { propertiesServiceClient } from '@service-properties/client';
 import type { Accessor, Component } from 'solid-js';
@@ -203,9 +204,9 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
     const currentIds = props.selectedPropertyIds();
     if (!currentIds.includes(property.id)) {
       const currentIds = props.selectedPropertyIds();
-      // Enforce max 6 properties
+      // Enforce max 4 properties
       if (currentIds.length >= MAX_DISPLAY_PROPERTIES) {
-        toast.failure('You can only select up to 6 properties to display.');
+        toast.failure('You can only select up to 4 properties to display.');
         return;
       }
 
@@ -220,9 +221,9 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
 
   const handleSelectProperty = (property: PropertyDefinitionFlat) => {
     const currentIds = props.selectedPropertyIds();
-    // Enforce max 6 properties
-    if (currentIds.length >= 6) {
-      toast.failure('You can only select up to 6 properties to display.');
+    // Enforce max 4 properties
+    if (currentIds.length >= MAX_DISPLAY_PROPERTIES) {
+      toast.failure('You can only select up to 4 properties to display.');
       return;
     }
 
@@ -352,7 +353,8 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
           </div>
         </Show>
 
-        <div class="relative w-full">
+        <div class="relative flex w-full">
+          <MagnifyingGlassIcon class="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-ink-muted pointer-events-none" />
           <input
             ref={searchInputRef}
             type="text"
@@ -363,7 +365,7 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
             }}
             onFocus={() => setIsDropdownOpen(true)}
             placeholder="Search Properties..."
-            class="w-full px-2 py-1 font-mono text-xs text-ink placeholder-ink-muted bg-transparent"
+            class="w-full pl-7 pr-2 py-1 font-mono text-xs text-ink placeholder-ink-muted bg-transparent"
           />
 
           <PropertyDropdown

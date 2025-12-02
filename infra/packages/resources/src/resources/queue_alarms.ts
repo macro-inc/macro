@@ -41,7 +41,7 @@ export class QueueAlarms extends pulumi.ComponentResource {
       new aws.cloudwatch.MetricAlarm(
         `${name}-aaoom`,
         {
-          alarmDescription: `Alarm when ${queue.name} has approximate age of oldest message over ${approximateAgeOfOldestMessageThreshold}s for ${approximateAgeOfOldestMessageEvaluationPeriods}s.`,
+          alarmDescription: pulumi.interpolate`Alarm when ${queue.name} has approximate age of oldest message over ${approximateAgeOfOldestMessageThreshold}s for ${approximateAgeOfOldestMessageEvaluationPeriods}s.`,
           comparisonOperator: 'GreaterThanThreshold',
           evaluationPeriods: 1,
           metricName: 'ApproximateAgeOfOldestMessage',

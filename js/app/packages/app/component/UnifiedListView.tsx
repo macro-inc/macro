@@ -29,6 +29,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
+import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyMatch } from '@core/util/fuzzy';
 import SearchIcon from '@icon/regular/magnifying-glass.svg?component-solid';
 import LoadingSpinner from '@icon/regular/spinner.svg?component-solid';
@@ -85,7 +86,6 @@ import type {
   GetItemsSoupParams,
   PostSoupRequest,
 } from '@service-storage/generated/schemas';
-import { debounce } from '@solid-primitives/scheduled';
 import stringify from 'json-stable-stringify';
 import {
   type Accessor,
@@ -144,6 +144,9 @@ import {
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
+
+const SEARCH_SERVICE_DEBOUNCE_MS = 200;
+const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
 
 const sortOptions = [
   {
@@ -462,6 +465,16 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const rawSearchText = createMemo<string>(() => view()?.searchText ?? '');
   const searchText = createMemo(() => rawSearchText()?.trim() ?? '');
+
+  const debouncedSearchForLocal = debouncedDependent(
+    searchText,
+    LOCAL_FUZZY_SEARCH_DEBOUNCE_MS
+  );
+  const debouncedSearchForService = debouncedDependent(
+    searchText,
+    SEARCH_SERVICE_DEBOUNCE_MS
+  );
+
   const [isSearchLoading, setIsSearchLoading] = createSignal(false);
 
   const currentViewConfigBase = createMemo(() => {
@@ -516,9 +529,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const nameFuzzySearchFilter = createMemo(() =>
     rawSearchText()
       ? (items: WithNotification<EntityData>[]) => {
-          if (!searchText() || searchText().length === 0) return items;
+          const query = debouncedSearchForLocal();
+          if (!query || query.length === 0) return items;
 
-          const query = searchText();
           const matchResults = fuzzyMatch(query, items, (item) => item.name);
 
           return matchResults.map((result) => {
@@ -741,12 +754,16 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         document_ids: entityTypeFilter().includes('document')
           ? []
           : [GARBAGE_UUID],
+        project_ids: view().viewType === 'project' ? [view().id] : [],
       },
       chat_filters: {
         chat_ids: [GARBAGE_UUID],
       },
       email_filters: {
         recipients: [GARBAGE_UUID],
+      },
+      project_filters: {
+        project_ids: view().viewType === 'project' ? [view().id] : [],
       },
       limit: props.defaultDisplayOptions?.limit ?? 100,
       sort_method: sortType(),
@@ -770,7 +787,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       request: {
         search_on: 'name_content',
         match_type: 'partial',
-        terms: searchText().length > 0 ? [searchText()] : undefined,
+        terms:
+          debouncedSearchForService().length > 0
+            ? [debouncedSearchForService()]
+            : undefined,
         filters: unifiedSearchFilters(),
         include: unifiedSearchIncludeArray(),
       },
@@ -778,7 +798,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   );
 
   const validSearchTerms = createMemo(() => {
-    return searchText().length >= 3;
+    return debouncedSearchForService().length >= 3;
   });
   const validSearchFilters = createMemo(() => {
     const senders = unifiedSearchFilters()?.email?.senders;
@@ -808,6 +828,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   });
 
   const disableDssInfiniteQueryGET = createMemo(() => {
+    if (view().viewType === 'project') return true;
     if (view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.folders) return true;
 
     const typeFilter = entityTypeFilter();
@@ -817,7 +838,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return !hasDssTypes;
   });
   const disableDssInfiniteQueryPost = createMemo(() => {
-    if (view().id !== VIEWCONFIG_DEFAULTS_IDS_ENUM.folders) return true;
+    if (
+      view().viewType !== 'project' &&
+      view().id !== VIEWCONFIG_DEFAULTS_IDS_ENUM.folders
+    )
+      return true;
 
     const typeFilter = entityTypeFilter();
     if (typeFilter.length === 0) return false;
@@ -1628,7 +1653,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               if (hasSelection) {
                 setKonsoleMode('SELECTION_MODIFICATION');
                 const selectionIndex =
-                  searchCategories.getCateoryIndex('Selection');
+                  searchCategories.getCategoryIndex('Selection');
 
                 if (selectionIndex === undefined) return false;
 
@@ -1714,8 +1739,6 @@ function SearchBar(props: {
   const setSearchText = (text: string) => {
     setViewDataStore(selectedView(), 'searchText', text);
   };
-
-  const debouncedSetSearch = debounce(setSearchText, 300);
 
   const isElementInViewport = (element: Element): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -1825,7 +1848,7 @@ function SearchBar(props: {
           placeholder={`Search in ${viewName()}`}
           value={searchText()}
           onInput={(e) => {
-            debouncedSetSearch(e.target.value);
+            setSearchText(e.target.value);
           }}
           onKeyDown={(e) => {
             if (
