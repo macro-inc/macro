@@ -1,14 +1,13 @@
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::util::{
-    cg_refresh_email, check_gmail_rate_limit, complete_transaction_with_processing_error,
-};
+use crate::pubsub::util::{cg_refresh_email, complete_transaction_with_processing_error};
 use crate::pubsub::webhook::process;
+use crate::pubsub::webhook::process::check_gmail_rate_limit_webhook;
 use email_db_client::labels::delete::delete_db_message_labels;
 use email_db_client::labels::insert;
 use email_db_client::threads::update::update_thread_metadata;
 use models_email::email::service::link;
 use models_email::gmail::operations::GmailApiOperation;
-use models_email::gmail::webhook::UpdateLabelsPayload;
+use models_email::gmail::webhook::{UpdateLabelsPayload, WebhookOperation};
 use models_email::service;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqlx::PgPool;
@@ -56,13 +55,15 @@ pub async fn update_labels(
                 })
             })?;
 
-    check_gmail_rate_limit(
-        &ctx.redis_client,
+    // get the message labels from gmail
+    check_gmail_rate_limit_webhook(
+        ctx,
         link.id,
         GmailApiOperation::MessagesGet,
-        false,
+        WebhookOperation::UpdateLabels(payload.clone()),
     )
     .await?;
+
     let gmail_message_labels = match ctx
         .gmail_client
         .get_message_label_ids(&gmail_access_token, &payload.provider_message_id, link.id)

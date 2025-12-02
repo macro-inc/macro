@@ -22,6 +22,7 @@ pub async fn run_worker(
     connection_gateway_client: ConnectionGatewayClient,
     dss_client: DocumentStorageServiceClient,
     notifications_enabled: bool,
+    retry_worker: bool,
 ) {
     let ctx = PubSubContext {
         db,
@@ -35,6 +36,7 @@ pub async fn run_worker(
         connection_gateway_client,
         dss_client,
         notifications_enabled,
+        retry_worker,
     };
 
     loop {

@@ -20,4 +20,5 @@ pub struct PubSubContext {
     pub connection_gateway_client: ConnectionGatewayClient,
     pub dss_client: DocumentStorageServiceClient,
     pub notifications_enabled: bool,
+    pub retry_worker: bool,
 }

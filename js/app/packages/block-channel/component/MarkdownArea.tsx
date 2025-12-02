@@ -337,6 +337,15 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
     })
   );
 
+  let disposeBlurFn: () => void = () => {};
+  createEffect(() => {
+    disposeBlurFn();
+    const blurFn = props.onBlur;
+    if (!blurFn) return;
+    disposeBlurFn = registerRootEventListener(editor, 'blur', blurFn);
+    onCleanup(() => disposeBlurFn());
+  });
+
   return (
     <LexicalWrapperContext.Provider value={props.lexicalWrapper}>
       <div class="relative w-full min-h-8">

@@ -433,7 +433,10 @@ export function BaseInput(props: BaseInputProps) {
                   return handleSend();
                 }
           }
-          onBlur={stopTyping}
+          onBlur={() => {
+            stopTyping();
+            onEscape();
+          }}
           users={props.channelUsers}
           onChange={handleChange}
           onPasteFile={onMarkdownAreaPaste}

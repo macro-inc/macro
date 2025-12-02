@@ -7,11 +7,13 @@ use crate::pubsub::webhook::operations::upsert_message::upsert_message;
 use anyhow::{Context, Result, anyhow};
 use models_email::email::service::cache;
 use models_email::email::service::link::UserProvider;
+use models_email::gmail::operations::GmailApiOperation;
 use models_email::gmail::webhook::{WebhookOperation, WebhookPubsubMessage};
 use models_email::service::link::Link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqs_worker::cleanup_message;
 use std::result;
+use uuid::Uuid;
 
 /// Processes a message from the gmail webhook queue.
 pub async fn process_message(
@@ -147,4 +149,50 @@ pub async fn fetch_pubsub_gmail_token(
         })
     })?;
     Ok(gmail_access_token)
+}
+
+/// Checks Gmail API rate limits and routes processing accordingly.
+///
+/// Uses a two-tier webhook system to prevent rate limit backpressure:
+/// - **Primary worker**: If rate limited, enqueues to retry queue and returns non-retryable error
+/// - **Retry worker**: If rate limited, returns retryable error so it gets tried again later
+///
+/// This design keeps the primary queue flowing by offloading rate-limited operations to a
+/// separate retry queue, preventing head-of-line blocking.
+pub async fn check_gmail_rate_limit_webhook(
+    ctx: &PubSubContext,
+    link_id: Uuid,
+    operation: GmailApiOperation,
+    webhook_operation: WebhookOperation,
+) -> result::Result<(), ProcessingError> {
+    if !ctx.redis_client.is_rate_limited(link_id, operation).await {
+        // Not rate limited, continue processing
+        return Ok(());
+    }
+
+    if !ctx.retry_worker {
+        ctx.sqs_client
+            .enqueue_gmail_retry_webhook_notification(WebhookPubsubMessage {
+                link_id,
+                operation: webhook_operation,
+            })
+            .await
+            .map_err(|e| {
+                ProcessingError::NonRetryable(DetailedError {
+                    reason: FailureReason::SqsEnqueueFailed,
+                    source: e.context("Failed to enqueue retry message"),
+                })
+            })?;
+        Err(ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::GmailApiRateLimited,
+            source: anyhow::Error::msg(
+                "Gmail API rate limit exceeded, enqueued message on retry queue",
+            ),
+        }))
+    } else {
+        Err(ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::GmailApiRateLimited,
+            source: anyhow::Error::msg("Gmail API rate limit exceeded in retry worker"),
+        }))
+    }
 }
