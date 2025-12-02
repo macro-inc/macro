@@ -2,7 +2,8 @@ import { createControlledOpenSignal } from '@core/util/createControlledOpenSigna
 import { debounce } from '@solid-primitives/scheduled';
 import { createEffect, createSignal, untrack } from 'solid-js';
 
-const COMMAND_DEBOUNCE_MS = 300;
+const SEARCH_SERVICE_DEBOUNCE_MS = 300;
+const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 10;
 
 export const [konsoleOpen, setKonsoleOpen] = createControlledOpenSignal();
 export const toggleKonsoleVisibility = () => {
@@ -13,10 +14,27 @@ export const toggleKonsoleVisibility = () => {
 
 export const [lastCommandTime, setLastCommandTime] = createSignal(Date.now());
 
+const [debouncedSearchServiceQuery, _setDebouncedAsyncQuery] = createSignal('');
+const setDebouncedAsyncQuery = debounce(
+  _setDebouncedAsyncQuery,
+  SEARCH_SERVICE_DEBOUNCE_MS
+);
+
+const [debouncedLocalQuery, _setDebouncedLocalQuery] = createSignal('');
+const setDebouncedLocalQuery = debounce(
+  _setDebouncedLocalQuery,
+  LOCAL_FUZZY_SEARCH_DEBOUNCE_MS
+);
+
 export const [rawQuery, immediatelySetRawQuery] = createSignal('');
-export const setRawQuery = debounce((term: string) => {
+export const setRawQuery = (term: string) => {
   immediatelySetRawQuery(term);
-}, COMMAND_DEBOUNCE_MS);
+  setDebouncedAsyncQuery(term);
+  setDebouncedLocalQuery(term);
+};
+
+export { debouncedSearchServiceQuery, debouncedLocalQuery };
+
 export const resetQuery = () => setRawQuery('');
 
 // If we aren't in default mode,
@@ -24,15 +42,15 @@ export const resetQuery = () => setRawQuery('');
 // so we remove it.
 // THIS IS WHAT YOU SHOULD USE FOR MOST "WHAT DID THE USER TYPE IN?" THINGS,
 // the exception being actually checking for sigils.
-export function cleanQuery() {
-  const query = rawQuery();
+export function cleanQuery(query?: string) {
+  const q = query ?? rawQuery();
   const mode = getModeConfig(currentKonsoleMode());
 
-  if (mode.sigil && query.startsWith(mode.sigil)) {
-    return query.slice(mode.sigil.length);
+  if (mode.sigil && q.startsWith(mode.sigil)) {
+    return q.slice(mode.sigil.length);
   }
 
-  return query;
+  return q;
 }
 
 export const COMMAND_MODES = [
