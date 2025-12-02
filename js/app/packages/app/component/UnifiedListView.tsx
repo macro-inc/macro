@@ -134,6 +134,7 @@ import { EntityModal } from './EntityModal/EntityModal';
 import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
 import { EntityRow, EntityRowProvider } from './mobile/EntityRow';
 import { PropertyDisplayControl } from './PropertyDisplayControl';
+import { PropertyFilterControl } from './PropertyFilterControl';
 import { useUpsertSavedViewMutation } from './Soup';
 import { openEntityInSplitFromUnifiedList } from './soupContextHelpers';
 import {
@@ -1601,7 +1602,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                   <Show when={ENABLE_PROPERTY_DISPLAY_CONTROL}>
                     <section class="gap-1 grid p-2">
                       <span class="font-medium text-xs">Property</span>
-                      <div class="text-xs text-ink-muted">Coming soon...</div>
+                      <PropertyFilterControl />
                     </section>
                   </Show>
                 </div>
