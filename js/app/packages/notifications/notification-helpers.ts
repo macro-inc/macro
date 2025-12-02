@@ -64,8 +64,10 @@ export function entityHasUnreadNotifications(
   const notifications = notificationSource.store[compositeEntity(entity)] ?? [];
 
   return notifications.some((notification) => {
-    notificationIsOfEntity(notification, entity) &&
-      !notificationIsRead(notification);
+    return (
+      notificationIsOfEntity(notification, entity) &&
+      !notificationIsRead(notification)
+    );
   });
 }
 
