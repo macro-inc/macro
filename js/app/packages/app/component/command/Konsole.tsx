@@ -191,11 +191,16 @@ export function KommandMenuInner(props: {
 
   createModeListenerEffects();
 
+  const isFullTextSearch = createMemo(
+    () => currentKonsoleMode() === 'FULL_TEXT_SEARCH'
+  );
+
   // Prevent unnecessary ftsearches
-  const fullTextQueryOrBlank = () => {
-    if (currentKonsoleMode() !== 'FULL_TEXT_SEARCH') return '';
+  const fullTextQueryOrBlank = createMemo(() => {
+    if (!isFullTextSearch()) return '';
     return cleanQuery(debouncedSearchServiceQuery());
-  };
+  });
+
   const paginatedSearch = usePaginatedSearchItems(fullTextQueryOrBlank);
   const channelLookup = createChannelLookup(channelsContext);
 
@@ -232,10 +237,6 @@ export function KommandMenuInner(props: {
       } as CommandItemCard,
     ];
   };
-
-  const isFullTextSearch = createMemo(
-    () => currentKonsoleMode() === 'FULL_TEXT_SEARCH'
-  );
 
   // choose which items to display, based on which menu is open
   const filteredItems = createMemo(() => {
