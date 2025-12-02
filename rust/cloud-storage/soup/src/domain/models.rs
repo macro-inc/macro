@@ -91,6 +91,7 @@ pub struct AdvancedSortParams<'a> {
     pub user_id: MacroUserIdStr<'a>,
 }
 
+#[derive(Debug)]
 pub enum SoupQuery {
     Simple(Query<Uuid, SimpleSortMethod, Option<EntityFilterAst>>),
     Frecency(Query<Uuid, Frecency, Option<EntityFilterAst>>),
@@ -105,6 +106,7 @@ impl SoupQuery {
     }
 }
 
+#[derive(Debug)]
 pub struct SoupRequest {
     pub soup_type: SoupType,
     pub limit: u16,
