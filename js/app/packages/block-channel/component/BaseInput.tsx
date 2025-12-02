@@ -26,6 +26,7 @@ import XIcon from '@icon/regular/x.svg';
 import { logger } from '@observability';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
+import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { createCallback } from '@solid-primitives/rootless';
 import { leading, throttle } from '@solid-primitives/scheduled';
@@ -94,6 +95,10 @@ type BaseInputProps = {
   /** the list of users in the channel  */
   channelUsers?: () => IUser[];
   domRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
+  /** callback to delete draft */
+  onDeleteDraft?: () => void;
+  /** whether this input is for a reply (affects styling) */
+  isReplyInput?: boolean;
 };
 
 /** the time after a user stops typing before we consider them idle */
@@ -378,6 +383,9 @@ export function BaseInput(props: BaseInputProps) {
   return (
     <div
       class="relative flex flex-col flex-1 items-center justify-between bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px]"
+      classList={{
+        'rounded-b-[5px] border-b mb-4': props.isReplyInput,
+      }}
       ref={containerRef}
       use:fileDrop={{
         onDrop: (files) => {
@@ -393,7 +401,9 @@ export function BaseInput(props: BaseInputProps) {
         },
       }}
     >
-      <BrightJoins dots={[false, false, true, true]} />
+      <Show when={!props.isReplyInput}>
+        <BrightJoins dots={[false, false, true, true]} />
+      </Show>
       <Show when={isDraggedOver() || isDraggingOverChannel()}>
         <FileDropOverlay valid={isValidChannelDrag()}>
           <Show when={!isValidChannelDrag()}>
@@ -504,6 +514,17 @@ export function BaseInput(props: BaseInputProps) {
           >
             <FormatIcon width={20} height={20} />
           </ActionButton>
+          <Show when={props.onDeleteDraft}>
+            <ActionButton
+              tooltip="Delete reply"
+              onClick={(e) => {
+                e.preventDefault();
+                props.onDeleteDraft?.();
+              }}
+            >
+              <Trash width={20} height={20} />
+            </ActionButton>
+          </Show>
         </div>
         <button
           disabled={hasPendingAttachments()}
