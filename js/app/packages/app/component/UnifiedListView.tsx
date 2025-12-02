@@ -238,7 +238,19 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         if (!localEntityListRef) return;
         setEntityListRef(localEntityListRef);
 
-        if (view()?.hasUserInteractedEntity) return;
+        if (view()?.hasUserInteractedEntity) {
+          if (selectedEntity()) {
+            if (localEntityListRef && localEntityListRef.isConnected) {
+              // focusing non-first entity causes issue where 100ms later, that focused entity loses focus and document.body is focused
+              // forcing refocus on that entity works for now
+              // read TODO inside function for more info
+              tryFocusEntity(selectedEntity()!.id, {
+                forceRefocusOnce: true,
+              });
+            }
+          }
+          return;
+        }
 
         // select first item from entityList until interaction
         if (!_entities() || !_entities()?.length) return;
@@ -247,25 +259,56 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         setViewDataStore(selectedView(), 'highlightedId', firstEntity.id);
         setViewDataStore(selectedView(), 'selectedEntity', firstEntity);
 
-        setTimeout(() => {
-          // don't steal focus outside of entityList
-          if (
-            !(
-              document.activeElement === document.body ||
-              document.activeElement === panelRef() ||
-              localEntityListRef.contains(document.activeElement)
-            )
-          ) {
-            return;
+        tryFocusEntity(firstEntity.id);
+
+        function tryFocusEntity(
+          entityId: string,
+          { forceRefocusOnce }: { forceRefocusOnce: boolean } = {
+            forceRefocusOnce: false,
           }
+        ) {
+          setTimeout(() => {
+            const dontFocus = () => {
+              if (!localEntityListRef) return true;
+              // don't steal focus outside of entityList
+              if (
+                !(
+                  document.activeElement === document.body ||
+                  document.activeElement === panelRef() ||
+                  localEntityListRef.contains(document.activeElement)
+                )
+              ) {
+                return true;
+              }
+              return false;
+            };
 
-          const focusElement = localEntityListRef.querySelector(
-            `[data-entity-id="${firstEntity.id}"]`
-          ) as HTMLElement;
+            if (dontFocus()) return;
 
-          if (focusElement instanceof HTMLElement)
-            focusElement.focus({ preventScroll: true });
-        });
+            const focusElement = localEntityListRef!.querySelector(
+              `[data-entity-id="${entityId}"]`
+            ) as HTMLElement;
+
+            if (focusElement instanceof HTMLElement) {
+              focusElement.focus({ preventScroll: true });
+
+              // TODO: figure out what's causing document.body to be focused
+              // 100ms later or so, document.body is focused, despite focueElement still connected, and not shuffled
+              // without this, createMenu on close doesn't refocus on entity
+              if (forceRefocusOnce) {
+                focusElement.addEventListener(
+                  'blur',
+                  () => {
+                    if (dontFocus()) return;
+
+                    focusElement.focus({ preventScroll: true });
+                  },
+                  { once: true }
+                );
+              }
+            }
+          });
+        }
       }
     )
   );
