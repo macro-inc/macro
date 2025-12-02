@@ -13,3 +13,4 @@ config:
     secure: AAABABwFDqaa168byV3n4r7DZAxWY3DiN/JlTE2rWIHcWs966wvLVUe47u4ee/A35kf6d+JC+Qq/ouGs8GGUqgZN+LqHjIottuH7xYGqKliMWEWLUE/4bUAdDNrHUR/oJN12hgr8oh9ExqWSA7EY0Itd9/nbMxcjcICkfPOba6yQIXmZYYEpUQOAQQ58a0SP/EBgVG4VVbLq02yOEzTrHVhi6qzLb4jIrg6FjpfrEPuZL6/k8nq132Pw08GUVEzS69e90zEttexlc592rDcIC38A1/utFbmIsw0XFgBpzpWZyehHjJTEzks73wUBN4SOIQXQS3lO2lIopBHlvxREVhD1+oYMKK93/gIUr4QkqzkHmZYpixe+GJ48wvhHPM8x4Q==
   notification-service:fcm_secret_key: fcm-credential-dev
   notification-service:macro_cache_secret_key: macro-cache-dev
+  notification-service:authentication_service_internal_api_key: authentication-service-internal-api-key-dev

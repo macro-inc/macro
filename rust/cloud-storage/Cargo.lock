@@ -5667,6 +5667,7 @@ name = "notification_service"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "authentication_service_client",
  "aws-config",
  "aws-sdk-secretsmanager",
  "aws-sdk-sesv2",
