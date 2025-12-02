@@ -85,7 +85,7 @@ import type {
   GetItemsSoupParams,
   PostSoupRequest,
 } from '@service-storage/generated/schemas';
-import { debounce } from '@solid-primitives/scheduled';
+import { debouncedDependent } from '@core/util/debounce';
 import stringify from 'json-stable-stringify';
 import {
   type Accessor,
@@ -144,6 +144,9 @@ import {
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
+
+const SEARCH_SERVICE_DEBOUNCE_MS = 200;
+const LOCAL_FUZZY_SEARCH_DEBOUNCE_MS = 20;
 
 const sortOptions = [
   {
@@ -462,6 +465,16 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const rawSearchText = createMemo<string>(() => view()?.searchText ?? '');
   const searchText = createMemo(() => rawSearchText()?.trim() ?? '');
+
+  const debouncedSearchForLocal = debouncedDependent(
+    searchText,
+    LOCAL_FUZZY_SEARCH_DEBOUNCE_MS
+  );
+  const debouncedSearchForService = debouncedDependent(
+    searchText,
+    SEARCH_SERVICE_DEBOUNCE_MS
+  );
+
   const [isSearchLoading, setIsSearchLoading] = createSignal(false);
 
   const currentViewConfigBase = createMemo(() => {
@@ -516,9 +529,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const nameFuzzySearchFilter = createMemo(() =>
     rawSearchText()
       ? (items: WithNotification<EntityData>[]) => {
-          if (!searchText() || searchText().length === 0) return items;
+          const query = debouncedSearchForLocal();
+          if (!query || query.length === 0) return items;
 
-          const query = searchText();
           const matchResults = fuzzyMatch(query, items, (item) => item.name);
 
           return matchResults.map((result) => {
@@ -770,7 +783,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       request: {
         search_on: 'name_content',
         match_type: 'partial',
-        terms: searchText().length > 0 ? [searchText()] : undefined,
+        terms:
+          debouncedSearchForService().length > 0
+            ? [debouncedSearchForService()]
+            : undefined,
         filters: unifiedSearchFilters(),
         include: unifiedSearchIncludeArray(),
       },
@@ -778,7 +794,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   );
 
   const validSearchTerms = createMemo(() => {
-    return searchText().length >= 3;
+    return debouncedSearchForService().length >= 3;
   });
   const validSearchFilters = createMemo(() => {
     const senders = unifiedSearchFilters()?.email?.senders;
@@ -1715,8 +1731,6 @@ function SearchBar(props: {
     setViewDataStore(selectedView(), 'searchText', text);
   };
 
-  const debouncedSetSearch = debounce(setSearchText, 300);
-
   const isElementInViewport = (element: Element): Promise<boolean> => {
     return new Promise((resolve) => {
       const observer = new IntersectionObserver(
@@ -1825,7 +1839,7 @@ function SearchBar(props: {
           placeholder={`Search in ${viewName()}`}
           value={searchText()}
           onInput={(e) => {
-            debouncedSetSearch(e.target.value);
+            setSearchText(e.target.value);
           }}
           onKeyDown={(e) => {
             if (
