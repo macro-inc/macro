@@ -665,9 +665,20 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     });
   });
 
-  // better focus in handling. preserves selection on regain focus!
+  // HACK: We need to distinguish click-based focus events from programmatic
+  // ones (el.focus()). We want to maintain the previous selection (editor.focus)
+  // only if we are regaining focus programmatically. If click, let browser handle
+  // focus and let lexical catch up.
+  let clickFocusFlag = false;
   autoRegister(
+    registerRootEventListener(editor, 'pointerdown', () => {
+      clickFocusFlag = true;
+      setTimeout(() => {
+        clickFocusFlag = false; // negate the flag after tasks
+      });
+    }),
     registerRootEventListener(editor, 'focusin', (e) => {
+      if (clickFocusFlag) return;
       e.preventDefault();
       editor.focus(undefined, { defaultSelection: 'rootStart' });
     })
