@@ -1,6 +1,6 @@
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import {
-  InfiniteData,
+  type InfiniteData,
   partialMatchKey,
   useInfiniteQuery,
 } from '@tanstack/solid-query';
@@ -11,8 +11,8 @@ import type { PreviewsInboxCursorParams } from 'service-email/generated/schemas/
 import { type Accessor, createMemo } from 'solid-js';
 import type { EmailEntity } from '../types/entity';
 import { createApiTokenQuery } from './auth';
-import { queryKeys } from './key';
 import { queryClient } from './client';
+import { queryKeys } from './key';
 
 export type FetchPaginatedEmailsParams = PreviewsInboxCursorParams & {
   // path parameter

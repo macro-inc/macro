@@ -1,12 +1,12 @@
 import type { Entity } from '@core/types';
 import { emailClient } from '@service-email/client';
 import { onCleanup, onMount } from 'solid-js';
+import { optimisticMarkEmailAsRead } from '../../macro-entity/src/queries/email';
 import {
   markNotificationForEntityIdAsRead,
   markNotificationsForEntityAsRead,
 } from '../notification-helpers';
 import type { NotificationSource } from '../notification-source';
-import { optimisticMarkEmailAsRead } from '../../macro-entity/src/queries/email';
 
 const DEFAULT_DEBOUNCE_TIME = 2_000;
 
