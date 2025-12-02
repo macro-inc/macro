@@ -124,16 +124,16 @@ impl SortOn<SimpleSortMethod> for EnrichedEmailThreadPreview {
     }
 }
 
-// derived metadata for the email thread that the FE uses for filtering
+/// derived metadata for the email thread that the FE uses for filtering
 #[derive(Debug, Clone, Default)]
 pub struct EmailThreadPreviewMetadata {
-    // if user has previously emailed any sender
+    /// if user has previously emailed any sender
     pub known_sender: bool,
-    // if any email contains a <table> html tag
+    /// if any email contains a <table> html tag
     pub tabular: bool,
-    // if any email contains a calendar invite
+    /// if any email contains a calendar invite
     pub calendar_invite: bool,
-    // if any sender is a generic email
+    /// if any sender is a generic email
     pub generic_sender: bool,
 }
 

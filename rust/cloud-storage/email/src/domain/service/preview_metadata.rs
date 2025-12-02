@@ -13,7 +13,7 @@ where
     U: FrecencyQueryService,
 {
     /// get metadata for thread previews, used by FE for filtering Important vs Other threads
-    pub(crate) async fn get_preview_metadata(
+    pub async fn get_preview_metadata(
         &self,
         previews: &[EmailThreadPreview],
         link_id: &Uuid,

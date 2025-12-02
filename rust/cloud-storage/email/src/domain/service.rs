@@ -1,3 +1,5 @@
+mod preview_metadata;
+
 use crate::domain::{
     models::{
         EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorQuery, UserProvider,
@@ -16,8 +18,8 @@ use uuid::Uuid;
 
 #[derive(Clone)]
 pub struct EmailServiceImpl<T, U> {
-    pub(crate) email_repo: T,
-    pub(crate) frecency_service: U,
+    email_repo: T,
+    frecency_service: U,
 }
 
 impl<T, U> EmailServiceImpl<T, U>
