@@ -203,9 +203,9 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
     const currentIds = props.selectedPropertyIds();
     if (!currentIds.includes(property.id)) {
       const currentIds = props.selectedPropertyIds();
-      // Enforce max 6 properties
+      // Enforce max 4 properties
       if (currentIds.length >= MAX_DISPLAY_PROPERTIES) {
-        toast.failure('You can only select up to 6 properties to display.');
+        toast.failure('You can only select up to 4 properties to display.');
         return;
       }
 
@@ -220,9 +220,9 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
 
   const handleSelectProperty = (property: PropertyDefinitionFlat) => {
     const currentIds = props.selectedPropertyIds();
-    // Enforce max 6 properties
-    if (currentIds.length >= 6) {
-      toast.failure('You can only select up to 6 properties to display.');
+    // Enforce max 4 properties
+    if (currentIds.length >= MAX_DISPLAY_PROPERTIES) {
+      toast.failure('You can only select up to 4 properties to display.');
       return;
     }
 
