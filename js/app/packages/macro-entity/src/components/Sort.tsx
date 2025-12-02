@@ -1,6 +1,7 @@
 import { ENABLE_PROPERTY_DISPLAY_CONTROL } from '@core/constant/featureFlags';
 import ClockIcon from '@phosphor-icons/core/assets/regular/clock.svg';
 import LightningIcon from '@phosphor-icons/core/assets/regular/lightning.svg';
+import MagnifyingGlassIcon from '@phosphor-icons/core/assets/regular/magnifying-glass.svg';
 import SortAscendingIcon from '@phosphor-icons/core/assets/regular/sort-ascending.svg';
 import SortDescendingIcon from '@phosphor-icons/core/assets/regular/sort-descending.svg';
 import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
@@ -123,6 +124,7 @@ function PropertySortSearch(props: PropertySortSearchProps) {
 
   return (
     <div ref={containerRef} class="relative w-full">
+      <MagnifyingGlassIcon class="absolute left-2 top-1/2 -translate-y-1/2 size-3.5 text-ink-muted pointer-events-none" />
       <input
         ref={searchInputRef}
         type="text"
@@ -133,7 +135,7 @@ function PropertySortSearch(props: PropertySortSearchProps) {
         }}
         onFocus={() => setIsDropdownOpen(true)}
         placeholder="Search Properties..."
-        class="w-full px-2 py-1 font-mono text-xs text-ink placeholder-ink-muted bg-transparent border border-edge focus:ring-2 focus:ring-accent/50 focus:border-accent"
+        class="w-full pl-7 pr-2 py-1 font-mono text-xs text-ink placeholder-ink-muted bg-transparent border border-edge focus:ring-2 focus:ring-accent/50 focus:border-accent"
       />
       <Show when={isDropdownOpen()}>
         <div
