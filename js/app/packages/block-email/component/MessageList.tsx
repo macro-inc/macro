@@ -1,3 +1,4 @@
+import { isScrollingToMessage } from '@block-email/signal/scrollState';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { createSelector, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -5,11 +6,11 @@ import { useEmailContext } from './EmailContext';
 import { MessageContainer } from './MessageContainer';
 
 interface MessageListProps {
-  isScrollingToMessage: () => boolean;
   initialLoadComplete: boolean;
 }
 
 export function MessageList(props: MessageListProps) {
+  const getIsScrollingToMessage = isScrollingToMessage.get;
   const context = useEmailContext();
   const [expandedMessageBodyIds, setExpandedMessageBodyIds] = createStore<
     Record<string, boolean>
@@ -29,7 +30,7 @@ export function MessageList(props: MessageListProps) {
       ref={context.setMessagesRef}
       onscroll={(e) => {
         // Don't load more if we're programmatically scrolling to a message
-        if (props.isScrollingToMessage() || !props.initialLoadComplete) return;
+        if (getIsScrollingToMessage() || !props.initialLoadComplete) return;
 
         const threshold = 300;
         const isNearBeginning = e.currentTarget.scrollTop <= threshold;

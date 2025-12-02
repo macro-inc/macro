@@ -621,10 +621,7 @@ export function Email(props: EmailProps) {
             class="w-full flex-1 flex flex-col items-center justify-center overflow-hidden"
             ref={setMessagesContainerRef}
           >
-            <MessageList
-              isScrollingToMessage={isScrollingToMessage.get}
-              initialLoadComplete={hasHandledTarget()}
-            />
+            <MessageList initialLoadComplete={hasHandledTarget()} />
           </div>
           {/* <div class="z-4 absolute left-[44px] bottom-[92px] w-[21px] rounded-bl-xl min-h-[84px] border-l border-b border-edge" /> */}
           <Show when={filteredMessages()?.at(-1)}>
