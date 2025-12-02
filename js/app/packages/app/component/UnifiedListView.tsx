@@ -838,8 +838,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return !hasDssTypes;
   });
   const disableDssInfiniteQueryPost = createMemo(() => {
-    if (view().viewType === 'project') return false;
-    if (view().id !== VIEWCONFIG_DEFAULTS_IDS_ENUM.folders) return true;
+    if (
+      view().viewType !== 'project' &&
+      view().id !== VIEWCONFIG_DEFAULTS_IDS_ENUM.folders
+    )
+      return true;
 
     const typeFilter = entityTypeFilter();
     if (typeFilter.length === 0) return false;
