@@ -733,7 +733,7 @@ export function MentionsMenu(props: {
     const orgUsers = useOrganizationUsers();
     const contacts = useContacts();
     users = createMemo(() =>
-      mergeByKey('id', contacts(), orgUsers())
+      mergeByKey('email', orgUsers(), contacts())
         .map(entityMapper('user'))
         .filter(allItemFilter)
     );
