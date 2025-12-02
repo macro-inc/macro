@@ -1,9 +1,27 @@
+import { ENABLE_PROPERTY_DISPLAY_CONTROL } from '@core/constant/featureFlags';
+import ClockIcon from '@phosphor-icons/core/assets/regular/clock.svg';
+import LightningIcon from '@phosphor-icons/core/assets/regular/lightning.svg';
+import SortAscendingIcon from '@phosphor-icons/core/assets/regular/sort-ascending.svg';
+import SortDescendingIcon from '@phosphor-icons/core/assets/regular/sort-descending.svg';
+import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
+import { propertiesServiceClient } from '@service-properties/client';
 import { SegmentedControl } from 'core/component/FormControls/SegmentControls';
+import { ToggleButton } from 'core/component/FormControls/ToggleButton';
+import type { PropertyDefinitionFlat } from 'core/component/Properties/types';
+import { PropertyDataTypeIcon } from 'core/component/Properties/utils/PropertyDataTypeIcon';
+import { isErr } from 'core/util/maybeResult';
 import {
   type Accessor,
+  type Component,
+  createEffect,
   createMemo,
   createSignal,
+  For,
   type JSX,
+  on,
+  onCleanup,
+  onMount,
+  Show,
   type Signal,
 } from 'solid-js';
 import type { EntityComparator, EntityData } from '../types/entity';
@@ -11,6 +29,146 @@ import type { WithNotification } from '../types/notification';
 
 export function Sort() {
   return <SegmentedControl list={['Notified', 'Updated', 'Viewed']} />;
+}
+
+type PropertySortSearchProps = {
+  onSelectProperty?: (property: PropertyDefinitionFlat) => void;
+};
+
+function PropertySortSearch(props: PropertySortSearchProps) {
+  const [availableProperties, setAvailableProperties] = createSignal<
+    PropertyDefinitionFlat[]
+  >([]);
+  const [searchQuery, setSearchQuery] = createSignal('');
+  const [isDropdownOpen, setIsDropdownOpen] = createSignal(false);
+
+  let searchInputRef!: HTMLInputElement;
+  let dropdownRef!: HTMLDivElement;
+  let containerRef!: HTMLDivElement;
+
+  const fetchAvailableProperties = async () => {
+    try {
+      const result = await propertiesServiceClient.listProperties({
+        scope: 'all',
+        include_options: false,
+      });
+
+      if (isErr(result)) {
+        return;
+      }
+
+      const [, data] = result;
+      const properties = Array.isArray(data) ? data : [];
+      setAvailableProperties(properties);
+    } catch (_apiError) {
+      // Silently fail
+    }
+  };
+
+  // Filter to only sortable properties
+  const sortableProperties = createMemo(() => {
+    return availableProperties().filter((property) => {
+      if (
+        ['BOOLEAN', 'ENTITY', 'LINK', 'STRING'].includes(property.data_type) ||
+        property.is_multi_select
+      )
+        return false;
+      return true;
+    });
+  });
+
+  const filteredProperties = createMemo(() => {
+    const query = searchQuery().toLowerCase().trim();
+    const properties = sortableProperties();
+
+    if (!query) return properties;
+
+    return properties.filter((property) => {
+      const name = property.display_name.toLowerCase();
+      return name.includes(query);
+    });
+  });
+
+  const handleSelectProperty = (property: PropertyDefinitionFlat) => {
+    props.onSelectProperty?.(property);
+    setSearchQuery('');
+    setIsDropdownOpen(false);
+  };
+
+  onMount(() => {
+    fetchAvailableProperties();
+  });
+
+  // Close dropdown when clicking outside
+  createEffect(() => {
+    if (!isDropdownOpen()) return;
+
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+
+      const isInsideContainer = containerRef?.contains(target);
+      const isInsideDropdown = dropdownRef?.contains(target);
+
+      if (!isInsideContainer && !isInsideDropdown) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    onCleanup(() => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    });
+  });
+
+  return (
+    <div ref={containerRef} class="relative w-full">
+      <input
+        ref={searchInputRef}
+        type="text"
+        value={searchQuery()}
+        onInput={(e) => {
+          setSearchQuery(e.currentTarget.value);
+          setIsDropdownOpen(true);
+        }}
+        onFocus={() => setIsDropdownOpen(true)}
+        placeholder="Search Properties..."
+        class="w-full px-2 py-1 font-mono text-xs text-ink placeholder-ink-muted bg-transparent border border-edge focus:ring-2 focus:ring-accent/50 focus:border-accent"
+      />
+      <Show when={isDropdownOpen()}>
+        <div
+          ref={dropdownRef}
+          class="absolute left-0 right-0 top-full mt-1 z-[100] border border-edge bg-menu shadow-lg max-h-48 overflow-y-auto font-mono"
+        >
+          <Show
+            when={filteredProperties().length > 0}
+            fallback={
+              <div class="px-3 py-2 text-xs text-ink-muted text-center">
+                No sortable properties found
+              </div>
+            }
+          >
+            <For each={filteredProperties()}>
+              {(property) => (
+                <button
+                  type="button"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleSelectProperty(property);
+                  }}
+                  class="w-full px-2 py-1.5 text-xs text-ink hover:bg-hover flex items-center gap-2 text-left"
+                >
+                  <PropertyDataTypeIcon property={property} />
+                  <span class="truncate flex-1">{property.display_name}</span>
+                </button>
+              )}
+            </For>
+          </Show>
+        </div>
+      </Show>
+    </div>
+  );
 }
 
 type DefaultSortType = 'important' | 'updatedAt' | 'viewedAt' | 'frecency';
@@ -100,7 +258,10 @@ export function createSort<T extends EntityData, S extends string>(context: {
 };
 export function createSort<T extends EntityData, S extends string>(context: {
   sortOptions: SortOption<T, S>[];
+  defaultSortOption?: S;
   sortTypeSignal: Signal<S>;
+  propertyIdSignal?: Signal<string | null>;
+  sortOrderSignal?: Signal<'ascending' | 'descending'>;
   disabled?: Accessor<boolean>;
 }): {
   sortFn: Accessor<InferSortFn<SortOption<T, S>[]>>;
@@ -112,6 +273,8 @@ export function createSort<
   sortOptions: Options;
   defaultSortOption?: Options[number]['value'];
   sortTypeSignal?: Signal<Options[number]['value']>;
+  propertyIdSignal?: Signal<string | null>;
+  sortOrderSignal?: Signal<'ascending' | 'descending'>;
   disabled?: Accessor<boolean>;
 }): {
   sortFn: Accessor<InferSortFn<Options>>;
@@ -126,7 +289,29 @@ export function createSort<
     context?.sortTypeSignal ??
     createSignal<Options[number]['value']>(defaultSortOption);
 
+  // Use external signals if provided, otherwise local state
+  const [localSortOrder, setLocalSortOrder] = createSignal<
+    'ascending' | 'descending'
+  >('descending');
+  const [sortOrder, setSortOrder] = context?.sortOrderSignal ?? [
+    localSortOrder,
+    setLocalSortOrder,
+  ];
+
+  const [localPropertyId, setLocalPropertyId] = createSignal<string | null>(
+    null
+  );
+  const [propertyId, setPropertyId] = context?.propertyIdSignal ?? [
+    localPropertyId,
+    setLocalPropertyId,
+  ];
+
   const sortFn = createMemo<InferSortFn<Options>>(() => {
+    // If property sort is active, return no-op (backend handles sorting)
+    if (propertyId()) {
+      return ((_, __) => 0) as InferSortFn<Options>;
+    }
+
     const sortBy = sortType();
     const sortFn = sortOptions.find(
       (option) => option.value === sortBy
@@ -139,15 +324,199 @@ export function createSort<
     return sortFn as InferSortFn<Options>;
   });
 
-  const SortComponent: SortComponent = (props) => (
-    <SegmentedControl
-      label="Sort"
-      value={sortType()}
-      onChange={setSortType}
-      list={sortOptions}
-      size={props.size}
-      disabled={disabled?.()}
-    />
+  // Track the full property object for display (fetched when needed)
+  const [selectedProperty, setSelectedProperty] =
+    createSignal<PropertyDefinitionFlat | null>(null);
+
+  // Fetch property details when propertyId changes
+  createEffect(
+    on(propertyId, (id) => {
+      if (id) {
+        // Fetch property details
+        propertiesServiceClient
+          .listProperties({ scope: 'all', include_options: false })
+          .then((result) => {
+            if (isErr(result)) return;
+            const [, data] = result;
+            const properties = Array.isArray(data) ? data : [];
+            const property = properties.find((p) => p.id === id);
+            if (property) {
+              setSelectedProperty(property);
+            }
+          });
+      } else {
+        setSelectedProperty(null);
+      }
+    })
+  );
+
+  const isSortedByProperty = createMemo(() => {
+    return propertyId() !== null;
+  });
+
+  const handleSelectProperty = (property: PropertyDefinitionFlat) => {
+    setPropertyId(property.id);
+    setSelectedProperty(property);
+  };
+
+  const handleClearProperty = () => {
+    setPropertyId(null);
+    setSelectedProperty(null);
+    setSortOrder('descending');
+    setSortType(defaultSortOption);
+  };
+
+  const handleSelectSystemSort = (value: string) => {
+    setPropertyId(null);
+    setSelectedProperty(null);
+    setSortOrder('descending');
+    setSortType(value);
+  };
+
+  type SystemSortPillsProps = {
+    sortType: Accessor<string>;
+    onSelect: (value: string) => void;
+    disabled?: Accessor<boolean>;
+    isSortedByProperty: Accessor<boolean>;
+  };
+
+  const SystemSortPills: Component<SystemSortPillsProps> = (props) => {
+    const pillClass =
+      'inline-flex w-fit min-h-[24px] items-center gap-1.5 px-2 py-1 text-xs font-mono border cursor-pointer';
+
+    const isSelected = (value: string) =>
+      !props.isSortedByProperty() && props.sortType() === value;
+
+    return (
+      <div class="flex flex-wrap gap-1">
+        <button
+          type="button"
+          onClick={() => props.onSelect('viewed_at')}
+          disabled={props.disabled?.()}
+          class={pillClass}
+          classList={{
+            'bg-ink text-panel border-ink': isSelected('viewed_at'),
+            'bg-transparent text-ink border-edge hover:bg-hover':
+              !isSelected('viewed_at'),
+          }}
+        >
+          <ClockIcon class="size-3.5" />
+          Viewed
+        </button>
+        <button
+          type="button"
+          onClick={() => props.onSelect('updated_at')}
+          disabled={props.disabled?.()}
+          class={pillClass}
+          classList={{
+            'bg-ink text-panel border-ink': isSelected('updated_at'),
+            'bg-transparent text-ink border-edge hover:bg-hover':
+              !isSelected('updated_at'),
+          }}
+        >
+          <ClockIcon class="size-3.5" />
+          Updated
+        </button>
+        <button
+          type="button"
+          onClick={() => props.onSelect('created_at')}
+          disabled={props.disabled?.()}
+          class={pillClass}
+          classList={{
+            'bg-ink text-panel border-ink': isSelected('created_at'),
+            'bg-transparent text-ink border-edge hover:bg-hover':
+              !isSelected('created_at'),
+          }}
+        >
+          <ClockIcon class="size-3.5" />
+          Created
+        </button>
+        <button
+          type="button"
+          onClick={() => props.onSelect('frecency')}
+          disabled={props.disabled?.()}
+          class={pillClass}
+          classList={{
+            'bg-ink text-panel border-ink': isSelected('frecency'),
+            'bg-transparent text-ink border-edge hover:bg-hover':
+              !isSelected('frecency'),
+          }}
+        >
+          <LightningIcon class="size-3.5" />
+          Frecency
+        </button>
+      </div>
+    );
+  };
+
+  const SortComponent: SortComponent = (_props) => (
+    <div class="flex flex-col gap-2">
+      <span class="text-xs font-medium">Sort</span>
+      <SystemSortPills
+        sortType={sortType}
+        onSelect={handleSelectSystemSort}
+        disabled={disabled}
+        isSortedByProperty={isSortedByProperty}
+      />
+      <Show when={ENABLE_PROPERTY_DISPLAY_CONTROL}>
+        <Show
+          when={isSortedByProperty()}
+          fallback={
+            <div class="w-full">
+              <PropertySortSearch onSelectProperty={handleSelectProperty} />
+            </div>
+          }
+        >
+          <div class="flex items-center gap-2">
+            <div class="flex max-w-[200px]">
+              <Show
+                when={selectedProperty()}
+                fallback={
+                  <div class="flex items-center gap-1.5 px-2 py-1 text-xs font-mono border border-failure bg-failure/10 text-failure min-w-0 overflow-hidden">
+                    <span class="truncate">Property not found</span>
+                  </div>
+                }
+              >
+                <div class="flex items-center gap-1.5 px-2 py-1 text-xs font-mono border bg-ink text-panel border-ink min-w-0 overflow-hidden">
+                  <PropertyDataTypeIcon
+                    property={selectedProperty()!}
+                    class="text-panel size-3.5 shrink-0"
+                  />
+                  <span class="truncate">
+                    {selectedProperty()?.display_name}
+                  </span>
+                </div>
+              </Show>
+              <button
+                type="button"
+                onClick={handleClearProperty}
+                class="px-1 bg-edge-muted hover:opacity-70 transition-opacity shrink-0 border border-ink"
+              >
+                <XIcon class="size-3.5" />
+              </button>
+            </div>
+            <Show when={selectedProperty()}>
+              <div class="flex shrink-0">
+                <ToggleButton
+                  size="SM"
+                  pressed={sortOrder() === 'descending'}
+                  onChange={() => setSortOrder('descending')}
+                >
+                  <SortDescendingIcon class="size-4" />
+                </ToggleButton>
+                <ToggleButton
+                  size="SM"
+                  pressed={sortOrder() === 'ascending'}
+                  onChange={() => setSortOrder('ascending')}
+                >
+                  <SortAscendingIcon class="size-4" />
+                </ToggleButton>
+              </div>
+            </Show>
+          </div>
+        </Show>
+      </Show>
+    </div>
   );
 
   return {

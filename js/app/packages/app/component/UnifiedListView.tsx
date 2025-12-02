@@ -102,6 +102,7 @@ import {
   type ParentProps,
   type Setter,
   Show,
+  type Signal,
 } from 'solid-js';
 import { createStore, type SetStoreFunction, unwrap } from 'solid-js/store';
 import { EntityWithEverything } from '../../macro-entity/src/components/EntityWithEverything';
@@ -136,6 +137,7 @@ import {
   isConfigEqual,
   KNOWN_FILE_TYPES,
   type SortOptions,
+  type SystemSortOption,
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_IDS,
   VIEWCONFIG_DEFAULTS_IDS_ENUM,
@@ -164,7 +166,7 @@ const sortOptions = [
     label: 'Frecency',
     sortFn: sortByFrecencyScore,
   },
-] satisfies SortOption<EntityData, SortOptions['sortBy']>[];
+] satisfies SortOption<EntityData, SystemSortOption>[];
 
 export type UnifiedListViewProps = {
   defaultFilterOptions?: Partial<FilterOptions>;
@@ -349,13 +351,59 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     setViewDataStore(selectedView(), 'filters', 'fromFilter', ...args);
   };
 
-  const sortType = createMemo(
-    () => view()?.sort?.sortBy ?? defaultSortOptions.sortBy
+  const getSystemSortOption = (
+    sort: SortOptions | undefined
+  ): SystemSortOption => {
+    if (sort?.type === 'systemSortOption') {
+      return sort.sortBy;
+    }
+    // Default fallback - use defaultSortOptions if it's a system sort
+    if (
+      defaultSortOptions.type === 'systemSortOption' &&
+      defaultSortOptions.sortBy
+    ) {
+      return defaultSortOptions.sortBy;
+    }
+    return 'updated_at';
+  };
+
+  const sortType = createMemo(() => getSystemSortOption(view()?.sort));
+  const setSortType = (sortBy: SystemSortOption) => {
+    (setViewDataStore as any)(selectedView(), 'sort', 'sortBy', sortBy);
+  };
+
+  const propertyId = createMemo(() => {
+    const sort = view()?.sort;
+    return sort?.type === 'property' ? sort.propertyId : null;
+  });
+  const setPropertyId = (id: string | null) => {
+    if (id === null) {
+      // Clear property sort, revert to system
+      batch(() => {
+        (setViewDataStore as any)(
+          selectedView(),
+          'sort',
+          'type',
+          'systemSortOption'
+        );
+        (setViewDataStore as any)(selectedView(), 'sort', 'propertyId', null);
+      });
+    } else {
+      // Set property sort
+      batch(() => {
+        (setViewDataStore as any)(selectedView(), 'sort', 'type', 'property');
+        (setViewDataStore as any)(selectedView(), 'sort', 'propertyId', id);
+        // Clear sortBy if switching to property
+        (setViewDataStore as any)(selectedView(), 'sort', 'sortBy', null);
+      });
+    }
+  };
+
+  const sortOrder = createMemo(
+    () => view()?.sort?.sortOrder ?? defaultSortOptions.sortOrder
   );
-  const setSortType: SetStoreFunction<SortOptions['sortBy']> = (
-    sortType: any
-  ) => {
-    setViewDataStore(selectedView(), 'sort', 'sortBy', sortType);
+  const setSortOrder = (order: 'ascending' | 'descending') => {
+    setViewDataStore(selectedView(), 'sort', 'sortOrder', order);
   };
 
   const showUnrollNotifications = createMemo(
@@ -417,12 +465,26 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const [isSearchLoading, setIsSearchLoading] = createSignal(false);
 
   const currentViewConfigBase = createMemo(() => {
-    const view_ = view();
-    if (!view_) return null;
+    const viewKey = selectedView();
+    const viewData = viewsData[viewKey];
+    if (!viewData) return null;
+
+    // Access store properties directly (not through view() memo) for reactivity
+    const sort = viewsData[viewKey]?.sort as any;
+    const sortType = sort?.type ?? null;
+    const sortBy = sort?.sortBy ?? null;
+    const propertyId = sort?.propertyId ?? null;
+    const sortOrder = sort?.sortOrder ?? null;
+
     return {
-      display: view_.display,
-      filters: view_.filters,
-      sort: view_.sort,
+      display: viewsData[viewKey]?.display,
+      filters: viewsData[viewKey]?.filters,
+      sort: {
+        type: sortType,
+        sortBy,
+        propertyId,
+        sortOrder,
+      },
     };
   });
   const stringifiedCurrentViewConfigBase = createMemo(() => {
@@ -840,7 +902,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const { SortComponent, sortFn: entitySort } = createSort({
     sortOptions,
-    sortTypeSignal: [sortType, setSortType],
+    defaultSortOption: getSystemSortOption(defaultSortOptions as SortOptions),
+    sortTypeSignal: [sortType, setSortType] as Signal<SystemSortOption>,
+    propertyIdSignal: [propertyId, setPropertyId] as Signal<string | null>,
+    sortOrderSignal: [sortOrder, setSortOrder] as Signal<
+      'ascending' | 'descending'
+    >,
     disabled: isSearchActive,
   });
 
@@ -1034,6 +1101,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     });
   };
 
+  // Set initialConfig when it's not present (on load or after save/refetch)
   createEffect(() => {
     const view_ = view();
     if (!view_) return;
@@ -1260,9 +1328,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       disabled
                     />
                   </section>
-                  <section class="p-2">
-                    <SortComponent size="SM" />
-                  </section>
                   <section class="gap-1 grid p-2">
                     <ToggleSwitch
                       size="SM"
@@ -1276,6 +1341,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                       checked={showUnreadIndicator()}
                       onChange={setShowUnreadIndicator}
                     />
+                  </section>
+                  <section class="p-2">
+                    <SortComponent size="SM" />
                   </section>
                   <Show when={ENABLE_PROPERTY_DISPLAY_CONTROL}>
                     <section class="p-2">
