@@ -38,7 +38,7 @@ pub struct EmailSearchResponseItem {
     /// These field names are being aligned across all item types
     /// for consistency in our data model.
     pub id: String,
-    /// email threads don't have names, but keeping this here for consistency with other search items
+    /// Subject of the email thread
     pub name: Option<String>,
     pub owner_id: String,
 
