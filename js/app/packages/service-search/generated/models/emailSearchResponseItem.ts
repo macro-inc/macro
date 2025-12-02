@@ -19,7 +19,7 @@ This may be empty if the search result match was on the email subject only */
 These field names are being aligned across all item types
 for consistency in our data model. */
   id: string;
-  /** email threads don't have names, but keeping this here for consistency with other search items */
+  /** Subject of the email thread */
   name?: EmailSearchResponseItemName;
   owner_id: string;
   /** The subject of the email

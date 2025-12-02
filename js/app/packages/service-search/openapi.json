@@ -1470,7 +1470,7 @@
           },
           "name": {
             "type": ["string", "null"],
-            "description": "email threads don't have names, but keeping this here for consistency with other search items"
+            "description": "Subject of the email thread"
           },
           "owner_id": { "type": "string" },
           "subject": {
