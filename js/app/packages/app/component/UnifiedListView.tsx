@@ -1628,7 +1628,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               if (hasSelection) {
                 setKonsoleMode('SELECTION_MODIFICATION');
                 const selectionIndex =
-                  searchCategories.getCateoryIndex('Selection');
+                  searchCategories.getCategoryIndex('Selection');
 
                 if (selectionIndex === undefined) return false;
 

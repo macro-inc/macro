@@ -1015,7 +1015,7 @@ export function createNavigationEntityListShortcut({
 
       if (hasSelection) {
         setKonsoleMode('SELECTION_MODIFICATION');
-        const selectionIndex = searchCategories.getCateoryIndex('Selection');
+        const selectionIndex = searchCategories.getCategoryIndex('Selection');
 
         if (selectionIndex === undefined) return false;
 

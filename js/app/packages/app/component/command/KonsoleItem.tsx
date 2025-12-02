@@ -121,7 +121,7 @@ const [categories, setCategories] = createStore<KonsoleCategory[]>(
 );
 
 export const searchCategories = {
-  getCateoryIndex(name: DefaultCategoryNames | (string & {})) {
+  getCategoryIndex(name: DefaultCategoryNames | (string & {})) {
     const index = categories.findIndex((c) => c.name === name);
 
     if (index === -1) return;
