@@ -741,12 +741,16 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         document_ids: entityTypeFilter().includes('document')
           ? []
           : [GARBAGE_UUID],
+        project_ids: view().viewType === 'project' ? [view().id] : [],
       },
       chat_filters: {
         chat_ids: [GARBAGE_UUID],
       },
       email_filters: {
         recipients: [GARBAGE_UUID],
+      },
+      project_filters: {
+        project_ids: view().viewType === 'project' ? [view().id] : [],
       },
       limit: props.defaultDisplayOptions?.limit ?? 100,
       sort_method: sortType(),
@@ -808,6 +812,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   });
 
   const disableDssInfiniteQueryGET = createMemo(() => {
+    if (view().viewType === 'project') return true;
     if (view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.folders) return true;
 
     const typeFilter = entityTypeFilter();
@@ -817,6 +822,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return !hasDssTypes;
   });
   const disableDssInfiniteQueryPost = createMemo(() => {
+    if (view().viewType === 'project') return false;
     if (view().id !== VIEWCONFIG_DEFAULTS_IDS_ENUM.folders) return true;
 
     const typeFilter = entityTypeFilter();
