@@ -72,8 +72,6 @@ function createEmailItems(email: UnifiedSearchResponseItem): CommandItemCard[] {
   if (email.email_message_search_results.length === 0) return [];
 
   for (const result of email.email_message_search_results) {
-    // NOTE: this should already be true for command k since its a content search
-    // but this is a safety check
     const isContentHit = !!result.message_id;
     if (!isContentHit) continue;
 
