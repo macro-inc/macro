@@ -22,41 +22,41 @@ export const PropertyDataTypeIcon: Component<PropertyDataTypeIconProps> = (
   props
 ) => {
   const dataTypeLower = props.property.data_type.toLowerCase();
-  const ICON_CLASSES = 'size-4 text-ink-muted';
+  const iconClasses = props.class ?? 'size-4 text-ink-muted';
 
   if (dataTypeLower === 'entity') {
     const specificType = props.property.specific_entity_type?.toUpperCase();
 
     switch (specificType) {
       case 'USER':
-        return <UserCircleIcon class={ICON_CLASSES} />;
+        return <UserCircleIcon class={iconClasses} />;
       case 'DOCUMENT':
-        return <FileIcon class={ICON_CLASSES} />;
+        return <FileIcon class={iconClasses} />;
       case 'PROJECT':
-        return <FolderIcon class={ICON_CLASSES} />;
+        return <FolderIcon class={iconClasses} />;
       case 'CHAT':
-        return <ChatIcon class={ICON_CLASSES} />;
+        return <ChatIcon class={iconClasses} />;
       case 'CHANNEL':
-        return <HashIcon class={ICON_CLASSES} />;
+        return <HashIcon class={iconClasses} />;
       default:
-        return <SimpleTagIcon class={ICON_CLASSES} />;
+        return <SimpleTagIcon class={iconClasses} />;
     }
   }
 
   switch (dataTypeLower) {
     case 'string':
-      return <PencilIcon class={ICON_CLASSES} />;
+      return <PencilIcon class={iconClasses} />;
     case 'number':
-      return <CalculatorIcon class={ICON_CLASSES} />;
+      return <CalculatorIcon class={iconClasses} />;
     case 'boolean':
-      return <CheckSquareIcon class={ICON_CLASSES} />;
+      return <CheckSquareIcon class={iconClasses} />;
     case 'date':
-      return <CalendarBlankIcon class={ICON_CLASSES} />;
+      return <CalendarBlankIcon class={iconClasses} />;
     case 'link':
-      return <LinkIcon class={ICON_CLASSES} />;
+      return <LinkIcon class={iconClasses} />;
     case 'select_string':
     case 'select_number':
-      return <ListBulletIcon class={ICON_CLASSES} />;
+      return <ListBulletIcon class={iconClasses} />;
     default:
       return null;
   }

@@ -123,7 +123,10 @@ const PropertyPill: Component<PropertyPillProps> = (props) => {
                border border-edge
                min-w-0 overflow-hidden"
       >
-        <PropertyDataTypeIcon property={props.property} class="shrink-0" />
+        <PropertyDataTypeIcon
+          property={props.property}
+          class="size-4 text-ink-muted shrink-0"
+        />
         <span class="truncate font-mono">{props.property.display_name}</span>
       </div>
       <button

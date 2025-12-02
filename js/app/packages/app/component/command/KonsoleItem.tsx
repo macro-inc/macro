@@ -116,12 +116,12 @@ type KonsoleCategory = {
   visible: boolean;
 };
 
-const [categories, setCategories] = createStore<KonsoleCategory[]>(
-  DEFAULT_CATEGORIES.slice()
-);
+const [categories, setCategories] = createStore<KonsoleCategory[]>([
+  ...DEFAULT_CATEGORIES,
+]);
 
 export const searchCategories = {
-  getCateoryIndex(name: DefaultCategoryNames | (string & {})) {
+  getCategoryIndex(name: DefaultCategoryNames | (string & {})) {
     const index = categories.findIndex((c) => c.name === name);
 
     if (index === -1) return;
@@ -160,7 +160,7 @@ export const searchCategories = {
   },
   findNextCategoryIndex(category: number, backwards: boolean): number {
     let candidateCategory = -1;
-    const length = categories.length;
+    const length = this.listVisible().length;
     for (let i = 1; i < length; i++) {
       if (backwards) {
         candidateCategory = category - i;
@@ -446,7 +446,7 @@ function getCommandItemBlockName(
 }
 
 function getCommandItemName(item: CommandItemCard): string {
-  return item.data.name!;
+  return item.data.name;
 }
 
 export function filterItemByCategory(item: CommandItemCard) {
