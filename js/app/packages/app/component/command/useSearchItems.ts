@@ -85,7 +85,6 @@ function createEmailItems(email: UnifiedSearchResponseItem): CommandItemCard[] {
           id: email.thread_id,
           name: email.name ?? '',
           sender: result.sender!,
-          // TODO: This should be sent time, not update time
           timestamp: new Date(
             (result.sent_at ?? email.updated_at) * 1000
           ).toISOString(),
