@@ -102,7 +102,7 @@ function usePushNotifications(
 
     try {
       const url = new URL(deepLinkUrl);
-      const path = url.pathname;
+      const path = `/${url.host}${url.pathname}`;
       const query = url.search.slice(1);
 
       if (query) {
