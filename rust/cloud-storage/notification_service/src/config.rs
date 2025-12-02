@@ -128,9 +128,8 @@ impl Config {
 
         let redis_uri = std::env::var("REDIS_URI").context("REDIS_URI must be provided")?;
 
-        let auth_service_secret_key =
-            std::env::var("AUTHENTICATION_SERVICE_SECRET_KEY")
-                .context("AUTHENTICATION_SERVICE_SECRET_KEY must be provided")?;
+        let auth_service_secret_key = std::env::var("AUTHENTICATION_SERVICE_SECRET_KEY")
+            .context("AUTHENTICATION_SERVICE_SECRET_KEY must be provided")?;
 
         let auth_service_url = std::env::var("AUTHENTICATION_SERVICE_URL")
             .context("AUTHENTICATION_SERVICE_URL must be provided")?;
