@@ -54,11 +54,6 @@ const fetchPaginatedDocumentsGet = async ({
     throw new Error('Failed to fetch documents', { cause: response });
 
   const result: SoupPage = await response.json();
-  result.items.forEach((item) => {
-    if (item.tag === 'document' && item.data.fileType === 'md') {
-      syncServiceClient.wakeup({ documentId: item.data.id });
-    }
-  });
   return result;
 };
 
@@ -90,11 +85,6 @@ const fetchPaginatedDocumentsPost = async ({
     throw new Error('Failed to fetch documents', { cause: response });
 
   const result: SoupPage = await response.json();
-  result.items.forEach((item) => {
-    if (item.tag === 'document' && item.data.fileType === 'md') {
-      syncServiceClient.wakeup({ documentId: item.data.id });
-    }
-  });
   return result;
 };
 
