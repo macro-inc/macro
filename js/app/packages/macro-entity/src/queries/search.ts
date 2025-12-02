@@ -200,7 +200,7 @@ const useMapSearchResponseItem = () => {
           ownerId: result.owner_id,
           createdAt: emailResult.sent_at ?? result.updated_at,
           updatedAt: emailResult.sent_at ?? result.updated_at,
-          viewedAt: result.updated_at,
+          viewedAt: result.viewed_at ?? undefined,
           isRead: !emailResult.labels.includes('UNREAD'),
           isImportant: emailResult.labels.includes('IMPORTANT'),
           done: !emailResult.labels.includes('INBOX'),
