@@ -32,6 +32,7 @@ import {
   EntityIcon,
   type EntityWithValidIcon,
 } from 'core/component/EntityIcon';
+import { syncServiceClient } from 'service-sync/client';
 import {
   type Component,
   createMemo,
@@ -39,6 +40,8 @@ import {
   type JSX,
   type JSXElement,
   Match,
+  onCleanup,
+  onMount,
   type Setter,
   Switch,
 } from 'solid-js';
@@ -518,6 +521,15 @@ export function CommandItemCard(props: CommandItemProps) {
     const name = getCommandItemName(props.item);
     return name && name.length > 55 ? `${name.slice(0, 52)}...` : name;
   };
+
+  onMount(() => {
+    if (blockName() === 'md') {
+      syncServiceClient.safeWakeup(props.item.data.id);
+      onCleanup(() => {
+        syncServiceClient.cancelWakeup(props.item.data.id);
+      });
+    }
+  });
 
   const CommandItemContainer = ({ children }: { children?: JSXElement }) => {
     const optionKeyPressed = createMemo(() => {
