@@ -220,7 +220,10 @@ export function EntityWithEverything(
 
   onMount(() => {
     if (props.entity.type === 'document' && props.entity.fileType === 'md') {
-      syncServiceClient.wakeup({ documentId: props.entity.id });
+      syncServiceClient.safeWakeup(props.entity.id);
+      onCleanup(() => {
+        syncServiceClient.cancelWakeup(props.entity.id);
+      });
     }
   });
 
