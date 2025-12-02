@@ -211,7 +211,7 @@ const Root: Component<MessageRootProps> = (props) => {
       <div
         class={`relative flex flex-row items-stretch w-full suppress-css-brackets [--thread-shift:23px] @sm:[--thread-shift:46px] [--user-icon-width:30px] @sm:[--user-icon-width:40px] [--left-of-connector:20px] @sm:[--left-of-connector:28px] [--left-of-user-icon:calc(var(--left-of-connector)-var(--user-icon-width)/2)] transition-colors duration-1000 ease`}
         classList={{
-          'bg-accent ': props.isTarget,
+          'bg-accent': props.isTarget,
         }}
         onMouseEnter={() => setHover(true)}
         onMouseLeave={() => setHover(false)}
@@ -224,7 +224,7 @@ const Root: Component<MessageRootProps> = (props) => {
         </Show>
         <BozzyBracket
           active={props.focused}
-          unfocusable={props.unfocusable}
+          unfocusable={props.isTarget || props.unfocusable}
           class="flex flex-row"
           style={{
             'margin-bottom': props.isLastInThread //|| props.showReply?.()

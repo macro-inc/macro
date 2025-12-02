@@ -23,9 +23,9 @@ on:
         required: false
         type: boolean
     secrets:
-      AWS_DEPLOYMENT_ACCESS_KEY:
+      AWS_ACCESS_KEY:
         required: true
-      AWS_DEPLOYMENT_SECRET_ACCESS_KEY:
+      AWS_SECRET_ACCESS_KEY:
         required: true
       PULUMI_ACCESS_TOKEN:
         required: true
@@ -46,8 +46,8 @@ jobs:
       - uses: docker/setup-buildx-action@v3
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.AWS_DEPLOYMENT_ACCESS_KEY }}
-          aws-secret-access-key: ${{ secrets.AWS_DEPLOYMENT_SECRET_ACCESS_KEY }}
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: us-east-1
       - name: Setup
         uses: ./.github/actions/setup-reqs-web

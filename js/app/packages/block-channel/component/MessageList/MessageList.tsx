@@ -15,6 +15,7 @@ import {
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { TextButton } from '@core/component/TextButton';
 import { observedSize } from '@core/directive/observedSize';
+import { createActiveTarget } from '@core/signal/activeTarget';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import SunIcon from '@icon/duotone/sun-horizon-duotone.svg';
 import ArrowDownIcon from '@icon/regular/arrow-down.svg';
@@ -138,34 +139,10 @@ export function MessageList(props: MessageListProps) {
     })
   );
 
-  const [activeTargetMessage, setActiveTargetMessage] = createSignal<
-    | {
-        messageId: string;
-        threadId?: string;
-      }
-    | undefined
-  >();
-
-  let targetTimeoutId: ReturnType<typeof setTimeout> | undefined;
-
-  createEffect(() => {
-    const target = props.targetMessage();
-
-    if (targetTimeoutId) {
-      clearTimeout(targetTimeoutId);
-      targetTimeoutId = undefined;
-    }
-
-    if (target) {
-      setActiveTargetMessage(target);
-      targetTimeoutId = setTimeout(() => {
-        setActiveTargetMessage(undefined);
-        targetTimeoutId = undefined;
-      }, TARGET_MESSAGE_ACTIVE_TIME);
-    } else {
-      setActiveTargetMessage(undefined);
-    }
-  });
+  const activeTargetMessage = createActiveTarget(
+    props.targetMessage,
+    TARGET_MESSAGE_ACTIVE_TIME
+  );
 
   let scrollTimeoutId: ReturnType<typeof setTimeout> | undefined;
   let scrollHintTimeoutId: ReturnType<typeof setTimeout> | undefined;

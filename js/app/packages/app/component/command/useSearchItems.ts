@@ -6,7 +6,7 @@ import {
   extractSearchTerms,
 } from '@core/util/searchHighlight';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
-import { createEffect, createMemo, createSignal } from 'solid-js';
+import { createEffect, createMemo, createSignal, on } from 'solid-js';
 import { searchClient } from '../../../service-search/client';
 import type { UnifiedSearchResponse } from '../../../service-search/generated/models/unifiedSearchResponse';
 import type { UnifiedSearchResponseItem } from '../../../service-search/generated/models/unifiedSearchResponseItem';
@@ -244,9 +244,8 @@ export function usePaginatedSearchItems(searchTerm: () => string) {
   let loadMoreAbortController: AbortController | null = null;
 
   // Reset when search term changes
-  createEffect(() => {
-    const term = searchTerm();
-    if (term !== '') {
+  createEffect(
+    on(searchTerm, () => {
       if (loadMoreAbortController) {
         loadMoreAbortController.abort();
         loadMoreAbortController = null;
@@ -254,8 +253,8 @@ export function usePaginatedSearchItems(searchTerm: () => string) {
       setAllItems([]);
       setCurrentPage(0);
       setHasMore(true);
-    }
-  });
+    })
+  );
 
   // Load first page when search term changes
   const searchResults = useSearch(searchTerm);

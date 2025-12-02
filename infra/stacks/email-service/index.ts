@@ -44,6 +44,12 @@ const BACKFILL_QUEUE_MAX_MESSAGES = config.require(
 );
 const WEBHOOK_QUEUE_WORKERS = config.require(`webhook_queue_workers`);
 const WEBHOOK_QUEUE_MAX_MESSAGES = config.require(`webhook_queue_max_messages`);
+const WEBHOOK_RETRY_QUEUE_WORKERS = config.require(
+  `webhook_retry_queue_workers`
+);
+const WEBHOOK_RETRY_QUEUE_MAX_MESSAGES = config.require(
+  `webhook_retry_queue_max_messages`
+);
 const SFS_UPLOADER_WORKERS = config.require(`sfs_uploader_workers`);
 const gmailGcpQueue = config.require(`gmail_gcp_queue`);
 const GMAIL_GCP_QUEUE = aws.secretsmanager
@@ -116,12 +122,21 @@ const macroDbUrlArn: pulumi.Output<string> = aws.secretsmanager
 
 const webhook_queue = new Queue('email-service-gmail-webhook', {
   tags,
-  maxReceiveCount: 20,
+  maxReceiveCount: 5,
   visibilityTimeoutSeconds: 60,
 });
 
 export const webhookQueueArn = pulumi.interpolate`${webhook_queue.queue.arn}`;
 export const webhookQueueName = pulumi.interpolate`${webhook_queue.queue.name}`;
+
+const webhook_retry_queue = new Queue('email-service-gmail-webhook-retry', {
+  tags,
+  maxReceiveCount: 100,
+  visibilityTimeoutSeconds: 60,
+});
+
+export const webhookRetryQueueArn = pulumi.interpolate`${webhook_retry_queue.queue.arn}`;
+export const webhookRetryQueueName = pulumi.interpolate`${webhook_retry_queue.queue.name}`;
 
 const refresh_queue = new Queue('email-service-refresh', {
   tags,
@@ -211,6 +226,7 @@ const secretKeyArns = [
 const queueArns = [
   notificationQueueArn,
   webhookQueueArn,
+  webhookRetryQueueArn,
   refreshQueueArn,
   scheduledQueueArn,
   searchEventQueueArn,
@@ -260,6 +276,10 @@ const emailService = new EmailService('email-service', {
     {
       name: 'GMAIL_WEBHOOK_QUEUE',
       value: webhookQueueName,
+    },
+    {
+      name: 'GMAIL_WEBHOOK_RETRY_QUEUE',
+      value: webhookRetryQueueName,
     },
     {
       name: 'BACKFILL_QUEUE',
@@ -348,6 +368,14 @@ const emailService = new EmailService('email-service', {
     {
       name: 'WEBHOOK_QUEUE_MAX_MESSAGES',
       value: pulumi.interpolate`${WEBHOOK_QUEUE_MAX_MESSAGES}`,
+    },
+    {
+      name: 'WEBHOOK_RETRY_QUEUE_WORKERS',
+      value: pulumi.interpolate`${WEBHOOK_RETRY_QUEUE_WORKERS}`,
+    },
+    {
+      name: 'WEBHOOK_RETRY_QUEUE_MAX_MESSAGES',
+      value: pulumi.interpolate`${WEBHOOK_RETRY_QUEUE_MAX_MESSAGES}`,
     },
     {
       name: 'SFS_UPLOADER_WORKERS',
