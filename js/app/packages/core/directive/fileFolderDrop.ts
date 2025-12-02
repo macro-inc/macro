@@ -22,49 +22,14 @@ declare module 'solid-js' {
   }
 }
 
-// Helper to convert File to FileSystemFileEntry for HTML-extracted images
+// Helper to convert File to FileSystemFileEntry for HTML-extracted images if webkitGetAsEntry fails
+// We only need to shim the file() method
 function fileToFileSystemFileEntry(file: File): FileSystemFileEntry {
-  // Create a minimal FileSystem object (required by FileSystemFileEntry)
-  const filesystem = {
-    name: '',
-    root: null as unknown as FileSystemDirectoryEntry,
-  } as FileSystem;
-
-  const entry = {
-    isFile: true,
-    isDirectory: false,
-    name: file.name,
-    fullPath: `/${file.name}`,
-    filesystem,
-    getParent: (
-      _successCallback: (entry: FileSystemDirectoryEntry) => void,
-      errorCallback?: (error: DOMException) => void
-    ) => {
-      // For a root-level file, call error callback since there's no parent
-      if (errorCallback) {
-        errorCallback(new DOMException('No parent directory'));
-      }
+  return {
+    file: (successCallback, _errorCallback) => {
+      return successCallback(file);
     },
-    file: (
-      successCallback: (file: File) => void,
-      errorCallback?: (error: DOMException) => void
-    ) => {
-      try {
-        successCallback(file);
-      } catch (error) {
-        if (errorCallback) {
-          const domError =
-            error instanceof DOMException
-              ? error
-              : new DOMException(
-                  error instanceof Error ? error.message : String(error)
-                );
-          errorCallback(domError);
-        }
-      }
-    },
-  } satisfies FileSystemFileEntry;
-  return entry;
+  } as FileSystemFileEntry;
 }
 
 // differs from fileDrop in that it handles both files and folders
