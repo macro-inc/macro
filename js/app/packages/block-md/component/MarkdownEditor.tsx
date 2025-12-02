@@ -142,6 +142,7 @@ import { normalizeEnterPlugin } from 'core/component/LexicalMarkdown/plugins/nor
 import {
   autoRegister,
   lazyRegister,
+  registerInternalLayoutShiftListener,
   registerRootEventListener,
 } from 'core/component/LexicalMarkdown/plugins/shared/utils';
 import { createMethodRegistration } from 'core/orchestrator';
@@ -709,7 +710,9 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       if (clickFocusFlag) return;
       e.preventDefault();
       editor.focus(undefined, { defaultSelection: 'rootStart' });
-    })
+    }),
+    // adjust click target height on layout shift
+    registerInternalLayoutShiftListener(editor, observeClickTargetHeight)
   );
 
   const additionalCleanups: Array<() => void> = [];
@@ -966,7 +969,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         <FocusClickTarget
           editor={editor}
           editorFocus={editorFocus}
-          style={{ height: `${clickTargetHeight()}px` }}
+          style={{ height: `${clickTargetHeight()}px`, background: 'orange' }}
         />
         <Show when={isBlankMarkdown()}>
           <div class="pointer-events-none text-ink-placeholder absolute top-0">
