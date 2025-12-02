@@ -59,8 +59,6 @@ export async function handleFileUpload(
   onUploaded?: (attachment: InputAttachment) => void
 ) {
   const key = inputAttachmentsStore.key;
-  let newAttachments: InputAttachment[] =
-    inputAttachmentsStore.store[key] ?? [];
 
   for (const entry of files) {
     const file = isFileUploadEntry(entry) ? entry.file : entry;
@@ -75,7 +73,8 @@ export async function handleFileUpload(
       pending: true,
     };
 
-    newAttachments = [...newAttachments, pendingAttachment];
+    const existingAttachments = inputAttachmentsStore.store[key] ?? [];
+    const newAttachments = [...existingAttachments, pendingAttachment];
     inputAttachmentsStore.setStore(key, newAttachments);
 
     try {
