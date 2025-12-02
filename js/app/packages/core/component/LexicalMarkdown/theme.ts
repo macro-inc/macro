@@ -216,5 +216,5 @@ export const unifiedListMarkdownTheme = createTheme({
     h6: 'text-[1em] font-medium',
   },
   // padding right to prevent italics being clipped by overflow properties such as truncation
-  root: `${theme.root} inline pr-[2px] cursor-default`,
+  root: `${theme.root} inline pr-[2px] cursor-default truncate`,
 });

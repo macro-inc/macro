@@ -90,9 +90,9 @@ export class DlpHandler extends pulumi.ComponentResource {
           ],
         }),
         managedPolicyArns: [
-          aws.iam.ManagedPolicies.AWSLambdaBasicExecutionRole,
-          aws.iam.ManagedPolicies.AWSLambdaRole,
-          aws.iam.ManagedPolicies.CloudWatchLogsFullAccess,
+          aws.iam.ManagedPolicy.AWSLambdaBasicExecutionRole,
+          aws.iam.ManagedPolicy.AWSLambdaRole,
+          aws.iam.ManagedPolicy.CloudWatchLogsFullAccess,
           snsPolicy.arn,
           s3Policy.arn,
         ],

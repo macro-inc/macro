@@ -1,5 +1,5 @@
 import { type SettingsTab, setSettingsOpen, useSettingsState } from '@core/constant/SettingsState';
-import { createEffect, createMemo, createSignal, For, onCleanup, Show } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, onCleanup, Show, Suspense } from 'solid-js';
 import { DEV_MODE_ENV, ENABLE_AI_MEMORY } from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { MacroPermissions, usePermissions } from '@service-gql/client';
@@ -230,7 +230,9 @@ export function Settings() {
 
             <div class="flex-1 p-6 overflow-y-scroll">
               <Tabs.Content value="Account" class="h-full">
-                <Account />
+                <Suspense>
+                  <Account />
+                </Suspense>
               </Tabs.Content>
               <Show when={!orgName() && !isNativeMobilePlatform()}>
                 <Tabs.Content value="Subscription" class="h-full">

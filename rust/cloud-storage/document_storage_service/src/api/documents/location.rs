@@ -272,7 +272,7 @@ async fn get_editable_url(
     );
 
     // Check if the item exists in s3
-    #[cfg(not(feature = "disable_location_check"))]
+    #[cfg(feature = "location_check")]
     {
         // NOTE: owner is not url encoded
         let document_key = build_cloud_storage_bucket_document_key(
@@ -323,7 +323,7 @@ pub(in crate::api::documents) async fn get_static_url(
     );
 
     // Check if the item exists in s3
-    #[cfg(not(feature = "disable_location_check"))]
+    #[cfg(feature = "location_check")]
     {
         // NOTE: owner is not url encoded
         let document_key = build_cloud_storage_bucket_document_key(
@@ -368,7 +368,7 @@ async fn get_converted_docx_url(
     );
 
     // Check if the item exists in s3
-    #[cfg(not(feature = "disable_location_check"))]
+    #[cfg(feature = "location_check")]
     {
         let document_key = format!(
             "{}/{}/{}.pdf",

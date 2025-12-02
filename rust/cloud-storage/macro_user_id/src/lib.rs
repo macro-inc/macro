@@ -5,5 +5,6 @@
 pub(crate) mod byte_range;
 pub mod cowlike;
 pub mod email;
+pub mod error;
 pub mod lowercased;
 pub mod user_id;

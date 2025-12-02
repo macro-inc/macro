@@ -273,6 +273,36 @@ pub async fn get_all_chat_ids_with_users_paginated(
     Ok(result)
 }
 
+/// Returns a paginated list of chat IDs, sorting by ascending so we don't miss new ones
+#[tracing::instrument(skip(db))]
+pub async fn get_all_chat_ids_paginated(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    limit: i64,
+    offset: i64,
+) -> anyhow::Result<Vec<String>> {
+    let result = sqlx::query!(
+        r#"
+        SELECT
+            id as "chat_id"
+        FROM
+            "Chat"
+        WHERE
+            "deletedAt" IS NULL
+        ORDER BY
+            "createdAt" ASC
+        LIMIT $1
+        OFFSET $2
+        "#,
+        limit,
+        offset
+    )
+    .map(|row| row.chat_id)
+    .fetch_all(db)
+    .await?;
+
+    Ok(result)
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct ChatHistoryInfo {
     pub item_id: String,

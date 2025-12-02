@@ -11,6 +11,7 @@ use models_email::email::service::thread;
 use models_email::service::link::Link;
 use models_email::service::message::MessageWithBodyReplyless;
 use models_email::service::thread::APIThread;
+use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::types::Uuid;
 use strum_macros::AsRefStr;
 use thiserror::Error;
@@ -65,6 +66,7 @@ pub struct GetThreadParams {
 pub struct GetThreadResponse {
     /// the thread, with messages inside
     pub thread: thread::APIThread,
+    pub access_level: AccessLevel,
 }
 
 /// Represents pagination parameters with defaults applied
@@ -115,7 +117,7 @@ pub async fn get_thread_handler(
 ) -> Result<Response, GetThreadError> {
     let p = process_get_thread_params(&query_params);
 
-    let thread = email_db_client::threads::get::fetch_thread_with_messages_paginated(
+    let mut thread = email_db_client::threads::get::fetch_thread_with_messages_paginated(
         &ctx.db, thread_id, p.offset, p.limit,
     )
     .await
@@ -127,16 +129,23 @@ pub async fn get_thread_handler(
     }
 
     // if the requester doesn't own the thread, check if it has been shared with the requester
-    if thread.link_id != link.id {
+    let access_level = if thread.link_id != link.id {
         // call will fail if user doesn't have an access level. otherwise, we can return the thread
-        ctx.dss_client
-            .get_thread_access_level(&link.macro_id, &thread.db_id.unwrap().to_string())
+        let access_level = ctx
+            .dss_client
+            .get_thread_access_level(link.macro_id.as_ref(), &thread.db_id.unwrap().to_string())
             .await
             .map_err(|e| {
                 tracing::error!(error=?e, "unable to get access level for thread for user");
                 GetThreadError::ThreadNotFound
             })?;
-    }
+        // don't include the owner's drafts if it's a shared thread
+        thread.messages.retain(|m| !m.is_draft);
+        access_level
+    } else {
+        // it's the user's thread
+        AccessLevel::Owner
+    };
 
     let tasks: Vec<_> = thread
         .clone()
@@ -151,7 +160,10 @@ pub async fn get_thread_handler(
 
     Ok((
         StatusCode::OK,
-        Json(GetThreadResponse { thread: api_thread }),
+        Json(GetThreadResponse {
+            access_level,
+            thread: api_thread,
+        }),
     )
         .into_response())
 }

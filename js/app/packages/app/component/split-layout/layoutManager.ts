@@ -1,11 +1,21 @@
 import type { BlockName } from '@core/block';
+import type { ResizeZoneCtx } from '@core/component/Resize/types';
 import type {
   BlockInstanceHandle,
   BlockOrchestrator,
 } from '@core/orchestrator';
-import { type Accessor, createMemo, type JSXElement } from 'solid-js';
-import { createStore, produce, reconcile } from 'solid-js/store';
-import { resolveComponent } from './componentRegistry';
+import {
+  type Accessor,
+  createMemo,
+  createSignal,
+  type JSXElement,
+} from 'solid-js';
+import { createStore, produce, reconcile, type Store } from 'solid-js/store';
+import {
+  type ComponentMeta,
+  type ComponentMetaMap,
+  resolveComponent,
+} from './componentRegistry';
 import { createHistory, type History } from './history';
 
 const ENABLE_DEFAULT_ALWAYS_IN_HISTORY = true;
@@ -41,6 +51,8 @@ type ComponentMount = {
   kind: 'component';
   name: string;
   element: ElementFn;
+  meta: Store<ComponentMeta>;
+  updateMeta: (data: Omit<ComponentMeta, 'kind'>) => void;
 };
 
 export type SplitMount = BlockMount | ComponentMount;
@@ -102,6 +114,7 @@ export type SplitManager = {
   readonly activeSplitId: Accessor<SplitId | undefined>;
   readonly lastActiveSplitId: Accessor<SplitId | undefined>;
   readonly events: Accessor<SplitEventWithType>;
+  readonly resizeContext: Accessor<ResizeZoneCtx | undefined>;
 
   // methods
   /** Get a split by its split id */
@@ -122,6 +135,8 @@ export type SplitManager = {
 
   toggleSpotlightSplit: (id: SplitId) => void;
 
+  getOrchestrator: () => BlockOrchestrator;
+
   /**
    * Reconcile the splits with the provided list of splits.
    * Useful for when the url changes.
@@ -137,19 +152,25 @@ export type SplitManager = {
   hasSplit: (type: BlockName | 'component', id: string) => boolean;
 
   /** Get a potential split id by its content type and id */
-  getSplitByContent: (
-    type: BlockName | 'component',
-    id: string
-  ) => SplitHandle | undefined;
+  getSplitByContent: {
+    <K extends keyof ComponentMetaMap>(
+      type: 'component',
+      id: K
+    ): SplitHandle<ComponentMetaMap[K]> | undefined;
+    (type: BlockName | 'component', id: string): SplitHandle | undefined;
+  };
 
   /** Get a reactive string that is the display name of the active split. */
   tabTitle: () => string | undefined;
 
   /** A function to return focus to the most recent split. */
   returnFocus: () => void;
+
+  /** Set the layout resize context from the component tree. */
+  setResizeContext: (cts: ResizeZoneCtx) => void;
 } & UrlCapabilities;
 
-export type SplitHandle = {
+export type SplitHandle<TMeta extends ComponentMeta = ComponentMeta> = {
   unregisterContentChangeListener: (
     cb: (payload: SplitEventPayload[SplitEvent.ContentChange]) => void
   ) => void;
@@ -157,6 +178,7 @@ export type SplitHandle = {
     cb: (payload: SplitEventPayload[SplitEvent.ContentChange]) => void
   ) => void;
   replace: (next: SplitContent, mergeHistory?: boolean) => void;
+  removeFromHistory: (predicate: (content: SplitContent) => boolean) => void;
   toggleSpotlight: (force?: boolean) => void;
   setDisplayName: (name: string) => void;
   canGoForward: () => boolean;
@@ -173,6 +195,10 @@ export type SplitHandle = {
   close: () => void;
   reset: () => void;
   id: SplitId;
+  /** Component metadata store (only available for component splits) */
+  meta: () => Store<TMeta> | undefined;
+  /** Update component metadata (only available for component splits) */
+  updateMeta: ((data: Omit<TMeta, 'kind'>) => void) | undefined;
 } & UrlCapabilities;
 
 function newSplitId(): SplitId {
@@ -186,8 +212,20 @@ function createPinnedMount(
   content: SplitContent
 ): SplitMount {
   if (content.type === 'component') {
-    const element = resolveComponent(content.id, content.params);
-    return { kind: 'component', name: content.id, element };
+    const resolved = resolveComponent(content.id, content.params);
+    const [meta, setMeta] = createStore<ComponentMeta>(
+      resolved.initialMeta ?? {}
+    );
+    const updateMeta = (data: Omit<ComponentMeta, 'kind'>) => {
+      setMeta({ kind: content.id, ...data } as ComponentMeta);
+    };
+    return {
+      kind: 'component',
+      name: content.id,
+      element: resolved.element,
+      meta,
+      updateMeta,
+    };
   }
 
   const handle = orchestrator.createBlockInstance(content.type, content.id);
@@ -210,15 +248,6 @@ function sameNonComponentIdentity(a: SplitContent, b: SplitContent): boolean {
   if (a.type === 'component' || b.type === 'component') return false;
   if (a.type !== b.type) return false;
   return a.id === b.id;
-}
-
-function _findDuplicateSplit(
-  splits: SplitState[],
-  content: SplitContent
-): SplitState | null {
-  return (
-    splits.find((s) => sameNonComponentIdentity(s.content, content)) ?? null
-  );
 }
 
 function isDuplicateSplit(
@@ -248,6 +277,8 @@ export function createSplitLayout(
     spotlightId: undefined,
     events: [],
   });
+
+  const [resizeContext, setResizeContext] = createSignal<ResizeZoneCtx>();
 
   const [splitNamesById, setSplitNamesById] = createStore<{
     [id: SplitId]: string;
@@ -362,6 +393,20 @@ export function createSplitLayout(
     reattach(split, next);
   }
 
+  function removeFromHistory(
+    id: SplitId,
+    predicate: (content: SplitContent) => boolean
+  ) {
+    const i = state.splits.findIndex((s) => s.id === id);
+    if (i < 0) return console.error(`Split with id ${id} not found`);
+
+    const split = state.splits[i];
+    const next = split.history.remove(predicate);
+    if (!next) return;
+
+    reattach(split, next);
+  }
+
   /**
    * Replace the content of a split with the provided content. If mergeHistory is true, the current history index will be replaced with the new content.
    */
@@ -469,6 +514,9 @@ export function createSplitLayout(
       goForward: () => forward(currentSplit.id),
       replace: (next, mergeHistory = false) =>
         replace(currentSplit.id, next, mergeHistory),
+      removeFromHistory: (predicate: (content: SplitContent) => boolean) => {
+        removeFromHistory(currentSplit.id, predicate);
+      },
       close: () => {
         // If there's only one split and it's the default split, then no-op
         if (state.splits.length <= 1) {
@@ -512,6 +560,14 @@ export function createSplitLayout(
           }
         }
       },
+      meta: () =>
+        currentSplit.mount.kind === 'component'
+          ? currentSplit.mount.meta
+          : undefined,
+      updateMeta:
+        currentSplit.mount.kind === 'component'
+          ? currentSplit.mount.updateMeta
+          : undefined,
     };
   };
 
@@ -658,5 +714,8 @@ export function createSplitLayout(
     toggleSpotlightSplit,
     tabTitle,
     returnFocus: () => dispatchEvent(SplitEvent.ReturnFocus, undefined),
+    resizeContext,
+    setResizeContext,
+    getOrchestrator: () => orchestrator,
   };
 }

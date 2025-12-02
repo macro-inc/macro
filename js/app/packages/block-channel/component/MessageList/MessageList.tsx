@@ -12,8 +12,10 @@ import {
   createMessageListContextLookup,
   type MessageListContextLookup,
 } from '@block-channel/utils/listContext';
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { TextButton } from '@core/component/TextButton';
 import { observedSize } from '@core/directive/observedSize';
+import { createActiveTarget } from '@core/signal/activeTarget';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import SunIcon from '@icon/duotone/sun-horizon-duotone.svg';
 import ArrowDownIcon from '@icon/regular/arrow-down.svg';
@@ -39,7 +41,6 @@ import {
 } from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
-import { CustomScrollbar } from '../../../macro-entity/src/components/CustomScrollbar';
 import { MessageContainer } from '../Message/MessageContainer';
 import { ReplyInputsPortaler } from '../ReplyInputsPortaler';
 
@@ -138,34 +139,10 @@ export function MessageList(props: MessageListProps) {
     })
   );
 
-  const [activeTargetMessage, setActiveTargetMessage] = createSignal<
-    | {
-        messageId: string;
-        threadId?: string;
-      }
-    | undefined
-  >();
-
-  let targetTimeoutId: ReturnType<typeof setTimeout> | undefined;
-
-  createEffect(() => {
-    const target = props.targetMessage();
-
-    if (targetTimeoutId) {
-      clearTimeout(targetTimeoutId);
-      targetTimeoutId = undefined;
-    }
-
-    if (target) {
-      setActiveTargetMessage(target);
-      targetTimeoutId = setTimeout(() => {
-        setActiveTargetMessage(undefined);
-        targetTimeoutId = undefined;
-      }, TARGET_MESSAGE_ACTIVE_TIME);
-    } else {
-      setActiveTargetMessage(undefined);
-    }
-  });
+  const activeTargetMessage = createActiveTarget(
+    props.targetMessage,
+    TARGET_MESSAGE_ACTIVE_TIME
+  );
 
   let scrollTimeoutId: ReturnType<typeof setTimeout> | undefined;
   let scrollHintTimeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -322,6 +299,7 @@ export function MessageList(props: MessageListProps) {
   const [localTyping, setLocalTyping] = createSignal(false);
   let updateDelayedByTyping = false;
 
+  // TODO something wrong with localTyping signal. When a message from another user comes in, on a thread that a user is typing a reply to, localTyping gets set to false. Investigate why.
   createEffect(
     on([flattenedThreaded, localTyping], ([flat, typing], prev) => {
       const oldFlat = prev?.[0];

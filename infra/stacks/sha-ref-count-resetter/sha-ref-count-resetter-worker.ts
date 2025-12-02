@@ -31,6 +31,10 @@ export class ShaRefCountResetterWorker extends pulumi.ComponentResource {
         name: `${BASE_NAME}-${stack}`,
         imageTagMutability: 'MUTABLE',
         forceDelete: true,
+        lifecyclePolicy: {
+          // We do not want a lifecycle policy for the repositories
+          skip: true,
+        },
         tags,
       },
       { parent: this }

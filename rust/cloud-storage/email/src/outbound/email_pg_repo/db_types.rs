@@ -1,7 +1,11 @@
-use crate::domain::models::{Attachment, AttachmentMacro, EmailThreadPreview};
+use crate::domain::models::{
+    Attachment, AttachmentMacro, EmailThreadPreview, Label, LabelListVisibility, LabelType, Link,
+    MessageListVisibility,
+};
 use chrono::{DateTime, Utc};
-use doppleganger::Doppleganger;
-use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use doppleganger::{Doppleganger, Mirror};
+use macro_user_id::{cowlike::CowLike, email::EmailStr, user_id::MacroUserIdStr};
+use sqlx::Type;
 use uuid::Uuid;
 
 #[derive(Doppleganger)]
@@ -57,6 +61,53 @@ pub struct ThreadPreviewCursorDbRow {
     pub updated_at: DateTime<Utc>,
 }
 
+#[derive(Debug, sqlx::Type, Clone, Copy, PartialEq, Eq, Doppleganger)]
+#[dg(forward = MessageListVisibility)]
+#[sqlx(
+    type_name = "email_message_list_visibility_enum",
+    rename_all = "PascalCase"
+)]
+pub enum MessageListVisibilityDbRow {
+    Show,
+    Hide,
+}
+
+#[derive(Debug, sqlx::Type, Clone, Copy, PartialEq, Eq, Doppleganger)]
+#[dg(forward = LabelListVisibility)]
+#[sqlx(
+    type_name = "email_label_list_visibility_enum",
+    rename_all = "PascalCase"
+)]
+#[expect(clippy::enum_variant_names, reason = "Matches names from Gmail API")]
+pub enum LabelListVisibilityDbRow {
+    LabelShow,
+    LabelShowIfUnread,
+    LabelHide,
+}
+
+#[derive(Debug, sqlx::Type, Clone, Copy, PartialEq, Eq, Doppleganger)]
+#[dg(forward = LabelType)]
+#[sqlx(type_name = "email_label_type_enum", rename_all = "PascalCase")]
+pub enum LabelTypeDbRow {
+    System,
+    User,
+}
+
+#[derive(Doppleganger)]
+#[dg(forward = Label)]
+#[derive(Debug, Clone)]
+pub struct LabelDbRow {
+    pub id: Uuid,
+    pub thread_id: Uuid,
+    pub link_id: Uuid,
+    pub provider_label_id: String,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+    pub message_list_visibility: MessageListVisibilityDbRow,
+    pub label_list_visibility: LabelListVisibilityDbRow,
+    pub type_: LabelTypeDbRow,
+}
+
 impl ThreadPreviewCursorDbRow {
     pub fn with_user_id(self, owner_id: MacroUserIdStr<'_>) -> EmailThreadPreview {
         let ThreadPreviewCursorDbRow {
@@ -95,5 +146,50 @@ impl ThreadPreviewCursorDbRow {
             updated_at,
             viewed_at,
         }
+    }
+}
+
+#[derive(Type, Debug, Clone, Copy, Doppleganger)]
+#[sqlx(type_name = "email_user_provider_enum", rename_all = "UPPERCASE")]
+#[dg(forward = crate::domain::models::UserProvider)]
+pub enum DbUserProvider {
+    Gmail,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct DbLink {
+    pub id: Uuid,
+    pub macro_id: String,
+    pub fusionauth_user_id: String,
+    pub email_address: String,
+    pub provider: DbUserProvider,
+    pub is_sync_active: bool,
+    pub created_at: DateTime<Utc>,
+    pub updated_at: DateTime<Utc>,
+}
+
+impl DbLink {
+    pub(crate) fn try_into_model(self) -> Result<Link, macro_user_id::error::ParseErr> {
+        let DbLink {
+            id,
+            macro_id,
+            fusionauth_user_id,
+            email_address,
+            provider,
+            is_sync_active,
+            created_at,
+            updated_at,
+        } = self;
+
+        Ok(Link {
+            id,
+            macro_id: MacroUserIdStr::parse_from_str(&macro_id)?.into_owned(),
+            fusionauth_user_id,
+            email_address: EmailStr::try_from(email_address)?,
+            provider: DbUserProvider::mirror(provider),
+            is_sync_active,
+            created_at,
+            updated_at,
+        })
     }
 }

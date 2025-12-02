@@ -5,12 +5,28 @@ inputs:
     description: Install Playwright and cache
     required: false
     default: ''
+  npm-rc-token:
+    description: NPM RC Token
+    required: false
+    default: ''
 
 runs:
   using: composite
   steps:
     - name: Setup Bun
       uses: oven-sh/setup-bun@v2
+
+    - name: Setup bunfig.toml
+      working-directory: js/app
+      shell: bash
+      run: |
+        touch bunfig.toml
+        echo "[run]" >> bunfig.toml
+        echo "bun = true" >> bunfig.toml
+        echo "[install]" >> bunfig.toml
+        echo "linker = \"hoisted\"" >> bunfig.toml
+        echo "[install.scopes]" >> bunfig.toml
+        echo "macro-inc = { token = \"${{ inputs.npm-rc-token }}\", url = \"https://npm.pkg.github.com\" }" >> bunfig.toml
 
     - name: Install Dependencies
       shell: bash

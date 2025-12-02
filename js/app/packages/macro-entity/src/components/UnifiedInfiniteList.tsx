@@ -1,3 +1,4 @@
+import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import Fragment from '@core/util/Fragment';
 import { onElementConnect } from '@solid-primitives/lifecycle';
 import { debounce } from '@solid-primitives/scheduled';
@@ -26,6 +27,7 @@ import type {
   EntityQueryOperations,
   EntityQueryWithOperations,
 } from '../queries/entity';
+import { isSearchEntity } from '../queries/search';
 import type {
   EntitiesFilter,
   EntityComparator,
@@ -35,11 +37,7 @@ import type {
   EntityRenderer,
 } from '../types/entity';
 import type { WithSearch } from '../types/search';
-import { CustomScrollbar } from './CustomScrollbar';
 import { Entity } from './Entity';
-
-const isSearchEntity = (entity: EntityData): entity is WithSearch<EntityData> =>
-  'search' in entity;
 
 /**
  * Merges search data from two entities, preferring service source with local as fallback.
@@ -48,9 +46,9 @@ const isSearchEntity = (entity: EntityData): entity is WithSearch<EntityData> =>
  * - Falls back to local contentHighlights if service doesn't have any
  */
 const mergeSearchEntities = <T extends EntityData>(
-  first: T & WithSearch<EntityData>,
-  second: T & WithSearch<EntityData>
-): T => {
+  first: WithSearch<T>,
+  second: WithSearch<T>
+): WithSearch<T> => {
   const serviceEntity = first.search.source === 'service' ? first : second;
   const localEntity = first.search.source === 'local' ? first : second;
 
@@ -60,11 +58,11 @@ const mergeSearchEntities = <T extends EntityData>(
       ...serviceEntity.search,
       nameHighlight:
         serviceEntity.search.nameHighlight || localEntity.search.nameHighlight,
-      contentHighlights: serviceEntity.search.contentHighlights?.length
-        ? serviceEntity.search.contentHighlights
-        : localEntity.search.contentHighlights,
+      contentHitData: serviceEntity.search.contentHitData?.length
+        ? serviceEntity.search.contentHitData
+        : localEntity.search.contentHitData,
     },
-  } as T;
+  };
 };
 
 /**
@@ -75,13 +73,13 @@ const getEntityTimestamp = (entity: EntityData): number => {
 };
 
 /**
- * Returns true if the new entity should replace the existing one based on timestamp
+ * Returns true if the new entity should replace the existing one based on timestamp. If the timestamp is the same, prefer to use the newer entity to handle optimistic updates
  */
 const isNewerEntity = (
   newEntity: EntityData,
   existing: EntityData
 ): boolean => {
-  return getEntityTimestamp(newEntity) > getEntityTimestamp(existing);
+  return getEntityTimestamp(newEntity) >= getEntityTimestamp(existing);
 };
 
 /**
@@ -204,8 +202,6 @@ interface UnifiedInfiniteListContext<T extends EntityData> {
   entitySort?: Accessor<EntityComparator<T>>;
   searchFilter?: Accessor<EntitiesFilter<T> | undefined>;
   isSearchActive?: Accessor<boolean>;
-  // TODO: deduplicate entities for same match
-  deduplicate?: Accessor<(prev: T, next: T) => boolean>;
 }
 
 export function createUnifiedInfiniteList<T extends EntityData>({

@@ -29,10 +29,9 @@ import { authServiceClient } from '@service-auth/client';
 import { useEmail, useLicenseStatus, useUserId } from '@service-gql/client';
 import { createMemo, createResource, createSignal, Show } from 'solid-js';
 import {
-  connectEmail,
-  disconnectEmail,
+    useEmailLinks,
   useEmailLinksStatus,
-} from '../../signal/emailAuth';
+} from '@core/email-link';
 import { BetaTooltip } from '../BetaTooltip';
 
 // NOTE: solid directives
@@ -68,6 +67,8 @@ export function Account() {
   const { showPaywall } = usePaywallState();
   const hasPaidAccess = useHasPaidAccess();
   const [showEmailModal, setShowEmailModal] = createSignal<boolean>(false);
+
+  const { connect: connectEmail, disconnect: disconnectEmail } = useEmailLinks();
 
   const userName = useUserName();
   const [updatedFirstName, setUpdatedFirstName] = createSignal<

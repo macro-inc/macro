@@ -127,7 +127,7 @@ impl Identify for SoupItem {
 impl SortOn<SimpleSortMethod> for SoupItem {
     fn sort_on(
         sort: SimpleSortMethod,
-    ) -> impl FnOnce(&Self) -> models_pagination::CursorVal<SimpleSortMethod> {
+    ) -> impl FnMut(&Self) -> models_pagination::CursorVal<SimpleSortMethod> {
         move |v| {
             let last_val = v.cursor_timestamp(sort);
             models_pagination::CursorVal {

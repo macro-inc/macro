@@ -2,14 +2,7 @@ import { Message } from '@core/component/Message';
 import { useDisplayName } from '@core/user';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 import { useUserId } from '@service-gql/client';
-import {
-  type Accessor,
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  Show,
-} from 'solid-js';
+import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import { EmailAttachmentPill } from './AttachmentPill';
@@ -20,9 +13,12 @@ import { EmailMessageTopBar } from './EmailMessageTopBar';
 
 interface MessageContainerProps {
   message: MessageWithBodyReplyless;
-  index: Accessor<number>;
   expandedMessageBodyIds: Record<string, boolean>;
   setExpandedMessageBodyIds: SetStoreFunction<Record<string, boolean>>;
+  isFirstMessage: boolean;
+  isLastMessage: boolean;
+  isFocused: boolean;
+  isTarget: boolean;
 }
 
 export function MessageContainer(props: MessageContainerProps) {
@@ -45,18 +41,6 @@ export function MessageContainer(props: MessageContainerProps) {
 
   const isBodyExpanded = createMemo(() => {
     return props.expandedMessageBodyIds[props.message.db_id ?? ''];
-  });
-
-  const isFocused = createMemo(() => {
-    return props.message.db_id === context.focusedMessageId();
-  });
-
-  const isFirstMessage = createMemo(() => {
-    return props.index() === 0;
-  });
-
-  const isLastMessage = createMemo(() => {
-    return props.index() === (context.filteredMessages().length ?? 0) - 1;
   });
 
   const isNewMessage = createMemo(() => {
@@ -96,7 +80,7 @@ export function MessageContainer(props: MessageContainerProps) {
   // expand appropriate messages
   createEffect(() => {
     const id = props.message.db_id;
-    if (isLastMessage() && id) {
+    if (props.isLastMessage && id) {
       props.setExpandedMessageBodyIds(id, true);
     }
     if (isNewMessage() && id) {
@@ -108,23 +92,25 @@ export function MessageContainer(props: MessageContainerProps) {
     <div class="shrink-0 flex justify-center w-full">
       <div class="macro-message-width w-full">
         <Message
-          focused={isFocused()}
-          isFirstMessage={isFirstMessage()}
-          isLastMessage={isLastMessage()}
+          id={props.message.db_id ?? undefined}
+          focused={props.isFocused}
+          isFirstMessage={props.isFirstMessage}
+          isLastMessage={props.isLastMessage}
           senderId={props.message.from?.email}
           isNewMessage={isNewMessage()}
+          isTarget={props.isTarget}
         >
           <Message.TopBar>
             <EmailMessageTopBar
               message={props.message}
-              focused={isFocused()}
+              focused={props.isFocused}
               setExpandedMessageBodyIds={props.setExpandedMessageBodyIds}
               isBodyExpanded={isBodyExpanded}
               expandedHeader={expandedHeader}
               setExpandedHeader={setExpandedHeader}
               setFocusedMessageId={context.setFocusedMessageId}
               setShowReply={setShowReply}
-              isLastMessage={isLastMessage()}
+              isLastMessage={props.isLastMessage}
             />
           </Message.TopBar>
           <Message.Body>
@@ -148,7 +134,7 @@ export function MessageContainer(props: MessageContainerProps) {
             </div>
           </Show>
         </Message>
-        <Show when={showReply() && !isLastMessage()}>
+        <Show when={showReply() && !props.isLastMessage}>
           <Message
             focused={false}
             unfocusable

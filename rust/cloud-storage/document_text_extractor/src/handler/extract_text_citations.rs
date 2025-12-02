@@ -220,6 +220,7 @@ mod test {
     use crate::handler::extract_text_citations::ref_id_extract_text;
     use crate::service::db::DBClient;
 
+    #[ignore = "this test requires a very specific system environment which is hard to replicate in CI"]
     #[tokio::test]
     pub async fn test_local_extract() {
         let db_url = std::env::var("DATABASE_URL").unwrap();
@@ -233,7 +234,7 @@ mod test {
         let test_file = "deepseek.pdf";
         let mut f = File::open(test_file).unwrap();
         let mut data: Vec<u8> = vec![];
-        f.read_to_end(&mut data);
+        f.read_to_end(&mut data).unwrap();
         let pdf_file = pdfium.load_pdf_from_byte_vec(data, None).unwrap();
         let (refs, text) = ref_id_extract_text(&pdf_file);
         println!("{}", text);

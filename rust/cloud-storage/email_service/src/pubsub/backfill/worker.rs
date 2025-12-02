@@ -35,6 +35,7 @@ pub async fn run_worker(
         connection_gateway_client,
         dss_client,
         notifications_enabled,
+        retry_worker: false,
     };
 
     loop {

@@ -21,10 +21,8 @@ pub async fn webhook_handler(
     headers: HeaderMap,
     extract::Json(req): extract::Json<GmailWebhookPayload>,
 ) -> Result<Response, Response> {
-    if !cfg!(feature = "disable_gmail_webhook_auth") {
-        // Validate the token in the headers sent from Google
-        validate_google_token(&ctx, &headers).await?;
-    }
+    // Validate the token in the headers sent from Google
+    validate_google_token(&ctx, &headers).await?;
     let email_address = &req.message.data.email_address;
 
     let link = email_db_client::links::get::fetch_link_by_email(

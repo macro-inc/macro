@@ -88,6 +88,15 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
     );
   };
 
+  const onDeleteReply = (threadId: string) => () => {
+    clearDraftMessage(props.channelId, threadId);
+    props.setThreadViewStore(threadId, (prev) =>
+      prev
+        ? { ...prev, threadExpanded: true, hasActiveReply: false }
+        : { threadExpanded: true, hasActiveReply: false }
+    );
+  };
+
   const onFocusLeaveStart = (e: KeyboardEvent, threadId: string) => {
     e.preventDefault();
     e.stopPropagation();
@@ -110,9 +119,12 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
       )}
     >
       {(threadId) => {
+        // This create effect maintains focus on reply inputs when the mount target changes due to new messages in the thread coming in
+        // TODO: this should only fire if this reply input was focused
         createEffect((prev) => {
           if (
             props.threadViewStore[threadId].replyInputMountTarget &&
+            prev &&
             prev !== props.threadViewStore[threadId].replyInputMountTarget
           ) {
             props.setThreadViewStore(threadId, (prev) => ({
@@ -173,6 +185,8 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
                 onFocusLeaveStart={(e) => {
                   onFocusLeaveStart(e, threadId);
                 }}
+                onDeleteDraft={onDeleteReply(threadId)}
+                isReplyInput
               />
             </div>
           </Portal>

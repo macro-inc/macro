@@ -8,9 +8,12 @@ version = "0.1.0"
 anyhow = { workspace = true }
 base64 = { workspace = true }
 chrono = { workspace = true }
+doppleganger = { workspace = true, features = ["chrono", "uuid"] }
 ego-tree = { workspace = true }
+email = { path = "../email" }
 html2text = "0.15.1"
 lazy_static = { workspace = true }
+macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 models_pagination = { path = "../models_pagination" }
 regex = { workspace = true }

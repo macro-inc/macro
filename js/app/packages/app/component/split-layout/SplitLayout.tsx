@@ -290,7 +290,9 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
     scopeId: 'global',
     description: 'Create new split',
     keyDownHandler: () => {
-      splitManager.createNewSplit();
+      const canFit =
+        splitManager.resizeContext()?.canFit({ minSize: 400 }) ?? true;
+      if (canFit) splitManager.createNewSplit();
       return true;
     },
     runWithInputFocused: true,
@@ -308,7 +310,11 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
 
   return (
     <SplitLayoutContext.Provider value={{ manager: splitManager }}>
-      <Resize.Zone direction="horizontal" gutter={gutterSize()}>
+      <Resize.Zone
+        direction="horizontal"
+        gutter={gutterSize()}
+        captureResizeCtx={splitManager.setResizeContext}
+      >
         <For each={ids()}>
           {(id, index) => (
             <Resize.Panel id={id} minSize={400}>

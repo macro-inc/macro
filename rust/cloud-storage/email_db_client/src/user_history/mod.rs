@@ -48,12 +48,15 @@ pub async fn get_thread_summary_info(
             MIN(m.created_at) as "earliest_created_at!",
             MAX(m.created_at) as "latest_updated_at!",
             uh.updated_at as "viewed_at?",
-            m.snippet
+            m.snippet,
+            m.subject as "subject?",
+            l.macro_id
         FROM email_messages m
         LEFT JOIN email_user_history uh ON uh.thread_id = m.thread_id AND uh.link_id = $1
+        LEFT JOIN email_links l ON l.id = m.link_id
         WHERE m.thread_id = ANY($2)
         AND m.link_id = $1
-        GROUP BY m.thread_id, uh.updated_at, m.snippet
+        GROUP BY m.thread_id, uh.updated_at, m.snippet, m.subject, l.macro_id
         "#,
         link_id,
         thread_ids
@@ -67,6 +70,8 @@ pub async fn get_thread_summary_info(
     for row in rows {
         let summary_info = ThreadHistoryInfo {
             item_id: row.thread_id,
+            user_id: row.macro_id,
+            subject: row.subject,
             snippet: row.snippet,
             created_at: row.earliest_created_at,
             updated_at: row.latest_updated_at,

@@ -1,15 +1,19 @@
 use crate::api::context::ApiContext;
 use crate::utils::extract_email_with_response;
 use anyhow::Context;
+use axum::Json;
 use axum::extract::State;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
-use axum::{Extension, Json};
+use email::domain::models::UserProvider;
+use email::domain::ports::EmailRepo;
+use macro_user_id::email::EmailStr;
+use macro_user_id::user_id::MacroUserIdStr;
 use model::response::{EmptyResponse, ErrorResponse};
 use model::user::UserContext;
+use model::user::axum_extractor::MacroUserExtractor;
 use models_email::email::service::link;
 use models_email::email::service::link::Link;
-use models_email::email::service::link::UserProvider;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 
@@ -26,14 +30,17 @@ pub enum EnableSyncError {
 
     #[error("Bad request")]
     BadRequest(String),
+
+    #[error("Invalid input")]
+    Parse(#[from] macro_user_id::error::ParseErr),
 }
 
 impl IntoResponse for EnableSyncError {
     fn into_response(self) -> Response {
         let status_code = match &self {
-            EnableSyncError::SyncAlreadyEnabled | EnableSyncError::BadRequest(_) => {
-                StatusCode::BAD_REQUEST
-            }
+            EnableSyncError::SyncAlreadyEnabled
+            | EnableSyncError::BadRequest(_)
+            | EnableSyncError::Parse(_) => StatusCode::BAD_REQUEST,
             EnableSyncError::RegisterWatchError(_) | EnableSyncError::QueryError(_) => {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
@@ -67,17 +74,22 @@ impl IntoResponse for EnableSyncError {
 #[tracing::instrument(skip(ctx, user_context), fields(user_id=user_context.user_id, fusionauth_user_id=user_context.fusion_user_id))]
 pub async fn enable_handler(
     State(ctx): State<ApiContext>,
-    user_context: Extension<UserContext>,
+    MacroUserExtractor {
+        macro_user_id,
+        user_context,
+        ..
+    }: MacroUserExtractor,
 ) -> Result<Response, EnableSyncError> {
     // if link exists already and syncing is already enabled, return error
-    let existing_link = email_db_client::links::get::fetch_link_by_fusionauth_and_macro_id(
-        &ctx.db,
-        &user_context.fusion_user_id,
-        &user_context.user_id,
-        UserProvider::Gmail,
-    )
-    .await
-    .context("Failed to fetch link")?;
+    let pg_repo = email::outbound::EmailPgRepo::new(ctx.db.clone());
+    let existing_link = pg_repo
+        .link_by_fusionauth_and_macro_id(
+            &user_context.fusion_user_id,
+            macro_user_id,
+            UserProvider::Gmail,
+        )
+        .await
+        .context("Failed to fetch link")?;
 
     if let Some(link) = existing_link
         && link.is_sync_active
@@ -121,10 +133,10 @@ pub async fn enable_gmail_sync(
 
     let mut link = link::Link {
         id: macro_uuid::generate_uuid_v7(), // will get ignored for existing links
-        macro_id: user_context.user_id.clone(),
+        macro_id: MacroUserIdStr::try_from(user_context.user_id.clone())?,
         fusionauth_user_id: user_context.fusion_user_id.clone(),
-        email_address: email,
-        provider: UserProvider::Gmail,
+        email_address: EmailStr::try_from(email)?,
+        provider: models_email::service::link::UserProvider::Gmail,
         is_sync_active: true,
         created_at: Default::default(),
         updated_at: Default::default(),

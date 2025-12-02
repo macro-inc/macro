@@ -181,6 +181,34 @@ pub async fn get_org_channels(
     Ok(channels)
 }
 
+/// Returns a paginated list of project IDs, sorting by ascending so we don't miss new ones
+#[tracing::instrument(skip(db))]
+pub async fn get_all_channel_ids_paginated(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    limit: i64,
+    offset: i64,
+) -> anyhow::Result<Vec<String>> {
+    let result = sqlx::query!(
+        r#"
+        SELECT
+            id as "channel_id"
+        FROM
+            comms_channels
+        ORDER BY
+            created_at ASC
+        LIMIT $1
+        OFFSET $2
+        "#,
+        limit,
+        offset
+    )
+    .map(|row| row.channel_id.to_string())
+    .fetch_all(db)
+    .await?;
+
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

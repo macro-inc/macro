@@ -19,17 +19,11 @@ async fn main() {
 
     let initial_modification_data =
         get_pdf_modification_data_for_document(&pool, document_id).await;
-    if initial_modification_data.is_err() {
-        panic!("{:?}", initial_modification_data.unwrap_err());
-    }
     let initial_modification_data = initial_modification_data.unwrap();
 
     let full_modification_data =
         get_complete_pdf_modification_data(&pool, document_id, Some(initial_modification_data))
             .await;
-    if full_modification_data.is_err() {
-        panic!("{:?}", full_modification_data.unwrap_err());
-    }
 
     println!(
         "{}",

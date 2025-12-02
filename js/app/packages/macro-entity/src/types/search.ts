@@ -1,3 +1,5 @@
+import type { EntityData } from './entity';
+
 type MarkdownHighlightLocation = {
   type: 'md';
   nodeId: string;
@@ -11,19 +13,72 @@ type PdfHighlightLocation = {
   searchRawQuery: string;
 };
 
-export type FileTypeWithLocation = 'md' | 'pdf';
-
-export type SearchLocation = MarkdownHighlightLocation | PdfHighlightLocation;
-
-type ContentHighlight = {
-  content: string;
-  location?: SearchLocation;
+type ChannelMessageHighlightLocation = {
+  type: 'channel';
+  messageId: string;
 };
 
-export type WithSearch<T extends object> = T & {
-  search: {
-    nameHighlight: string | null;
-    contentHighlights: ContentHighlight[] | null;
-    source: 'local' | 'service';
-  };
+type EmailMessageHighlightLocation = {
+  type: 'email';
+  messageId: string;
+};
+
+export type SearchLocation =
+  | MarkdownHighlightLocation
+  | PdfHighlightLocation
+  | ChannelMessageHighlightLocation
+  | EmailMessageHighlightLocation;
+
+export type ChannelContentHitData = {
+  type: 'channel';
+  id: string;
+  content: string;
+  senderId: string;
+  sentAt: number;
+  location: ChannelMessageHighlightLocation;
+};
+
+type MdContentHitData = {
+  type: 'md';
+  content: string;
+  location: MarkdownHighlightLocation;
+};
+
+type PdfContentHitData = {
+  type: 'pdf';
+  content: string;
+  location: PdfHighlightLocation;
+};
+
+type GenericContentHitData = {
+  type?: undefined;
+  content: string;
+  location?: never;
+};
+
+type EmailContentHitData = {
+  type: 'email';
+  content: string;
+  location: EmailMessageHighlightLocation;
+};
+
+export type DocumentContentHitData =
+  | MdContentHitData
+  | PdfContentHitData
+  | GenericContentHitData;
+
+export type ContentHitData =
+  | DocumentContentHitData
+  | ChannelContentHitData
+  | EmailContentHitData
+  | GenericContentHitData;
+
+export type SearchData = {
+  nameHighlight: string | null;
+  contentHitData: ContentHitData[] | null;
+  source: 'local' | 'service';
+};
+
+export type WithSearch<T extends EntityData> = T & {
+  search: SearchData;
 };

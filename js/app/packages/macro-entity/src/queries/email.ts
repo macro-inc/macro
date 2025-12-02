@@ -1,5 +1,9 @@
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
-import { useInfiniteQuery } from '@tanstack/solid-query';
+import {
+  type InfiniteData,
+  partialMatchKey,
+  useInfiniteQuery,
+} from '@tanstack/solid-query';
 import { SERVER_HOSTS } from 'core/constant/servers';
 import { platformFetch } from 'core/util/platformFetch';
 import type { ApiPaginatedThreadCursor } from 'service-email/generated/schemas/apiPaginatedThreadCursor';
@@ -7,6 +11,7 @@ import type { PreviewsInboxCursorParams } from 'service-email/generated/schemas/
 import { type Accessor, createMemo } from 'solid-js';
 import type { EmailEntity } from '../types/entity';
 import { createApiTokenQuery } from './auth';
+import { queryClient } from './client';
 import { queryKeys } from './key';
 
 export type FetchPaginatedEmailsParams = PreviewsInboxCursorParams & {
@@ -77,10 +82,10 @@ export function createEmailsInfiniteQuery(
       select: (data) =>
         data.pages.flatMap(({ items }) =>
           items.map((email): EmailEntity => {
-            const participantEmails = email.contacts.map(
-              (p) => p.emailAddress ?? ''
-            );
-            const participantNames = email.contacts.map((p) => p.name ?? '');
+            const participants = email.contacts.map((p) => ({
+              email: p.emailAddress ?? '',
+              name: p.name ?? '',
+            }));
 
             return {
               ...email,
@@ -91,8 +96,7 @@ export function createEmailsInfiniteQuery(
               snippet: email.snippet ?? undefined,
               isImportant: email.isImportant ?? false,
               done: !email.inboxVisible,
-              participantEmails,
-              participantNames,
+              participants,
               senderEmail: email.senderEmail ?? undefined,
               senderName: email.senderName ?? email.senderEmail ?? undefined,
             };
@@ -103,3 +107,50 @@ export function createEmailsInfiniteQuery(
     };
   });
 }
+
+export const optimisticMarkEmailAsRead = (emailId: string) => {
+  queryClient.setQueriesData(
+    {
+      predicate(query) {
+        return partialMatchKey(
+          query.queryKey,
+          queryKeys.email({
+            infinite: true,
+            limit: 100,
+            view: 'inbox',
+          })
+        );
+      },
+    },
+    (
+      prev:
+        | InfiniteData<ApiPaginatedThreadCursor>
+        | ApiPaginatedThreadCursor
+        | undefined
+    ) => {
+      if (!prev) return;
+
+      if ('pageParams' in prev) {
+        return {
+          ...prev,
+          pages: prev.pages.map((p) => ({
+            ...p,
+            items: p.items.map((item) => {
+              if (item.id !== emailId) return item;
+              return {
+                ...item,
+                isRead: true,
+              };
+            }),
+          })),
+        };
+      }
+
+      return prev.items.map((item) => {
+        if (item.id !== emailId) return item;
+
+        return { ...item, isRead: true };
+      });
+    }
+  );
+};

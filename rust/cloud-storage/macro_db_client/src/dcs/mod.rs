@@ -12,7 +12,6 @@ pub mod get_attachment;
 pub mod get_attachments_for_message;
 pub mod get_chats;
 pub mod get_chats_for_attachment;
-pub mod partial_message;
 pub mod patch_chat;
 
 // Document queries

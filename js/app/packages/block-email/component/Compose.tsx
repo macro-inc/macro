@@ -3,12 +3,12 @@ import {
   SplitHeaderBadge,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
-import { connectEmail } from '@app/signal/emailAuth';
 import { useHasPaidAccess } from '@core/auth';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { TextButton } from '@core/component/TextButton';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { fileDrop } from '@core/directive/fileDrop';
+import { useEmailLinks } from '@core/email-link';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { useDisplayName, type WithCustomUserInput } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
@@ -69,6 +69,8 @@ export function EmailCompose() {
   const [showBcc, setShowBcc] = createSignal(false);
 
   const [triedToSubmit, _setTriedToSubmit] = createSignal(false);
+
+  const { connect: connectEmail } = useEmailLinks();
 
   const previewName = createMemo(() => {
     const recipients = selectedRecipients();

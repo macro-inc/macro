@@ -129,6 +129,36 @@ pub async fn get_documents_to_delete(
     Ok(result)
 }
 
+/// Returns a paginated list of document IDs, sorting by ascending so we don't miss new ones
+#[tracing::instrument(skip(db))]
+pub async fn get_all_document_ids_paginated(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    limit: i64,
+    offset: i64,
+) -> anyhow::Result<Vec<String>> {
+    let result = sqlx::query!(
+        r#"
+        SELECT
+            id as "document_id"
+        FROM
+            "Document"
+        WHERE
+            "deletedAt" IS NULL
+        ORDER BY
+            "createdAt" ASC
+        LIMIT $1
+        OFFSET $2
+        "#,
+        limit,
+        offset
+    )
+    .map(|row| row.document_id)
+    .fetch_all(db)
+    .await?;
+
+    Ok(result)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,7 +1,7 @@
-import { connectEmail, useEmailLinksStatus } from '@app/signal/emailAuth';
 import { IconButton } from '@core/component/IconButton';
 import { toast } from '@core/component/Toast/Toast';
 import { fileSelector } from '@core/directive/fileSelector';
+import { useEmailLinks, useEmailLinksStatus } from '@core/email-link';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
@@ -17,6 +17,7 @@ false && fileSelector;
 
 export function HelpDrawer(props: { viewId?: ViewId }) {
   const emailActive = useEmailLinksStatus();
+  const { connect: connectEmail } = useEmailLinks();
 
   return (
     <Switch>
