@@ -130,7 +130,7 @@ pub async fn fetch_thread_with_messages_paginated(
                 attachments_res,
                 macro_attachments_res,
             ) = tokio::try_join!(
-                async { contacts::get::get_sender_by_message_id(&pool_clone, db_message.id).await },
+                contacts::get::get_sender_by_message_id(&pool_clone, db_message.id),
                 contacts::get::fetch_db_recipients(&pool_clone, db_message.id),
                 messages::scheduled::get_scheduled_message_no_auth(&pool_clone, db_message.id),
                 labels::get::fetch_message_labels(&pool_clone, db_message.id),

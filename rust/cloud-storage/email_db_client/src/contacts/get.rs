@@ -14,7 +14,7 @@ pub async fn get_sender_by_message_id(
     pool: &PgPool,
     message_id: Uuid,
 ) -> anyhow::Result<Option<db::contact::Contact>> {
-    sqlx::query_as!(
+    let result = sqlx::query_as!(
         db::contact::Contact,
         r#"
             SELECT
@@ -34,13 +34,9 @@ pub async fn get_sender_by_message_id(
         message_id
     )
     .fetch_optional(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch contact for sender of message ID: {}",
-            message_id
-        )
-    })
+    .await?;
+
+    Ok(result)
 }
 
 #[tracing::instrument(skip(executor))]
