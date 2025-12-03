@@ -161,11 +161,9 @@ fn create_system_property_inner(
     value: Option<PropertyValue>,
     entity_type: EntityType,
 ) -> EntityPropertyWithDefinition {
-    // System properties don't have a real owner, use a placeholder
-    // These are computed on-the-fly and never persisted
-    let owner = models_properties::PropertyOwner::User {
-        user_id: String::new(),
-    };
+    // Metadata properties are computed on-the-fly and never persisted
+    // Use System owner since they don't belong to any user or org
+    let owner = models_properties::PropertyOwner::System;
 
     let property_definition = PropertyDefinition {
         id: METADATA_PROPERTY_ID,
@@ -176,6 +174,7 @@ fn create_system_property_inner(
         specific_entity_type: None,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
+        is_system: false, // Metadata properties are not DB-stored system properties
         is_metadata: true,
     };
 
