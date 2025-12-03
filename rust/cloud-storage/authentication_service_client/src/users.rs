@@ -13,7 +13,7 @@ pub struct PostGetExistingUsersRequestBody {
 
 #[derive(Default, Debug, serde::Deserialize)]
 pub struct PostGetExistingUsersResponse {
-    pub existing_users: Vec<String>,
+    pub existing_user_ids: Vec<String>,
 }
 
 impl AuthServiceClient {
@@ -47,7 +47,7 @@ impl AuthServiceClient {
                         })
                     })?;
 
-                Ok(result.existing_users.into_iter().collect())
+                Ok(result.existing_user_ids.into_iter().collect())
             }
             status_code => {
                 let body: String = res.text().await?;
