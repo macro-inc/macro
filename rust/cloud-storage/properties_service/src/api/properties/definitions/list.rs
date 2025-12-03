@@ -55,7 +55,9 @@ pub enum PropertyScope {
     User,
     /// Organization-scoped properties only
     Org,
-    /// Both user and organization properties
+    /// System properties only
+    System,
+    /// User, organization, and system properties
     All,
 }
 
@@ -82,7 +84,7 @@ pub enum PropertyDefinitionResponse {
     get,
     path = "/properties/definitions",
     params(
-        ("scope" = PropertyScope, Query, description = "Filter by scope: 'user' for user-scoped only, 'org' for organization-scoped only, 'all' for both scopes"),
+        ("scope" = PropertyScope, Query, description = "Filter by scope: 'user', 'org', 'system', or 'all'"),
         ("include_options" = Option<bool>, Query, description = "Whether to include property options in the response")
     ),
     responses(
@@ -98,18 +100,22 @@ pub async fn list_properties(
     State(context): State<ApiContext>,
     Extension(user_context): Extension<UserContext>,
 ) -> Result<Json<Vec<PropertyDefinitionResponse>>, ListPropertiesErr> {
-    let (org_id, user_id_opt) = match query.scope {
-        PropertyScope::Org => (user_context.organization_id, None),
-        PropertyScope::User => (None, Some(user_context.user_id.as_str())),
+    // Determine query parameters based on scope
+    let (org_id, user_id_opt, include_system) = match query.scope {
+        PropertyScope::User => (None, Some(user_context.user_id.as_str()), false),
+        PropertyScope::Org => (user_context.organization_id, None, false),
+        PropertyScope::System => (None, None, true),
         PropertyScope::All => (
             user_context.organization_id,
             Some(user_context.user_id.as_str()),
+            true,
         ),
     };
 
     tracing::info!(
         organization_id = ?org_id,
         scope = ?query.scope,
+        include_system = include_system,
         user_id = %user_context.user_id,
         "listing properties"
     );
@@ -119,18 +125,22 @@ pub async fn list_properties(
     }
 
     let response = if query.include_options {
-        let properties_with_options =
-            property_definitions_get::get_properties_with_options(&context.db, org_id, user_id_opt)
-                .await
-                .inspect_err(|e| {
-                    tracing::error!(
-                        error = ?e,
-                        organization_id = ?org_id,
-                        scope = ?query.scope,
-                        user_id = %user_context.user_id,
-                        "failed to retrieve properties with options"
-                    );
-                })?;
+        let properties_with_options = property_definitions_get::get_properties_with_options(
+            &context.db,
+            org_id,
+            user_id_opt,
+            include_system,
+        )
+        .await
+        .inspect_err(|e| {
+            tracing::error!(
+                error = ?e,
+                organization_id = ?org_id,
+                scope = ?query.scope,
+                user_id = %user_context.user_id,
+                "failed to retrieve properties with options"
+            );
+        })?;
 
         let response: Vec<PropertyDefinitionResponse> = properties_with_options
             .into_iter()
@@ -146,17 +156,22 @@ pub async fn list_properties(
         );
         response
     } else {
-        let properties = property_definitions_get::get_properties(&context.db, org_id, user_id_opt)
-            .await
-            .inspect_err(|e| {
-                tracing::error!(
-                    error = ?e,
-                    organization_id = ?org_id,
-                    scope = ?query.scope,
-                    user_id = %user_context.user_id,
-                    "failed to retrieve properties"
-                );
-            })?;
+        let properties = property_definitions_get::get_properties(
+            &context.db,
+            org_id,
+            user_id_opt,
+            include_system,
+        )
+        .await
+        .inspect_err(|e| {
+            tracing::error!(
+                error = ?e,
+                organization_id = ?org_id,
+                scope = ?query.scope,
+                user_id = %user_context.user_id,
+                "failed to retrieve properties"
+            );
+        })?;
 
         let response: Vec<PropertyDefinitionResponse> = properties
             .into_iter()
