@@ -4,7 +4,10 @@ import {
 } from '@block-channel/constants';
 import { openedChannelSignal } from '@block-channel/signal/activity';
 import { messageToReactionStore } from '@block-channel/signal/reactions';
-import { threadsStore } from '@block-channel/signal/threads';
+import {
+  type ThreadStoreData,
+  threadsStore,
+} from '@block-channel/signal/threads';
 import { usersTypingSignal } from '@block-channel/signal/typing';
 import type { ThreadViewData } from '@block-channel/type/threadView';
 import { loadDraftMessage } from '@block-channel/utils/draftMessages';
@@ -105,6 +108,7 @@ export function MessageList(props: MessageListProps) {
 
   const userId = useUserId();
   const threads = threadsStore.get;
+  const [viewThreads, setViewThreads] = createStore<ThreadStoreData>({});
 
   const [threadInputAttachmentsStore, setThreadInputAttachmentsStore] =
     createStore<Record<string, InputAttachment[]>>({});
@@ -268,9 +272,8 @@ export function MessageList(props: MessageListProps) {
   // Keep the message if:
   // 1. It's not deleted, OR
   // 2. It's deleted but is a parent message
-  const messageFilterFn = (message: Message) => {
-    return !message.deleted_at || threads[message.id]?.length > 0;
-  };
+  const messageFilterFn = (message: Message) =>
+    !message.deleted_at || viewThreads[message.id]?.length > 0;
 
   const filteredTopLevelMessages = createMemo(() =>
     props.messages.filter(messageFilterFn)
@@ -280,7 +283,7 @@ export function MessageList(props: MessageListProps) {
   // mapFn is not tracking, so wrap thread-dependent logic in a memo per parent.
   const segments = mapArray(filteredTopLevelMessages, (message) =>
     createMemo(() => {
-      const children = threads[message.id] ?? [];
+      const children = viewThreads[message.id] ?? [];
       const filteredChildren = children.filter(messageFilterFn);
       return filteredChildren.length
         ? [message, ...filteredChildren]
@@ -295,7 +298,7 @@ export function MessageList(props: MessageListProps) {
     return out;
   });
 
-  // Thread reply inputs are portaled to the correct message container. This keeps them in the right place, but if they are portaled while a user is typing, the user can lose input. To address this, we do not update the threaded messages until the user stops typing.
+  // Thread reply inputs are portaled to the correct message container. This keeps them in the correct location even as new thread replies come in, but if they are portaled while a user is typing, the user can momentarily lose input. To address this, we do not update the threaded messages until the user stops typing.
   const [localTyping, setLocalTyping] = createSignal(false);
   let updateDelayedByTyping = false;
 
@@ -312,6 +315,46 @@ export function MessageList(props: MessageListProps) {
       }
     })
   );
+
+  // Maintain a snapshot of threads store, changes to whcih only propagate when the user is not typing.
+  let threadsDirtyWhileTyping = false;
+  let snapshot: ThreadStoreData = {};
+
+  // Prepare snapshot of threads
+  createEffect(() => {
+    const baseMessages = props.messages;
+    const nextSnapshot: ThreadStoreData = {};
+    let hasChanges = false;
+
+    for (const message of baseMessages) {
+      const id = message.id;
+      const threadArr = threads[id] ?? [];
+      nextSnapshot[id] = threadArr;
+      if (!hasChanges && viewThreads[id] !== threadArr) {
+        hasChanges = true;
+      }
+    }
+
+    if (!hasChanges) return;
+
+    snapshot = nextSnapshot;
+
+    if (untrack(localTyping)) {
+      threadsDirtyWhileTyping = true;
+    } else {
+      setViewThreads(reconcile(snapshot));
+      threadsDirtyWhileTyping = false;
+    }
+  });
+
+  // Commit pending changes when the user is not typing
+  createEffect(() => {
+    const typing = localTyping();
+    if (!typing && threadsDirtyWhileTyping) {
+      setViewThreads(reconcile(snapshot));
+      threadsDirtyWhileTyping = false;
+    }
+  });
 
   // Provide stable row models to VList so item instances are preserved across moves/insertions
   type RowModel = {
@@ -350,7 +393,8 @@ export function MessageList(props: MessageListProps) {
         (threadId &&
           ((next && next.thread_id !== msg.thread_id) || !next) &&
           threadViewStore[threadId]?.hasActiveReply) ||
-        (threadViewStore[msg.id]?.hasActiveReply && !threads[msg.id]?.length)
+        (threadViewStore[msg.id]?.hasActiveReply &&
+          !viewThreads[msg.id]?.length)
       ) {
         indices.push(i);
       }
@@ -380,7 +424,7 @@ export function MessageList(props: MessageListProps) {
   const lastMessageThread = createMemo(() => {
     const base = filteredTopLevelMessages() ?? [];
     const lastTopLevelId = base[base.length - 1]?.id;
-    return threads[lastTopLevelId];
+    return viewThreads[lastTopLevelId];
   });
 
   createEffect(
@@ -622,10 +666,10 @@ export function MessageList(props: MessageListProps) {
                       setFocusedMessageId={props.setFocusedMessageId}
                       index={i}
                       orderedMessages={props.orderedMessages}
-                      threadSiblings={threads[
+                      threadSiblings={viewThreads[
                         row.message.thread_id ?? ''
                       ]?.filter(messageFilterFn)}
-                      threadChildren={threads[row.message.id ?? '']?.filter(
+                      threadChildren={viewThreads[row.message.id ?? '']?.filter(
                         messageFilterFn
                       )}
                       threadViewStore={threadViewStore}
@@ -729,7 +773,7 @@ export function MessageList(props: MessageListProps) {
         orderedMessages={props.orderedMessages}
         threadViewStore={threadViewStore}
         setThreadViewStore={setThreadViewStore}
-        threads={threads}
+        threads={viewThreads}
         virtualHandle={virtualHandle}
         threadInputAttachmentsStore={threadInputAttachmentsStore}
         setThreadInputAttachmentsStore={setThreadInputAttachmentsStore}
