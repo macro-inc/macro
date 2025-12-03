@@ -139,72 +139,109 @@ export const isFilterableDataType = (dataType: DataType): boolean => {
   return (FILTERABLE_DATA_TYPES as readonly DataType[]).includes(dataType);
 };
 
-/** Helper: Get valid filter actions for a property based on data type, multi-select, and existing filters */
+/** Helper: Get valid filter actions for a property based on data type and multi-select */
 export const getValidFilterActions = (
-  propertyId: string,
   dataType: DataType,
-  isMultiSelect: boolean,
-  existingFilters: PropertyFilter[] = []
+  isMultiSelect: boolean
 ): FilterAction[] => {
-  // Get existing actions for this specific property
-  const filtersForProperty = existingFilters.filter(
-    (f) => f.propertyId === propertyId
-  );
-  const existingActions = new Set(filtersForProperty.map((f) => f.action));
-
   const actions: FilterAction[] = [];
 
   // Multi-select properties only support contains actions
   if (isMultiSelect) {
     actions.push(ContainsAction.HAS_ANY);
-    if (!existingActions.has(ContainsAction.HAS_ALL)) {
-      actions.push(ContainsAction.HAS_ALL);
-    }
-    if (!existingActions.has(ContainsAction.DOES_NOT_HAVE)) {
-      actions.push(ContainsAction.DOES_NOT_HAVE);
-    }
+    actions.push(ContainsAction.HAS_ALL);
+    actions.push(ContainsAction.DOES_NOT_HAVE);
     return actions;
   }
 
-  // BOOLEAN: if any filter exists, no more filters allowed (only true/false)
+  // BOOLEAN: only equality
   if (dataType === DataType.BOOLEAN) {
-    if (filtersForProperty.length > 0) {
-      return [];
-    }
     return [EqualityAction.EQUAL, EqualityAction.NOT_EQUAL];
   }
 
-  // Equality actions (all single-value types)
-  if (!existingActions.has(EqualityAction.EQUAL)) {
-    actions.push(EqualityAction.EQUAL);
-  }
-  if (!existingActions.has(EqualityAction.NOT_EQUAL)) {
-    actions.push(EqualityAction.NOT_EQUAL);
+  // ENTITY (single-value): only equality
+  if (dataType === DataType.ENTITY) {
+    return [EqualityAction.EQUAL, EqualityAction.NOT_EQUAL];
   }
 
-  // Comparison actions (DATE, NUMBER, SELECT_NUMBER, SELECT_STRING only)
-  if (
-    dataType === DataType.DATE ||
-    dataType === DataType.NUMBER ||
-    dataType === DataType.SELECT_NUMBER ||
-    dataType === DataType.SELECT_STRING
-  ) {
-    const hasLowerBound =
-      existingActions.has(ComparisonAction.GREATER_THAN) ||
-      existingActions.has(ComparisonAction.GREATER_THAN_OR_EQUAL);
-    const hasUpperBound =
-      existingActions.has(ComparisonAction.LESS_THAN) ||
-      existingActions.has(ComparisonAction.LESS_THAN_OR_EQUAL);
-
-    if (!hasLowerBound) {
-      actions.push(ComparisonAction.GREATER_THAN);
-      actions.push(ComparisonAction.GREATER_THAN_OR_EQUAL);
-    }
-    if (!hasUpperBound) {
-      actions.push(ComparisonAction.LESS_THAN);
-      actions.push(ComparisonAction.LESS_THAN_OR_EQUAL);
-    }
-  }
+  // DATE, NUMBER, SELECT_NUMBER, SELECT_STRING: equality + comparison
+  actions.push(EqualityAction.EQUAL);
+  actions.push(EqualityAction.NOT_EQUAL);
+  actions.push(ComparisonAction.GREATER_THAN);
+  actions.push(ComparisonAction.GREATER_THAN_OR_EQUAL);
+  actions.push(ComparisonAction.LESS_THAN);
+  actions.push(ComparisonAction.LESS_THAN_OR_EQUAL);
 
   return actions;
+};
+
+/** Helper: Check if a new filter conflicts with existing filters */
+export const checkFilterConflict = (
+  newFilter: PropertyFilter,
+  existingFilters: PropertyFilter[]
+): string | null => {
+  const filtersForProperty = existingFilters.filter(
+    (f) => f.propertyId === newFilter.propertyId
+  );
+
+  if (filtersForProperty.length === 0) return null;
+
+  const existingActions = new Set(filtersForProperty.map((f) => f.action));
+  const newAction = newFilter.action;
+
+  // BOOLEAN: only one filter allowed per property
+  if (newFilter.dataType === 'BOOLEAN' && filtersForProperty.length > 0) {
+    return 'Redundant: boolean already filtered';
+  }
+
+  // Duplicate action (except has_any which can be repeated)
+  if (existingActions.has(newAction) && newAction !== ContainsAction.HAS_ANY) {
+    return `Redundant: duplicate "${ACTION_DISPLAY_NAMES[newAction]}" filter`;
+  }
+
+  // Equal conflicts with comparisons
+  if (newAction === EqualityAction.EQUAL) {
+    const hasComparison =
+      existingActions.has(ComparisonAction.GREATER_THAN) ||
+      existingActions.has(ComparisonAction.GREATER_THAN_OR_EQUAL) ||
+      existingActions.has(ComparisonAction.LESS_THAN) ||
+      existingActions.has(ComparisonAction.LESS_THAN_OR_EQUAL);
+    if (hasComparison) {
+      return 'Conflicting: "is" + comparison';
+    }
+  }
+
+  // Comparisons conflict with equal
+  const isComparison =
+    newAction === ComparisonAction.GREATER_THAN ||
+    newAction === ComparisonAction.GREATER_THAN_OR_EQUAL ||
+    newAction === ComparisonAction.LESS_THAN ||
+    newAction === ComparisonAction.LESS_THAN_OR_EQUAL;
+  if (isComparison && existingActions.has(EqualityAction.EQUAL)) {
+    return 'Conflicting: comparison + "is"';
+  }
+
+  // Lower bound conflicts
+  const isLowerBound =
+    newAction === ComparisonAction.GREATER_THAN ||
+    newAction === ComparisonAction.GREATER_THAN_OR_EQUAL;
+  const hasLowerBound =
+    existingActions.has(ComparisonAction.GREATER_THAN) ||
+    existingActions.has(ComparisonAction.GREATER_THAN_OR_EQUAL);
+  if (isLowerBound && hasLowerBound) {
+    return 'Redundant: multiple lower bounds';
+  }
+
+  // Upper bound conflicts
+  const isUpperBound =
+    newAction === ComparisonAction.LESS_THAN ||
+    newAction === ComparisonAction.LESS_THAN_OR_EQUAL;
+  const hasUpperBound =
+    existingActions.has(ComparisonAction.LESS_THAN) ||
+    existingActions.has(ComparisonAction.LESS_THAN_OR_EQUAL);
+  if (isUpperBound && hasUpperBound) {
+    return 'Redundant: multiple upper bounds';
+  }
+
+  return null;
 };
