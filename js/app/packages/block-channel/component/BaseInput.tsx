@@ -205,17 +205,17 @@ export function BaseInput(props: BaseInputProps) {
     }
 
     if (ref() && props.onFocus) {
-      ref()?.addEventListener('focusin', () => {
+      const markdownElement = ref()!;
+      const handleFocusIn = () => {
         props.onFocus?.();
+      };
+
+      markdownElement.addEventListener('focusin', handleFocusIn);
+
+      onCleanup(() => {
+        markdownElement.removeEventListener('focusin', handleFocusIn);
       });
     }
-    onCleanup(() => {
-      if (ref() && props.onFocus) {
-        ref()?.removeEventListener('focusin', () => {
-          props.onFocus?.();
-        });
-      }
-    });
   });
 
   const onFocusLeaveEnd = (e: KeyboardEvent) => {
