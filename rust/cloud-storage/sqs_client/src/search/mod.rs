@@ -215,17 +215,22 @@ pub async fn bulk_enqueue_search_text_extractor(
         return Ok(());
     }
 
-    let results: Vec<_> = futures::stream::iter(entries.chunks(MAX_BATCH_SIZE))
-        .map(|chunk| {
-            sqs_client
-                .send_message_batch()
-                .set_entries(Some(chunk.to_vec()))
-                .queue_url(queue_url)
-                .send()
-        })
-        .buffer_unordered(MAX_CONCURRENT_BATCHES)
-        .collect()
-        .await;
+    let results: Vec<_> = futures::stream::iter(
+        entries
+            .chunks(MAX_BATCH_SIZE)
+            .map(|chunk| chunk.to_vec())
+            .collect::<Vec<_>>(),
+    )
+    .map(|chunk| {
+        sqs_client
+            .send_message_batch()
+            .set_entries(Some(chunk))
+            .queue_url(queue_url)
+            .send()
+    })
+    .buffer_unordered(MAX_CONCURRENT_BATCHES)
+    .collect()
+    .await;
 
     for result in results {
         result?;
