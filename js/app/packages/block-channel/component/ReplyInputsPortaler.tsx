@@ -11,7 +11,13 @@ import { blockElementSignal } from '@core/signal/blockElement';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import type { Message } from '@service-comms/generated/models';
 import { createCallback } from '@solid-primitives/rootless';
-import { type Accessor, createEffect, createSignal, For, type Setter } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  For,
+  type Setter,
+} from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import type { VirtualizerHandle } from 'virtua/solid';
