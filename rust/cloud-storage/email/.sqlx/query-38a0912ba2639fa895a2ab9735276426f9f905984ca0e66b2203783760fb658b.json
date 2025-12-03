@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                m.thread_id,\n                c.id, c.link_id, c.email_address, c.name, c.sfs_photo_url\n            FROM email_messages m\n            JOIN email_contacts c ON m.from_contact_id = c.id\n            WHERE m.thread_id = ANY($1) AND m.from_contact_id IS NOT NULL\n            ORDER BY m.created_at ASC\n            ",
+  "query": "\n            SELECT\n                m.thread_id,\n                c.id, c.link_id, c.email_address, COALESCE(m.from_name, c.name) as \"name\", c.sfs_photo_url\n            FROM email_messages m\n            JOIN email_contacts c ON m.from_contact_id = c.id\n            WHERE m.thread_id = ANY($1) AND m.from_contact_id IS NOT NULL\n            ORDER BY m.created_at ASC\n            ",
   "describe": {
     "columns": [
       {
@@ -44,9 +44,9 @@
       false,
       false,
       false,
-      true,
+      null,
       true
     ]
   },
-  "hash": "e8ff98a61e6520835e18bc399b31968576c7c0117ac821236990033b29726eae"
+  "hash": "38a0912ba2639fa895a2ab9735276426f9f905984ca0e66b2203783760fb658b"
 }
