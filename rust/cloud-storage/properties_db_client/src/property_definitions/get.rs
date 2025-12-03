@@ -305,16 +305,16 @@ mod tests {
         assert_eq!(properties.len(), 10); // Organization 1 has 10 properties
 
         // Verify they are sorted by display name (case-insensitive alphabetical)
-        assert_eq!(properties[0].display_name, "Assigned To");
-        assert_eq!(properties[1].display_name, "Budget");
-        assert_eq!(properties[2].display_name, "Completed");
-        assert_eq!(properties[3].display_name, "Department");
-        assert_eq!(properties[4].display_name, "Description");
-        assert_eq!(properties[5].display_name, "Due Date");
-        assert_eq!(properties[6].display_name, "Priority");
-        assert_eq!(properties[7].display_name, "Relevant Documents");
-        assert_eq!(properties[8].display_name, "Score");
-        assert_eq!(properties[9].display_name, "Website");
+        assert_eq!(properties[0].display_name, "Test Assigned To");
+        assert_eq!(properties[1].display_name, "Test Budget");
+        assert_eq!(properties[2].display_name, "Test Completed");
+        assert_eq!(properties[3].display_name, "Test Department");
+        assert_eq!(properties[4].display_name, "Test Description");
+        assert_eq!(properties[5].display_name, "Test Due Date");
+        assert_eq!(properties[6].display_name, "Test Priority");
+        assert_eq!(properties[7].display_name, "Test Relevant Documents");
+        assert_eq!(properties[8].display_name, "Test Score");
+        assert_eq!(properties[9].display_name, "Test Website");
 
         Ok(())
     }
@@ -329,8 +329,8 @@ mod tests {
         let properties = get_properties(&pool, None, Some("user1")).await?;
 
         assert_eq!(properties.len(), 2); // User1 has 2 properties
-        assert_eq!(properties[0].display_name, "Notes");
-        assert_eq!(properties[1].display_name, "Personal Priority");
+        assert_eq!(properties[0].display_name, "Test Notes");
+        assert_eq!(properties[1].display_name, "Test Personal Priority");
 
         Ok(())
     }
@@ -349,7 +349,7 @@ mod tests {
 
         assert!(property.is_some());
         let property = property.unwrap();
-        assert_eq!(property.display_name, "Priority");
+        assert_eq!(property.display_name, "Test Priority");
         assert_eq!(property.data_type, DataType::SelectString);
         assert!(!property.is_multi_select);
 
@@ -411,7 +411,7 @@ mod tests {
         // Find Priority property which should have 4 options
         let priority_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Priority")
+            .find(|p| p.definition.display_name == "Test Priority")
             .unwrap();
 
         assert_eq!(priority_prop.property_options.len(), 4);
@@ -443,7 +443,7 @@ mod tests {
         // Find non-select properties (should have 0 options)
         let completed_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Completed")
+            .find(|p| p.definition.display_name == "Test Completed")
             .unwrap();
 
         assert_eq!(completed_prop.definition.data_type, DataType::Boolean);
@@ -464,7 +464,7 @@ mod tests {
         // Find Score property which has number options
         let score_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Score")
+            .find(|p| p.definition.display_name == "Test Score")
             .unwrap();
 
         assert_eq!(score_prop.property_options.len(), 5);
@@ -496,7 +496,7 @@ mod tests {
         // Find Department property which is multi-select
         let dept_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Department")
+            .find(|p| p.definition.display_name == "Test Department")
             .unwrap();
 
         assert!(dept_prop.definition.is_multi_select);

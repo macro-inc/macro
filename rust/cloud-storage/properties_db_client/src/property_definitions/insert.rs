@@ -300,7 +300,7 @@ mod tests {
             &pool,
             Some(1),
             None,
-            "Priority", // Already exists in fixtures
+            "Test Priority", // Already exists in fixtures
             DataType::String,
             false,
             None,
