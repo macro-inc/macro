@@ -23,6 +23,14 @@ export default defineConfig({
           environment: 'jsdom',
         },
       },
+      {
+        // Tauri-specific browser-ish tests
+        test: {
+          include: ['packages/tauri/**/*.test.{ts,tsx}'],
+          name: 'tauri',
+          environment: 'jsdom',
+        },
+      },
     ],
   },
 });
