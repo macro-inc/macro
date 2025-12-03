@@ -11,6 +11,7 @@ use crate::{
 };
 use anyhow::Context;
 use aws_sdk_sqs::{self as sqs, types::SendMessageBatchRequestEntry};
+use futures::StreamExt;
 use strum::Display;
 
 pub mod channel;
@@ -189,6 +190,8 @@ pub async fn enqueue_search_text_extractor(
         .to_string())
 }
 
+const MAX_CONCURRENT_BATCHES: usize = 20;
+
 /// Bulk enqueues items to the search text extractor queue
 #[tracing::instrument(skip(sqs_client, items))]
 pub async fn bulk_enqueue_search_text_extractor(
@@ -199,14 +202,12 @@ pub async fn bulk_enqueue_search_text_extractor(
     let mut entries: Vec<SendMessageBatchRequestEntry> = vec![];
     for item in items {
         tracing::trace!(item=?item, "enqueueing search text extractor");
-
         let message_str = serde_json::to_string(&item)?;
-        let batch_requesst = SendMessageBatchRequestEntry::builder()
+        let batch_request = SendMessageBatchRequestEntry::builder()
             .id(item.id())
             .message_body(message_str)
             .build()?;
-
-        entries.push(batch_requesst);
+        entries.push(batch_request);
     }
 
     if entries.is_empty() {
@@ -214,17 +215,25 @@ pub async fn bulk_enqueue_search_text_extractor(
         return Ok(());
     }
 
-    // Batch the entries in chunks of 10 and send each batch separately
-    for chunk in entries.chunks(MAX_BATCH_SIZE) {
-        let chunk_to_send = chunk.to_vec();
-
-        // Send the batch
+    let results: Vec<_> = futures::stream::iter(
+        entries
+            .chunks(MAX_BATCH_SIZE)
+            .map(|chunk| chunk.to_vec())
+            .collect::<Vec<_>>(),
+    )
+    .map(|chunk| {
         sqs_client
             .send_message_batch()
-            .set_entries(Some(chunk_to_send))
+            .set_entries(Some(chunk))
             .queue_url(queue_url)
             .send()
-            .await?;
+    })
+    .buffer_unordered(MAX_CONCURRENT_BATCHES)
+    .collect()
+    .await;
+
+    for result in results {
+        result?;
     }
 
     Ok(())
