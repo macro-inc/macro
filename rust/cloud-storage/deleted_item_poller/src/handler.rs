@@ -9,7 +9,7 @@ use sqs_client::search::{
     SearchQueueMessage, chat::RemoveChatMessage, document::DocumentId, project,
 };
 
-#[tracing::instrument(skip(ctx, _event))]
+#[tracing::instrument(skip(ctx, _event), err)]
 pub async fn handler(
     ctx: context::Context,
     _event: LambdaEvent<EventBridgeEvent>,
@@ -23,13 +23,12 @@ pub async fn handler(
     Ok(())
 }
 
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx), err)]
 async fn handle_projects(ctx: &context::Context) -> anyhow::Result<()> {
     let date = chrono::Utc::now().naive_utc() - chrono::Duration::days(30);
 
     let projects_to_delete = macro_db_client::projects::get_projects_to_delete(&ctx.db, &date)
-        .await
-        .context("unable to get projects to delete")?;
+        .await?;
 
     if projects_to_delete.is_empty() {
         tracing::info!("no projects to delete");
@@ -51,21 +50,17 @@ async fn handle_projects(ctx: &context::Context) -> anyhow::Result<()> {
                 project_ids: projects_to_delete,
             },
         ))
-        .await
-        .inspect_err(|e| {
-            tracing::error!(error=?e, "SEARCH_QUEUE unable to enqueue message");
-        });
+        .await?;
 
     Ok(())
 }
 
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx), err)]
 async fn handle_chats(ctx: &context::Context) -> anyhow::Result<()> {
     let date = chrono::Utc::now().naive_utc() - chrono::Duration::days(30);
 
     let chats_to_delete = macro_db_client::chat::get_chats_to_delete(&ctx.db, &date)
-        .await
-        .context("unable to get chats to delete")?;
+        .await?;
 
     if chats_to_delete.is_empty() {
         tracing::info!("no chats to delete");
@@ -86,25 +81,22 @@ async fn handle_chats(ctx: &context::Context) -> anyhow::Result<()> {
                 })
                 .collect(),
         )
-        .await
-        .context("unable to enqueue chat delete for search")?;
+        .await?;
 
     ctx.sqs_client
         .bulk_enqueue_chat_delete(chats_to_delete)
-        .await
-        .context("unable to enqueue chat delete")?;
+        .await?;
 
     Ok(())
 }
 
-#[tracing::instrument(skip(ctx))]
+#[tracing::instrument(skip(ctx), err)]
 async fn handle_documents(ctx: &context::Context) -> anyhow::Result<()> {
     let date = chrono::Utc::now().naive_utc() - chrono::Duration::days(30);
 
     let documents_to_delete =
         macro_db_client::document::get_all_documents::get_documents_to_delete(&ctx.db, &date)
-            .await
-            .context("unable to get documents to delete")?;
+            .await?;
 
     if documents_to_delete.is_empty() {
         tracing::info!("no documents to delete");
@@ -124,13 +116,11 @@ async fn handle_documents(ctx: &context::Context) -> anyhow::Result<()> {
                 })
                 .collect(),
         )
-        .await
-        .context("unable to enqueue chat delete for search")?;
+        .await?;
 
     ctx.sqs_client
         .bulk_enqueue_document_delete(documents_to_delete)
-        .await
-        .context("unable to enqueue document delete")?;
+        .await?;
 
     Ok(())
 }
