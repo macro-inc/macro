@@ -67,10 +67,6 @@ type BaseInputProps = {
   onSend: (args: Parameters<typeof sendMessage>[0]) => Promise<void>;
   /** callback to be executed when the user changes the input */
   onChange: (content: string) => void;
-  /** callback to be executed when the user clears the input */
-  onEmpty: () => void;
-  /** callback to be executed when the user presses escape */
-  escHandler?: () => void;
   /** initial value of the input */
   initialValue?: Accessor<string>;
   /** placeholder text to be displayed */
@@ -96,7 +92,7 @@ type BaseInputProps = {
   channelUsers?: () => IUser[];
   domRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
   /** callback to delete draft */
-  onDeleteDraft?: () => void;
+  deleteDraft?: () => void;
   /** whether this input is for a reply (affects styling) */
   isReplyInput?: boolean;
 };
@@ -126,7 +122,6 @@ export function BaseInput(props: BaseInputProps) {
 
   const [typing, setTyping] = createSignal(false);
   let inactivityTimeout: ReturnType<typeof setTimeout> | undefined;
-  let localTypingTimeout: ReturnType<typeof setTimeout> | undefined;
   let viewportObserver: IntersectionObserver | undefined;
 
   const [showAttachMenu, setShowAttachMenu] = createSignal(false);
@@ -144,7 +139,6 @@ export function BaseInput(props: BaseInputProps) {
     if (typing()) {
       setTyping(false);
       props.onStopTyping();
-      if (localTypingTimeout) clearTimeout(localTypingTimeout);
       props.setLocalTyping?.(false);
     }
   }
@@ -155,6 +149,7 @@ export function BaseInput(props: BaseInputProps) {
       if (!typing()) {
         setTyping(true);
         props.onStartTyping();
+        props.setLocalTyping?.(true);
       }
     }),
     1000
@@ -257,12 +252,12 @@ export function BaseInput(props: BaseInputProps) {
     if (inactivityTimeout) {
       clearTimeout(inactivityTimeout);
     }
+    console.log('onCleanup triggering stopTyping');
     stopTyping();
-    if (localTypingTimeout) clearTimeout(localTypingTimeout);
-    props.setLocalTyping?.(false);
     viewportObserver?.disconnect();
     if (markdownState().trim() === '') {
-      props.onEmpty();
+      console.log('onCleanup empty input triggering deleteDraft');
+      props.deleteDraft?.();
     }
   });
 
@@ -313,6 +308,7 @@ export function BaseInput(props: BaseInputProps) {
       .onSend(args)
       .then(() => {
         props.inputAttachments.setStore(key, []);
+        console.log('stopTyping in onSend');
         stopTyping();
         return props.afterSend?.();
       })
@@ -337,18 +333,12 @@ export function BaseInput(props: BaseInputProps) {
 
   function handleChange(input: string) {
     if (input.trim() === '') {
+      console.log('handleChange empty input triggering stopTyping');
       stopTyping();
-      if (localTypingTimeout) clearTimeout(localTypingTimeout);
-      props.setLocalTyping?.(false);
-      props.onEmpty();
     } else {
+      console.log('handleChange non-empty input triggering startTyping');
       startTyping();
       resetInactivityTimeout();
-      props.setLocalTyping?.(true);
-      if (localTypingTimeout) clearTimeout(localTypingTimeout);
-      localTypingTimeout = setTimeout(() => {
-        props.setLocalTyping?.(false);
-      }, 500);
       props.onChange(input);
     }
   }
@@ -372,11 +362,11 @@ export function BaseInput(props: BaseInputProps) {
   const documentAttachments = () =>
     attachments().filter((a) => !isStaticAttachmentType(a.blockName));
 
-  const onEscape = () => {
-    if (markdownState().trim() === '') {
-      props.escHandler?.();
-    }
+  const handleBlur = () => {
     blurMarkdownArea();
+    if (markdownState().trim() === '') {
+      props.deleteDraft?.();
+    }
     return true;
   };
 
@@ -444,15 +434,15 @@ export function BaseInput(props: BaseInputProps) {
                 }
           }
           onBlur={() => {
-            stopTyping();
-            onEscape();
+            // stopTyping();
+            handleBlur();
           }}
           users={props.channelUsers}
           onChange={handleChange}
           onPasteFile={onMarkdownAreaPaste}
           initialValue={props.initialValue?.()}
           useBlockBoundary={true}
-          onEscape={onEscape}
+          onEscape={handleBlur}
           dontFocusOnMount
           onFocusLeaveStart={props.onFocusLeaveStart}
           onFocusLeaveEnd={onFocusLeaveEnd}
@@ -514,12 +504,12 @@ export function BaseInput(props: BaseInputProps) {
           >
             <FormatIcon width={20} height={20} />
           </ActionButton>
-          <Show when={props.onDeleteDraft}>
+          <Show when={props.deleteDraft}>
             <ActionButton
               tooltip="Delete reply"
               onClick={(e) => {
                 e.preventDefault();
-                props.onDeleteDraft?.();
+                props.deleteDraft?.();
               }}
             >
               <Trash width={20} height={20} />

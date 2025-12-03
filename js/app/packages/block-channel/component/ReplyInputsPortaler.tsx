@@ -80,15 +80,7 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
     );
   };
 
-  const onEsc = (threadId: string) => () => {
-    props.setThreadViewStore(threadId, (prev) =>
-      prev
-        ? { ...prev, threadExpanded: true, hasActiveReply: false }
-        : { threadExpanded: true, hasActiveReply: false }
-    );
-  };
-
-  const onDeleteReply = (threadId: string) => () => {
+  const deleteDraft = (threadId: string) => () => {
     clearDraftMessage(props.channelId, threadId);
     props.setThreadViewStore(threadId, (prev) =>
       prev
@@ -177,15 +169,13 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
                     threadId,
                   })
                 }
-                onEmpty={() => clearDraftMessage(props.channelId, threadId)}
-                escHandler={onEsc(threadId)}
                 initialValue={() =>
                   loadDraftMessage(props.channelId, threadId)?.content ?? ''
                 }
                 onFocusLeaveStart={(e) => {
                   onFocusLeaveStart(e, threadId);
                 }}
-                onDeleteDraft={onDeleteReply(threadId)}
+                deleteDraft={deleteDraft(threadId)}
                 isReplyInput
               />
             </div>
