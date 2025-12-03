@@ -1,4 +1,7 @@
 //! Entity property get operations.
+//!
+//! TODO: The `pd.is_system = FALSE` filters are temporary. In a future PR, system properties
+//!       will be properly supported and returned to users via the API.
 
 use crate::error::PropertiesDatabaseError;
 use sqlx::{Pool, Postgres};
@@ -280,6 +283,7 @@ pub async fn get_entity_properties_values(
         FROM entity_properties ep
         INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
         WHERE ep.entity_id = $1 AND ep.entity_type = $2
+          AND pd.is_system = FALSE
         "#,
         entity_id,
         entity_type as EntityType
@@ -357,6 +361,7 @@ pub async fn get_bulk_entity_properties_values(
         WHERE (ep.entity_id, ep.entity_type) IN (
             SELECT * FROM UNNEST($1::TEXT[], $2::property_entity_type[])
         )
+          AND pd.is_system = FALSE
         "#,
         &entity_ids,
         &entity_types as &[EntityType]

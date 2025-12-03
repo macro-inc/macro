@@ -1,4 +1,7 @@
 //! Property definitions get operations.
+//!
+//! TODO: The `is_system = FALSE` filters are temporary. In a future PR, system properties
+//!       will be properly supported and returned to users via the API.
 
 use crate::error::PropertiesDatabaseError;
 use models_properties::service::property_definition::PropertyDefinition;
@@ -32,8 +35,11 @@ pub async fn get_properties(
             updated_at
         FROM property_definitions
         WHERE 
-            ($1::int IS NOT NULL AND organization_id = $1) 
-            OR ($2::text IS NOT NULL AND user_id = $2)
+            is_system = FALSE
+            AND (
+                ($1::int IS NOT NULL AND organization_id = $1) 
+                OR ($2::text IS NOT NULL AND user_id = $2)
+            )
         ORDER BY LOWER(display_name) ASC
         "#,
         organization_id,
@@ -83,6 +89,7 @@ pub async fn get_property_definition(
             updated_at
         FROM property_definitions
         WHERE id = $1
+          AND is_system = FALSE
         "#,
         property_id
     )
@@ -130,6 +137,7 @@ pub async fn get_property_definition_with_owner(
             updated_at
         FROM property_definitions
         WHERE id = $1
+          AND is_system = FALSE
           AND (
             user_id = $2
             OR ($3::int IS NOT NULL AND organization_id = $3)
@@ -188,8 +196,11 @@ pub async fn get_properties_with_options(
         FROM property_definitions pd
         LEFT JOIN property_options po ON pd.id = po.property_definition_id
         WHERE 
-            ($1::int IS NOT NULL AND pd.organization_id = $1) 
-            OR ($2::text IS NOT NULL AND pd.user_id = $2)
+            pd.is_system = FALSE
+            AND (
+                ($1::int IS NOT NULL AND pd.organization_id = $1) 
+                OR ($2::text IS NOT NULL AND pd.user_id = $2)
+            )
         ORDER BY LOWER(pd.display_name), po.display_order, po.number_value, LOWER(po.string_value)
         "#,
         organization_id,
