@@ -116,7 +116,7 @@ export function BaseInput(props: BaseInputProps) {
     ? isValidChannelDragSignal
     : createSignal(false);
 
-  const [isDraggingOverChannel, _setIsDraggingOverChannel] = isInBlock()
+  const [isDraggingOverChannel, setIsDraggingOverChannel] = isInBlock()
     ? isDraggingOverChannelSignal
     : createSignal(false);
 
@@ -393,6 +393,7 @@ export function BaseInput(props: BaseInputProps) {
       ref={containerRef}
       use:fileFolderDrop={{
         onDrop: (files, folders) => {
+          setIsDraggingOverChannel(false);
           handleFileFolderDrop(files, folders, (uploadEntries) =>
             handleFileUpload(uploadEntries, {
               store: props.inputAttachments.store,
