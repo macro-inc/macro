@@ -22,6 +22,8 @@ pub enum DeletePropertyOptionErr {
     DatabaseError(#[from] PropertiesDatabaseError),
     #[error("Property definition not found")]
     PropertyNotFound,
+    #[error("cannot modify system properties")]
+    SystemPropertyNotModifiable,
     #[error("Property option not found")]
     OptionNotFound,
 }
@@ -34,6 +36,7 @@ impl IntoResponse for DeletePropertyOptionErr {
             DeletePropertyOptionErr::PropertyNotFound | DeletePropertyOptionErr::OptionNotFound => {
                 StatusCode::NOT_FOUND
             }
+            DeletePropertyOptionErr::SystemPropertyNotModifiable => StatusCode::FORBIDDEN,
         };
 
         if status_code.is_server_error() {
@@ -59,6 +62,7 @@ impl IntoResponse for DeletePropertyOptionErr {
     responses(
         (status = 204, description = "Property option deleted successfully"),
         (status = 400, description = "Invalid option ID"),
+        (status = 403, description = "Cannot modify system properties"),
         (status = 404, description = "Property option not found"),
         (status = 500, description = "Internal server error")
     ),
@@ -76,6 +80,33 @@ pub async fn delete_property_option(
         "deleting property option"
     );
 
+    // First check if property exists and if it's a system property
+    let property = property_definitions_get::get_property_definition(&context.db, def_uuid)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(
+                error = ?e,
+                def_id = %def_uuid,
+                "failed to fetch property definition"
+            );
+        })?
+        .ok_or_else(|| {
+            tracing::warn!(
+                def_id = %def_uuid,
+                "property definition not found"
+            );
+            DeletePropertyOptionErr::PropertyNotFound
+        })?;
+
+    if property.is_system {
+        tracing::warn!(
+            def_id = %def_uuid,
+            "attempted to delete option from system property"
+        );
+        return Err(DeletePropertyOptionErr::SystemPropertyNotModifiable);
+    }
+
+    // Then verify ownership
     let _property_definition = property_definitions_get::get_property_definition_with_owner(
         &context.db,
         def_uuid,
@@ -87,13 +118,13 @@ pub async fn delete_property_option(
         tracing::error!(
             error = ?e,
             def_id = %def_uuid,
-            "failed to fetch property definition"
+            "failed to fetch property definition with owner"
         );
     })?
     .ok_or_else(|| {
         tracing::warn!(
             def_id = %def_uuid,
-            "property definition not found"
+            "property definition not found or not owned by user"
         );
         DeletePropertyOptionErr::PropertyNotFound
     })?;

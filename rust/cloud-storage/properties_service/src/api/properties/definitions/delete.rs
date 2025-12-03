@@ -19,6 +19,8 @@ use properties_db_client::{
 pub enum DeletePropertyDefinitionError {
     #[error("property definition not found")]
     NotFound,
+    #[error("cannot modify system properties")]
+    SystemPropertyNotModifiable,
     #[error("internal server error")]
     InternalServerError(#[from] anyhow::Error),
     #[error("Database error: {0}")]
@@ -29,6 +31,7 @@ impl IntoResponse for DeletePropertyDefinitionError {
     fn into_response(self) -> Response {
         let status_code = match &self {
             DeletePropertyDefinitionError::NotFound => StatusCode::NOT_FOUND,
+            DeletePropertyDefinitionError::SystemPropertyNotModifiable => StatusCode::FORBIDDEN,
             DeletePropertyDefinitionError::InternalServerError(_)
             | DeletePropertyDefinitionError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
@@ -55,6 +58,7 @@ impl IntoResponse for DeletePropertyDefinitionError {
     responses(
         (status = 204, description = "Property definition deleted successfully"),
         (status = 400, description = "Invalid property ID"),
+        (status = 403, description = "Cannot modify system properties"),
         (status = 404, description = "Property definition not found"),
         (status = 500, description = "Internal server error")
     ),
@@ -71,6 +75,20 @@ pub async fn delete_property_definition(
         "deleting property definition"
     );
 
+    // First check if property exists and if it's a system property
+    let property = property_definitions_get::get_property_definition(&context.db, property_uuid)
+        .await?
+        .ok_or(DeletePropertyDefinitionError::NotFound)?;
+
+    if property.is_system {
+        tracing::warn!(
+            property_id = %property_uuid,
+            "attempted to delete system property"
+        );
+        return Err(DeletePropertyDefinitionError::SystemPropertyNotModifiable);
+    }
+
+    // Then verify ownership
     let _property = property_definitions_get::get_property_definition_with_owner(
         &context.db,
         property_uuid,

@@ -24,6 +24,8 @@ pub enum AddPropertyOptionErr {
     DatabaseError(#[from] PropertiesDatabaseError),
     #[error("Property not found")]
     PropertyNotFound,
+    #[error("cannot modify system properties")]
+    SystemPropertyNotModifiable,
     #[error("{0}")]
     InvalidRequest(String),
 }
@@ -35,6 +37,7 @@ impl IntoResponse for AddPropertyOptionErr {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             AddPropertyOptionErr::PropertyNotFound => StatusCode::NOT_FOUND,
+            AddPropertyOptionErr::SystemPropertyNotModifiable => StatusCode::FORBIDDEN,
             AddPropertyOptionErr::InvalidRequest(_) => StatusCode::BAD_REQUEST,
         };
 
@@ -61,6 +64,7 @@ impl IntoResponse for AddPropertyOptionErr {
     responses(
         (status = 201, description = "Property option created successfully", body = PropertyOption),
         (status = 400, description = "Invalid request"),
+        (status = 403, description = "Cannot modify system properties"),
         (status = 404, description = "Property not found"),
         (status = 500, description = "Internal server error")
     ),
@@ -75,6 +79,27 @@ pub async fn add_property_option(
 ) -> Result<(StatusCode, Json<PropertyOption>), AddPropertyOptionErr> {
     tracing::info!("adding property option");
 
+    // First check if property exists and if it's a system property
+    let property = property_definitions_get::get_property_definition(&context.db, property_uuid)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(
+                property_id = %property_uuid,
+                error = ?e,
+                "failed to fetch property definition"
+            );
+        })?
+        .ok_or(AddPropertyOptionErr::PropertyNotFound)?;
+
+    if property.is_system {
+        tracing::warn!(
+            property_id = %property_uuid,
+            "attempted to add option to system property"
+        );
+        return Err(AddPropertyOptionErr::SystemPropertyNotModifiable);
+    }
+
+    // Then verify ownership
     let property_definition = property_definitions_get::get_property_definition_with_owner(
         &context.db,
         property_uuid,
@@ -86,7 +111,7 @@ pub async fn add_property_option(
         tracing::error!(
             property_id = %property_uuid,
             error = ?e,
-            "failed to fetch property definition"
+            "failed to fetch property definition with owner"
         );
     })?
     .ok_or(AddPropertyOptionErr::PropertyNotFound)?;
