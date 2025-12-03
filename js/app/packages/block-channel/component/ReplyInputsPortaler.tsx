@@ -11,7 +11,7 @@ import { blockElementSignal } from '@core/signal/blockElement';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import type { Message } from '@service-comms/generated/models';
 import { createCallback } from '@solid-primitives/rootless';
-import { type Accessor, createEffect, For } from 'solid-js';
+import { type Accessor, createEffect, For, type Setter } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import type { VirtualizerHandle } from 'virtua/solid';
@@ -28,7 +28,7 @@ export type ReplyInputsPortalerProps = {
   setThreadInputAttachmentsStore: SetStoreFunction<
     Record<string, InputAttachment[]>
   >;
-  setLocalTyping?: (isTyping: boolean) => void;
+  setLocalTypingThreadId?: Setter<string | undefined>;
 };
 
 export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
@@ -160,7 +160,11 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
                   setStore: props.setThreadInputAttachmentsStore,
                   key: threadId,
                 }}
-                setLocalTyping={props.setLocalTyping}
+                setLocalTyping={
+                  props.setLocalTypingThreadId
+                    ? (isTyping) => props.setLocalTypingThreadId?.(isTyping ? threadId : undefined)
+                    : undefined
+                }
                 onChange={(content) =>
                   saveDraftMessage(props.channelId, {
                     content,

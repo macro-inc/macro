@@ -97,8 +97,9 @@ type BaseInputProps = {
   isReplyInput?: boolean;
 };
 
-/** the time after a user stops typing before we consider them idle */
-const ACTIVITY_TIMEOUT_MS = 2000;
+/** the time after a user stops typing before we consider them idle. we want smooth remote changes, but local changes should happen more immediately. */
+const REMOTE_ACTIVITY_TIMEOUT_MS = 2000;
+const LOCAL_ACTIVITY_TIMEOUT_MS = 500;
 
 export function BaseInput(props: BaseInputProps) {
   let containerRef!: HTMLDivElement;
@@ -121,7 +122,8 @@ export function BaseInput(props: BaseInputProps) {
   );
 
   const [typing, setTyping] = createSignal(false);
-  let inactivityTimeout: ReturnType<typeof setTimeout> | undefined;
+  let remoteInactivityTimeout: ReturnType<typeof setTimeout> | undefined;
+  let localInactivityTimeout: ReturnType<typeof setTimeout> | undefined;
   let viewportObserver: IntersectionObserver | undefined;
 
   const [showAttachMenu, setShowAttachMenu] = createSignal(false);
@@ -129,18 +131,30 @@ export function BaseInput(props: BaseInputProps) {
     createSignal<HTMLDivElement>();
 
   function resetInactivityTimeout() {
-    if (inactivityTimeout) {
-      clearTimeout(inactivityTimeout);
+    if (remoteInactivityTimeout) {
+      clearTimeout(remoteInactivityTimeout);
     }
-    inactivityTimeout = setTimeout(() => stopTyping(), ACTIVITY_TIMEOUT_MS);
+    if (localInactivityTimeout) {
+      clearTimeout(localInactivityTimeout);
+    }
+    remoteInactivityTimeout = setTimeout(() => stopRemoteTyping(), REMOTE_ACTIVITY_TIMEOUT_MS);
+    localInactivityTimeout = setTimeout(() => stopLocalTyping(), LOCAL_ACTIVITY_TIMEOUT_MS);
+  }
+
+  function stopRemoteTyping() {
+     if (typing()) {
+      setTyping(false);
+      props.onStopTyping();
+    }
+  }
+
+  function stopLocalTyping() {
+      props.setLocalTyping?.(false);
   }
 
   function stopTyping() {
-    if (typing()) {
-      setTyping(false);
-      props.onStopTyping();
-      props.setLocalTyping?.(false);
-    }
+    stopRemoteTyping();
+    stopLocalTyping();
   }
 
   const startTyping = leading(
@@ -149,8 +163,8 @@ export function BaseInput(props: BaseInputProps) {
       if (!typing()) {
         setTyping(true);
         props.onStartTyping();
-        props.setLocalTyping?.(true);
       }
+      props.setLocalTyping?.(true);
     }),
     1000
   );
@@ -249,14 +263,12 @@ export function BaseInput(props: BaseInputProps) {
   });
 
   onCleanup(() => {
-    if (inactivityTimeout) {
-      clearTimeout(inactivityTimeout);
+    if (remoteInactivityTimeout) {
+      clearTimeout(remoteInactivityTimeout);
     }
-    console.log('onCleanup triggering stopTyping');
     stopTyping();
     viewportObserver?.disconnect();
     if (markdownState().trim() === '') {
-      console.log('onCleanup empty input triggering deleteDraft');
       props.deleteDraft?.();
     }
   });
@@ -308,7 +320,6 @@ export function BaseInput(props: BaseInputProps) {
       .onSend(args)
       .then(() => {
         props.inputAttachments.setStore(key, []);
-        console.log('stopTyping in onSend');
         stopTyping();
         return props.afterSend?.();
       })
@@ -333,10 +344,8 @@ export function BaseInput(props: BaseInputProps) {
 
   function handleChange(input: string) {
     if (input.trim() === '') {
-      console.log('handleChange empty input triggering stopTyping');
       stopTyping();
     } else {
-      console.log('handleChange non-empty input triggering startTyping');
       startTyping();
       resetInactivityTimeout();
       props.onChange(input);
@@ -434,7 +443,7 @@ export function BaseInput(props: BaseInputProps) {
                 }
           }
           onBlur={() => {
-            // stopTyping();
+            stopTyping();
             handleBlur();
           }}
           users={props.channelUsers}

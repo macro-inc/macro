@@ -298,62 +298,64 @@ export function MessageList(props: MessageListProps) {
     return out;
   });
 
-  // Thread reply inputs are portaled to the correct message container. This keeps them in the correct location even as new thread replies come in, but if they are portaled while a user is typing, the user can momentarily lose input. To address this, we do not update the threaded messages until the user stops typing.
-  const [localTyping, setLocalTyping] = createSignal(false);
-  let updateDelayedByTyping = false;
-
-  // TODO something wrong with localTyping signal. When a message from another user comes in, on a thread that a user is typing a reply to, localTyping gets set to false. Investigate why.
   createEffect(
-    on([flattenedThreaded, localTyping], ([flat, typing], prev) => {
-      const oldFlat = prev?.[0];
-      if (!typing && (oldFlat !== flat || updateDelayedByTyping)) {
+    on(flattenedThreaded, (flat, prev) => {
+      const oldFlat = prev;
+      if (oldFlat !== flat) {
         props.setOrderedMessages(flat);
         computeListContext(flat);
-        updateDelayedByTyping = false;
-      } else if (typing && oldFlat !== flat) {
-        updateDelayedByTyping = true;
       }
     })
   );
 
-  // Maintain a snapshot of threads store, changes to whcih only propagate when the user is not typing.
-  let threadsDirtyWhileTyping = false;
-  let snapshot: ThreadStoreData = {};
+  // Thread reply inputs are portaled to the correct message container. This keeps them in the correct location even as new thread replies come in, but if they are re-portaled while a user is typing, the user can momentarily lose input. To address this, we gate updates to the thread that a user is currently typing in.
+  const [localTypingThreadId, setLocalTypingThreadId] = createSignal<
+    string | undefined
+  >();
 
-  // Prepare snapshot of threads
+  let dirtyTypingThreadId: string | undefined;
+
+  // Maintain a local snapshot of threads that freezes changes for threads in which a user is actively typing.
   createEffect(() => {
     const baseMessages = props.messages;
-    const nextSnapshot: ThreadStoreData = {};
-    let hasChanges = false;
+    const activeThreadId = untrack(localTypingThreadId);
 
     for (const message of baseMessages) {
       const id = message.id;
       const threadArr = threads[id] ?? [];
-      nextSnapshot[id] = threadArr;
-      if (!hasChanges && viewThreads[id] !== threadArr) {
-        hasChanges = true;
+      const currentView = viewThreads[id];
+      const isTypingThisThread = id === activeThreadId;
+
+      if (isTypingThisThread) {
+        if (currentView !== threadArr) {
+          dirtyTypingThreadId = id;
+        }
+      } else {
+        if (currentView !== threadArr) {
+          setViewThreads(id, reconcile(threadArr));
+        }
+        if (dirtyTypingThreadId === id) {
+          dirtyTypingThreadId = undefined;
+        }
       }
-    }
-
-    if (!hasChanges) return;
-
-    snapshot = nextSnapshot;
-
-    if (untrack(localTyping)) {
-      threadsDirtyWhileTyping = true;
-    } else {
-      setViewThreads(reconcile(snapshot));
-      threadsDirtyWhileTyping = false;
     }
   });
 
-  // Commit pending changes when the user is not typing
-  createEffect(() => {
-    const typing = localTyping();
-    if (!typing && threadsDirtyWhileTyping) {
-      setViewThreads(reconcile(snapshot));
-      threadsDirtyWhileTyping = false;
+  // When active typing thread changes flush any pending changes for the previous typing thread.
+  createEffect((prevTypingId: string | undefined) => {
+    const currentTypingId = localTypingThreadId();
+
+    if (
+      prevTypingId &&
+      prevTypingId !== currentTypingId &&
+      dirtyTypingThreadId === prevTypingId
+    ) {
+      const threadArr = untrack(() => threads[prevTypingId] ?? []);
+      setViewThreads(prevTypingId, reconcile(threadArr));
+      dirtyTypingThreadId = undefined;
     }
+
+    return currentTypingId;
   });
 
   // Provide stable row models to VList so item instances are preserved across moves/insertions
@@ -777,7 +779,7 @@ export function MessageList(props: MessageListProps) {
         virtualHandle={virtualHandle}
         threadInputAttachmentsStore={threadInputAttachmentsStore}
         setThreadInputAttachmentsStore={setThreadInputAttachmentsStore}
-        setLocalTyping={setLocalTyping}
+        setLocalTypingThreadId={setLocalTypingThreadId}
       />
     </div>
   );
