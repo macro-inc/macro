@@ -102,35 +102,35 @@ async function deleteUserData() {
         `Found ${docCount} documents with user_id OR owner_id: ${userId} in ${index}`
       );
 
-      if (docCount === 0) {
-        console.log(`No documents to delete in ${index}`);
-        continue;
-      }
-
-      // Delete documents by query
-      await opensearchClient.deleteByQuery({
-        index,
-        body: {
-          query,
-        },
-        refresh: true, // Refresh the index after deletion
-      });
-
-      console.log(`Delete operation completed for ${index}`);
-
-      // Verify deletion by counting again
-      const verifyResult = await opensearchClient.count({
-        index,
-        body: {
-          query,
-        },
-      });
-
-      const remainingCount = verifyResult.body.count;
-      const deletedCount = docCount - remainingCount;
-      console.log(
-        `Deleted ${deletedCount} documents from ${index} (${remainingCount} remaining)`
-      );
+      // if (docCount === 0) {
+      //   console.log(`No documents to delete in ${index}`);
+      //   continue;
+      // }
+      //
+      // // Delete documents by query
+      // await opensearchClient.deleteByQuery({
+      //   index,
+      //   body: {
+      //     query,
+      //   },
+      //   refresh: true, // Refresh the index after deletion
+      // });
+      //
+      // console.log(`Delete operation completed for ${index}`);
+      //
+      // // Verify deletion by counting again
+      // const verifyResult = await opensearchClient.count({
+      //   index,
+      //   body: {
+      //     query,
+      //   },
+      // });
+      //
+      // const remainingCount = verifyResult.body.count;
+      // const deletedCount = docCount - remainingCount;
+      // console.log(
+      //   `Deleted ${deletedCount} documents from ${index} (${remainingCount} remaining)`
+      // );
 
       // Delete corresponding entries from names index
       console.log(`Deleting entries from ${NAMES_INDEX} for entity_type: ${index} and user_id: ${userId}`);
