@@ -1,5 +1,5 @@
 import { withAnalytics } from '@coparse/analytics';
-import { DEV_MODE_ENV, ENABLE_AI_MEMORY } from '@core/constant/featureFlags';
+import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import {
   type SettingsTab,
   setSettingsOpen,
@@ -123,9 +123,6 @@ export function Settings() {
 
     if (isNativeMobilePlatform() && DEV_MODE_ENV) {
       tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' });
-    }
-    if (ENABLE_AI_MEMORY) {
-      tabs.push({ value: 'AI Memory', label: 'AI Memory' });
     }
 
     return tabs;
@@ -284,7 +281,6 @@ export function Settings() {
               <Tabs.Content value="Notification" class="h-full">
                 <Notification />
               </Tabs.Content>
-              <Show when={ENABLE_AI_MEMORY}></Show>
             </div>
           </Tabs>
         </Dialog.Content>
