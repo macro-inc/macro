@@ -85,4 +85,5 @@ impl From<service::message::ScheduledMessage> for ScheduledMessage {
 pub struct MessageRecipient {
     pub contact_id: Uuid,
     pub recipient_type: EmailRecipientType,
+    pub name: Option<String>,
 }
