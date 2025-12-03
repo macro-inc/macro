@@ -40,7 +40,7 @@ impl SystemProperties {
         let entity_types: Vec<String> = rows
             .iter()
             .map(|r| {
-                serde_json::to_value(&r.entity_type)
+                serde_json::to_value(r.entity_type)
                     .expect("EntityType serializes to JSON")
                     .as_str()
                     .expect("EntityType serializes to string")
