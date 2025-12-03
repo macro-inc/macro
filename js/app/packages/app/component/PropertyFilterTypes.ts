@@ -86,11 +86,11 @@ export type PropertyFilter =
       action: ComparisonAction;
       value: number;
     }
-  // SELECT_NUMBER | SELECT_STRING - equality/contains (multiple) or comparison (single)
+  // SELECT_NUMBER | SELECT_STRING (single-value) - equality or comparison
   | {
       propertyId: string;
       dataType: 'SELECT_NUMBER' | 'SELECT_STRING';
-      action: EqualityAction | ContainsAction;
+      action: EqualityAction;
       values: string[]; // option ids
     }
   | {
@@ -99,11 +99,25 @@ export type PropertyFilter =
       action: ComparisonAction;
       value: string; // option id
     }
-  // ENTITY - equality or contains (always multiple)
+  // SELECT_NUMBER | SELECT_STRING (multi-value) - contains only
+  | {
+      propertyId: string;
+      dataType: 'SELECT_NUMBER' | 'SELECT_STRING';
+      action: ContainsAction;
+      values: string[]; // option ids
+    }
+  // ENTITY (single-value) - equality only
   | {
       propertyId: string;
       dataType: 'ENTITY';
-      action: EqualityAction | ContainsAction;
+      action: EqualityAction;
+      values: EntityFilterValue[];
+    }
+  // ENTITY (multi-value) - contains only
+  | {
+      propertyId: string;
+      dataType: 'ENTITY';
+      action: ContainsAction;
       values: EntityFilterValue[];
     };
 
@@ -112,38 +126,72 @@ export const isFilterableDataType = (dataType: DataType): boolean => {
   return (FILTERABLE_DATA_TYPES as readonly DataType[]).includes(dataType);
 };
 
-/** Helper: Get valid actions for a property based on data type and multi-select status */
+/** Helper: Get valid filter actions for a property based on data type, multi-select, and existing filters */
 export const getValidFilterActions = (
+  propertyId: string,
   dataType: DataType,
-  isMultiSelect: boolean
+  isMultiSelect: boolean,
+  existingFilters: PropertyFilter[] = []
 ): FilterAction[] => {
+  // Get existing actions for this specific property
+  const filtersForProperty = existingFilters.filter(
+    (f) => f.propertyId === propertyId
+  );
+  const existingActions = new Set(filtersForProperty.map((f) => f.action));
+
+  const actions: FilterAction[] = [];
+
   // Multi-select properties only support contains actions
   if (isMultiSelect) {
-    return [
-      ContainsAction.HAS_ANY,
-      ContainsAction.HAS_ALL,
-      ContainsAction.DOES_NOT_HAVE,
-    ];
+    actions.push(ContainsAction.HAS_ANY);
+    if (!existingActions.has(ContainsAction.HAS_ALL)) {
+      actions.push(ContainsAction.HAS_ALL);
+    }
+    if (!existingActions.has(ContainsAction.DOES_NOT_HAVE)) {
+      actions.push(ContainsAction.DOES_NOT_HAVE);
+    }
+    return actions;
   }
 
-  // Single value properties - actions depend on data type
-  switch (dataType) {
-    case DataType.BOOLEAN:
-    case DataType.ENTITY:
-      return [EqualityAction.EQUAL, EqualityAction.NOT_EQUAL];
-    case DataType.DATE:
-    case DataType.NUMBER:
-    case DataType.SELECT_NUMBER:
-    case DataType.SELECT_STRING:
-      return [
-        EqualityAction.EQUAL,
-        EqualityAction.NOT_EQUAL,
-        ComparisonAction.GREATER_THAN,
-        ComparisonAction.GREATER_THAN_OR_EQUAL,
-        ComparisonAction.LESS_THAN,
-        ComparisonAction.LESS_THAN_OR_EQUAL,
-      ];
-    default:
+  // BOOLEAN: if any filter exists, no more filters allowed (only true/false)
+  if (dataType === DataType.BOOLEAN) {
+    if (filtersForProperty.length > 0) {
       return [];
+    }
+    return [EqualityAction.EQUAL, EqualityAction.NOT_EQUAL];
   }
+
+  // Equality actions (all single-value types)
+  if (!existingActions.has(EqualityAction.EQUAL)) {
+    actions.push(EqualityAction.EQUAL);
+  }
+  if (!existingActions.has(EqualityAction.NOT_EQUAL)) {
+    actions.push(EqualityAction.NOT_EQUAL);
+  }
+
+  // Comparison actions (DATE, NUMBER, SELECT_NUMBER, SELECT_STRING only)
+  if (
+    dataType === DataType.DATE ||
+    dataType === DataType.NUMBER ||
+    dataType === DataType.SELECT_NUMBER ||
+    dataType === DataType.SELECT_STRING
+  ) {
+    const hasLowerBound =
+      existingActions.has(ComparisonAction.GREATER_THAN) ||
+      existingActions.has(ComparisonAction.GREATER_THAN_OR_EQUAL);
+    const hasUpperBound =
+      existingActions.has(ComparisonAction.LESS_THAN) ||
+      existingActions.has(ComparisonAction.LESS_THAN_OR_EQUAL);
+
+    if (!hasLowerBound) {
+      actions.push(ComparisonAction.GREATER_THAN);
+      actions.push(ComparisonAction.GREATER_THAN_OR_EQUAL);
+    }
+    if (!hasUpperBound) {
+      actions.push(ComparisonAction.LESS_THAN);
+      actions.push(ComparisonAction.LESS_THAN_OR_EQUAL);
+    }
+  }
+
+  return actions;
 };
