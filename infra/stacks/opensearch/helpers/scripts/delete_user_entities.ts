@@ -1,4 +1,7 @@
 import { client } from '../client';
+import {
+  NAMES_INDEX,
+} from '../constants';
 
 /**
  * Delete User Entities Script
@@ -128,6 +131,63 @@ async function deleteUserData() {
       console.log(
         `Deleted ${deletedCount} documents from ${index} (${remainingCount} remaining)`
       );
+
+      // Delete corresponding entries from names index
+      console.log(`Deleting entries from ${NAMES_INDEX} for entity_type: ${index} and user_id: ${userId}`);
+
+      const namesQuery = {
+        bool: {
+          must: [
+            {
+              term: {
+                entity_type: index,
+              },
+            },
+            {
+              term: {
+                user_id: userId,
+              },
+            },
+          ],
+        },
+      };
+
+      // Count names entries before deletion
+      const namesCountResult = await opensearchClient.count({
+        index: NAMES_INDEX,
+        body: {
+          query: namesQuery,
+        },
+      });
+
+      const namesDocCount = namesCountResult.body.count;
+      console.log(
+        `Found ${namesDocCount} entries in ${NAMES_INDEX} for entity_type: ${index} and user_id: ${userId}`
+      );
+
+      if (namesDocCount > 0) {
+        await opensearchClient.deleteByQuery({
+          index: NAMES_INDEX,
+          body: {
+            query: namesQuery,
+          },
+          refresh: true,
+        });
+
+        // Verify names deletion
+        const namesVerifyResult = await opensearchClient.count({
+          index: NAMES_INDEX,
+          body: {
+            query: namesQuery,
+          },
+        });
+
+        const namesRemainingCount = namesVerifyResult.body.count;
+        const namesDeletedCount = namesDocCount - namesRemainingCount;
+        console.log(
+          `Deleted ${namesDeletedCount} entries from ${NAMES_INDEX} (${namesRemainingCount} remaining)`
+        );
+      }
     }
 
     console.log('User data deletion completed');
