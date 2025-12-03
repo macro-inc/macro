@@ -162,7 +162,10 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
                 }}
                 setLocalTyping={
                   props.setLocalTypingThreadId
-                    ? (isTyping) => props.setLocalTypingThreadId?.(isTyping ? threadId : undefined)
+                    ? (isTyping) =>
+                        props.setLocalTypingThreadId?.(
+                          isTyping ? threadId : undefined
+                        )
                     : undefined
                 }
                 onChange={(content) =>
