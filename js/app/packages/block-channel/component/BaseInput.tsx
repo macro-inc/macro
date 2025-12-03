@@ -86,9 +86,10 @@ type BaseInputProps = {
   /** external focus trigger: if getter returns true, focus then call clearer */
   shouldFocus?: boolean;
   clearShouldFocus?: () => void;
-  /** called after onSend resolves and after BaseInput cleanup */
   onFocus?: () => void;
   onBlur?: () => void;
+  /** called after onSend resolves and after BaseInput cleanup */
+
   afterSend?: () => void | Promise<void>;
   /** called when the user uses the up arrow or shift + tab to leave the first line of input */
   onFocusLeaveStart?: (e: KeyboardEvent) => void;
