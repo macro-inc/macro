@@ -1,7 +1,6 @@
 use crate::context::{self};
 use anyhow::Context;
 use aws_lambda_events::eventbridge::EventBridgeEvent;
-use lambda_runtime::tracing::Instrument;
 use lambda_runtime::{
     Error, LambdaEvent,
     tracing::{self},
@@ -15,29 +14,11 @@ pub async fn handler(
     ctx: context::Context,
     _event: LambdaEvent<EventBridgeEvent>,
 ) -> Result<(), Error> {
-    let chat_handle = tokio::spawn({
-        let ctx = ctx.clone();
-        async move { handle_chats(&ctx).await }
-    });
-
-    let document_handle = tokio::spawn({
-        let ctx = ctx.clone();
-        async move { handle_documents(&ctx).await }
-    });
-
-    let project_handle = tokio::spawn({
-        let ctx = ctx.clone();
-        async move { handle_projects(&ctx).await }
-    });
-
-    // Use tokio::try_join! macro
-    let (chat_result, document_result, project_result) =
-        tokio::try_join!(chat_handle, document_handle, project_handle)?;
-
-    // Propagate any errors from the tasks
-    project_result.context("error handling projects")?;
-    chat_result.context("error handling chats")?;
-    document_result.context("error handling documents")?;
+    let _ = tokio::try_join!(
+        handle_chats(&ctx),
+        handle_documents(&ctx),
+        handle_projects(&ctx)
+    )?;
 
     Ok(())
 }
@@ -63,23 +44,17 @@ async fn handle_projects(ctx: &context::Context) -> anyhow::Result<()> {
         .await
         .context("unable to delete projects")?;
 
-    // delete projects from search
-    tokio::spawn({
-        let sqs_client = ctx.sqs_client.clone();
-        let project_ids = projects_to_delete.clone();
-        async move {
-            tracing::trace!("sending message to search extractor queue");
-            let _ = sqs_client
-                .send_message_to_search_event_queue(SearchQueueMessage::BulkRemoveProjectMessage(
-                    project::BulkRemoveProjectMessage { project_ids },
-                ))
-                .await
-                .inspect_err(|e| {
-                    tracing::error!(error=?e, "SEARCH_QUEUE unable to enqueue message");
-                });
-        }
-        .in_current_span()
-    });
+    let _ = ctx
+        .sqs_client
+        .send_message_to_search_event_queue(SearchQueueMessage::BulkRemoveProjectMessage(
+            project::BulkRemoveProjectMessage {
+                project_ids: projects_to_delete,
+            },
+        ))
+        .await
+        .inspect_err(|e| {
+            tracing::error!(error=?e, "SEARCH_QUEUE unable to enqueue message");
+        });
 
     Ok(())
 }
