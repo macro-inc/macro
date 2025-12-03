@@ -186,11 +186,9 @@ pub enum RemoveUserFromTeamError {
 
 /// Arguments for creating a subscription
 #[derive(Debug, Clone)]
-pub struct CreateSubscriptionArgs<'a> {
+pub struct CreateSubscriptionArgs {
     /// The customer id
     pub customer_id: stripe::CustomerId,
-    /// The price id
-    pub price_id: &'a str,
     /// The quantity
     pub quantity: u64,
     /// The metadata to attach to the subscription
