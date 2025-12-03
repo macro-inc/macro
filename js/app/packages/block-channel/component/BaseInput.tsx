@@ -87,6 +87,8 @@ type BaseInputProps = {
   shouldFocus?: boolean;
   clearShouldFocus?: () => void;
   /** called after onSend resolves and after BaseInput cleanup */
+  onFocus?: () => void;
+  onBlur?: () => void;
   afterSend?: () => void | Promise<void>;
   /** called when the user uses the up arrow or shift + tab to leave the first line of input */
   onFocusLeaveStart?: (e: KeyboardEvent) => void;
@@ -200,6 +202,19 @@ export function BaseInput(props: BaseInputProps) {
         }
       }, 0);
     }
+
+    if (ref() && props.onFocus) {
+      ref()?.addEventListener('focusin', () => {
+        props.onFocus?.();
+      });
+    }
+    onCleanup(() => {
+      if (ref() && props.onFocus) {
+        ref()?.removeEventListener('focusin', () => {
+          props.onFocus?.();
+        });
+      }
+    });
   });
 
   const onFocusLeaveEnd = (e: KeyboardEvent) => {
@@ -444,6 +459,7 @@ export function BaseInput(props: BaseInputProps) {
                 }
           }
           onBlur={() => {
+            props.onBlur?.();
             stopTyping();
             onEscape();
           }}
