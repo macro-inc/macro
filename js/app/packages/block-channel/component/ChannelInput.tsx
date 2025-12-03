@@ -82,7 +82,7 @@ export function ChannelInput(props: ChannelInputProps) {
         key: props.inputAttachmentsKey,
       }}
       onFocusLeaveStart={props.onFocusLeaveStart}
-      deleteDraft={() => clearDraftMessage(channelId)}
+      onEmptyBlur={() => clearDraftMessage(channelId)}
       channelUsers={channelUsers}
       autoFocusOnMount={props.autoFocusOnMount}
       domRef={props.domRef}

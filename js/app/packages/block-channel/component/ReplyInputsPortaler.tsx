@@ -80,7 +80,7 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
     );
   };
 
-  const deleteDraft = (threadId: string) => () => {
+  const onEmptyBlur = (threadId: string) => () => {
     clearDraftMessage(props.channelId, threadId);
     props.setThreadViewStore(threadId, (prev) =>
       prev
@@ -182,7 +182,7 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
                 onFocusLeaveStart={(e) => {
                   onFocusLeaveStart(e, threadId);
                 }}
-                deleteDraft={deleteDraft(threadId)}
+                onEmptyBlur={onEmptyBlur(threadId)}
                 isReplyInput
               />
             </div>

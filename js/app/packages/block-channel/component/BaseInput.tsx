@@ -91,8 +91,8 @@ type BaseInputProps = {
   /** the list of users in the channel  */
   channelUsers?: () => IUser[];
   domRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
-  /** callback to delete draft */
-  deleteDraft?: () => void;
+  /** callback to be called to "clear the input" */
+  onEmptyBlur?: () => void;
   /** whether this input is for a reply (affects styling) */
   isReplyInput?: boolean;
 };
@@ -275,7 +275,7 @@ export function BaseInput(props: BaseInputProps) {
     stopTyping();
     viewportObserver?.disconnect();
     if (markdownState().trim() === '') {
-      props.deleteDraft?.();
+      props.onEmptyBlur?.();
     }
   });
 
@@ -380,7 +380,7 @@ export function BaseInput(props: BaseInputProps) {
   const handleBlur = () => {
     blurMarkdownArea();
     if (markdownState().trim() === '') {
-      props.deleteDraft?.();
+      props.onEmptyBlur?.();
     }
     return true;
   };
@@ -519,12 +519,12 @@ export function BaseInput(props: BaseInputProps) {
           >
             <FormatIcon width={20} height={20} />
           </ActionButton>
-          <Show when={props.deleteDraft}>
+          <Show when={props.onEmptyBlur}>
             <ActionButton
               tooltip="Delete reply"
               onClick={(e) => {
                 e.preventDefault();
-                props.deleteDraft?.();
+                props.onEmptyBlur?.();
               }}
             >
               <Trash width={20} height={20} />
