@@ -137,19 +137,25 @@ export function BaseInput(props: BaseInputProps) {
     if (localInactivityTimeout) {
       clearTimeout(localInactivityTimeout);
     }
-    remoteInactivityTimeout = setTimeout(() => stopRemoteTyping(), REMOTE_ACTIVITY_TIMEOUT_MS);
-    localInactivityTimeout = setTimeout(() => stopLocalTyping(), LOCAL_ACTIVITY_TIMEOUT_MS);
+    remoteInactivityTimeout = setTimeout(
+      () => stopRemoteTyping(),
+      REMOTE_ACTIVITY_TIMEOUT_MS
+    );
+    localInactivityTimeout = setTimeout(
+      () => stopLocalTyping(),
+      LOCAL_ACTIVITY_TIMEOUT_MS
+    );
   }
 
   function stopRemoteTyping() {
-     if (typing()) {
+    if (typing()) {
       setTyping(false);
       props.onStopTyping();
     }
   }
 
   function stopLocalTyping() {
-      props.setLocalTyping?.(false);
+    props.setLocalTyping?.(false);
   }
 
   function stopTyping() {
