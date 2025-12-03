@@ -285,9 +285,9 @@ export function KommandMenuInner(props: {
       return true;
     },
     runWithInputFocused: true,
-    hide: true
-  })
-  
+    hide: true,
+  });
+
   const CommandKItemWrapper = (props: {
     index: number;
     item: CommandItemCard;

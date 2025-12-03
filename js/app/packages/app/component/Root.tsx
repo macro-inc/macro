@@ -1,6 +1,6 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { setHotkeyRoot, useSubscribeToKeypress } from '@app/signal/hotkeyRoot';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { ChannelsContextProvider } from '@core/component/ChannelsProvider';

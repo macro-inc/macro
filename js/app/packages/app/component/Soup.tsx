@@ -13,7 +13,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { ENABLE_FOLDER_UPLOAD } from '@core/constant/featureFlags';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
-import { RegisterHotkeyReturn } from '@core/hotkey/types';
+import type { RegisterHotkeyReturn } from '@core/hotkey/types';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import {
   CONDITIONAL_VIEWS,
