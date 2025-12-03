@@ -30,7 +30,7 @@ export function ChannelCompose() {
   const [isValidChannelDrag] = isInBlock()
     ? isValidChannelDragSignal
     : createSignal(true);
-  const [isDraggingOverChannel, _setIsDraggingOverChannel] = isInBlock()
+  const [isDraggingOverChannel, setIsDraggingOverChannel] = isInBlock()
     ? isDraggingOverChannelSignal
     : createSignal(false);
 
@@ -113,6 +113,7 @@ export function ChannelCompose() {
         class="relative flex flex-col w-full h-full panel"
         use:fileFolderDrop={{
           onDrop: (files, folders) => {
+            setIsDraggingOverChannel(false);
             handleFileFolderDrop(files, folders, (uploadEntries) =>
               handleFileUpload(uploadEntries, {
                 store: channelInputAttachmentsStore,
