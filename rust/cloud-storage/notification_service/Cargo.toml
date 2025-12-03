@@ -77,7 +77,7 @@ tracing = { workspace = true }
 url = { workspace = true }
 utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
-
+authentication_service_client = { path = "../authentication_service_client" }
 
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }

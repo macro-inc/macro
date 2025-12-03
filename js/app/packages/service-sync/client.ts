@@ -18,6 +18,11 @@ import { InitializeFromSnapshotRequest } from './generated/schema';
 
 const SYNC_SERVICE_WORKER_URL = `${SYNC_SERVICE_HOSTS['worker']}`;
 
+const WAKEUP_TTL = 55 * 1000; // 55 seconds - cloudflare ttl is 60
+
+const pendingWakeups = new Map<string, ReturnType<typeof setTimeout>>();
+const recentWakeups = new Map<string, number>();
+
 export function syncFetch(
   url: string,
   init?: SafeFetchInit
@@ -47,6 +52,48 @@ export const syncServiceClient = {
     await syncFetch(`/document/${args.documentId}/wakeup`, {
       method: 'GET',
     });
+  },
+  async safeWakeup(id: string, delay: number = 200) {
+    const lastWakeup = recentWakeups.get(id);
+    if (lastWakeup && Date.now() - lastWakeup < WAKEUP_TTL) {
+      return;
+    }
+
+    const existingTimeout = pendingWakeups.get(id);
+    if (existingTimeout) {
+      // let the first timeout handle it.
+      return;
+    }
+
+    const timeout = setTimeout(async () => {
+      try {
+        await syncFetch(`/document/${id}/wakeup`, {
+          method: 'GET',
+        });
+        recentWakeups.set(id, Date.now());
+
+        // prune
+        const now = Date.now();
+        for (const [key, timestamp] of recentWakeups.entries()) {
+          if (now - timestamp >= WAKEUP_TTL) {
+            recentWakeups.delete(key);
+          }
+        }
+      } catch (error) {
+        console.error(`Failed to wakeup document ${id}:`, error);
+      } finally {
+        pendingWakeups.delete(id);
+      }
+    }, delay);
+
+    pendingWakeups.set(id, timeout);
+  },
+  cancelWakeup(id: string) {
+    const timeout = pendingWakeups.get(id);
+    if (timeout) {
+      clearTimeout(timeout);
+      pendingWakeups.delete(id);
+    }
   },
   async exists(args: { documentId: string }) {
     const res = await syncFetch(`/document/${args.documentId}/exists`, {

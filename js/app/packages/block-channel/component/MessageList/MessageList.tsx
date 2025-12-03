@@ -4,7 +4,10 @@ import {
 } from '@block-channel/constants';
 import { openedChannelSignal } from '@block-channel/signal/activity';
 import { messageToReactionStore } from '@block-channel/signal/reactions';
-import { threadsStore } from '@block-channel/signal/threads';
+import {
+  type ThreadStoreData,
+  threadsStore,
+} from '@block-channel/signal/threads';
 import { usersTypingSignal } from '@block-channel/signal/typing';
 import type { ThreadViewData } from '@block-channel/type/threadView';
 import { loadDraftMessage } from '@block-channel/utils/draftMessages';
@@ -15,6 +18,7 @@ import {
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { TextButton } from '@core/component/TextButton';
 import { observedSize } from '@core/directive/observedSize';
+import { createActiveTarget } from '@core/signal/activeTarget';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import SunIcon from '@icon/duotone/sun-horizon-duotone.svg';
 import ArrowDownIcon from '@icon/regular/arrow-down.svg';
@@ -104,6 +108,7 @@ export function MessageList(props: MessageListProps) {
 
   const userId = useUserId();
   const threads = threadsStore.get;
+  const [viewThreads, setViewThreads] = createStore<ThreadStoreData>({});
 
   const [threadInputAttachmentsStore, setThreadInputAttachmentsStore] =
     createStore<Record<string, InputAttachment[]>>({});
@@ -138,34 +143,10 @@ export function MessageList(props: MessageListProps) {
     })
   );
 
-  const [activeTargetMessage, setActiveTargetMessage] = createSignal<
-    | {
-        messageId: string;
-        threadId?: string;
-      }
-    | undefined
-  >();
-
-  let targetTimeoutId: ReturnType<typeof setTimeout> | undefined;
-
-  createEffect(() => {
-    const target = props.targetMessage();
-
-    if (targetTimeoutId) {
-      clearTimeout(targetTimeoutId);
-      targetTimeoutId = undefined;
-    }
-
-    if (target) {
-      setActiveTargetMessage(target);
-      targetTimeoutId = setTimeout(() => {
-        setActiveTargetMessage(undefined);
-        targetTimeoutId = undefined;
-      }, TARGET_MESSAGE_ACTIVE_TIME);
-    } else {
-      setActiveTargetMessage(undefined);
-    }
-  });
+  const activeTargetMessage = createActiveTarget(
+    props.targetMessage,
+    TARGET_MESSAGE_ACTIVE_TIME
+  );
 
   let scrollTimeoutId: ReturnType<typeof setTimeout> | undefined;
   let scrollHintTimeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -291,9 +272,8 @@ export function MessageList(props: MessageListProps) {
   // Keep the message if:
   // 1. It's not deleted, OR
   // 2. It's deleted but is a parent message
-  const messageFilterFn = (message: Message) => {
-    return !message.deleted_at || threads[message.id]?.length > 0;
-  };
+  const messageFilterFn = (message: Message) =>
+    !message.deleted_at || viewThreads[message.id]?.length > 0;
 
   const filteredTopLevelMessages = createMemo(() =>
     props.messages.filter(messageFilterFn)
@@ -303,7 +283,7 @@ export function MessageList(props: MessageListProps) {
   // mapFn is not tracking, so wrap thread-dependent logic in a memo per parent.
   const segments = mapArray(filteredTopLevelMessages, (message) =>
     createMemo(() => {
-      const children = threads[message.id] ?? [];
+      const children = viewThreads[message.id] ?? [];
       const filteredChildren = children.filter(messageFilterFn);
       return filteredChildren.length
         ? [message, ...filteredChildren]
@@ -318,22 +298,65 @@ export function MessageList(props: MessageListProps) {
     return out;
   });
 
-  // Thread reply inputs are portaled to the correct message container. This keeps them in the right place, but if they are portaled while a user is typing, the user can lose input. To address this, we do not update the threaded messages until the user stops typing.
-  const [localTyping, setLocalTyping] = createSignal(false);
-  let updateDelayedByTyping = false;
-
   createEffect(
-    on([flattenedThreaded, localTyping], ([flat, typing], prev) => {
-      const oldFlat = prev?.[0];
-      if (!typing && (oldFlat !== flat || updateDelayedByTyping)) {
+    on(flattenedThreaded, (flat, prev) => {
+      const oldFlat = prev;
+      if (oldFlat !== flat) {
         props.setOrderedMessages(flat);
         computeListContext(flat);
-        updateDelayedByTyping = false;
-      } else if (typing && oldFlat !== flat) {
-        updateDelayedByTyping = true;
       }
     })
   );
+
+  // Thread reply inputs are portaled to the correct message container. This keeps them in the correct location even as new thread replies come in, but if they are re-portaled while a user is typing, the user can momentarily lose input. To address this, we gate updates to the thread that a user is currently typing in.
+  const [localTypingThreadId, setLocalTypingThreadId] = createSignal<
+    string | undefined
+  >();
+
+  let dirtyTypingThreadId: string | undefined;
+
+  // Maintain a local snapshot of threads that freezes changes for threads in which a user is actively typing.
+  createEffect(() => {
+    const baseMessages = props.messages;
+    const activeThreadId = untrack(localTypingThreadId);
+
+    for (const message of baseMessages) {
+      const id = message.id;
+      const threadArr = threads[id] ?? [];
+      const currentView = viewThreads[id];
+      const isTypingThisThread = id === activeThreadId;
+
+      if (isTypingThisThread) {
+        if (currentView !== threadArr) {
+          dirtyTypingThreadId = id;
+        }
+      } else {
+        if (currentView !== threadArr) {
+          setViewThreads(id, reconcile(threadArr));
+        }
+        if (dirtyTypingThreadId === id) {
+          dirtyTypingThreadId = undefined;
+        }
+      }
+    }
+  });
+
+  // When active typing thread changes flush any pending changes for the previous typing thread.
+  createEffect((prevTypingId: string | undefined) => {
+    const currentTypingId = localTypingThreadId();
+
+    if (
+      prevTypingId &&
+      prevTypingId !== currentTypingId &&
+      dirtyTypingThreadId === prevTypingId
+    ) {
+      const threadArr = untrack(() => threads[prevTypingId] ?? []);
+      setViewThreads(prevTypingId, reconcile(threadArr));
+      dirtyTypingThreadId = undefined;
+    }
+
+    return currentTypingId;
+  });
 
   // Provide stable row models to VList so item instances are preserved across moves/insertions
   type RowModel = {
@@ -372,7 +395,8 @@ export function MessageList(props: MessageListProps) {
         (threadId &&
           ((next && next.thread_id !== msg.thread_id) || !next) &&
           threadViewStore[threadId]?.hasActiveReply) ||
-        (threadViewStore[msg.id]?.hasActiveReply && !threads[msg.id]?.length)
+        (threadViewStore[msg.id]?.hasActiveReply &&
+          !viewThreads[msg.id]?.length)
       ) {
         indices.push(i);
       }
@@ -402,7 +426,7 @@ export function MessageList(props: MessageListProps) {
   const lastMessageThread = createMemo(() => {
     const base = filteredTopLevelMessages() ?? [];
     const lastTopLevelId = base[base.length - 1]?.id;
-    return threads[lastTopLevelId];
+    return viewThreads[lastTopLevelId];
   });
 
   createEffect(
@@ -644,10 +668,10 @@ export function MessageList(props: MessageListProps) {
                       setFocusedMessageId={props.setFocusedMessageId}
                       index={i}
                       orderedMessages={props.orderedMessages}
-                      threadSiblings={threads[
+                      threadSiblings={viewThreads[
                         row.message.thread_id ?? ''
                       ]?.filter(messageFilterFn)}
-                      threadChildren={threads[row.message.id ?? '']?.filter(
+                      threadChildren={viewThreads[row.message.id ?? '']?.filter(
                         messageFilterFn
                       )}
                       threadViewStore={threadViewStore}
@@ -751,11 +775,11 @@ export function MessageList(props: MessageListProps) {
         orderedMessages={props.orderedMessages}
         threadViewStore={threadViewStore}
         setThreadViewStore={setThreadViewStore}
-        threads={threads}
+        threads={viewThreads}
         virtualHandle={virtualHandle}
         threadInputAttachmentsStore={threadInputAttachmentsStore}
         setThreadInputAttachmentsStore={setThreadInputAttachmentsStore}
-        setLocalTyping={setLocalTyping}
+        setLocalTypingThreadId={setLocalTypingThreadId}
       />
     </div>
   );

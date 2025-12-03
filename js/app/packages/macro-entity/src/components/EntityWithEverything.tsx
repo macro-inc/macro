@@ -40,6 +40,9 @@ import type {
   WithSearch,
 } from '../types/search';
 import type { EntityClickEvent, EntityClickHandler } from './Entity';
+import type { Property } from '@core/component/Properties/types';
+import { syncServiceClient } from 'service-sync/client';
+import { PropertyPills } from './PropertyPills';
 
 function UnreadIndicator(props: { active?: boolean }) {
   return (
@@ -133,7 +136,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   onMouseLeave?: () => void;
   onFocusIn?: () => void;
   onContextMenu?: () => void;
-  properties?: Record<string, string>;
+  properties?: Property[];
   contentPlacement?: 'middle' | 'bottom-row';
   unreadIndicatorActive?: boolean;
   fadeIfRead?: boolean;
@@ -214,48 +217,59 @@ export function EntityWithEverything(
     return props.entity.search.contentHitData ?? [];
   };
 
+  onMount(() => {
+    if (props.entity.type === 'document' && props.entity.fileType === 'md') {
+      syncServiceClient.safeWakeup(props.entity.id);
+      onCleanup(() => {
+        syncServiceClient.cancelWakeup(props.entity.id);
+      });
+    }
+  });
+
   const EntityTitle = () => {
     if (props.entity.type === 'email') {
-      const macroDisplayNames =
-        props.entity.participantEmails?.map((email) => {
-          return useDisplayName(emailToId(email))[0];
-        }) ?? [];
       const isLikelyEmail = (value?: string) =>
         typeof value === 'string' && value.includes('@');
+
       const combinedParticipantFirstNames = createMemo(() => {
         if (props.entity.type !== 'email') return [];
         const me = userEmail();
-        const participantNames = props.entity.participantNames ?? [];
-        return (
-          props.entity.participantEmails?.reduce<string[]>(
-            (acc, email, idx) => {
-              if (me && email === me) return acc;
-              const macroFirstName = macroDisplayNames[idx]?.().split(' ')[0];
-              const participantFirstName = participantNames[idx].split(' ')[0];
-              if (macroFirstName && !isLikelyEmail(macroFirstName)) {
-                acc.push(macroFirstName);
-              } else if (
-                isLikelyEmail(macroFirstName) &&
-                participantFirstName &&
-                !isLikelyEmail(participantFirstName)
-              ) {
-                acc.push(participantFirstName);
-              } else {
-                acc.push(email.split('@')[0]);
-              }
-              return acc;
-            },
-            []
-          ) ?? []
-        );
+        if (
+          props.entity.participants?.length === 1 &&
+          props.entity.participants?.[0].email === me
+        ) {
+          return ['me'];
+        }
+        const namesSet = new Set<string>();
+
+        props.entity.participants?.forEach((participant) => {
+          if (!participant.email) return;
+          if (me && participant.email === me) return;
+          const macroDisplayName = useDisplayName(
+            emailToId(participant.email)
+          )[0]?.();
+          const macroFirstName = macroDisplayName?.split(' ')[0];
+          const participantFirstName = participant.name?.split(' ')[0] ?? '';
+          if (macroFirstName && !isLikelyEmail(macroFirstName)) {
+            namesSet.add(macroFirstName);
+          } else if (
+            participantFirstName &&
+            !isLikelyEmail(participantFirstName)
+          ) {
+            namesSet.add(participantFirstName);
+          } else {
+            const emailName = participant.email.split('@')[0];
+            namesSet.add(emailName);
+          }
+        });
+        return Array.from(namesSet);
       });
 
       const displayedNames = () => {
         const names = combinedParticipantFirstNames();
-        if (names.length <= 3 && names.length > 0) return names.join(', ');
-        if (names.length > 3)
-          return `${names[0]} .. ${names[names.length - 2]}, ${names[names.length - 1]}`;
-        return undefined;
+        if (!names || names.length === 0) return undefined;
+        if (names.length <= 3) return names.join(', ');
+        return `${names[0]} .. ${names[names.length - 2]}, ${names[names.length - 1]}`;
       };
 
       return (
@@ -264,7 +278,9 @@ export function EntityWithEverything(
           <div class="flex w-[20cqw] gap-2 font-semibold shrink-0">
             {/* Sender Name */}
             <div class="truncate">
-              {displayedNames() ?? props.entity.senderName}
+              {displayedNames() ??
+                props.entity.senderName ??
+                props.entity.senderEmail?.split('@')[0]}
             </div>
             {/* Sender Email Address */}
             {/* <Show
@@ -403,6 +419,15 @@ export function EntityWithEverything(
     };
   };
 
+  /**
+   * Properties for this entity
+   * TODO - @danielkweon: Once endpoint includes properties, remove temp data and use: props.displayProperties ?? []
+   */
+  const properties = (): Property[] => {
+    // Use real properties if provided, otherwise use temp data for testing
+    return props.properties ?? [];
+  };
+
   return (
     <div
       use:draggable
@@ -515,6 +540,11 @@ export function EntityWithEverything(
           }}
         >
           <div class="flex flex-row items-center justify-end gap-2 min-w-0">
+            <Show when={properties().length > 0}>
+              <div class="pr-2 overflow-hidden shrink min-w-0">
+                <PropertyPills properties={properties()} />
+              </div>
+            </Show>
             <Show when={sharedData()}>
               {(shared) => (
                 <Tooltip

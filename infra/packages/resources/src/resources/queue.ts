@@ -80,7 +80,7 @@ export class Queue extends pulumi.ComponentResource {
     );
 
     new QueueAlarms(
-      'queue-alarms',
+      `${name}-alarm`,
       { queue: this.queue, tags },
       { parent: this }
     );

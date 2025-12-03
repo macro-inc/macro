@@ -10,4 +10,5 @@ pub struct QueueWorkerContext {
     pub ses_client: Arc<ses_client::Ses>,
     pub sns_client: Arc<sns_client::SNS>,
     pub macro_cache_client: Arc<macro_cache_client::MacroCache>,
+    pub auth_service_client: Arc<authentication_service_client::AuthServiceClient>,
 }

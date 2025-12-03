@@ -55,6 +55,7 @@ export function EmailInput(props: EmailInputProps) {
         draft={props.draft}
         preloadedHtml={draftHTML()}
         sideEffectOnSend={afterSend}
+        onSendAndMarkDone={ctx.archiveThread}
         setShowReply={props.setShowReply}
         markdownDomRef={props.markdownDomRef}
       />

@@ -1,6 +1,7 @@
-use std::collections::HashMap;
+use std::collections::HashSet;
 
 use anyhow::Context;
+use authentication_service_client::AuthServiceClient;
 use model_notifications::{NotificationEventType, NotificationWithRecipient};
 use notification_db_client::user_notification::get::should_email::should_email_based_on_user_notification_bulk;
 
@@ -13,24 +14,17 @@ pub async fn filter_emails(
 ) -> anyhow::Result<Vec<String>> {
     // Filter out users that have already received an email for this event
     // This is done to prevent spam
-    let should_email: HashMap<String, bool> =
-        should_email(&queue_worker_context.db, notification, user_ids)
-            .await
-            .context("unable to get should email")?;
-    tracing::debug!(should_email=?should_email, "got should email");
+    // Contains a list of user ids that should receive an email
+    let filtered_user_ids: HashSet<String> = should_email(
+        &queue_worker_context.auth_service_client,
+        &queue_worker_context.db,
+        notification,
+        user_ids,
+    )
+    .await
+    .context("unable to get should email")?;
 
-    // Filter only users that should receive an email
-    let filtered_user_ids: Vec<String> = should_email
-        .iter()
-        .filter_map(|(user_id, should_email)| {
-            if *should_email {
-                Some(user_id.to_string())
-            } else {
-                None
-            }
-        })
-        .collect();
-    tracing::debug!(filtered_user_ids=?filtered_user_ids, "got filtered user ids");
+    tracing::debug!(filtered_user_ids=?filtered_user_ids, filter_method="should_email", "filtered user ids");
 
     let emails: Vec<String> = filtered_user_ids
         .iter()
@@ -77,10 +71,11 @@ pub async fn filter_emails(
 /// Given the notification and list of user ids to potentially send an email to, this will return
 /// a map of each user id and whether or not they should receive an email.
 async fn should_email(
+    auth_service_client: &AuthServiceClient,
     db: &sqlx::Pool<sqlx::Postgres>,
     notification: &NotificationWithRecipient,
     user_ids: &[String],
-) -> anyhow::Result<HashMap<String, bool>> {
+) -> anyhow::Result<HashSet<String>> {
     match notification.inner.notification_event.event_type() {
         NotificationEventType::ItemSharedUser => {
             let result = should_email_based_on_user_notification_bulk(
@@ -96,9 +91,21 @@ async fn should_email(
             )
             .await?;
 
-            Ok(result.into_iter().collect())
+            let result: HashSet<String> = result
+                .into_iter()
+                .filter_map(|(user_id, should_email)| {
+                    if should_email {
+                        Some(user_id.to_string())
+                    } else {
+                        None
+                    }
+                })
+                .collect();
+
+            Ok(result)
         }
         NotificationEventType::ChannelInvite => comms_utils::should_email_channel_notification(
+            auth_service_client,
             db,
             &notification.inner.notification_entity.event_item_id,
             user_ids,

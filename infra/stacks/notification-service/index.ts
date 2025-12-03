@@ -28,7 +28,13 @@ const password = aws.secretsmanager
   })
   .apply((secret) => secret.secretString);
 
-const AUDIENCE = config.require(`fusionauth_client_id`);
+const fusionauthClientIdSecretKey = config.require(`fusionauth_client_id`);
+const AUDIENCE = aws.secretsmanager
+  .getSecretVersionOutput({
+    secretId: fusionauthClientIdSecretKey,
+  })
+  .apply((secret) => secret.secretString);
+
 const ISSUER = config.require(`fusionauth_issuer`);
 
 const appleTeamId = config.require(`apple_team_id`);
@@ -57,6 +63,17 @@ const MACRO_CACHE = aws.secretsmanager
     secretId: config.require(`macro_cache_secret_key`),
   })
   .apply((secret) => secret.secretString);
+
+const AUTHENTICATION_SERVICE_INTERNAL_API_KEY = config.require(
+  `authentication_service_internal_api_key`
+);
+
+const authenticationServiceInternalApiKeyArn: pulumi.Output<string> =
+  aws.secretsmanager
+    .getSecretVersionOutput({
+      secretId: AUTHENTICATION_SERVICE_INTERNAL_API_KEY,
+    })
+    .apply((secret) => secret.arn);
 
 export const coparse_api_vpc = get_coparse_api_vpc();
 
@@ -156,6 +173,7 @@ const notificationService = new NotificationService('notification-service', {
     jwtSecretKeyArn,
     internalApiKeyArn,
     MACRO_API_TOKENS.macroApiTokenPublicKeyArn,
+    authenticationServiceInternalApiKeyArn,
   ],
   queueArns: [pushNotificationEventHandlerQueueArn, notificationQueueArn],
   snsPlatformArns: notificationSnsPlatformArns,
@@ -257,6 +275,14 @@ const notificationService = new NotificationService('notification-service', {
     {
       name: 'MACRO_API_TOKEN_PUBLIC_KEY',
       value: pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKey}`,
+    },
+    {
+      name: 'AUTHENTICATION_SERVICE_URL',
+      value: pulumi.interpolate`https://auth-service${stack === 'prod' ? '' : `-${stack}`}.macro.com`,
+    },
+    {
+      name: 'AUTHENTICATION_SERVICE_SECRET_KEY',
+      value: pulumi.interpolate`${AUTHENTICATION_SERVICE_INTERNAL_API_KEY}`,
     },
   ],
 });

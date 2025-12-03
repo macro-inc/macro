@@ -127,6 +127,9 @@
       "@block-channel/*": [
         "./packages/block-channel/*"
       ],
+      "@block-email/*": [
+        "./packages/block-email/*"
+      ],
       "@block-md/*": [
         "./packages/block-md/*"
       ],

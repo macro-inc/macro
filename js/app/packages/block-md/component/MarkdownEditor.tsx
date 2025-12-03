@@ -84,7 +84,6 @@ import {
   mediaPlugin,
 } from '@core/component/LexicalMarkdown/plugins/media';
 import { createAccessoryStore } from '@core/component/LexicalMarkdown/plugins/node-accessory';
-import { useUserPromptPlugin } from '@core/component/LexicalMarkdown/plugins/userPrompt';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   $insertWrappedAfter,
@@ -100,7 +99,6 @@ import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import {
   blockNameToFileExtensions,
-  blockNameToMimeTypes,
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
 import {
@@ -110,7 +108,7 @@ import {
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { fileDrop } from '@core/directive/fileDrop';
-import { HEIC_EXTENSIONS, HEIC_MIME_TYPES } from '@core/heic/constants';
+import { HEIC_EXTENSIONS } from '@core/heic/constants';
 import { blockElementSignal } from '@core/signal/blockElement';
 import {
   blockFileSignal,
@@ -123,6 +121,7 @@ import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
+import { uploadFile } from '@core/util/upload';
 import WarningIcon from '@icon/regular/warning.svg';
 import {
   $createDocumentMentionNode,
@@ -143,10 +142,16 @@ import { normalizeEnterPlugin } from 'core/component/LexicalMarkdown/plugins/nor
 import {
   autoRegister,
   lazyRegister,
+  registerInternalLayoutShiftListener,
   registerRootEventListener,
 } from 'core/component/LexicalMarkdown/plugins/shared/utils';
 import { createMethodRegistration } from 'core/orchestrator';
-import { $getRoot, $isElementNode, type EditorState } from 'lexical';
+import {
+  $getRoot,
+  $getSelection,
+  $isElementNode,
+  type EditorState,
+} from 'lexical';
 import {
   type Accessor,
   createEffect,
@@ -202,12 +207,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     ...blockNameToFileExtensions.image,
     ...HEIC_EXTENSIONS,
   ];
-  const IMAGE_MIME_TYPES_HEIC = [
-    ...blockNameToMimeTypes.image,
-    ...HEIC_MIME_TYPES,
-  ];
   const VIDEO_EXTENSIONS = blockNameToFileExtensions.video;
-  const VIDEO_MIME_TYPES = blockNameToMimeTypes.video;
 
   const blockHandle = blockHandleSignal.get;
   createMethodRegistration(blockHandle, {
@@ -277,12 +277,13 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   const { editor, plugins, cleanup: cleanupPlugins } = lexicalWrapper;
 
-  let [state, setState] = createSignal<EditorState>(editor.getEditorState());
+  const [state, setState] = createSignal<EditorState>(editor.getEditorState());
 
   setMdStore('editor', editor);
   setMdStore('plugins', plugins);
+
   const [editorFocus, setEditorFocus] = createSignal(false);
-  editorFocusSignal(editor, setEditorFocus);
+  autoRegister(editorFocusSignal(editor, setEditorFocus));
 
   const mentionsMenuOperations = createMenuOperations();
   const emojiMenuOperations = createMenuOperations();
@@ -304,7 +305,10 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
   };
 
   // handler for the file paste directive
-  const onPasteFiles = async (files: File[]) => {
+  const onPasteFiles = async (
+    files: File[],
+    position?: ReturnType<typeof getDragDropPosition>
+  ) => {
     for (const file of files) {
       const ext = fileExtension(file.name);
 
@@ -316,18 +320,45 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       } else if (ext != null && VIDEO_EXTENSIONS.includes(ext)) {
         const res = await addMediaFromFile(editor, file, 'video');
         success = res.success;
+      } else {
+        const res = await uploadFile(file, 'dss');
+        if (!res.failed && !res.pending && res.type === 'document') {
+          success = true;
+          const mentionId = await trackMention(
+            blockId,
+            'document',
+            res.documentId
+          );
+          editor.update(() => {
+            const mention = $createDocumentMentionNode({
+              documentId: res.documentId,
+              blockName: fileTypeToBlockName(res.fileType),
+              mentionUuid: mentionId,
+              documentName: file.name,
+            });
+            if (position && position.key) {
+              if (position.position === 'before') {
+                $insertWrappedBefore(position.key, mention);
+              } else {
+                $insertWrappedAfter(position.key, mention);
+              }
+            } else {
+              $getSelection()?.insertNodes([mention]);
+            }
+            mention.selectEnd();
+          });
+        }
       }
 
       if (!success) {
-        toast.failure('Invalid attachment file(s)');
+        toast.failure('Invalid file for upload');
       }
     }
   };
 
   // handler for the file drop directive - file paste plus calc drop pos.
   const onDropFiles = (files: File[], e: DragEvent) => {
-    getDragDropPosition(e, true);
-    onPasteFiles(files);
+    onPasteFiles(files, getDragDropPosition(e, true));
   };
 
   // store for the drag insert pluign.
@@ -631,6 +662,18 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     })
   );
 
+  const observeClickTargetHeight = () => {
+    const blockEl = blockElement();
+    if (!blockEl) {
+      setClickTargetHeight(EDITOR_PADDING_BOTTOM);
+      return;
+    }
+    const blockBottom = blockEl.getBoundingClientRect().bottom;
+    const targetHeight =
+      blockBottom - mountRef.getBoundingClientRect().bottom - 40;
+    setClickTargetHeight(Math.max(targetHeight, EDITOR_PADDING_BOTTOM));
+  };
+
   onMount(() => {
     setMdStore('selection', lexicalWrapper.selection);
     editor.setRootElement(mountRef);
@@ -643,21 +686,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       })
     );
 
-    // watch the height of the content editable to set the height of
-    // the focus target
-    const editorRefObserver = new ResizeObserver(() => {
-      const blockEl = blockElement();
-      if (!blockEl) {
-        setClickTargetHeight(EDITOR_PADDING_BOTTOM);
-        return;
-      }
-      const blockBottom =
-        blockEl?.getBoundingClientRect().bottom ?? window.innerHeight;
-
-      const targetHeight =
-        blockBottom - mountRef.getBoundingClientRect().bottom - 40;
-      setClickTargetHeight(Math.max(targetHeight, EDITOR_PADDING_BOTTOM));
-    });
+    const editorRefObserver = new ResizeObserver(observeClickTargetHeight);
 
     editorRefObserver.observe(mountRef);
     onCleanup(() => {
@@ -665,12 +694,25 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     });
   });
 
-  // better focus in handling. preserves selection on regain focus!
+  // HACK: We need to distinguish click-based focus events from programmatic
+  // ones (el.focus()). We want to maintain the previous selection (editor.focus)
+  // only if we are regaining focus programmatically. If click, let browser handle
+  // focus and let lexical catch up.
+  let clickFocusFlag = false;
   autoRegister(
+    registerRootEventListener(editor, 'pointerdown', () => {
+      clickFocusFlag = true;
+      setTimeout(() => {
+        clickFocusFlag = false; // negate the flag after tasks
+      });
+    }),
     registerRootEventListener(editor, 'focusin', (e) => {
+      if (clickFocusFlag) return;
       e.preventDefault();
       editor.focus(undefined, { defaultSelection: 'rootStart' });
-    })
+    }),
+    // adjust click target height on layout shift
+    registerInternalLayoutShiftListener(editor, observeClickTargetHeight)
   );
 
   const additionalCleanups: Array<() => void> = [];
@@ -894,11 +936,6 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
         class="relative"
         ref={editorContainerRef}
         use:fileDrop={{
-          acceptedMimeTypes: [...IMAGE_MIME_TYPES_HEIC, ...VIDEO_MIME_TYPES],
-          acceptedFileExtensions: [
-            ...IMAGE_EXTENSIONS_HEIC,
-            ...VIDEO_EXTENSIONS,
-          ],
           onDrop: (files, event) => {
             onDropFiles(files, event);
           },
@@ -1042,367 +1079,6 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
           menuOpen={generateMenuSignal}
           completionSignal={completionSignal[0]}
           editor={editor}
-        />
-
-        <Show when={DEBUG}>
-          <Show when={state()}>
-            {(state) => (
-              <LexicalStateDebugger state={state()}></LexicalStateDebugger>
-            )}
-          </Show>
-        </Show>
-
-        {/*<Show when={ENABLE_MARKDOWN_DIFF}>
-          <RewritePopup />
-        </Show>*/}
-      </div>
-    </LexicalWrapperContext.Provider>
-  );
-}
-
-// markdown editor for instructions.md
-export function InstructionsMarkdownEditor() {
-  const blockData = blockDataSignal.get;
-  const blockId = useBlockId();
-
-  const saveMarkdownDocument = useSaveMarkdownDocument();
-  const setMdStore = mdStore.set;
-  const canEdit = useCanEdit();
-  const [blockElement] = blockElementSignal;
-  const docSource = blockSourceSignal.get;
-
-  const blockHandle = blockHandleSignal.get;
-  createMethodRegistration(blockHandle, {
-    goToLocationFromParams: (_params: Record<string, any>) => {},
-  });
-
-  const IS_SYNC = () => {
-    return docSource() && isSourceSyncService(docSource()!);
-  };
-
-  const debouncedSaveState = debounce(() => {
-    const state_ = state();
-    if (!state_ || !canEdit()) return;
-    const savableState = getSaveState(editor.getEditorState());
-    saveMarkdownDocument(JSON.stringify(savableState));
-  }, 500);
-
-  // flush save state after unblocking
-  const blockSave = useBlockSave();
-  createEffect((prev) => {
-    const blockSave_ = blockSave();
-    // no save on load
-    if (!blockSave_ && prev !== undefined) {
-      debouncedSaveState();
-    }
-
-    return blockSave_;
-  }, undefined);
-
-  let mountRef!: HTMLDivElement;
-  let editorContainerRef!: HTMLDivElement;
-
-  const [clickTargetHeight, setClickTargetHeight] = createSignal(0);
-
-  const [editorReady, setEditorReady] = createSignal<boolean>(false);
-  const [editorError, setEditorError] = markdownBlockErrorSignal;
-
-  createEffect(() => {
-    // We still want the editor to be locked down (for certain things like click events on check
-    // lists) when the user does not have editor access.
-    editor.setEditable(canEdit());
-  });
-
-  const isContentEditable = createMemo(() => {
-    return (canEdit() ?? false) && !editorError();
-  });
-
-  const lexicalWrapper = createLexicalWrapper({
-    type: 'markdown-sync',
-    namespace: 'block-md-instructions',
-    isInteractable: isContentEditable,
-    withIds: true,
-  });
-
-  const { editor, plugins, cleanup: cleanupPlugins } = lexicalWrapper;
-
-  let [state, setState] = createSignal<EditorState>(editor.getEditorState());
-
-  setMdStore('editor', editor);
-  setMdStore('plugins', plugins);
-  const [editorFocus, setEditorFocus] = createSignal(false);
-  editorFocusSignal(editor, setEditorFocus);
-
-  const mentionsMenuOperations = createMenuOperations();
-  const emojiMenuOperations = createMenuOperations();
-
-  const peerIdValidator: Accessor<PeerIdValidator> = () => {
-    if (!IS_SYNC()) {
-      return createPeerIdValidator(() => undefined, false);
-    }
-    const loroManager = blockLoroManagerSignal.get;
-    const peerId = () => loroManager()?.getPeerIdStr();
-    return createPeerIdValidator(peerId, true);
-  };
-
-  const userPromptPlugin = useUserPromptPlugin({
-    documentId: blockId,
-  });
-
-  // plugins
-  plugins
-    .richText()
-    .list()
-    .markdownShortcuts()
-    .delete()
-    .state<EditorState>(setState, 'json')
-    .history(400)
-    .use(userPromptPlugin)
-    .use(
-      emojisPlugin({
-        menu: emojiMenuOperations,
-        peerIdValidator: peerIdValidator(),
-      })
-    )
-    .use(
-      mentionsPlugin({
-        menu: mentionsMenuOperations,
-        peerIdValidator: peerIdValidator(),
-        sourceDocumentId: blockId,
-        disableMentionTracking: true,
-      })
-    )
-    .use(textPastePlugin())
-    .use(markdownPastePlugin())
-    .use(
-      keyboardShortcutsPlugin({
-        shortcuts: DefaultShortcuts,
-      })
-    )
-    .use(
-      documentMetadataPlugin({
-        onVersionError: (error) => setEditorError(error),
-      })
-    );
-
-  if (ENABLE_MARKDOWN_LIVE_COLLABORATION) {
-    const getBlockLoroManager = blockLoroManagerSignal.get;
-    const peerId = () => getBlockLoroManager()?.getPeerIdStr();
-    plugins.use(
-      peerIdPlugin({ peerId, nodes: [InlineSearchNode, CommentNode] })
-    );
-  }
-
-  onMount(() => {
-    setMdStore('selection', lexicalWrapper.selection);
-    editor.setRootElement(mountRef);
-
-    // watch the height of the content editable to set the height of
-    // the focus target
-    const editorRefObserver = new ResizeObserver(() => {
-      const blockEl = blockElement();
-      if (!blockEl) {
-        setClickTargetHeight(EDITOR_PADDING_BOTTOM);
-        return;
-      }
-      const blockBottom =
-        blockEl?.getBoundingClientRect().bottom ?? window.innerHeight;
-
-      const targetHeight =
-        blockBottom - mountRef.getBoundingClientRect().bottom - 40;
-      setClickTargetHeight(Math.max(targetHeight, EDITOR_PADDING_BOTTOM));
-    });
-
-    editorRefObserver.observe(mountRef);
-    onCleanup(() => {
-      editorRefObserver.disconnect();
-    });
-  });
-
-  const additionalCleanups: Array<() => void> = [];
-
-  onCleanup(() => {
-    additionalCleanups.forEach((cleanup) => cleanup());
-    cleanupPlugins();
-  });
-
-  createEffect(() => {
-    // We still want the editor to be locked down (for certain things like click events on check
-    // lists) when the user does not have editor access.
-    editor.setEditable(canEdit() ?? false);
-  });
-
-  const [editorHasNoContent, setEditorHasNoContent] = createSignal(false);
-
-  const isBlankMarkdown = createMemo(() => {
-    return editorHasNoContent();
-  });
-
-  // not all changes that can trigger preview display are text content changes.
-  additionalCleanups.push(
-    editor.registerUpdateListener(({ editorState }) => {
-      setEditorHasNoContent(editorIsEmpty(editorState));
-    })
-  );
-
-  // handle changes to the editor after initial load
-  const registerSaveListener = () => {
-    additionalCleanups.push(
-      editor.registerUpdateListener(({ mutatedNodes }) => {
-        if (mutatedNodes === null || mutatedNodes.size === 0) return;
-        debouncedSaveState();
-      })
-    );
-  };
-
-  const [fileArrayBuffer, setFileArrayBuffer] = createSignal<ArrayBuffer>();
-  createEffect(() => {
-    const file = blockFileSignal();
-    if (!file) return;
-
-    file.arrayBuffer().then(setFileArrayBuffer);
-  });
-
-  createEffect(() => {
-    const source = docSource();
-    if (!source) return;
-    if (!isSourceDSS(source)) return;
-    if (!blockData()) return;
-    if (editorReady()) return;
-
-    const buf = fileArrayBuffer();
-    if (!buf) return;
-    const text = bufToString(buf);
-
-    // Blank state is a new document.
-    if (text === '') {
-      setEditorHasNoContent(true);
-      initializeEditorEmpty(editor);
-
-      registerSaveListener();
-      return;
-    }
-
-    // Valid JSON state is an existing document.
-    let validJson = true;
-    try {
-      const parsed = JSON.parse(text);
-      initializeEditorWithState(editor, parsed);
-
-      // don't open any hanging inline searches.
-      editor.dispatchCommand(CLOSE_INLINE_SEARCH_COMMAND, undefined);
-
-      if (editorIsEmpty(editor.getEditorState())) {
-        setEditorHasNoContent(true);
-      }
-
-      registerSaveListener();
-      setEditorReady(true);
-      return;
-    } catch (e) {
-      console.error('LexicalParseError : ', e);
-      validJson = false;
-    }
-
-    // Fallback is treated as a markdown string.
-    if (!validJson) {
-      setEditorStateFromMarkdown(editor, text);
-      if (editorIsEmpty(editor.getEditorState())) {
-        setEditorHasNoContent(true);
-      }
-
-      // Fallback is treated as a markdown string.
-      if (!validJson) {
-        setEditorStateFromMarkdown(editor, text);
-        registerSaveListener();
-      }
-
-      if (editorIsEmpty(editor)) {
-        setEditorError(MarkdownEditorErrors.EMPTY_SOURCE);
-      }
-    }
-
-    setEditorReady(true);
-  });
-
-  const setRewriteSignal = rewriteSignal.set;
-  const setRevisionSignal = revisionsSignal.set;
-
-  createMethodRegistration(blockHandle, {
-    setPatches: (args: { patches: MarkdownRewriteOutput['diffs'] }) => {
-      setRewriteSignal(false);
-      setRevisionSignal(args.patches);
-    },
-  });
-
-  createMethodRegistration(blockHandle, {
-    setIsRewriting: () => {
-      setRewriteSignal(true);
-    },
-  });
-
-  return (
-    <LexicalWrapperContext.Provider value={lexicalWrapper}>
-      {/* SCUFFED: are these the right transparency values? */}
-      <Show when={editorError()}>
-        {(error) => (
-          <div class="pointer-events-none text-alert-ink p-2 bg-alert-bg w-full border-alert/30 border-1 mb-2 flex items-center gap-2">
-            <WarningIcon class="size-6 shrink-0" />
-            {getErrorDescription(error())}
-          </div>
-        )}
-      </Show>
-      <div class="relative" ref={editorContainerRef}>
-        <div
-          ref={mountRef}
-          contentEditable={isContentEditable()}
-          class="w-full max-w-full"
-          classList={{
-            'select-auto': !canEdit(),
-            'md-no-comments': true,
-          }}
-        />
-
-        <Show when={IS_SYNC()}>
-          <MarkdownCollabProvider
-            editor={editor}
-            pluginManager={plugins}
-            editorContainerRef={editorContainerRef}
-            highlighLayerRef={editorContainerRef}
-            mappings={lexicalWrapper.mapping!}
-            editorFocus={editorFocus}
-            setEditorReady={setEditorReady}
-            setEditorError={setEditorError}
-          />
-        </Show>
-
-        <FocusClickTarget
-          editor={editor}
-          editorFocus={editorFocus}
-          style={{ height: `${clickTargetHeight()}px` }}
-        />
-        <Show when={isBlankMarkdown()}>
-          <div class="pointer-events-none text-ink-placeholder absolute top-0">
-            {canEdit()
-              ? `Enter custom instructions for AI here...`
-              : `This document is blank...`}
-          </div>
-        </Show>
-
-        <DecoratorRenderer editor={editor} />
-
-        <EmojiMenu
-          editor={editor}
-          menu={emojiMenuOperations}
-          useBlockBoundary={true}
-        />
-
-        <MentionsMenu
-          editor={editor}
-          menu={mentionsMenuOperations}
-          useBlockBoundary={true}
-          disableMentionTracking={true}
-          emails={() => []}
         />
 
         <Show when={DEBUG}>

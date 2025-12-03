@@ -18,8 +18,9 @@ name = "backfill_null_macro_user_id"
 path = "src/bin/backfill_null_macro_user_id.rs"
 
 [features]
-disable_rate_limit = []
+default = ["rate_limit"]
 local = []
+rate_limit = []
 
 [dependencies]
 anyhow = { workspace = true }
