@@ -115,7 +115,7 @@ pub async fn delete_entity_name_bulk_for_user(
 }
 
 /// Deletes all names for a specified user_id and entity_type
-#[tracing::instrument(skip(client))]
+#[tracing::instrument(skip(client), err)]
 pub async fn delete_entity_name_bulk_for_user_by_entity_type(
     client: &opensearch::OpenSearch,
     user_id: &str,
