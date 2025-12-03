@@ -67,7 +67,7 @@ async fn main() -> anyhow::Result<()> {
             .min_connections(10)
             .max_connections(60)
             .connect(&database_url)
-            .await?
+            .await?,
     );
 
     let search_event_queue =

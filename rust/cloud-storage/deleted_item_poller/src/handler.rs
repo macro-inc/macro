@@ -27,8 +27,8 @@ pub async fn handler(
 async fn handle_projects(ctx: &context::Context) -> anyhow::Result<()> {
     let date = chrono::Utc::now().naive_utc() - chrono::Duration::days(30);
 
-    let projects_to_delete = macro_db_client::projects::get_projects_to_delete(&ctx.db, &date)
-        .await?;
+    let projects_to_delete =
+        macro_db_client::projects::get_projects_to_delete(&ctx.db, &date).await?;
 
     if projects_to_delete.is_empty() {
         tracing::info!("no projects to delete");
@@ -59,8 +59,7 @@ async fn handle_projects(ctx: &context::Context) -> anyhow::Result<()> {
 async fn handle_chats(ctx: &context::Context) -> anyhow::Result<()> {
     let date = chrono::Utc::now().naive_utc() - chrono::Duration::days(30);
 
-    let chats_to_delete = macro_db_client::chat::get_chats_to_delete(&ctx.db, &date)
-        .await?;
+    let chats_to_delete = macro_db_client::chat::get_chats_to_delete(&ctx.db, &date).await?;
 
     if chats_to_delete.is_empty() {
         tracing::info!("no chats to delete");
