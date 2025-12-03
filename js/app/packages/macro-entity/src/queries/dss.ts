@@ -22,7 +22,6 @@ import { platformFetch } from 'core/util/platformFetch';
 import type { GetItemsSoupParams } from 'service-storage/generated/schemas/getItemsSoupParams';
 import type { SoupPage } from 'service-storage/generated/schemas/soupPage';
 import { useInstructionsMdIdQuery } from 'service-storage/instructionsMd';
-import { syncServiceClient } from 'service-sync/client';
 import type { Accessor } from 'solid-js';
 import type {
   ChatEntity,
@@ -54,11 +53,6 @@ const fetchPaginatedDocumentsGet = async ({
     throw new Error('Failed to fetch documents', { cause: response });
 
   const result: SoupPage = await response.json();
-  result.items.forEach((item) => {
-    if (item.tag === 'document' && item.data.fileType === 'md') {
-      syncServiceClient.wakeup({ documentId: item.data.id });
-    }
-  });
   return result;
 };
 
@@ -90,11 +84,6 @@ const fetchPaginatedDocumentsPost = async ({
     throw new Error('Failed to fetch documents', { cause: response });
 
   const result: SoupPage = await response.json();
-  result.items.forEach((item) => {
-    if (item.tag === 'document' && item.data.fileType === 'md') {
-      syncServiceClient.wakeup({ documentId: item.data.id });
-    }
-  });
   return result;
 };
 

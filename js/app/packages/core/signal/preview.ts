@@ -241,7 +241,7 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
     switch (doc.type) {
       case 'access':
         if (doc.file_type === 'md') {
-          syncServiceClient.wakeup({ documentId: doc.document_id });
+          syncServiceClient.safeWakeup(doc.document_id);
         }
         return {
           ...base,

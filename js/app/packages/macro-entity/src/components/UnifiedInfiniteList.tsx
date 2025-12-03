@@ -73,13 +73,13 @@ const getEntityTimestamp = (entity: EntityData): number => {
 };
 
 /**
- * Returns true if the new entity should replace the existing one based on timestamp
+ * Returns true if the new entity should replace the existing one based on timestamp. If the timestamp is the same, prefer to use the newer entity to handle optimistic updates
  */
 const isNewerEntity = (
   newEntity: EntityData,
   existing: EntityData
 ): boolean => {
-  return getEntityTimestamp(newEntity) > getEntityTimestamp(existing);
+  return getEntityTimestamp(newEntity) >= getEntityTimestamp(existing);
 };
 
 /**

@@ -299,6 +299,7 @@ export function MessageList(props: MessageListProps) {
   const [localTyping, setLocalTyping] = createSignal(false);
   let updateDelayedByTyping = false;
 
+  // TODO something wrong with localTyping signal. When a message from another user comes in, on a thread that a user is typing a reply to, localTyping gets set to false. Investigate why.
   createEffect(
     on([flattenedThreaded, localTyping], ([flat, typing], prev) => {
       const oldFlat = prev?.[0];

@@ -1,4 +1,32 @@
+use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 use model::organization::User;
+
+/// Given a list of macro user ids, returns a list of user ids that exist in our system
+#[tracing::instrument(skip(db), err)]
+pub async fn get_existing_users(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    user_ids: &[MacroUserId<Lowercase<'_>>],
+) -> anyhow::Result<Vec<String>> {
+    let user_ids: Vec<String> = user_ids
+        .iter()
+        .map(|id| id.as_ref().to_string())
+        .collect::<Vec<_>>();
+
+    let user_ids: Vec<String> = sqlx::query!(
+        r#"
+        SELECT
+            u.id
+        FROM "User" u
+        WHERE u."id" = ANY($1)
+        "#,
+        &user_ids
+    )
+    .map(|r| r.id)
+    .fetch_all(db)
+    .await?;
+
+    Ok(user_ids)
+}
 
 /// Gets all user ids in the database with null macro user id
 pub async fn get_all_user_ids_stripe_customer_id_with_null_macro_user_id(

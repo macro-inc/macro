@@ -29,8 +29,10 @@ default = [
   "attachment_upload",
   "connection_gateway",
   "contacts_sync",
+  "gmail_webhook_auth",
   "sfs_map",
 ]
+gmail_webhook_auth = []
 local_queue = []
 sfs_map = []
 

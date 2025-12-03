@@ -15,7 +15,7 @@ use email::{
         models::{Link, PreviewView},
         ports::EmailService,
     },
-    inbound::{EmailLinkExtractor, EmailPreviewState},
+    inbound::{EmailLinkErr, EmailLinkExtractor, EmailPreviewState},
 };
 use item_filters::{
     EntityFilters,
@@ -115,7 +115,7 @@ where
     async fn handle(
         &self,
         macro_user_id: MacroUserIdStr<'static>,
-        email_link: Link,
+        email_link: Option<Link>,
         PostSoupRequest { filters, params }: PostSoupRequest,
         cursor: SoupCursor,
     ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr> {
@@ -162,7 +162,7 @@ where
                 email_preview_view: PreviewView::StandardLabel(
                     email::domain::models::PreviewViewStandardLabel::Inbox,
                 ),
-                link_id: email_link.id,
+                link_id: email_link.map(|l| l.id),
             })
             .await?;
 
@@ -210,6 +210,8 @@ impl SoupApiItem {
 pub enum SoupHandlerErr {
     #[error("An internal server error has occurred")]
     Internal(#[from] SoupErr),
+    #[error("An internal server error has occurred")]
+    EmailLinkErr(#[from] EmailLinkErr),
     #[error("Invalid filter arguments provided")]
     ExpandErr(#[from] ExpandErr),
 }
@@ -243,7 +245,7 @@ impl IntoResponse for SoupHandlerErr {
 pub async fn get_soup_handler<T, U>(
     State(service): State<SoupRouterState<T, U>>,
     Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
-    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<U>>,
+    email_link: Result<Cached<EmailLinkExtractor<U>>, EmailLinkErr>,
     Query(params): Query<Params>,
     cursor: SoupCursor,
 ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
@@ -251,6 +253,11 @@ where
     T: SoupService,
     U: EmailService,
 {
+    let link = match email_link {
+        Ok(l) => Some(l.0.0),
+        Err(EmailLinkErr::NotFound) => None,
+        Err(e) => Err(e)?,
+    };
     service
         .handle(
             macro_user_id,
@@ -293,7 +300,7 @@ type SoupCursor = EitherWrapper<
 pub async fn post_soup_handler<T, U>(
     State(service): State<SoupRouterState<T, U>>,
     Cached(MacroUserExtractor { macro_user_id, .. }): Cached<MacroUserExtractor>,
-    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<U>>,
+    email_link: Result<Cached<EmailLinkExtractor<U>>, EmailLinkErr>,
     cursor: SoupCursor,
     Json(post_soup_request): Json<PostSoupRequest>,
 ) -> Result<Json<PaginatedOpaqueCursor<SoupApiItem>>, SoupHandlerErr>
@@ -301,6 +308,11 @@ where
     T: SoupService,
     U: EmailService,
 {
+    let link = match email_link {
+        Ok(l) => Some(l.0.0),
+        Err(EmailLinkErr::NotFound) => None,
+        Err(e) => Err(e)?,
+    };
     service
         .handle(macro_user_id, link, post_soup_request, cursor)
         .await

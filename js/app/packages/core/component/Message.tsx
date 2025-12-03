@@ -172,7 +172,11 @@ export const NestedConnectorLines: Component<NestedConnectorLinesProps> = (
   for (let i = 0; i < (props.threadDepth ?? 0); i++) {
     NestedLines.push(
       <div
-        class={`absolute h-full w-[1px] ${props.isParentNewMessage ? 'bg-accent' : 'bg-edge'}`}
+        class="absolute h-full w-[1px]"
+        classList={{
+          'bg-accent': props.isParentNewMessage,
+          'bg-edge-muted': !props.isParentNewMessage,
+        }}
         style={{
           left: `calc(${i} * var(--thread-shift) + var(--left-of-connector))`,
         }}
@@ -180,7 +184,11 @@ export const NestedConnectorLines: Component<NestedConnectorLinesProps> = (
     );
   }
 
-  return <div class="absolute left-0 top-0 w-full h-full">{NestedLines}</div>;
+  return (
+    <div class="absolute left-0 top-0 w-full h-full z-1 pointer-events-none">
+      {NestedLines}
+    </div>
+  );
 };
 
 /* Root */
@@ -246,19 +254,25 @@ const Root: Component<MessageRootProps> = (props) => {
             data-message-body-id={props.id}
           >
             <div
-              class={`relative z-0 flex-1 flex flex-col justify-start w-[calc(100%-28px)] min-w-0 pl-[var(--left-of-connector)]
-                ${props.hideConnectors ? '' : 'border-l'}
-                ${props.isNewMessage ? 'border-accent' : 'border-edge-muted'}
-                ${props.isConsecutive || props.isFirstMessage || props.isFirstInThread ? '' : 'pt-4'}
-                ${props.isLastMessage && !props.isLastInThread ? 'pb-2' : ''}
-                ${props.hasThreadChildren ? 'pb-4' : ''}
-                `}
+              class="relative flex-1 flex flex-col justify-start w-[calc(100%-28px)] min-w-0 pl-[var(--left-of-connector)]"
+              classList={{
+                'border-l': !props.hideConnectors,
+                'border-accent': props.isNewMessage ?? false,
+                'border-edge-muted': !props.isNewMessage,
+                'pt-4': !(
+                  props.isConsecutive ||
+                  props.isFirstMessage ||
+                  props.isFirstInThread
+                ),
+                'pb-2': props.isLastMessage && !props.isLastInThread,
+                'pb-4': props.hasThreadChildren ?? false,
+              }}
               style={{
                 'margin-left': `var(--left-of-connector)`,
               }}
             >
               {/* User Icon */}
-              <div class="z-2 absolute -left-[.5px] -translate-x-1/2">
+              <div class="absolute -left-[.5px] -translate-x-1/2">
                 <Show when={!props.isConsecutive}>
                   <div class="relative">
                     <Show when={props.isFirstInThread}>
@@ -315,9 +329,11 @@ const Root: Component<MessageRootProps> = (props) => {
         </BozzyBracket>
         <Show when={props.hoverActions && !isTouchDevice}>
           <div
-            class={`absolute right-2 -top-2 border border-edge bg-panel ${
-              hover() || props.shouldHover ? 'block' : 'hidden'
-            }`}
+            class="absolute right-2 -top-2 border border-edge bg-panel"
+            classList={{
+              block: hover() || !!props.shouldHover,
+              hidden: !(hover() || !!props.shouldHover),
+            }}
             onMouseEnter={() => setHover(true)}
             onMouseLeave={() => setHover(false)}
           >
@@ -338,7 +354,10 @@ const Root: Component<MessageRootProps> = (props) => {
               }
               fallback={
                 <div
-                  class={`w-min -translate-x-1/2 icon-plus ${props.isLastInThread && props.isLastMessage ? 'pb-3' : ''} allow-css-brackets`}
+                  class="w-min -translate-x-1/2 icon-plus allow-css-brackets"
+                  classList={{
+                    'pb-3': props.isLastInThread && props.isLastMessage,
+                  }}
                   style={{
                     'margin-left': `calc(var(--thread-shift) + var(--left-of-connector))`,
                   }}
@@ -356,7 +375,10 @@ const Root: Component<MessageRootProps> = (props) => {
               }
             >
               <div
-                class={`relative ${props.isLastInThread && props.isLastMessage ? 'pb-3' : ''}`}
+                class="relative"
+                classList={{
+                  'pb-3': props.isLastInThread && props.isLastMessage,
+                }}
                 style={{
                   'margin-left': `calc(var(--left-of-connector) + var(--thread-shift) + var(--user-icon-width) / 2)`,
                 }}
@@ -364,7 +386,7 @@ const Root: Component<MessageRootProps> = (props) => {
                 ref={(el) => props.setThreadAppendMountTarget?.(el)}
               >
                 <div
-                  class="absolute border-b border-l border-edge"
+                  class="absolute border-b border-l border-edge-muted"
                   style={{
                     left: `calc((var(--user-icon-width) / 2) * -1)`,
                     width: `calc(var(--user-icon-width) / 2)`,
