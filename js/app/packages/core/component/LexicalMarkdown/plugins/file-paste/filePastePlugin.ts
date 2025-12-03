@@ -7,7 +7,7 @@ import {
 } from 'lexical';
 
 type FilePastePluginProps = {
-  onPasteFilesAndDirs?: (
+  onPasteFilesAndDirs: (
     files: FileSystemFileEntry[],
     directories: FileSystemDirectoryEntry[]
   ) => void;
@@ -33,18 +33,8 @@ function registerFilePastePlugin(
           return false;
         }
 
-        // Prefer new API when provided
-        if (props.onPasteFilesAndDirs) {
-          // If folders present, prefer directories to avoid duplicate phantom files
-          if (directoryEntries.length > 0) {
-            props.onPasteFilesAndDirs([], directoryEntries);
-            return true;
-          }
-          props.onPasteFilesAndDirs(fileEntries, []);
-          return true;
-        }
-
-        return false;
+        props.onPasteFilesAndDirs(fileEntries, directoryEntries);
+        return true;
       },
       COMMAND_PRIORITY_NORMAL
     )
