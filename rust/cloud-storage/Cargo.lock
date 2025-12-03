@@ -8262,6 +8262,7 @@ dependencies = [
  "anyhow",
  "aws-sdk-sqs",
  "chrono",
+ "futures",
  "model",
  "models_email",
  "models_opensearch",
