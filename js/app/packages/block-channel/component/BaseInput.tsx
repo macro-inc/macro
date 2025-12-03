@@ -20,13 +20,13 @@ import {
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
 import type { IUser } from '@core/user';
+import ArrowUp from '@icon/bold/arrow-up-bold.svg';
+import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import PlusIcon from '@icon/regular/plus.svg';
 import FormatIcon from '@icon/regular/text-aa.svg';
+import Trash from '@icon/regular/trash.svg';
 import XIcon from '@icon/regular/x.svg';
 import { logger } from '@observability';
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
-import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
-import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
 import { createCallback } from '@solid-primitives/rootless';
 import { leading, throttle } from '@solid-primitives/scheduled';
@@ -548,22 +548,16 @@ export function BaseInput(props: BaseInputProps) {
           onClick={() => {
             handleSend();
           }}
-          class="text-ink-muted bg-transparent rounded-full hover:scale-110! transition ease-in-out delay-150 flex flex-col justify-center items-center"
+          class="text-ink-muted hover:scale-115 transition ease-in-out flex flex-col justify-center items-center size-6 rounded-full"
         >
-          <div class="bg-transparent rounded-full size-8 flex flex-row justify-center items-center">
-            <Show
-              when={!hasPendingAttachments() && !isPendingSend()}
-              fallback={
-                <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
-              }
-            >
-              <ArrowFatLineUp
-                width={20}
-                height={20}
-                class="!text-accent-ink !fill-accent"
-              />
-            </Show>
-          </div>
+          <Show
+            when={!hasPendingAttachments() && !isPendingSend()}
+            fallback={<Spinner class="size-6 animate-spin cursor-disabled" />}
+          >
+            <div class="group hover:bg-accent transition ease-in-out size-6 border border-accent rounded-full flex items-center justify-center">
+              <ArrowUp class="group-hover:!text-input group-hover:!fill-input !text-accent-ink !fill-accent size-4 transition ease-in-out" />
+            </div>
+          </Show>
         </button>
       </div>
     </div>
