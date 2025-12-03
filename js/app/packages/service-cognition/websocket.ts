@@ -55,7 +55,8 @@ export const ws: CognitionWebsocket = new WebsocketBuilder(resolveWsUrl)
   .withSerializer(
     new JsonSerializer<ToWebSocketMessage, FromWebSocketMessage>()
   )
-  .withBackoff(new ConstantBackoff(500))
+  .withBackoff(new ConstantBackoff(2_000))
+  .withMaxRetries(20)
   .withHeartbeat({
     interval: 1_000,
     timeout: 1_000,
