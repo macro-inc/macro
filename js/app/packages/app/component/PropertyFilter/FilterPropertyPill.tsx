@@ -3,7 +3,7 @@ import { PropertyDataTypeIcon } from '@core/component/Properties/utils/PropertyD
 import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
 import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
 import type { Component } from 'solid-js';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Match, Show, Switch } from 'solid-js';
 import type { FilterAction, PropertyFilter } from '../PropertyFilterTypes';
 import { ComparisonAction } from '../PropertyFilterTypes';
 import { FilterActionSelect } from './FilterAction';
@@ -209,9 +209,9 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
           <button
             type="button"
             onClick={props.onCancel}
-            class="h-6 w-6 flex items-center justify-center text-ink hover:bg-hover cursor-pointer"
+            class="h-6 w-6 flex items-center justify-center text-ink hover:text-failure-ink hover:bg-hover cursor-pointer"
           >
-            <XIcon class="size-4" />
+            <XIcon class="size-3" />
           </button>
         </div>
       }
@@ -241,22 +241,23 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
 
         {/* Value input - only show after action is set */}
         <Show when={action()}>
-          <Show
-            when={selectedProperty()?.data_type === 'BOOLEAN'}
+          <Switch
             fallback={
               <button
                 type="button"
-                class="h-6 px-2 min-w-[60px] text-[10px] text-ink-muted border border-edge hover:bg-hover text-left cursor-pointer flex items-center"
+                class="h-6 px-2 w-fit text-[10px] text-ink-muted border border-edge hover:bg-hover text-left cursor-pointer flex items-center"
               >
-                {values().length > 0 ? values().join(', ') : 'Value'}
+                {values().length > 0 ? values().join(', ') : '...'}
               </button>
             }
           >
-            <FilterValueBoolean
-              value={booleanValue()}
-              onSelect={handleBooleanValueChange}
-            />
-          </Show>
+            <Match when={selectedProperty()?.data_type === 'BOOLEAN'}>
+              <FilterValueBoolean
+                value={booleanValue()}
+                onSelect={handleBooleanValueChange}
+              />
+            </Match>
+          </Switch>
         </Show>
 
         {/* Confirm button - only show when pending and all fields filled */}
@@ -275,9 +276,9 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
         <button
           type="button"
           onClick={props.onCancel}
-          class="h-6 w-6 flex items-center justify-center text-ink hover:bg-hover cursor-pointer"
+          class="h-6 w-6 flex items-center justify-center text-ink hover:text-failure-ink hover:bg-hover cursor-pointer"
         >
-          <XIcon class="size-4" />
+          <XIcon class="size-3" />
         </button>
       </div>
     </Show>
