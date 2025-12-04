@@ -158,4 +158,3 @@ export const FilterPropertySelect: Component<FilterPropertySelectProps> = (
     </div>
   );
 };
-
