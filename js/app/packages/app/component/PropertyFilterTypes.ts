@@ -45,17 +45,30 @@ export type ContainsAction =
 /** All possible filter actions */
 export type FilterAction = EqualityAction | ComparisonAction | ContainsAction;
 
-/** Display names for filter actions */
-export const ACTION_DISPLAY_NAMES: Record<FilterAction, string> = {
-  [EqualityAction.EQUAL]: 'is',
-  [EqualityAction.NOT_EQUAL]: 'is not',
+/** Symbols for filter actions (shown in pill) */
+export const ACTION_SYMBOLS: Record<FilterAction, string> = {
+  [EqualityAction.EQUAL]: '=',
+  [EqualityAction.NOT_EQUAL]: '≠',
   [ComparisonAction.GREATER_THAN]: '>',
   [ComparisonAction.GREATER_THAN_OR_EQUAL]: '≥',
   [ComparisonAction.LESS_THAN]: '<',
   [ComparisonAction.LESS_THAN_OR_EQUAL]: '≤',
-  [ContainsAction.HAS_ANY]: 'has any',
-  [ContainsAction.HAS_ALL]: 'has all',
-  [ContainsAction.DOES_NOT_HAVE]: 'has none',
+  [ContainsAction.HAS_ANY]: '∈',
+  [ContainsAction.HAS_ALL]: '⊇',
+  [ContainsAction.DOES_NOT_HAVE]: '∉',
+};
+
+/** Display names for filter actions (shown in dropdown: text + symbol) */
+export const ACTION_DISPLAY_NAMES: Record<FilterAction, string> = {
+  [EqualityAction.EQUAL]: 'is =',
+  [EqualityAction.NOT_EQUAL]: 'is not ≠',
+  [ComparisonAction.GREATER_THAN]: 'greater than >',
+  [ComparisonAction.GREATER_THAN_OR_EQUAL]: 'at least ≥',
+  [ComparisonAction.LESS_THAN]: 'less than <',
+  [ComparisonAction.LESS_THAN_OR_EQUAL]: 'at most ≤',
+  [ContainsAction.HAS_ANY]: 'has any ∈',
+  [ContainsAction.HAS_ALL]: 'has all ⊇',
+  [ContainsAction.DOES_NOT_HAVE]: 'has none ∉',
 };
 
 /** Entity reference for ENTITY filter values */

@@ -12,6 +12,7 @@ import {
 import type { FilterAction } from '../PropertyFilterTypes';
 import {
   ACTION_DISPLAY_NAMES,
+  ACTION_SYMBOLS,
   getValidFilterActions,
 } from '../PropertyFilterTypes';
 
@@ -74,9 +75,7 @@ export const FilterActionSelect: Component<FilterActionSelectProps> = (
           'text-ink-muted': props.selectedAction === null,
         }}
       >
-        {props.selectedAction
-          ? ACTION_DISPLAY_NAMES[props.selectedAction]
-          : '...'}
+        {props.selectedAction ? ACTION_SYMBOLS[props.selectedAction] : '...'}
       </button>
       <Show when={isOpen()}>
         <div
