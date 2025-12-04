@@ -255,6 +255,9 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     sort: {
       sortBy: 'viewed_at',
     },
+    filters: {
+      typeFilter: ['channel', 'chat', 'document', 'email', 'project'],
+    },
     hotkeyOptions: {
       e: (entity: EntityData) => {
         if (entity.type === 'email') {

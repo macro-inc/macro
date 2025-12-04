@@ -87,47 +87,7 @@ const fetchPaginatedDocumentsPost = async ({
   return result;
 };
 
-export function createDssInfiniteQueryGet(
-  _params?: Accessor<GetItemsSoupParams>,
-  options?: {
-    disabled?: Accessor<boolean>;
-  }
-) {
-  const params = () => {
-    const argParams = _params?.();
-    const limit =
-      argParams?.limit && argParams.limit > 0 && argParams.limit <= 500
-        ? argParams.limit
-        : 500;
-    return {
-      ...argParams,
-      limit,
-    };
-  };
-
-  const authQuery = createApiTokenQuery();
-  const instructionsIdQuery = useInstructionsMdIdQuery();
-
-  return useInfiniteQuery(() => {
-    const queryKey = queryKeys.dss({
-      infinite: true,
-      ...params(),
-    });
-
-    return {
-      queryKey,
-      queryHash: hashKey(queryKey),
-      queryFn: ({ pageParam }) =>
-        fetchPaginatedDocumentsGet({ apiToken: authQuery.data, ...pageParam }),
-      initialPageParam: params(),
-      getNextPageParam: ({ next_cursor: cursor }) =>
-        cursor ? { ...params(), cursor } : undefined,
-      select: (data) => selectData(data, { instructionsIdQuery }),
-      enabled: authQuery.isSuccess && !options?.disabled?.(),
-    };
-  });
-}
-export function createDssInfiniteQueryPost(
+export function createDssInfiniteQuery(
   _params?: Accessor<PostItemsSoupParams>,
   options?: {
     disabled?: Accessor<boolean>;
@@ -165,7 +125,7 @@ export function createDssInfiniteQueryPost(
     // Only include document_filters in query key for granular refetching
     // This ensures the query only refetches when document_filters/document_ids changes
     const documentFilters = requestBody?.document_filters;
-    const queryKey = queryKeys.dssPost({
+    const queryKey = queryKeys.dss({
       infinite: true,
       ...params(),
       // Include only document_filters in query key so query refetches only when document filters change
@@ -385,14 +345,10 @@ export function createDeleteDssItemMutation() {
       return { success };
     },
     onMutate: async ({ id }: EntityData) => {
-      await Promise.all([
-        queryClient.cancelQueries({
-          queryKey: queryKeys.dss({ infinite: true }),
-        }),
-        queryClient.cancelQueries({
-          queryKey: queryKeys.dssPost({ infinite: true }),
-        }),
-      ]);
+      queryClient.cancelQueries({
+        queryKey: queryKeys.dss({ infinite: true }),
+      });
+
       function removeEntityFromQueryData(
         prev: { pages: { items: EntityData[] }[] } | undefined
       ): { pages: { items: EntityData[] }[] } | undefined {
@@ -413,13 +369,6 @@ export function createDeleteDssItemMutation() {
             prev as { pages: { items: EntityData[] }[] } | undefined
           )
       );
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.dssPost({ infinite: true }) },
-        (prev) =>
-          removeEntityFromQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined
-          )
-      );
     },
     onSettled: (data, error, entity) => {
       if (data?.success === false || error)
@@ -427,9 +376,6 @@ export function createDeleteDssItemMutation() {
 
       queryClient.invalidateQueries({
         queryKey: queryKeys.dss({ infinite: true }),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.dssPost({ infinite: true }),
       });
     },
   }));
@@ -454,14 +400,9 @@ export function createBulkDeleteDssItemsMutation() {
     },
     onMutate: async (entities: EntityData[]) => {
       const deletedIDs = entities.map((e) => e.id);
-      await Promise.all([
-        queryClient.cancelQueries({
-          queryKey: queryKeys.dss({ infinite: true }),
-        }),
-        queryClient.cancelQueries({
-          queryKey: queryKeys.dssPost({ infinite: true }),
-        }),
-      ]);
+      queryClient.cancelQueries({
+        queryKey: queryKeys.dss({ infinite: true }),
+      });
       function removeEntitiesFromQueryData(
         prev: { pages: { items: EntityData[] }[] } | undefined
       ): { pages: { items: EntityData[] }[] } | undefined {
@@ -482,13 +423,6 @@ export function createBulkDeleteDssItemsMutation() {
             prev as { pages: { items: EntityData[] }[] } | undefined
           )
       );
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.dssPost({ infinite: true }) },
-        (prev) =>
-          removeEntitiesFromQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined
-          )
-      );
     },
     onSettled: (data, error, entities) => {
       if (error)
@@ -496,9 +430,6 @@ export function createBulkDeleteDssItemsMutation() {
 
       queryClient.invalidateQueries({
         queryKey: queryKeys.dss({ infinite: true }),
-      });
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.dssPost({ infinite: true }),
       });
     },
   }));
@@ -528,14 +459,9 @@ export function createRenameDssEntityMutation() {
       entity: EntityData & { name: string };
       newName: string;
     }) => {
-      await Promise.all([
-        queryClient.cancelQueries({
-          queryKey: queryKeys.dss({ infinite: true }),
-        }),
-        queryClient.cancelQueries({
-          queryKey: queryKeys.dssPost({ infinite: true }),
-        }),
-      ]);
+      queryClient.cancelQueries({
+        queryKey: queryKeys.dss({ infinite: true }),
+      });
       function updateEntityNameInQueryData(
         prev: { pages: { items: EntityData[] }[] } | undefined,
         id: string,
@@ -563,23 +489,11 @@ export function createRenameDssEntityMutation() {
             newName
           )
       );
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.dssPost({ infinite: true }) },
-        (prev) =>
-          updateEntityNameInQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined,
-            id,
-            newName
-          )
-      );
     },
     onSettled: (data, error, { entity: { id } }) => {
       if (data?.success === false || error)
         console.error(`Failed to rename dss item ${id}`, data, error);
 
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
-      });
       queryClient.invalidateQueries({
         queryKey: queryKeys.dss({ infinite: true }),
       });
@@ -624,14 +538,9 @@ export function createBulkRenameDssEntityMutation() {
     }) => {
       const ids = new Set(entities.map((e) => e.id));
 
-      await Promise.all([
-        queryClient.cancelQueries({
-          queryKey: queryKeys.dss({ infinite: true }),
-        }),
-        queryClient.cancelQueries({
-          queryKey: queryKeys.dssPost({ infinite: true }),
-        }),
-      ]);
+      queryClient.cancelQueries({
+        queryKey: queryKeys.dss({ infinite: true }),
+      });
 
       function update(prev: { pages: { items: EntityData[] }[] } | undefined) {
         if (!prev) return prev;
@@ -655,11 +564,6 @@ export function createBulkRenameDssEntityMutation() {
         { queryKey: queryKeys.dss({ infinite: true }) },
         (prev) => update(prev as any)
       );
-
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.dssPost({ infinite: true }) },
-        (prev) => update(prev as any)
-      );
     },
 
     onSettled: (data, error, { entities }) => {
@@ -669,10 +573,6 @@ export function createBulkRenameDssEntityMutation() {
 
       queryClient.invalidateQueries({
         queryKey: queryKeys.dss({ infinite: true }),
-      });
-
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.dssPost({ infinite: true }),
       });
     },
   }));
@@ -702,14 +602,9 @@ export function createMoveToProjectDssEntityMutation() {
       entity: EntityData & { name: string };
       project: { id: string; name: string };
     }) => {
-      await Promise.all([
-        queryClient.cancelQueries({
-          queryKey: queryKeys.dss({ infinite: true }),
-        }),
-        queryClient.cancelQueries({
-          queryKey: queryKeys.dssPost({ infinite: true }),
-        }),
-      ]);
+      queryClient.cancelQueries({
+        queryKey: queryKeys.dss({ infinite: true }),
+      });
       function updateEntityProjectIdInQueryData(
         prev: { pages: { items: EntityData[] }[] } | undefined
       ): { pages: { items: EntityData[] }[] } | undefined {
@@ -727,13 +622,6 @@ export function createMoveToProjectDssEntityMutation() {
       }
       queryClient.setQueriesData(
         { queryKey: queryKeys.dss({ infinite: true }) },
-        (prev) =>
-          updateEntityProjectIdInQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined
-          )
-      );
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.dssPost({ infinite: true }) },
         (prev) =>
           updateEntityProjectIdInQueryData(
             prev as { pages: { items: EntityData[] }[] } | undefined
@@ -776,14 +664,9 @@ export function createCopyDssEntityMutation() {
       return { success: true };
     },
     onMutate: async () => {
-      await Promise.all([
-        queryClient.cancelQueries({
-          queryKey: queryKeys.dss({ infinite: true }),
-        }),
-        queryClient.cancelQueries({
-          queryKey: queryKeys.dssPost({ infinite: true }),
-        }),
-      ]);
+      queryClient.cancelQueries({
+        queryKey: queryKeys.dss({ infinite: true }),
+      });
       // For copy operations, we don't need optimistic updates since we're creating a new item
       // The new item will be added when the mutation completes and queries are invalidated
     },
@@ -835,14 +718,9 @@ export function createBulkCopyDssEntityMutation() {
 
     onMutate: async () => {
       // For copy, no optimistic update — new IDs unknown until server
-      await Promise.all([
-        queryClient.cancelQueries({
-          queryKey: queryKeys.dss({ infinite: true }),
-        }),
-        queryClient.cancelQueries({
-          queryKey: queryKeys.dssPost({ infinite: true }),
-        }),
-      ]);
+      queryClient.cancelQueries({
+        queryKey: queryKeys.dss({ infinite: true }),
+      });
     },
 
     onSettled: (data, error, { entities }) => {
@@ -853,10 +731,6 @@ export function createBulkCopyDssEntityMutation() {
       // Trigger refetch so new items appear
       queryClient.invalidateQueries({
         queryKey: queryKeys.dss({ infinite: true }),
-      });
-
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.dssPost({ infinite: true }),
       });
     },
   }));
@@ -904,14 +778,9 @@ export function createBulkMoveToProjectDssEntityMutation() {
       entities: (EntityData & { name: string })[];
       project: { id: string; name: string };
     }) => {
-      await Promise.all([
-        queryClient.cancelQueries({
-          queryKey: queryKeys.dss({ infinite: true }),
-        }),
-        queryClient.cancelQueries({
-          queryKey: queryKeys.dssPost({ infinite: true }),
-        }),
-      ]);
+      queryClient.cancelQueries({
+        queryKey: queryKeys.dss({ infinite: true }),
+      });
 
       function updateEntityProjectIdInQueryData(
         prev: { pages: { items: EntityData[] }[] } | undefined
@@ -939,13 +808,6 @@ export function createBulkMoveToProjectDssEntityMutation() {
             prev as { pages: { items: EntityData[] }[] } | undefined
           )
       );
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.dssPost({ infinite: true }) },
-        (prev) =>
-          updateEntityProjectIdInQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined
-          )
-      );
     },
 
     onSettled: (data, error, { entities }) => {
@@ -954,10 +816,6 @@ export function createBulkMoveToProjectDssEntityMutation() {
 
       queryClient.invalidateQueries({
         queryKey: queryKeys.dss({ infinite: true }),
-      });
-
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.dssPost({ infinite: true }),
       });
     },
   }));
