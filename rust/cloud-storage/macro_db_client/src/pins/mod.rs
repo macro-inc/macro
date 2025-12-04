@@ -79,8 +79,10 @@ pub async fn get_pins(db: Pool<Postgres>, user_id: &str) -> anyhow::Result<Vec<P
             d."projectId" as "project_id",
             di.sha as "sha",
             NULL as "is_persistent",
+            (dt.document_id IS NOT NULL) as "is_task!",
             pi.pin_index as "pin_index"
         FROM "Document" d
+        LEFT JOIN document_task dt ON dt.document_id = d.id
         INNER JOIN PinnedItems pi ON pi.pin_item_id = d.id AND pi.pin_item_type = 'document'
         LEFT JOIN LATERAL (
             SELECT
@@ -124,6 +126,7 @@ pub async fn get_pins(db: Pool<Postgres>, user_id: &str) -> anyhow::Result<Vec<P
             c."projectId" as "project_id",
             NULL as "sha",
             c."isPersistent" as "is_persistent",
+            false as "is_task",
             pi.pin_index as "pin_index"
         FROM "Chat" c
         INNER JOIN PinnedItems pi ON pi.pin_item_id = c.id AND pi.pin_item_type = 'chat'
@@ -143,6 +146,7 @@ pub async fn get_pins(db: Pool<Postgres>, user_id: &str) -> anyhow::Result<Vec<P
             p."parentId" as "project_id",
             NULL as "sha",
             NULL as "is_persistent",
+            false as "is_task",
             pi.pin_index as "pin_index"
         FROM "Project" p
         INNER JOIN PinnedItems pi ON pi.pin_item_id = p.id AND pi.pin_item_type = 'project'
@@ -174,6 +178,7 @@ pub async fn get_pins(db: Pool<Postgres>, user_id: &str) -> anyhow::Result<Vec<P
                     r.branched_from_id,
                     r.branched_from_version_id,
                     r.project_id,
+                    r.is_task,
                 )
                 .map_err(|e| sqlx::Error::TypeNotFound {
                     type_name: e.to_string(),

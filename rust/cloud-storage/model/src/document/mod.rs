@@ -84,6 +84,10 @@ pub struct BasicDocument {
     #[serde(skip_serializing_if = "Option::is_none", with = "ts_seconds_option")]
     #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+
+    /// Whether or not the document is a task.
+    /// This is only applicable for md documents.
+    pub is_task: bool,
 }
 
 #[derive(sqlx::FromRow, serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
