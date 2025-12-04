@@ -527,13 +527,17 @@ const Table: RenderableElement<TableNode> = {
   guard: (node: LexicalNode): node is TableNode => node.__type === 'table',
   render: (props) => (
     <div
-      class={`overflow-x-${props.isGenerating() ? 'hidden' : 'auto'} mt-4 mb-4 max-w-full`}
+      class={`${props.theme?.static?.['table-container'] || ''}`}
+      classList={{
+        hidden: props.isGenerating(),
+      }}
     >
       <table
-        {...props}
         class={`${props.theme.table} min-w-full table-auto`}
         style="width: max-content;"
-      />
+      >
+        {props.children}
+      </table>
     </div>
   ),
 };

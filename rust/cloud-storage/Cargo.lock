@@ -2836,6 +2836,7 @@ dependencies = [
  "chrono",
  "doppleganger",
  "either",
+ "email_utils",
  "filter_ast",
  "frecency",
  "item_filters",
@@ -5667,6 +5668,7 @@ name = "notification_service"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "authentication_service_client",
  "aws-config",
  "aws-sdk-secretsmanager",
  "aws-sdk-sesv2",
@@ -8260,6 +8262,7 @@ dependencies = [
  "anyhow",
  "aws-sdk-sqs",
  "chrono",
+ "futures",
  "model",
  "models_email",
  "models_opensearch",

@@ -117,7 +117,7 @@ export function DraftChannelInput(props: {
         onStopTyping={() => {}}
         onSend={handleSend}
         onChange={setContent}
-        onEmpty={() => setContent('')}
+        onEmptyBlur={() => setContent('')}
         initialValue={() => content()}
         inputAttachments={
           props.inputAttachments || {

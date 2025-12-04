@@ -95,6 +95,12 @@ const googleClientSecretKeyArn: pulumi.Output<string> = aws.secretsmanager
   .getSecretVersionOutput({ secretId: GOOGLE_CLIENT_SECRET_KEY })
   .apply((secret) => secret.arn);
 
+const STRIPE_PRICE_ID_KEY = config.require(`stripe_price_id`);
+
+const stripePriceIdArn: pulumi.Output<string> = aws.secretsmanager
+  .getSecretVersionOutput({ secretId: STRIPE_PRICE_ID_KEY })
+  .apply((secret) => secret.arn);
+
 const MACRO_API_TOKEN_PRIVATE_SECRET_KEY = config.require(
   `macro_api_token_private_secret_key`
 );
@@ -120,6 +126,7 @@ const secretKeyArns = [
   pulumi.interpolate`${MACRO_API_TOKENS.macroApiTokenPublicKeyArn}`,
   pulumi.interpolate`${macroApiTokenSecretPrivateKeyArn}`,
   pulumi.interpolate`${stripeWebhookSecretKeyArn}`,
+  pulumi.interpolate`${stripePriceIdArn}`,
 ];
 
 const vpc = get_coparse_api_vpc();
@@ -264,6 +271,10 @@ const service = new AuthenticationService('authentication-service', {
     {
       name: 'STRIPE_WEBHOOK_SECRET_KEY',
       value: pulumi.interpolate`${stripeWebhookSecretKeyArn}`,
+    },
+    {
+      name: 'STRIPE_PRICE_ID',
+      value: pulumi.interpolate`${STRIPE_PRICE_ID_KEY}`,
     },
   ],
 });

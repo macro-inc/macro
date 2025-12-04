@@ -46,7 +46,7 @@ pub(crate) async fn user_label_preview_cursor(
                 )
             ) AS "is_important!",
             c.email_address AS "sender_email?",
-            c.name AS "sender_name?",
+            COALESCE(lmp.from_name, c.name) AS "sender_name?",
             c.sfs_photo_url as "sender_photo_url?"
         FROM (
             -- Step 1: Find the latest labeled message timestamp for each thread,
@@ -96,6 +96,7 @@ pub(crate) async fn user_label_preview_cursor(
                    m.subject,
                    m.snippet,
                    m.from_contact_id,
+                   m.from_name,
                    m.is_draft
             FROM email_messages m
             JOIN email_message_labels ml ON m.id = ml.message_id

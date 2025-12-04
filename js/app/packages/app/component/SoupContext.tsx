@@ -1187,9 +1187,6 @@ export function createNavigationEntityListShortcut({
     scopeId: entityHotkeyScope,
     description: 'Open',
     keyDownHandler: () => {
-      const [preview] = previewState;
-      if (!preview()) return false;
-
       const entity = getHighlightedEntity()?.entity;
       if (!entity) return false;
 

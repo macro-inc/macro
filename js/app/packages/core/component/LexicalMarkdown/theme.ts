@@ -71,6 +71,7 @@ export const theme: EditorThemeClasses = {
   code: 'bg-edge/20 font-mono p-3 rounded block md-code-box before:text-ink-extra-muted/70 whitespace-pre mb-4',
   static: {
     'code-container': 'bg-edge/20 rounded',
+    'table-container': 'my-4 max-w-full',
   },
   codeHighlight,
   'inline-search':
@@ -205,7 +206,9 @@ export const unifiedListMarkdownTheme = createTheme({
   static: {
     'code-container':
       'font-mono md-code-box no-accessory overflow-hidden flex items-center',
+    'table-container': 'hidden',
   },
+  table: 'hidden',
   paragraph: `${theme.paragraph} inline`,
   heading: {
     h1: 'text-[1em] font-semibold',

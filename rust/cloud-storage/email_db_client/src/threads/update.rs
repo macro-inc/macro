@@ -1,9 +1,7 @@
-use crate::messages;
 use crate::messages::get::fetch_messages_metadata;
 use anyhow::Context;
 use chrono::{DateTime, Utc};
 use models_email::email::service::message::{is_inbound, is_outbound, is_spam_or_trash};
-use models_email::gmail::labels::SystemLabelID;
 use models_email::service;
 use sqlx::PgPool;
 use sqlx::types::Uuid;
@@ -81,30 +79,6 @@ pub async fn update_inbox_visible_status(
         "Failed to update archived status to {} for thread ID {} with link_id {}",
         inbox_visible, thread_id, link_id
     ))?;
-
-    Ok(())
-}
-
-/// Updates a thread's inbox_visible status, setting the value based on the inbox state
-#[tracing::instrument(skip(tx), level = "debug")]
-pub async fn validate_inbox_visible_status(
-    tx: &mut sqlx::PgConnection,
-    thread_db_id: Uuid,
-    link_id: Uuid,
-) -> anyhow::Result<()> {
-    let inbox_count = messages::get::count_thread_messages_with_label(
-        &mut *tx,
-        thread_db_id,
-        link_id,
-        SystemLabelID::Inbox.as_ref(),
-    )
-    .await
-    .context("Failed to count thread messages with label")?;
-
-    // update the archived status of the thread
-    update_inbox_visible_status(tx, thread_db_id, link_id, inbox_count != 0)
-        .await
-        .context("Failed to update thread inbox_visible status")?;
 
     Ok(())
 }

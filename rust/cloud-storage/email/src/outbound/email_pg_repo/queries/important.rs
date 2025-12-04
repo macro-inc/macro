@@ -34,7 +34,8 @@ pub(crate) async fn important_preview_cursor(
                    m.is_draft,
                    m.subject,
                    m.snippet,
-                   m.from_contact_id
+                   m.from_contact_id,
+                   m.from_name
             FROM email_messages m
             WHERE m.link_id = $1
               AND EXISTS (
@@ -58,7 +59,8 @@ pub(crate) async fn important_preview_cursor(
                    m.is_draft,
                    m.subject,
                    m.snippet,
-                   m.from_contact_id
+                   m.from_contact_id,
+                   m.from_name
             FROM email_messages m
             WHERE m.link_id = $1
               AND m.is_draft = TRUE
@@ -71,7 +73,8 @@ pub(crate) async fn important_preview_cursor(
                    is_draft,
                    subject,
                    snippet,
-                   from_contact_id
+                   from_contact_id,
+                   from_name
             FROM QualifyingMessages
             ORDER BY thread_id, internal_date_ts DESC
         ),
@@ -84,6 +87,7 @@ pub(crate) async fn important_preview_cursor(
                 ait.subject,
                 ait.snippet,
                 ait.from_contact_id,
+                ait.from_name,
                 ait.internal_date_ts as created_at,
                 ait.internal_date_ts as updated_at,
                 uh.updated_at as viewed_at,
@@ -117,7 +121,7 @@ pub(crate) async fn important_preview_cursor(
                isk.subject as "name?",
                isk.snippet as "snippet?",
                c.email_address AS "sender_email?",
-               c.name AS "sender_name?",
+               COALESCE(isk.from_name, c.name) AS "sender_name?",
                c.sfs_photo_url as "sender_photo_url?"
         FROM ImportantWithSortKey isk
         JOIN email_threads t ON isk.thread_id = t.id

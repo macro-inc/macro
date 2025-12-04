@@ -8,12 +8,14 @@
 /// Example:
 /// cargo run backfill_entity_names.rs chats,documents
 use anyhow::Context;
+
 use macro_entrypoint::MacroEntrypoint;
 use models_opensearch::SearchEntityType;
 use sqlx::postgres::PgPoolOptions;
 use sqs_client::search::name::EntityName;
 use std::future::Future;
 use std::str::FromStr;
+use std::sync::Arc;
 use uuid::Uuid;
 
 #[tokio::main]
@@ -60,12 +62,13 @@ async fn main() -> anyhow::Result<()> {
     println!("Starting backfill for indices: {:?}", target_indices);
 
     let database_url = std::env::var("DATABASE_URL").context("DATABASE_URL not set")?;
-    let db = PgPoolOptions::new()
-        .min_connections(10)
-        .max_connections(60)
-        .connect(&database_url)
-        .await
-        .context("could not connect to db")?;
+    let db = Arc::new(
+        PgPoolOptions::new()
+            .min_connections(10)
+            .max_connections(60)
+            .connect(&database_url)
+            .await?,
+    );
 
     let search_event_queue =
         std::env::var("SEARCH_EVENT_QUEUE").context("SEARCH_EVENT_QUEUE not set")?;
@@ -75,71 +78,125 @@ async fn main() -> anyhow::Result<()> {
         .load()
         .await;
 
-    let sqs_client = sqs_client::SQS::new(aws_sdk_sqs::Client::new(&queue_aws_config))
-        .search_event_queue(&search_event_queue);
+    let sqs_client = Arc::new(
+        sqs_client::SQS::new(aws_sdk_sqs::Client::new(&queue_aws_config))
+            .search_event_queue(&search_event_queue),
+    );
 
-    for index in target_indices {
-        match index {
-            SearchEntityType::Chats => {
-                backfill_entities(
-                    &sqs_client,
-                    "chats",
-                    SearchEntityType::Chats,
-                    |limit, offset| {
-                        macro_db_client::chat::get::get_all_chat_ids_paginated(&db, limit, offset)
-                    },
-                )
-                .await?;
-            }
-            SearchEntityType::Documents => {
-                backfill_entities(
-                    &sqs_client,
-                    "documents",
-                    SearchEntityType::Documents,
-                    |limit, offset| {
-                        macro_db_client::document::get_all_documents::get_all_document_ids_paginated(
-                            &db, limit, offset,
+    // Process all entity types in parallel
+    let handles: Vec<_> = target_indices
+        .into_iter()
+        .map(|index| {
+            let db = Arc::clone(&db);
+            let sqs_client = Arc::clone(&sqs_client);
+
+            tokio::spawn(async move {
+                let result = match index {
+                    SearchEntityType::Chats => {
+                        backfill_entities(
+                            &sqs_client,
+                            "chats",
+                            SearchEntityType::Chats,
+                            |limit, offset| {
+                                let db = Arc::clone(&db);
+                                async move {
+                                    macro_db_client::chat::get::get_all_chat_ids_paginated(
+                                        &db, limit, offset,
+                                    )
+                                    .await
+                                }
+                            },
                         )
-                    },
-                )
-                    .await?;
-            }
-            SearchEntityType::Channels => {
-                backfill_entities(
-                    &sqs_client,
-                    "channels",
-                    SearchEntityType::Channels,
-                    |limit, offset| {
-                        comms_db_client::channels::get_channels::get_all_channel_ids_paginated(
-                            &db, limit, offset,
+                        .await
+                    }
+                    SearchEntityType::Documents => {
+                        backfill_entities(
+                            &sqs_client,
+                            "documents",
+                            SearchEntityType::Documents,
+                            |limit, offset| {
+                                let db = Arc::clone(&db);
+                                async move {
+                                    macro_db_client::document::get_all_documents::get_all_document_ids_paginated(
+                                        &db, limit, offset,
+                                    )
+                                    .await
+                                }
+                            },
                         )
-                    },
-                )
-                .await?;
-            }
-            SearchEntityType::Emails => {
-                backfill_entities(
-                    &sqs_client,
-                    "email threads",
-                    SearchEntityType::Emails,
-                    |limit, offset| {
-                        email_db_client::threads::get::get_all_thread_ids_paginated(
-                            &db, limit, offset,
+                        .await
+                    }
+                    SearchEntityType::Channels => {
+                        backfill_entities(
+                            &sqs_client,
+                            "channels",
+                            SearchEntityType::Channels,
+                            |limit, offset| {
+                                let db = Arc::clone(&db);
+                                async move {
+                                    comms_db_client::channels::get_channels::get_all_channel_ids_paginated(
+                                        &db, limit, offset,
+                                    )
+                                    .await
+                                }
+                            },
                         )
-                    },
-                )
-                .await?;
+                        .await
+                    }
+                    SearchEntityType::Emails => {
+                        backfill_entities(
+                            &sqs_client,
+                            "email threads",
+                            SearchEntityType::Emails,
+                            |limit, offset| {
+                                let db = Arc::clone(&db);
+                                async move {
+                                    email_db_client::threads::get::get_all_thread_ids_paginated(
+                                        &db, limit, offset,
+                                    )
+                                    .await
+                                }
+                            },
+                        )
+                        .await
+                    }
+                    SearchEntityType::Projects => {
+                        unreachable!("Backfill logic for 'projects' is not implemented.");
+                    }
+                };
+
+                (index, result)
+            })
+        })
+        .collect();
+
+    // Wait for all tasks and report results
+    let mut had_errors = false;
+    for handle in handles {
+        match handle.await {
+            Ok((index, Ok(()))) => {
+                println!("Successfully completed backfill for {:?}", index);
             }
-            SearchEntityType::Projects => {
-                unreachable!("Backfill logic for 'projects' is not implemented.");
+            Ok((index, Err(e))) => {
+                eprintln!("Error backfilling {:?}: {:?}", index, e);
+                had_errors = true;
+            }
+            Err(e) => {
+                eprintln!("Task panicked: {:?}", e);
+                had_errors = true;
             }
         }
+    }
+
+    if had_errors {
+        anyhow::bail!("One or more backfill tasks failed");
     }
 
     Ok(())
 }
 
 /// Generic function to handle pagination, UUID parsing, and SQS queuing for any entity type
+/// Uses concurrent batch processing for improved throughput
 async fn backfill_entities<F, Fut>(
     sqs_client: &sqs_client::SQS,
     name: &str,
@@ -147,18 +204,18 @@ async fn backfill_entities<F, Fut>(
     fetcher: F,
 ) -> anyhow::Result<()>
 where
-    F: Fn(i64, i64) -> Fut, // Function taking (limit, offset)
-    Fut: Future<Output = anyhow::Result<Vec<String>>>,
+    F: Fn(i64, i64) -> Fut + Send + Sync,
+    Fut: Future<Output = anyhow::Result<Vec<String>>> + Send,
 {
     let limit = 5000;
     let mut offset = 0;
     let mut count = 0;
 
     loop {
-        println!("getting {name}");
+        println!("[{}] fetching batch at offset {}", name, offset);
 
         let ids = fetcher(limit, offset).await?;
-        println!("got batch offset {offset}");
+        println!("[{}] got {} ids at offset {}", name, ids.len(), offset);
 
         if ids.is_empty() {
             tracing::trace!("no more {name} found");
@@ -167,29 +224,27 @@ where
 
         count += ids.len();
 
-        tracing::trace!(count = ids.len(), "ready to queue {name}");
+        let messages: Vec<_> = ids
+            .iter()
+            .map(|id| {
+                sqs_client::search::SearchQueueMessage::UpdateEntityName(EntityName {
+                    entity_id: Uuid::parse_str(id)
+                        .with_context(|| format!("Failed to parse UUID from {}: {}", name, id))
+                        .unwrap(),
+                    entity_type: entity_type.clone(),
+                })
+            })
+            .collect();
 
         sqs_client
-            .bulk_send_message_to_search_event_queue(
-                ids.iter()
-                    .map(|id| {
-                        sqs_client::search::SearchQueueMessage::UpdateEntityName(EntityName {
-                            entity_id: Uuid::parse_str(id)
-                                .with_context(|| {
-                                    format!("Failed to parse UUID from {}: {}", name, id)
-                                })
-                                .unwrap(),
-                            entity_type: entity_type.clone(),
-                        })
-                    })
-                    .collect(),
-            )
+            .bulk_send_message_to_search_event_queue(messages)
             .await?;
-        println!("queued batch with offset {offset}");
+
+        println!("[{}] queued batch at offset {}", name, offset);
 
         offset += limit;
     }
 
-    println!("Completed. Total {} processed: {}", name, count);
+    println!("[{}] Completed. Total processed: {}", name, count);
     Ok(())
 }

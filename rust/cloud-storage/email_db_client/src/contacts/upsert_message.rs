@@ -74,6 +74,7 @@ where
                         db_recipients.push(message::MessageRecipient {
                             contact_id: *id,
                             recipient_type: recip_type.clone(),
+                            name: addr.name.clone(),
                         });
                     } else {
                         tracing::error!(email=%addr.email_address, type=?recip_type, "Recipient ID missing post-upsert");
@@ -179,11 +180,13 @@ pub async fn upsert_message_recipients(
     let n = upserted_recipients.recipients.len();
     let mut message_ids_to_insert: Vec<Uuid> = Vec::with_capacity(n);
     let mut contact_ids_to_insert: Vec<Uuid> = Vec::with_capacity(n);
+    let mut names_to_insert: Vec<Option<String>> = Vec::with_capacity(n);
     let mut recipient_types_to_insert: Vec<address::EmailRecipientType> = Vec::with_capacity(n);
 
     for recipient in &upserted_recipients.recipients {
         message_ids_to_insert.push(message_id);
         contact_ids_to_insert.push(recipient.contact_id);
+        names_to_insert.push(recipient.name.clone());
         recipient_types_to_insert.push(recipient.recipient_type.clone());
     }
 
@@ -212,12 +215,13 @@ pub async fn upsert_message_recipients(
 
     sqlx::query!(
         r#"
-        INSERT INTO email_message_recipients (message_id, contact_id, recipient_type)
-        SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::email_recipient_type[])
+        INSERT INTO email_message_recipients (message_id, contact_id, name, recipient_type)
+        SELECT * FROM unnest($1::uuid[], $2::uuid[], $3::text[], $4::email_recipient_type[])
         ON CONFLICT (message_id, contact_id, recipient_type) DO NOTHING
         "#,
         &message_ids_to_insert,
         &contact_ids_to_insert,
+        &names_to_insert as &[Option<String>],
         &recipient_types_to_insert as &[db::address::EmailRecipientType]
     )
         .execute(&mut *tx)
