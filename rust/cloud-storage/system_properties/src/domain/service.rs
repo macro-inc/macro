@@ -20,6 +20,15 @@ pub trait SystemPropertiesService: Clone + Send + Sync + 'static {
         &self,
         items: Vec<EmailAttachmentInput>,
     ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
+
+    /// Set empty task system properties for multiple entities.
+    ///
+    /// Initializes all task-related system properties with null values.
+    /// All properties are upserted in a single query.
+    fn attach_task_properties(
+        &self,
+        entity_ids: Vec<String>,
+    ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
 }
 
 /// Implementation of SystemPropertiesService using a repository.
@@ -53,6 +62,19 @@ where
         let rows: Vec<PropertyRow> = items
             .into_iter()
             .flat_map(|item| collect_email_property_rows(&item.entity_id, item.properties))
+            .collect();
+
+        self.repository.bulk_upsert_properties(rows).await
+    }
+
+    #[tracing::instrument(skip(self, entity_ids))]
+    async fn attach_task_properties(
+        &self,
+        entity_ids: Vec<String>,
+    ) -> Result<(), SystemPropertyError> {
+        let rows: Vec<PropertyRow> = entity_ids
+            .iter()
+            .flat_map(|entity_id| collect_task_property_rows(entity_id))
             .collect();
 
         self.repository.bulk_upsert_properties(rows).await
@@ -127,4 +149,42 @@ fn collect_email_property_rows(
     }
 
     rows
+}
+
+/// Collect property rows for a single entity's task properties.
+/// All task properties are initialized with null values.
+/// Tasks are always applied to Task entities.
+fn collect_task_property_rows(entity_id: &str) -> Vec<PropertyRow> {
+    let entity_type = EntityType::Task;
+
+    vec![
+        // Assignees
+        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::Assignees.uuid()),
+        // Status
+        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::Status.uuid()),
+        // Priority
+        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::Priority.uuid()),
+        // Due Date
+        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::DueDate.uuid()),
+        // Parent Task
+        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::ParentTask.uuid()),
+        // Subtasks
+        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::Subtasks.uuid()),
+        // Depends On
+        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::DependsOn.uuid()),
+        // Effort
+        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::Effort.uuid()),
+        // Story Points
+        PropertyRow::null_value(
+            entity_id,
+            entity_type,
+            SystemPropertyKey::StoryPoints.uuid(),
+        ),
+        // Relevant Documents
+        PropertyRow::null_value(
+            entity_id,
+            entity_type,
+            SystemPropertyKey::RelevantDocuments.uuid(),
+        ),
+    ]
 }
