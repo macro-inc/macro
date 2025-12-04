@@ -92,6 +92,7 @@ pub async fn get_docx_files(
         branched_from_version_id: None,
         document_family_id: None,
         modification_data: None,
+        is_task: false,
     })
     .fetch_all(db)
     .await?;

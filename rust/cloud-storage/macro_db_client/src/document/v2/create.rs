@@ -207,6 +207,7 @@ pub async fn create_document_txn(
         project_name,
         document_version.created_at,
         document_version.updated_at,
+        false, // TODO: @daniel please update this when you add in task creation in create document
     ))
 }
 

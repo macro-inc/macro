@@ -244,9 +244,11 @@ pub async fn get_document(
             di.modification_data as "modification_data?",
             d."projectId" as "project_id",
             p.name as "project_name?",
-            di.sha as "sha?"
+            di.sha as "sha?",
+            (dt.document_id IS NOT NULL) as "is_task!"
         FROM
             "Document" d
+        LEFT JOIN document_task dt ON dt.document_id = d.id
         LEFT JOIN LATERAL (
             SELECT
                 i.id,
@@ -336,9 +338,11 @@ pub async fn get_document_version(
             di.modification_data as "modification_data?",
             d."projectId" as "project_id?",
             p.name as "project_name?",
-            di.sha as "sha?"
+            di.sha as "sha?",
+            (dt.document_id IS NOT NULL) as "is_task!"
         FROM
             "Document" d
+        LEFT JOIN document_task dt ON dt.document_id = d.id
         LEFT JOIN LATERAL (
             SELECT
                 i.id,
