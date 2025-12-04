@@ -33,6 +33,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
                             "content": "test"
                         }
                     },
+                    {"term": {"_index": "channels"}},
                     {
                         "terms": {
                             "thread_id": ["thread1", "thread2"]

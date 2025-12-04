@@ -58,6 +58,7 @@ pub async fn unexpanded_generic_cursor_soup(
                 d."projectId" as "project_id",
                 NULL as "is_persistent",
                 di.sha as "sha",
+                (dt.document_id IS NOT NULL) as "is_task!",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", d."updatedAt")
@@ -66,6 +67,7 @@ pub async fn unexpanded_generic_cursor_soup(
                     ELSE d."updatedAt"
                 END::timestamptz as "sort_ts!"
             FROM "Document" d
+            LEFT JOIN document_task dt ON dt.document_id = d.id
             INNER JOIN UserAccessibleItems uai 
                 ON uai.item_id = d.id 
                 AND uai.item_type = 'document'
@@ -106,6 +108,7 @@ pub async fn unexpanded_generic_cursor_soup(
                 c."projectId" as "project_id",
                 c."isPersistent" as "is_persistent",
                 NULL as "sha",
+                false as "is_task",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", c."updatedAt")
@@ -140,6 +143,7 @@ pub async fn unexpanded_generic_cursor_soup(
                 p."parentId" as "project_id",
                 NULL as "is_persistent",
                 NULL as "sha",
+                false as "is_task",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", p."updatedAt")
@@ -228,6 +232,7 @@ pub async fn no_frecency_unexpanded_generic_cursor_soup(
                 d."projectId" as "project_id",
                 NULL as "is_persistent",
                 di.sha as "sha",
+                (dt.document_id IS NOT NULL) as "is_task!",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", d."updatedAt")
@@ -236,6 +241,7 @@ pub async fn no_frecency_unexpanded_generic_cursor_soup(
                     ELSE d."updatedAt"
                 END::timestamptz as "sort_ts!"
             FROM "Document" d
+            LEFT JOIN document_task dt ON dt.document_id = d.id
             INNER JOIN UserAccessibleItems uai 
                 ON uai.item_id = d.id 
                 AND uai.item_type = 'document'
@@ -276,6 +282,7 @@ pub async fn no_frecency_unexpanded_generic_cursor_soup(
                 c."projectId" as "project_id",
                 c."isPersistent" as "is_persistent",
                 NULL as "sha",
+                false as "is_task",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", c."updatedAt")
@@ -310,6 +317,7 @@ pub async fn no_frecency_unexpanded_generic_cursor_soup(
                 p."parentId" as "project_id",
                 NULL as "is_persistent",
                 NULL as "sha",
+                false as "is_task",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", p."updatedAt")

@@ -160,7 +160,7 @@ mod tests {
         .await?;
         let desc_prop_before = properties_before
             .iter()
-            .find(|p| p.definition.display_name == "Description");
+            .find(|p| p.definition.display_name == "Test Description");
         assert!(desc_prop_before.is_none());
 
         let property_id = "88888888-8888-8888-8888-888888888888"
@@ -186,7 +186,7 @@ mod tests {
         .await?;
         let desc_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Description");
+            .find(|p| p.definition.display_name == "Test Description");
 
         assert!(desc_prop.is_some());
         let desc_prop = desc_prop.unwrap();
@@ -231,7 +231,7 @@ mod tests {
         .await?;
         let desc_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Description")
+            .find(|p| p.definition.display_name == "Test Description")
             .unwrap();
 
         if let Some(PropertyValue::Str(val)) = &desc_prop.value {
@@ -269,7 +269,7 @@ mod tests {
         .await?;
         let desc_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Description")
+            .find(|p| p.definition.display_name == "Test Description")
             .unwrap();
 
         assert!(desc_prop.value.is_none());
@@ -309,7 +309,7 @@ mod tests {
         .await?;
         let completed_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Completed");
+            .find(|p| p.definition.display_name == "Test Completed");
 
         assert!(completed_prop.is_some());
         if let Some(PropertyValue::Bool(val)) = completed_prop.unwrap().value {
@@ -351,7 +351,7 @@ mod tests {
         .await?;
         let budget_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Budget")
+            .find(|p| p.definition.display_name == "Test Budget")
             .unwrap();
 
         if let Some(PropertyValue::Num(val)) = budget_prop.value {
@@ -380,7 +380,7 @@ mod tests {
         .await?;
         let priority_prop_before = properties_before
             .iter()
-            .find(|p| p.definition.display_name == "Priority")
+            .find(|p| p.definition.display_name == "Test Priority")
             .unwrap();
         if let Some(PropertyValue::SelectOption(ids)) = &priority_prop_before.value {
             assert_eq!(ids.len(), 1);
@@ -420,7 +420,7 @@ mod tests {
         .await?;
         let priority_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Priority")
+            .find(|p| p.definition.display_name == "Test Priority")
             .unwrap();
 
         if let Some(PropertyValue::SelectOption(ids)) = &priority_prop.value {
@@ -451,7 +451,7 @@ mod tests {
         .await?;
         let assigned_prop_before = properties_before
             .iter()
-            .find(|p| p.definition.display_name == "Assigned To")
+            .find(|p| p.definition.display_name == "Test Assigned To")
             .unwrap();
 
         if let Some(PropertyValue::EntityRef(refs)) = &assigned_prop_before.value {
@@ -493,7 +493,7 @@ mod tests {
         .await?;
         let assigned_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Assigned To")
+            .find(|p| p.definition.display_name == "Test Assigned To")
             .unwrap();
 
         if let Some(PropertyValue::EntityRef(refs)) = &assigned_prop.value {

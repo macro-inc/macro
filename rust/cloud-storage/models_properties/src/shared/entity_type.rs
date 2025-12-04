@@ -14,8 +14,10 @@ use utoipa::ToSchema;
 pub enum EntityType {
     Channel,
     Chat,
+    Company,
     Document,
     Project,
+    Task,
     Thread,
     User,
 }
@@ -25,8 +27,10 @@ impl fmt::Display for EntityType {
         match self {
             EntityType::Channel => write!(f, "channel"),
             EntityType::Chat => write!(f, "chat"),
+            EntityType::Company => write!(f, "company"),
             EntityType::Document => write!(f, "document"),
             EntityType::Project => write!(f, "project"),
+            EntityType::Task => write!(f, "task"),
             EntityType::Thread => write!(f, "thread"),
             EntityType::User => write!(f, "user"),
         }

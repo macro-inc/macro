@@ -44,6 +44,9 @@ pub enum OpensearchClientError {
 
     #[error("no title key is available for name search")]
     NoTitleKeyForNameSearch,
+
+    #[error("bool query not built")]
+    BoolQueryNotBuilt,
 }
 
 impl From<anyhow::Error> for OpensearchClientError {
