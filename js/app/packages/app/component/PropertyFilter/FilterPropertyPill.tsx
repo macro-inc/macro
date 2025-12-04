@@ -10,6 +10,7 @@ import { FilterActionSelect } from './FilterAction';
 import { FilterPropertySelect } from './FilterProperty';
 import { FilterValueBoolean } from './FilterValueBoolean';
 import { FilterValueDate } from './FilterValueDate';
+import { FilterValueNumber } from './FilterValueNumber';
 
 type FilterPillProps = {
   id: string;
@@ -26,6 +27,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
   const [values, _setValues] = createSignal<string[]>([]);
   const [booleanValue, setBooleanValue] = createSignal<boolean | null>(null);
   const [dateValue, setDateValue] = createSignal<string | null>(null);
+  const [numberValue, setNumberValue] = createSignal<number | null>(null);
 
   // Track if user is editing property (to show search instead of pill)
   const [previousProperty, setPreviousProperty] =
@@ -51,6 +53,9 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
     if (property.data_type === 'DATE' && isComparisonAction(action())) {
       return dateValue() !== null;
     }
+    if (property.data_type === 'NUMBER' && isComparisonAction(action())) {
+      return numberValue() !== null;
+    }
     return values().length > 0;
   };
 
@@ -63,6 +68,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
       setAction(null);
       setBooleanValue(null);
       setDateValue(null);
+      setNumberValue(null);
       _setValues([]);
     }
     setSelectedProperty(property);
@@ -97,7 +103,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
     }
   };
 
-  const handleValueChange = (value: boolean | string) => {
+  const handleValueChange = (value: boolean | string | number) => {
     const property = selectedProperty();
     if (!property) return;
 
@@ -106,6 +112,8 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
       setBooleanValue(value);
     } else if (property.data_type === 'DATE' && typeof value === 'string') {
       setDateValue(value);
+    } else if (property.data_type === 'NUMBER' && typeof value === 'number') {
+      setNumberValue(value);
     }
 
     // Auto-save when value changes
@@ -179,7 +187,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             ...baseFilter,
             dataType: 'NUMBER',
             action: filterAction as any,
-            value: 0,
+            value: numberValue() ?? 0,
           } as PropertyFilter;
         }
         return {
@@ -285,6 +293,17 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             >
               <FilterValueDate
                 value={dateValue()}
+                onChange={handleValueChange}
+              />
+            </Match>
+            <Match
+              when={
+                selectedProperty()?.data_type === 'NUMBER' &&
+                isComparisonAction(action())
+              }
+            >
+              <FilterValueNumber
+                value={numberValue()}
                 onChange={handleValueChange}
               />
             </Match>
