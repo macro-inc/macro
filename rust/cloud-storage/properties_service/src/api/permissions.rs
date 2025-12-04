@@ -28,6 +28,7 @@ impl PermissionError {
 }
 
 /// Checks if a user has view access to an entity (View, Comment, Edit, or Owner level).
+/// Also allows access if the entity is publicly viewable.
 /// Supports: Document, Chat, Project, Thread, Channel, Macro.
 #[tracing::instrument(skip(context), fields(user_id = %user_id, entity_id = %entity_ref.entity_id, entity_type = ?entity_ref.entity_type))]
 pub async fn check_entity_view_permission(
@@ -39,7 +40,19 @@ pub async fn check_entity_view_permission(
 
     match access_level {
         Some(_) => Ok(()), // Any access level is sufficient for viewing
-        None => Err(PermissionError::Unauthorized),
+        None => {
+            // Fallback: check if entity is publicly viewable
+            if is_entity_public(&context.db, entity_ref).await? {
+                tracing::debug!(
+                    entity_id = %entity_ref.entity_id,
+                    entity_type = ?entity_ref.entity_type,
+                    "granting view access via public share"
+                );
+                Ok(())
+            } else {
+                Err(PermissionError::Unauthorized)
+            }
+        }
     }
 }
 
@@ -100,4 +113,57 @@ async fn get_access_level(
     })?;
 
     Ok(access_level)
+}
+
+/// Checks if an entity is publicly viewable via SharePermission.
+/// This is a fallback for when get_users_access_level_v2 returns None but
+/// the entity is publicly shared.
+#[tracing::instrument(skip(db))]
+async fn is_entity_public(
+    db: &sqlx::Pool<sqlx::Postgres>,
+    entity_ref: &EntityReference,
+) -> Result<bool, PermissionError> {
+    let share_permission = match entity_ref.entity_type {
+        EntityType::Document => {
+            macro_db_client::share_permission::get::get_document_share_permission(
+                db,
+                &entity_ref.entity_id,
+            )
+            .await
+        }
+        EntityType::Chat => {
+            macro_db_client::share_permission::get::get_chat_share_permission(
+                db,
+                &entity_ref.entity_id,
+            )
+            .await
+        }
+        EntityType::Project => {
+            macro_db_client::share_permission::get::get_project_share_permission(
+                db,
+                &entity_ref.entity_id,
+            )
+            .await
+        }
+        EntityType::Thread | EntityType::Channel | EntityType::User => {
+            // Thread doesn't have a get_*_share_permission that returns SharePermissionV2
+            // Channels don't have public share permissions in the same way
+            // User entity type is not supported
+            return Ok(false);
+        }
+    };
+
+    match share_permission {
+        Ok(sp) => Ok(sp.is_public),
+        Err(e) => {
+            // If the entity doesn't exist or has no share permission, it's not public
+            tracing::debug!(
+                error = ?e,
+                entity_id = %entity_ref.entity_id,
+                entity_type = ?entity_ref.entity_type,
+                "could not get share permission, treating as not public"
+            );
+            Ok(false)
+        }
+    }
 }

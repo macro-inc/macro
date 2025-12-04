@@ -6468,6 +6468,7 @@ dependencies = [
  "http-body-util",
  "macro_auth",
  "macro_cors",
+ "macro_db_client",
  "macro_entrypoint",
  "macro_env",
  "macro_middleware",
