@@ -79,7 +79,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/user", user::router(state.clone(), state.jwt_args.clone()))
         .nest(
             "/update",
-            native_app_service::routes(RouterState {
+            native_app_service::inbound::native_app_router(RouterState {
                 inner: state.native_app_service.clone(),
             }),
         )

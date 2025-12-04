@@ -1,7 +1,7 @@
 use macro_env::Environment;
 
 use crate::domain::{
-    models::{BundleUpdate, BundleUpdateRequest, UpdateErr},
+    models::{BundleUpdate, BundleUpdateRequest, PlatformData, PlatformVerifier, UpdateErr},
     ports::{GetJsBundleSemver, NativeAppService},
 };
 
@@ -11,6 +11,9 @@ pub struct NativeAppServiceImpl<T> {
     pub bundle_fetcher: T,
     /// the environment we are running in
     pub environment: Environment,
+
+    /// the platform data for various platforms
+    pub platform_data: PlatformData,
 }
 
 impl<T> NativeAppService for NativeAppServiceImpl<T>
@@ -41,5 +44,9 @@ where
         }
 
         Ok(None)
+    }
+
+    fn verification_data<P: PlatformVerifier>(&self, req: P) -> P::VerifierPayload {
+        req.get_payload(&self.platform_data)
     }
 }

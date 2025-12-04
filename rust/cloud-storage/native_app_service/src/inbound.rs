@@ -9,7 +9,7 @@ use axum::{
 };
 
 use crate::domain::models::{
-    AllTargets, Arch, BundleUpdate, BundleUpdateRequest, DesktopTarget, DesktopUpdate,
+    AllTargets, Arch, BundleUpdate, BundleUpdateRequest, DesktopTarget, DesktopUpdate, IOSVerifier,
 };
 use crate::domain::ports::NativeAppService;
 
@@ -28,15 +28,19 @@ impl<S> Clone for RouterState<S> {
 }
 
 /// the external facing router to be merged with the root router
-pub fn routes<S: NativeAppService, T>(state: RouterState<S>) -> Router<T> {
+pub fn native_app_router<S: NativeAppService, T>(state: RouterState<S>) -> Router<T> {
     Router::new()
         .route(
-            "/desktop/:desktop_target/:arch/:current_version",
+            "/update/desktop/:desktop_target/:arch/:current_version",
             get(desktop_update_handler),
         )
         .route(
-            "/bundle/:all_target/:arch/:current_version",
+            "/update/bundle/:all_target/:arch/:current_version",
             get(bundle_update_handler),
+        )
+        .route(
+            ".well-known/apple-app-site-association",
+            get(verify_ios_app_handler),
         )
         .with_state(state)
 }
@@ -82,4 +86,10 @@ where
             UpdateResult::NoUpdateAvailable => (reqwest::StatusCode::NO_CONTENT).into_response(),
         }
     }
+}
+
+async fn verify_ios_app_handler<S: NativeAppService>(
+    State(s): State<RouterState<S>>,
+) -> Json<serde_json::Value> {
+    Json(s.inner.verification_data(IOSVerifier))
 }

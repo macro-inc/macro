@@ -5,7 +5,10 @@ use document_storage_service_client::DocumentStorageServiceClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
-use native_app_service::{domain::service::NativeAppServiceImpl, outbound::DefaultBundleFetcher};
+use native_app_service::{
+    domain::{models::PlatformData, service::NativeAppServiceImpl},
+    outbound::DefaultBundleFetcher,
+};
 use notification_service_client::NotificationServiceClient;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
@@ -222,6 +225,10 @@ async fn main() -> anyhow::Result<()> {
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::default(),
                 environment: config.environment,
+                platform_data: PlatformData {
+                    ios_development_team_id: String::new(),
+                    ios_app_bundle_id: String::new(),
+                },
             }),
         },
         config.port,

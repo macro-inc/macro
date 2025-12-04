@@ -1,4 +1,5 @@
 use serde::{Deserialize, Serialize};
+use serde_json::json;
 use thiserror::Error;
 use url::Url;
 
@@ -102,4 +103,43 @@ pub enum UpdateErr {
     /// failed to parse a semver string
     #[error("Failed to parse semver {0}")]
     Semver(#[from] semver::Error),
+}
+
+/// contains information about bundle ids for various app platforms
+pub struct PlatformData {
+    /// the ios xcode dev team id
+    pub ios_development_team_id: String,
+    /// the ios xcode bundle id
+    pub ios_app_bundle_id: String,
+}
+
+/// trait which defines how we fetch platform verification data for different platforms
+pub trait PlatformVerifier {
+    /// the type of the output data
+    type VerifierPayload: Serialize;
+
+    /// get the verifier payload
+    fn get_payload(&self, platform_data: &PlatformData) -> Self::VerifierPayload;
+}
+
+/// the concrete struct which is used to produce the iOS verification payload
+pub struct IOSVerifier;
+
+impl PlatformVerifier for IOSVerifier {
+    type VerifierPayload = serde_json::Value;
+
+    fn get_payload(&self, platform_data: &PlatformData) -> Self::VerifierPayload {
+        json!([
+          {
+            "relation": ["delegate_permission/common.handle_all_urls"],
+            "target": {
+              "namespace": "android_app",
+              "package_name": "$APP_BUNDLE_ID",
+              "sha256_cert_fingerprints": [
+                  format_args!("{}.{}", platform_data.ios_development_team_id, platform_data.ios_app_bundle_id)
+              ]
+            }
+          }
+        ])
+    }
 }

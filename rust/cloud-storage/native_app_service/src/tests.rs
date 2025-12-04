@@ -1,7 +1,9 @@
 use crate::{
     domain::{
         self,
-        models::{AllTargets, Arch, BundleUpdate, DesktopTarget, MobileTarget, UpdateErr},
+        models::{
+            AllTargets, Arch, BundleUpdate, DesktopTarget, MobileTarget, PlatformData, UpdateErr,
+        },
         ports::{GetJsBundleSemver, NativeAppService},
         service::NativeAppServiceImpl,
     },
@@ -37,6 +39,13 @@ impl GetJsBundleSemver for MockBundleFetcher {
     }
 }
 
+fn mock_platform_data() -> PlatformData {
+    PlatformData {
+        ios_development_team_id: String::new(),
+        ios_app_bundle_id: String::new(),
+    }
+}
+
 #[tokio::test]
 async fn it_should_not_downgrade_mobile() {
     let semver: Version = "1.2.1".parse().unwrap();
@@ -51,6 +60,7 @@ async fn it_should_not_downgrade_mobile() {
             let service = NativeAppServiceImpl {
                 bundle_fetcher: MockBundleFetcher,
                 environment: e,
+                platform_data: mock_platform_data(),
             };
 
             service
@@ -80,6 +90,7 @@ async fn it_should_upgrade_mobile() {
             let service = NativeAppServiceImpl {
                 bundle_fetcher: MockBundleFetcher,
                 environment: e,
+                platform_data: mock_platform_data(),
             };
 
             service
@@ -112,6 +123,7 @@ async fn it_should_not_downgrade_desktop() {
             let service = NativeAppServiceImpl {
                 bundle_fetcher: MockBundleFetcher,
                 environment: e,
+                platform_data: mock_platform_data(),
             };
 
             service
@@ -141,6 +153,7 @@ async fn it_should_upgrade_desktop() {
             let service = NativeAppServiceImpl {
                 bundle_fetcher: MockBundleFetcher,
                 environment: e,
+                platform_data: mock_platform_data(),
             };
 
             service

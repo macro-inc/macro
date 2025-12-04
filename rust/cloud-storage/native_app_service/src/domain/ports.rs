@@ -1,4 +1,4 @@
-use crate::domain::models::{BundleUpdate, BundleUpdateRequest, UpdateErr};
+use crate::domain::models::{BundleUpdate, BundleUpdateRequest, PlatformVerifier, UpdateErr};
 use macro_env::Environment;
 use url::Url;
 
@@ -21,4 +21,7 @@ pub trait NativeAppService: Send + Sync + 'static {
         &self,
         req: BundleUpdateRequest,
     ) -> impl Future<Output = Result<Option<BundleUpdate>, UpdateErr>> + Send;
+
+    /// retrieve the verification payload for some platform T
+    fn verification_data<T: PlatformVerifier>(&self, req: T) -> T::VerifierPayload;
 }
