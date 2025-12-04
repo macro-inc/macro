@@ -884,23 +884,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return false;
   });
 
-  const disableDssInfiniteQueryGET = createMemo(() => {
-    if (view().viewType === 'project') return true;
-    if (view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.folders) return true;
-
-    const typeFilter = entityTypeFilter();
-    if (typeFilter.length === 0) return false;
-    const dssTypes = ['document', 'chat', 'project'];
-    const hasDssTypes = typeFilter.some((t) => dssTypes.includes(t));
-    return !hasDssTypes;
-  });
   const disableDssInfiniteQuery = createMemo(() => {
-    // if (
-    //   view().viewType !== 'project' &&
-    //   view().id !== VIEWCONFIG_DEFAULTS_IDS_ENUM.folders
-    // )
-    //   return true;
-
     const typeFilter = entityTypeFilter();
     if (typeFilter.length === 0) return false;
     const dssTypes = ['document', 'chat', 'project'];
