@@ -67,6 +67,7 @@ pub fn map_service_message_to_db(
         snippet: service_msg.snippet.clone(),
         size_estimate: service_msg.size_estimate,
         subject: service_msg.subject.clone(),
+        from_name: service_msg.from.as_ref().and_then(|f| f.name.clone()),
         from_contact_id,
         sent_at: service_msg.sent_at,
         has_attachments: service_msg.has_attachments,

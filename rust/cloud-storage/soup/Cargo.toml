@@ -12,6 +12,7 @@ axum = [
   "dep:model_user",
   "dep:utoipa",
   "email/axum",
+  "item_filters/schema",
   "models_pagination/axum",
   "models_soup/schema",
 ]

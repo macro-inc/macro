@@ -64,6 +64,9 @@ pub struct Config {
 
     /// The search event queue
     pub search_event_queue: String,
+
+    /// The stripe price id for the professional subscription
+    pub stripe_price_id: String,
 }
 
 impl Config {
@@ -118,6 +121,9 @@ impl Config {
         let search_event_queue =
             std::env::var("SEARCH_EVENT_QUEUE").context("SEARCH_EVENT_QUEUE must be provided")?;
 
+        let stripe_price_id =
+            std::env::var("STRIPE_PRICE_ID").context("STRIPE_PRICE_ID must be provided")?;
+
         Ok(Config {
             base_url,
             database_url,
@@ -138,6 +144,7 @@ impl Config {
             notification_service_url,
             notification_queue,
             search_event_queue,
+            stripe_price_id,
             environment,
         })
     }

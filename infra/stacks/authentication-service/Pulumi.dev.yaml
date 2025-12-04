@@ -15,3 +15,4 @@ config:
   authentication-service:google_client_secret_key: google-client-secret-dev
   authentication-service:macro_api_token_private_secret_key: macro-api-token-private-key-dev
   authentication-service:stripe_webhook_secret_key: stripe-webhook-secret-dev
+  authentication-service:stripe_price_id: stripe-price-id-dev

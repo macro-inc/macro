@@ -14,6 +14,8 @@ export type MessageListContext<T extends MinimalMessage = Message> = {
   threadIndex: number;
   /** The previous non-threaded message outside of the current thread */
   previousNonThreadedMessage: T | undefined;
+  /** True if the message is in a thread and the parent is the last top-level message */
+  isInLastThread: boolean;
 };
 
 export type MessageListContextLookup<T extends MinimalMessage = Message> =
@@ -47,6 +49,15 @@ export function createMessageListContextLookup<
 
   for (const [index, message] of messages.entries()) {
     messagesById.set(message.id, [index, message]);
+  }
+
+  // Find the last top-level message (last message without a thread_id)
+  let lastTopLevelMessageId: string | undefined;
+  for (let i = messages.length - 1; i >= 0; i--) {
+    if (!messages[i].thread_id) {
+      lastTopLevelMessageId = messages[i].id;
+      break;
+    }
   }
 
   for (const [messageIndex, message] of messages.entries()) {
@@ -86,12 +97,19 @@ export function createMessageListContextLookup<
       }
     }
 
+    // Check if message is in the last thread
+    const isInLastThread =
+      message.thread_id !== null &&
+      message.thread_id !== undefined &&
+      message.thread_id === lastTopLevelMessageId;
+
     context[message.id] = {
       index: messageIndex,
       isNewMessage: isNewMessage,
       isParentNewMessage: isParentNewMessage,
       threadIndex,
       previousNonThreadedMessage,
+      isInLastThread,
     };
   }
 
