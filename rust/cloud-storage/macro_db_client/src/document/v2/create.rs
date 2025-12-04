@@ -343,6 +343,7 @@ mod tests {
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: Some(&ts),
+                is_task: false,
             },
         )
         .await?;
@@ -369,6 +370,7 @@ mod tests {
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: None,
+                is_task: false,
             },
         )
         .await?;
@@ -407,6 +409,7 @@ mod tests {
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: Some(&ts),
+                is_task: false,
             },
         )
         .await?;
@@ -436,6 +439,7 @@ mod tests {
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: None,
+                is_task: false,
             },
         )
         .await?;
@@ -466,6 +470,7 @@ mod tests {
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: None,
+                is_task: false,
             },
         )
         .await;
