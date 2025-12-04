@@ -9,7 +9,18 @@ pub mod entities;
 pub mod metadata;
 pub mod options;
 
-pub fn router() -> Router<ApiContext> {
+/// Routes that allow anonymous access (for viewing public entities)
+pub fn public_router() -> Router<ApiContext> {
+    Router::new()
+        // GET entity properties - allows anonymous access for public documents
+        .route(
+            "/entities/:entity_type/:entity_id",
+            get(entities::get::get_entity_properties),
+        )
+}
+
+/// Routes that require authentication
+pub fn authenticated_router() -> Router<ApiContext> {
     Router::new()
         // Property Definition Management - Unified endpoint with query params
         .route(
@@ -30,11 +41,7 @@ pub fn router() -> Router<ApiContext> {
             "/definitions/:definition_id/options/:option_id",
             delete(options::delete::delete_property_option),
         )
-        // Entity Property Operations
-        .route(
-            "/entities/:entity_type/:entity_id",
-            get(entities::get::get_entity_properties),
-        )
+        // Entity Property Operations (write operations require auth)
         .route(
             "/entities/:entity_type/:entity_id/:property_id",
             put(entities::set::set_entity_property),
