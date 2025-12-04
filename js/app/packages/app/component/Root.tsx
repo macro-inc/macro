@@ -1,4 +1,5 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
+import { globalSplitManager } from '@app/signal/splitLayout';
 import { withAnalytics } from '@coparse/analytics';
 import { useIsAuthenticated } from '@core/auth';
 import { ChannelsContextProvider } from '@core/component/ChannelsProvider';
@@ -21,8 +22,10 @@ import { isTauri, MaybeTauriProvider } from '@macro/tauri';
 import { createEmailSource, Provider as EntityProvider } from '@macro-entity';
 import {
   createNotificationSource,
+  type UnifiedNotification,
   usePlatformNotificationState,
 } from '@notifications';
+import { maybeHandlePlatformNotification } from '@notifications/notification-platform';
 import { setUser, useObserveRouting } from '@observability';
 import { ws as connectionGatewayWebsocket } from '@service-connection/websocket';
 import { gqlServiceClient } from '@service-gql/client';
@@ -256,11 +259,20 @@ const ROUTES: RouteDefinition[] = [
 export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
   // Initialize global notification helpers
   const notifInterface = usePlatformNotificationState();
+
+  const onNotification = (notification: UnifiedNotification) => {
+    if (notifInterface === 'not-supported') return;
+    const layoutManager = globalSplitManager();
+    if (!layoutManager) return;
+    maybeHandlePlatformNotification(
+      notification,
+      notifInterface,
+      layoutManager
+    );
+  };
   const notificationSource = createNotificationSource(
     connectionGatewayWebsocket,
-    notifInterface === 'not-supported'
-      ? undefined
-      : notifInterface.showNotification
+    onNotification
   );
 
   const emailActive = useEmailLinksStatus();

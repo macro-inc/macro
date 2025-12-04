@@ -38,7 +38,8 @@ type TypedInnerSearchResult =
   | { results: InnerSearchResult[]; type?: undefined }
   | { results: DocumentSearchResult[]; type: 'pdf'; searchQuery: string }
   | { results: DocumentSearchResult[]; type: 'md' }
-  | { results: ChannelSearchResult[]; type: 'channel' };
+  | { results: ChannelSearchResult[]; type: 'channel' }
+  | { results: EmailSearchResult[]; type: 'email' };
 
 export const isSearchEntity = <T extends EntityData>(
   entity: T
@@ -98,6 +99,20 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           type: 'md' as const,
           content: mergeAdjacentMacroEmTags(content),
           location: { type: 'md' as const, nodeId: r.node_id! },
+        }));
+      });
+      break;
+    }
+    case 'email': {
+      contentHitData = data.results.flatMap((r) => {
+        const contents = r.highlight.content ?? [];
+        return contents.map((content) => ({
+          type: 'email' as const,
+          content: mergeAdjacentMacroEmTags(content),
+          location: {
+            type: 'email' as const,
+            messageId: r.message_id,
+          },
         }));
       });
       break;
@@ -172,6 +187,7 @@ const useMapSearchResponseItem = () => {
         const emailResult = result.email_message_search_results.at(0);
         const search = getSearchData({
           results: result.email_message_search_results,
+          type: 'email',
         });
 
         // Email thread subject match

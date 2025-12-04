@@ -1,7 +1,7 @@
 use super::super::db_types::*;
-use crate::domain::models::PreviewCursorQuery;
-use macro_user_id::user_id::MacroUserIdStr;
+use models_pagination::{Query, SimpleSortMethod};
 use sqlx::PgPool;
+use uuid::Uuid;
 
 /// Fetches a paginated list of thread previews for the "Important" view.
 /// Includes threads that:
@@ -11,12 +11,13 @@ use sqlx::PgPool;
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn important_preview_cursor(
     pool: &PgPool,
-    query: &PreviewCursorQuery,
-    user_id: MacroUserIdStr<'_>,
+    link_id: &Uuid,
+    limit: u32,
+    query: &Query<Uuid, SimpleSortMethod, ()>,
 ) -> Result<Vec<ThreadPreviewCursorDbRow>, sqlx::Error> {
-    let query_limit = query.limit as i64;
-    let sort_method_str = query.query.sort_method().to_string();
-    let (cursor_id, cursor_timestamp) = query.query.vals();
+    let query_limit = limit as i64;
+    let sort_method_str = query.sort_method().to_string();
+    let (cursor_id, cursor_timestamp) = query.vals();
 
     sqlx::query_as!(
         ThreadPreviewCursorDbRow,
@@ -33,7 +34,8 @@ pub(crate) async fn important_preview_cursor(
                    m.is_draft,
                    m.subject,
                    m.snippet,
-                   m.from_contact_id
+                   m.from_contact_id,
+                   m.from_name
             FROM email_messages m
             WHERE m.link_id = $1
               AND EXISTS (
@@ -57,7 +59,8 @@ pub(crate) async fn important_preview_cursor(
                    m.is_draft,
                    m.subject,
                    m.snippet,
-                   m.from_contact_id
+                   m.from_contact_id,
+                   m.from_name
             FROM email_messages m
             WHERE m.link_id = $1
               AND m.is_draft = TRUE
@@ -70,7 +73,8 @@ pub(crate) async fn important_preview_cursor(
                    is_draft,
                    subject,
                    snippet,
-                   from_contact_id
+                   from_contact_id,
+                   from_name
             FROM QualifyingMessages
             ORDER BY thread_id, internal_date_ts DESC
         ),
@@ -83,6 +87,7 @@ pub(crate) async fn important_preview_cursor(
                 ait.subject,
                 ait.snippet,
                 ait.from_contact_id,
+                ait.from_name,
                 ait.internal_date_ts as created_at,
                 ait.internal_date_ts as updated_at,
                 uh.updated_at as viewed_at,
@@ -116,7 +121,7 @@ pub(crate) async fn important_preview_cursor(
                isk.subject as "name?",
                isk.snippet as "snippet?",
                c.email_address AS "sender_email?",
-               c.name AS "sender_name?",
+               COALESCE(isk.from_name, c.name) AS "sender_name?",
                c.sfs_photo_url as "sender_photo_url?"
         FROM ImportantWithSortKey isk
         JOIN email_threads t ON isk.thread_id = t.id
@@ -126,7 +131,7 @@ pub(crate) async fn important_preview_cursor(
         ORDER BY isk.effective_ts DESC, isk.thread_id DESC
         LIMIT $2
         "#,
-        query.link_id,            // $1
+        link_id,            // $1
         query_limit,              // $2
         cursor_timestamp,   // $3
         cursor_id,          // $4

@@ -14,7 +14,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .layer(
             ServiceBuilder::new()
                 .layer(axum::middleware::from_fn_with_state(
-                    state.clone(),
+                    state.email_service.clone(),
                     crate::api::middleware::link::attach_link_context,
                 ))
                 .layer(axum::middleware::from_fn_with_state(

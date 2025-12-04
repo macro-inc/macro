@@ -22,7 +22,7 @@ pub(crate) struct ApiContext {
     pub jwt_args: JwtValidationArgs,
     pub config: Arc<Config>,
     pub internal_auth_key: LocalOrRemoteSecret<InternalApiSecretKey>,
-    pub email_cursor_service: EmailPreviewState<
+    pub email_service: EmailPreviewState<
         EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>>,
     >,
 }

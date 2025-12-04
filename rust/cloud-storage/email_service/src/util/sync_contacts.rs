@@ -192,7 +192,7 @@ async fn process_and_store_contacts(
         "Inserted contacts into DB"
     );
 
-    if cfg!(feature = "disable_sfs_map") {
+    if cfg!(not(feature = "sfs_map")) {
         return Ok(());
     }
     // Async enqueue messages to sfs_uploader worker that populates the sfs_url for the contacts profile images

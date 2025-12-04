@@ -104,10 +104,11 @@ export class UploadExtractorLambdaHandler extends pulumi.ComponentResource {
           aws.iam.ManagedPolicy.AWSLambdaBasicExecutionRole,
           aws.iam.ManagedPolicy.AmazonDynamoDBFullAccess,
           sqsPolicy.arn,
+          uploadBucketPolicy.arn,
         ],
         tags: this.tags,
       },
-      { parent: this }
+      { parent: this, dependsOn: [sqsPolicy, uploadBucketPolicy] }
     );
 
     const uploadExtractorLambdaHandlerLambda =
@@ -128,26 +129,6 @@ export class UploadExtractorLambdaHandler extends pulumi.ComponentResource {
 
     this.lambda = uploadExtractorLambdaHandlerLambda.lambda;
     this.role = role;
-
-    new aws.iam.RolePolicyAttachment(
-      `${LAMBDA_BASE_NAME}-role-upload-bucket-att`,
-      {
-        role,
-        policyArn: uploadBucketPolicy.arn,
-      },
-      { parent: this, dependsOn: [uploadBucketPolicy, role] }
-    );
-
-    new aws.lambda.Permission(
-      `${LAMBDA_BASE_NAME}-sqs-permission-${stack}`,
-      {
-        action: 'lambda:InvokeFunction',
-        function: this.lambda.name,
-        principal: 'sqs.amazonaws.com',
-        sourceArn: uploadExtractorQueueArn,
-      },
-      { parent: this }
-    );
 
     new aws.lambda.EventSourceMapping(
       `${LAMBDA_BASE_NAME}-sqs-source-mapping`,

@@ -114,6 +114,15 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
+    let stripe_price_id = match config.environment {
+        Environment::Local => config.stripe_price_id.clone(),
+        _ => secretsmanager_client
+            .get_secret_value(&config.stripe_price_id)
+            .await
+            .context("unable to get stripe price id")?
+            .to_string(),
+    };
+
     let auth_client = crate::service::fusionauth_client::FusionAuthClient::new(
         fusionauth_api_key,
         config.fusionauth_client_id.clone(),
@@ -188,7 +197,7 @@ async fn main() -> anyhow::Result<()> {
     );
 
     let teams_repo_impl = TeamRepositoryImpl::new(db.clone());
-    let customer_repo_impl = CustomerRepositoryImpl::new(stripe_client.clone());
+    let customer_repo_impl = CustomerRepositoryImpl::new(stripe_client.clone(), &stripe_price_id);
 
     let teams_service_impl = TeamServiceImpl::new(
         teams_repo_impl,

@@ -101,6 +101,10 @@ use model::{
 use models_permissions::share_permission::channel_share_permission::UpdateOperation;
 use models_soup::chat::SoupChat;
 use models_soup::document::SoupDocument;
+use models_soup::email_thread::{
+    SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEmailThreadPreviewMetadata,
+    SoupEnrichedEmailThreadPreview, SoupMacroAttachment,
+};
 use models_soup::item::SoupItem;
 use models_soup::item::SoupItemType;
 use models_soup::project::SoupProject;
@@ -203,7 +207,6 @@ use utoipa::OpenApi;
 
         // /recents
         recents::recently_deleted::handler,
-
         saved_views::create_view_handler,
         saved_views::get_views_handler,
         saved_views::delete_view_handler,
@@ -280,6 +283,12 @@ use utoipa::OpenApi;
             SoupItemType,
             SoupApiSort,
             SoupPage,
+            SoupEnrichedEmailThreadPreview,
+            SoupEmailThreadPreview,
+            SoupAttachment,
+            SoupMacroAttachment,
+            SoupContact,
+            SoupEmailThreadPreviewMetadata,
             PostSoupRequest,
 
 

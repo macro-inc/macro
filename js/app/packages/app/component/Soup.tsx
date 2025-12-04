@@ -39,6 +39,7 @@ import { createDroppable, useDragDropContext } from '@thisbeyond/solid-dnd';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import {
   type Component,
+  createEffect,
   createMemo,
   createRenderEffect,
   createSignal,
@@ -220,6 +221,7 @@ export function Soup() {
 
   const splitPanelContext = useSplitPanelOrThrow();
   const {
+    handle,
     splitHotkeyScope,
     unifiedListContext: {
       viewsDataStore: viewsData,
@@ -234,6 +236,11 @@ export function Soup() {
   const previewState = () => splitPanelContext.previewState;
   const [preview, setPreview] = previewState();
   const selectedEntity = () => view().selectedEntity;
+
+  // Sync selected view to split metadata
+  createEffect(() => {
+    handle.updateMeta?.({ viewId: selectedView() });
+  });
 
   const orchestrator = useGlobalBlockOrchestrator();
 
@@ -394,7 +401,7 @@ export function Soup() {
         >
           <Tabs
             ref={tabsRef}
-            class="@container/soup flex flex-col gap-1 size-full overflow-x-clip"
+            class="@container/soup [container-type:inline-size] flex flex-col gap-1 size-full overflow-x-clip"
             classList={{
               'border-r border-edge-muted': preview(),
               'pt-2 pb-0': showHelpDrawer().has(selectedView()),

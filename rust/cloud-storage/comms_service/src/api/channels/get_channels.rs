@@ -34,7 +34,7 @@ pub enum GetChannelsError {
     #[error(transparent)]
     Sqlx(#[from] sqlx::Error),
     #[error("Invalid user id")]
-    Id(#[from] macro_user_id::user_id::ParseErr),
+    Id(#[from] macro_user_id::error::ParseErr),
 }
 
 impl IntoResponse for GetChannelsError {

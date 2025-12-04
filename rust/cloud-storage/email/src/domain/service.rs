@@ -1,5 +1,9 @@
+mod preview_metadata;
+
 use crate::domain::{
-    models::{EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorQuery},
+    models::{
+        EmailErr, EnrichedEmailThreadPreview, GetEmailsRequest, PreviewCursorQuery, UserProvider,
+    },
     ports::{EmailRepo, EmailService},
 };
 use frecency::domain::{
@@ -12,6 +16,7 @@ use models_pagination::{CollectBy, PaginateOn, PaginatedCursor, SimpleSortMethod
 use std::collections::HashMap;
 use uuid::Uuid;
 
+#[derive(Clone)]
 pub struct EmailServiceImpl<T, U> {
     email_repo: T,
     frecency_service: U,
@@ -85,12 +90,14 @@ where
             macro_attachment_map_result,
             participant_result,
             labels_result,
+            metadata_result,
             frecency_scores,
         ) = tokio::join!(
             self.email_repo.attachments_by_thread_ids(&thread_ids),
             self.email_repo.macro_attachments_by_thread_ids(&thread_ids),
             self.email_repo.contacts_by_thread_ids(&thread_ids),
             self.email_repo.labels_by_thread_ids(&thread_ids),
+            self.get_preview_metadata(&previews, &link_id),
             self.frecency_service
                 .get_frecencies_by_ids(frecency_request)
         );
@@ -111,6 +118,7 @@ where
             .map_err(anyhow::Error::from)?
             .into_iter()
             .group_by(|v| v.thread_id);
+        let mut metadata_map = metadata_result.map_err(anyhow::Error::from)?;
 
         let mut frecency_scores_map: HashMap<AggregateId<'static>, FrecencyData> =
             frecency_scores?.into_inner();
@@ -128,6 +136,7 @@ where
                     attachments_macro: macro_attachment_map.remove(&thread.id).unwrap_or_default(),
                     labels: labels_map.remove(&thread.id).unwrap_or_default(),
                     participants: participant_map.remove(&thread.id).unwrap_or_default(),
+                    metadata: metadata_map.remove(&thread.id).unwrap_or_default(),
                     frecency_score: frecency_scores_map
                         .remove(&id)
                         .map(|data| id.into_aggregate(data)),
@@ -136,5 +145,17 @@ where
             })
             .paginate_on(limit as usize, sort_method)
             .into_page())
+    }
+
+    async fn get_link_by_auth_id_and_macro_id(
+        &self,
+        auth_id: &str,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> Result<Option<super::models::Link>, EmailErr> {
+        Ok(self
+            .email_repo
+            .link_by_fusionauth_and_macro_id(auth_id, macro_id, UserProvider::Gmail)
+            .await
+            .map_err(anyhow::Error::from)?)
     }
 }

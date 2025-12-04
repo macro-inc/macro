@@ -59,9 +59,12 @@ pub async fn backfill_email_insights(
         tracing::debug!(
             "user {} has email account {} linked",
             user_id,
-            link.email_address
+            link.email_address.0.as_ref()
         );
-        user_emails_map.insert(user_id.clone(), vec![link.email_address]);
+        user_emails_map.insert(
+            user_id.clone(),
+            vec![link.email_address.0.as_ref().to_string()],
+        );
     }
 
     let mut user_offsets: std::collections::HashMap<String, i64> =

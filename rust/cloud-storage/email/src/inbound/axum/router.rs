@@ -1,8 +1,9 @@
 use axum::{
-    Extension, Json, Router,
+    Json, Router,
     extract::{self, State},
     routing::get,
 };
+use axum_extra::extract::Cached;
 use model_error_response::ErrorResponse;
 use model_user::axum_extractor::MacroUserExtractor;
 use models_pagination::{CursorExtractor, SimpleSortMethod, TypeEraseCursor};
@@ -12,15 +13,13 @@ use uuid::Uuid;
 use crate::{
     domain::{models::GetEmailsRequest, ports::EmailService},
     inbound::{
-        ApiPaginatedThreadCursor,
-        axum::axum_impls::{
-            GetPreviewsCursorError, GetPreviewsCursorParams, LinkUuid, PreviewViewExtractor,
-        },
+        ApiPaginatedThreadCursor, EmailLinkExtractor,
+        axum::axum_impls::{GetPreviewsCursorError, GetPreviewsCursorParams, PreviewViewExtractor},
     },
 };
 
 pub struct EmailPreviewState<T> {
-    inner: Arc<T>,
+    pub(crate) inner: Arc<T>,
 }
 
 impl<T> Clone for EmailPreviewState<T> {
@@ -70,11 +69,11 @@ where
             (status = 500, body=ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(link_id, macro_user, service), fields(user_id=macro_user.macro_user_id.as_ref(), fusionauth_user_id=macro_user.user_context.fusion_user_id))]
+#[tracing::instrument(skip(link, macro_user, service), fields(user_id=macro_user.macro_user_id.as_ref(), fusionauth_user_id=macro_user.user_context.fusion_user_id))]
 async fn cursor_handler<T: EmailService>(
     State(service): State<EmailPreviewState<T>>,
-    macro_user: MacroUserExtractor,
-    Extension(LinkUuid(link_id)): Extension<LinkUuid>,
+    Cached(macro_user): Cached<MacroUserExtractor>,
+    Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T>>,
     PreviewViewExtractor(preview_view): PreviewViewExtractor,
     extract::Query(params): extract::Query<GetPreviewsCursorParams>,
     cursor: CursorExtractor<Uuid, SimpleSortMethod, ()>,
@@ -84,16 +83,18 @@ async fn cursor_handler<T: EmailService>(
             .inner
             .get_email_thread_previews(GetEmailsRequest {
                 view: preview_view,
-                link_id,
+                link_id: link.id,
                 macro_id: macro_user.macro_user_id,
                 limit: params.limit,
-                query: cursor.into_query(
-                    params
-                        .sort_method
-                        .map(|v| v.into_simple_sort())
-                        .unwrap_or(SimpleSortMethod::ViewedUpdated),
-                    (),
-                ),
+                query: cursor
+                    .into_query(
+                        params
+                            .sort_method
+                            .map(|v| v.into_simple_sort())
+                            .unwrap_or(SimpleSortMethod::ViewedUpdated),
+                        (),
+                    )
+                    .map_filter(|_| None),
             })
             .await?
             .type_erase(),

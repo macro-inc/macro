@@ -105,7 +105,6 @@ where
                     .customer_repository
                     .create_subscription(CreateSubscriptionArgs {
                         customer_id,
-                        price_id: "price_1PnSgXJaD7zvQeOBfSYgOmZc",
                         quantity: invited.len() as u64,
                         metadata: Some(
                             vec![

@@ -32,8 +32,8 @@ mod service;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let env = Environment::new_or_prod();
     MacroEntrypoint::default().init();
+    let env = Environment::new_or_prod();
 
     let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
         .region("us-east-1")
@@ -182,12 +182,17 @@ async fn main() -> anyhow::Result<()> {
             .await?;
 
     let frecency_service = FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone()));
+    let email_service =
+        EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
     let api_context = ApiContext {
-        soup_router_state: SoupRouterState::new(SoupImpl::new(
-            PgSoupRepo::new(db.clone()),
-            frecency_service.clone(),
-            EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service),
-        )),
+        soup_router_state: SoupRouterState::new(
+            SoupImpl::new(
+                PgSoupRepo::new(db.clone()),
+                frecency_service,
+                email_service.clone(),
+            ),
+            email_service,
+        ),
         db,
         redis_client: Arc::new(Redis::new(redis_client)),
         s3_client: Arc::new(S3::new(

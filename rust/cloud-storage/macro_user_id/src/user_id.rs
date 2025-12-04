@@ -1,14 +1,13 @@
 //! Module defines the [MacroUserId] and the methods to read the email
-use std::ops::Deref;
-
 use crate::{
     cowlike::{ArcCowStr, CowLike},
     email::{Email, email},
+    error::ParseErr,
     lowercased::Lowercase,
 };
 use nom::{Finish, IResult, Parser, bytes::complete::tag, character::char};
 use serde::{Deserialize, Serialize};
-use thiserror::Error;
+use std::ops::Deref;
 
 #[cfg(test)]
 mod tests;
@@ -87,6 +86,13 @@ impl<'a> MacroUserIdStr<'a> {
     /// parse the inner value from the input string
     pub fn parse_from_str(s: &'a str) -> Result<Self, ParseErr> {
         MacroUserId::parse_from_str(s).map(MacroUserIdStr)
+    }
+}
+
+impl MacroUserIdStr<'static> {
+    /// Create a MacroUserIdStr from an email address by prepending "macro|"
+    pub fn try_from_email(email: &str) -> Result<Self, ParseErr> {
+        Self::try_from(format!("{}|{}", MACRO_PREFIX, email))
     }
 }
 
@@ -170,11 +176,6 @@ where
         }
     }
 }
-
-/// describes the error that occurred while parsing a [MacroUserId]
-#[derive(Debug, Error)]
-#[error(transparent)]
-pub struct ParseErr(#[from] nom::error::Error<String>);
 
 impl<'a> MacroUserId<ArcCowStr<'a>> {
     /// attempt to create a borrowed version of self from an input string

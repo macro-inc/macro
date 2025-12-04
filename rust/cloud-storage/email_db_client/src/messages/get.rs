@@ -71,51 +71,6 @@ pub async fn find_missing_provider_ids(
     Ok(missing_provider_ids)
 }
 
-// returns the number of messages in a thread that have a given label.
-#[tracing::instrument(skip(conn), level = "info")]
-pub async fn count_thread_messages_with_label(
-    conn: &mut sqlx::PgConnection,
-    thread_id: Uuid,
-    link_id: Uuid,
-    provider_label_id: &str,
-) -> anyhow::Result<i64> {
-    let count = sqlx::query_scalar!(
-        r#"
-        WITH TargetLabel AS (
-            SELECT
-                l.id AS label_id
-            FROM
-                email_labels l
-            WHERE
-                l.link_id = $2
-                AND l.provider_label_id = $3
-        )
-        SELECT
-            COUNT(m.id) AS "message_count!"
-        FROM
-            email_messages m
-        JOIN
-            email_message_labels ml ON m.id = ml.message_id
-        JOIN
-            TargetLabel tl ON ml.label_id = tl.label_id
-        WHERE
-            m.thread_id = $1
-            AND m.link_id = $2
-        "#,
-        thread_id,
-        link_id,
-        provider_label_id
-    )
-    .fetch_one(conn)
-    .await
-    .context(format!(
-        "Failed to count messages with label '{}' for thread ID {} with link_id {}",
-        provider_label_id, thread_id, link_id
-    ))?;
-
-    Ok(count)
-}
-
 /// Fetches the thread's messages without attachments and body attributes.
 #[tracing::instrument(skip(conn), level = "info")]
 pub async fn fetch_messages_metadata(
@@ -138,6 +93,7 @@ pub async fn fetch_messages_metadata(
             snippet,
             size_estimate,
             subject,
+            from_name,
             from_contact_id,
             sent_at,
             has_attachments,
@@ -172,12 +128,8 @@ pub async fn fetch_messages_metadata(
     }
 
     let message_ids: Vec<Uuid> = db_messages.iter().map(|m| m.id).collect();
-    let sender_ids: Vec<Uuid> = db_messages
-        .iter()
-        .filter_map(|m| m.from_contact_id)
-        .collect();
 
-    let senders_map = contacts::get::get_contacts_map(&mut *conn, &sender_ids)
+    let senders_map = contacts::get::get_senders_contacts_map(&mut *conn, &message_ids)
         .await
         .context("Failed to fetch senders in bulk")?;
 
@@ -228,6 +180,7 @@ pub async fn fetch_messages_with_labels(
             snippet,
             size_estimate,
             subject,
+            from_name,
             from_contact_id,
             sent_at,
             has_attachments,
@@ -372,6 +325,7 @@ pub async fn get_message_to_send(
             snippet,
             size_estimate,
             subject,
+            from_name,
             from_contact_id,
             sent_at,
             has_attachments,
@@ -402,7 +356,7 @@ pub async fn get_message_to_send(
 
     // fetch data from each table concurrently
     let (sender_res, recipients_res) = tokio::try_join!(
-        async { contacts::get::get_contact_by_id(pool, db_message.from_contact_id.unwrap()).await },
+        async { contacts::get::get_sender_by_message_id(pool, message_id).await },
         contacts::get::fetch_db_recipients(pool, db_message.id)
     )?;
 

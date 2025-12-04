@@ -299,7 +299,7 @@ where
                         .chain(email_soup)
                         .paginate_on(limit.into(), sort_method)
                         .filter_on(paginate_filter)
-                        .ensure_sorted()
+                        .sort_desc()
                         .into_page(),
                 ))
             }

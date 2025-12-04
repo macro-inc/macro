@@ -33,10 +33,14 @@ fn it_expands_filters() {
         ..Default::default()
     };
 
-    let ast = Arc::into_inner(EntityFilterAst::new_from_filters(f).unwrap().unwrap().inner)
-        .unwrap()
-        .document_filter
-        .unwrap();
+    let ast = Arc::into_inner(
+        EntityFilterAst::new_from_filters(f)
+            .unwrap()
+            .unwrap()
+            .document_filter
+            .unwrap(),
+    )
+    .unwrap();
 
     let json = serde_json::to_value(ast).unwrap();
     let exp = json!({

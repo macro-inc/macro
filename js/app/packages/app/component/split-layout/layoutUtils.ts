@@ -77,3 +77,11 @@ export function globalRemoveFromSplitHistory(
     handle?.removeFromHistory(predicate);
   }
 }
+
+/**
+ * Check if there's a unified-list split with the inbox view active.
+ */
+export function isInboxOpen(manager: SplitManager): boolean {
+  const split = manager.getSplitByContent('component', 'unified-list');
+  return split?.meta()?.viewId === 'inbox';
+}

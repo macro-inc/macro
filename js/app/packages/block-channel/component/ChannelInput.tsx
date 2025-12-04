@@ -75,7 +75,6 @@ export function ChannelInput(props: ChannelInputProps) {
       onSend={sendMessage_}
       afterSend={() => clearDraftMessage(channelId)}
       onChange={handleChange}
-      onEmpty={() => clearDraftMessage(channelId)}
       initialValue={() => draftMessage()?.content ?? ''}
       inputAttachments={{
         store: props.inputAttachmentsStore,
@@ -83,6 +82,7 @@ export function ChannelInput(props: ChannelInputProps) {
         key: props.inputAttachmentsKey,
       }}
       onFocusLeaveStart={props.onFocusLeaveStart}
+      onEmptyBlur={() => clearDraftMessage(channelId)}
       channelUsers={channelUsers}
       autoFocusOnMount={props.autoFocusOnMount}
       domRef={props.domRef}

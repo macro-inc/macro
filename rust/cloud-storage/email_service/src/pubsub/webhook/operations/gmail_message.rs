@@ -2,14 +2,13 @@ use crate::pubsub::context::PubSubContext;
 use crate::pubsub::util::check_gmail_rate_limit;
 use crate::pubsub::webhook::process::fetch_pubsub_gmail_token;
 use crate::util::process_pre_insert::sync_labels::sync_labels;
-use models_email::db::link::UserProvider;
 use models_email::gmail::history::InboxChanges;
 use models_email::gmail::operations::GmailApiOperation;
 use models_email::gmail::webhook::{
     DeleteMessagePayload, GmailMessagePayload, UpdateLabelsPayload, UpsertMessagePayload,
     WebhookOperation, WebhookPubsubMessage,
 };
-use models_email::service::link::Link;
+use models_email::service::link::{Link, UserProvider};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use std::result;
 use uuid::Uuid;
@@ -28,7 +27,7 @@ pub async fn gmail_message(
     // if it's GTE this message's history id, do nothing - db is already updated or being updated
     let db_history_id = email_db_client::histories::fetch_history_id_for_link(
         &ctx.db,
-        &link.email_address,
+        link.email_address.0.as_ref(),
         UserProvider::Gmail,
     )
     .await
@@ -56,11 +55,14 @@ pub async fn gmail_message(
         return Ok(());
     }
 
-    // ensure user's labels are synced before we start processing changes
+    // ensure user's labels are synced before we start processing changes.
     check_gmail_rate_limit(
         &ctx.redis_client,
         link.id,
         GmailApiOperation::LabelsList,
+        // don't retry if rate limited, just wait until the next inbox update comes in. if we're
+        // rate limited it's likely because of a large previous inbox update, so let that get
+        // fully processed before the next one.
         false,
     )
     .await?;
@@ -81,6 +83,9 @@ pub async fn gmail_message(
         &ctx.redis_client,
         link.id,
         GmailApiOperation::HistoryList,
+        // don't retry if rate limited, just wait until the next inbox update comes in. if we're
+        // rate limited it's likely because of a large previous inbox update, so let that get
+        // fully processed before the next one.
         false,
     )
     .await?;

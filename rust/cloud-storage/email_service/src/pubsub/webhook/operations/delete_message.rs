@@ -84,7 +84,7 @@ pub async fn delete_message(
     // tell FE to refresh user's inbox
     cg_refresh_email(
         &ctx.connection_gateway_client,
-        &link.macro_id,
+        link.macro_id.as_ref(),
         "delete_message",
     )
     .await;
@@ -95,7 +95,7 @@ pub async fn delete_message(
         .bulk_send_message_to_search_event_queue(vec![SearchQueueMessage::RemoveEmailMessage(
             EmailMessage {
                 message_id: message.db_id.to_string(),
-                macro_user_id: link.macro_id.clone(),
+                macro_user_id: link.macro_id.to_string(),
             },
         )])
         .await

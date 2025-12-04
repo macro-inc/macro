@@ -66,10 +66,18 @@ export type FilterOptions = {
   fromFilter?: WithCustomUserInput<'user' | 'contact'>[];
 };
 
+export type SystemSortOption =
+  | 'updated_at'
+  | 'created_at'
+  | 'viewed_at'
+  | 'frecency';
+
 export type SortOptions = {
-  sortBy: 'updated_at' | 'created_at' | 'viewed_at' | 'frecency';
   sortOrder: 'ascending' | 'descending';
-};
+} & (
+  | { type: 'systemSortOption'; sortBy: SystemSortOption }
+  | { type: 'property'; propertyId: string }
+);
 
 export type DisplayOptions = {
   layout: 'compact' | 'expanded' | 'visual';
@@ -107,6 +115,7 @@ export type ViewConfigEnhanced = {
 
 export const VIEWCONFIG_BASE: ViewConfigBase = {
   sort: {
+    type: 'systemSortOption',
     sortBy: 'updated_at',
     sortOrder: 'ascending',
   },
@@ -130,6 +139,7 @@ export const VIEWCONFIG_BASE: ViewConfigBase = {
 export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
   viewType: 'project',
   sort: {
+    type: 'systemSortOption',
     sortBy: 'viewed_at',
     sortOrder: 'descending',
   },
@@ -167,7 +177,9 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     hotkeyOptions: {
       e: (entity, extra) => {
         if (entity.type === 'email') {
-          archiveEmail(entity.id, { isDone: entity.done });
+          archiveEmail(entity.id, {
+            isDone: entity.done,
+          });
         }
         if (extra?.notificationSource) {
           markNotificationsForEntityAsDone(extra.notificationSource, entity);
@@ -275,7 +287,7 @@ export const VIEWCONFIG_FILTER_FILETYPE_OPTIONS: readonly FilterOptions['documen
   ['md', 'code', 'image', 'canvas', 'pdf', 'unknown'] as const;
 export const VIEWCONFIG_DISPLAY_LAYOUT_OPTIONS: readonly DisplayOptions['layout'][] =
   ['compact', 'expanded', 'visual'] as const;
-export const VIEWCONFIG_SORT_BY: readonly SortOptions['sortBy'][] = [
+export const VIEWCONFIG_SORT_BY: readonly SystemSortOption[] = [
   'updated_at',
   'created_at',
   'viewed_at',
@@ -297,24 +309,50 @@ export async function archiveEmail(
   id: string,
   options: { isDone: boolean; optimisticallyExclude?: boolean }
 ) {
-  // optimistic update
-  await queryClient.cancelQueries({ queryKey: queryKeys.all.email });
+  await Promise.all([
+    queryClient.cancelQueries({ queryKey: queryKeys.all.email }),
+    queryClient.cancelQueries({ queryKey: queryKeys.all.dss }),
+  ]);
 
-  const previous = queryClient.getQueriesData<{
+  const previousEmail = queryClient.getQueriesData<{
     pages: { items: EntityData[] }[];
   }>({
     queryKey: queryKeys.all.email,
   });
+  const previousEmailThreadItemFromDss = queryClient.getQueriesData<{
+    pages: { items: EntityData[] }[];
+  }>({
+    queryKey: queryKeys.all.dss,
+  });
 
-  const applyOptimistic = (data?: { pages: { items: EntityData[] }[] }) => {
+  const applyOptimistic = (data?: {
+    pages: { items: (EntityData | { data: EntityData })[] }[];
+  }) => {
     if (!data) return data;
+
     return {
       ...data,
       pages: data.pages.map((page) => ({
         ...page,
         items: options.optimisticallyExclude
-          ? page.items.filter((item) => item.id !== id)
+          ? page.items.filter((item) => {
+              if ('data' in item) {
+                return item.data.id !== id;
+              }
+              return item.id !== id;
+            })
           : page.items.map((item) => {
+              if ('data' in item) {
+                return item.data.id === id
+                  ? {
+                      ...item,
+                      data: {
+                        ...item.data,
+                        inboxVisible: false,
+                      },
+                    }
+                  : item;
+              }
               return item.id === id
                 ? {
                     ...item,
@@ -326,7 +364,10 @@ export async function archiveEmail(
     };
   };
 
-  for (const [key, data] of previous) {
+  for (const [key, data] of [
+    ...previousEmailThreadItemFromDss,
+    ...previousEmail,
+  ]) {
     queryClient.setQueryData(key, applyOptimistic(data));
   }
 
@@ -335,12 +376,18 @@ export async function archiveEmail(
     await emailClient.flagArchived({ value: !options.isDone, id });
   } catch (_err) {
     // rollback on error
-    for (const [key, data] of previous) {
+    for (const [key, data] of previousEmail) {
+      queryClient.setQueryData(key, data);
+    }
+    for (const [key, data] of previousEmailThreadItemFromDss) {
       queryClient.setQueryData(key, data);
     }
   } finally {
     // revalidate
-    await queryClient.invalidateQueries({ queryKey: queryKeys.all.email });
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: queryKeys.all.email }),
+      queryClient.invalidateQueries({ queryKey: queryKeys.all.dss }),
+    ]);
   }
 }
 

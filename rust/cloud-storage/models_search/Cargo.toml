@@ -6,9 +6,9 @@ version = "0.1.0"
 
 [dependencies]
 chrono = { workspace = true }
-item_filters = { path = "../item_filters" }
-opensearch_client = { path = "../opensearch_client" }
+item_filters = { path = "../item_filters", features = ["schema"] }
 models_opensearch = { path = "../models_opensearch" }
+opensearch_client = { path = "../opensearch_client" }
 schemars = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

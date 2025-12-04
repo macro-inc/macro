@@ -32,6 +32,7 @@ import {
   EntityIcon,
   type EntityWithValidIcon,
 } from 'core/component/EntityIcon';
+import { syncServiceClient } from 'service-sync/client';
 import {
   type Component,
   createMemo,
@@ -39,6 +40,8 @@ import {
   type JSX,
   type JSXElement,
   Match,
+  onCleanup,
+  onMount,
   type Setter,
   Switch,
 } from 'solid-js';
@@ -116,12 +119,12 @@ type KonsoleCategory = {
   visible: boolean;
 };
 
-const [categories, setCategories] = createStore<KonsoleCategory[]>(
-  DEFAULT_CATEGORIES.slice()
-);
+const [categories, setCategories] = createStore<KonsoleCategory[]>([
+  ...DEFAULT_CATEGORIES,
+]);
 
 export const searchCategories = {
-  getCateoryIndex(name: DefaultCategoryNames | (string & {})) {
+  getCategoryIndex(name: DefaultCategoryNames | (string & {})) {
     const index = categories.findIndex((c) => c.name === name);
 
     if (index === -1) return;
@@ -160,7 +163,7 @@ export const searchCategories = {
   },
   findNextCategoryIndex(category: number, backwards: boolean): number {
     let candidateCategory = -1;
-    const length = categories.length;
+    const length = this.listVisible().length;
     for (let i = 1; i < length; i++) {
       if (backwards) {
         candidateCategory = category - i;
@@ -446,7 +449,7 @@ function getCommandItemBlockName(
 }
 
 function getCommandItemName(item: CommandItemCard): string {
-  return item.data.name!;
+  return item.data.name;
 }
 
 export function filterItemByCategory(item: CommandItemCard) {
@@ -518,6 +521,15 @@ export function CommandItemCard(props: CommandItemProps) {
     const name = getCommandItemName(props.item);
     return name && name.length > 55 ? `${name.slice(0, 52)}...` : name;
   };
+
+  onMount(() => {
+    if (blockName() === 'md') {
+      syncServiceClient.safeWakeup(props.item.data.id);
+      onCleanup(() => {
+        syncServiceClient.cancelWakeup(props.item.data.id);
+      });
+    }
+  });
 
   const CommandItemContainer = ({ children }: { children?: JSXElement }) => {
     const optionKeyPressed = createMemo(() => {

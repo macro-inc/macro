@@ -1,5 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import { QueueAlarms } from '@resources';
 import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
 
 const tags = {
@@ -35,7 +36,6 @@ if (stack === 'prod') {
   });
 }
 
-// TODO: we may need to tweak the queues settings here
 const queue = new aws.sqs.Queue(
   'queue',
   {
@@ -52,6 +52,8 @@ const queue = new aws.sqs.Queue(
   },
   { dependsOn: [dlq] }
 );
+
+new QueueAlarms('queue-alarms', { queue: queue, tags });
 
 export const searchTextExtractorQueueArn = pulumi.interpolate`${queue.arn}`;
 export const searchTextExtractorQueueName = pulumi.interpolate`${queue.name}`;
