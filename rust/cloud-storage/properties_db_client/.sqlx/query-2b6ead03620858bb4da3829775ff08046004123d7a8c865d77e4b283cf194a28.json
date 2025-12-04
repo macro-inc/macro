@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT \n            pd.id,\n            pd.organization_id,\n            pd.user_id,\n            pd.display_name,\n            pd.data_type as \"data_type: DataType\",\n            pd.is_multi_select,\n            pd.specific_entity_type as \"specific_entity_type: Option<EntityType>\",\n            pd.created_at,\n            pd.updated_at,\n            po.id as \"option_id?\",\n            po.display_order as \"option_display_order?\",\n            po.number_value as option_number_value,\n            po.string_value as option_string_value,\n            po.created_at as \"option_created_at?\",\n            po.updated_at as \"option_updated_at?\"\n        FROM property_definitions pd\n        LEFT JOIN property_options po ON pd.id = po.property_definition_id\n        WHERE \n            ($1::int IS NOT NULL AND pd.organization_id = $1) \n            OR ($2::text IS NOT NULL AND pd.user_id = $2)\n        ORDER BY LOWER(pd.display_name), po.display_order, po.number_value, LOWER(po.string_value)\n        ",
+  "query": "\n        SELECT \n            pd.id,\n            pd.organization_id,\n            pd.user_id,\n            pd.display_name,\n            pd.data_type as \"data_type: DataType\",\n            pd.is_multi_select,\n            pd.specific_entity_type as \"specific_entity_type: Option<EntityType>\",\n            pd.created_at,\n            pd.updated_at,\n            po.id as \"option_id?\",\n            po.display_order as \"option_display_order?\",\n            po.number_value as option_number_value,\n            po.string_value as option_string_value,\n            po.created_at as \"option_created_at?\",\n            po.updated_at as \"option_updated_at?\"\n        FROM property_definitions pd\n        LEFT JOIN property_options po ON pd.id = po.property_definition_id\n        WHERE \n            pd.is_system = FALSE\n            AND (\n                ($1::int IS NOT NULL AND pd.organization_id = $1) \n                OR ($2::text IS NOT NULL AND pd.user_id = $2)\n            )\n        ORDER BY LOWER(pd.display_name), po.display_order, po.number_value, LOWER(po.string_value)\n        ",
   "describe": {
     "columns": [
       {
@@ -62,7 +62,9 @@
                 "DOCUMENT",
                 "PROJECT",
                 "THREAD",
-                "USER"
+                "USER",
+                "COMPANY",
+                "TASK"
               ]
             }
           }
@@ -133,5 +135,5 @@
       false
     ]
   },
-  "hash": "3f99042ec859c30190f667c30fe1163b7574328dd2be7ce1113ee212812b3627"
+  "hash": "2b6ead03620858bb4da3829775ff08046004123d7a8c865d77e4b283cf194a28"
 }

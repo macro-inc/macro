@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT \n            id,\n            organization_id,\n            user_id,\n            display_name,\n            data_type as \"data_type: DataType\",\n            is_multi_select,\n            specific_entity_type as \"specific_entity_type: Option<EntityType>\",\n            created_at,\n            updated_at\n        FROM property_definitions\n        WHERE id = $1\n          AND (\n            user_id = $2\n            OR ($3::int IS NOT NULL AND organization_id = $3)\n          )\n        ",
+  "query": "\n        SELECT \n            id,\n            organization_id,\n            user_id,\n            display_name,\n            data_type as \"data_type: DataType\",\n            is_multi_select,\n            specific_entity_type as \"specific_entity_type: Option<EntityType>\",\n            created_at,\n            updated_at\n        FROM property_definitions\n        WHERE id = $1\n          AND is_system = FALSE\n          AND (\n            user_id = $2\n            OR ($3::int IS NOT NULL AND organization_id = $3)\n          )\n        ",
   "describe": {
     "columns": [
       {
@@ -62,7 +62,9 @@
                 "DOCUMENT",
                 "PROJECT",
                 "THREAD",
-                "USER"
+                "USER",
+                "COMPANY",
+                "TASK"
               ]
             }
           }
@@ -98,5 +100,5 @@
       false
     ]
   },
-  "hash": "8dd49cd84c7a54e7af425a2b377388117dadb9ee8aa8e9d39926364542688549"
+  "hash": "f476964b8bcedb7b69ad1bb708586065adea1bd5c2f00e3f3050ae00470546c3"
 }

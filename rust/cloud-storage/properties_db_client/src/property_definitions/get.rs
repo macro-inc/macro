@@ -1,4 +1,7 @@
 //! Property definitions get operations.
+//!
+//! TODO: The `is_system = FALSE` filters are temporary. In a future PR, system properties
+//!       will be properly supported and returned to users via the API.
 
 use crate::error::PropertiesDatabaseError;
 use models_properties::service::property_definition::PropertyDefinition;
@@ -32,8 +35,11 @@ pub async fn get_properties(
             updated_at
         FROM property_definitions
         WHERE 
-            ($1::int IS NOT NULL AND organization_id = $1) 
-            OR ($2::text IS NOT NULL AND user_id = $2)
+            is_system = FALSE
+            AND (
+                ($1::int IS NOT NULL AND organization_id = $1) 
+                OR ($2::text IS NOT NULL AND user_id = $2)
+            )
         ORDER BY LOWER(display_name) ASC
         "#,
         organization_id,
@@ -83,6 +89,7 @@ pub async fn get_property_definition(
             updated_at
         FROM property_definitions
         WHERE id = $1
+          AND is_system = FALSE
         "#,
         property_id
     )
@@ -130,6 +137,7 @@ pub async fn get_property_definition_with_owner(
             updated_at
         FROM property_definitions
         WHERE id = $1
+          AND is_system = FALSE
           AND (
             user_id = $2
             OR ($3::int IS NOT NULL AND organization_id = $3)
@@ -188,8 +196,11 @@ pub async fn get_properties_with_options(
         FROM property_definitions pd
         LEFT JOIN property_options po ON pd.id = po.property_definition_id
         WHERE 
-            ($1::int IS NOT NULL AND pd.organization_id = $1) 
-            OR ($2::text IS NOT NULL AND pd.user_id = $2)
+            pd.is_system = FALSE
+            AND (
+                ($1::int IS NOT NULL AND pd.organization_id = $1) 
+                OR ($2::text IS NOT NULL AND pd.user_id = $2)
+            )
         ORDER BY LOWER(pd.display_name), po.display_order, po.number_value, LOWER(po.string_value)
         "#,
         organization_id,
@@ -294,16 +305,16 @@ mod tests {
         assert_eq!(properties.len(), 10); // Organization 1 has 10 properties
 
         // Verify they are sorted by display name (case-insensitive alphabetical)
-        assert_eq!(properties[0].display_name, "Assigned To");
-        assert_eq!(properties[1].display_name, "Budget");
-        assert_eq!(properties[2].display_name, "Completed");
-        assert_eq!(properties[3].display_name, "Department");
-        assert_eq!(properties[4].display_name, "Description");
-        assert_eq!(properties[5].display_name, "Due Date");
-        assert_eq!(properties[6].display_name, "Priority");
-        assert_eq!(properties[7].display_name, "Relevant Documents");
-        assert_eq!(properties[8].display_name, "Score");
-        assert_eq!(properties[9].display_name, "Website");
+        assert_eq!(properties[0].display_name, "Test Assigned To");
+        assert_eq!(properties[1].display_name, "Test Budget");
+        assert_eq!(properties[2].display_name, "Test Completed");
+        assert_eq!(properties[3].display_name, "Test Department");
+        assert_eq!(properties[4].display_name, "Test Description");
+        assert_eq!(properties[5].display_name, "Test Due Date");
+        assert_eq!(properties[6].display_name, "Test Priority");
+        assert_eq!(properties[7].display_name, "Test Relevant Documents");
+        assert_eq!(properties[8].display_name, "Test Score");
+        assert_eq!(properties[9].display_name, "Test Website");
 
         Ok(())
     }
@@ -318,8 +329,8 @@ mod tests {
         let properties = get_properties(&pool, None, Some("user1")).await?;
 
         assert_eq!(properties.len(), 2); // User1 has 2 properties
-        assert_eq!(properties[0].display_name, "Notes");
-        assert_eq!(properties[1].display_name, "Personal Priority");
+        assert_eq!(properties[0].display_name, "Test Notes");
+        assert_eq!(properties[1].display_name, "Test Personal Priority");
 
         Ok(())
     }
@@ -338,7 +349,7 @@ mod tests {
 
         assert!(property.is_some());
         let property = property.unwrap();
-        assert_eq!(property.display_name, "Priority");
+        assert_eq!(property.display_name, "Test Priority");
         assert_eq!(property.data_type, DataType::SelectString);
         assert!(!property.is_multi_select);
 
@@ -400,7 +411,7 @@ mod tests {
         // Find Priority property which should have 4 options
         let priority_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Priority")
+            .find(|p| p.definition.display_name == "Test Priority")
             .unwrap();
 
         assert_eq!(priority_prop.property_options.len(), 4);
@@ -432,7 +443,7 @@ mod tests {
         // Find non-select properties (should have 0 options)
         let completed_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Completed")
+            .find(|p| p.definition.display_name == "Test Completed")
             .unwrap();
 
         assert_eq!(completed_prop.definition.data_type, DataType::Boolean);
@@ -453,7 +464,7 @@ mod tests {
         // Find Score property which has number options
         let score_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Score")
+            .find(|p| p.definition.display_name == "Test Score")
             .unwrap();
 
         assert_eq!(score_prop.property_options.len(), 5);
@@ -485,7 +496,7 @@ mod tests {
         // Find Department property which is multi-select
         let dept_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Department")
+            .find(|p| p.definition.display_name == "Test Department")
             .unwrap();
 
         assert!(dept_prop.definition.is_multi_select);

@@ -62,7 +62,9 @@
                 "DOCUMENT",
                 "PROJECT",
                 "THREAD",
-                "USER"
+                "USER",
+                "COMPANY",
+                "TASK"
               ]
             }
           }
@@ -113,7 +115,9 @@
                 "DOCUMENT",
                 "PROJECT",
                 "THREAD",
-                "USER"
+                "USER",
+                "COMPANY",
+                "TASK"
               ]
             }
           }

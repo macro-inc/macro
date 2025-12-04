@@ -8531,6 +8531,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "system_properties"
+version = "0.1.0"
+dependencies = [
+ "models_properties",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.17",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "teams"
 version = "0.1.0"
 dependencies = [
