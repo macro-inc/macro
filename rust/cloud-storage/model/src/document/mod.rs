@@ -84,6 +84,10 @@ pub struct BasicDocument {
     #[serde(skip_serializing_if = "Option::is_none", with = "ts_seconds_option")]
     #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
+
+    /// Whether or not the document is a task.
+    /// This is only applicable for md documents.
+    pub is_task: bool,
 }
 
 #[derive(sqlx::FromRow, serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
@@ -176,6 +180,10 @@ pub struct DocumentMetadata {
     #[serde(with = "ts_seconds_option")]
     #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
+
+    /// Whether or not the document is a task.
+    /// This is only applicable for md documents.
+    pub is_task: bool,
 }
 
 impl DocumentMetadata {
@@ -213,6 +221,7 @@ impl DocumentMetadata {
             project_name,
             created_at,
             updated_at,
+            is_task: false,
         }
     }
 
@@ -235,6 +244,7 @@ impl DocumentMetadata {
         project_name: Option<&str>,
         created_at: Option<chrono::DateTime<chrono::Utc>>,
         updated_at: Option<chrono::DateTime<chrono::Utc>>,
+        is_task: bool,
     ) -> Self {
         Self {
             document_id: document_id.to_string(),
@@ -252,6 +262,7 @@ impl DocumentMetadata {
             project_name: project_name.map(|s| s.to_string()),
             created_at,
             updated_at,
+            is_task,
         }
     }
 
@@ -274,6 +285,7 @@ impl DocumentMetadata {
         project_name: Option<String>,
         created_at: Option<chrono::DateTime<chrono::Utc>>,
         updated_at: Option<chrono::DateTime<chrono::Utc>>,
+        is_task: bool,
     ) -> Self {
         Self {
             document_id: document_id.to_string(),
@@ -291,6 +303,7 @@ impl DocumentMetadata {
             project_name,
             created_at,
             updated_at,
+            is_task,
         }
     }
 }
@@ -320,6 +333,9 @@ pub struct DocumentPreviewData {
     #[serde(with = "ts_seconds_option")]
     #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Whether or not the document is a task.
+    /// This is only applicable for md documents.
+    pub is_task: bool,
 }
 
 #[derive(

@@ -562,6 +562,15 @@ pub async fn save_document(
         }
     };
 
+    let is_task = sqlx::query!(
+        r#"
+            SELECT document_id FROM document_task WHERE document_id = $1
+        "#,
+        document_id
+    )
+    .fetch_optional(&mut *transaction)
+    .await?;
+
     if let Err(err) = transaction.commit().await {
         tracing::error!(error=?err, "unable to commit transaction");
         return Err(err.into());
@@ -583,6 +592,7 @@ pub async fn save_document(
         project_name,
         created_at: document_version.created_at,
         updated_at: document_version.updated_at,
+        is_task: is_task.is_some(),
     })
 }
 

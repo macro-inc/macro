@@ -61,4 +61,8 @@ pub struct SoupDocument {
     #[serde(with = "chrono::serde::ts_milliseconds_option")]
     #[cfg_attr(feature = "schema", schema(value_type = i64, nullable = true))]
     pub viewed_at: Option<chrono::DateTime<Utc>>,
+
+    /// Whether or not the document is a task.
+    /// This is only applicable for md documents.
+    pub is_task: bool,
 }

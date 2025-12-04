@@ -142,6 +142,7 @@ pub(in crate::document) async fn copy_docx_document(
         document_bom: Some(saved_bom_parts),
         created_at: document.created_at,
         updated_at: document.updated_at,
+        is_task: false, // docx documents are not tasks
     })
 }
 
@@ -249,6 +250,7 @@ pub(in crate::document) async fn copy_non_docx_document(
         modification_data: original_modification_data,
         created_at: document.created_at,
         updated_at: document.updated_at,
+        is_task: false, // TODO: @daniel please update this when you add in task creation/copy
     })
 }
 
@@ -277,6 +279,7 @@ mod tests {
                 None,
                 None,
                 None,
+                false,
             ),
             "macro|user@user.com",
             "new name",

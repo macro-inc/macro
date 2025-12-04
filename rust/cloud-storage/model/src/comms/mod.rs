@@ -120,7 +120,9 @@ pub struct ChannelHistoryInfo {
     pub updated_at: DateTime<Utc>,
     pub viewed_at: Option<DateTime<Utc>>,
     pub interacted_at: Option<DateTime<Utc>>,
+    /// The id of the user who created the channel
     pub user_id: String,
+    /// The string value of the channel type
     pub channel_type: String,
 }
 

@@ -5,28 +5,34 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { SearchHighlight } from './searchHighlight';
+import type { EmailSearchResultMessageId } from './emailSearchResultMessageId';
 import type { EmailSearchResultScore } from './emailSearchResultScore';
+import type { EmailSearchResultSender } from './emailSearchResultSender';
 import type { EmailSearchResultSentAt } from './emailSearchResultSentAt';
-import type { EmailSearchResultSubject } from './emailSearchResultSubject';
 
 /**
  * A email message match for a given thread id
  */
 export interface EmailSearchResult {
+  /** This is only present if the search result is on the message content */
   bcc: string[];
+  /** This is only present if the search result is on the message content */
   cc: string[];
   /** The highlights for the email message */
   highlight: SearchHighlight;
+  /** This is only present if the search result is on the message content */
   labels: string[];
-  /** The email message id. */
-  message_id: string;
+  /** The email message id.
+This is only present if the search result is on the message content */
+  message_id?: EmailSearchResultMessageId;
+  /** This is only present if the search result is on the message content */
   recipients: string[];
   /** The score of the result */
   score?: EmailSearchResultScore;
-  sender: string;
-  /** When the email message was sent */
+  /** The sender
+This is only present if the search result is on the message content */
+  sender?: EmailSearchResultSender;
+  /** When the email message was sent
+This is only present if the search result is on the message content */
   sent_at?: EmailSearchResultSentAt;
-  subject?: EmailSearchResultSubject;
-  /** When the search email message was last updated */
-  updated_at: number;
 }

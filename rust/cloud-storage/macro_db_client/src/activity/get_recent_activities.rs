@@ -55,9 +55,11 @@ pub async fn get_recent_activities(
             d."updatedAt"::timestamptz as "updated_at",
             d."projectId" as "project_id",
             NULL as "is_persistent",
-            di.sha as "sha"
+            di.sha as "sha",
+            (dt.document_id IS NOT NULL) as "is_task"
         FROM
             "Document" d
+        LEFT JOIN document_task dt ON dt.document_id = d.id
         LEFT JOIN LATERAL (
             SELECT
                 b.id
@@ -101,7 +103,8 @@ pub async fn get_recent_activities(
             c."updatedAt"::timestamptz as "updated_at",
             c."projectId" as "project_id",
             c."isPersistent" as "is_persistent",
-            NULL as "sha"
+            NULL as "sha",
+            false as "is_task!"
         FROM "Chat" c
         WHERE c."userId" = $1 AND c."deletedAt" IS NULL
         ORDER BY updated_at DESC
@@ -125,6 +128,7 @@ pub async fn get_recent_activities(
             let created_at: Option<chrono::DateTime<chrono::Utc>> = r.get("created_at");
             let updated_at: Option<chrono::DateTime<chrono::Utc>> = r.get("updated_at");
             let project_id: Option<String> = r.get("project_id");
+            let is_task: bool = r.get("is_task");
 
             match row_type.as_ref() {
                 "document" => {
@@ -143,6 +147,7 @@ pub async fn get_recent_activities(
                         branched_from_id: r.get("branched_from_id"),
                         branched_from_version_id: r.get("branched_from_version_id"),
                         project_id,
+                        is_task,
                     }))
                 }
                 "chat" => Some(Activity::Chat(Chat {

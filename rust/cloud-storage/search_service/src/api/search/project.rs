@@ -1,7 +1,4 @@
-use crate::{
-    api::search::simple::{SearchError, simple_project::search_projects},
-    model::ProjectOpenSearchResponse,
-};
+use crate::api::search::simple::{SearchError, simple_project::search_projects};
 use axum::{
     Extension,
     extract::{self, State},
@@ -10,12 +7,12 @@ use axum::{
 };
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::project::{
-    ProjectSearchMetadata, ProjectSearchRequest, ProjectSearchResponse, ProjectSearchResponseItem,
+    ProjectSearchRequest, ProjectSearchResponse, ProjectSearchResponseItem,
     ProjectSearchResponseItemWithMetadata, ProjectSearchResult,
 };
 use std::collections::HashMap;
 
-use crate::{api::ApiContext, util};
+use crate::api::ApiContext;
 
 use super::SearchPaginationParams;
 
@@ -24,13 +21,18 @@ use super::SearchPaginationParams;
 pub(in crate::api::search) async fn enrich_projects(
     ctx: &ApiContext,
     user_id: &str,
-    results: Vec<opensearch_client::search::projects::ProjectSearchResponse>,
+    results: Vec<opensearch_client::search::model::SearchHit>,
 ) -> Result<Vec<ProjectSearchResponseItemWithMetadata>, SearchError> {
+    let results: Vec<opensearch_client::search::model::SearchHit> = results
+        .into_iter()
+        .filter(|r| r.entity_type == models_opensearch::SearchEntityType::Projects)
+        .collect();
+
     if results.is_empty() {
         return Ok(vec![]);
     }
     // Extract project IDs from results
-    let project_ids: Vec<String> = results.iter().map(|r| r.project_id.clone()).collect();
+    let project_ids: Vec<String> = results.iter().map(|r| r.entity_id.clone()).collect();
 
     // Fetch project metadata from database
     let project_histories =
@@ -97,39 +99,54 @@ pub async fn handler(
 }
 
 pub fn construct_search_result(
-    search_results: Vec<opensearch_client::search::projects::ProjectSearchResponse>,
+    search_results: Vec<opensearch_client::search::model::SearchHit>,
     project_histories: HashMap<
         String,
         macro_db_client::projects::get_project_history::ProjectHistoryInfo,
     >,
 ) -> anyhow::Result<Vec<ProjectSearchResponseItemWithMetadata>> {
-    let search_results = search_results
+    // construct entity hit map of id -> vec<hits>
+    let entity_id_hit_map: HashMap<String, Vec<ProjectSearchResult>> = search_results
         .into_iter()
-        .map(|inner| ProjectOpenSearchResponse { inner })
-        .collect();
-    let result = util::construct_search_result::<
-        ProjectOpenSearchResponse,
-        ProjectSearchResult,
-        ProjectSearchMetadata,
-    >(search_results)?;
-    let result: Vec<ProjectSearchResponseItem> = result.into_iter().map(|a| a.into()).collect();
-    // Add metadata for each project, fetched from macrodb
-    let result: Vec<ProjectSearchResponseItemWithMetadata> = result
+        .map(|hit| {
+            let result = ProjectSearchResult {
+                highlight: hit.highlight.into(),
+                score: hit.score,
+            };
+
+            (hit.entity_id, result)
+        })
+        .fold(HashMap::new(), |mut map, (entity_id, result)| {
+            map.entry(entity_id).or_insert_with(Vec::new).push(result);
+            map
+        });
+
+    // now construct the search results
+    let result: Vec<ProjectSearchResponseItemWithMetadata> = entity_id_hit_map
         .into_iter()
-        .map(|item| {
-            let metadata = project_histories.get(&item.id).map(|info| {
-                models_search::project::ProjectMetadata {
+        .filter_map(|(entity_id, hits)| {
+            if let Some(info) = project_histories.get(&entity_id) {
+                let info = info.clone();
+                let metadata = models_search::project::ProjectMetadata {
                     created_at: info.created_at.timestamp(),
                     updated_at: info.updated_at.timestamp(),
                     viewed_at: info.viewed_at.map(|a| a.timestamp()),
                     parent_project_id: info.parent_project_id.clone(),
                     deleted_at: info.deleted_at.map(|a| a.timestamp()),
-                }
-            });
-
-            ProjectSearchResponseItemWithMetadata {
-                metadata,
-                extra: item,
+                };
+                Some(ProjectSearchResponseItemWithMetadata {
+                    metadata: Some(metadata),
+                    extra: ProjectSearchResponseItem {
+                        id: entity_id.clone(),
+                        owner_id: info.user_id.clone(),
+                        name: info.name,
+                        project_search_results: hits,
+                        updated_at: info.updated_at.timestamp(),
+                        created_at: info.created_at.timestamp(),
+                    },
+                })
+            } else {
+                None
             }
         })
         .collect();

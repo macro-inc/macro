@@ -3,21 +3,20 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::{MatchType, SearchHighlight, SearchOn, SearchResponseItem};
+use crate::{MatchType, SearchHighlight, SearchOn};
 
 /// A document match for a given node
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct DocumentSearchResult {
     /// The node id for the document.
     /// This is only useful for markdown at the moment
-    pub node_id: String,
+    /// This will only be provided if the match was on content
+    pub node_id: Option<String>,
     /// The highlights for the document
     pub highlight: SearchHighlight,
     /// The raw content of the document.
     /// This is only included for markdown files and will be the raw json node of the match
     pub raw_content: Option<String>,
-    /// When the search document was last updated
-    pub updated_at: i64,
     /// The score of the result
     #[serde(skip_serializing_if = "Option::is_none")]
     pub score: Option<f64>,
@@ -32,13 +31,14 @@ pub struct DocumentSearchResponseItem {
     pub id: String,
     pub name: String,
     pub owner_id: String,
-
     /// The id of the document
     pub document_id: String,
     /// The name of the document
     pub document_name: String,
     /// The file type of the document
-    pub file_type: String,
+    pub file_type: Option<String>,
+    /// Whether the document is a task
+    pub is_task: bool,
     /// The search results for the document
     /// This may be empty if the search result match was on the document name only
     pub document_search_results: Vec<DocumentSearchResult>,
@@ -74,23 +74,7 @@ pub struct DocumentSearchMetadata {
     /// The id of the owner of the document
     pub owner_id: String,
     /// The file type of the document
-    pub file_type: String,
-}
-
-impl From<SearchResponseItem<DocumentSearchResult, DocumentSearchMetadata>>
-    for DocumentSearchResponseItem
-{
-    fn from(response: SearchResponseItem<DocumentSearchResult, DocumentSearchMetadata>) -> Self {
-        DocumentSearchResponseItem {
-            id: response.metadata.document_id.clone(),
-            name: response.metadata.document_name.clone(),
-            document_id: response.metadata.document_id.clone(),
-            document_name: response.metadata.document_name,
-            owner_id: response.metadata.owner_id,
-            file_type: response.metadata.file_type,
-            document_search_results: response.results,
-        }
-    }
+    pub file_type: Option<String>,
 }
 
 /// The document search response object
@@ -123,23 +107,6 @@ pub struct SimpleDocumentSearchResponseBaseItem<T> {
 
 pub type SimpleDocumentSearchResponseItem =
     SimpleDocumentSearchResponseBaseItem<crate::TimestampSeconds>;
-
-impl From<opensearch_client::search::documents::DocumentSearchResponse>
-    for SimpleDocumentSearchResponseItem
-{
-    fn from(response: opensearch_client::search::documents::DocumentSearchResponse) -> Self {
-        Self {
-            document_id: response.document_id,
-            document_name: response.document_name,
-            node_id: response.node_id,
-            owner_id: response.owner_id,
-            file_type: response.file_type,
-            updated_at: response.updated_at.into(),
-            highlight: response.highlight.into(),
-            raw_content: response.raw_content,
-        }
-    }
-}
 
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct SimpleDocumentSearchResponse {
