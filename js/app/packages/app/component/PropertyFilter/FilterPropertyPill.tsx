@@ -8,7 +8,8 @@ import type { FilterAction, PropertyFilter } from '../PropertyFilterTypes';
 import { ComparisonAction } from '../PropertyFilterTypes';
 import { FilterActionSelect } from './FilterAction';
 import { FilterPropertySelect } from './FilterProperty';
-import { FilterValueBoolean } from './FilterValue';
+import { FilterValueBoolean } from './FilterValueBoolean';
+import { FilterValueDate } from './FilterValueDate';
 
 type FilterPillProps = {
   id: string;
@@ -24,12 +25,20 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
   const [action, setAction] = createSignal<FilterAction | null>(null);
   const [values, _setValues] = createSignal<string[]>([]);
   const [booleanValue, setBooleanValue] = createSignal<boolean | null>(null);
+  const [dateValue, setDateValue] = createSignal<string | null>(null);
 
   // Track if user is editing property (to show search instead of pill)
   const [previousProperty, setPreviousProperty] =
     createSignal<PropertyDefinitionFlat | null>(null);
 
   const isPending = () => props.savedData === null;
+
+  // Helper to check if action is a comparison
+  const isComparisonAction = (a: FilterAction | null) =>
+    a === ComparisonAction.GREATER_THAN ||
+    a === ComparisonAction.GREATER_THAN_OR_EQUAL ||
+    a === ComparisonAction.LESS_THAN ||
+    a === ComparisonAction.LESS_THAN_OR_EQUAL;
 
   // Check if value is set based on data type
   const hasValue = () => {
@@ -38,6 +47,9 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
 
     if (property.data_type === 'BOOLEAN') {
       return booleanValue() !== null;
+    }
+    if (property.data_type === 'DATE' && isComparisonAction(action())) {
+      return dateValue() !== null;
     }
     return values().length > 0;
   };
@@ -50,6 +62,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
     if (prev && prev.id !== property.id) {
       setAction(null);
       setBooleanValue(null);
+      setDateValue(null);
       _setValues([]);
     }
     setSelectedProperty(property);
@@ -84,13 +97,20 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
     }
   };
 
-  const handleBooleanValueChange = (value: boolean) => {
-    setBooleanValue(value);
+  const handleValueChange = (value: boolean | string) => {
+    const property = selectedProperty();
+    if (!property) return;
+
+    // Set the appropriate value based on data type
+    if (property.data_type === 'BOOLEAN' && typeof value === 'boolean') {
+      setBooleanValue(value);
+    } else if (property.data_type === 'DATE' && typeof value === 'string') {
+      setDateValue(value);
+    }
 
     // Auto-save when value changes
-    const property = selectedProperty();
     const currentAction = action();
-    if (property && currentAction) {
+    if (currentAction) {
       const filter = buildPartialFilter(property, currentAction);
       if (filter) {
         props.onSave(filter);
@@ -144,7 +164,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             ...baseFilter,
             dataType: 'DATE',
             action: filterAction as any,
-            value: '',
+            value: dateValue() ?? '',
           } as PropertyFilter;
         }
         return {
@@ -245,7 +265,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             fallback={
               <button
                 type="button"
-                class="h-6 px-2 w-fit text-[10px] text-ink-muted border border-edge hover:bg-hover text-left cursor-pointer flex items-center"
+                class="h-6  px-2 w-fit text-[10px] text-ink-muted font-mono border border-edge hover:bg-hover text-left cursor-pointer flex items-center"
               >
                 {values().length > 0 ? values().join(', ') : '...'}
               </button>
@@ -254,7 +274,18 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             <Match when={selectedProperty()?.data_type === 'BOOLEAN'}>
               <FilterValueBoolean
                 value={booleanValue()}
-                onSelect={handleBooleanValueChange}
+                onSelect={handleValueChange}
+              />
+            </Match>
+            <Match
+              when={
+                selectedProperty()?.data_type === 'DATE' &&
+                isComparisonAction(action())
+              }
+            >
+              <FilterValueDate
+                value={dateValue()}
+                onChange={handleValueChange}
               />
             </Match>
           </Switch>
