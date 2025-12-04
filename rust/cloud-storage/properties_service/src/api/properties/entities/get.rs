@@ -69,22 +69,13 @@ impl IntoResponse for GetEntityPropertiesErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, user_context), fields(user_id = tracing::field::Empty, entity_type = ?entity_type, include_metadata = query.include_metadata))]
+#[tracing::instrument(skip(context, user_context), fields(user_id = %user_context.user_id, entity_type = ?entity_type, include_metadata = query.include_metadata))]
 pub async fn get_entity_properties(
     Path((entity_type, entity_id)): Path<(EntityType, String)>,
     Query(query): Query<EntityQueryParams>,
     State(context): State<ApiContext>,
-    user_context: Option<Extension<UserContext>>,
+    Extension(user_context): Extension<UserContext>,
 ) -> Result<Json<EntityPropertiesResponse>, GetEntityPropertiesErr> {
-    // Extract user_id from context, defaulting to empty string for anonymous users
-    let user_id = user_context
-        .as_ref()
-        .map(|ctx| ctx.user_id.as_str())
-        .unwrap_or("");
-
-    // Record user_id in span
-    tracing::Span::current().record("user_id", user_id);
-
     tracing::info!(
         entity_id = %entity_id,
         entity_type = ?entity_type,
@@ -96,7 +87,12 @@ pub async fn get_entity_properties(
         entity_id: entity_id.clone(),
         entity_type,
     };
-    crate::api::permissions::check_entity_view_permission(&context, user_id, &entity_ref).await?;
+    crate::api::permissions::check_entity_view_permission(
+        &context,
+        &user_context.user_id,
+        &entity_ref,
+    )
+    .await?;
 
     let (user_properties, metadata_properties) = if query.include_metadata {
         // Fetch user properties and metadata in parallel when metadata is requested
@@ -178,7 +174,7 @@ pub async fn get_entity_properties(
         entity_id = %entity_id,
         properties_count = response.properties.len(),
         include_metadata = query.include_metadata,
-        user_id = %user_id,
+        user_id = %user_context.user_id,
         "successfully retrieved entity properties"
     );
 

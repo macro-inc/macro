@@ -41,21 +41,18 @@ pub async fn setup_and_serve(state: ApiContext) -> anyhow::Result<()> {
 
 fn api_router(app_state: ApiContext) -> Router {
     Router::new()
-        // Public properties routes (allows anonymous access for viewing public entities)
         .nest(
             "/properties",
-            properties::public_router().layer(axum::middleware::from_fn_with_state(
-                app_state.jwt_args.clone(),
-                macro_middleware::auth::attach_user::handler,
-            )),
-        )
-        // Authenticated properties routes (requires JWT)
-        .nest(
-            "/properties",
-            properties::authenticated_router().layer(axum::middleware::from_fn_with_state(
-                app_state.jwt_args.clone(),
-                macro_middleware::auth::decode_jwt::handler,
-            )),
+            properties::router().layer(
+                tower::ServiceBuilder::new()
+                    .layer(axum::middleware::from_fn(
+                        macro_middleware::auth::initialize_user_context::handler,
+                    ))
+                    .layer(axum::middleware::from_fn_with_state(
+                        app_state.jwt_args.clone(),
+                        macro_middleware::auth::attach_user::handler,
+                    )),
+            ),
         )
         .nest(
             "/internal",

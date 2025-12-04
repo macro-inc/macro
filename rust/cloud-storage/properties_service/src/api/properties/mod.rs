@@ -9,45 +9,47 @@ pub mod entities;
 pub mod metadata;
 pub mod options;
 
-/// Routes that allow anonymous access (for viewing public entities)
-pub fn public_router() -> Router<ApiContext> {
+pub fn router() -> Router<ApiContext> {
+    let ensure_user_exists =
+        axum::middleware::from_fn(macro_middleware::auth::ensure_user_exists::handler);
+
     Router::new()
-        // GET entity properties - allows anonymous access for public documents
+        // Property Definition Management - requires authentication
+        .route(
+            "/definitions",
+            get(definitions::list::list_properties)
+                .post(definitions::create::create_property_definition)
+                .layer(ensure_user_exists.clone()),
+        )
+        .route(
+            "/definitions/:definition_id",
+            delete(definitions::delete::delete_property_definition)
+                .layer(ensure_user_exists.clone()),
+        )
+        // Property Options Management - requires authentication
+        .route(
+            "/definitions/:definition_id/options",
+            get(options::get::get_property_options)
+                .post(options::create::add_property_option)
+                .layer(ensure_user_exists.clone()),
+        )
+        .route(
+            "/definitions/:definition_id/options/:option_id",
+            delete(options::delete::delete_property_option).layer(ensure_user_exists.clone()),
+        )
+        // Entity Property Operations
+        // GET allows anonymous access for public entities
         .route(
             "/entities/:entity_type/:entity_id",
             get(entities::get::get_entity_properties),
         )
-}
-
-/// Routes that require authentication
-pub fn authenticated_router() -> Router<ApiContext> {
-    Router::new()
-        // Property Definition Management - Unified endpoint with query params
-        .route(
-            "/definitions",
-            get(definitions::list::list_properties)
-                .post(definitions::create::create_property_definition),
-        )
-        .route(
-            "/definitions/:definition_id",
-            delete(definitions::delete::delete_property_definition),
-        )
-        // Property Options Management
-        .route(
-            "/definitions/:definition_id/options",
-            get(options::get::get_property_options).post(options::create::add_property_option),
-        )
-        .route(
-            "/definitions/:definition_id/options/:option_id",
-            delete(options::delete::delete_property_option),
-        )
-        // Entity Property Operations (write operations require auth)
+        // PUT/DELETE require authentication
         .route(
             "/entities/:entity_type/:entity_id/:property_id",
-            put(entities::set::set_entity_property),
+            put(entities::set::set_entity_property).layer(ensure_user_exists.clone()),
         )
         .route(
             "/entity_properties/:entity_property_id",
-            delete(entities::delete_property::delete_entity_property),
+            delete(entities::delete_property::delete_entity_property).layer(ensure_user_exists),
         )
 }
