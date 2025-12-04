@@ -20,9 +20,7 @@ import {
   isCompanyEmailContact,
   useContacts,
   useEmailContacts,
-  useOrganizationUsers,
 } from '@core/user';
-import { mergeByKey } from '@core/util/compareUtils';
 import { getDateSuggestions, type ParsedDate } from '@core/util/dateParser';
 import { createFreshSearch } from '@core/util/freshSort';
 import BuildingIcon from '@icon/regular/buildings.svg';
@@ -723,21 +721,12 @@ export function MentionsMenu(props: {
     );
   }
 
-  let users: Accessor<Entity<'user'>[]>;
-  if (props.users) {
-    users = createMemo(
-      () =>
-        props.users?.().map(entityMapper('user')).filter(allItemFilter) ?? []
-    );
-  } else {
-    const orgUsers = useOrganizationUsers();
-    const contacts = useContacts();
-    users = createMemo(() =>
-      mergeByKey('email', orgUsers(), contacts())
-        .map(entityMapper('user'))
-        .filter(allItemFilter)
-    );
-  }
+  const contacts = useContacts();
+
+  const users = createMemo(() => {
+    const list = props.users?.() ?? contacts();
+    return list.map(entityMapper('user')).filter(allItemFilter);
+  });
 
   let channels: Accessor<Entity<'channel'>[]>;
   if (props.channels) {
