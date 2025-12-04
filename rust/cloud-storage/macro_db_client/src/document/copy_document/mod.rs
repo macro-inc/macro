@@ -234,6 +234,18 @@ pub(in crate::document) async fn copy_non_docx_document(
         None
     };
 
+    if original_document.is_task {
+        sqlx::query!(
+            r#"
+                INSERT INTO document_task (document_id)
+                VALUES ($1)
+            "#,
+            document.id
+        )
+        .execute(transaction.as_mut())
+        .await?;
+    }
+
     Ok(DocumentMetadata {
         document_id: document.id.clone(),
         owner: user_id.to_string(),
@@ -250,7 +262,7 @@ pub(in crate::document) async fn copy_non_docx_document(
         modification_data: original_modification_data,
         created_at: document.created_at,
         updated_at: document.updated_at,
-        is_task: false, // TODO: @daniel please update this when you add in task creation/copy
+        is_task: original_document.is_task,
     })
 }
 
