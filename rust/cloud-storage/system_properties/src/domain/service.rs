@@ -51,9 +51,7 @@ where
     ) -> Result<(), SystemPropertyError> {
         let rows: Vec<PropertyRow> = items
             .into_iter()
-            .flat_map(|item| {
-                collect_email_property_rows(&item.entity_id, item.entity_type, item.properties)
-            })
+            .flat_map(|item| collect_email_property_rows(&item.entity_id, item.properties))
             .collect();
 
         self.repository.bulk_upsert_properties(rows).await
@@ -79,12 +77,13 @@ fn entity_refs_json(ref_type: EntityType, ids: Vec<String>) -> serde_json::Value
 }
 
 /// Collect property rows for a single entity's email attachment properties.
+/// Email attachments are always applied to Document entities.
 fn collect_email_property_rows(
     entity_id: &str,
-    entity_type: EntityType,
     properties: EmailAttachmentProperty,
 ) -> Vec<PropertyRow> {
     let mut rows = Vec::new();
+    let entity_type = EntityType::Document;
 
     // Source (single entity reference)
     if let Some(source) = properties.source {

@@ -1,7 +1,5 @@
 //! Email attachment property types.
 
-use models_properties::EntityType;
-
 use super::source_entity::SourceEntity;
 
 /// Email attachment properties to set on an entity.
@@ -24,8 +22,6 @@ pub struct EmailAttachmentProperty {
 pub struct EmailAttachmentInput {
     /// The entity ID to set properties on.
     pub entity_id: String,
-    /// The entity type.
-    pub entity_type: EntityType,
     /// The properties to set.
     pub properties: EmailAttachmentProperty,
 }
