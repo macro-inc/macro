@@ -15,9 +15,7 @@ import clickOutside from '@core/directive/clickOutside';
 import { trackMention } from '@core/signal/mention';
 import {
   type ChannelWithParticipants,
-  type EmailContact,
   type IUser,
-  isCompanyEmailContact,
   useContacts,
 } from '@core/user';
 import { getDateSuggestions, type ParsedDate } from '@core/util/dateParser';
@@ -85,7 +83,6 @@ type EntityMap = {
   item: Item;
   user: IUser;
   channel: ChannelWithParticipants;
-  emailContact: EmailContact;
   date: DateItem;
   email: EmailEntity;
 };
@@ -124,17 +121,6 @@ const getUserSearchText = (item: IUser): string => {
   // able to rank above users without a display name.
   if (name === email) return `${email} | ${email}`;
   return `${name} | ${email}`;
-};
-
-const getContactName = (item: EmailContact): string => {
-  const { name, type } = item;
-  switch (type) {
-    case 'company':
-      return item.name;
-    case 'person':
-      if (name === item.email) return item.email;
-      return `${name} | ${item.email}`;
-  }
 };
 
 const getCombinedEntityBlockName = (
@@ -262,26 +248,6 @@ async function handleUserMention(
     userId: user.id,
     email: user.email,
     mentionUuid: mentionId,
-  });
-}
-
-/**
- * Inserts a contact mention.
- * @param contact
- * @param dependencies
- */
-async function handleContactMention(
-  contact: EmailContact,
-  dependencies: HandlerDependencies
-) {
-  const { editor } = dependencies;
-  editor.dispatchCommand(INSERT_CONTACT_MENTION_COMMAND, {
-    contactId: contact.id,
-    name: contact.name,
-    emailOrDomain: isCompanyEmailContact(contact)
-      ? contact.domain
-      : contact.email,
-    isCompany: isCompanyEmailContact(contact),
   });
 }
 
@@ -427,8 +393,6 @@ function createItemHandler(dependencies: HandlerDependencies) {
     switch (item.kind) {
       case 'user':
         return await handleUserMention(item.data, dependencies);
-      case 'emailContact':
-        return await handleContactMention(item.data, dependencies);
       case 'date':
         return await handleDateMention(item.data, dependencies);
       case 'item':
@@ -602,13 +566,6 @@ export function MentionsMenuItem(props: {
       case 'user':
         return <UserIcon id={props.item.id} size="sm" isDeleted={false} />;
 
-      case 'emailContact':
-        return isCompanyEmailContact(props.item.data) ? (
-          <BuildingIcon class="size-4 text-ink-muted" />
-        ) : (
-          <UserIconSolid class="size-4 text-ink-muted" />
-        );
-
       case 'date':
         return <ClockIcon class="size-4 text-ink-muted" />;
 
@@ -661,11 +618,6 @@ export function MentionsMenuItem(props: {
       <div class="mr-2">{icon()}</div>
       <span
         class="text-ink text-xs sm:text-sm font-medium grow overflow-hidden text-nowrap"
-        classList={{
-          capitalize:
-            props.item.kind === 'emailContact' &&
-            isCompanyEmailContact(props.item.data),
-        }}
         style={{ 'text-overflow': 'ellipsis' }}
       >
         {name()}
