@@ -1,6 +1,6 @@
 import { TextButton } from '@core/component/TextButton';
 import { Bar } from '@core/component/TopBar/Bar';
-import { useContacts, useEmailContacts } from '@core/user';
+import { useContacts } from '@core/user';
 import Refresh from '@phosphor-icons/core/regular/arrow-clockwise.svg?component-solid';
 import Copy from '@phosphor-icons/core/regular/copy.svg?component-solid';
 import { useHistory } from '@service-storage/history';
@@ -71,7 +71,6 @@ function SignalDebugCard(props: SignalDebugCardProps) {
 
 const DataDebug: Component = () => {
   const contacts = useContacts();
-  const emailContacts = useEmailContacts();
   const history = useHistory();
 
   const [_, setRefreshKey] = createSignal(0);
@@ -106,22 +105,6 @@ const DataDebug: Component = () => {
               <div class="bg-surface-secondary p-2 rounded text-sm">
                 <div class="font-medium">{contact.email}</div>
                 <div class="text-text-secondary">ID: {contact.id}</div>
-              </div>
-            )}
-          />
-
-          <SignalDebugCard
-            title="useEmailContacts()"
-            data={emailContacts()}
-            renderItem={(contact) => (
-              <div class="bg-surface-secondary p-2 rounded text-sm">
-                <div class="font-medium">{contact.name}</div>
-                <div class="text-text-secondary">
-                  Type: {contact.type} |
-                  {'email' in contact
-                    ? ` Email: ${contact.email}`
-                    : ` Domain: ${contact.domain}`}
-                </div>
               </div>
             )}
           />
