@@ -81,7 +81,7 @@ pub struct DocumentResponse {
     pub presigned_url: Option<String>,
 }
 
-#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema, Default)]
+#[derive(serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentResponseMetadata {
     /// The document id
