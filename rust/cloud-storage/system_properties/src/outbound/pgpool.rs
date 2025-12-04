@@ -4,8 +4,8 @@ use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 
 use crate::domain::{
-    model::SystemPropertyError,
-    port::{PropertyRow, SystemPropertiesRepository},
+    model::{PropertyRow, SystemPropertyError},
+    port::SystemPropertiesRepository,
 };
 
 /// PostgreSQL implementation of SystemPropertiesRepository.
@@ -31,19 +31,19 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
         }
 
         let ids: Vec<Uuid> = rows.iter().map(|_| Uuid::now_v7()).collect();
-        let entity_ids: Vec<&str> = rows.iter().map(|r| r.entity_id.as_str()).collect();
+        let entity_ids: Vec<&str> = rows.iter().map(|r| r.entity_id()).collect();
         let entity_types: Vec<String> = rows
             .iter()
             .map(|r| {
-                serde_json::to_value(r.entity_type)
+                serde_json::to_value(r.entity_type())
                     .expect("EntityType serializes to JSON")
                     .as_str()
                     .expect("EntityType serializes to string")
                     .to_string()
             })
             .collect();
-        let property_ids: Vec<Uuid> = rows.iter().map(|r| r.property_definition_id).collect();
-        let values: Vec<serde_json::Value> = rows.iter().map(|r| r.values.clone()).collect();
+        let property_ids: Vec<Uuid> = rows.iter().map(|r| r.property_definition_id()).collect();
+        let values: Vec<serde_json::Value> = rows.iter().map(|r| r.values().clone()).collect();
 
         sqlx::query(
             r#"
