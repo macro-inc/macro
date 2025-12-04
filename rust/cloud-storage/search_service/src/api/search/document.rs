@@ -154,6 +154,7 @@ pub fn construct_search_result(
                         document_name: info.file_name,
                         owner_id: info.owner,
                         file_type: info.file_type,
+                        is_task: info.is_task,
                         document_search_results: hits,
                     },
                 })

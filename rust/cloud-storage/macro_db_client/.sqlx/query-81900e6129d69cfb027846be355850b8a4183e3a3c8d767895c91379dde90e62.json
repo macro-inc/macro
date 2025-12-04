@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            c.\"id\" as \"item_id!\",\n            c.\"owner\" as \"owner\",\n            c.\"fileType\" as \"file_type\",\n            c.\"name\" as \"file_name\",\n            c.\"createdAt\" as \"created_at!\",\n            c.\"updatedAt\" as \"updated_at!\",\n            c.\"deletedAt\" as \"deleted_at?\",\n            uh.\"updatedAt\" as \"viewed_at?\",\n            c.\"projectId\" as \"project_id?\"\n        FROM\n            \"Document\" c\n        LEFT JOIN\n            \"UserHistory\" uh ON uh.\"itemId\" = c.\"id\"\n                AND uh.\"userId\" = $1\n                AND uh.\"itemType\" = 'document'\n        WHERE\n            c.\"id\" = ANY($2)\n        ORDER BY\n            c.\"updatedAt\" DESC\n        ",
+  "query": "\n        SELECT\n            c.\"id\" as \"item_id!\",\n            c.\"owner\" as \"owner\",\n            c.\"fileType\" as \"file_type\",\n            c.\"name\" as \"file_name\",\n            c.\"createdAt\" as \"created_at!\",\n            c.\"updatedAt\" as \"updated_at!\",\n            c.\"deletedAt\" as \"deleted_at?\",\n            uh.\"updatedAt\" as \"viewed_at?\",\n            c.\"projectId\" as \"project_id?\",\n            (dt.document_id IS NOT NULL) as \"is_task!\"\n        FROM\n            \"Document\" c\n        LEFT JOIN document_task dt ON dt.document_id = c.id\n        LEFT JOIN\n            \"UserHistory\" uh ON uh.\"itemId\" = c.\"id\"\n                AND uh.\"userId\" = $1\n                AND uh.\"itemType\" = 'document'\n        WHERE\n            c.\"id\" = ANY($2)\n        ORDER BY\n            c.\"updatedAt\" DESC\n        ",
   "describe": {
     "columns": [
       {
@@ -47,6 +47,11 @@
         "ordinal": 8,
         "name": "project_id?",
         "type_info": "Text"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_task!",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -64,8 +69,9 @@
       false,
       true,
       false,
-      true
+      true,
+      null
     ]
   },
-  "hash": "7756867bf7e7a0530c155ad9f266f7416f8f40ade686ea78dabf97d4a3b77f65"
+  "hash": "81900e6129d69cfb027846be355850b8a4183e3a3c8d767895c91379dde90e62"
 }

@@ -44,6 +44,7 @@ fn test_construct_search_result_single_document() {
             file_name: "Test Document".to_string(),
             owner: "user1".to_string(),
             deleted_at: None,
+            is_task: false,
         },
     );
 
@@ -123,6 +124,7 @@ fn test_construct_search_result_multiple_nodes_same_document() {
             owner: "user_1".to_string(),
             deleted_at: None,
             file_type: Some("pdf".to_string()),
+            is_task: false,
         },
     );
 
@@ -417,6 +419,7 @@ fn test_document_history_deleted() {
             file_type: Some("pdf".to_string()),
             owner: "user_1".to_string(),
             file_name: "name".to_string(),
+            is_task: false,
         },
     );
 

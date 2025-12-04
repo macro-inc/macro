@@ -3,7 +3,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use utoipa::ToSchema;
 
-use crate::{MatchType, SearchHighlight, SearchOn, SearchResponseItem};
+use crate::{MatchType, SearchHighlight, SearchOn};
 
 /// A document match for a given node
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
@@ -31,13 +31,14 @@ pub struct DocumentSearchResponseItem {
     pub id: String,
     pub name: String,
     pub owner_id: String,
-
     /// The id of the document
     pub document_id: String,
     /// The name of the document
     pub document_name: String,
     /// The file type of the document
     pub file_type: Option<String>,
+    /// Whether the document is a task
+    pub is_task: bool,
     /// The search results for the document
     /// This may be empty if the search result match was on the document name only
     pub document_search_results: Vec<DocumentSearchResult>,
@@ -74,22 +75,6 @@ pub struct DocumentSearchMetadata {
     pub owner_id: String,
     /// The file type of the document
     pub file_type: Option<String>,
-}
-
-impl From<SearchResponseItem<DocumentSearchResult, DocumentSearchMetadata>>
-    for DocumentSearchResponseItem
-{
-    fn from(response: SearchResponseItem<DocumentSearchResult, DocumentSearchMetadata>) -> Self {
-        DocumentSearchResponseItem {
-            id: response.metadata.document_id.clone(),
-            name: response.metadata.document_name.clone(),
-            document_id: response.metadata.document_id.clone(),
-            document_name: response.metadata.document_name,
-            owner_id: response.metadata.owner_id,
-            file_type: response.metadata.file_type,
-            document_search_results: response.results,
-        }
-    }
 }
 
 /// The document search response object
