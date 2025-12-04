@@ -129,7 +129,7 @@ export default function Onboarding() {
   };
 
   return (
-    <div class="relative flex flex-col gap-4 justify-between items-center p-4 md:p-8 m-1 md:m-8 border border-edge">
+    <div class="relative flex flex-col gap-4 justify-between items-center p-4 md:p-8 m-1 md:m-8 border border-edge max-w-screen overflow-x-hidden">
       <BrightJoins />
       <BrightJoinsProgressMeter progress={progress()} />
 
@@ -161,7 +161,7 @@ export default function Onboarding() {
 
       <section class="flex flex-col gap-8 w-max pb-8 -mt-16">
         <div class="space-y-2">
-          <h1 class="font-semibold text-5xl">Boot Sequence</h1>
+          <h1 class="font-semibold text-4xl md:text-5xl">Boot Sequence</h1>
           <p class="font-medium text-ink-muted">
             Let's initialize your new workspace.
           </p>
