@@ -1,5 +1,6 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
+import { idToDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import {
   extractSearchSnippet,
@@ -50,16 +51,19 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
   switch (data.type) {
     case 'channel': {
       contentHitData = data.results.flatMap((r) => {
+        const isContentHit = !!r.message_id;
+        if (!isContentHit) return [];
+
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
           type: 'channel' as const,
-          id: r.message_id,
+          id: r.message_id!,
           content: mergeAdjacentMacroEmTags(content),
-          senderId: r.sender_id,
-          sentAt: r.created_at,
+          senderId: r.sender_id!,
+          sentAt: r.created_at!,
           location: {
             type: 'channel' as const,
-            messageId: r.message_id,
+            messageId: r.message_id!,
           },
         }));
       });
@@ -87,11 +91,14 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
     }
     case 'md': {
       contentHitData = data.results.flatMap((r) => {
+        const isContentHit = !!r.node_id;
+        if (!isContentHit) return [];
+
         const contents = r.highlight.content ?? [];
         return contents.map((content) => ({
           type: 'md' as const,
           content: mergeAdjacentMacroEmTags(content),
-          location: { type: 'md' as const, nodeId: r.node_id },
+          location: { type: 'md' as const, nodeId: r.node_id! },
         }));
       });
       break;
@@ -104,7 +111,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           content: mergeAdjacentMacroEmTags(content),
           location: {
             type: 'email' as const,
-            messageId: r.message_id,
+            messageId: r.message_id!,
           },
         }));
       });
@@ -178,26 +185,42 @@ const useMapSearchResponseItem = () => {
       }
       case 'email': {
         const emailResult = result.email_message_search_results.at(0);
-        if (!emailResult) {
-          console.error('Email result not found', result);
-          return;
-        }
         const search = getSearchData({
           results: result.email_message_search_results,
           type: 'email',
         });
+
+        // Email thread subject match
+        // TODO: make sure this looks/feels right in the unified list
+        if (!emailResult) {
+          return {
+            type: 'email',
+            id: result.thread_id,
+            name: result.name ?? '',
+            ownerId: result.owner_id,
+            createdAt: result.created_at,
+            updatedAt: result.updated_at,
+            viewedAt: result.viewed_at ?? undefined,
+            isRead: false,
+            isImportant: false,
+            done: false,
+            senderName: idToDisplayName(result.user_id),
+            search,
+          };
+        }
+
         return {
           type: 'email',
           id: result.thread_id,
-          name: emailResult.subject ?? '',
-          ownerId: emailResult.sender,
-          createdAt: emailResult.sent_at ?? emailResult.updated_at,
-          updatedAt: emailResult.sent_at ?? emailResult.updated_at,
-          viewedAt: emailResult.updated_at,
+          name: result.name ?? '',
+          ownerId: result.owner_id,
+          createdAt: emailResult.sent_at ?? result.updated_at,
+          updatedAt: emailResult.sent_at ?? result.updated_at,
+          viewedAt: result.viewed_at ?? undefined,
           isRead: !emailResult.labels.includes('UNREAD'),
           isImportant: emailResult.labels.includes('IMPORTANT'),
           done: !emailResult.labels.includes('INBOX'),
-          senderName: emailResult.sender,
+          senderName: emailResult.sender!,
           search,
         };
       }

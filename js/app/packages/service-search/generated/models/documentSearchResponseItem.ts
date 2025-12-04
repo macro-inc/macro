@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentSearchResult } from './documentSearchResult';
+import type { DocumentSearchResponseItemFileType } from './documentSearchResponseItemFileType';
 
 /**
  * A single response item, part of the DocumentSearchResponse object
@@ -18,7 +19,7 @@ export interface DocumentSearchResponseItem {
 This may be empty if the search result match was on the document name only */
   document_search_results: DocumentSearchResult[];
   /** The file type of the document */
-  file_type: string;
+  file_type?: DocumentSearchResponseItemFileType;
   /** Standardized fields that all item types will share.
 These field names are being aligned across all item types
 for consistency in our data model. */

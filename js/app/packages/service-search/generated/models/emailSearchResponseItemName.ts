@@ -6,6 +6,6 @@
  */
 
 /**
- * email threads don't have names, but keeping this here for consistency with other search items
+ * Subject of the email thread
  */
 export type EmailSearchResponseItemName = string | null;

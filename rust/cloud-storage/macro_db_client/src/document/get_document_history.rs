@@ -1,14 +1,25 @@
 use chrono::{DateTime, Utc};
-use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 
-#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct DocumentHistoryInfo {
+    /// The id of the document
     pub item_id: String,
+    /// The owner of the document
+    pub owner: String,
+    /// The file type of the document
+    pub file_type: Option<String>,
+    /// The file name of the document
+    pub file_name: String,
+    /// Created at
     pub created_at: DateTime<Utc>,
+    /// Updated at
     pub updated_at: DateTime<Utc>,
+    /// Viewed at
     pub viewed_at: Option<DateTime<Utc>>,
+    /// The project id of the document
     pub project_id: Option<String>,
+    /// Deleted at
     pub deleted_at: Option<DateTime<Utc>>,
 }
 
@@ -28,6 +39,9 @@ pub async fn get_document_history_info(
         r#"
         SELECT
             c."id" as "item_id!",
+            c."owner" as "owner",
+            c."fileType" as "file_type",
+            c."name" as "file_name",
             c."createdAt" as "created_at!",
             c."updatedAt" as "updated_at!",
             c."deletedAt" as "deleted_at?",
@@ -55,6 +69,9 @@ pub async fn get_document_history_info(
         .map(|row| {
             let info = DocumentHistoryInfo {
                 item_id: row.item_id.clone(),
+                owner: row.owner,
+                file_type: row.file_type,
+                file_name: row.file_name,
                 created_at: DateTime::<Utc>::from_naive_utc_and_offset(row.created_at, Utc),
                 updated_at: DateTime::<Utc>::from_naive_utc_and_offset(row.updated_at, Utc),
                 viewed_at: row
