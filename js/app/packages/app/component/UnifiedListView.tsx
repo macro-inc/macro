@@ -139,7 +139,6 @@ import {
   type SystemSortOption,
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_IDS,
-  VIEWCONFIG_DEFAULTS_IDS_ENUM,
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';

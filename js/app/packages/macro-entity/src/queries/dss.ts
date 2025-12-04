@@ -122,15 +122,27 @@ export function createDssInfiniteQuery(
 
   return useInfiniteQuery(() => {
     const requestBody = options?.requestBody?.();
-    // Only include document_filters in query key for granular refetching
-    // This ensures the query only refetches when document_filters/document_ids changes
+    // Include all filters in query key so query refetches when any filter changes
     const documentFilters = requestBody?.document_filters;
+    const projectFilters = requestBody?.project_filters;
+    const chatFilters = requestBody?.chat_filters;
+    const emailFilters = requestBody?.email_filters;
+    const channelFilters = requestBody?.channel_filters;
+
     const queryKey = queryKeys.dss({
       infinite: true,
       ...params(),
       // Include only document_filters in query key so query refetches only when document filters change
       documentFilters: documentFilters
         ? JSON.stringify(documentFilters)
+        : undefined,
+      projectFilters: projectFilters
+        ? JSON.stringify(projectFilters)
+        : undefined,
+      chatFilters: chatFilters ? JSON.stringify(chatFilters) : undefined,
+      emailFilters: emailFilters ? JSON.stringify(emailFilters) : undefined,
+      channelFilters: channelFilters
+        ? JSON.stringify(channelFilters)
         : undefined,
     });
 
