@@ -213,19 +213,15 @@ fn test_search_response_item_to_chat_response_item_with_metadata() {
     let search_item = SearchResponseItem {
         results: vec![
             ChatMessageSearchResult {
-                chat_message_id: "msg_1".to_string(),
-                role: "user".to_string(),
+                chat_message_id: Some("msg_1".to_string()),
+                role: Some("user".to_string()),
                 highlight: SearchHighlight::default(),
-                updated_at: 1234567890,
-                title: "Test".to_string(),
                 score: None,
             },
             ChatMessageSearchResult {
-                chat_message_id: "msg_2".to_string(),
-                role: "assistant".to_string(),
+                chat_message_id: Some("msg_2".to_string()),
+                role: Some("assistant".to_string()),
                 highlight: SearchHighlight::default(),
-                updated_at: 1234567891,
-                title: "Test".to_string(),
                 score: None,
             },
         ],
@@ -245,11 +241,17 @@ fn test_search_response_item_to_chat_response_item_with_metadata() {
     assert_eq!(chat_response.name, "hello");
     assert_eq!(chat_response.chat_search_results.len(), 2);
     assert_eq!(
-        chat_response.chat_search_results[0].chat_message_id,
+        chat_response.chat_search_results[0]
+            .chat_message_id
+            .as_ref()
+            .unwrap(),
         "msg_1"
     );
     assert_eq!(
-        chat_response.chat_search_results[1].chat_message_id,
+        chat_response.chat_search_results[1]
+            .chat_message_id
+            .as_ref()
+            .unwrap(),
         "msg_2"
     );
 }
@@ -264,11 +266,9 @@ fn test_serialization_equivalence() {
         chat_id: "chat_123".to_string(),
         user_id: "user_456".to_string(),
         chat_search_results: vec![ChatMessageSearchResult {
-            chat_message_id: "msg_1".to_string(),
-            role: "user".to_string(),
+            chat_message_id: Some("msg_1".to_string()),
+            role: Some("user".to_string()),
             highlight: SearchHighlight::default(),
-            updated_at: 1234567890,
-            title: "Test Chat".to_string(),
             score: None,
         }],
     };
@@ -276,11 +276,9 @@ fn test_serialization_equivalence() {
     // Create the same thing via SearchResponseItem conversion
     let search_item = SearchResponseItem {
         results: vec![ChatMessageSearchResult {
-            chat_message_id: "msg_1".to_string(),
-            role: "user".to_string(),
+            chat_message_id: Some("msg_1".to_string()),
+            role: Some("user".to_string()),
             highlight: SearchHighlight::default(),
-            updated_at: 1234567890,
-            title: "Test Chat".to_string(),
             score: None,
         }],
         metadata: ChatSearchMetadata {

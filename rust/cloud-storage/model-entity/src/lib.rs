@@ -38,7 +38,7 @@ pub enum EntityType {
     Chat,
     /// The entity is a channel (slack-like) conversation
     Channel,
-    /// The entity is a markdown document
+    /// The entity is a document
     Document,
     /// The entity is a collection of other entities
     Project,

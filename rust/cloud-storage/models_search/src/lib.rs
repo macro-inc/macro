@@ -9,8 +9,11 @@ pub mod document;
 pub mod email;
 pub mod project;
 pub mod score;
+mod simple;
 pub mod timestamp;
 pub mod unified;
+
+pub use simple::*;
 
 pub use timestamp::*;
 

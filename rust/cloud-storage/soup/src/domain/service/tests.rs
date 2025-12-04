@@ -87,6 +87,7 @@ fn soup_document_uuid_with_updated(id: Uuid, updated_at: DateTime<Utc>) -> SoupD
         created_at: Default::default(),
         updated_at,
         viewed_at: Default::default(),
+        is_task: false,
     }
 }
 

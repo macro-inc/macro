@@ -311,6 +311,8 @@ pub struct ChatHistoryInfo {
     pub viewed_at: Option<DateTime<Utc>>,
     pub project_id: Option<String>,
     pub deleted_at: Option<DateTime<Utc>>,
+    pub user_id: String,
+    pub name: String,
 }
 
 /// Gets chat history information including when a user last viewed each chat
@@ -333,7 +335,9 @@ pub async fn get_chat_history_info(
             c."updatedAt" as "updated_at!",
             c."deletedAt" as "deleted_at?",
             uh."updatedAt" as "viewed_at?",
-            c."projectId" as "project_id?"
+            c."projectId" as "project_id?",
+            c."userId" as "user_id",
+            c."name"
         FROM
             "Chat" c
         LEFT JOIN
@@ -356,6 +360,8 @@ pub async fn get_chat_history_info(
         .map(|row| {
             let info = ChatHistoryInfo {
                 item_id: row.item_id.clone(),
+                user_id: row.user_id,
+                name: row.name,
                 created_at: DateTime::<Utc>::from_naive_utc_and_offset(row.created_at, Utc),
                 updated_at: DateTime::<Utc>::from_naive_utc_and_offset(row.updated_at, Utc),
                 viewed_at: row

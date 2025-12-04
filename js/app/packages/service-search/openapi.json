@@ -982,41 +982,38 @@
       "ChannelSearchResult": {
         "type": "object",
         "description": "A channel message match for a given channel id",
-        "required": [
-          "message_id",
-          "sender_id",
-          "highlight",
-          "created_at",
-          "updated_at"
-        ],
+        "required": ["highlight"],
         "properties": {
           "created_at": {
-            "type": "integer",
+            "type": ["integer", "null"],
             "format": "int64",
-            "description": "When the channel message was created"
+            "description": "When the channel message was created\nThis is only prsent if the search result is on the message content"
           },
           "highlight": {
             "$ref": "#/components/schemas/SearchHighlight",
             "description": "The highlights for the channel message"
           },
           "message_id": {
-            "type": "string",
-            "description": "The channel message id"
+            "type": ["string", "null"],
+            "description": "The channel message id\nThis is only prsent if the search result is on the message content"
           },
           "score": {
             "type": ["number", "null"],
             "format": "double",
             "description": "The score of the result"
           },
-          "sender_id": { "type": "string", "description": "The sender id" },
+          "sender_id": {
+            "type": ["string", "null"],
+            "description": "The sender id\nThis is only prsent if the search result is on the message content"
+          },
           "thread_id": {
             "type": ["string", "null"],
             "description": "The channel message thread id"
           },
           "updated_at": {
-            "type": "integer",
+            "type": ["integer", "null"],
             "format": "int64",
-            "description": "When the channel message was last updated"
+            "description": "When the channel message was last updated\nThis is only prsent if the search result is on the message content"
           }
         }
       },
@@ -1049,36 +1046,24 @@
       "ChatMessageSearchResult": {
         "type": "object",
         "description": "A chat match for a given message id",
-        "required": [
-          "chat_message_id",
-          "role",
-          "highlight",
-          "updated_at",
-          "title"
-        ],
+        "required": ["highlight"],
         "properties": {
           "chat_message_id": {
-            "type": "string",
-            "description": "The chat message id for the chat"
+            "type": ["string", "null"],
+            "description": "The chat message id for the chat\nThis is only present if the search match was on the chat message content"
           },
           "highlight": {
             "$ref": "#/components/schemas/SearchHighlight",
             "description": "The highlights for the chat message"
           },
           "role": {
-            "type": "string",
-            "description": "The role of the chat message"
+            "type": ["string", "null"],
+            "description": "The role of the chat message\nThis is only present if the search match was on the chat message content"
           },
           "score": {
             "type": ["number", "null"],
             "format": "double",
             "description": "The score of the result"
-          },
-          "title": { "type": "string", "description": "The title of the chat" },
-          "updated_at": {
-            "type": "integer",
-            "format": "int64",
-            "description": "When the search chat was last updated"
           }
         }
       },
@@ -1307,7 +1292,6 @@
           "owner_id",
           "document_id",
           "document_name",
-          "file_type",
           "document_search_results"
         ],
         "properties": {
@@ -1325,7 +1309,7 @@
             "description": "The search results for the document\nThis may be empty if the search result match was on the document name only"
           },
           "file_type": {
-            "type": "string",
+            "type": ["string", "null"],
             "description": "The file type of the document"
           },
           "id": {
@@ -1359,15 +1343,15 @@
       "DocumentSearchResult": {
         "type": "object",
         "description": "A document match for a given node",
-        "required": ["node_id", "highlight", "updated_at"],
+        "required": ["highlight"],
         "properties": {
           "highlight": {
             "$ref": "#/components/schemas/SearchHighlight",
             "description": "The highlights for the document"
           },
           "node_id": {
-            "type": "string",
-            "description": "The node id for the document.\nThis is only useful for markdown at the moment"
+            "type": ["string", "null"],
+            "description": "The node id for the document.\nThis is only useful for markdown at the moment\nThis will only be provided if the match was on content"
           },
           "raw_content": {
             "type": ["string", "null"],
@@ -1377,11 +1361,6 @@
             "type": ["number", "null"],
             "format": "double",
             "description": "The score of the result"
-          },
-          "updated_at": {
-            "type": "integer",
-            "format": "int64",
-            "description": "When the search document was last updated"
           }
         }
       },
@@ -1491,9 +1470,13 @@
           },
           "name": {
             "type": ["string", "null"],
-            "description": "email threads don't have names, but keeping this here for consistency with other search items"
+            "description": "Subject of the email thread"
           },
           "owner_id": { "type": "string" },
+          "subject": {
+            "type": ["string", "null"],
+            "description": "The subject of the email\nThis is only present if the search result is on the message content"
+          },
           "thread_id": {
             "type": "string",
             "description": "The id of the email thread"
@@ -1523,45 +1506,49 @@
       "EmailSearchResult": {
         "type": "object",
         "description": "A email message match for a given thread id",
-        "required": [
-          "message_id",
-          "sender",
-          "recipients",
-          "cc",
-          "bcc",
-          "labels",
-          "highlight",
-          "updated_at"
-        ],
+        "required": ["recipients", "cc", "bcc", "labels", "highlight"],
         "properties": {
-          "bcc": { "type": "array", "items": { "type": "string" } },
-          "cc": { "type": "array", "items": { "type": "string" } },
+          "bcc": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "This is only present if the search result is on the message content"
+          },
+          "cc": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "This is only present if the search result is on the message content"
+          },
           "highlight": {
             "$ref": "#/components/schemas/SearchHighlight",
             "description": "The highlights for the email message"
           },
-          "labels": { "type": "array", "items": { "type": "string" } },
-          "message_id": {
-            "type": "string",
-            "description": "The email message id."
+          "labels": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "This is only present if the search result is on the message content"
           },
-          "recipients": { "type": "array", "items": { "type": "string" } },
+          "message_id": {
+            "type": ["string", "null"],
+            "description": "The email message id.\nThis is only present if the search result is on the message content"
+          },
+          "recipients": {
+            "type": "array",
+            "items": { "type": "string" },
+            "description": "This is only present if the search result is on the message content"
+          },
           "score": {
             "type": ["number", "null"],
             "format": "double",
             "description": "The score of the result"
           },
-          "sender": { "type": "string" },
+          "sender": {
+            "type": ["string", "null"],
+            "description": "The sender\nThis is only present if the search result is on the message content"
+          },
           "sent_at": {
             "type": ["integer", "null"],
             "format": "int64",
-            "description": "When the email message was sent"
-          },
-          "subject": { "type": ["string", "null"] },
-          "updated_at": {
-            "type": "integer",
-            "format": "int64",
-            "description": "When the search email message was last updated"
+            "description": "When the email message was sent\nThis is only present if the search result is on the message content"
           }
         }
       },
