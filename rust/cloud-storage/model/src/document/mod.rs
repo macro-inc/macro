@@ -333,6 +333,9 @@ pub struct DocumentPreviewData {
     #[serde(with = "ts_seconds_option")]
     #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Whether or not the document is a task.
+    /// This is only applicable for md documents.
+    pub is_task: bool,
 }
 
 #[derive(

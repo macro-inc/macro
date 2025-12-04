@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n                d.id as document_id,\n                d.name as document_name,\n                d.\"fileType\" as file_type,\n                d.owner as owner,\n                d.\"updatedAt\"::timestamptz as \"updated_at\"\n            FROM \"Document\" d\n            WHERE\n                d.\"id\" = ANY($1)\n        ",
+  "query": "\n            SELECT\n                d.id as document_id,\n                d.name as document_name,\n                d.\"fileType\" as file_type,\n                d.owner as owner,\n                d.\"updatedAt\"::timestamptz as \"updated_at\",\n                (dt.document_id IS NOT NULL) as \"is_task!\"\n            FROM \"Document\" d\n            LEFT JOIN document_task dt ON dt.document_id = d.id\n            WHERE\n                d.\"id\" = ANY($1)\n        ",
   "describe": {
     "columns": [
       {
@@ -27,6 +27,11 @@
         "ordinal": 4,
         "name": "updated_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_task!",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
@@ -39,8 +44,9 @@
       false,
       true,
       false,
+      null,
       null
     ]
   },
-  "hash": "00b05287f77baebb2155e5297a617132165dd9f297b036927a876cb20e2b3371"
+  "hash": "cd03404aa4732898d67a1d88abd2e11691b9647640780c5d5c26e4e399c7a8d5"
 }

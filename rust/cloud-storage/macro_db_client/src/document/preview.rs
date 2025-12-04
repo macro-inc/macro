@@ -15,8 +15,10 @@ pub async fn batch_get_document_preview_v2(
                 d.name as document_name,
                 d."fileType" as file_type,
                 d.owner as owner,
-                d."updatedAt"::timestamptz as "updated_at"
+                d."updatedAt"::timestamptz as "updated_at",
+                (dt.document_id IS NOT NULL) as "is_task!"
             FROM "Document" d
+            LEFT JOIN document_task dt ON dt.document_id = d.id
             WHERE
                 d."id" = ANY($1)
         "#,
