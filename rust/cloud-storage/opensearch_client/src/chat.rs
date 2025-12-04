@@ -1,6 +1,6 @@
 use crate::{
     OpensearchClient, Result, delete,
-    search::chats::{ChatSearchResponse, search_chats},
+    search::{chats::search_chats, model::SearchHit},
     upsert::{self, chat_message::UpsertChatMessageArgs},
 };
 
@@ -32,7 +32,7 @@ impl OpensearchClient {
     pub async fn search_chats(
         &self,
         args: crate::search::chats::ChatSearchArgs,
-    ) -> Result<Vec<ChatSearchResponse>> {
+    ) -> Result<Vec<SearchHit>> {
         search_chats(&self.inner, args).await
     }
 

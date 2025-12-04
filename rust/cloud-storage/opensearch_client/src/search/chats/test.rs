@@ -31,6 +31,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
                             "content": "test"
                         }
                     },
+                    {"term": {"_index": "chats"}},
                     {
                         "bool": {
                             "minimum_should_match": 1,

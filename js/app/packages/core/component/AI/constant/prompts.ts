@@ -1,6 +1,5 @@
 import { useInstructionsMdTextQuery } from '@service-storage/instructionsMd';
 import { createMemo } from 'solid-js';
-import { useFormatMemoriesQuery } from './memories';
 
 const ABOUT_MACRO = `
 Macro is an AI workspace with all the latest models and built-in editors for pdfs, docs, notes, images, diagrams, chats and more. Macro is like ChatGPT but you can do all your work inside it+
@@ -27,7 +26,6 @@ Internal terminology and knowledge
 
 export function useAdditionalInstructions() {
   const userInstructionsQuery = useInstructionsMdTextQuery();
-  const memory = useFormatMemoriesQuery();
   return createMemo(() => {
     let prompt = ABOUT_MACRO;
     const userInstructions = userInstructionsQuery.data;
@@ -35,10 +33,6 @@ export function useAdditionalInstructions() {
       prompt +=
         '\nThese are system instructions provided by the user. Follow them\n';
       prompt += userInstructions;
-    }
-    const memories = memory.data;
-    if (memories) {
-      prompt += memories;
     }
     return appendDate(prompt);
   });

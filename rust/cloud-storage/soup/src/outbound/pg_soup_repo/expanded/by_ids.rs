@@ -91,8 +91,10 @@ pub async fn expanded_soup_by_ids<'a>(
                 d."projectId" as "project_id",
                 NULL as "is_persistent",
                 di.sha as "sha",
+                (dt.document_id IS NOT NULL) as "is_task!",
                 uh."updatedAt"::timestamptz as "viewed_at"
             FROM "Document" d
+            LEFT JOIN document_task dt ON dt.document_id = d.id
             INNER JOIN UserAccessibleItems uai 
                 ON uai.item_id = d.id 
                 AND uai.item_type = 'document'
@@ -134,6 +136,7 @@ pub async fn expanded_soup_by_ids<'a>(
                 c."projectId" as "project_id",
                 c."isPersistent" as "is_persistent",
                 NULL as "sha",
+                false as "is_task",
                 uh."updatedAt"::timestamptz as "viewed_at"
             FROM "Chat" c
             INNER JOIN UserAccessibleItems uai 
