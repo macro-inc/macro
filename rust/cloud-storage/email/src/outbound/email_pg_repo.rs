@@ -198,7 +198,7 @@ impl EmailRepo for EmailPgRepo {
             r#"
             SELECT
                 m.thread_id,
-                c.id, c.link_id, c.email_address, c.name, c.sfs_photo_url
+                c.id, c.link_id, c.email_address, COALESCE(m.from_name, c.name) as "name", c.sfs_photo_url
             FROM email_messages m
             JOIN email_contacts c ON m.from_contact_id = c.id
             WHERE m.thread_id = ANY($1) AND m.from_contact_id IS NOT NULL

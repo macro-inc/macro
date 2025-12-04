@@ -14,13 +14,16 @@ use crate::domain::{
 pub struct CustomerRepositoryImpl {
     /// The underlying stripe::Client connected to stripe.
     client: Arc<stripe::Client>,
+    /// The price id for the professional subscription
+    stripe_price_id: String,
 }
 
 impl CustomerRepositoryImpl {
     /// Creates a new instance of CustomerRepositoryImpl
-    pub fn new(stripe_client: stripe::Client) -> Self {
+    pub fn new(stripe_client: stripe::Client, stripe_price_id: &str) -> Self {
         Self {
             client: Arc::new(stripe_client),
+            stripe_price_id: stripe_price_id.to_string(),
         }
     }
 }
@@ -28,12 +31,12 @@ impl CustomerRepositoryImpl {
 impl CustomerRepository for CustomerRepositoryImpl {
     async fn create_subscription(
         &self,
-        args: CreateSubscriptionArgs<'_>,
+        args: CreateSubscriptionArgs,
     ) -> Result<stripe::SubscriptionId, CustomerError> {
         // Create the subscription
         let mut params = CreateSubscription::new(args.customer_id);
         params.items = Some(vec![CreateSubscriptionItems {
-            price: Some(args.price_id.to_string()),
+            price: Some(self.stripe_price_id.clone()),
             quantity: Some(args.quantity),
             ..Default::default()
         }]);

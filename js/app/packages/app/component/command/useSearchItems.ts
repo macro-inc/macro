@@ -12,6 +12,9 @@ import type { UnifiedSearchResponse } from '../../../service-search/generated/mo
 import type { UnifiedSearchResponseItem } from '../../../service-search/generated/models/unifiedSearchResponseItem';
 import type { CommandItemCard } from './KonsoleItem';
 
+const convertSecondsToMillis = (timestamp?: number) =>
+  timestamp ? timestamp * 1000 : undefined;
+
 function createDocumentItems(
   doc: UnifiedSearchResponseItem
 ): CommandItemCard[] {
@@ -25,8 +28,10 @@ function createDocumentItems(
   )
     return [];
 
-  // TODO: de-duplicate: see logic in useDocumentItems
   for (const result of doc.document_search_results) {
+    const isContentHit = !!result.node_id;
+    if (!isContentHit) continue;
+
     const contents = result.highlight.content ?? [];
     contents.forEach((content, index) => {
       // TODO: Canvas returns some nasty partial <m-foo> tags in plaintext
@@ -42,16 +47,16 @@ function createDocumentItems(
           },
           snippet: {
             content,
-            locationId: result.node_id,
-            fileType: doc.file_type,
+            locationId: result.node_id!,
+            fileType: doc.file_type!,
             matchIndex: index,
             // For PDF files, extract additional location data
-            ...(['docx', 'pdf'].includes(doc.file_type) && {
+            ...(['docx', 'pdf'].includes(doc.file_type!) && {
               searchSnippet: extractSearchSnippet(content),
               highlightTerms: extractSearchTerms(content),
             }),
           },
-          updatedAt: result.updated_at * 1000, // Convert Unix timestamp to milliseconds
+          updatedAt: convertSecondsToMillis(doc.metadata?.updated_at),
         });
       }
     });
@@ -66,25 +71,28 @@ function createEmailItems(email: UnifiedSearchResponseItem): CommandItemCard[] {
 
   if (email.email_message_search_results.length === 0) return [];
 
-  // TODO: de-duplicate: see logic in useEmailItems
   for (const result of email.email_message_search_results) {
+    const isContentHit = !!result.message_id;
+    if (!isContentHit) continue;
+
     const contents = result.highlight.content ?? [];
     contents.forEach((content, index) => {
       items.push({
         type: 'email',
         data: {
           id: email.thread_id,
-          name: result.subject as string,
-          sender: result.sender,
-          // TODO: This should be sent time, not update time
-          timestamp: new Date(result.updated_at * 1000).toISOString(),
-          is_read: result.labels.indexOf('UNREAD') >= 0,
+          name: email.name ?? '',
+          sender: result.sender!,
+          timestamp: new Date(
+            convertSecondsToMillis(result.sent_at ?? email.updated_at)!
+          ).toISOString(),
+          is_read: !result.labels.includes('UNREAD'),
           // TODO: This should be the attachments from the email, need to update the search service to return them
           attachments: [],
         },
         snippet: {
           content,
-          locationId: result.message_id,
+          locationId: result.message_id!,
           fileType: 'email',
           matchIndex: index,
         },
@@ -106,25 +114,27 @@ function createChatItems(chat: UnifiedSearchResponseItem): CommandItemCard[] {
   )
     return [];
 
-  // TODO: de-duplicate: see logic in useChatItems
   for (const result of chat.chat_search_results) {
+    const isContentHit = !!result.chat_message_id;
+    if (!isContentHit) continue;
+
     const contents = result.highlight.content ?? [];
     contents.forEach((content, index) => {
       items.push({
         type: 'item',
         data: {
           id: chat.chat_id,
-          name: result.title,
+          name: chat.name,
           itemType: 'chat',
         },
         snippet: {
           content,
-          locationId: result.chat_message_id,
+          locationId: result.chat_message_id!,
           fileType: 'chat',
           matchIndex: index,
           senderId: chat.user_id,
         },
-        updatedAt: result.updated_at * 1000, // Convert Unix timestamp to milliseconds
+        updatedAt: convertSecondsToMillis(chat.metadata?.updated_at),
       });
     });
   }
@@ -141,22 +151,26 @@ function createChannelItems(
   if (channel.channel_message_search_results.length === 0) return [];
 
   for (const result of channel.channel_message_search_results) {
+    const isContentHit = !!result.message_id;
+    if (!isContentHit) continue;
+
     const contents = result.highlight.content ?? [];
     contents.forEach((content, index) => {
       items.push({
         type: 'channel',
         data: {
           id: channel.channel_id,
+          // TODO: use channels context to get channel name
           name: '', // Set name to empty string since search results don't contain channel names anymore
         },
         snippet: {
           content,
-          locationId: result.message_id,
+          locationId: result.message_id!,
           fileType: 'chat',
           matchIndex: index,
-          senderId: result.sender_id,
+          senderId: result.sender_id!,
         },
-        updatedAt: result.updated_at * 1000, // Convert Unix timestamp to milliseconds
+        updatedAt: convertSecondsToMillis(channel.metadata?.updated_at),
       });
     });
   }

@@ -73,8 +73,6 @@ export const ENABLE_EMAIL = true;
 
 export const ENABLE_BLOCK_IN_BLOCK = true;
 
-export const ENABLE_AI_MEMORY = true;
-
 export const EDITABLE_SMART_INSIGHTS = false;
 
 export const ENABLE_SEARCH_SERVICE = true;

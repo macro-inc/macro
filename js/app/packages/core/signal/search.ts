@@ -188,6 +188,7 @@ export function createUnifiedSearchResource(
       const result = await searchClient.search(
         {
           request: {
+            search_on: 'content',
             match_type: 'partial',
             query: term,
             // in order for an index to be searched on, the key needs to exist in "filters"

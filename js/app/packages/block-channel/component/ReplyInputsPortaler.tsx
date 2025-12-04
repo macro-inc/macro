@@ -11,7 +11,13 @@ import { blockElementSignal } from '@core/signal/blockElement';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import type { Message } from '@service-comms/generated/models';
 import { createCallback } from '@solid-primitives/rootless';
-import { type Accessor, createEffect, For } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  For,
+  type Setter,
+} from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
 import type { VirtualizerHandle } from 'virtua/solid';
@@ -28,13 +34,16 @@ export type ReplyInputsPortalerProps = {
   setThreadInputAttachmentsStore: SetStoreFunction<
     Record<string, InputAttachment[]>
   >;
-  setLocalTyping?: (isTyping: boolean) => void;
+  setLocalTypingThreadId?: Setter<string | undefined>;
 };
 
 export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
   const postTypingUpdate_ = createCallback(postTypingUpdate);
   const sendMessage_ = createCallback(sendMessage);
   const blockRef = blockElementSignal.get;
+
+  const [focusedReplyInputThreadId, setFocusedReplyInputThreadId] =
+    createSignal<string>();
 
   const onSend =
     (threadId: string) => async (args: Parameters<typeof sendMessage>[0]) => {
@@ -80,15 +89,7 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
     );
   };
 
-  const onEsc = (threadId: string) => () => {
-    props.setThreadViewStore(threadId, (prev) =>
-      prev
-        ? { ...prev, threadExpanded: true, hasActiveReply: false }
-        : { threadExpanded: true, hasActiveReply: false }
-    );
-  };
-
-  const onDeleteReply = (threadId: string) => () => {
+  const onEmptyBlur = (threadId: string) => () => {
     clearDraftMessage(props.channelId, threadId);
     props.setThreadViewStore(threadId, (prev) =>
       prev
@@ -112,6 +113,8 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
     (lastMessageBody as HTMLElement).focus();
   };
 
+  let replyFocusTimeout: ReturnType<typeof setTimeout> | undefined;
+
   return (
     <For
       each={Object.keys(props.threadViewStore).filter(
@@ -123,6 +126,7 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
         // TODO: this should only fire if this reply input was focused
         createEffect((prev) => {
           if (
+            focusedReplyInputThreadId() === threadId &&
             props.threadViewStore[threadId].replyInputMountTarget &&
             prev &&
             prev !== props.threadViewStore[threadId].replyInputMountTarget
@@ -161,6 +165,15 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
                     replyInputShouldFocus: false,
                   }))
                 }
+                onFocus={() => {
+                  if (replyFocusTimeout) clearTimeout(replyFocusTimeout);
+                  setFocusedReplyInputThreadId(threadId);
+                }}
+                onBlur={() => {
+                  replyFocusTimeout = setTimeout(() => {
+                    setFocusedReplyInputThreadId(undefined);
+                  }, 100);
+                }}
                 onStartTyping={() => postTypingUpdate_('start', threadId)}
                 onStopTyping={() => postTypingUpdate_('stop', threadId)}
                 inputAttachments={{
@@ -168,7 +181,14 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
                   setStore: props.setThreadInputAttachmentsStore,
                   key: threadId,
                 }}
-                setLocalTyping={props.setLocalTyping}
+                setLocalTyping={
+                  props.setLocalTypingThreadId
+                    ? (isTyping) =>
+                        props.setLocalTypingThreadId?.(
+                          isTyping ? threadId : undefined
+                        )
+                    : undefined
+                }
                 onChange={(content) =>
                   saveDraftMessage(props.channelId, {
                     content,
@@ -177,15 +197,13 @@ export function ReplyInputsPortaler(props: ReplyInputsPortalerProps) {
                     threadId,
                   })
                 }
-                onEmpty={() => clearDraftMessage(props.channelId, threadId)}
-                escHandler={onEsc(threadId)}
                 initialValue={() =>
                   loadDraftMessage(props.channelId, threadId)?.content ?? ''
                 }
                 onFocusLeaveStart={(e) => {
                   onFocusLeaveStart(e, threadId);
                 }}
-                onDeleteDraft={onDeleteReply(threadId)}
+                onEmptyBlur={onEmptyBlur(threadId)}
                 isReplyInput
               />
             </div>

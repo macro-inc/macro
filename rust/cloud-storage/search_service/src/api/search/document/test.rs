@@ -12,22 +12,23 @@ fn test_construct_search_result_empty_input() {
 
 #[test]
 fn test_construct_search_result_single_document() {
-    let search_results = vec![
-        opensearch_client::search::documents::DocumentSearchResponse {
-            document_id: "doc1".to_string(),
-            document_name: "Test Document".to_string(),
-            node_id: "node1".to_string(),
-            owner_id: "user1".to_string(),
-            file_type: "pdf".to_string(),
-            updated_at: 1234567890,
-            score: None,
-            highlight: Highlight {
-                name: None,
-                content: vec!["Test content".to_string()],
-            },
-            raw_content: Some("Raw test content".to_string()),
+    let search_results = vec![opensearch_client::search::model::SearchHit {
+        entity_id: "doc1".to_string(),
+        entity_type: SearchEntityType::Documents,
+        goto: Some(
+            opensearch_client::search::model::SearchGotoContent::Documents(
+                opensearch_client::search::model::SearchGotoDocument {
+                    node_id: "node1".to_string(),
+                    raw_content: Some("Raw test content".to_string()),
+                },
+            ),
+        ),
+        score: None,
+        highlight: Highlight {
+            name: None,
+            content: vec!["Test content".to_string()],
         },
-    ];
+    }];
 
     let mut document_histories = HashMap::new();
     let now = chrono::Utc::now();
@@ -39,7 +40,10 @@ fn test_construct_search_result_single_document() {
             updated_at: now,
             viewed_at: None,
             project_id: None,
-            ..Default::default()
+            file_type: Some("pdf".to_string()),
+            file_name: "Test Document".to_string(),
+            owner: "user1".to_string(),
+            deleted_at: None,
         },
     );
 
@@ -51,9 +55,15 @@ fn test_construct_search_result_single_document() {
     assert_eq!(result[0].extra.document_name, "Test Document");
     assert_eq!(result[0].extra.name, "Test Document");
     assert_eq!(result[0].extra.owner_id, "user1");
-    assert_eq!(result[0].extra.file_type, "pdf");
+    assert_eq!(result[0].extra.file_type.as_ref().unwrap(), "pdf");
     assert_eq!(result[0].extra.document_search_results.len(), 1);
-    assert_eq!(result[0].extra.document_search_results[0].node_id, "node1");
+    assert_eq!(
+        result[0].extra.document_search_results[0]
+            .node_id
+            .as_ref()
+            .unwrap(),
+        "node1"
+    );
     assert_eq!(
         result[0].extra.document_search_results[0].raw_content,
         Some("Raw test content".to_string())
@@ -63,33 +73,39 @@ fn test_construct_search_result_single_document() {
 #[test]
 fn test_construct_search_result_multiple_nodes_same_document() {
     let search_results = vec![
-        opensearch_client::search::documents::DocumentSearchResponse {
-            document_id: "doc1".to_string(),
-            document_name: "Test Document".to_string(),
-            node_id: "node1".to_string(),
-            owner_id: "user1".to_string(),
-            file_type: "pdf".to_string(),
-            updated_at: 1234567890,
+        opensearch_client::search::model::SearchHit {
+            entity_id: "doc1".to_string(),
+            entity_type: SearchEntityType::Documents,
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Documents(
+                    opensearch_client::search::model::SearchGotoDocument {
+                        node_id: "node1".to_string(),
+                        raw_content: Some("First content".to_string()),
+                    },
+                ),
+            ),
             score: None,
             highlight: Highlight {
                 name: None,
                 content: vec!["First content".to_string()],
             },
-            raw_content: Some("First raw content".to_string()),
         },
-        opensearch_client::search::documents::DocumentSearchResponse {
-            document_id: "doc1".to_string(),
-            document_name: "Test Document".to_string(),
-            node_id: "node2".to_string(),
-            owner_id: "user1".to_string(),
-            file_type: "pdf".to_string(),
-            updated_at: 1234567891,
+        opensearch_client::search::model::SearchHit {
+            entity_id: "doc1".to_string(),
+            entity_type: SearchEntityType::Documents,
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Documents(
+                    opensearch_client::search::model::SearchGotoDocument {
+                        node_id: "node2".to_string(),
+                        raw_content: Some("Second content".to_string()),
+                    },
+                ),
+            ),
             score: None,
             highlight: Highlight {
                 name: None,
                 content: vec!["Second content".to_string()],
             },
-            raw_content: Some("Second raw content".to_string()),
         },
     ];
 
@@ -103,7 +119,10 @@ fn test_construct_search_result_multiple_nodes_same_document() {
             updated_at: now,
             viewed_at: None,
             project_id: None,
-            ..Default::default()
+            file_name: "Test Document".to_string(),
+            owner: "user_1".to_string(),
+            deleted_at: None,
+            file_type: Some("pdf".to_string()),
         },
     );
 
@@ -119,7 +138,7 @@ fn test_construct_search_result_multiple_nodes_same_document() {
         .extra
         .document_search_results
         .iter()
-        .map(|r| r.node_id.clone())
+        .map(|r| r.node_id.clone().unwrap())
         .collect();
     assert!(node_ids.contains(&"node1".to_string()));
     assert!(node_ids.contains(&"node2".to_string()));
@@ -129,22 +148,24 @@ fn test_construct_search_result_multiple_nodes_same_document() {
 fn create_test_document_response(
     document_id: &str,
     node_id: &str,
-    owner_id: &str,
     content: Option<Vec<String>>,
-) -> opensearch_client::search::documents::DocumentSearchResponse {
-    opensearch_client::search::documents::DocumentSearchResponse {
-        document_id: document_id.to_string(),
-        document_name: "Test Document".to_string(),
-        node_id: node_id.to_string(),
-        owner_id: owner_id.to_string(),
-        file_type: "pdf".to_string(),
-        updated_at: 1234567890,
+) -> opensearch_client::search::model::SearchHit {
+    opensearch_client::search::model::SearchHit {
+        entity_id: document_id.to_string(),
+        entity_type: SearchEntityType::Documents,
+        goto: Some(
+            opensearch_client::search::model::SearchGotoContent::Documents(
+                opensearch_client::search::model::SearchGotoDocument {
+                    node_id: node_id.to_string(),
+                    raw_content: Some("Raw test content".to_string()),
+                },
+            ),
+        ),
         score: None,
         highlight: Highlight {
             name: None,
             content: content.unwrap_or_default(),
         },
-        raw_content: Some("Raw test content".to_string()),
     }
 }
 
@@ -154,7 +175,6 @@ fn test_document_history_timestamps() {
     let input = vec![create_test_document_response(
         "doc_1",
         "node_1",
-        "user_1",
         Some(vec!["hello world".to_string()]),
     )];
 
@@ -198,7 +218,6 @@ fn test_document_history_missing_entry() {
     let input = vec![create_test_document_response(
         "doc_missing",
         "node_1",
-        "user_1",
         Some(vec!["hello world".to_string()]),
     )];
 
@@ -220,9 +239,8 @@ fn test_document_history_missing_entry() {
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
 
-    // Documents without history info should have metadata=None
-    assert_eq!(result.len(), 1);
-    assert!(result[0].metadata.is_none());
+    // Documents without history info should not return
+    assert_eq!(result.len(), 0);
 }
 
 #[test]
@@ -231,7 +249,6 @@ fn test_document_history_null_viewed_at() {
     let input = vec![create_test_document_response(
         "doc_1",
         "node_1",
-        "user_1",
         Some(vec!["hello world".to_string()]),
     )];
 
@@ -270,18 +287,8 @@ fn test_document_history_null_viewed_at() {
 fn test_document_history_multiple_documents() {
     // Create test responses for multiple documents
     let input = vec![
-        create_test_document_response(
-            "doc_1",
-            "node_1",
-            "user_1",
-            Some(vec!["first document".to_string()]),
-        ),
-        create_test_document_response(
-            "doc_2",
-            "node_2",
-            "user_2",
-            Some(vec!["second document".to_string()]),
-        ),
+        create_test_document_response("doc_1", "node_1", Some(vec!["first document".to_string()])),
+        create_test_document_response("doc_2", "node_2", Some(vec!["second document".to_string()])),
     ];
 
     // Create mock document histories
@@ -344,13 +351,11 @@ fn test_document_history_partial_missing_entries() {
         create_test_document_response(
             "doc_exists",
             "node_1",
-            "user_1",
             Some(vec!["existing document".to_string()]),
         ),
         create_test_document_response(
             "doc_missing",
             "node_2",
-            "user_2",
             Some(vec!["missing document".to_string()]),
         ),
     ];
@@ -373,8 +378,8 @@ fn test_document_history_partial_missing_entries() {
     // Call the function under test
     let result = construct_search_result(input, document_histories).unwrap();
 
-    // We should have 2 results - one with real data, one with defaults
-    assert_eq!(result.len(), 2);
+    // We should have 2 results - one with real data, one not found
+    assert_eq!(result.len(), 1);
 
     // The existing document should have real timestamps in metadata
     let existing_doc = result
@@ -386,13 +391,6 @@ fn test_document_history_partial_missing_entries() {
     assert_eq!(metadata.created_at, now.timestamp());
     assert_eq!(metadata.updated_at, now.timestamp());
     assert_eq!(metadata.viewed_at, Some(now.timestamp()));
-
-    // The missing document should have no metadata
-    let missing_doc = result
-        .iter()
-        .find(|r| r.extra.document_id == "doc_missing")
-        .unwrap();
-    assert!(missing_doc.metadata.is_none());
 }
 
 #[test]
@@ -403,7 +401,6 @@ fn test_document_history_deleted() {
     let input_deleted = vec![create_test_document_response(
         "doc_deleted",
         "node_1",
-        "user_1",
         Some(vec!["hello world".to_string()]),
     )];
 
@@ -417,6 +414,9 @@ fn test_document_history_deleted() {
             viewed_at: Some(now),
             project_id: Some("project_1".to_string()),
             deleted_at: Some(now), // Soft deleted
+            file_type: Some("pdf".to_string()),
+            owner: "user_1".to_string(),
+            file_name: "name".to_string(),
         },
     );
 
@@ -433,7 +433,6 @@ fn test_document_history_deleted() {
     let input_not_found = vec![create_test_document_response(
         "doc_not_found",
         "node_2",
-        "user_1",
         Some(vec!["stale data".to_string()]),
     )];
 
@@ -442,7 +441,6 @@ fn test_document_history_deleted() {
     let result_not_found =
         construct_search_result(input_not_found, document_histories_not_found).unwrap();
 
-    // Document not in DB should be returned with metadata=None
-    assert_eq!(result_not_found.len(), 1);
-    assert!(result_not_found[0].metadata.is_none());
+    // Document not in DB should not be returned
+    assert_eq!(result_not_found.len(), 0);
 }
