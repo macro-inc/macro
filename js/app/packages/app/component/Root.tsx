@@ -244,8 +244,10 @@ const ROUTES: RouteDefinition[] = [
       <div
         class="flex *:flex-1 w-full h-dvh overflow-y-hidden"
         style={{
-          'padding-top': 'max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px))',
-          'padding-bottom': 'max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px))',
+          'padding-top':
+            'max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px))',
+          'padding-bottom':
+            'max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px))',
         }}
       >
         <Onboarding />
