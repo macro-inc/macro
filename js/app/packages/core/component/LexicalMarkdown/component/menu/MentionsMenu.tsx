@@ -20,10 +20,8 @@ import {
 } from '@core/user';
 import { getDateSuggestions, type ParsedDate } from '@core/util/dateParser';
 import { createFreshSearch } from '@core/util/freshSort';
-import BuildingIcon from '@icon/regular/buildings.svg';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
-import UserIconSolid from '@icon/regular/user.svg';
 import { type EmailEntity, useEmails } from '@macro-entity';
 import type { DocumentMentionMetadata } from '@service-notification/client';
 import { storageServiceClient } from '@service-storage/client';
@@ -51,7 +49,6 @@ import { floatWithElement } from '../../directive/floatWithElement';
 import { floatWithSelection } from '../../directive/floatWithSelection';
 import {
   CLOSE_INLINE_SEARCH_COMMAND,
-  INSERT_CONTACT_MENTION_COMMAND,
   INSERT_DATE_MENTION_COMMAND,
   INSERT_DOCUMENT_MENTION_COMMAND,
   INSERT_USER_MENTION_COMMAND,
@@ -149,8 +146,6 @@ const getItemName = (item: CombinedEntity): string => {
       return getUserName(item.data);
     case 'channel':
       return item.data.name ?? '';
-    case 'emailContact':
-      return getContactName(item.data);
     case 'email':
       return item.data.name ?? 'No Subject';
     case 'date':
@@ -166,8 +161,6 @@ const getItemSearchText = (item: CombinedEntity): string => {
       return getUserSearchText(item.data);
     case 'channel':
       return item.data.name ?? '';
-    case 'emailContact':
-      return getContactName(item.data);
     case 'date':
       return item.data.displayFormat;
     case 'email':
