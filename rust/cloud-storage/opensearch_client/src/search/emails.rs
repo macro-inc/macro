@@ -3,14 +3,14 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{Highlight, parse_highlight_hit},
+        model::{NameIndex, SearchGotoContent, SearchGotoEmail, SearchHit, parse_highlight_hit},
         query::Keys,
         utils::should_wildcard_field_query_builder,
     },
 };
 
 use crate::SearchOn;
-use models_opensearch::SearchIndex;
+use models_opensearch::{SearchEntityType, SearchIndex};
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, QueryType, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
     ToOpenSearchJson,
@@ -23,9 +23,10 @@ pub(crate) struct EmailSearchConfig;
 
 impl SearchQueryConfig for EmailSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
-    const TITLE_KEY: Option<&'static str> = Some("subject");
+    const TITLE_KEY: &'static str = "name";
+    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Emails;
 
-    fn default_sort_types() -> Vec<SortType<'static>> {
+    fn default_sort_types<'a>() -> Vec<SortType<'a>> {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
@@ -97,46 +98,55 @@ impl EmailQueryBuilder {
         self
     }
 
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
-        // Build the main bool query containing all terms and any other filters
-        let mut bool_query = self.inner.build_bool_query()?;
+    pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
+        let mut content_and_name_bool_queries = self.inner.build_content_and_name_bool_query()?;
 
         // CUSTOM ATTRIBUTES SECTION
+        if self.inner.search_on == SearchOn::Content
+            || self.inner.search_on == SearchOn::NameContent
+        {
+            let mut bool_query = content_and_name_bool_queries
+                .content_bool_query
+                .ok_or(OpensearchClientError::BoolQueryNotBuilt)?;
 
-        // If link_ids are provided, add them to the query
-        if !self.link_ids.is_empty() {
-            bool_query.must(QueryType::terms("link_id", self.link_ids.clone()));
-        }
+            // If link_ids are provided, add them to the query
+            if !self.link_ids.is_empty() {
+                bool_query.must(QueryType::terms("link_id", self.link_ids.clone()));
+            }
 
-        if !self.sender.is_empty() {
-            // Create new query for senders
-            let senders_query = should_wildcard_field_query_builder("sender", &self.sender);
-            bool_query.must(senders_query);
-        }
+            if !self.sender.is_empty() {
+                // Create new query for senders
+                let senders_query = should_wildcard_field_query_builder("sender", &self.sender);
+                bool_query.must(senders_query);
+            }
 
-        if !self.cc.is_empty() {
-            let ccs_query = should_wildcard_field_query_builder("cc", &self.cc);
-            bool_query.must(ccs_query);
-        }
+            if !self.cc.is_empty() {
+                let ccs_query = should_wildcard_field_query_builder("cc", &self.cc);
+                bool_query.must(ccs_query);
+            }
 
-        if !self.bcc.is_empty() {
-            // Create new query for bccs
-            let bccs_query = should_wildcard_field_query_builder("bcc", &self.bcc);
-            bool_query.must(bccs_query);
-        }
+            if !self.bcc.is_empty() {
+                // Create new query for bccs
+                let bccs_query = should_wildcard_field_query_builder("bcc", &self.bcc);
+                bool_query.must(bccs_query);
+            }
 
-        if !self.recipients.is_empty() {
-            // Create new query for recipients
-            let recipients_query =
-                should_wildcard_field_query_builder("recipients", &self.recipients);
-            bool_query.must(recipients_query);
+            if !self.recipients.is_empty() {
+                // Create new query for recipients
+                let recipients_query =
+                    should_wildcard_field_query_builder("recipients", &self.recipients);
+                bool_query.must(recipients_query);
+            }
+
+            content_and_name_bool_queries.content_bool_query = Some(bool_query);
         }
 
         // END CUSTOM ATTRIBUTES SECTION
+        let bool_query = self.inner.build_bool_query(content_and_name_bool_queries)?;
         Ok(bool_query)
     }
 
-    fn build_search_request(&self) -> Result<SearchRequest<'static>> {
+    fn build_search_request<'a>(&'a self) -> Result<SearchRequest<'a>> {
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
         // SearchOn::NameContent is used
@@ -178,22 +188,11 @@ pub(crate) struct EmailIndex {
     pub content: String,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct EmailSearchResponse {
-    pub thread_id: String,
-    pub message_id: String,
-    pub sender: String,
-    pub recipients: Vec<String>,
-    pub cc: Vec<String>,
-    pub bcc: Vec<String>,
-    pub labels: Vec<String>,
-    pub link_id: String,
-    pub user_id: String,
-    pub updated_at: i64,
-    pub sent_at: Option<i64>,
-    pub subject: Option<String>,
-    pub score: Option<f64>,
-    pub highlight: Highlight,
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+pub(crate) enum EmailNameIndex {
+    Email(Box<EmailIndex>),
+    Name(NameIndex),
 }
 
 pub struct EmailSearchArgs {
@@ -245,7 +244,7 @@ impl EmailSearchArgs {
 pub(crate) async fn search_emails(
     client: &opensearch::OpenSearch,
     args: EmailSearchArgs,
-) -> Result<Vec<EmailSearchResponse>> {
+) -> Result<Vec<SearchHit>> {
     let query_body = args.build()?;
 
     let response = client
@@ -265,7 +264,7 @@ pub(crate) async fn search_emails(
             details: e.to_string(),
         })?;
 
-    let result: DefaultSearchResponse<EmailIndex> =
+    let result: DefaultSearchResponse<EmailNameIndex> =
         serde_json::from_slice(&bytes).map_err(|e| {
             OpensearchClientError::SearchDeserializationFailed {
                 details: e.to_string(),
@@ -277,21 +276,8 @@ pub(crate) async fn search_emails(
         .hits
         .hits
         .into_iter()
-        .map(|hit| EmailSearchResponse {
-            thread_id: hit.source.entity_id,
-            message_id: hit.source.message_id,
-            subject: hit.source.subject,
-            sender: hit.source.sender,
-            recipients: hit.source.recipients,
-            cc: hit.source.cc,
-            bcc: hit.source.bcc,
-            labels: hit.source.labels,
-            link_id: hit.source.link_id,
-            user_id: hit.source.user_id,
-            updated_at: hit.source.updated_at_seconds,
-            sent_at: hit.source.sent_at_seconds,
-            score: hit.score,
-            highlight: hit
+        .map(|hit| {
+            let highlight = hit
                 .highlight
                 .map(|h| {
                     parse_highlight_hit(
@@ -302,7 +288,32 @@ pub(crate) async fn search_emails(
                         },
                     )
                 })
-                .unwrap_or_default(),
+                .unwrap_or_default();
+
+            match hit.source {
+                EmailNameIndex::Name(a) => SearchHit {
+                    entity_id: a.entity_id,
+                    entity_type: a.entity_type,
+                    goto: None,
+                    score: hit.score,
+                    highlight,
+                },
+                EmailNameIndex::Email(a) => SearchHit {
+                    entity_id: a.entity_id,
+                    entity_type: SearchEntityType::Emails,
+                    score: hit.score,
+                    highlight,
+                    goto: Some(SearchGotoContent::Emails(SearchGotoEmail {
+                        email_message_id: a.message_id,
+                        bcc: a.bcc,
+                        cc: a.cc,
+                        labels: a.labels,
+                        sent_at: a.sent_at_seconds,
+                        sender: a.sender,
+                        recipients: a.recipients,
+                    })),
+                },
+            }
         })
         .collect())
 }

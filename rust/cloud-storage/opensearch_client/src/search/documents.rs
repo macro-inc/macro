@@ -3,13 +3,16 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{DefaultSearchResponse, Highlight, parse_highlight_hit},
+        model::{
+            DefaultSearchResponse, NameIndex, SearchGotoContent, SearchGotoDocument, SearchHit,
+            parse_highlight_hit,
+        },
         query::Keys,
     },
 };
 
 use crate::SearchOn;
-use models_opensearch::SearchIndex;
+use models_opensearch::{SearchEntityType, SearchIndex};
 use opensearch_query_builder::{
     BoolQueryBuilder, FieldSort, ScoreWithOrderSort, SearchRequest, SortOrder, SortType,
     ToOpenSearchJson,
@@ -21,9 +24,10 @@ pub(crate) struct DocumentSearchConfig;
 
 impl SearchQueryConfig for DocumentSearchConfig {
     const USER_ID_KEY: &'static str = "owner_id";
-    const TITLE_KEY: Option<&'static str> = Some("document_name");
+    const TITLE_KEY: &'static str = "name";
+    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Documents;
 
-    fn default_sort_types() -> Vec<SortType<'static>> {
+    fn default_sort_types<'a>() -> Vec<SortType<'a>> {
         vec![
             SortType::ScoreWithOrder(ScoreWithOrderSort::new(SortOrder::Desc)),
             SortType::Field(FieldSort::new(Self::ID_KEY, SortOrder::Asc)),
@@ -56,11 +60,12 @@ impl DocumentQueryBuilder {
         fn disable_recency(disable_recency: bool) -> Self;
     }
 
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
-        self.inner.build_bool_query()
+    pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
+        self.inner
+            .build_bool_query(self.inner.build_content_and_name_bool_query()?)
     }
 
-    fn build_search_request(self) -> Result<SearchRequest<'static>> {
+    fn build_search_request<'a>(&'a self) -> Result<SearchRequest<'a>> {
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
         // SearchOn::NameContent is used
@@ -84,18 +89,11 @@ pub(crate) struct DocumentIndex {
     pub updated_at_seconds: i64,
 }
 
-#[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
-pub struct DocumentSearchResponse {
-    pub document_id: String,
-    pub document_name: String,
-    pub node_id: String,
-    pub owner_id: String,
-    pub file_type: String,
-    pub updated_at: i64,
-    /// Contains the highlight matches for the document name and content
-    pub highlight: Highlight,
-    pub raw_content: Option<String>,
-    pub score: Option<f64>,
+#[derive(Debug, serde::Serialize, serde::Deserialize)]
+#[serde(untagged)]
+pub(crate) enum DocumentNameIndex {
+    Name(NameIndex),
+    Document(DocumentIndex),
 }
 
 #[derive(Debug)]
@@ -138,7 +136,7 @@ impl DocumentSearchArgs {
 pub(crate) async fn search_documents(
     client: &opensearch::OpenSearch,
     args: DocumentSearchArgs,
-) -> Result<Vec<DocumentSearchResponse>> {
+) -> Result<Vec<SearchHit>> {
     let query_body = args.build()?;
 
     tracing::trace!("query: {}", query_body);
@@ -160,7 +158,7 @@ pub(crate) async fn search_documents(
             details: e.to_string(),
         })?;
 
-    let result: DefaultSearchResponse<DocumentIndex> =
+    let result: DefaultSearchResponse<DocumentNameIndex> =
         serde_json::from_slice(&bytes).map_err(|e| {
             OpensearchClientError::SearchDeserializationFailed {
                 details: e.to_string(),
@@ -172,16 +170,8 @@ pub(crate) async fn search_documents(
         .hits
         .hits
         .into_iter()
-        .map(|hit| DocumentSearchResponse {
-            document_id: hit.source.entity_id,
-            node_id: hit.source.node_id,
-            document_name: hit.source.document_name,
-            owner_id: hit.source.owner_id,
-            file_type: hit.source.file_type,
-            updated_at: hit.source.updated_at_seconds,
-            raw_content: hit.source.raw_content,
-            score: hit.score,
-            highlight: hit
+        .map(|hit| {
+            let highlight = hit
                 .highlight
                 .map(|h| {
                     parse_highlight_hit(
@@ -192,7 +182,27 @@ pub(crate) async fn search_documents(
                         },
                     )
                 })
-                .unwrap_or_default(),
+                .unwrap_or_default();
+
+            match hit.source {
+                DocumentNameIndex::Name(a) => SearchHit {
+                    entity_id: a.entity_id,
+                    entity_type: a.entity_type,
+                    score: hit.score,
+                    highlight,
+                    goto: None,
+                },
+                DocumentNameIndex::Document(a) => SearchHit {
+                    entity_id: a.entity_id,
+                    entity_type: SearchEntityType::Documents,
+                    score: hit.score,
+                    highlight,
+                    goto: Some(SearchGotoContent::Documents(SearchGotoDocument {
+                        node_id: a.node_id,
+                        raw_content: a.raw_content,
+                    })),
+                },
+            }
         })
         .collect())
 }
