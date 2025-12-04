@@ -36,6 +36,53 @@ pub struct SoupEmailThreadPreviewMetadata {
 #[derive(Debug, Doppleganger, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
+#[dg(backward = email::domain::models::Label)]
+#[serde(rename_all = "camelCase")]
+pub struct SoupLabel {
+    pub id: Uuid,
+    pub link_id: Uuid,
+    pub provider_label_id: String,
+    pub name: String,
+    pub created_at: DateTime<Utc>,
+    pub message_list_visibility: SoupMessageListVisibility,
+    pub label_list_visibility: SoupLabelListVisibility,
+    pub type_: SoupLabelType,
+}
+
+#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
+#[dg(backward = email::domain::models::MessageListVisibility)]
+#[serde(rename_all = "camelCase")]
+pub enum SoupMessageListVisibility {
+    Show,
+    Hide,
+}
+
+#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
+#[dg(backward = email::domain::models::LabelListVisibility)]
+#[serde(rename_all = "camelCase")]
+pub enum SoupLabelListVisibility {
+    LabelShow,
+    LabelShowIfUnread,
+    LabelHide,
+}
+
+#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
+#[dg(backward = email::domain::models::LabelType)]
+#[serde(rename_all = "camelCase")]
+pub enum SoupLabelType {
+    System,
+    User,
+}
+
+#[derive(Debug, Doppleganger, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "mock", derive(PartialEq, Eq))]
 #[dg(backward = email::domain::models::AttachmentMacro)]
 #[serde(rename_all = "camelCase")]
 pub struct SoupMacroAttachment {
@@ -109,4 +156,5 @@ pub struct SoupEnrichedEmailThreadPreview {
     pub attachments_macro: Vec<SoupMacroAttachment>,
     pub participants: Vec<SoupContact>,
     pub metadata: SoupEmailThreadPreviewMetadata,
+    pub labels: Vec<SoupLabel>,
 }
