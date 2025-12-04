@@ -1,17 +1,11 @@
 //! Domain models for system properties.
 
-mod effort_option;
-mod email_attachment;
+mod constants;
 mod error;
-mod priority_option;
-mod source_entity;
-mod status_option;
-mod system_property_key;
+mod inbound;
+mod repository;
 
-pub use effort_option::EffortOption;
-pub use email_attachment::{EmailAttachmentInput, EmailAttachmentProperty};
+pub use constants::{EffortOption, PriorityOption, StatusOption, SystemPropertyKey};
 pub use error::SystemPropertyError;
-pub use priority_option::PriorityOption;
-pub use source_entity::SourceEntity;
-pub use status_option::StatusOption;
-pub use system_property_key::SystemPropertyKey;
+pub use inbound::{EmailAttachmentInput, EmailAttachmentProperty, SourceEntity};
+pub use repository::PropertyRow;

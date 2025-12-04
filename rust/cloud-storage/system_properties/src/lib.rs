@@ -45,10 +45,11 @@ pub mod domain;
 pub mod outbound;
 
 // Re-export commonly used types for convenience
+pub use domain::model::PropertyRow;
 pub use domain::model::{
     EffortOption, EmailAttachmentInput, EmailAttachmentProperty, PriorityOption, SourceEntity,
     StatusOption, SystemPropertyError, SystemPropertyKey,
 };
-pub use domain::port::{PropertyRow, SystemPropertiesRepository};
+pub use domain::port::SystemPropertiesRepository;
 pub use domain::service::{SystemPropertiesService, SystemPropertiesServiceImpl};
 pub use outbound::pgpool::PgSystemPropertiesRepository;
