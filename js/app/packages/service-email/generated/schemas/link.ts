@@ -5,6 +5,8 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { UserProvider } from './userProvider';
+import type { Settings } from './settings';
+import type { LinkSignature } from './linkSignature';
 
 export interface Link {
   created_at: string;
@@ -14,5 +16,7 @@ export interface Link {
   is_sync_active: boolean;
   macro_id: string;
   provider: UserProvider;
+  settings: Settings;
+  signature?: LinkSignature;
   updated_at: string;
 }
