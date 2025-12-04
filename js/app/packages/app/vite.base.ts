@@ -1,5 +1,4 @@
 import { resolve } from 'node:path';
-import importMetaUrlPlugin from '@codingame/esbuild-import-meta-url-plugin';
 import tailwind from '@tailwindcss/vite';
 import { Features } from 'lightningcss';
 import type { UserConfigFn } from 'vite';
@@ -11,7 +10,7 @@ import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
 import { version } from './package.json';
 
-const PLATFORMS = ['web', 'desktop', 'ios'] as const;
+const PLATFORMS = ['web', 'desktop', 'ios', 'android'] as const;
 
 export type AppPlatform = (typeof PLATFORMS)[number];
 
@@ -115,7 +114,6 @@ export const createAppViteConfig = ({
         ],
         esbuildOptions: {
           target: 'esnext',
-          plugins: [importMetaUrlPlugin],
         },
       },
       resolve: {
