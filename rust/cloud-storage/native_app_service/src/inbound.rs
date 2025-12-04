@@ -39,7 +39,7 @@ pub fn native_app_router<S: NativeAppService, T>(state: RouterState<S>) -> Route
             get(bundle_update_handler),
         )
         .route(
-            ".well-known/apple-app-site-association",
+            "/.well-known/apple-app-site-association",
             get(verify_ios_app_handler),
         )
         .with_state(state)

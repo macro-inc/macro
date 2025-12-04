@@ -226,8 +226,8 @@ async fn main() -> anyhow::Result<()> {
                 bundle_fetcher: DefaultBundleFetcher::default(),
                 environment: config.environment,
                 platform_data: PlatformData {
-                    ios_development_team_id: String::new(),
-                    ios_app_bundle_id: String::new(),
+                    ios_development_team_id: IOS_DEVELOPMENT_TEAM_ID.to_string(),
+                    ios_app_bundle_id: IOS_APP_BUNDLE_ID.to_string(),
                 },
             }),
         },
@@ -236,3 +236,8 @@ async fn main() -> anyhow::Result<()> {
     .await?;
     Ok(())
 }
+
+// SAFETY: this is not a secret value
+const IOS_DEVELOPMENT_TEAM_ID: &str = "TY74Q77JBD";
+// SAFETY: this is not a secret value
+const IOS_APP_BUNDLE_ID: &str = "com.macro.app.prod";

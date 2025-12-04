@@ -129,17 +129,20 @@ impl PlatformVerifier for IOSVerifier {
     type VerifierPayload = serde_json::Value;
 
     fn get_payload(&self, platform_data: &PlatformData) -> Self::VerifierPayload {
-        json!([
-          {
-            "relation": ["delegate_permission/common.handle_all_urls"],
-            "target": {
-              "namespace": "android_app",
-              "package_name": "$APP_BUNDLE_ID",
-              "sha256_cert_fingerprints": [
-                  format_args!("{}.{}", platform_data.ios_development_team_id, platform_data.ios_app_bundle_id)
-              ]
-            }
+        json!({
+          "applinks": {
+            "details": [
+              {
+                "appIDs": [format_args!("{}.{}", platform_data.ios_development_team_id, platform_data.ios_app_bundle_id)],
+                "components": [
+                  {
+                    "/": "/app/*",
+                    "comment": "Matches any URL whose path starts with /app/"
+                  }
+                ]
+              }
+            ]
           }
-        ])
+        })
     }
 }
