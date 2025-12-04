@@ -13,8 +13,10 @@ use crate::domain::models::{
 };
 use crate::domain::ports::NativeAppService;
 
-struct RouterState<S> {
-    inner: Arc<S>,
+/// the type of router state for this axum router
+pub struct RouterState<S> {
+    /// the inner service implementation S
+    pub inner: Arc<S>,
 }
 
 impl<S> Clone for RouterState<S> {
@@ -26,7 +28,7 @@ impl<S> Clone for RouterState<S> {
 }
 
 /// the external facing router to be merged with the root router
-pub fn routes<S: NativeAppService, T>(state: S) -> Router<T> {
+pub fn routes<S: NativeAppService, T>(state: RouterState<S>) -> Router<T> {
     Router::new()
         .route(
             "/desktop/:desktop_target/:arch/:current_version",
@@ -36,9 +38,7 @@ pub fn routes<S: NativeAppService, T>(state: S) -> Router<T> {
             "/bundle/:all_target/:arch/:current_version",
             get(bundle_update_handler),
         )
-        .with_state(RouterState {
-            inner: Arc::new(state),
-        })
+        .with_state(state)
 }
 
 #[tracing::instrument(ret)]

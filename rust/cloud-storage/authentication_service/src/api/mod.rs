@@ -6,6 +6,7 @@ use axum::http::HeaderName;
 use axum::http::Method;
 use axum::middleware::Next;
 use macro_auth::constant::MACRO_REFRESH_TOKEN_HEADER;
+use native_app_service::inbound::RouterState;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
@@ -76,7 +77,12 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/oauth", oauth::router(state.clone()))
         .nest("/oauth2", oauth2::router())
         .nest("/user", user::router(state.clone(), state.jwt_args.clone()))
-        .nest("/update", native_app_service::routes(state.environment))
+        .nest(
+            "/update",
+            native_app_service::routes(RouterState {
+                inner: state.native_app_service.clone(),
+            }),
+        )
         .nest(
             "/team",
             team::router(state.jwt_args.clone()).layer(ServiceBuilder::new().layer(

@@ -1,4 +1,7 @@
-use crate::domain::{models::UpdateErr, ports::GetJsBundleSemver};
+use crate::domain::{
+    models::{BUNDLE_ARCHIVE_NAME, SEMVER_FILE_NAME, UpdateErr},
+    ports::GetJsBundleSemver,
+};
 use macro_env::{Environment, ext::frontend_url::FrontendUrl};
 use std::str::FromStr;
 use url::Url;
@@ -10,6 +13,15 @@ pub struct DefaultBundleFetcher {
     pub semver_file_name: &'static str,
     /// the name of the bundle archive on the s3 bucket
     pub bundle_archive_name: &'static str,
+}
+
+impl Default for DefaultBundleFetcher {
+    fn default() -> Self {
+        Self {
+            semver_file_name: SEMVER_FILE_NAME,
+            bundle_archive_name: BUNDLE_ARCHIVE_NAME,
+        }
+    }
 }
 
 impl GetJsBundleSemver for DefaultBundleFetcher {
