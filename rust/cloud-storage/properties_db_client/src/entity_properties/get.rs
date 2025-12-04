@@ -230,6 +230,9 @@ async fn attach_property_options(
 
 /// Gets the entity_id and entity_type for a given entity_property_id.
 /// Used for permission checking before deletion.
+///
+/// Note: This excludes system properties (is_system = TRUE). System properties
+/// cannot be deleted, so this function will return None for them.
 #[tracing::instrument(skip(db))]
 pub async fn get_entity_type_from_entity_property(
     db: &Pool<Postgres>,
@@ -238,10 +241,12 @@ pub async fn get_entity_type_from_entity_property(
     let row = sqlx::query!(
         r#"
         SELECT 
-            entity_id,
-            entity_type as "entity_type: EntityType"
-        FROM entity_properties
-        WHERE id = $1
+            ep.entity_id,
+            ep.entity_type as "entity_type: EntityType"
+        FROM entity_properties ep
+        JOIN property_definitions pd ON ep.property_definition_id = pd.id
+        WHERE ep.id = $1
+          AND pd.is_system = FALSE
         "#,
         entity_property_id
     )

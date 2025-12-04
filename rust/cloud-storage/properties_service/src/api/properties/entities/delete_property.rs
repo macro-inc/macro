@@ -9,7 +9,9 @@ use uuid::Uuid;
 use crate::api::context::ApiContext;
 use model::user::UserContext;
 use properties_db_client::{
-    entity_properties::{delete as entity_properties_delete, get as entity_properties_get},
+    entity_properties::{
+        delete as entity_properties_delete, get::get_entity_type_from_entity_property,
+    },
     error::PropertiesDatabaseError,
 };
 
@@ -72,25 +74,24 @@ pub async fn delete_entity_property(
     );
 
     // Get entity property metadata to check permissions
-    let entity_ref = entity_properties_get::get_entity_type_from_entity_property(
-        &context.db,
-        entity_property_uuid,
-    )
-    .await
-    .inspect_err(|e| {
-        tracing::error!(
-            error = ?e,
-            entity_property_id = %entity_property_uuid,
-            "failed to get entity property metadata"
-        );
-    })?
-    .ok_or_else(|| {
-        tracing::warn!(
-            entity_property_id = %entity_property_uuid,
-            "entity property not found"
-        );
-        DeleteEntityPropertyErr::NotFound
-    })?;
+    // Note: get_entity_type_from_entity_property excludes system properties,
+    // so system properties will return NotFound here.
+    let entity_ref = get_entity_type_from_entity_property(&context.db, entity_property_uuid)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(
+                error = ?e,
+                entity_property_id = %entity_property_uuid,
+                "failed to get entity property metadata"
+            );
+        })?
+        .ok_or_else(|| {
+            tracing::warn!(
+                entity_property_id = %entity_property_uuid,
+                "entity property not found"
+            );
+            DeleteEntityPropertyErr::NotFound
+        })?;
 
     tracing::debug!(
         entity_id = %entity_ref.entity_id,
