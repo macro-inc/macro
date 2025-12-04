@@ -76,10 +76,7 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/oauth", oauth::router(state.clone()))
         .nest("/oauth2", oauth2::router())
         .nest("/user", user::router(state.clone(), state.jwt_args.clone()))
-        .nest(
-            "/update",
-            macro_autoupdate_router::routes(state.environment),
-        )
+        .nest("/update", native_app_service::routes(state.environment))
         .nest(
             "/team",
             team::router(state.jwt_args.clone()).layer(ServiceBuilder::new().layer(

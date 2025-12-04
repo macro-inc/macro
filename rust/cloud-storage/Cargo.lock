@@ -481,7 +481,6 @@ dependencies = [
  "http-body-util",
  "jsonwebtoken",
  "macro_auth",
- "macro_autoupdate_router",
  "macro_cache_client",
  "macro_cors",
  "macro_db_client",
@@ -497,6 +496,7 @@ dependencies = [
  "model",
  "model_notifications",
  "models_team",
+ "native_app_service",
  "non_empty",
  "notification_service_client",
  "openssl",
@@ -4729,23 +4729,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "macro_autoupdate_router"
-version = "0.1.0"
-dependencies = [
- "axum",
- "cool_asserts",
- "macro_env",
- "reqwest",
- "semver",
- "serde",
- "strum",
- "thiserror 2.0.17",
- "tokio",
- "tracing",
- "url",
-]
-
-[[package]]
 name = "macro_axum_utils"
 version = "0.1.0"
 
@@ -5599,6 +5582,23 @@ dependencies = [
  "security-framework 2.11.1",
  "security-framework-sys",
  "tempfile",
+]
+
+[[package]]
+name = "native_app_service"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "cool_asserts",
+ "macro_env",
+ "reqwest",
+ "semver",
+ "serde",
+ "strum",
+ "thiserror 2.0.17",
+ "tokio",
+ "tracing",
+ "url",
 ]
 
 [[package]]

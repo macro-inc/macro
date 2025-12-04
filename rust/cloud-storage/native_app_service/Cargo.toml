@@ -1,6 +1,6 @@
 [package]
 edition = "2024"
-name = "macro_autoupdate_router"
+name = "native_app_service"
 publish = false
 version = "0.1.0"
 

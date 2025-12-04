@@ -45,7 +45,6 @@ futures = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 macro_auth = { path = "../macro_auth" }
-macro_autoupdate_router = { path = "../macro_autoupdate_router" }
 macro_cache_client = { path = "../macro_cache_client", default-features = false, features = [
   "auth",
   "auth_rate_limit",
@@ -73,6 +72,7 @@ mockall = { workspace = true }
 model = { path = "../model" }
 model_notifications = { path = "../model_notifications" }
 models_team = { path = "../models_team" }
+native_app_service = { path = "../native_app_service" }
 non_empty = { path = "../non_empty" }
 notification_service_client = { path = "../notification_service_client" }
 openssl = { workspace = true }
