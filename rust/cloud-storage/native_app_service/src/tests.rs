@@ -1,23 +1,38 @@
-use super::*;
+use crate::{
+    domain::{
+        self,
+        models::{AllTargets, Arch, BundleUpdate, DesktopTarget, MobileTarget, UpdateErr},
+        ports::{GetJsBundleSemver, NativeAppService},
+        service::NativeAppServiceImpl,
+    },
+    outbound::DefaultBundleFetcher,
+};
+use macro_env::Environment;
+use reqwest::Url;
+
 use cool_asserts::assert_matches;
 use semver::Version;
 use strum::IntoEnumIterator;
 
 #[test]
 fn all_urls_work() {
+    let fetcher = DefaultBundleFetcher {
+        semver_file_name: "",
+        bundle_archive_name: "",
+    };
     let _urls = Environment::iter()
-        .map(|e| DefaultBundleFetcher::get_app_bundle_path(&e))
+        .map(|e| fetcher.get_app_bundle_path(&e))
         .collect::<Vec<_>>();
 }
 
 struct MockBundleFetcher;
 
 impl GetJsBundleSemver for MockBundleFetcher {
-    async fn get_app_semver(_env: &Environment) -> Result<semver::Version, UpdateErr> {
+    async fn get_app_semver(&self, _env: &Environment) -> Result<semver::Version, UpdateErr> {
         Ok("1.1.1".parse().unwrap())
     }
 
-    fn get_app_bundle_path(_env: &Environment) -> Url {
+    fn get_app_bundle_path(&self, _env: &Environment) -> Url {
         "https://example.com".parse().unwrap()
     }
 }
@@ -25,13 +40,27 @@ impl GetJsBundleSemver for MockBundleFetcher {
 #[tokio::test]
 async fn it_should_not_downgrade_mobile() {
     let semver: Version = "1.2.1".parse().unwrap();
+
     let iter = MobileTarget::iter()
         .flat_map(move |target| {
             let semver = semver.clone();
             Arch::iter().map(move |arch| (AllTargets::Mobile(target), arch, semver.clone()))
         })
         .flat_map(|p| Environment::iter().map(move |e| (p.clone(), e)))
-        .map(|(p, e)| bundle_update_handle_inner::<MockBundleFetcher>(p, e));
+        .map(|((target, arch, semver), e)| async move {
+            let service = NativeAppServiceImpl {
+                bundle_fetcher: MockBundleFetcher,
+                environment: e,
+            };
+
+            service
+                .get_bundle_update(domain::models::BundleUpdateRequest {
+                    target,
+                    arch,
+                    semver,
+                })
+                .await
+        });
 
     for fut in iter {
         assert_matches!(fut.await, Ok(None))
@@ -47,7 +76,20 @@ async fn it_should_upgrade_mobile() {
             Arch::iter().map(move |arch| (AllTargets::Mobile(target), arch, semver.clone()))
         })
         .flat_map(|p| Environment::iter().map(move |e| (p.clone(), e)))
-        .map(|(p, e)| bundle_update_handle_inner::<MockBundleFetcher>(p, e));
+        .map(|((target, arch, semver), e)| async move {
+            let service = NativeAppServiceImpl {
+                bundle_fetcher: MockBundleFetcher,
+                environment: e,
+            };
+
+            service
+                .get_bundle_update(domain::models::BundleUpdateRequest {
+                    target,
+                    arch,
+                    semver,
+                })
+                .await
+        });
 
     for fut in iter {
         assert_matches!(fut.await, Ok(Some(BundleUpdate { version, notes: _, url })) => {
@@ -66,7 +108,20 @@ async fn it_should_not_downgrade_desktop() {
             Arch::iter().map(move |arch| (AllTargets::Desktop(target), arch, semver.clone()))
         })
         .flat_map(|p| Environment::iter().map(move |e| (p.clone(), e)))
-        .map(|(p, e)| bundle_update_handle_inner::<MockBundleFetcher>(p, e));
+        .map(|((target, arch, semver), e)| async move {
+            let service = NativeAppServiceImpl {
+                bundle_fetcher: MockBundleFetcher,
+                environment: e,
+            };
+
+            service
+                .get_bundle_update(domain::models::BundleUpdateRequest {
+                    target,
+                    arch,
+                    semver,
+                })
+                .await
+        });
 
     for fut in iter {
         assert_matches!(fut.await, Ok(None));
@@ -82,7 +137,20 @@ async fn it_should_upgrade_desktop() {
             Arch::iter().map(move |arch| (AllTargets::Desktop(target), arch, semver.clone()))
         })
         .flat_map(|p| Environment::iter().map(move |e| (p.clone(), e)))
-        .map(|(p, e)| bundle_update_handle_inner::<MockBundleFetcher>(p, e));
+        .map(|((target, arch, semver), e)| async move {
+            let service = NativeAppServiceImpl {
+                bundle_fetcher: MockBundleFetcher,
+                environment: e,
+            };
+
+            service
+                .get_bundle_update(domain::models::BundleUpdateRequest {
+                    target,
+                    arch,
+                    semver,
+                })
+                .await
+        });
 
     for fut in iter {
         assert_matches!(fut.await, Ok(Some(BundleUpdate { version, notes: _, url })) => {

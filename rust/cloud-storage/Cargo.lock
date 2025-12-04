@@ -5588,6 +5588,7 @@ dependencies = [
 name = "native_app_service"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "axum",
  "cool_asserts",
  "macro_env",
