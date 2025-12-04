@@ -111,7 +111,7 @@ const getSearchData = (data: TypedInnerSearchResult): SearchData => {
           content: mergeAdjacentMacroEmTags(content),
           location: {
             type: 'email' as const,
-            messageId: r.message_id,
+            messageId: r.message_id!,
           },
         }));
       });
