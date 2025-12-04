@@ -1,10 +1,6 @@
 import { TextButton } from '@core/component/TextButton';
 import { Bar } from '@core/component/TopBar/Bar';
-import {
-  useContacts,
-  useEmailContacts,
-  useOrganizationUsers,
-} from '@core/user';
+import { useContacts, useEmailContacts } from '@core/user';
 import Refresh from '@phosphor-icons/core/regular/arrow-clockwise.svg?component-solid';
 import Copy from '@phosphor-icons/core/regular/copy.svg?component-solid';
 import { useHistory } from '@service-storage/history';
@@ -76,7 +72,6 @@ function SignalDebugCard(props: SignalDebugCardProps) {
 const DataDebug: Component = () => {
   const contacts = useContacts();
   const emailContacts = useEmailContacts();
-  const organizationUsers = useOrganizationUsers();
   const history = useHistory();
 
   const [_, setRefreshKey] = createSignal(0);
@@ -126,19 +121,6 @@ const DataDebug: Component = () => {
                   {'email' in contact
                     ? ` Email: ${contact.email}`
                     : ` Domain: ${contact.domain}`}
-                </div>
-              </div>
-            )}
-          />
-
-          <SignalDebugCard
-            title="useOrganizationUsers()"
-            data={organizationUsers()}
-            renderItem={(user) => (
-              <div class="bg-surface-secondary p-2 rounded text-sm">
-                <div class="font-medium">{user.email}</div>
-                <div class="text-text-secondary">
-                  ID: {user.id} | Admin: {user.is_it_admin ? 'Yes' : 'No'}
                 </div>
               </div>
             )}
