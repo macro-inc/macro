@@ -19,7 +19,6 @@ import {
   type IUser,
   isCompanyEmailContact,
   useContacts,
-  useEmailContacts,
 } from '@core/user';
 import { getDateSuggestions, type ParsedDate } from '@core/util/dateParser';
 import { createFreshSearch } from '@core/util/freshSort';
@@ -567,7 +566,7 @@ export function computeBins<T extends string>(
 }
 
 /** The current bins enum */
-export type MentionBins = 'items' | 'users' | 'contacts' | 'dates' | 'emails';
+export type MentionBins = 'items' | 'users' | 'dates' | 'emails';
 
 /** View all mode type */
 type ViewAllMode = MentionBins | null;
@@ -699,11 +698,6 @@ export function MentionsMenu(props: {
   const historyAccessor = props.history ?? useHistory();
   const history = createMemo(() => {
     return historyAccessor().map(entityMapper('item'));
-  });
-
-  const emailContactsAccessor = useEmailContacts();
-  const emailContacts = createMemo(() => {
-    return emailContactsAccessor().map(entityMapper('emailContact'));
   });
 
   let emails: Accessor<Entity<'email'>[]>;
@@ -881,17 +875,6 @@ export function MentionsMenu(props: {
     });
   });
 
-  const contactSearch = createFreshSearch<Entity<'emailContact'>>(
-    { timeWeight: 0.1, brevityWeight: 0.3 },
-    getItemSearchText
-  );
-
-  const filteredContacts = createMemo(() => {
-    return contactSearch(emailContacts(), searchTerm()).map((result) => {
-      return result.item;
-    });
-  });
-
   const emailSearch = createFreshSearch<Entity<'email'>>(
     { timeWeight: 0, brevityWeight: 0.3 },
     getItemSearchText
@@ -915,7 +898,6 @@ export function MentionsMenu(props: {
   const rawBins = createMemo<Record<MentionBins, number>>(() => ({
     users: filteredUsers().length,
     items: filteredItems().length,
-    contacts: filteredContacts().length,
     dates: dateSuggestions().length,
     emails: filteredEmails().length,
   }));
@@ -933,8 +915,6 @@ export function MentionsMenu(props: {
           return filteredUsers();
         case 'items':
           return filteredItems();
-        case 'contacts':
-          return filteredContacts();
         case 'dates':
           return dateSuggestions();
         case 'emails':
@@ -948,7 +928,6 @@ export function MentionsMenu(props: {
     return [
       ...filteredUsers().slice(0, bins().users),
       ...filteredItems().slice(0, bins().items),
-      ...filteredContacts().slice(0, bins().contacts),
       ...dateSuggestions().slice(0, bins().dates),
       ...filteredEmails().slice(0, bins().emails),
     ];
@@ -968,7 +947,7 @@ export function MentionsMenu(props: {
     if (viewAllMode()) return null; // no category selection in view all mode
 
     const index = selectedIndex();
-    const { users, items, contacts, dates, emails } = bins();
+    const { users, items, dates, emails } = bins();
 
     let currentIndex = 0;
 
@@ -984,13 +963,6 @@ export function MentionsMenu(props: {
         return 'items';
       }
       currentIndex += items;
-    }
-
-    if (contacts > 0) {
-      if (index < currentIndex + contacts) {
-        return 'contacts';
-      }
-      currentIndex += contacts;
     }
 
     if (dates > 0) {
@@ -1250,11 +1222,9 @@ export function MentionsMenu(props: {
     // ------ NORMAL MODE ------------------------------------------------------
     const users = filteredUsers().slice(0, bins().users);
     const docs = filteredItems().slice(0, bins().items);
-    const contactsList = filteredContacts().slice(0, bins().contacts);
     const dates = dateSuggestions().slice(0, bins().dates);
     const emailList = filteredEmails().slice(0, bins().emails);
-    const totalLength = () =>
-      users.length + docs.length + contactsList.length + dates.length;
+    const totalLength = () => users.length + docs.length + dates.length;
 
     const renderOptions = createMemo(() => {
       const options = [];
@@ -1311,34 +1281,6 @@ export function MentionsMenu(props: {
         );
       }
 
-      if (contactsList.length > 0) {
-        options.push(
-          <ItemBin
-            label="Contacts & Companies"
-            binType="contacts"
-            totalCount={filteredContacts().length}
-            showingCount={contactsList.length}
-            onViewAll={handleViewAll}
-            isSelected={selectedCategory() === 'contacts'}
-          >
-            <For each={contactsList}>
-              {(item, i) => (
-                <MentionsMenuItem
-                  item={item}
-                  index={users.length + docs.length + i()}
-                  selected={
-                    users.length + docs.length + i() === selectedIndex()
-                  }
-                  itemAction={itemAction}
-                  setIndex={setSelectedIndex}
-                  setOpen={setMenuOpen}
-                />
-              )}
-            </For>
-          </ItemBin>
-        );
-      }
-
       if (dates.length > 0) {
         options.push(
           <ItemBin
@@ -1353,10 +1295,9 @@ export function MentionsMenu(props: {
               {(item, i) => (
                 <MentionsMenuItem
                   item={item}
-                  index={users.length + docs.length + contactsList.length + i()}
+                  index={users.length + docs.length + i()}
                   selected={
-                    users.length + docs.length + contactsList.length + i() ===
-                    selectedIndex()
+                    users.length + docs.length + i() === selectedIndex()
                   }
                   itemAction={itemAction}
                   setIndex={setSelectedIndex}
@@ -1384,11 +1325,7 @@ export function MentionsMenu(props: {
                   item={item}
                   index={i()}
                   selected={
-                    users.length +
-                      docs.length +
-                      contactsList.length +
-                      dates.length +
-                      i() ===
+                    users.length + docs.length + dates.length + i() ===
                     selectedIndex()
                   }
                   itemAction={itemAction}
