@@ -1,9 +1,9 @@
 use crate::history::{upsert_item_last_accessed_timestamp, upsert_user_history_timestamp};
 use crate::share_permission::create::create_document_permission;
-use model::document::DocumentMetadata;
 use model::document::FileType;
 use model::document::ID;
 use model::document::VersionIDWithTimeStamps;
+use model::document::{DocumentMetadata, DocumentSubType};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::Pool;
@@ -136,10 +136,11 @@ pub async fn create_document_txn(
 
         sqlx::query!(
             r#"
-                INSERT INTO document_task (document_id)
-                VALUES ($1)
+            INSERT INTO document_sub_type (document_id, sub_type) 
+            VALUES ($1, $2)
             "#,
-            document_id
+            document_id,
+            DocumentSubType::Task as _
         )
         .execute(&mut **transaction)
         .await?;

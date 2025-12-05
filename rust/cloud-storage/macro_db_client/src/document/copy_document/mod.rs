@@ -2,8 +2,8 @@ use crate::{
     document::document_bom::create_bom_parts, share_permission::create::create_document_permission,
 };
 use model::document::{
-    BomPart, DocumentMetadata, FileType, IDWithTimeStamps, VersionIDWithTimeStamps,
-    VersionIDWithTimeStampsNoSha,
+    BomPart, DocumentMetadata, DocumentSubType, FileType, IDWithTimeStamps,
+    VersionIDWithTimeStamps, VersionIDWithTimeStampsNoSha,
 };
 use models_permissions::share_permission::SharePermissionV2;
 use sqlx::{Pool, Postgres, Transaction};
@@ -237,10 +237,11 @@ pub(in crate::document) async fn copy_non_docx_document(
     if original_document.is_task {
         sqlx::query!(
             r#"
-                INSERT INTO document_task (document_id)
-                VALUES ($1)
+                INSERT INTO document_sub_type (document_id, sub_type)
+                VALUES ($1, $2)
             "#,
-            document.id
+            document.id,
+            DocumentSubType::Task as _,
         )
         .execute(transaction.as_mut())
         .await?;
