@@ -70,10 +70,7 @@ pub async fn delete_property_definition(
     State(context): State<ApiContext>,
     Extension(user_context): Extension<UserContext>,
 ) -> Result<Response, DeletePropertyDefinitionError> {
-    tracing::info!(
-        property_id = %property_uuid,
-        "deleting property definition"
-    );
+    tracing::info!("deleting property definition");
 
     // First check if property exists and if it's a system property
     let property = property_definitions_get::get_property_definition(&context.db, property_uuid)
@@ -81,10 +78,7 @@ pub async fn delete_property_definition(
         .ok_or(DeletePropertyDefinitionError::NotFound)?;
 
     if property.is_system {
-        tracing::warn!(
-            property_id = %property_uuid,
-            "attempted to delete system property"
-        );
+        tracing::warn!("attempted to delete system property");
         return Err(DeletePropertyDefinitionError::SystemPropertyNotModifiable);
     }
 
@@ -100,10 +94,7 @@ pub async fn delete_property_definition(
 
     property_definitions_delete::delete_property_definition(&context.db, property_uuid).await?;
 
-    tracing::info!(
-        property_id = %property_uuid,
-        "successfully deleted property definition"
-    );
+    tracing::info!("successfully deleted property definition");
 
     Ok(StatusCode::NO_CONTENT.into_response())
 }

@@ -78,8 +78,6 @@ pub async fn get_entity_properties(
 ) -> Result<Json<EntityPropertiesResponse>, GetEntityPropertiesErr> {
     tracing::info!(
         entity_id = %entity_id,
-        entity_type = ?entity_type,
-        include_metadata = query.include_metadata,
         "retrieving entity properties"
     );
 
@@ -126,7 +124,6 @@ pub async fn get_entity_properties(
             tracing::error!(
                 error = ?e,
                 entity_id = %entity_id,
-                entity_type = ?entity_type,
                 "failed to retrieve entity properties from database"
             );
         })?;
@@ -135,7 +132,6 @@ pub async fn get_entity_properties(
             tracing::error!(
                 error = ?e,
                 entity_id = %entity_id,
-                entity_type = ?entity_type,
                 "failed to get document system properties"
             );
         })?;
@@ -154,7 +150,6 @@ pub async fn get_entity_properties(
             tracing::error!(
                 error = ?e,
                 entity_id = %entity_id,
-                entity_type = ?entity_type,
                 "failed to retrieve entity properties from database"
             );
         })?;
@@ -173,8 +168,6 @@ pub async fn get_entity_properties(
     tracing::info!(
         entity_id = %entity_id,
         properties_count = response.properties.len(),
-        include_metadata = query.include_metadata,
-        user_id = %user_context.user_id,
         "successfully retrieved entity properties"
     );
 

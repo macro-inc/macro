@@ -60,11 +60,7 @@ pub async fn delete_entity(
     Path((entity_type, entity_id)): Path<(EntityType, String)>,
     State(context): State<ApiContext>,
 ) -> Result<StatusCode, DeleteEntityErr> {
-    tracing::info!(
-        entity_type = %entity_type,
-        entity_id = %entity_id,
-        "deleting all properties for entity"
-    );
+    tracing::info!("deleting all properties for entity");
 
     let entity_reference = EntityReference {
         entity_id: entity_id.clone(),
@@ -76,17 +72,11 @@ pub async fn delete_entity(
         .inspect_err(|e| {
             tracing::error!(
                 error = ?e,
-                entity_type = %entity_type,
-                entity_id = %entity_id,
                 "failed to delete entity properties"
             );
         })?;
 
-    tracing::info!(
-        entity_type = %entity_type,
-        entity_id = %entity_id,
-        "successfully deleted all properties for entity"
-    );
+    tracing::info!("successfully deleted all properties for entity");
 
     Ok(StatusCode::NO_CONTENT)
 }

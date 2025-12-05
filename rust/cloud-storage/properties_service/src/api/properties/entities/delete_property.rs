@@ -68,10 +68,7 @@ pub async fn delete_entity_property(
     State(context): State<ApiContext>,
     Extension(user_context): Extension<UserContext>,
 ) -> Result<StatusCode, DeleteEntityPropertyErr> {
-    tracing::info!(
-        entity_property_id = %entity_property_uuid,
-        "removing entity property"
-    );
+    tracing::info!("removing entity property");
 
     // Get entity property metadata to check permissions
     // Note: get_entity_type_from_entity_property excludes system properties,
@@ -81,15 +78,11 @@ pub async fn delete_entity_property(
         .inspect_err(|e| {
             tracing::error!(
                 error = ?e,
-                entity_property_id = %entity_property_uuid,
                 "failed to get entity property metadata"
             );
         })?
         .ok_or_else(|| {
-            tracing::warn!(
-                entity_property_id = %entity_property_uuid,
-                "entity property not found"
-            );
+            tracing::warn!("entity property not found");
             DeleteEntityPropertyErr::NotFound
         })?;
 
@@ -111,15 +104,11 @@ pub async fn delete_entity_property(
         .inspect_err(|e| {
             tracing::error!(
                 error = ?e,
-                entity_property_id = %entity_property_uuid,
                 "failed to remove entity property"
             );
         })?;
 
-    tracing::info!(
-        entity_property_id = %entity_property_uuid,
-        "successfully removed entity property"
-    );
+    tracing::info!("successfully removed entity property");
 
     Ok(StatusCode::NO_CONTENT)
 }

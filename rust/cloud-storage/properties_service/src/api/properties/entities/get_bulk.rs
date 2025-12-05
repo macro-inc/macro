@@ -67,10 +67,7 @@ pub async fn get_bulk_entity_properties(
         return Err(GetBulkEntityPropertiesErr::InvalidRequest);
     }
 
-    tracing::info!(
-        entity_count = request.entities.len(),
-        "retrieving bulk entity properties"
-    );
+    tracing::info!("retrieving bulk entity properties");
 
     let bulk_properties =
         entity_properties_get::get_bulk_entity_properties_values(&context.db, &request.entities)
@@ -78,7 +75,6 @@ pub async fn get_bulk_entity_properties(
             .inspect_err(|e| {
                 tracing::error!(
                     error = ?e,
-                    entity_count = request.entities.len(),
                     "failed to retrieve bulk entity properties"
                 );
             })?;

@@ -84,7 +84,6 @@ pub async fn add_property_option(
         .await
         .inspect_err(|e| {
             tracing::error!(
-                property_id = %property_uuid,
                 error = ?e,
                 "failed to fetch property definition"
             );
@@ -92,10 +91,7 @@ pub async fn add_property_option(
         .ok_or(AddPropertyOptionErr::PropertyNotFound)?;
 
     if property.is_system {
-        tracing::warn!(
-            property_id = %property_uuid,
-            "attempted to add option to system property"
-        );
+        tracing::warn!("attempted to add option to system property");
         return Err(AddPropertyOptionErr::SystemPropertyNotModifiable);
     }
 
@@ -109,7 +105,6 @@ pub async fn add_property_option(
     .await
     .inspect_err(|e| {
         tracing::error!(
-            property_id = %property_uuid,
             error = ?e,
             "failed to fetch property definition with owner"
         );
@@ -118,7 +113,6 @@ pub async fn add_property_option(
 
     if let Err(err) = request.validate() {
         tracing::error!(
-            property_id = %property_uuid,
             error = %err,
             "option value validation failed"
         );
@@ -127,7 +121,6 @@ pub async fn add_property_option(
 
     if let Err(err) = request.validate_compatibility(&property_definition.data_type) {
         tracing::error!(
-            property_id = %property_uuid,
             data_type = ?property_definition.data_type,
             request_type = ?request,
             error = %err,
@@ -157,13 +150,11 @@ pub async fn add_property_option(
     .inspect_err(|e| {
         tracing::error!(
             error = ?e,
-            property_id = %property_uuid,
             "failed to add property option"
         );
     })?;
 
     tracing::info!(
-        property_id = %property_uuid,
         option_id = %option.id,
         display_order = option.display_order,
         "successfully added property option"

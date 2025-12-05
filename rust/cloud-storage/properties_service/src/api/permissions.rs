@@ -94,7 +94,6 @@ async fn get_access_level(
         tracing::error!(
             status_code = ?status_code,
             message = %message,
-            entity_type = ?entity_ref.entity_type,
             "failed to get user access level"
         );
         PermissionError::InternalError(message)

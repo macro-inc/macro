@@ -69,13 +69,11 @@ pub async fn get_property_options(
         .inspect_err(|e| {
             tracing::error!(
                 error = ?e,
-                property_id = %property_uuid,
                 "failed to retrieve property options"
             );
         })?;
 
     tracing::info!(
-        property_id = %property_uuid,
         options_count = options.len(),
         "successfully retrieved property options"
     );

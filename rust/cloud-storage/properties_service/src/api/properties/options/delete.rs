@@ -74,11 +74,7 @@ pub async fn delete_property_option(
     State(context): State<ApiContext>,
     Extension(user_context): Extension<UserContext>,
 ) -> Result<StatusCode, DeletePropertyOptionErr> {
-    tracing::info!(
-        def_id = %def_uuid,
-        option_id = %option_uuid,
-        "deleting property option"
-    );
+    tracing::info!("deleting property option");
 
     // First check if property exists and if it's a system property
     let property = property_definitions_get::get_property_definition(&context.db, def_uuid)
@@ -86,23 +82,16 @@ pub async fn delete_property_option(
         .inspect_err(|e| {
             tracing::error!(
                 error = ?e,
-                def_id = %def_uuid,
                 "failed to fetch property definition"
             );
         })?
         .ok_or_else(|| {
-            tracing::warn!(
-                def_id = %def_uuid,
-                "property definition not found"
-            );
+            tracing::warn!("property definition not found");
             DeletePropertyOptionErr::PropertyNotFound
         })?;
 
     if property.is_system {
-        tracing::warn!(
-            def_id = %def_uuid,
-            "attempted to delete option from system property"
-        );
+        tracing::warn!("attempted to delete option from system property");
         return Err(DeletePropertyOptionErr::SystemPropertyNotModifiable);
     }
 
@@ -117,15 +106,11 @@ pub async fn delete_property_option(
     .inspect_err(|e| {
         tracing::error!(
             error = ?e,
-            def_id = %def_uuid,
             "failed to fetch property definition with owner"
         );
     })?
     .ok_or_else(|| {
-        tracing::warn!(
-            def_id = %def_uuid,
-            "property definition not found or not owned by user"
-        );
+        tracing::warn!("property definition not found or not owned by user");
         DeletePropertyOptionErr::PropertyNotFound
     })?;
 
@@ -134,24 +119,16 @@ pub async fn delete_property_option(
         .inspect_err(|e| {
             tracing::error!(
                 error = ?e,
-                def_id = %def_uuid,
-                option_id = %option_uuid,
                 "failed to fetch property option"
             );
         })?
         .ok_or_else(|| {
-            tracing::warn!(
-                def_id = %def_uuid,
-                option_id = %option_uuid,
-                "property option not found"
-            );
+            tracing::warn!("property option not found");
             DeletePropertyOptionErr::OptionNotFound
         })?;
 
     if option.property_definition_id != def_uuid {
         tracing::warn!(
-            def_id = %def_uuid,
-            option_id = %option_uuid,
             actual_def_id = %option.property_definition_id,
             "property option does not belong to specified definition"
         );
@@ -163,25 +140,15 @@ pub async fn delete_property_option(
         .inspect_err(|e| {
             tracing::error!(
                 error = ?e,
-                def_id = %def_uuid,
-                option_id = %option_uuid,
                 "failed to delete property option"
             );
         })?;
 
     if deleted {
-        tracing::info!(
-            def_id = %def_uuid,
-            option_id = %option_uuid,
-            "successfully deleted property option"
-        );
+        tracing::info!("successfully deleted property option");
         Ok(StatusCode::NO_CONTENT)
     } else {
-        tracing::error!(
-            def_id = %def_uuid,
-            option_id = %option_uuid,
-            "property option disappeared between fetch and delete"
-        );
+        tracing::error!("property option disappeared between fetch and delete");
         Err(DeletePropertyOptionErr::OptionNotFound)
     }
 }

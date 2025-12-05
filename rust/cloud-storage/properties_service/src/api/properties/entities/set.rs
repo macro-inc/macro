@@ -101,15 +101,11 @@ pub async fn set_entity_property(
             .inspect_err(|e| {
                 tracing::error!(
                     error = ?e,
-                    property_id = %property_uuid,
                     "failed to get property definition"
                 );
             })?
             .ok_or_else(|| {
-                tracing::error!(
-                    property_id = %property_uuid,
-                    "property definition not found"
-                );
+                tracing::error!("property definition not found");
                 SetEntityPropertyErr::PropertyNotFound
             })?;
 
@@ -122,7 +118,6 @@ pub async fn set_entity_property(
                 property_definition.is_multi_select,
             ) {
                 tracing::error!(
-                    property_id = %property_uuid,
                     data_type = ?property_definition.data_type,
                     is_multi_select = property_definition.is_multi_select,
                     value_type = ?value,
@@ -155,8 +150,6 @@ pub async fn set_entity_property(
             if matches!(e, PropertiesDatabaseError::InvalidPropertyOptions { .. }) {
                 tracing::warn!(
                     error = %e,
-                    entity_id = %entity_id,
-                    property_id = %property_uuid,
                     "invalid property options provided"
                 );
                 return SetEntityPropertyErr::InvalidPropertyOptions;
@@ -186,8 +179,6 @@ pub async fn set_entity_property(
         if matches!(e, PropertiesDatabaseError::InvalidPropertyOptions { .. }) {
             tracing::warn!(
                 error = %e,
-                entity_id = %entity_id,
-                property_id = %property_uuid,
                 "invalid property options provided"
             );
             return SetEntityPropertyErr::InvalidPropertyOptions;
@@ -195,9 +186,6 @@ pub async fn set_entity_property(
 
         tracing::error!(
             error = ?e,
-            entity_id = %entity_id,
-            property_id = %property_uuid,
-            entity_type = ?entity_type,
             "failed to set entity property"
         );
         SetEntityPropertyErr::InternalError(anyhow::anyhow!(
@@ -206,13 +194,7 @@ pub async fn set_entity_property(
         ))
     })?;
 
-    tracing::info!(
-        entity_id = %entity_id,
-        property_id = %property_uuid,
-        entity_type = ?entity_type,
-        has_value = has_value,
-        "successfully set entity property"
-    );
+    tracing::info!(has_value = has_value, "successfully set entity property");
 
     Ok(StatusCode::NO_CONTENT)
 }
