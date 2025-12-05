@@ -22,7 +22,8 @@ import { createMenuOpen, Launcher, setCreateMenuOpen } from './Launcher';
 import { Paywall } from './paywall/Paywall';
 import { QuickCreateMenu } from './QuickCreateMenu';
 import { RightbarWrapper } from './rightbar/Rightbar';
-import { Settings, setViewportOffset } from './settings/Settings';
+import { SettingsWrapper } from './settings/SettingsWrapper';
+import { setViewportOffset } from './settings/Settings';
 
 const AUTH_URLS = [
   '/app/login',
@@ -117,7 +118,6 @@ export function Layout(props: RouteSectionProps) {
     <div class="relative pb-[max(env(safe-area-inset-bottom),var(--tauri-inset-bottom))] pt-[max(env(safe-area-inset-top),var(--tauri-inset-top))] flex flex-col justify-between w-dvw h-dvh">
       <Show when={isAuthenticated()}>
         <GlobalShortcuts />
-        <Settings />
         <Suspense>
           <KommandMenu />
         </Suspense>
@@ -146,6 +146,7 @@ export function Layout(props: RouteSectionProps) {
               {props.children}
             </Resize.Panel>
             <RightbarWrapper />
+            <SettingsWrapper />
           </ItemDndProvider>
         </Resize.Zone>
       </div>
