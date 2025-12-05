@@ -23,10 +23,7 @@ import type {
 import { useUserId } from '@service-gql/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
-import {
-  defaultSelectionData,
-  type SelectionData,
-} from 'core/component/LexicalMarkdown/plugins';
+import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
 import {
   NODE_TRANSFORM,
   type NodeTransformType,
@@ -38,7 +35,6 @@ import {
   type TextFormatType,
 } from 'lexical';
 import { createSignal, onMount, Show } from 'solid-js';
-import { createStore } from 'solid-js/store';
 import { type FocusableElement, tabbable } from 'tabbable';
 import { handleFileUpload } from '../util/handleFileUpload';
 import { makeAttachmentPublic } from '../util/makeAttachmentPublic';
@@ -50,30 +46,29 @@ import { AttachMenu } from './AttachMenu';
 
 false && fileDrop;
 
-export function ComposeEmailInput(props: {
-  selectedRecipients: () => WithCustomUserInput<'user' | 'contact'>[];
-  ccRecipients: () => WithCustomUserInput<'user' | 'contact'>[];
-  bccRecipients: () => WithCustomUserInput<'user' | 'contact'>[];
-  subject: () => string;
-  link: EmailAccountLink | null;
-  inputAttachments?: {
-    store: Record<string, any[]>;
-    setStore: any;
-    key: string;
+export type ComposeInputData = {
+  body: {
+    text: string;
+    html: string;
+    raw: string;
   };
-}) {
+};
+
+type ComposeEmailInputProps = {
+  onSubmit: (data: ComposeInputData) => void;
+  isSubmitting?: boolean;
+};
+
+export function ComposeEmailInput(props: ComposeEmailInputProps) {
   const [editor, setEditor] = createSignal<LexicalEditor>();
+
   const [isDragging, setIsDragging] = createSignal<boolean>();
   const [isPendingUpload, setIsPendingUpload] = createSignal<boolean>(false);
+
   const [showFormatRibbon, setShowFormatRibbon] = createSignal<boolean>(false);
-  const [formatState] = createStore<SelectionData>(
-    structuredClone(defaultSelectionData)
-  );
   const [attachMenuOpen, setAttachMenuOpen] = createSignal(false);
+
   const [content, setContent] = createSignal('');
-  const [error, setError] = createSignal(false);
-  const [errorMsg, setErrorMsg] = createSignal('');
-  const [sending, setSending] = createSignal(false);
 
   const panel = useSplitPanel();
 
@@ -101,21 +96,6 @@ export function ComposeEmailInput(props: {
   let bodyDiv!: HTMLDivElement;
   let attachButtonRef!: HTMLDivElement;
 
-  function failure(msg: string) {
-    setError(true);
-    setErrorMsg(msg);
-  }
-
-  const convertToContactInfoArray = (
-    recipients: WithCustomUserInput<'user' | 'contact'>[]
-  ): ContactInfo[] => {
-    return recipients.map((recipient) => ({
-      email: recipient.data.email,
-      name:
-        'name' in recipient.data ? recipient.data.name || undefined : undefined,
-    }));
-  };
-
   function onAttach(items: Item[]) {
     const documentMentionItems = items.map((item) => ({
       documentId: item.id,
@@ -139,93 +119,24 @@ export function ComposeEmailInput(props: {
     console.log('ComposeEmailInput: Document attachments processed');
   }
 
-  const { replaceSplit } = useSplitLayout();
-
   // Set up hotkey scope for the compose message component
   const [attachComposeHotkeys, composeHotkeyScope] =
     useHotkeyDOMScope('compose-message');
   let composeContainerRef: HTMLDivElement | undefined;
 
   async function handleSend() {
-    if (sending()) return;
-
     const prepared = prepareEmailBody(editor());
     if (!prepared) return;
 
-    setError(false);
-    setSending(true);
-
-    const toRecipients = props?.selectedRecipients?.();
-    const ccRecipients = props?.ccRecipients?.();
-    const bccRecipients = props?.bccRecipients?.();
-    const subject = props?.subject?.();
     const bodyMacro = content();
 
-    try {
-      if (!toRecipients || toRecipients.length === 0) {
-        const e = 'Please select at least one recipient';
-        failure(e);
-        return;
-      }
-
-      if (!bodyMacro?.trim()) {
-        const e = 'Please enter a message';
-        failure(e);
-        return;
-      }
-
-      if (!subject?.trim()) {
-        const e = 'Please enter a subject';
-        failure(e);
-        return;
-      }
-      if (!props.link) {
-        const e = 'Unable to find linked email account';
-        failure(e);
-        return;
-      }
-
-      const messageToSend: MessageToSend = {
-        link_id: props.link.id, // For new emails
-        to: convertToContactInfoArray(toRecipients),
-        cc:
-          ccRecipients && ccRecipients.length > 0
-            ? convertToContactInfoArray(ccRecipients)
-            : [],
-        bcc:
-          bccRecipients && bccRecipients.length > 0
-            ? convertToContactInfoArray(bccRecipients)
-            : [],
-        subject: subject,
-        body_text: prepared.bodyText,
-        body_html: prepared.bodyHtml,
-        body_macro: bodyMacro,
-        attachments: [],
-      };
-
-      const result = await emailClient.sendMessage({
-        message: messageToSend,
-      });
-
-      if (isErr(result)) {
-        const e = 'Failed to send email';
-        failure(e);
-        return;
-      }
-      toast.success('Email sent');
-
-      const [, { message }] = result;
-
-      if (message.thread_db_id) {
-        replaceSplit({ type: 'email', id: message.thread_db_id }, true);
-      }
-      globalSplitManager();
-    } catch (error) {
-      console.error('Failed to send email:', error);
-      failure('Failed to send email');
-    } finally {
-      setSending(false);
-    }
+    props.onSubmit({
+      body: {
+        text: prepared.bodyText,
+        html: prepared.bodyHtml,
+        raw: bodyMacro,
+      },
+    });
   }
 
   onMount(() => {
@@ -254,13 +165,10 @@ export function ComposeEmailInput(props: {
       }}
       class="relative flex flex-col flex-1 items-center justify-between"
     >
-      <Show when={error()}>
-        <div class="text-failure-ink text-sm mt-1">{errorMsg()}</div>
-      </Show>
       <div class="w-full h-full flex flex-col">
         <Show when={showFormatRibbon()}>
           <FormatRibbon
-            state={formatState}
+            state={structuredClone(defaultSelectionData)}
             inlineFormat={(format: TextFormatType) => {
               editor()?.dispatchCommand(FORMAT_TEXT_COMMAND, format);
             }}
@@ -339,7 +247,7 @@ export function ComposeEmailInput(props: {
             />
           </div>
           <button
-            disabled={isPendingUpload() || sending()}
+            disabled={isPendingUpload() || props.isSubmitting}
             onClick={() => {
               handleSend();
             }}
@@ -347,7 +255,7 @@ export function ComposeEmailInput(props: {
           >
             <div class="bg-transparent rounded-full size-8 flex flex-row justify-center items-center">
               <Show
-                when={!isPendingUpload() && !sending()}
+                when={!isPendingUpload() && !props.isSubmitting}
                 fallback={
                   <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
                 }
