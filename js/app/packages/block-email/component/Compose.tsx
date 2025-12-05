@@ -9,7 +9,6 @@ import { ClippedPanel } from '@core/component/ClippedPanel';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { TextButton } from '@core/component/TextButton';
 import { usePaywallState } from '@core/constant/PaywallState';
-import { fileDrop } from '@core/directive/fileDrop';
 import { useEmailLinks } from '@core/email-link';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { useDisplayName, type WithCustomUserInput } from '@core/user';
@@ -27,8 +26,6 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { ComposeEmailInput } from './ComposeEmailInput';
-
-false && fileDrop;
 
 export function EmailCompose() {
   const hasPaidAccess = useHasPaidAccess();
