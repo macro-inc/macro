@@ -1,0 +1,15 @@
+{
+  "applinks": {
+    "details": [
+      {
+        "appIDs": ["TY74Q77JBD.com.macro.app.prod"],
+        "components": [
+          {
+            "/": "/app/*",
+            "comment": "Matches any URL whose path starts with /app/"
+          }
+        ]
+      }
+    ]
+  }
+}

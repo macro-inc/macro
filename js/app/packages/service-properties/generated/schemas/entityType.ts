@@ -16,8 +16,10 @@ export type EntityType = typeof EntityType[keyof typeof EntityType];
 export const EntityType = {
   CHANNEL: 'CHANNEL',
   CHAT: 'CHAT',
+  COMPANY: 'COMPANY',
   DOCUMENT: 'DOCUMENT',
   PROJECT: 'PROJECT',
+  TASK: 'TASK',
   THREAD: 'THREAD',
   USER: 'USER',
 } as const;

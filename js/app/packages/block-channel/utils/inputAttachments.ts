@@ -9,7 +9,8 @@ import {
   STATIC_IMAGE,
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
-import { chatRuleset, uploadFile } from '@core/util/upload';
+import type { UploadInput } from '@core/util/upload';
+import { chatRuleset, isFileUploadEntry, uploadFile } from '@core/util/upload';
 import type { NewAttachment } from '@service-comms/generated/models';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import { blockNameToItemType } from '@service-storage/client';
@@ -53,15 +54,14 @@ export function mapAttachmentsForSend(
 }
 
 export async function handleFileUpload(
-  files: File[],
+  files: UploadInput[],
   inputAttachmentsStore: InputAttachmentsStore,
   onUploaded?: (attachment: InputAttachment) => void
 ) {
   const key = inputAttachmentsStore.key;
-  let newAttachments: InputAttachment[] =
-    inputAttachmentsStore.store[key] ?? [];
 
-  for (const file of files) {
+  for (const entry of files) {
+    const file = isFileUploadEntry(entry) ? entry.file : entry;
     const pendingId = crypto.randomUUID();
     const initialAttachmentType = getAttachmentType(file.type);
 
@@ -73,12 +73,14 @@ export async function handleFileUpload(
       pending: true,
     };
 
-    newAttachments = [...newAttachments, pendingAttachment];
+    const existingAttachments = inputAttachmentsStore.store[key] ?? [];
+    const newAttachments = [...existingAttachments, pendingAttachment];
     inputAttachmentsStore.setStore(key, newAttachments);
 
     try {
       const result = await uploadFile(file, chatRuleset, {
         hideProgressIndicator: true,
+        unzipFolder: isFileUploadEntry(entry) && entry.isFolder,
       });
 
       if (!result.failed) {
