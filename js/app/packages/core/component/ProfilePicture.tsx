@@ -4,8 +4,8 @@ import { staticFileIdEndpoint } from '@core/constant/servers';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
 import { idToEmail } from '@core/user';
 import { createStaticFile } from '@core/util/create';
-import { createMemo, Show } from 'solid-js';
 import { authServiceClient } from '@service-auth/client';
+import { createMemo, Show } from 'solid-js';
 import type { SizeClass } from './UserIcon';
 
 type ProfilePictureProps = {
