@@ -40,10 +40,16 @@ type EmailComposeErrors =
   | 'no_subject'
   | 'no_link'
   | 'generic';
-type EmailComposeErrorObj = { type: EmailComposeErrors; messsage: string };
 type EmailComposeVariables = {
   body: { text: string; html: string; raw: string; attachments?: [] };
 };
+
+class EmailComposeError {
+  constructor(
+    public type: EmailComposeErrors,
+    public message: string
+  ) {}
+}
 
 export function EmailCompose() {
   const hasPaidAccess = useHasPaidAccess();
@@ -121,7 +127,7 @@ export function EmailCompose() {
 
   const sendEmailMutation = useMutation<
     SendMessageResponse,
-    EmailComposeErrorObj | Error,
+    EmailComposeError | Error,
     EmailComposeVariables
   >(() => ({
     async mutationFn(contents) {
@@ -129,21 +135,21 @@ export function EmailCompose() {
 
       if (!selectedRecipients().length) {
         const e = 'Please select at least one recipient';
-        throw { type: 'no_recipient', message: e };
+        throw new EmailComposeError('no_recipient', e);
       }
 
       if (!contents.body.raw.trim()) {
         const e = 'Please enter a message';
-        throw { type: 'no_message', message: e };
+        throw new EmailComposeError('no_message', e);
       }
 
       if (!subject()?.trim()) {
         const e = 'Please enter a subject';
-        throw { type: 'no_subject', message: e };
+        throw new EmailComposeError('no_subject', e);
       }
       if (!_link) {
         const e = 'Unable to find linked email account';
-        throw { type: 'no_link', message: e };
+        throw new EmailComposeError('no_link', e);
       }
 
       const result = await emailClient.sendMessage({
@@ -168,7 +174,7 @@ export function EmailCompose() {
 
       if (isErr(result)) {
         const e = 'Failed to send email';
-        throw { type: 'generic', message: e };
+        throw new EmailComposeError('generic', e);
       }
 
       return result[1];
@@ -176,7 +182,7 @@ export function EmailCompose() {
     mutationKey: ['compose-email'],
     onError(error) {
       if (error instanceof Error || error.type === 'generic') {
-        toast.failure(error instanceof Error ? error.message : error.messsage);
+        toast.failure(error instanceof Error ? error.message : error.message);
       }
     },
     onSuccess(data) {
