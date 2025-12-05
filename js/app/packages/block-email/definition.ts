@@ -3,6 +3,7 @@ import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { isErr, ok } from '@core/util/maybeResult';
 import { emailClient } from '@service-email/client';
 import EmailBlock from './component/Block';
+import { fetchAndCacheThread } from '../queries/email/thread-queries';
 
 export const definition = defineBlock({
   name: 'email',
@@ -13,28 +14,38 @@ export const definition = defineBlock({
 
   async load(source) {
     if (source.type === 'dss') {
-      let email = await emailClient.getThread({
-        thread_id: source.id,
-        offset: 0,
-        limit: DEFAULT_THREAD_MESSAGES_LIMIT,
-      });
+      // let email = await emailClient.getThread({
+      //   thread_id: source.id,
+      //   offset: 0,
+      //   limit: DEFAULT_THREAD_MESSAGES_LIMIT,
+      // });
 
-      if (isErr(email)) {
-        if (isErr(email, 'MISSING')) {
-          return LoadErrors.MISSING;
-        } else if (isErr(email, 'UNAUTHORIZED')) {
-          return LoadErrors.UNAUTHORIZED;
-        } else if (isErr(email, 'GONE')) {
-          return LoadErrors.GONE;
-        } else {
-          return LoadErrors.INVALID;
-        }
+      let email = await fetchAndCacheThread(
+        source.id,
+      )
+
+      console.log('email', email)
+
+      if (!email) {
+        return LoadErrors.MISSING;
       }
 
-      const [, emailData] = email;
+      // if (isErr(email)) {
+      //   if (isErr(email, 'MISSING')) {
+      //     return LoadErrors.MISSING;
+      //   } else if (isErr(email, 'UNAUTHORIZED')) {
+      //     return LoadErrors.UNAUTHORIZED;
+      //   } else if (isErr(email, 'GONE')) {
+      //     return LoadErrors.GONE;
+      //   } else {
+      //     return LoadErrors.INVALID;
+      //   }
+      // }
+
+      // const [, emailData] = email;
 
       return ok({
-        ...emailData,
+        ...email,
       });
     }
     return LoadErrors.INVALID;

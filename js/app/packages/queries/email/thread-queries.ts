@@ -31,7 +31,8 @@ function threadQueryOptions(threadId: string) {
       });
 
       if (isErr(result)) {
-        throw new Error('Failed to fetch thread');
+        console.log(result[0])
+        throw new Error("SOMETHING");
       }
 
       const threadData = result[1];
@@ -82,10 +83,19 @@ export async function fetchAndCacheThread(
       });
     }
 
-    const data = await queryClient.fetchInfiniteQuery({
+    let data: InfiniteData<Thread, number> | undefined;
+
+    try {
+
+    data = await queryClient.fetchInfiniteQuery({
       ...threadQueryOptions(threadId),
       staleTime,
     });
+
+    } catch (error) {
+      console.error('Failed to fetch thread!!!', error);
+      return undefined;
+    }
 
     const thread = flattenThreadPages(data);
     return thread ? { thread } : undefined;
