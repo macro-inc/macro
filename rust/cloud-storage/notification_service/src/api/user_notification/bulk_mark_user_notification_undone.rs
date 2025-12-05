@@ -47,10 +47,11 @@ pub async fn handler(
     tracing::info!("bulk_mark_user_notification_undone");
 
     let notification_ids = req.notification_ids;
-    notification_db_client::user_notification::patch::done::bulk_patch_undone(
+    notification_db_client::user_notification::patch::done::bulk_patch_done(
         &ctx.db,
         &user_context.user_id,
         &notification_ids,
+        false,
     )
     .await?;
 

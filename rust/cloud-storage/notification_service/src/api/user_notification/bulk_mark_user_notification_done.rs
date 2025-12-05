@@ -33,6 +33,7 @@ pub async fn handler(
         &ctx.db,
         &user_context.user_id,
         &notification_ids,
+        true,
     )
     .await
     .map_err(|e| {

@@ -22,45 +22,24 @@ pub async fn patch_done(
     Ok(())
 }
 
-/// Marks the user's notifications as done.
+/// Marks the user's notifications as done or undone.
 #[tracing::instrument(skip(db))]
 pub async fn bulk_patch_done(
     db: &sqlx::Pool<sqlx::Postgres>,
     user_id: &str,
     notification_ids: &Vec<uuid::Uuid>,
+    done: bool,
 ) -> anyhow::Result<()> {
     sqlx::query!(
         r#"
         UPDATE user_notification
-        SET done = true
+        SET done = $3
         WHERE user_id = $1
         AND notification_id = ANY($2)
         "#,
         user_id,
         notification_ids,
-    )
-    .execute(db)
-    .await?;
-
-    Ok(())
-}
-
-/// Marks the user's notifications as undone.
-#[tracing::instrument(skip(db))]
-pub async fn bulk_patch_undone(
-    db: &sqlx::Pool<sqlx::Postgres>,
-    user_id: &str,
-    notification_ids: &Vec<uuid::Uuid>,
-) -> anyhow::Result<()> {
-    sqlx::query!(
-        r#"
-        UPDATE user_notification
-        SET done = false
-        WHERE user_id = $1
-        AND notification_id = ANY($2)
-        "#,
-        user_id,
-        notification_ids,
+        done
     )
     .execute(db)
     .await?;

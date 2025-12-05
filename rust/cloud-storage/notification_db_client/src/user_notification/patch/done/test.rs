@@ -14,7 +14,7 @@ async fn test_bulk_patch_undone(pool: Pool<Postgres>) -> anyhow::Result<()> {
         patch_done(&pool, &notif_id.to_string(), user_id).await?;
     }
 
-    bulk_patch_undone(&pool, user_id, &notification_ids).await?;
+    bulk_patch_done(&pool, user_id, &notification_ids, false).await?;
 
     // Verify that the notifications are now marked as undone.
     for notif_id in &notification_ids {
@@ -89,7 +89,7 @@ async fn test_bulk_patch_done(pool: Pool<Postgres>) -> anyhow::Result<()> {
     }
 
     // Perform bulk patch: mark the notifications as done.
-    bulk_patch_done(&pool, user_id, &notification_ids).await?;
+    bulk_patch_done(&pool, user_id, &notification_ids, true).await?;
 
     // Verify that the notifications are now marked as done.
     for notif_id in &notification_ids {
