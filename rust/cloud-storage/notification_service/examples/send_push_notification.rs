@@ -17,7 +17,12 @@ async fn main() -> anyhow::Result<()> {
 
     let endpoint_arn = std::env::var("ENDPOINT_ARN").context("missing ENDPOINT_ARN")?;
     let collapse_key = "collapse";
+
+    // Sends the first push notification
     send_first(&sns_client, &endpoint_arn, collapse_key).await?;
+
+    // Sends an empty push notification with the same collapse key.
+    // this will remove the notification from the device.
     send_empty(&sns_client, &endpoint_arn, collapse_key).await?;
 
     Ok(())
