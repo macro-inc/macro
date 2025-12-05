@@ -17,11 +17,11 @@ use properties_db_client::{
 
 #[derive(Debug, Error)]
 pub enum DeletePropertyDefinitionError {
-    #[error("property definition not found")]
+    #[error("Property definition not found")]
     NotFound,
-    #[error("cannot modify system properties")]
+    #[error("Cannot modify system properties")]
     SystemPropertyNotModifiable,
-    #[error("internal server error")]
+    #[error("An internal error occurred")]
     InternalServerError(#[from] anyhow::Error),
     #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),

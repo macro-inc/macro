@@ -14,7 +14,7 @@ pub enum MetadataError {
     #[error("Document not found")]
     NotFound,
 
-    #[error("Failed to fetch document metadata from database: {0}")]
+    #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
 }
 

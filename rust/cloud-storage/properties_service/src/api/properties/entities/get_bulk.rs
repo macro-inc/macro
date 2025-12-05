@@ -17,11 +17,11 @@ use properties_db_client::{
 
 #[derive(Debug, Error)]
 pub enum GetBulkEntityPropertiesErr {
-    #[error("An unknown error has occurred")]
+    #[error("An internal error occurred")]
     InternalError(#[from] anyhow::Error),
     #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
-    #[error("Invalid request: entities array cannot be empty")]
+    #[error("Entities array cannot be empty")]
     InvalidRequest,
 }
 

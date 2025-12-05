@@ -18,11 +18,11 @@ use properties_db_client::{
 
 #[derive(Debug, Error)]
 pub enum ListPropertiesErr {
-    #[error("An unknown error has occurred")]
+    #[error("An internal error occurred")]
     InternalError(#[from] anyhow::Error),
     #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
-    #[error("organization_id is required for org scope")]
+    #[error("Organization ID is required for org scope")]
     MissingOrganizationId,
 }
 

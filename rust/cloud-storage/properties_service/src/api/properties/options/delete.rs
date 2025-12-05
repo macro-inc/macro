@@ -16,13 +16,13 @@ use properties_db_client::{
 
 #[derive(Debug, Error)]
 pub enum DeletePropertyOptionErr {
-    #[error("An unknown error has occurred")]
+    #[error("An internal error occurred")]
     InternalError(#[from] anyhow::Error),
     #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
     #[error("Property definition not found")]
     PropertyNotFound,
-    #[error("cannot modify system properties")]
+    #[error("Cannot modify system properties")]
     SystemPropertyNotModifiable,
     #[error("Property option not found")]
     OptionNotFound,

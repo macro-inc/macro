@@ -14,7 +14,7 @@ use properties_db_client::{
 #[allow(dead_code)]
 #[derive(Debug, Error)]
 pub enum DeleteEntityErr {
-    #[error("An unknown error has occurred")]
+    #[error("An internal error occurred")]
     Internal(#[from] anyhow::Error),
     #[error("An internal error occurred")]
     Database(#[from] PropertiesDatabaseError),

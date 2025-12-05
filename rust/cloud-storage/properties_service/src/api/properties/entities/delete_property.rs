@@ -17,11 +17,11 @@ use properties_db_client::{
 
 #[derive(Debug, Error)]
 pub enum DeleteEntityPropertyErr {
-    #[error("An unknown error has occurred")]
+    #[error("An internal error occurred")]
     InternalError(#[from] anyhow::Error),
     #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
-    #[error("Permission error: {0}")]
+    #[error("{0}")]
     Permission(#[from] crate::api::permissions::PermissionError),
     #[error("Entity property not found")]
     NotFound,

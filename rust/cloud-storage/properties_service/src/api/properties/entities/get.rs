@@ -18,15 +18,15 @@ use properties_db_client::{
 
 #[derive(Debug, Error)]
 pub enum GetEntityPropertiesErr {
-    #[error("An unknown error has occurred")]
+    #[error("An internal error occurred")]
     Internal(#[from] anyhow::Error),
     #[error("An internal error occurred")]
     Database(#[from] PropertiesDatabaseError),
 
-    #[error("Document metadata error: {0}")]
+    #[error("{0}")]
     Metadata(#[from] crate::api::properties::metadata::MetadataError),
 
-    #[error("Permission error: {0}")]
+    #[error("{0}")]
     Permission(#[from] crate::api::permissions::PermissionError),
 }
 

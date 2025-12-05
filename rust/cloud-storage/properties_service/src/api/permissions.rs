@@ -7,13 +7,13 @@ use crate::api::context::ApiContext;
 
 #[derive(Debug, Error)]
 pub enum PermissionError {
-    #[error("Entity type not supported for property operations")]
+    #[error("Unsupported entity type")]
     UnsupportedEntityType,
 
-    #[error("Unauthorized: user does not have sufficient access")]
+    #[error("Access denied")]
     Unauthorized,
 
-    #[error("Internal error checking permissions: {0}")]
+    #[error("An internal error occurred")]
     InternalError(String),
 }
 

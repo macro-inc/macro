@@ -16,7 +16,7 @@ use properties_db_client::{
 
 #[derive(Debug, Error)]
 pub enum GetPropertyOptionsErr {
-    #[error("An unknown error has occurred")]
+    #[error("An internal error occurred")]
     Internal(#[from] anyhow::Error),
     #[error("An internal error occurred")]
     Database(#[from] PropertiesDatabaseError),
