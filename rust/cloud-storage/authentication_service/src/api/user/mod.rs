@@ -1,3 +1,4 @@
+use auth_service_rpc::LegacyApiRpcRouterBuilder;
 use axum::{
     Router,
     routing::{delete, get, patch, post, put},
@@ -6,7 +7,7 @@ use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use tower::ServiceBuilder;
 use tower_cookies::CookieManagerLayer;
 
-use crate::api::ApiContext;
+use crate::api::{ApiContext, user::legacy_rpc::AuthRpcState};
 
 // needs to be public in api crate for swagger
 pub(in crate::api) mod create_user;
@@ -17,6 +18,7 @@ pub(in crate::api) mod get_user_info;
 pub(in crate::api) mod get_user_link_exists;
 pub(in crate::api) mod get_user_organization;
 pub(in crate::api) mod get_user_quota;
+pub(in crate::api) mod legacy_rpc;
 pub(in crate::api) mod patch_tutorial;
 pub(in crate::api) mod patch_user_group;
 pub(in crate::api) mod patch_user_onboarding;
@@ -35,25 +37,18 @@ pub fn router(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<ApiConte
 }
 
 fn router_with_auth(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<ApiContext> {
+    let rpc_router = LegacyApiRpcRouterBuilder::new(AuthRpcState(state.clone())).build();
+
     Router::new()
+        .merge(rpc_router)
         .route("/me", get(get_user_info::handler))
         .route("/me", delete(delete_user::handler))
-        .route(
-            "/legacy_user_permissions",
-            get(get_legacy_user_permissions::handler).layer(axum::middleware::from_fn_with_state(
-                state.clone(),
-                macro_middleware::user_permissions::attach_user_permissions::handler,
-            )),
-        )
         .route("/profile_pictures", post(post_profile_pictures::handler))
         .route("/profile_picture", put(put_profile_picture::handler))
         .route("/name", put(put_name::handler))
         .route("/name", get(get_name::handler))
-        .route("/organization", get(get_user_organization::handler))
         .route("/get_names", post(post_get_names::handler_external))
         .route("/link_exists", get(get_user_link_exists::handler))
-        .route("/group", patch(patch_user_group::handler))
-        .route("/onboarding", patch(patch_user_onboarding::handler))
         .route("/tutorial", patch(patch_tutorial::handler))
         .route(
             "/quota",

@@ -34,6 +34,9 @@ the file type */
   fileType?: BasicDocumentFileType;
   /** The document id */
   id: string;
+  /** Whether or not the document is a task.
+This is only applicable for md documents. */
+  isTask: boolean;
   /** The name of the document */
   name: string;
   /** The owner of the document */

@@ -4056,7 +4056,8 @@
           "owner",
           "name",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "isTask"
         ],
         "properties": {
           "branchedFromId": {
@@ -4093,6 +4094,10 @@
             "description": "The file type of the document (e.g. pdf, docx)"
           },
           "id": { "type": "string", "description": "The document id" },
+          "isTask": {
+            "type": "boolean",
+            "description": "Whether or not the document is a task.\nThis is only applicable for md documents."
+          },
           "name": {
             "type": "string",
             "description": "The name of the document"
@@ -4428,6 +4433,10 @@
             "type": ["string", "null"],
             "description": "The id of the document in the database"
           },
+          "isTask": {
+            "type": "boolean",
+            "description": "Whether the document is a task.\nThis is only applicable for md documents and the request will fail if the file type is not\nmd."
+          },
           "jobId": {
             "type": ["string", "null"],
             "description": "Optional job id to be used to track an upload job for the newly created document.\nWill need to have a corresponding job initiated for the file beforehand."
@@ -4660,7 +4669,8 @@
           "owner",
           "documentName",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "isTask"
         ],
         "properties": {
           "branchedFromId": {
@@ -4700,6 +4710,10 @@
           "fileType": {
             "type": ["string", "null"],
             "description": "The file type of the document (file extension)"
+          },
+          "isTask": {
+            "type": "boolean",
+            "description": "Whether or not the document is a task.\nThis is only applicable for md documents."
           },
           "modificationData": {
             "description": "The modification data for the document instance.\nThis is only used for PDF documents."
@@ -4810,7 +4824,13 @@
       },
       "DocumentPreviewData": {
         "type": "object",
-        "required": ["document_id", "document_name", "owner", "updated_at"],
+        "required": [
+          "document_id",
+          "document_name",
+          "owner",
+          "updated_at",
+          "is_task"
+        ],
         "properties": {
           "document_id": { "type": "string", "description": "The document id" },
           "document_name": {
@@ -4820,6 +4840,10 @@
           "file_type": {
             "type": ["string", "null"],
             "description": "The file type of the document (e.g. pdf, docx)"
+          },
+          "is_task": {
+            "type": "boolean",
+            "description": "Whether or not the document is a task.\nThis is only applicable for md documents."
           },
           "owner": {
             "type": "string",
@@ -4850,7 +4874,8 @@
           "owner",
           "documentName",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "isTask"
         ],
         "properties": {
           "branchedFromId": {
@@ -4890,6 +4915,10 @@
           "fileType": {
             "type": ["string", "null"],
             "description": "The file type of the document"
+          },
+          "isTask": {
+            "type": "boolean",
+            "description": "Whether or not the document is a task.\nThis is only applicable for md documents."
           },
           "modificationData": {
             "description": "The modification data for the document instance.\nThis is only used for PDF documents."
@@ -6812,7 +6841,8 @@
           "name",
           "createdAt",
           "updatedAt",
-          "viewedAt"
+          "viewedAt",
+          "isTask"
         ],
         "properties": {
           "branchedFromId": {
@@ -6848,6 +6878,10 @@
             "type": "string",
             "format": "uuid",
             "description": "The document id"
+          },
+          "isTask": {
+            "type": "boolean",
+            "description": "Whether or not the document is a task.\nThis is only applicable for md documents."
           },
           "name": {
             "type": "string",
@@ -6911,12 +6945,45 @@
           "viewedAt": { "type": ["integer", "null"], "format": "int64" }
         }
       },
+      "SoupEmailThreadPreviewMetadata": {
+        "type": "object",
+        "required": [
+          "knownSender",
+          "tabular",
+          "calendarInvite",
+          "genericSender"
+        ],
+        "properties": {
+          "calendarInvite": {
+            "type": "boolean",
+            "description": "if any email contains a calendar invite"
+          },
+          "genericSender": {
+            "type": "boolean",
+            "description": "if any sender is a generic email"
+          },
+          "knownSender": {
+            "type": "boolean",
+            "description": "if user has previously emailed any sender"
+          },
+          "tabular": {
+            "type": "boolean",
+            "description": "if any email contains a <table> html tag"
+          }
+        }
+      },
       "SoupEnrichedEmailThreadPreview": {
         "allOf": [
           { "$ref": "#/components/schemas/SoupEmailThreadPreview" },
           {
             "type": "object",
-            "required": ["attachments", "attachmentsMacro", "participants"],
+            "required": [
+              "attachments",
+              "attachmentsMacro",
+              "participants",
+              "metadata",
+              "labels"
+            ],
             "properties": {
               "attachments": {
                 "type": "array",
@@ -6925,6 +6992,13 @@
               "attachmentsMacro": {
                 "type": "array",
                 "items": { "$ref": "#/components/schemas/SoupMacroAttachment" }
+              },
+              "labels": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/SoupLabel" }
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/SoupEmailThreadPreviewMetadata"
               },
               "participants": {
                 "type": "array",
@@ -6976,6 +7050,38 @@
         "type": "string",
         "enum": ["document", "chat", "project", "email_thread"]
       },
+      "SoupLabel": {
+        "type": "object",
+        "required": [
+          "id",
+          "linkId",
+          "providerLabelId",
+          "name",
+          "createdAt",
+          "messageListVisibility",
+          "labelListVisibility",
+          "type"
+        ],
+        "properties": {
+          "createdAt": { "type": "string", "format": "date-time" },
+          "id": { "type": "string", "format": "uuid" },
+          "labelListVisibility": {
+            "$ref": "#/components/schemas/SoupLabelListVisibility"
+          },
+          "linkId": { "type": "string", "format": "uuid" },
+          "messageListVisibility": {
+            "$ref": "#/components/schemas/SoupMessageListVisibility"
+          },
+          "name": { "type": "string" },
+          "providerLabelId": { "type": "string" },
+          "type": { "$ref": "#/components/schemas/SoupLabelType" }
+        }
+      },
+      "SoupLabelListVisibility": {
+        "type": "string",
+        "enum": ["labelShow", "labelShowIfUnread", "labelHide"]
+      },
+      "SoupLabelType": { "type": "string", "enum": ["system", "user"] },
       "SoupMacroAttachment": {
         "type": "object",
         "required": ["threadId", "dbId", "messageId", "itemId", "itemType"],
@@ -6986,6 +7092,10 @@
           "messageId": { "type": "string", "format": "uuid" },
           "threadId": { "type": "string", "format": "uuid" }
         }
+      },
+      "SoupMessageListVisibility": {
+        "type": "string",
+        "enum": ["show", "hide"]
       },
       "SoupPage": {
         "type": "object",
