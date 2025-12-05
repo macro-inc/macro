@@ -29,6 +29,16 @@ pub trait SystemPropertiesService: Clone + Send + Sync + 'static {
         &self,
         entity_ids: Vec<String>,
     ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
+
+    /// Copy all task properties from one entity to another.
+    ///
+    /// Copies all task-related system properties from the source entity
+    /// to the destination entity, overwriting any existing values.
+    fn copy_task_properties(
+        &self,
+        from_task_id: &str,
+        to_task_id: &str,
+    ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
 }
 
 /// Implementation of SystemPropertiesService using a repository.
@@ -78,6 +88,17 @@ where
             .collect();
 
         self.repository.bulk_upsert_properties(rows).await
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn copy_task_properties(
+        &self,
+        from_task_id: &str,
+        to_task_id: &str,
+    ) -> Result<(), SystemPropertyError> {
+        self.repository
+            .copy_task_properties(from_task_id, to_task_id)
+            .await
     }
 }
 

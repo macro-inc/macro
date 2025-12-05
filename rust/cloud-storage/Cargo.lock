@@ -8577,6 +8577,7 @@ dependencies = [
 name = "system_properties"
 version = "0.1.0"
 dependencies = [
+ "macro_uuid",
  "models_properties",
  "serde",
  "serde_json",
