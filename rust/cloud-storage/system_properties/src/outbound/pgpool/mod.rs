@@ -49,7 +49,7 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
         let property_ids: Vec<Uuid> = rows.iter().map(|r| r.property_definition_id()).collect();
         let values: Vec<serde_json::Value> = rows.iter().map(|r| r.values().clone()).collect();
 
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
             SELECT 
@@ -70,12 +70,12 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
                 values = EXCLUDED.values,
                 updated_at = NOW()
             "#,
+            &ids,
+            &entity_ids as &[&str],
+            &entity_types,
+            &property_ids,
+            &values,
         )
-        .bind(&ids)
-        .bind(&entity_ids)
-        .bind(&entity_types)
-        .bind(&property_ids)
-        .bind(&values)
         .execute(&self.pool)
         .await?;
 
@@ -101,15 +101,15 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
         ];
 
         // Step 1: Fetch all properties from source task
-        let source_properties: Vec<(Uuid, serde_json::Value)> = sqlx::query_as(
+        let source_properties = sqlx::query!(
             r#"
             SELECT property_definition_id, values
             FROM entity_properties
             WHERE entity_id = $1
               AND entity_type = 'TASK'
             "#,
+            from_task_id
         )
-        .bind(from_task_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -120,11 +120,16 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
                 .map(|_| generate_uuid_v7())
                 .collect();
             let entity_ids: Vec<&str> = source_properties.iter().map(|_| to_task_id).collect();
-            let property_ids: Vec<Uuid> = source_properties.iter().map(|(id, _)| *id).collect();
-            let values: Vec<serde_json::Value> =
-                source_properties.iter().map(|(_, v)| v.clone()).collect();
+            let property_ids: Vec<Uuid> = source_properties
+                .iter()
+                .map(|r| r.property_definition_id)
+                .collect();
+            let values: Vec<serde_json::Value> = source_properties
+                .iter()
+                .map(|r| r.values.clone().unwrap_or(serde_json::Value::Null))
+                .collect();
 
-            sqlx::query(
+            sqlx::query!(
                 r#"
                 INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
                 SELECT 
@@ -144,11 +149,11 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
                     values = EXCLUDED.values,
                     updated_at = NOW()
                 "#,
+                &ids,
+                &entity_ids as &[&str],
+                &property_ids,
+                &values,
             )
-            .bind(&ids)
-            .bind(&entity_ids)
-            .bind(&property_ids)
-            .bind(&values)
             .execute(&self.pool)
             .await?;
         }
@@ -163,7 +168,7 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
             .map(|_| to_task_id)
             .collect();
 
-        sqlx::query(
+        sqlx::query!(
             r#"
             INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
             SELECT 
@@ -180,10 +185,10 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
             ON CONFLICT (entity_id, entity_type, property_definition_id)
             DO NOTHING
             "#,
+            &ids,
+            &entity_ids as &[&str],
+            &system_task_property_ids,
         )
-        .bind(&ids)
-        .bind(&entity_ids)
-        .bind(&system_task_property_ids)
         .execute(&self.pool)
         .await?;
 
