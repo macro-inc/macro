@@ -36,13 +36,7 @@ pub async fn get_document_metadata_properties(
                     "failed to get document metadata from database"
                 );
             })?
-            .ok_or_else(|| {
-                tracing::warn!(
-                    document_id = %document_id,
-                    "document not found in database"
-                );
-                MetadataError::NotFound
-            })?;
+            .ok_or(MetadataError::NotFound)?;
 
     tracing::debug!(
         document_id = %document_id,

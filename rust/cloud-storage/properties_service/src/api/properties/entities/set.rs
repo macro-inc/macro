@@ -104,10 +104,7 @@ pub async fn set_entity_property(
                     "failed to get property definition"
                 );
             })?
-            .ok_or_else(|| {
-                tracing::error!("property definition not found");
-                SetEntityPropertyErr::PropertyNotFound
-            })?;
+            .ok_or(SetEntityPropertyErr::PropertyNotFound)?;
 
     // Determine the value to set (if any) and validate
     let property_value = match &request.value {

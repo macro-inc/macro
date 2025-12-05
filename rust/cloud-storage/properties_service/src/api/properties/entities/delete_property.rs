@@ -81,10 +81,7 @@ pub async fn delete_entity_property(
                 "failed to get entity property metadata"
             );
         })?
-        .ok_or_else(|| {
-            tracing::warn!("entity property not found");
-            DeleteEntityPropertyErr::NotFound
-        })?;
+        .ok_or(DeleteEntityPropertyErr::NotFound)?;
 
     tracing::debug!(
         entity_id = %entity_ref.entity_id,

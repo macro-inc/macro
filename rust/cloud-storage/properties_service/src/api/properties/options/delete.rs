@@ -85,10 +85,7 @@ pub async fn delete_property_option(
                 "failed to fetch property definition"
             );
         })?
-        .ok_or_else(|| {
-            tracing::warn!("property definition not found");
-            DeletePropertyOptionErr::PropertyNotFound
-        })?;
+        .ok_or(DeletePropertyOptionErr::PropertyNotFound)?;
 
     if property.is_system {
         tracing::warn!("attempted to delete option from system property");
@@ -109,10 +106,7 @@ pub async fn delete_property_option(
             "failed to fetch property definition with owner"
         );
     })?
-    .ok_or_else(|| {
-        tracing::warn!("property definition not found or not owned by user");
-        DeletePropertyOptionErr::PropertyNotFound
-    })?;
+    .ok_or(DeletePropertyOptionErr::PropertyNotFound)?;
 
     let option = property_options_get::get_property_option_by_id(&context.db, option_uuid)
         .await
@@ -122,10 +116,7 @@ pub async fn delete_property_option(
                 "failed to fetch property option"
             );
         })?
-        .ok_or_else(|| {
-            tracing::warn!("property option not found");
-            DeletePropertyOptionErr::OptionNotFound
-        })?;
+        .ok_or(DeletePropertyOptionErr::OptionNotFound)?;
 
     if option.property_definition_id != def_uuid {
         tracing::warn!(
