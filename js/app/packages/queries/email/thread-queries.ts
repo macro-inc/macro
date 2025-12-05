@@ -1,4 +1,12 @@
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
+import { isErr } from '@core/util/maybeResult';
+import { emailClient } from '@service-email/client';
+import type {
+  GetThreadResponse,
+  MessageToSend,
+  SendMessageResponse,
+  Thread,
+} from '@service-email/generated/schemas';
 import {
   type InfiniteData,
   useInfiniteQuery,
@@ -6,16 +14,8 @@ import {
 } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
-import { emailKeys } from './keys';
-import { emailClient } from '@service-email/client';
-import { isErr, isOk } from '@core/util/maybeResult';
-import type {
-  GetThreadResponse,
-  MessageToSend,
-  SendMessageResponse,
-  Thread,
-} from '@service-email/generated/schemas';
 import { type MutationCallbacks, withCallbacks } from '../utils';
+import { emailKeys } from './keys';
 
 /**
  * Shared infinite query options for thread fetching.
@@ -94,7 +94,6 @@ export async function fetchAndCacheThread(
   }
 }
 
-
 export type ThreadQueryData = {
   thread: Thread;
   hasMore: boolean;
@@ -116,20 +115,16 @@ export function useThreadQuery(threadId: Accessor<string>) {
   }));
 }
 
-// ============================================================================
-// Thread Mutations
-// ============================================================================
-
-type MarkThreadAsSeenVars = { threadId: string };
+type MarkThreadAsSeenParams = { threadId: string };
 
 /**
  * Mutation to mark a thread as seen.
  */
 export function useMarkThreadAsSeenMutation(
-  callbacks?: MutationCallbacks<void, Error, MarkThreadAsSeenVars>
+  callbacks?: MutationCallbacks<void, Error, MarkThreadAsSeenParams>
 ) {
   return useMutation(() => ({
-    mutationFn: async (vars: MarkThreadAsSeenVars) => {
+    mutationFn: async (vars: MarkThreadAsSeenParams) => {
       const result = await emailClient.markThreadAsSeen({
         thread_id: vars.threadId,
       });
@@ -137,7 +132,7 @@ export function useMarkThreadAsSeenMutation(
         throw new Error('Failed to mark thread as seen');
       }
     },
-    ...withCallbacks<void, Error, MarkThreadAsSeenVars>(
+    ...withCallbacks<void, Error, MarkThreadAsSeenParams>(
       {
         onSuccess: (_data, vars) => {
           queryClient.invalidateQueries({
@@ -150,7 +145,7 @@ export function useMarkThreadAsSeenMutation(
   }));
 }
 
-type ArchiveThreadVars = { threadId: string; archive: boolean };
+type ArchiveThreadParams = { threadId: string; archive: boolean };
 type ArchiveThreadContext = {
   previousData: InfiniteData<Thread, number> | undefined;
 };
@@ -163,12 +158,12 @@ export function useArchiveThreadMutation(
   callbacks?: MutationCallbacks<
     void,
     Error,
-    ArchiveThreadVars,
+    ArchiveThreadParams,
     ArchiveThreadContext
   >
 ) {
   return useMutation(() => ({
-    mutationFn: async (vars: ArchiveThreadVars) => {
+    mutationFn: async (vars: ArchiveThreadParams) => {
       const result = await emailClient.flagArchived({
         id: vars.threadId,
         value: vars.archive,
@@ -177,7 +172,7 @@ export function useArchiveThreadMutation(
         throw new Error('Failed to update thread archive status');
       }
     },
-    ...withCallbacks<void, Error, ArchiveThreadVars, ArchiveThreadContext>(
+    ...withCallbacks<void, Error, ArchiveThreadParams, ArchiveThreadContext>(
       {
         onMutate: async (vars) => {
           await queryClient.cancelQueries({
@@ -222,23 +217,23 @@ export function useArchiveThreadMutation(
   }));
 }
 
-type SendMessageVars = { message: MessageToSend };
+type SendMessageParams = { message: MessageToSend };
 
 /**
  * Mutation to send an email message.
  */
 export function useSendMessageMutation(
-  callbacks?: MutationCallbacks<SendMessageResponse, Error, SendMessageVars>
+  callbacks?: MutationCallbacks<SendMessageResponse, Error, SendMessageParams>
 ) {
   return useMutation(() => ({
-    mutationFn: async (vars: SendMessageVars) => {
+    mutationFn: async (vars: SendMessageParams) => {
       const result = await emailClient.sendMessage({ message: vars.message });
       if (isErr(result)) {
         throw new Error('Failed to send message');
       }
       return result[1];
     },
-    ...withCallbacks<SendMessageResponse, Error, SendMessageVars>(
+    ...withCallbacks<SendMessageResponse, Error, SendMessageParams>(
       {
         onSuccess: (_data, vars) => {
           // Invalidate thread to show the new message
