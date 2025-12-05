@@ -270,7 +270,7 @@ export function EmailCompose() {
                         type="text"
                         value={subject()}
                         placeholder="Subject"
-                        class="text-base resize-none placeholder:text-ink-placeholder p-1 ml-1"
+                        class="w-full text-base resize-none placeholder:text-ink-placeholder p-1 ml-1"
                         onInput={(e) => {
                           setSubject(e.currentTarget.value);
                         }}
