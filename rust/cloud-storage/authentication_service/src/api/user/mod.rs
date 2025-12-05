@@ -23,6 +23,7 @@ pub(in crate::api) mod patch_tutorial;
 pub(in crate::api) mod patch_user_group;
 pub(in crate::api) mod patch_user_onboarding;
 pub(in crate::api) mod post_get_names;
+pub(in crate::api) mod post_get_names_with_email;
 pub(in crate::api) mod post_profile_pictures;
 pub(in crate::api) mod put_name;
 pub(in crate::api) mod put_profile_picture;
@@ -48,6 +49,10 @@ fn router_with_auth(state: ApiContext, jwt_args: JwtValidationArgs) -> Router<Ap
         .route("/name", put(put_name::handler))
         .route("/name", get(get_name::handler))
         .route("/get_names", post(post_get_names::handler_external))
+        .route(
+            "/get_names_with_email",
+            post(post_get_names_with_email::handler),
+        )
         .route("/link_exists", get(get_user_link_exists::handler))
         .route("/tutorial", patch(patch_tutorial::handler))
         .route(
