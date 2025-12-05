@@ -8,6 +8,7 @@ export type MutationCallbacks<
   TVariables = void,
   TContext = unknown,
 > = {
+  onMutate?: (variables: TVariables) => Promise<TContext> | TContext;
   onSuccess?: (
     data: TData,
     variables: TVariables,
@@ -29,6 +30,9 @@ export type MutationCallbacks<
 /**
  * Helper to merge user-provided callbacks with default mutation behavior.
  * Ensures callbacks are called in order: defaults first, then user callbacks.
+ *
+ * For onMutate: default runs first, override can augment the context.
+ * For onSuccess/onError/onSettled: default runs first, then override.
  */
 export function withCallbacks<
   TData,
@@ -42,17 +46,22 @@ export function withCallbacks<
   if (!overrides) return defaults;
 
   return {
-    onSuccess: (data, variables, context) => {
-      defaults.onSuccess?.(data, variables, context);
-      overrides.onSuccess?.(data, variables, context);
+    onMutate: async (variables) => {
+      const defaultContext = await defaults.onMutate?.(variables);
+      const overrideContext = await overrides.onMutate?.(variables);
+      return (overrideContext ?? defaultContext) as TContext;
     },
-    onError: (error, variables, context) => {
-      defaults.onError?.(error, variables, context);
-      overrides.onError?.(error, variables, context);
+    onSuccess: async (data, variables, context) => {
+      await defaults.onSuccess?.(data, variables, context);
+      await overrides.onSuccess?.(data, variables, context);
     },
-    onSettled: (data, error, variables, context) => {
-      defaults.onSettled?.(data, error, variables, context);
-      overrides.onSettled?.(data, error, variables, context);
+    onError: async (error, variables, context) => {
+      await defaults.onError?.(error, variables, context);
+      await overrides.onError?.(error, variables, context);
+    },
+    onSettled: async (data, error, variables, context) => {
+      await defaults.onSettled?.(data, error, variables, context);
+      await overrides.onSettled?.(data, error, variables, context);
     },
   };
 }

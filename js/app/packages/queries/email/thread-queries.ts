@@ -115,3 +115,146 @@ export function useThreadQuery(threadId: Accessor<string>) {
     },
   }));
 }
+
+// ============================================================================
+// Thread Mutations
+// ============================================================================
+
+type MarkThreadAsSeenVars = { threadId: string };
+
+/**
+ * Mutation to mark a thread as seen.
+ */
+export function useMarkThreadAsSeenMutation(
+  callbacks?: MutationCallbacks<void, Error, MarkThreadAsSeenVars>
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: MarkThreadAsSeenVars) => {
+      const result = await emailClient.markThreadAsSeen({
+        thread_id: vars.threadId,
+      });
+      if (isErr(result)) {
+        throw new Error('Failed to mark thread as seen');
+      }
+    },
+    ...withCallbacks<void, Error, MarkThreadAsSeenVars>(
+      {
+        onSuccess: (_data, vars) => {
+          queryClient.invalidateQueries({
+            queryKey: emailKeys.threadMessages(vars.threadId).queryKey,
+          });
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
+type ArchiveThreadVars = { threadId: string; archive: boolean };
+type ArchiveThreadContext = {
+  previousData: InfiniteData<Thread, number> | undefined;
+};
+
+/**
+ * Mutation to archive or unarchive a thread.
+ * Uses optimistic updates to immediately reflect the change in UI.
+ */
+export function useArchiveThreadMutation(
+  callbacks?: MutationCallbacks<
+    void,
+    Error,
+    ArchiveThreadVars,
+    ArchiveThreadContext
+  >
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: ArchiveThreadVars) => {
+      const result = await emailClient.flagArchived({
+        id: vars.threadId,
+        value: vars.archive,
+      });
+      if (isErr(result)) {
+        throw new Error('Failed to update thread archive status');
+      }
+    },
+    ...withCallbacks<void, Error, ArchiveThreadVars, ArchiveThreadContext>(
+      {
+        onMutate: async (vars) => {
+          await queryClient.cancelQueries({
+            queryKey: emailKeys.threadMessages(vars.threadId).queryKey,
+          });
+
+          const previousData = queryClient.getQueryData<
+            InfiniteData<Thread, number>
+          >(emailKeys.threadMessages(vars.threadId).queryKey);
+
+          queryClient.setQueryData<InfiniteData<Thread, number>>(
+            emailKeys.threadMessages(vars.threadId).queryKey,
+            (old) =>
+              old && {
+                ...old,
+                pages: old.pages.map((page) => ({
+                  ...page,
+                  inbox_visible: !vars.archive,
+                })),
+              }
+          );
+
+          return { previousData };
+        },
+        onError: (_err, vars, context) => {
+          if (context?.previousData) {
+            queryClient.setQueryData(
+              emailKeys.threadMessages(vars.threadId).queryKey,
+              context.previousData
+            );
+          }
+        },
+        onSettled: (_data, _error, vars) => {
+          queryClient.invalidateQueries({
+            queryKey: emailKeys.threadMessages(vars.threadId).queryKey,
+          });
+          queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
+        },
+      },
+      callbacks
+    ),
+  }));
+}
+
+type SendMessageVars = { message: MessageToSend };
+
+/**
+ * Mutation to send an email message.
+ */
+export function useSendMessageMutation(
+  callbacks?: MutationCallbacks<SendMessageResponse, Error, SendMessageVars>
+) {
+  return useMutation(() => ({
+    mutationFn: async (vars: SendMessageVars) => {
+      const result = await emailClient.sendMessage({ message: vars.message });
+      if (isErr(result)) {
+        throw new Error('Failed to send message');
+      }
+      return result[1];
+    },
+    ...withCallbacks<SendMessageResponse, Error, SendMessageVars>(
+      {
+        onSuccess: (_data, vars) => {
+          // Invalidate thread to show the new message
+          if (vars.message.thread_db_id) {
+            queryClient.invalidateQueries({
+              queryKey: emailKeys.threadMessages(vars.message.thread_db_id)
+                .queryKey,
+            });
+          }
+          // Invalidate previews to update thread list
+          queryClient.invalidateQueries({
+            queryKey: emailKeys.previews._def,
+          });
+        },
+      },
+      callbacks
+    ),
+  }));
+}
