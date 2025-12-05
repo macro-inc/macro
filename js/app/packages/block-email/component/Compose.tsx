@@ -222,8 +222,8 @@ export function EmailCompose() {
                 </div>
 
                 <Show when={showCc()}>
-                  <div class="flex items-center gap-2 focus-within:bracket-offset-2 border-edge-muted border-b">
-                    <div class="text-sm w-8 shrink-0 text-ink-placeholder/70">
+                  <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
+                    <div class="text-sm w-4 shrink-0 text-ink-placeholder/70">
                       Cc
                     </div>
                     <div class="flex-1">
@@ -241,8 +241,8 @@ export function EmailCompose() {
                 </Show>
 
                 <Show when={showBcc()}>
-                  <div class="mb-2 flex items-center gap-2 border-edge-muted border-b focus-within:bracket-offset-2">
-                    <div class="text-sm w-8 shrink-0 text-ink-placeholder/70">
+                  <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
+                    <div class="text-sm w-4 shrink-0 text-ink-placeholder/70">
                       Bcc
                     </div>
                     <div class="flex-1">
@@ -278,6 +278,7 @@ export function EmailCompose() {
                   </div>
                 </div>
               </div>
+
               <div
                 class="w-full h-full pb-2 flex flex-col min-h-0 overflow-hidden"
                 classList={{
