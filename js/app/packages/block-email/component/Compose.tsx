@@ -197,6 +197,16 @@ export function EmailCompose() {
     sendEmailMutation.mutate(data);
   };
 
+  const withMutationError = (type: EmailComposeErrors) => {
+    const error = sendEmailMutation.error;
+
+    if (!error || error instanceof Error) return;
+
+    if (error.type !== type) return;
+
+    return error;
+  };
+
   return (
     <>
       <SplitHeaderLeft>
@@ -319,6 +329,13 @@ export function EmailCompose() {
                         disabled={hasLinkError()}
                       />
                     </div>
+                    <Show when={withMutationError('no_recipient')}>
+                      {(err) => (
+                        <div class="text-failure-ink text-sm mt-1">
+                          {err().message}
+                        </div>
+                      )}
+                    </Show>
                   </div>
 
                   <Show when={showCc()}>
@@ -378,6 +395,14 @@ export function EmailCompose() {
                         disabled={hasLinkError()}
                       />
                     </div>
+
+                    <Show when={withMutationError('no_subject')}>
+                      {(err) => (
+                        <div class="text-failure-ink text-sm mt-1">
+                          {err().message}
+                        </div>
+                      )}
+                    </Show>
                   </div>
                 </div>
               </div>
@@ -393,6 +418,13 @@ export function EmailCompose() {
                   isSubmitting={sendEmailMutation.isPending}
                   disabled={hasLinkError()}
                 />
+                <Show when={withMutationError('no_message')}>
+                  {(err) => (
+                    <div class="text-failure-ink text-sm mt-1">
+                      {err().message}
+                    </div>
+                  )}
+                </Show>
               </div>
             </div>
           </ClippedPanel>
