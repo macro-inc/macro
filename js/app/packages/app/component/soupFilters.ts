@@ -1,5 +1,6 @@
 import type { EntityData } from '@macro-entity';
-import type { APIEmailThreadPreviewMetadata } from '@service-email/generated/schemas/aPIEmailThreadPreviewMetadata';
+import type { APIEmailThreadPreviewMetadata } from '@service-email/generated/schemas';
+import type { SoupEmailThreadPreviewMetadata } from '@service-storage/generated/schemas';
 import { makePersisted } from '@solid-primitives/storage';
 import { createMemo, createSignal } from 'solid-js';
 import type { ClientFilter } from './ViewConfig';
@@ -52,10 +53,10 @@ const PRIORITY_LABEL_SIGNAL_CONFIGS: SignalConfig<string>[] = [
 ];
 
 const PRIORITY_METADATA_SIGNAL_CONFIGS: SignalConfig<
-  keyof APIEmailThreadPreviewMetadata
+  keyof SoupEmailThreadPreviewMetadata
 >[] = [
   {
-    key: 'known_sender',
+    key: 'knownSender',
     label: 'Known Sender',
     defaultValue: false,
   },
@@ -85,7 +86,7 @@ const DEPRIORITY_LABEL_SIGNAL_CONFIGS: SignalConfig<string>[] = [
 ];
 
 const DEPRIORITY_METADATA_SIGNAL_CONFIGS: SignalConfig<
-  keyof APIEmailThreadPreviewMetadata
+  keyof SoupEmailThreadPreviewMetadata
 >[] = [
   {
     key: 'tabular',
@@ -93,10 +94,10 @@ const DEPRIORITY_METADATA_SIGNAL_CONFIGS: SignalConfig<
     defaultValue: false,
   },
   {
-    key: 'generic_sender',
+    key: 'genericSender',
     label: 'Generic Sender',
     defaultValue: false,
-  }
+  },
 ];
 
 export const PRIORITY_LABEL_SIGNAL_TOGGLES = createSignalToggles(
@@ -137,7 +138,7 @@ const SIGNAL_DEPRIORITY_LABELS = createMemo(
 
 const SIGNAL_PRIORITY_METADATA = createMemo(
   () =>
-    new Set<keyof APIEmailThreadPreviewMetadata>(
+    new Set<keyof SoupEmailThreadPreviewMetadata>(
       PRIORITY_METADATA_SIGNAL_TOGGLES.filter(({ enabled }) => enabled()).map(
         ({ key }) => key
       )
@@ -146,7 +147,7 @@ const SIGNAL_PRIORITY_METADATA = createMemo(
 
 const SIGNAL_DEPRIORITY_METADATA = createMemo(
   () =>
-    new Set<keyof APIEmailThreadPreviewMetadata>(
+    new Set<keyof SoupEmailThreadPreviewMetadata>(
       DEPRIORITY_METADATA_SIGNAL_TOGGLES.filter(({ enabled }) => enabled()).map(
         ({ key }) => key
       )
@@ -168,6 +169,32 @@ const getLabelTokens = (
   return tokens.map((token) => token.toUpperCase());
 };
 
+// Helper to safely check metadata properties that may use different naming conventions. We can removed this when we're no longer using Email query, and only Soup query.
+const getMetadataValue = (
+  metadata:
+    | SoupEmailThreadPreviewMetadata
+    | APIEmailThreadPreviewMetadata
+    | undefined,
+  key: keyof SoupEmailThreadPreviewMetadata
+): boolean | undefined => {
+  if (!metadata) return undefined;
+
+  // Check SoupEmailThreadPreviewMetadata format (camelCase)
+  if (key in metadata) {
+    return (metadata as SoupEmailThreadPreviewMetadata)[key];
+  }
+
+  // Check APIEmailThreadPreviewMetadata format (snake_case)
+  const snakeCaseKey = key
+    .replace(/([A-Z])/g, '_$1')
+    .toLowerCase() as keyof APIEmailThreadPreviewMetadata;
+  if (snakeCaseKey in metadata) {
+    return (metadata as APIEmailThreadPreviewMetadata)[snakeCaseKey];
+  }
+
+  return undefined;
+};
+
 const isSignalEmail = (entity: Extract<EntityData, { type: 'email' }>) => {
   const labelTokens = getLabelTokens(entity.labels);
   const priorityLabels = SIGNAL_PRIORITY_LABELS();
@@ -184,12 +211,12 @@ const isSignalEmail = (entity: Extract<EntityData, { type: 'email' }>) => {
 
   const hasPriorityMetadata = entity.metadata
     ? Array.from(priorityMetadata).some(
-        (key) => entity.metadata?.[key] === true
+        (key) => getMetadataValue(entity.metadata, key) === true
       )
     : false;
   const hasDeprioritizingMetadata = entity.metadata
     ? Array.from(depriorityMetadata).some(
-        (key) => entity.metadata?.[key] === true
+        (key) => getMetadataValue(entity.metadata, key) === true
       )
     : false;
 
