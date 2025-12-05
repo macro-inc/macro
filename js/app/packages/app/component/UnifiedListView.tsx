@@ -15,7 +15,6 @@ import { IconButton } from '@core/component/IconButton';
 import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
 import { getSuggestedProperties } from '@core/component/Properties/utils';
 import { RecipientSelector } from '@core/component/RecipientSelector';
-
 import {
   blockAcceptsFileExtension,
   fileTypeToBlockName,
