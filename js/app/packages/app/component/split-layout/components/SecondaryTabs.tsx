@@ -1,11 +1,6 @@
 import { playSound } from '@app/util/sound';
-import { getIconConfig } from '@core/component/EntityIcon';
-import type { ViewId } from '@core/types/view';
 import { Tabs } from '@kobalte/core';
 import { createElementSize } from '@solid-primitives/resize-observer';
-import MagnifyingGlassIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
-import LightningIcon from '@phosphor-icons/core/regular/lightning.svg?component-solid';
-import FunnelIcon from '@phosphor-icons/core/regular/funnel.svg?component-solid';
 import {
   type Accessor,
   createEffect,
@@ -14,49 +9,17 @@ import {
   For,
   type JSXElement,
   onMount,
-  Show,
   type Setter,
 } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
 import { useSplitPanelOrThrow } from '../layoutUtils';
-
-// NOTE: unused since everything should already be correctly cased
-const _titleCase = (str: string) => {
-  return str
-    .split('')
-    .map((c, i) => (i === 0 ? c.toUpperCase() : c.toLowerCase()))
-    .join('');
-};
 
 const SCROLL_THRESHOLD = 10;
 
-const TabSeparator = () => (
-  <div class="relative shrink-0 w-3 h-full flex items-center justify-center pointer-events-none">
-    <div class="relative w-px h-2/3 bg-gradient-to-b from-transparent via-edge-muted/80 to-transparent" />
-    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 size-1 rounded-full bg-edge-muted/60" />
-  </div>
-);
-
-const VIEW_ICONS: Partial<Record<ViewId, ReturnType<typeof getIconConfig>['icon']>> = {
-  signal: LightningIcon,
-  noise: FunnelIcon,
-  people: getIconConfig('directMessage').icon,
-  groups: getIconConfig('channel').icon,
-  ai_chats: getIconConfig('chat').icon,
-  notes: getIconConfig('md').icon,
-  emails: getIconConfig('email').icon,
-  files: getIconConfig('write').icon,
-  folders: getIconConfig('project').icon,
-  all: MagnifyingGlassIcon,
-};
-
-export function SplitTabs(props: {
-  // values: readonly View[];
-  list: { value: ViewId; label: string }[];
-  active: Accessor<ViewId>;
+export function SecondaryTabs(props: {
+  list: { value: string; label: string }[];
+  active: Accessor<string>;
+  setActive: (value: string) => void;
   setButtonsRef?: Setter<HTMLDivElement | null>;
-  newButton?: JSXElement;
-  contextMenu?: (props: { value: ViewId; label: string }) => JSXElement;
 }) {
   let scrollRef!: HTMLDivElement;
   const panel = useSplitPanelOrThrow();
@@ -121,20 +84,13 @@ export function SplitTabs(props: {
   });
 
   // Play sound when tab changes
-  let previousActive: ViewId | undefined;
+  let previousActive: string | undefined;
   createEffect(() => {
     const currentActive = props.active();
     if (previousActive !== undefined && previousActive !== currentActive) {
       playSound('open');
     }
     previousActive = currentActive;
-  });
-
-  // Reorder list to put "all" first
-  const reorderedList = createMemo(() => {
-    const allTab = props.list.find((tab) => tab.value === 'all');
-    const otherTabs = props.list.filter((tab) => tab.value !== 'all');
-    return allTab ? [allTab, ...otherTabs] : props.list;
   });
 
   return (
@@ -167,16 +123,9 @@ export function SplitTabs(props: {
           }}
         />
 
-        <For each={reorderedList()}>
+        <For each={props.list}>
           {({ value, label }, i) => {
             const isActive = createMemo(() => value === props.active());
-            const icon = VIEW_ICONS[value];
-            const isAll = value === 'all';
-            const isSignalOrNoise = value === 'signal' || value === 'noise';
-            const needsSeparator = (() => {
-              const prevTab = i() > 0 ? reorderedList()[i() - 1] : null;
-              return prevTab && (prevTab.value === 'signal' || prevTab.value === 'noise') && !isSignalOrNoise;
-            })();
 
             let ref: HTMLDivElement | undefined;
             createEffect(() => {
@@ -191,60 +140,28 @@ export function SplitTabs(props: {
               }
             });
 
-            createEffect(() => {
-              if (isActive()) {
-                panel.handle.setDisplayName(label);
-              }
-            });
-
-            const showLabel = () => (isSignalOrNoise || isActive()) && !isAll;
-
             return (
-              <>
-                <Show when={needsSeparator}>
-                  <TabSeparator />
-                </Show>
-                <Tabs.Trigger
-                  value={value}
-                  ref={ref}
-                  tabIndex={-1}
-                  class="group shrink-0 text-sm relative h-full flex items-center font-mono uppercase"
-                  classList={{
-                    'min-w-12 max-w-[40cqw] px-2': showLabel(),
-                    'px-2': !showLabel(),
-                    'z-1 text-accent text-glow': isActive(),
-                    'text-ink-disabled hover:text-accent/70 hover-transition-text': !isActive(),
-                  }}
-                >
-                  <span
-                    class="flex items-center gap-1.5"
-                    classList={{
-                      'w-full': showLabel(),
-                      'justify-center': !showLabel(),
-                    }}
-                  >
-                    <Show when={icon}>
-                      <Dynamic
-                        component={icon!}
-                        class="size-3.5 shrink-0 transition-colors"
-                        classList={{
-                          'text-accent': isActive(),
-                          'text-ink-disabled group-hover:text-accent/70': !isActive(),
-                        }}
-                      />
-                    </Show>
-                    <Show when={showLabel()}>
-                      <span class="truncate text-xs font-mono uppercase">{label}</span>
-                    </Show>
-                  </span>
-                  {props.contextMenu?.({ label, value })}
-                </Tabs.Trigger>
-              </>
+              <Tabs.Trigger
+                value={value}
+                ref={ref}
+                tabIndex={-1}
+                class="min-w-12 max-w-[40cqw] shrink-0 text-sm relative h-full flex items-center px-2"
+                classList={{
+                  'z-1 text-accent text-glow-sm': isActive(),
+                  'text-ink-disabled hover:text-accent/70 hover-transition-text':
+                    !isActive(),
+                }}
+                onClick={() => props.setActive(value)}
+              >
+                <span class="flex items-baseline gap-1 w-full">
+                  <span class="truncate">{label}</span>
+                </span>
+              </Tabs.Trigger>
             );
           }}
         </For>
-        {props.newButton}
       </Tabs.List>
     </div>
   );
 }
+

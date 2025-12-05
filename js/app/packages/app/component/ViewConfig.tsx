@@ -20,7 +20,12 @@ import { emailClient } from '@service-email/client';
 import stringify from 'json-stable-stringify';
 import { queryClient } from '../../macro-entity/src/queries/client';
 import type { UnifiedListContext } from './SoupContext';
-import { noiseFilter, signalFilter } from './soupFilters';
+import {
+  groupsFilter,
+  noiseFilter,
+  peopleFilter,
+  signalFilter,
+} from './soupFilters';
 
 // for custom views that extend the unified list view
 export type ViewType = 'project';
@@ -234,10 +239,45 @@ const ALL_VIEWCONFIG_DEFAULTS = {
       showUnreadIndicator: true,
     },
   },
+  groups: {
+    view: 'Groups',
+    filters: {
+      typeFilter: ['channel'],
+    },
+    display: {
+      showUnreadIndicator: true,
+    },
+  },
+  ai_chats: {
+    view: 'AI',
+    filters: {
+      typeFilter: ['chat'],
+    },
+    display: {
+      showUnreadIndicator: true,
+    },
+  },
+  notes: {
+    view: 'Notes',
+    filters: {
+      typeFilter: ['document'],
+      documentTypeFilter: ['md'],
+    },
+  },
+  emails: {
+    view: 'Emails',
+    filters: {
+      typeFilter: ['email'],
+    },
+    display: {
+      showUnreadIndicator: true,
+    },
+  },
   files: {
     view: 'Files',
     filters: {
       typeFilter: ['document'],
+      documentTypeFilter: ['code', 'image', 'canvas', 'pdf', 'unknown'],
     },
   },
   folders: {
@@ -301,7 +341,11 @@ export const VIEWCONFIG_FILTER_ENTITY_TYPE: readonly FilterOptions['typeFilter']
 export const VIEW_CLIENT_FILTERS: Record<ViewId, ClientFilter[]> = {
   signal: [signalFilter],
   noise: [noiseFilter],
-  people: [],
+  people: [peopleFilter],
+  groups: [groupsFilter],
+  ai_chats: [],
+  notes: [],
+  emails: [],
   files: [],
   folders: [],
   all: [],

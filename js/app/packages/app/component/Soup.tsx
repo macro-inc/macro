@@ -237,6 +237,24 @@ export function Soup() {
   });
 
   registerHotkey({
+    hotkey: ['cmd+f', 'ctrl+f'],
+    scopeId: splitHotkeyScope,
+    hotkeyToken: TOKENS.soup.switchToSearch,
+    description: 'Search',
+    keyDownHandler: () => {
+      setSelectedView('all');
+      setTimeout(() => {
+        const searchInput = document.getElementById(
+          `search-input-${handle.id}-all`
+        ) as HTMLInputElement;
+        searchInput?.focus();
+      }, 0);
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
     hotkey: ['p'],
     scopeId: splitHotkeyScope,
     description: 'Toggle Preview',

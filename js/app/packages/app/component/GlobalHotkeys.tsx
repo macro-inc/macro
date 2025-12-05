@@ -27,7 +27,6 @@ import { playSound } from '../util/sound';
 import {
   konsoleOpen,
   resetKonsoleMode,
-  setKonsoleMode,
   toggleKonsoleVisibility,
 } from './command/state';
 import { CREATABLE_BLOCKS, setCreateMenuOpen } from './Launcher';
@@ -49,12 +48,6 @@ export default function GlobalShortcuts() {
     if (!wasOpen) {
       playSound('Kick - Struct - Tight Minimal 4');
     }
-    return;
-  };
-
-  const handleSearchMenu = () => {
-    setKonsoleMode('FULL_TEXT_SEARCH');
-    toggleKonsoleVisibility();
     return;
   };
 
@@ -232,9 +225,21 @@ export default function GlobalShortcuts() {
       hotkeyToken: TOKENS.global.searchMenu,
       hotkey: 'cmd+p',
       scopeId: 'global',
-      description: 'Full text search',
+      description: 'Search in current tab',
       keyDownHandler: () => {
-        handleSearchMenu();
+        // Focus the search input in the current tab
+        setTimeout(() => {
+          const searchInputs = document.querySelectorAll<HTMLInputElement>(
+            'input[id^="search-input-"]'
+          );
+          // Find the first visible search input
+          for (const input of searchInputs) {
+            if (input.offsetParent !== null) {
+              input.focus();
+              return;
+            }
+          }
+        }, 0);
         return true;
       },
       runWithInputFocused: true,

@@ -368,11 +368,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     );
   };
 
+  
   const projectFilter = createMemo(
     () => view()?.filters?.projectFilter ?? defaultFilterOptions.projectFilter
   );
 
-  const { all: emailRecipientOptions } = useCombinedRecipients(['user']);
+  //const { all: emailRecipientOptions } = useCombinedRecipients(['user']);
   const fromFilter = createMemo(() => view()?.filters.fromFilter);
   const hasFromFilter = createMemo(() => fromFilter() !== undefined);
   const shouldFilterEmails = createMemo(() => {

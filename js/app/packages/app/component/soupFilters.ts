@@ -239,3 +239,23 @@ export const noiseFilter: ClientFilter = {
   id: 'noise',
   predicate: (entity, ctx) => !signalFilter.predicate(entity, ctx),
 };
+
+export const peopleFilter: ClientFilter = {
+  id: 'people',
+  predicate: (entity) => {
+    if (entity.type !== 'channel') return false;
+    return entity.channelType === 'direct_message';
+  },
+};
+
+export const groupsFilter: ClientFilter = {
+  id: 'groups',
+  predicate: (entity) => {
+    if (entity.type !== 'channel') return false;
+    return (
+      entity.channelType === 'organization' ||
+      entity.channelType === 'private' ||
+      entity.channelType === 'public'
+    );
+  },
+};
