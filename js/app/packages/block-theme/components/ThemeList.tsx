@@ -53,7 +53,6 @@ export function ThemeList() {
       <div
         style="
           font-family: var(--font-mono);
-          border: 1px solid var(--b4);
           overscoll-behavior: none;
           scrollbar-width: none;
           overflow-y: scroll;
@@ -62,7 +61,7 @@ export function ThemeList() {
       >
         <div
           style="
-            background-color: var(--b4);
+            background-color: var(--color-edge-muted);
             overscroll-behavior: none;
             box-sizing: border-box;
             overflow-x: hidden;
@@ -77,7 +76,7 @@ export function ThemeList() {
                 onPointerDown={() => {applyTheme(theme.id)}}
                 style="
                   grid-template-columns: min-content 1fr min-content;
-                  background-color: var(--b0);
+                  background-color: var(--b1);
                   align-items: center;
                   padding: 10px 20px;
                   cursor: var(--cursor-pointer);
@@ -109,8 +108,8 @@ export function ThemeList() {
                 <hr
                   style="
                     border: none;
+                    border-top: 1px dashed var(--color-edge-muted);
                     transition: border-color var(--transition);
-                    border-top: 1px dashed var(--b4);
                     box-sizing: border-box;
                     width: 100%;
                   "

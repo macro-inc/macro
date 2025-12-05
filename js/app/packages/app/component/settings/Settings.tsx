@@ -216,7 +216,7 @@ export function SettingsPanel() {
               </div>
 
               {/* Content area */}
-              <div style="display: grid; padding: var(--gutter-size); overflow-y: scroll; scrollbar-width: none;">
+              <div style="display: grid; overflow-y: scroll; scrollbar-width: none;">
                 <Tabs.Content value="Account" class="h-full">
                   <Suspense>
                     <Account />

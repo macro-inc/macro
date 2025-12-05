@@ -44,7 +44,7 @@ export function ThemeTools() {
         'padding': '0 12px 0 20px' /* (41 - 32) / 2 */,
         'gap': '4.5px' /* (41 - 32) / 2 */,
         'font-family': 'var( --font-mono)',
-        'border': '1px solid var(--b4)',
+        'background-color': 'var(--b1)',
         'scrollbar-width': 'none',
         'align-items': 'center',
         'overflow': 'hidden',
@@ -61,7 +61,7 @@ export function ThemeTools() {
       <hr
         style="
           border: none;
-          border-top: 1px dashed var(--b4);
+          border-top: 1px dashed var(--color-edge-muted);
           box-sizing: border-box;
           width: 100%;
         "
@@ -75,6 +75,7 @@ export function ThemeTools() {
           // tooltip={{label: "Delete Theme"}}
           icon={IconTrash}
           theme="base"
+          size="sm"
         />
       </Show>
 
@@ -86,6 +87,7 @@ export function ThemeTools() {
           // tooltip={{label: "Save Theme"}}
           icon={IconSave}
           theme="base"
+          size="sm"
         />
       </Show>
 
@@ -95,6 +97,7 @@ export function ThemeTools() {
           onPointerDown={copyTokens}
           icon={IconFigma}
           theme="base"
+          size="sm"
         />
       </Show>*/}
 
@@ -104,6 +107,7 @@ export function ThemeTools() {
           onPointerDown={exportTheme}
           icon={IconClipboard}
           theme="base"
+          size="sm"
         />
       </Show>
 
@@ -112,6 +116,7 @@ export function ThemeTools() {
         onPointerDown={invertTheme}
         icon={IconLightDark}
         theme="base"
+        size="sm"
       />
 
       <IconButton
@@ -119,6 +124,7 @@ export function ThemeTools() {
         onPointerDown={randomizeTheme}
         icon={IconDice}
         theme="base"
+        size="sm"
       />
     </div>
   );

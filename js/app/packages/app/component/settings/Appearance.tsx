@@ -17,29 +17,21 @@ export function Appearance() {
   return (
       <div
         style={{
-          'grid-template-rows': `min-content min-content ${isMobileWidth() ? '205px' : '269px'}`,
+          'grid-template-rows': 'min-content min-content 1fr',
+          'background-color': 'var(--color-edge-muted)',
+          height: '800px',
           display: 'grid',
-          gap: '8px',
+          gap: '1px',
         }}
       >
         <ThemeTools />
+        <ThemeEditorBasic />
 
         <div
           style={{
-            'grid-template-columns': '1fr',
+            'grid-template-columns': `${isMobileWidth() ? '1fr' : '1fr'}`,
             display: 'grid',
-            gap: '8px',
-          }}
-        >
-          {/*<ComputeTokens />*/}
-          <ThemeEditorBasic />
-        </div>
-
-        <div
-          style={{
-            'grid-template-columns': `${isMobileWidth() ? '1fr' : '1fr 1fr'}`,
-            display: 'grid',
-            gap: '8px',
+            gap: '1px',
           }}
         >
           <ThemeEditorAdvanced />

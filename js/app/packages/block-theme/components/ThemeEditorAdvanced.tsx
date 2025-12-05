@@ -34,7 +34,7 @@ export function ThemeEditorAdvanced(){
       <style>{`
         .theme-editor-advanced-input::selection {
           background-color: var(--a0);
-          color: var(--b0);
+          color: var(--b1);
         }
 
         .theme-editor-advanced-input.invalid {
@@ -55,7 +55,7 @@ export function ThemeEditorAdvanced(){
       >
         <div
           style="
-          border: 1px solid var(--b4);
+          border: 1px solid var(--color-edge-muted);
           overscroll-behavior: none;
           box-sizing: border-box;
           scrollbar-width: none;
@@ -66,7 +66,7 @@ export function ThemeEditorAdvanced(){
         >
           <div
             style="
-            background-color: var(--b4);
+            background-color: var(--color-edge-muted);
             box-sizing: border-box;
             overflow-x: hidden;
             display: grid;
@@ -75,8 +75,8 @@ export function ThemeEditorAdvanced(){
           >
             <div
               style="
-              border-bottom: 1px solid var(--b4);
-              background-color: var(--b0);
+              border-bottom: 1px solid var(--color-edge-muted);
+              background-color: var(--b1);
               width: calc(100% - 2px);
               align-items: center;
               position: absolute;
@@ -119,11 +119,11 @@ export function ThemeEditorAdvanced(){
                 });
 
                 return (
-                  <div style="background-color: var(--b0);">
+                  <div style="background-color: var(--b1);">
                     <div
                       style="
                       grid-template-columns: min-content 1fr min-content;
-                      background-color: var(--b4);
+                      background-color: var(--color-edge-muted);
                       align-items: center;
                       display: grid;
                       height: 41px;
@@ -132,7 +132,7 @@ export function ThemeEditorAdvanced(){
                     >
                       <div
                         style="
-                        background-color: var(--b0);
+                        background-color: var(--b1);
                         box-sizing: border-box;
                         align-items: center;
                         padding: 0 20px;
@@ -149,7 +149,7 @@ export function ThemeEditorAdvanced(){
 
                       <div
                         style="
-                        background-color: var(--b0);
+                        background-color: var(--b1);
                         box-sizing: border-box;
                         align-items: center;
                         white-space: nowrap;
@@ -181,7 +181,7 @@ export function ThemeEditorAdvanced(){
 
                       <div
                         style="
-                        background-color: var(--b0);
+                        background-color: var(--b1);
                         box-sizing: border-box;
                         white-space: nowrap;
                         align-items: center;
