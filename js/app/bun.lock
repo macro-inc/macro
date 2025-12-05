@@ -159,9 +159,6 @@
         "core": "workspace:*",
         "mermaid": "^11.6.0",
         "overlayscrollbars-solid": "^0.5.5",
-        "service-auth": "workspace:*",
-        "service-cognition": "workspace:*",
-        "service-gql": "workspace:*",
         "three": "^0.178.0",
       },
       "devDependencies": {
@@ -181,15 +178,9 @@
     },
     "packages/block-canvas": {
       "name": "block-canvas",
-      "dependencies": {
-        "service-storage": "workspace:*",
-      },
     },
     "packages/block-channel": {
       "name": "block-channel",
-      "dependencies": {
-        "service-storage": "workspace:*",
-      },
     },
     "packages/block-chat": {
       "name": "block-chat",
@@ -200,7 +191,6 @@
         "katex": "^0.16.9",
         "rehype-katex": "^7.0.0",
         "remark-math": "^6.0.0",
-        "service-cognition": "workspace:*",
       },
     },
     "packages/block-code": {
@@ -211,15 +201,9 @@
     },
     "packages/block-image": {
       "name": "block-image",
-      "dependencies": {
-        "service-storage": "workspace:*",
-      },
     },
     "packages/block-md": {
       "name": "block-markdown",
-      "dependencies": {
-        "service-storage": "workspace:*",
-      },
     },
     "packages/block-pdf": {
       "name": "block-pdf",
@@ -238,15 +222,9 @@
     },
     "packages/block-unknown": {
       "name": "block-unknown",
-      "dependencies": {
-        "service-storage": "workspace:*",
-      },
     },
     "packages/block-video": {
       "name": "block-video",
-      "dependencies": {
-        "service-storage": "workspace:*",
-      },
     },
     "packages/core": {
       "name": "core",
@@ -338,51 +316,6 @@
         "@datadog/browser-logs": "^6.22.0",
         "@datadog/browser-rum": "^6.22.0",
       },
-    },
-    "packages/service-auth": {
-      "name": "service-auth",
-    },
-    "packages/service-cognition": {
-      "name": "service-cognition",
-    },
-    "packages/service-comms": {
-      "name": "service-comms",
-    },
-    "packages/service-connection": {
-      "name": "service-connection",
-    },
-    "packages/service-email": {
-      "name": "service-email",
-    },
-    "packages/service-gql": {
-      "name": "service-gql",
-    },
-    "packages/service-insight": {
-      "name": "service-insight",
-    },
-    "packages/service-notification": {
-      "name": "service-notification",
-    },
-    "packages/service-organization": {
-      "name": "service-organization",
-    },
-    "packages/service-properties": {
-      "name": "service-properties",
-    },
-    "packages/service-search": {
-      "name": "service-search",
-    },
-    "packages/service-storage": {
-      "name": "service-storage",
-    },
-    "packages/service-stripe": {
-      "name": "service-stripe",
-    },
-    "packages/service-sync": {
-      "name": "service-sync",
-    },
-    "packages/service-unfurl": {
-      "name": "service-unfurl",
     },
     "packages/tauri": {
       "name": "@macro/tauri",
@@ -3208,36 +3141,6 @@
     "seroval": ["seroval@1.3.2", "", {}, "sha512-RbcPH1n5cfwKrru7v7+zrZvjLurgHhGyso3HTyGtRivGWgYjbOmGuivCQaORNELjNONoK35nj28EoWul9sb1zQ=="],
 
     "seroval-plugins": ["seroval-plugins@1.3.2", "", { "peerDependencies": { "seroval": "^1.0" } }, "sha512-0QvCV2lM3aj/U3YozDiVwx9zpH0q8A60CTWIv4Jszj/givcudPb48B+rkU5D51NJ0pTpweGMttHjboPa9/zoIQ=="],
-
-    "service-auth": ["service-auth@workspace:packages/service-auth"],
-
-    "service-cognition": ["service-cognition@workspace:packages/service-cognition"],
-
-    "service-comms": ["service-comms@workspace:packages/service-comms"],
-
-    "service-connection": ["service-connection@workspace:packages/service-connection"],
-
-    "service-email": ["service-email@workspace:packages/service-email"],
-
-    "service-gql": ["service-gql@workspace:packages/service-gql"],
-
-    "service-insight": ["service-insight@workspace:packages/service-insight"],
-
-    "service-notification": ["service-notification@workspace:packages/service-notification"],
-
-    "service-organization": ["service-organization@workspace:packages/service-organization"],
-
-    "service-properties": ["service-properties@workspace:packages/service-properties"],
-
-    "service-search": ["service-search@workspace:packages/service-search"],
-
-    "service-storage": ["service-storage@workspace:packages/service-storage"],
-
-    "service-stripe": ["service-stripe@workspace:packages/service-stripe"],
-
-    "service-sync": ["service-sync@workspace:packages/service-sync"],
-
-    "service-unfurl": ["service-unfurl@workspace:packages/service-unfurl"],
 
     "set-blocking": ["set-blocking@2.0.0", "", {}, "sha512-KiKBS8AnWGEyLzofFfmvKwpdPzqiy16LvQfK3yv/fVH7Bj13/wl3JSR1J+rfgRE9q7xUJK4qvgS8raSOeLUehw=="],
 
