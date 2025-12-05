@@ -258,6 +258,18 @@ export function ComposeEmailInput(props: {
         <div class="text-failure-ink text-sm mt-1">{errorMsg()}</div>
       </Show>
       <div class="w-full h-full flex flex-col">
+        <Show when={showFormatRibbon()}>
+          <FormatRibbon
+            state={formatState}
+            inlineFormat={(format: TextFormatType) => {
+              editor()?.dispatchCommand(FORMAT_TEXT_COMMAND, format);
+            }}
+            nodeFormat={(transform: NodeTransformType) => {
+              editor()?.dispatchCommand(NODE_TRANSFORM, transform);
+            }}
+          />
+        </Show>
+
         <div
           class="min-h-20 grow w-full h-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 px-3 pt-2 sm:pb-4"
           ref={bodyDiv}
@@ -305,17 +317,6 @@ export function ComposeEmailInput(props: {
             // setFormatState={setFormatState}
           />
         </div>
-        <Show when={showFormatRibbon()}>
-          <FormatRibbon
-            state={formatState}
-            inlineFormat={(format: TextFormatType) => {
-              editor()?.dispatchCommand(FORMAT_TEXT_COMMAND, format);
-            }}
-            nodeFormat={(transform: NodeTransformType) => {
-              editor()?.dispatchCommand(NODE_TRANSFORM, transform);
-            }}
-          />
-        </Show>
         <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2 allow-css-brackets">
           <div class="flex flex-row items-center gap-2">
             <div class="relative" ref={attachButtonRef}>
