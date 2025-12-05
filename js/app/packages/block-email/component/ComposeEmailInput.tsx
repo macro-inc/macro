@@ -1,25 +1,14 @@
-import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
-import { globalSplitManager } from '@app/signal/splitLayout';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
-import { toast } from '@core/component/Toast/Toast';
 import { fileDrop } from '@core/directive/fileDrop';
-import type { WithCustomUserInput } from '@core/user';
-import { isErr } from '@core/util/maybeResult';
 import TextAa from '@icon/regular/text-aa.svg';
 import type { DocumentMentionInfo } from '@lexical-core';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import { emailClient } from '@service-email/client';
-import type {
-  ContactInfo,
-  Link as EmailAccountLink,
-  MessageToSend,
-} from '@service-email/generated/schemas';
 import { useUserId } from '@service-gql/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
