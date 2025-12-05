@@ -60,6 +60,12 @@ pub struct Config {
 
     /// The redis uri for macro cache
     pub redis_uri: String,
+
+    /// Auth service secret key, used for internal access
+    pub auth_service_secret_key: String,
+
+    /// URL for auth service
+    pub auth_service_url: String,
 }
 
 impl Config {
@@ -122,6 +128,12 @@ impl Config {
 
         let redis_uri = std::env::var("REDIS_URI").context("REDIS_URI must be provided")?;
 
+        let auth_service_secret_key = std::env::var("AUTHENTICATION_SERVICE_SECRET_KEY")
+            .context("AUTHENTICATION_SERVICE_SECRET_KEY must be provided")?;
+
+        let auth_service_url = std::env::var("AUTHENTICATION_SERVICE_URL")
+            .context("AUTHENTICATION_SERVICE_URL must be provided")?;
+
         Ok(Config {
             base_url,
             database_url,
@@ -139,6 +151,8 @@ impl Config {
             apple_bundle_id,
             push_notification_event_handler_queue,
             redis_uri,
+            auth_service_secret_key,
+            auth_service_url,
         })
     }
 }

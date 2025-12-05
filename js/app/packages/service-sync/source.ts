@@ -10,7 +10,7 @@ import {
   type TimeoutError,
 } from '@core/collab/source';
 import { SYNC_SERVICE_HOSTS } from '@core/constant/servers';
-import { bytesEqual } from '@core/util/bytesEqual';
+import { arrayEquals } from '@core/util/compareUtils';
 import { isErr as isChaseError } from '@core/util/maybeResult';
 import { storageServiceClient } from '@service-storage/client';
 import { createEventBus } from '@solid-primitives/event-bus';
@@ -271,7 +271,7 @@ export const createSyncServiceSource = async (
         untilMessage(ws, (message) => {
           return (
             message.isRemoteUpdateSince() &&
-            bytesEqual(message.value.frontiers, encodedFrontiers)
+            arrayEquals(message.value.frontiers, encodedFrontiers)
           );
         }),
         TIMEOUTS.REQUEST_UPDATES_SINCE,

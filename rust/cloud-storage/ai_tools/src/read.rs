@@ -22,10 +22,8 @@ pub struct ReadResponse {
 #[serde(rename_all = "camelCase")]
 #[serde(tag = "type")]
 pub enum ReadContent {
-    Document {
-        document_id: String,
-        content: String,
-        metadata: DocumentMetadata,
+    Documents {
+        documents: Vec<DocumentItem>,
     },
     Channel {
         channel_id: String,
@@ -51,6 +49,14 @@ pub struct DocumentMetadata {
     pub file_type: Option<String>,
     pub project_id: Option<String>,
     pub deleted: bool,
+}
+
+#[derive(Debug, JsonSchema, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentItem {
+    pub document_id: String,
+    pub content: String,
+    pub metadata: DocumentMetadata,
 }
 
 #[derive(Debug, JsonSchema, Serialize)]
@@ -100,7 +106,7 @@ pub struct Read {
     )]
     pub content_type: ContentType,
     #[schemars(
-        description = "ID(s) of the content to read. IMPORTANT: Currently only chat-message content type supports MULTIPLE ids! For all other content types provide a single id."
+        description = "ID(s) of the content to read. IMPORTANT: document, channel-message, chat-message, and email-message content types support MULTIPLE ids! For all other content types (channel, chat-thread, email-thread) provide a single id."
     )]
     pub ids: Vec<String>,
     #[schemars(
@@ -183,43 +189,52 @@ impl Read {
         context: &ToolServiceContext,
         request_context: &RequestContext,
     ) -> Result<ReadContent, ToolCallError> {
-        let id = self.provide_single_id()?;
+        let mut documents = Vec::new();
 
-        let document_fetcher = context
-            .scribe
-            .document
-            .fetch_with_auth(&id, request_context.jwt_token.clone());
+        for id in &self.ids {
+            let document_fetcher = context
+                .scribe
+                .document
+                .fetch_with_auth(id, request_context.jwt_token.clone());
 
-        let document_with_content =
-            document_fetcher
-                .document_content()
-                .await
-                .map_err(|e| ToolCallError {
-                    description: format!("failed to fetch document content: {}", e),
-                    internal_error: e,
-                })?;
+            let document_with_content = match document_fetcher.document_content().await {
+                Ok(doc) => doc,
+                Err(e) => {
+                    tracing::warn!("failed to fetch document {}: {}", id, e);
+                    continue; // Skip failed documents instead of failing the entire request
+                }
+            };
 
-        let metadata = document_with_content.metadata().clone();
-        let content_str =
-            document_with_content
-                .content
-                .text_content()
-                .map_err(|e| ToolCallError {
-                    description: format!("failed to extract text content: {}", e),
-                    internal_error: e,
-                })?;
+            let metadata = document_with_content.metadata().clone();
+            let content_str = match document_with_content.content.text_content() {
+                Ok(content) => content,
+                Err(e) => {
+                    tracing::warn!("failed to extract text content for document {}: {}", id, e);
+                    continue;
+                }
+            };
 
-        Ok(ReadContent::Document {
-            document_id: id,
-            content: content_str,
-            metadata: DocumentMetadata {
-                document_name: metadata.document_name,
-                owner: metadata.owner,
-                file_type: metadata.file_type,
-                project_id: metadata.project_id,
-                deleted: metadata.deleted_at.is_some(),
-            },
-        })
+            documents.push(DocumentItem {
+                document_id: id.clone(),
+                content: content_str,
+                metadata: DocumentMetadata {
+                    document_name: metadata.document_name,
+                    owner: metadata.owner,
+                    file_type: metadata.file_type,
+                    project_id: metadata.project_id,
+                    deleted: metadata.deleted_at.is_some(),
+                },
+            });
+        }
+
+        if documents.is_empty() {
+            return Err(ToolCallError {
+                description: "failed to fetch any documents".to_string(),
+                internal_error: anyhow::anyhow!("all document fetches failed"),
+            });
+        }
+
+        Ok(ReadContent::Documents { documents })
     }
 
     async fn read_channel(
@@ -272,26 +287,53 @@ impl Read {
         context: &ToolServiceContext,
         request_context: &RequestContext,
     ) -> Result<ReadContent, ToolCallError> {
-        let id = self.provide_single_id()?;
+        let mut transcripts = Vec::new();
+        let mut channel_id = String::new();
 
-        // Get messages with context
-        let transcript = context
-            .scribe
-            .channel
-            .get_message_with_context(id.as_str(), 0, 0, &request_context.jwt_token)
-            .await
-            .map_err(|e| ToolCallError {
-                description: format!("failed to fetch channel message with context: {}", e),
-                internal_error: e,
-            })?;
+        for id in &self.ids {
+            // Get messages with context
+            let transcript = match context
+                .scribe
+                .channel
+                .get_message_with_context(id.as_str(), 0, 0, &request_context.jwt_token)
+                .await
+            {
+                Ok(t) => t,
+                Err(e) => {
+                    tracing::warn!("failed to fetch channel message {}: {}", id, e);
+                    continue; // Skip failed messages instead of failing the entire request
+                }
+            };
+
+            // Use the channel_id from the first message
+            if channel_id.is_empty() {
+                channel_id = id.clone();
+            }
+
+            transcripts.push(transcript);
+        }
+
+        if transcripts.is_empty() {
+            return Err(ToolCallError {
+                description: "failed to fetch any channel messages".to_string(),
+                internal_error: anyhow::anyhow!("all channel message fetches failed"),
+            });
+        }
+
+        // Combine transcripts with separators for multiple messages
+        let combined_transcript = if transcripts.len() == 1 {
+            transcripts.into_iter().next().unwrap()
+        } else {
+            transcripts.join("\n\n---\n\n")
+        };
 
         // Note: We don't fetch channel metadata here since the user is focused on a specific message
         // The message_id itself doesn't directly give us the channel_id, but the transcript
         // includes the conversation context
         Ok(ReadContent::Channel {
-            channel_id: id,
+            channel_id,
             channel_name: None,
-            transcript,
+            transcript: combined_transcript,
         })
     }
 
@@ -365,24 +407,48 @@ impl Read {
         context: &ToolServiceContext,
         request_context: &RequestContext,
     ) -> Result<ReadContent, ToolCallError> {
-        let id = self.provide_single_id()?;
-        let parsed_message = context
-            .scribe
-            .email
-            .get_email_message_by_id(&id, Some(&request_context.jwt_token))
-            .await
-            .map_err(|e| ToolCallError {
-                description: format!("failed to fetch email message: {}", e),
-                internal_error: e,
-            })?;
-        let subject = parsed_message.subject.clone();
+        let mut email_messages = Vec::new();
+        let mut subject = None;
+        let mut thread_id = String::new();
 
-        let email_message = EmailMessage::from(parsed_message);
+        for id in &self.ids {
+            let parsed_message = match context
+                .scribe
+                .email
+                .get_email_message_by_id(id, Some(&request_context.jwt_token))
+                .await
+            {
+                Ok(msg) => msg,
+                Err(e) => {
+                    tracing::warn!("failed to fetch email message {}: {}", id, e);
+                    continue; // Skip failed messages instead of failing the entire request
+                }
+            };
+
+            // Use the subject from the first message
+            if subject.is_none() {
+                subject = parsed_message.subject.clone();
+            }
+
+            // Use the thread_id from the first message
+            if thread_id.is_empty() {
+                thread_id = id.clone();
+            }
+
+            email_messages.push(EmailMessage::from(parsed_message));
+        }
+
+        if email_messages.is_empty() {
+            return Err(ToolCallError {
+                description: "failed to fetch any email messages".to_string(),
+                internal_error: anyhow::anyhow!("all email message fetches failed"),
+            });
+        }
 
         Ok(ReadContent::Email {
-            thread_id: id,
+            thread_id,
             subject,
-            messages: vec![email_message],
+            messages: email_messages,
         })
     }
 }

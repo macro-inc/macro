@@ -99,6 +99,7 @@ pub(in crate::api) async fn create_document_handler(
             project_id: req.project_id.as_deref(),
             email_attachment_id: req.email_attachment_id,
             created_at: req.created_at.as_ref(),
+            is_task: req.is_task,
         },
     )
     .await;

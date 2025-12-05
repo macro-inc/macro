@@ -21,7 +21,8 @@ const HEARTBEAT_INTERVAL = 300000;
 const HEARTBEAT_TIMEOUT = 5000;
 
 export const ws = new WebsocketBuilder(SERVER_HOSTS['websocket-service'])
-  .withBackoff(new ConstantBackoff(1500))
+  .withBackoff(new ConstantBackoff(2_000))
+  .withMaxRetries(20)
   .withHeartbeat({
     pingMessage: JSON.stringify({ action: 'wsping' }),
     pongMessage: 'pong',

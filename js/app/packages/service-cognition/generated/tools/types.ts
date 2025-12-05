@@ -169,6 +169,16 @@ export interface ListEmailsOutput {
     isDraft: boolean;
     isImportant: boolean;
     isRead: boolean;
+    labels: {
+      createdAt: string;
+      id: string;
+      labelListVisibility: 'LabelShow' | 'LabelShowIfUnread' | 'LabelHide';
+      linkId: string;
+      messageListVisibility: 'Show' | 'Hide';
+      name: string;
+      providerLabelId: string;
+      type: 'System' | 'User';
+    }[];
     macroAttachments: {
       dbId: string;
       itemId: string;
@@ -253,7 +263,7 @@ export interface ReadInput {
     | 'email-thread'
     | 'email-message';
   /**
-   * ID(s) of the content to read. IMPORTANT: Currently only chat-message content type supports MULTIPLE ids! For all other content types provide a single id.
+   * ID(s) of the content to read. IMPORTANT: document, channel-message, chat-message, and email-message content types support MULTIPLE ids! For all other content types (channel, chat-thread, email-thread) provide a single id.
    */
   ids: string[];
   /**
@@ -273,16 +283,18 @@ export interface ReadInput {
 export interface ReadOutput {
   content:
     | {
-        content: string;
-        document_id: string;
-        metadata: {
-          deleted: boolean;
-          documentName: string;
-          fileType?: string | null;
-          owner: string;
-          projectId?: string | null;
-        };
-        type: 'document';
+        documents: {
+          content: string;
+          documentId: string;
+          metadata: {
+            deleted: boolean;
+            documentName: string;
+            fileType?: string | null;
+            owner: string;
+            projectId?: string | null;
+          };
+        }[];
+        type: 'documents';
       }
     | {
         channel_id: string;

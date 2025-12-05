@@ -1,21 +1,23 @@
 use super::*;
 use macro_db_client::chat::get::ChatHistoryInfo;
+use models_opensearch::SearchEntityType;
 use opensearch_client::search::model::Highlight;
 use sqlx::types::chrono;
 
 fn create_test_response(
     chat_id: &str,
     chat_message_id: &str,
-    user_id: &str,
     content: Option<Vec<String>>,
-) -> opensearch_client::search::chats::ChatSearchResponse {
-    opensearch_client::search::chats::ChatSearchResponse {
-        chat_id: chat_id.to_string(),
-        chat_message_id: chat_message_id.to_string(),
-        user_id: user_id.to_string(),
-        role: "user".to_string(),
-        updated_at: 1234567890,
-        title: "Test Chat".to_string(),
+) -> opensearch_client::search::model::SearchHit {
+    opensearch_client::search::model::SearchHit {
+        entity_id: chat_id.to_string(),
+        entity_type: SearchEntityType::Chats,
+        goto: Some(opensearch_client::search::model::SearchGotoContent::Chats(
+            opensearch_client::search::model::SearchGotoChat {
+                chat_message_id: chat_message_id.to_string(),
+                role: "user".to_string(),
+            },
+        )),
         score: None,
         highlight: Highlight {
             name: None,
@@ -32,7 +34,9 @@ fn create_chat_history(chat_id: &str) -> macro_db_client::chat::get::ChatHistory
         updated_at: now,
         viewed_at: None,
         project_id: None,
-        ..Default::default()
+        user_id: "user_1".to_string(),
+        name: "name".to_string(),
+        deleted_at: None,
     }
 }
 
@@ -48,7 +52,6 @@ fn test_single_chat_with_content() {
     let input = vec![create_test_response(
         "chat_1",
         "msg_1",
-        "user_1",
         Some(vec!["hello world".to_string()]),
     )];
 
@@ -62,7 +65,9 @@ fn test_single_chat_with_content() {
             updated_at: now,
             viewed_at: None,
             project_id: None,
-            ..Default::default()
+            user_id: "user_1".to_string(),
+            name: "name".to_string(),
+            deleted_at: None,
         },
     );
 
@@ -73,10 +78,13 @@ fn test_single_chat_with_content() {
     assert_eq!(result[0].extra.id, "chat_1");
     assert_eq!(result[0].extra.user_id, "user_1");
     assert_eq!(result[0].extra.owner_id, "user_1");
-    assert_eq!(result[0].extra.name, "Test Chat");
+    assert_eq!(result[0].extra.name, "name");
     assert_eq!(result[0].extra.chat_search_results.len(), 1);
     assert_eq!(
-        result[0].extra.chat_search_results[0].chat_message_id,
+        result[0].extra.chat_search_results[0]
+            .chat_message_id
+            .as_ref()
+            .unwrap(),
         "msg_1"
     );
     assert_eq!(
@@ -87,7 +95,7 @@ fn test_single_chat_with_content() {
 
 #[test]
 fn test_single_chat_without_content() {
-    let input = vec![create_test_response("chat_1", "msg_1", "user_1", None)];
+    let input = vec![create_test_response("chat_1", "msg_1", None)];
 
     let mut chat_histories = HashMap::new();
     chat_histories.insert("chat_1".to_string(), create_chat_history("chat_1"));
@@ -99,15 +107,15 @@ fn test_single_chat_without_content() {
     assert_eq!(result[0].extra.id, "chat_1");
     assert_eq!(result[0].extra.user_id, "user_1");
     assert_eq!(result[0].extra.owner_id, "user_1");
-    assert_eq!(result[0].extra.name, "Test Chat");
+    assert_eq!(result[0].extra.name, "name");
     assert_eq!(result[0].extra.chat_search_results.len(), 1);
 }
 
 #[test]
 fn test_single_chat_multiple_messages() {
     let input = vec![
-        create_test_response("chat_1", "msg_1", "user_1", Some(vec!["hello".to_string()])),
-        create_test_response("chat_1", "msg_2", "user_1", Some(vec!["world".to_string()])),
+        create_test_response("chat_1", "msg_1", Some(vec!["hello".to_string()])),
+        create_test_response("chat_1", "msg_2", Some(vec!["world".to_string()])),
     ];
 
     let mut chat_histories = HashMap::new();
@@ -125,7 +133,7 @@ fn test_single_chat_multiple_messages() {
         .extra
         .chat_search_results
         .iter()
-        .map(|r| &r.chat_message_id)
+        .map(|r| r.chat_message_id.as_ref().unwrap())
         .collect();
     assert!(message_ids.contains(&&"msg_1".to_string()));
     assert!(message_ids.contains(&&"msg_2".to_string()));
@@ -134,8 +142,8 @@ fn test_single_chat_multiple_messages() {
 #[test]
 fn test_multiple_chats() {
     let input = vec![
-        create_test_response("chat_1", "msg_1", "user_1", Some(vec!["hello".to_string()])),
-        create_test_response("chat_2", "msg_2", "user_2", Some(vec!["world".to_string()])),
+        create_test_response("chat_1", "msg_1", Some(vec!["hello".to_string()])),
+        create_test_response("chat_2", "msg_2", Some(vec!["world".to_string()])),
     ];
 
     let mut chat_histories = HashMap::new();
@@ -160,19 +168,9 @@ fn test_multiple_chats() {
 #[test]
 fn test_mixed_content_presence() {
     let input = vec![
-        create_test_response(
-            "chat_1",
-            "msg_1",
-            "user_1",
-            Some(vec!["visible".to_string()]),
-        ),
-        create_test_response("chat_1", "msg_2", "user_1", None), // No content
-        create_test_response(
-            "chat_1",
-            "msg_3",
-            "user_1",
-            Some(vec!["also visible".to_string()]),
-        ),
+        create_test_response("chat_1", "msg_1", Some(vec!["visible".to_string()])),
+        create_test_response("chat_1", "msg_2", None), // No content
+        create_test_response("chat_1", "msg_3", Some(vec!["also visible".to_string()])),
     ];
 
     let mut chat_histories = HashMap::new();
@@ -198,18 +196,8 @@ fn test_mixed_content_presence() {
 #[test]
 fn test_user_id_taken_from_first_result() {
     let input = vec![
-        create_test_response(
-            "chat_1",
-            "msg_1",
-            "user_first",
-            Some(vec!["content1".to_string()]),
-        ),
-        create_test_response(
-            "chat_1",
-            "msg_2",
-            "user_second",
-            Some(vec!["content2".to_string()]),
-        ),
+        create_test_response("chat_1", "msg_1", Some(vec!["content1".to_string()])),
+        create_test_response("chat_1", "msg_2", Some(vec!["content2".to_string()])),
     ];
 
     let mut chat_histories = HashMap::new();
@@ -219,7 +207,7 @@ fn test_user_id_taken_from_first_result() {
 
     assert_eq!(result.len(), 1);
     // user_id should come from the first result (base_search_result)
-    assert_eq!(result[0].extra.user_id, "user_first");
+    assert_eq!(result[0].extra.user_id, "user_1");
     assert_eq!(result[0].extra.chat_search_results.len(), 2);
 }
 
@@ -229,7 +217,6 @@ fn test_chat_history_timestamps() {
     let input = vec![create_test_response(
         "chat_1",
         "msg_1",
-        "user_1",
         Some(vec!["hello world".to_string()]),
     )];
 
@@ -273,7 +260,6 @@ fn test_chat_history_missing_entry() {
     let input = vec![create_test_response(
         "chat_missing",
         "msg_1",
-        "user_1",
         Some(vec!["hello world".to_string()]),
     )];
 
@@ -295,9 +281,8 @@ fn test_chat_history_missing_entry() {
     // Call the function under test
     let result = construct_search_result(input, chat_histories).unwrap();
 
-    // Chats without history info should have metadata=None
-    assert_eq!(result.len(), 1);
-    assert!(result[0].metadata.is_none());
+    // Chats without history info should not be returned
+    assert_eq!(result.len(), 0);
 }
 
 #[test]
@@ -308,7 +293,6 @@ fn test_chat_history_deleted() {
     let input_deleted = vec![create_test_response(
         "chat_deleted",
         "msg_1",
-        "user_1",
         Some(vec!["hello world".to_string()]),
     )];
 
@@ -322,6 +306,8 @@ fn test_chat_history_deleted() {
             viewed_at: Some(now),
             project_id: Some("project_1".to_string()),
             deleted_at: Some(now), // Soft deleted
+            name: "name".to_string(),
+            user_id: "user_1".to_string(),
         },
     );
 
@@ -338,7 +324,6 @@ fn test_chat_history_deleted() {
     let input_not_found = vec![create_test_response(
         "chat_not_found",
         "msg_2",
-        "user_1",
         Some(vec!["stale data".to_string()]),
     )];
 
@@ -347,9 +332,8 @@ fn test_chat_history_deleted() {
     let result_not_found =
         construct_search_result(input_not_found, chat_histories_not_found).unwrap();
 
-    // Chat not in DB should be returned with metadata=None
-    assert_eq!(result_not_found.len(), 1);
-    assert!(result_not_found[0].metadata.is_none());
+    // Chat not in DB should not be returned
+    assert_eq!(result_not_found.len(), 0);
 }
 
 #[test]
@@ -358,7 +342,6 @@ fn test_chat_history_null_viewed_at() {
     let input = vec![create_test_response(
         "chat_1",
         "msg_1",
-        "user_1",
         Some(vec!["hello world".to_string()]),
     )];
 

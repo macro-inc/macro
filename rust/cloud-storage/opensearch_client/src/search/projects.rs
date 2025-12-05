@@ -3,13 +3,13 @@ use crate::{
     error::{OpensearchClientError, ResponseExt},
     search::{
         builder::{SearchQueryBuilder, SearchQueryConfig},
-        model::{Highlight, MacroEm, SearchResponse, parse_highlight_hit},
+        model::{MacroEm, SearchHit, SearchResponse, parse_highlight_hit},
         query::Keys,
     },
 };
 
 use crate::SearchOn;
-use models_opensearch::SearchIndex;
+use models_opensearch::{SearchEntityType, SearchIndex};
 use opensearch_query_builder::{BoolQueryBuilder, HighlightField, SearchRequest, ToOpenSearchJson};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -19,15 +19,16 @@ pub(crate) struct ProjectSearchConfig;
 
 impl SearchQueryConfig for ProjectSearchConfig {
     const USER_ID_KEY: &'static str = "user_id";
-    const TITLE_KEY: Option<&'static str> = Some("project_name");
+    const TITLE_KEY: &'static str = "project_name";
+    const ENTITY_INDEX: SearchEntityType = SearchEntityType::Projects;
 
     // Projects have no "content" to highlight match on, so match on the TITLE_KEY instead
-    fn default_highlight() -> opensearch_query_builder::Highlight<'static> {
+    fn default_highlight<'a>() -> opensearch_query_builder::Highlight<'a> {
         opensearch_query_builder::Highlight::new()
             .require_field_match(true)
             .field(
                 // we know the title key exists because it's implemented right above
-                Self::TITLE_KEY.unwrap(),
+                Self::TITLE_KEY,
                 HighlightField::new()
                     .highlight_type("plain")
                     .number_of_fragments(1)
@@ -62,11 +63,12 @@ impl ProjectQueryBuilder {
         fn disable_recency(disable_recency: bool) -> Self;
     }
 
-    pub fn build_bool_query(&self) -> Result<BoolQueryBuilder<'static>> {
-        self.inner.build_bool_query()
+    pub fn build_bool_query<'a>(&'a self) -> Result<BoolQueryBuilder<'a>> {
+        self.inner
+            .build_bool_query(self.inner.build_content_and_name_bool_query()?)
     }
 
-    fn build_search_request(&self) -> Result<SearchRequest<'static>> {
+    fn build_search_request<'a>(&'a self) -> Result<SearchRequest<'a>> {
         // Build the search request with the bool query
         // This will automatically wrap the bool query in a function score if
         // SearchOn::NameContent is used
@@ -124,22 +126,11 @@ impl ProjectSearchArgs {
     }
 }
 
-#[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct ProjectSearchResponse {
-    pub project_id: String,
-    pub user_id: String,
-    pub project_name: String,
-    pub created_at: i64,
-    pub updated_at: i64,
-    pub score: Option<f64>,
-    pub highlight: Highlight,
-}
-
 #[tracing::instrument(skip(client, args), err)]
 pub(crate) async fn search_projects(
     client: &opensearch::OpenSearch,
     args: ProjectSearchArgs,
-) -> Result<Vec<ProjectSearchResponse>> {
+) -> Result<Vec<SearchHit>> {
     let query_body = args.build()?;
 
     let response = client
@@ -170,12 +161,9 @@ pub(crate) async fn search_projects(
         .hits
         .hits
         .into_iter()
-        .map(|hit| ProjectSearchResponse {
-            project_id: hit.source.entity_id,
-            user_id: hit.source.user_id,
-            project_name: hit.source.project_name,
-            created_at: hit.source.created_at_seconds,
-            updated_at: hit.source.updated_at_seconds,
+        .map(|hit| SearchHit {
+            entity_id: hit.source.entity_id,
+            entity_type: SearchEntityType::Projects,
             score: hit.score,
             highlight: hit
                 .highlight
@@ -189,6 +177,7 @@ pub(crate) async fn search_projects(
                     )
                 })
                 .unwrap_or_default(),
+            goto: None,
         })
         .collect())
 }

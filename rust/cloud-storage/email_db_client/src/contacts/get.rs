@@ -9,48 +9,48 @@ use sqlx::types::Uuid;
 use std::collections::{HashMap, HashSet};
 
 /// fetch message sender from db
-#[tracing::instrument(skip(pool))]
-pub async fn get_contact_by_id(
+#[tracing::instrument(skip(pool), err)]
+pub async fn get_sender_by_message_id(
     pool: &PgPool,
-    address_id: Uuid,
+    message_id: Uuid,
 ) -> anyhow::Result<Option<db::contact::Contact>> {
-    sqlx::query_as!(
+    let result = sqlx::query_as!(
         db::contact::Contact,
-        "SELECT id, link_id, email_address, name, original_photo_url, sfs_photo_url, created_at, updated_at FROM email_contacts WHERE id = $1",
-        address_id
+        r#"
+            SELECT
+                c.id,
+                c.link_id,
+                c.email_address,
+                COALESCE(m.from_name, c.name) as "name", -- name from message overrides contact name
+                c.original_photo_url,
+                c.sfs_photo_url,
+                c.created_at,
+                c.updated_at
+            FROM email_messages m
+            INNER JOIN email_contacts c ON c.id = m.from_contact_id
+            WHERE m.id = $1
+            AND m.from_contact_id IS NOT NULL
+        "#,
+        message_id
     )
-        .fetch_optional(pool)
-        .await
-        .with_context(|| format!("Failed to fetch sender address with ID {}", address_id))
+    .fetch_optional(pool)
+    .await?;
+
+    Ok(result)
 }
 
 #[tracing::instrument(skip(executor))]
-pub async fn get_contacts_map<'e, E>(
+pub async fn get_senders_contacts_map<'e, E>(
     executor: E,
-    contact_ids: &[Uuid],
+    message_ids: &[Uuid],
 ) -> anyhow::Result<HashMap<Uuid, db::contact::Contact>>
 where
     E: sqlx::Executor<'e, Database = sqlx::Postgres>,
 {
-    if contact_ids.is_empty() {
-        return Ok(HashMap::new());
-    }
-
-    let contacts = sqlx::query_as!(
-        db::contact::Contact,
-        r#"
-        SELECT id, link_id, email_address, name, original_photo_url, sfs_photo_url, created_at, updated_at
-        FROM email_contacts
-        WHERE id = ANY($1)
-        "#,
-        contact_ids
-    )
-        .fetch_all(executor)
-        .await
-        .context("Failed to fetch contacts in bulk")?;
+    let db_contacts = fetch_sender_contacts_by_message_ids(executor, message_ids).await?;
 
     // Convert Vec<Contact> to HashMap<Uuid, Contact>
-    let contacts_map = contacts.into_iter().map(|c| (c.id, c)).collect();
+    let contacts_map = db_contacts.into_iter().map(|c| (c.id, c)).collect();
 
     Ok(contacts_map)
 }
@@ -81,8 +81,16 @@ pub async fn fetch_db_recipients(
         RecipientQueryResult,
         r#"
         SELECT
-            mr.message_id, c.id, c.link_id, c.email_address, c.name, c.original_photo_url, c.sfs_photo_url,
-            c.created_at, c.updated_at, mr.recipient_type as "recipient_type!: db::address::EmailRecipientType"
+            mr.message_id,
+            c.id,
+            c.link_id,
+            c.email_address,
+            COALESCE(mr.name, c.name) as "name", -- name from message overrides contact name
+            c.original_photo_url,
+            c.sfs_photo_url,
+            c.created_at,
+            c.updated_at,
+            mr.recipient_type as "recipient_type!: db::address::EmailRecipientType"
         FROM email_message_recipients mr
         JOIN email_contacts c ON mr.contact_id = c.id
         WHERE mr.message_id = $1
@@ -131,16 +139,17 @@ where
             c.id,
             c.link_id,
             c.email_address,
-            c.name,
+            COALESCE(mr.name, c.name) as "name", -- name from message overrides contact name
             c.original_photo_url,
             c.sfs_photo_url,
             c.created_at,
             c.updated_at,
             mr.recipient_type as "recipient_type!: db::address::EmailRecipientType"
-        FROM email_message_recipients mr
+        FROM email_messages m
+        JOIN email_message_recipients mr ON m.id = mr.message_id
         JOIN email_contacts c ON mr.contact_id = c.id
         WHERE
-            mr.message_id = ANY($1)
+            m.id = ANY($1)
         ORDER BY mr.message_id, mr.recipient_type
         "#,
         message_ids
@@ -227,36 +236,11 @@ pub async fn fetch_contact_by_email(
 }
 
 #[tracing::instrument(skip(pool))]
-pub async fn fetch_contact_info_by_ids(
+pub async fn fetch_sender_contact_info(
     pool: &PgPool,
-    address_ids: &[Uuid],
+    message_ids: &[Uuid],
 ) -> anyhow::Result<HashMap<Uuid, address::ContactInfo>> {
-    if address_ids.is_empty() {
-        return Ok(HashMap::new());
-    }
-
-    // Create a set of unique IDs to query
-    let unique_ids: HashSet<Uuid> = address_ids.iter().cloned().collect();
-    let unique_ids_vec: Vec<Uuid> = unique_ids.into_iter().collect();
-
-    // Fetch all email addresses that exist
-    let db_contacts = sqlx::query_as!(
-        db::contact::Contact,
-        r#"
-        SELECT id, link_id, email_address, name, original_photo_url, sfs_photo_url, created_at, updated_at
-        FROM email_contacts
-        WHERE id = ANY($1)
-        "#,
-        &unique_ids_vec
-    )
-    .fetch_all(pool)
-    .await
-    .with_context(|| {
-        format!(
-            "Failed to fetch email addresses with IDs: {:?}",
-            unique_ids_vec
-        )
-    })?;
+    let db_contacts = fetch_sender_contacts_by_message_ids(pool, message_ids).await?;
 
     let mut result = HashMap::with_capacity(db_contacts.len());
     for addr in db_contacts {
@@ -266,6 +250,52 @@ pub async fn fetch_contact_info_by_ids(
     }
 
     Ok(result)
+}
+
+#[tracing::instrument(skip(executor))]
+pub async fn fetch_sender_contacts_by_message_ids<'e, E>(
+    executor: E,
+    message_ids: &[Uuid],
+) -> anyhow::Result<Vec<db::contact::Contact>>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    if message_ids.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // Create a set of unique IDs to query
+    let unique_ids: HashSet<Uuid> = message_ids.iter().cloned().collect();
+    let unique_ids_vec: Vec<Uuid> = unique_ids.into_iter().collect();
+
+    // Fetch all email addresses that exist
+    sqlx::query_as!(
+        db::contact::Contact,
+        r#"
+            SELECT
+                c.id,
+                c.link_id,
+                c.email_address,
+                COALESCE(m.from_name, c.name) as "name", -- name from message overrides contact name
+                c.original_photo_url,
+                c.sfs_photo_url,
+                c.created_at,
+                c.updated_at
+            FROM email_messages m
+            INNER JOIN email_contacts c ON c.id = m.from_contact_id
+            WHERE m.id = ANY($1)
+            AND m.from_contact_id IS NOT NULL
+        "#,
+        &unique_ids_vec
+    )
+    .fetch_all(executor)
+    .await
+    .with_context(|| {
+        format!(
+            "Failed to fetch email addresses with IDs: {:?}",
+            unique_ids_vec
+        )
+    })
 }
 
 /// returns all email addresses and names the passed link has sent emails to.
@@ -364,80 +394,4 @@ pub async fn fetch_contacts_emails_by_link_id(
         .into_iter()
         .filter(|e| !is_generic_email(e))
         .collect())
-}
-
-/// Fetches contacts who sent messages in the specified threads, organized by thread ID
-/// Contacts are ordered chronologically by message creation time
-#[tracing::instrument(skip(executor), err)]
-pub async fn get_contacts_by_thread_ids<'e, E>(
-    executor: E,
-    thread_ids: &[Uuid],
-) -> anyhow::Result<HashMap<Uuid, Vec<service::contact::Contact>>>
-where
-    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
-{
-    if thread_ids.is_empty() {
-        return Ok(HashMap::new());
-    }
-
-    // Define a struct to hold the joined results
-    #[derive(Debug)]
-    struct ThreadContactResult {
-        thread_id: Uuid,
-        id: Uuid,
-        link_id: Uuid,
-        email_address: Option<String>,
-        name: Option<String>,
-        sfs_photo_url: Option<String>,
-    }
-
-    let results = sqlx::query_as!(
-        ThreadContactResult,
-        r#"
-        SELECT
-            m.thread_id,
-            c.id, c.link_id, c.email_address, c.name, c.sfs_photo_url
-        FROM email_messages m
-        JOIN email_contacts c ON m.from_contact_id = c.id
-        WHERE m.thread_id = ANY($1) AND m.from_contact_id IS NOT NULL
-        ORDER BY m.created_at ASC
-        "#,
-        thread_ids
-    )
-    .fetch_all(executor)
-    .await
-    .context("Failed to fetch contacts for specified thread IDs")?;
-
-    // Group results by thread_id
-    let mut thread_contacts_map: HashMap<Uuid, Vec<service::contact::Contact>> = HashMap::new();
-    let mut processed_contacts = HashMap::new(); // Track which contacts we've already processed per thread
-
-    for row in results {
-        let contact = service::contact::Contact {
-            id: Some(row.id),
-            link_id: row.link_id,
-            email_address: row.email_address,
-            name: row.name,
-            original_photo_url: None,
-            sfs_photo_url: row.sfs_photo_url,
-        };
-
-        // Create a unique key for this thread-contact combination
-        let thread_contact_key = format!("{}:{}", row.thread_id, row.id);
-
-        // Only add this contact if we haven't processed it for this thread yet
-        if let std::collections::hash_map::Entry::Vacant(e) =
-            processed_contacts.entry(thread_contact_key)
-        {
-            thread_contacts_map
-                .entry(row.thread_id)
-                .or_default()
-                .push(contact);
-
-            // Mark this contact as processed for this thread
-            e.insert(true);
-        }
-    }
-
-    Ok(thread_contacts_map)
 }

@@ -4,26 +4,34 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { ChannelSearchResultCreatedAt } from './channelSearchResultCreatedAt';
 import type { SearchHighlight } from './searchHighlight';
+import type { ChannelSearchResultMessageId } from './channelSearchResultMessageId';
 import type { ChannelSearchResultScore } from './channelSearchResultScore';
+import type { ChannelSearchResultSenderId } from './channelSearchResultSenderId';
 import type { ChannelSearchResultThreadId } from './channelSearchResultThreadId';
+import type { ChannelSearchResultUpdatedAt } from './channelSearchResultUpdatedAt';
 
 /**
  * A channel message match for a given channel id
  */
 export interface ChannelSearchResult {
-  /** When the channel message was created */
-  created_at: number;
+  /** When the channel message was created
+This is only prsent if the search result is on the message content */
+  created_at?: ChannelSearchResultCreatedAt;
   /** The highlights for the channel message */
   highlight: SearchHighlight;
-  /** The channel message id */
-  message_id: string;
+  /** The channel message id
+This is only prsent if the search result is on the message content */
+  message_id?: ChannelSearchResultMessageId;
   /** The score of the result */
   score?: ChannelSearchResultScore;
-  /** The sender id */
-  sender_id: string;
+  /** The sender id
+This is only prsent if the search result is on the message content */
+  sender_id?: ChannelSearchResultSenderId;
   /** The channel message thread id */
   thread_id?: ChannelSearchResultThreadId;
-  /** When the channel message was last updated */
-  updated_at: number;
+  /** When the channel message was last updated
+This is only prsent if the search result is on the message content */
+  updated_at?: ChannelSearchResultUpdatedAt;
 }

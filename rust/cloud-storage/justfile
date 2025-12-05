@@ -56,6 +56,7 @@ setup_test_envs:
     echo "DATABASE_URL={{ MACRODB }}" >> ./frecency/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./soup/.env
     echo "DATABASE_URL={{ MACRODB }}" >> ./email/.env
+    echo "DATABASE_URL={{ MACRODB }}" >> ./system_properties/.env
 
 setup_macrodb:
     just macro_db_client/migrate_db

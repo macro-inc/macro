@@ -1,4 +1,7 @@
 //! Entity property get operations.
+//!
+//! TODO: The `pd.is_system = FALSE` filters are temporary. In a future PR, system properties
+//!       will be properly supported and returned to users via the API.
 
 use crate::error::PropertiesDatabaseError;
 use sqlx::{Pool, Postgres};
@@ -280,6 +283,7 @@ pub async fn get_entity_properties_values(
         FROM entity_properties ep
         INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
         WHERE ep.entity_id = $1 AND ep.entity_type = $2
+          AND pd.is_system = FALSE
         "#,
         entity_id,
         entity_type as EntityType
@@ -357,6 +361,7 @@ pub async fn get_bulk_entity_properties_values(
         WHERE (ep.entity_id, ep.entity_type) IN (
             SELECT * FROM UNNEST($1::TEXT[], $2::property_entity_type[])
         )
+          AND pd.is_system = FALSE
         "#,
         &entity_ids,
         &entity_types as &[EntityType]
@@ -436,12 +441,12 @@ mod tests {
         assert_eq!(properties.len(), 6);
 
         // Verify they are sorted by display name (case-insensitive alphabetical)
-        assert_eq!(properties[0].definition.display_name, "Assigned To");
-        assert_eq!(properties[1].definition.display_name, "Completed");
-        assert_eq!(properties[2].definition.display_name, "Department");
-        assert_eq!(properties[3].definition.display_name, "Description");
-        assert_eq!(properties[4].definition.display_name, "Due Date");
-        assert_eq!(properties[5].definition.display_name, "Priority");
+        assert_eq!(properties[0].definition.display_name, "Test Assigned To");
+        assert_eq!(properties[1].definition.display_name, "Test Completed");
+        assert_eq!(properties[2].definition.display_name, "Test Department");
+        assert_eq!(properties[3].definition.display_name, "Test Description");
+        assert_eq!(properties[4].definition.display_name, "Test Due Date");
+        assert_eq!(properties[5].definition.display_name, "Test Priority");
 
         Ok(())
     }
@@ -460,7 +465,7 @@ mod tests {
         // Find Priority property
         let priority_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Priority")
+            .find(|p| p.definition.display_name == "Test Priority")
             .unwrap();
 
         // Verify it has options attached
@@ -485,7 +490,7 @@ mod tests {
         // Find Completed property (boolean)
         let completed_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Completed")
+            .find(|p| p.definition.display_name == "Test Completed")
             .unwrap();
 
         // Verify boolean value
@@ -512,7 +517,7 @@ mod tests {
         // Find Description property (string)
         let desc_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Description")
+            .find(|p| p.definition.display_name == "Test Description")
             .unwrap();
 
         // Verify string value
@@ -694,7 +699,7 @@ mod tests {
         // Find Assigned To property (ENTITY type with 1 user)
         let assigned_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Assigned To")
+            .find(|p| p.definition.display_name == "Test Assigned To")
             .unwrap();
 
         // Verify it's an ENTITY type property
@@ -731,7 +736,7 @@ mod tests {
         // Find Assigned To property (ENTITY type with 2 users)
         let assigned_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Assigned To")
+            .find(|p| p.definition.display_name == "Test Assigned To")
             .unwrap();
 
         // Verify it has 2 user references
@@ -768,7 +773,7 @@ mod tests {
         // Find Assigned To property (NULL value)
         let assigned_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Assigned To")
+            .find(|p| p.definition.display_name == "Test Assigned To")
             .unwrap();
 
         // Verify the property exists but value is NULL
@@ -792,7 +797,7 @@ mod tests {
         // Find Department property (multi-select SELECT_STRING)
         let dept_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Department")
+            .find(|p| p.definition.display_name == "Test Department")
             .unwrap();
 
         // Verify it's multi-select
@@ -831,7 +836,7 @@ mod tests {
         // Find Due Date property (DATE type)
         let date_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Due Date")
+            .find(|p| p.definition.display_name == "Test Due Date")
             .unwrap();
 
         // Verify it's a DATE type
@@ -862,7 +867,7 @@ mod tests {
         // Find Website property (LINK type)
         let link_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Website")
+            .find(|p| p.definition.display_name == "Test Website")
             .unwrap();
 
         // Verify it's a LINK type
@@ -891,7 +896,7 @@ mod tests {
         // Find Budget property (NUMBER type)
         let budget_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Budget")
+            .find(|p| p.definition.display_name == "Test Budget")
             .unwrap();
 
         // Verify it's a NUMBER type

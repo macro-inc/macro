@@ -29,6 +29,7 @@ impl PermissionError {
 
 /// Checks if a user has view access to an entity (View, Comment, Edit, or Owner level).
 /// Supports: Document, Chat, Project, Thread, Channel, Macro.
+/// For anonymous users (empty user_id), only allows access to publicly shared entities.
 #[tracing::instrument(skip(context), fields(user_id = %user_id, entity_id = %entity_ref.entity_id, entity_type = ?entity_ref.entity_type))]
 pub async fn check_entity_view_permission(
     context: &ApiContext,
@@ -75,8 +76,8 @@ async fn get_access_level(
         EntityType::Project => "project",
         EntityType::Thread => "thread",
         EntityType::Channel => "channel",
-        EntityType::User => {
-            tracing::warn!("property operations not supported for User entity type");
+        EntityType::Company | EntityType::Task | EntityType::User => {
+            tracing::warn!("property operations not supported for this entity type");
             return Err(PermissionError::UnsupportedEntityType);
         }
     };

@@ -128,6 +128,21 @@ pub async fn main() -> anyhow::Result<()> {
     #[cfg(feature = "notification_worker")]
     {
         use std::sync::Arc;
+
+        let auth_service_internal_key = match config.environment {
+            Environment::Local => config.auth_service_secret_key.clone(),
+            _ => secretsmanager_client
+                .get_secret_value(config.auth_service_secret_key.clone())
+                .await
+                .context("unable to get secret")?
+                .to_string(),
+        };
+
+        let auth_service_client = authentication_service_client::AuthServiceClient::new(
+            auth_service_internal_key,
+            config.auth_service_url.clone(),
+        );
+
         let queue_worker_context = notification::context::QueueWorkerContext {
             db: db.clone(),
             worker: Arc::new(notification_worker),
@@ -135,7 +150,9 @@ pub async fn main() -> anyhow::Result<()> {
             ses_client: Arc::new(ses_client),
             sns_client: Arc::new(sns_client.clone()),
             macro_cache_client: Arc::new(macro_cache_client),
+            auth_service_client: Arc::new(auth_service_client),
         };
+
         // Spawn the runner in a task of it's own so we don't block the main thread
         tokio::spawn(
             async move { notification::run_notification_worker(queue_worker_context).await },

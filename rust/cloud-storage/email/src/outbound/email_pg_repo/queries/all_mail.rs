@@ -46,7 +46,7 @@ pub(crate) async fn all_mail_preview_cursor(
                 )
             ) AS "is_important!",
             c.email_address AS "sender_email?",
-            c.name AS "sender_name?",
+            COALESCE(lmp.from_name, c.name) AS "sender_name?",
             c.sfs_photo_url as "sender_photo_url?"
         FROM (
             -- Step 1: Efficiently find, sort, and limit the top N+1 threads.
@@ -89,7 +89,8 @@ pub(crate) async fn all_mail_preview_cursor(
                 m.subject,
                 m.snippet,
                 m.is_draft,
-                m.from_contact_id
+                m.from_contact_id,
+                m.from_name
             FROM email_messages m
             WHERE m.thread_id = t.id
               AND m.is_draft = FALSE
