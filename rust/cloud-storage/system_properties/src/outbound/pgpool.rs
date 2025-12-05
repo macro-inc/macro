@@ -103,7 +103,7 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
             SELECT property_definition_id, values
             FROM entity_properties
             WHERE entity_id = $1
-              AND entity_type = 'Task'
+              AND entity_type = 'TASK'
             "#,
         )
         .bind(from_task_id)
@@ -127,7 +127,7 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
                 SELECT 
                     u.id,
                     u.entity_id,
-                    'Task'::property_entity_type,
+                    'TASK'::property_entity_type,
                     u.property_definition_id,
                     u.values
                 FROM UNNEST(
@@ -166,7 +166,7 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
             SELECT 
                 u.id,
                 u.entity_id,
-                'Task'::property_entity_type,
+                'TASK'::property_entity_type,
                 u.property_definition_id,
                 NULL
             FROM UNNEST(
