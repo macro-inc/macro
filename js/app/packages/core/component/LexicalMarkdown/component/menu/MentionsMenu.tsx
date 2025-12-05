@@ -1104,7 +1104,6 @@ export function MentionsMenu(props: {
         const categoryLabel = {
           users: 'People',
           items: 'Documents & Channels',
-          contacts: 'Contacts & Companies',
           dates: 'Dates',
           emails: 'Emails',
         }[currentViewAllMode];
