@@ -5,7 +5,6 @@ use models_email::db::contact::ContactPhotoless;
 use once_cell::sync::Lazy;
 use regex::Regex;
 
-
 pub fn normalize_contact(contact: ContactPhotoless) -> ContactPhotoless {
     let normalized_name = if email_utils::is_generic_email(&contact.email_address) {
         None
