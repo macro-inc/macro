@@ -1,5 +1,3 @@
-
-
 // import { customCursorEnabled, setCustomCursorEnabled } from '../custom-cursor/custom-cursor';
 import { ThemeEditorAdvanced } from '../../../block-theme/components/ThemeEditorAdvanced';
 import { ThemeEditorBasic } from '../../../block-theme/components/ThemeEditorBasic';
@@ -14,34 +12,26 @@ import { isMobileWidth } from '@core/mobile/mobileWidth';
 export function Appearance() {
   // const [cursorEnabled, setCursorEnabled] = createSignal(customCursorEnabled());
 
+  let state = true;
+
   return (
       <div
         style={{
-          'grid-template-rows': 'min-content 1fr min-content 1fr',
+          'grid-template-areas': `${state ? "'tools' 'basic' 'list' 'advanced'" : "'tools tools' 'basic basic' 'list advanced'"}`,
+          'grid-template-rows': `${state ? 'min-content min-content 1fr 1fr' : 'min-content min-content 1fr'}`,
+          'grid-template-columns': `${state ? '1fr' : '1fr 1fr'}`,
           'background-color': 'var(--color-edge-muted)',
           'position': 'absolute',
-          overflow: 'hidden',
-          display: 'grid',
+          'overflow': 'hidden',
+          'display': 'grid',
           'inset': '0',
-          gap: '1px',
+          'gap': '1px',
         }}
       >
-        <ThemeTools />
-        <ThemeList />
-        <ThemeEditorBasic />
-
-        <div
-          style={{
-            'grid-template-columns': `${isMobileWidth() ? '1fr' : '1fr'}`,
-            display: 'grid',
-            gap: '1px',
-            overflow: 'auto',
-            'min-height': '0'
-          }}
-        >
-          <ThemeEditorAdvanced />
-
-        </div>
+        <div style="grid-area: tools;"><ThemeTools /></div>
+        <div style="grid-area: basic;"><ThemeEditorBasic /></div>
+        <div style="grid-area: list; overflow: hidden;"><ThemeList/></div>
+        <div style="grid-area: advanced; overflow: hidden;"><ThemeEditorAdvanced /></div>
 
         {/*<Show when={ENABLE_CUSTOM_CURSOR}>
           <div

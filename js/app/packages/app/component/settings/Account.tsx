@@ -1,11 +1,11 @@
-import { capitalize } from '@block-pdf/util/StringUtils';
-import { useHasPaidAccess } from '@core/auth/license';
-import { useLogout } from '@core/auth/logout';
-import EditableField from '@core/component/EditableField';
 import { uploadProfilePicture } from '@core/component/ProfilePicture';
-import { TabContent, TabContentRow } from '@core/component/TabContent';
+import { TabContentRow } from '@core/component/TabContent';
+import EditableField from '@core/component/EditableField';
+import { capitalize } from '@block-pdf/util/StringUtils';
 import { TextButton } from '@core/component/TextButton';
+import { useHasPaidAccess } from '@core/auth/license';
 import { UserIcon } from '@core/component/UserIcon';
+import { useLogout } from '@core/auth/logout';
 import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,

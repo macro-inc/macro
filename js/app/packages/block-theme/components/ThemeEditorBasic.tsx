@@ -339,7 +339,7 @@ export function ThemeEditorBasic(){
                 left: 0;
               "
             >
-              chroma:
+              Chroma:
             </div>
           </div>
           <div
@@ -416,7 +416,7 @@ export function ThemeEditorBasic(){
                 left: 0;
               "
             >
-              saturation:
+              Saturation:
             </div>
           </div>
           <div
@@ -508,7 +508,7 @@ export function ThemeEditorBasic(){
                 left: 0;
               "
             >
-              contrast:
+              Contrast:
             </div>
           </div>
           <div

@@ -23,7 +23,6 @@ import { Paywall } from './paywall/Paywall';
 import { QuickCreateMenu } from './QuickCreateMenu';
 import { RightbarWrapper } from './rightbar/Rightbar';
 import { SettingsWrapper } from './settings/SettingsWrapper';
-import { setViewportOffset } from './settings/Settings';
 
 const AUTH_URLS = [
   '/app/login',
@@ -64,7 +63,6 @@ export function Layout(props: RouteSectionProps) {
         `${window.visualViewport.height}px`
       );
 
-      setViewportOffset(window.visualViewport.offsetTop);
     }
   };
 
@@ -73,7 +71,6 @@ export function Layout(props: RouteSectionProps) {
       window.visualViewport.addEventListener('resize', handleResize);
       window.visualViewport.addEventListener('scroll', handleResize);
       handleResize();
-      setViewportOffset(window.visualViewport.offsetTop);
     }
 
     if (sessionStorage.getItem('showUpgradeModal') === 'true') {

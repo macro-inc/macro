@@ -89,7 +89,7 @@ export function ThemeEditorAdvanced(){
                 onChange={setDisplayType}
                 value={displayType()}
                 list={formatArray}
-                label="format:"
+                label="Format"
                 size="SM"
               />
             </div>

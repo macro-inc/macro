@@ -1,14 +1,14 @@
 import { type SettingsTab, setSettingsOpen, useSettingsState } from '@core/constant/SettingsState';
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, Suspense } from 'solid-js';
-import CornersOut from '@phosphor-icons/core/regular/corners-out.svg?component-solid';
-import CornersIn from '@phosphor-icons/core/regular/corners-in.svg?component-solid';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { DEV_MODE_ENV, ENABLE_AI_MEMORY } from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { MacroPermissions, usePermissions } from '@service-gql/client';
 import { IconButton } from '@core/component/IconButton';
+import ContractIcon from '@icon/regular/arrows-in.svg';
 import Organization from './Organization/Organization';
+import ExpandIcon from '@icon/regular/arrows-out.svg';
 import { registerHotkey } from 'core/hotkey/hotkeys';
 import { withAnalytics } from '@coparse/analytics';
 import { useOrganizationName } from '@core/user';
@@ -17,8 +17,6 @@ import { Subscription } from './Subscription';
 import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
 import { Account } from './Account';
-
-export const [viewportOffset, setViewportOffset] = createSignal(0);
 
 const SCROLL_THRESHOLD = 10;
 
@@ -203,8 +201,9 @@ export function SettingsPanel() {
                       }}
                     </For>
                   </Tabs.List>
+
                   <IconButton
-                    icon={spotlight() ? CornersIn : CornersOut}
+                    icon={spotlight() ? ContractIcon : ExpandIcon}
                     onClick={() => setSpotlight(!spotlight())}
                     tooltip={{
                       label: spotlight() ? 'Exit Spotlight' : 'Enter Spotlight Mode'
