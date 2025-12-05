@@ -120,6 +120,10 @@ export function Layout(props: RouteSectionProps) {
           'max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px))',
         'padding-bottom':
           'max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px))',
+        'padding-left':
+          'max(env(safe-area-inset-left, 0px), var(--tauri-inset-left, 0px))',
+        'padding-right':
+          'max(env(safe-area-inset-right, 0px), var(--tauri-inset-right, 0px))',
       }}>
       <Show when={isAuthenticated()}>
         <GlobalShortcuts />
