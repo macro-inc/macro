@@ -14,17 +14,18 @@ import { useDisplayName, type WithCustomUserInput } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import Caution from '@icon/regular/warning.svg';
 import { emailClient } from '@service-email/client';
-import type { Link as EmailAccountLink } from '@service-email/generated/schemas';
 import {
   createMemo,
+  createResource,
   createSignal,
   Match,
-  onMount,
   Show,
+  Suspense,
   Switch,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { ComposeEmailInput } from './ComposeEmailInput';
+import { CircleSpinner } from '@core/component/CircleSpinner';
 
 false && fileDrop;
 
@@ -37,9 +38,8 @@ export function EmailCompose() {
   const [emailInputAttachmentsStore, setEmailInputAttachmentsStore] =
     createStore<Record<string, any[]>>({});
 
-  const [link, setLink] = createSignal<EmailAccountLink | null>(null);
   const [linkError, setLinkError] = createSignal<string | null>(null);
-  onMount(async () => {
+  const [link] = createResource(async () => {
     const maybeLinks = await emailClient.getLinks();
     if (isErr(maybeLinks)) {
       setLinkError('Could not find linked email account.');
@@ -48,7 +48,7 @@ export function EmailCompose() {
     const [, { links }] = maybeLinks;
     const [link] = links;
     if (link) {
-      setLink(link);
+      return link;
     } else {
       setLinkError('Could not find linked email account.');
     }
