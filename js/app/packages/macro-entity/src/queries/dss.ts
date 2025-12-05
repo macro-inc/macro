@@ -132,7 +132,6 @@ export function createDssInfiniteQuery(
     const queryKey = queryKeys.dss({
       infinite: true,
       ...params(),
-      // Include only document_filters in query key so query refetches only when document filters change
       documentFilters: documentFilters
         ? JSON.stringify(documentFilters)
         : undefined,

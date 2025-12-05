@@ -1023,7 +1023,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   onCleanup(() => {
     createRoot((dispose) => {
       createEffect(() => {
-        // don't dispose on email block
+        // don't dispose on blocks, such as email block when marking as done, in order to update entity navigation indicator
         if (
           splitContext.panelRef()?.isConnected &&
           splitContext.handle.content().id !== 'unified-list'
