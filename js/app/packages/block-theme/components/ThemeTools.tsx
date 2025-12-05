@@ -74,7 +74,7 @@ export function ThemeTools() {
           }}
           // tooltip={{label: "Delete Theme"}}
           icon={IconTrash}
-          theme="base"
+          theme="clear"
           size="sm"
         />
       </Show>
@@ -86,7 +86,7 @@ export function ThemeTools() {
           }}
           // tooltip={{label: "Save Theme"}}
           icon={IconSave}
-          theme="base"
+          theme="clear"
           size="sm"
         />
       </Show>
@@ -96,7 +96,7 @@ export function ThemeTools() {
           tooltip={{label: "Copy Tokens"}}
           onPointerDown={copyTokens}
           icon={IconFigma}
-          theme="base"
+          theme="clear"
           size="sm"
         />
       </Show>*/}
@@ -106,7 +106,7 @@ export function ThemeTools() {
           // tooltip={{label: "Copy To Clipboard"}}
           onPointerDown={exportTheme}
           icon={IconClipboard}
-          theme="base"
+          theme="clear"
           size="sm"
         />
       </Show>
@@ -115,7 +115,7 @@ export function ThemeTools() {
         // tooltip={{label: "Toggle Light / Dark"}}
         onPointerDown={invertTheme}
         icon={IconLightDark}
-        theme="base"
+        theme="clear"
         size="sm"
       />
 
@@ -123,7 +123,7 @@ export function ThemeTools() {
         // tooltip={{label: "Randomize Theme"}}
         onPointerDown={randomizeTheme}
         icon={IconDice}
-        theme="base"
+        theme="clear"
         size="sm"
       />
     </div>
