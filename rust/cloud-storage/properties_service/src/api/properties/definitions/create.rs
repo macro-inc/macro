@@ -20,7 +20,7 @@ use properties_db_client::{
 pub enum CreatePropertyDefinitionErr {
     #[error("An unknown error has occurred")]
     InternalError(#[from] anyhow::Error),
-    #[error("Database error: {0}")]
+    #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
     #[error("{0}")]
     InvalidRequest(String),

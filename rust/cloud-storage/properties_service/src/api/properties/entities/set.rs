@@ -21,7 +21,7 @@ use properties_db_client::{
 pub enum SetEntityPropertyErr {
     #[error("An unknown error has occurred")]
     InternalError(#[from] anyhow::Error),
-    #[error("Database error: {0}")]
+    #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
     #[error("Permission error: {0}")]
     Permission(#[from] crate::api::permissions::PermissionError),

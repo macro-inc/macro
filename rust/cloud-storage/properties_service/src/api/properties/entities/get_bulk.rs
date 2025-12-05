@@ -19,7 +19,7 @@ use properties_db_client::{
 pub enum GetBulkEntityPropertiesErr {
     #[error("An unknown error has occurred")]
     InternalError(#[from] anyhow::Error),
-    #[error("Database error: {0}")]
+    #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
     #[error("Invalid request: entities array cannot be empty")]
     InvalidRequest,

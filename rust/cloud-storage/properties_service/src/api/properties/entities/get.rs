@@ -20,7 +20,7 @@ use properties_db_client::{
 pub enum GetEntityPropertiesErr {
     #[error("An unknown error has occurred")]
     Internal(#[from] anyhow::Error),
-    #[error("Database error: {0}")]
+    #[error("An internal error occurred")]
     Database(#[from] PropertiesDatabaseError),
 
     #[error("Document metadata error: {0}")]

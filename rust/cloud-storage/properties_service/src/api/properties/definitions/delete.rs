@@ -23,7 +23,7 @@ pub enum DeletePropertyDefinitionError {
     SystemPropertyNotModifiable,
     #[error("internal server error")]
     InternalServerError(#[from] anyhow::Error),
-    #[error("Database error: {0}")]
+    #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
 }
 
