@@ -28,6 +28,9 @@ pub struct CreateDocumentArgs<'a> {
     pub email_attachment_id: Option<Uuid>,
     /// Optional value. defaults to now if not included
     pub created_at: Option<&'a chrono::DateTime<chrono::Utc>>,
+    /// Whether the document is a task.
+    /// This is only applicable for md documents.
+    pub is_task: bool,
 }
 
 /// Creates a new document
@@ -68,6 +71,7 @@ pub async fn create_document_txn(
         skip_history,
         created_at: _, // overwritten below
         email_attachment_id,
+        is_task,
     } = args;
 
     // default to now if created_at argument not included
@@ -122,6 +126,24 @@ pub async fn create_document_txn(
         .await?
         .id
     };
+
+    if is_task {
+        if file_type != Some(FileType::Md) {
+            return Err(anyhow::anyhow!(
+                "is_task is only applicable for md documents"
+            ));
+        }
+
+        sqlx::query!(
+            r#"
+                INSERT INTO document_task (document_id)
+                VALUES ($1)
+            "#,
+            document_id
+        )
+        .execute(&mut **transaction)
+        .await?;
+    }
 
     // Docx documents have their versions associated with a DocumentBom
     // whereas all other file types use DocumentInstance
@@ -207,7 +229,7 @@ pub async fn create_document_txn(
         project_name,
         document_version.created_at,
         document_version.updated_at,
-        false, // TODO: @daniel please update this when you add in task creation in create document
+        is_task,
     ))
 }
 
@@ -321,6 +343,7 @@ mod tests {
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: Some(&ts),
+                is_task: false,
             },
         )
         .await?;
@@ -347,6 +370,7 @@ mod tests {
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: None,
+                is_task: false,
             },
         )
         .await?;
@@ -385,6 +409,7 @@ mod tests {
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: Some(&ts),
+                is_task: false,
             },
         )
         .await?;
@@ -414,6 +439,7 @@ mod tests {
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: None,
+                is_task: false,
             },
         )
         .await?;
@@ -444,6 +470,7 @@ mod tests {
                 skip_history: false,
                 email_attachment_id: None,
                 created_at: None,
+                is_task: false,
             },
         )
         .await;

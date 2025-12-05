@@ -10,37 +10,46 @@ pub mod metadata;
 pub mod options;
 
 pub fn router() -> Router<ApiContext> {
+    let ensure_user_exists =
+        axum::middleware::from_fn(macro_middleware::auth::ensure_user_exists::handler);
+
     Router::new()
-        // Property Definition Management - Unified endpoint with query params
+        // Property Definition Management - requires authentication
         .route(
             "/definitions",
             get(definitions::list::list_properties)
-                .post(definitions::create::create_property_definition),
+                .post(definitions::create::create_property_definition)
+                .layer(ensure_user_exists.clone()),
         )
         .route(
             "/definitions/:definition_id",
-            delete(definitions::delete::delete_property_definition),
+            delete(definitions::delete::delete_property_definition)
+                .layer(ensure_user_exists.clone()),
         )
-        // Property Options Management
+        // Property Options Management - requires authentication
         .route(
             "/definitions/:definition_id/options",
-            get(options::get::get_property_options).post(options::create::add_property_option),
+            get(options::get::get_property_options)
+                .post(options::create::add_property_option)
+                .layer(ensure_user_exists.clone()),
         )
         .route(
             "/definitions/:definition_id/options/:option_id",
-            delete(options::delete::delete_property_option),
+            delete(options::delete::delete_property_option).layer(ensure_user_exists.clone()),
         )
         // Entity Property Operations
+        // GET allows anonymous access for public entities
         .route(
             "/entities/:entity_type/:entity_id",
             get(entities::get::get_entity_properties),
         )
+        // PUT/DELETE require authentication
         .route(
             "/entities/:entity_type/:entity_id/:property_id",
-            put(entities::set::set_entity_property),
+            put(entities::set::set_entity_property).layer(ensure_user_exists.clone()),
         )
         .route(
             "/entity_properties/:entity_property_id",
-            delete(entities::delete_property::delete_entity_property),
+            delete(entities::delete_property::delete_entity_property).layer(ensure_user_exists),
         )
 }

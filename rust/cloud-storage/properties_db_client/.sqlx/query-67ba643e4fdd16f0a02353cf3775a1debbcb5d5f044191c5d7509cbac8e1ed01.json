@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT \n            id,\n            organization_id,\n            user_id,\n            display_name,\n            data_type as \"data_type: DataType\",\n            is_multi_select,\n            specific_entity_type as \"specific_entity_type: Option<EntityType>\",\n            created_at,\n            updated_at\n        FROM property_definitions\n        WHERE \n            ($1::int IS NOT NULL AND organization_id = $1) \n            OR ($2::text IS NOT NULL AND user_id = $2)\n        ORDER BY LOWER(display_name) ASC\n        ",
+  "query": "\n        SELECT \n            id,\n            organization_id,\n            user_id,\n            display_name,\n            data_type as \"data_type: DataType\",\n            is_multi_select,\n            specific_entity_type as \"specific_entity_type: Option<EntityType>\",\n            created_at,\n            updated_at\n        FROM property_definitions\n        WHERE id = $1\n          AND is_system = FALSE\n        ",
   "describe": {
     "columns": [
       {
@@ -62,7 +62,9 @@
                 "DOCUMENT",
                 "PROJECT",
                 "THREAD",
-                "USER"
+                "USER",
+                "COMPANY",
+                "TASK"
               ]
             }
           }
@@ -81,8 +83,7 @@
     ],
     "parameters": {
       "Left": [
-        "Int4",
-        "Text"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -97,5 +98,5 @@
       false
     ]
   },
-  "hash": "f63638ff3ec30e4252915205687a0daafbfd58d258adef45d0792a05856509db"
+  "hash": "67ba643e4fdd16f0a02353cf3775a1debbcb5d5f044191c5d7509cbac8e1ed01"
 }

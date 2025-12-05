@@ -36,6 +36,9 @@ the file type */
   documentVersionId: number;
   /** The file type of the document (file extension) */
   fileType?: DocumentMetadataFileType;
+  /** Whether or not the document is a task.
+This is only applicable for md documents. */
+  isTask: boolean;
   /** The modification data for the document instance.
 This is only used for PDF documents. */
   modificationData?: unknown;

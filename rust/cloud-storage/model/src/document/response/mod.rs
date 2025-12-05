@@ -222,4 +222,9 @@ pub struct CreateDocumentRequest {
     pub email_attachment_id: Option<Uuid>,
     /// Optional time to set the document's created_at to. Set when backfilling email attachments.
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Whether the document is a task.
+    /// This is only applicable for md documents and the request will fail if the file type is not
+    /// md.
+    #[serde(default)]
+    pub is_task: bool,
 }

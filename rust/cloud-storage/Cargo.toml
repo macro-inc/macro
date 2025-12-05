@@ -109,6 +109,7 @@ members = [
   "static_file_service",
   "static_file_service_client",
   "sync_service_client",
+  "system_properties",
   "teams",
   "unfurl_service",
   "upload_extractor_lambda_handler",
