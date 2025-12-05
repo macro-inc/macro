@@ -153,7 +153,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="relative flex flex-col flex-1 items-center justify-between overflow-hidden"
+      class="relative flex flex-col flex-1 items-center justify-between min-h-0"
     >
       <div class="w-full h-full flex flex-col overflow-hidden min-h-0">
         <Show when={showFormatRibbon()}>
@@ -208,58 +208,56 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             portalScope="local"
           />
         </div>
-        <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
-          <div class="flex flex-row items-center gap-2">
-            <div class="relative" ref={attachButtonRef}>
-              <IconButton
-                theme="base"
-                icon={PaperclipIcon}
-                tooltip={{ label: 'Attach' }}
-                disabled={props.disabled}
-                onClick={() => setAttachMenuOpen(true)}
-              />
-              <AttachMenu
-                open={attachMenuOpen()}
-                close={() => setAttachMenuOpen(false)}
-                anchorRef={attachButtonRef}
-                containerRef={bodyDiv}
-                onAttach={onAttach}
-                onAttachDocuments={onAttachDocuments}
-                setIsPending={setIsPendingUpload}
-              />
-            </div>
+      </div>
+      <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
+        <div class="flex flex-row items-center gap-2">
+          <div class="relative" ref={attachButtonRef}>
             <IconButton
               theme="base"
-              icon={TextAa}
+              icon={PaperclipIcon}
+              tooltip={{ label: 'Attach' }}
               disabled={props.disabled}
-              onclick={() => {
-                setShowFormatRibbon(!showFormatRibbon());
-              }}
+              onClick={() => setAttachMenuOpen(true)}
+            />
+            <AttachMenu
+              open={attachMenuOpen()}
+              close={() => setAttachMenuOpen(false)}
+              anchorRef={attachButtonRef}
+              containerRef={bodyDiv}
+              onAttach={onAttach}
+              onAttachDocuments={onAttachDocuments}
+              setIsPending={setIsPendingUpload}
             />
           </div>
-          <button
-            disabled={isPendingUpload() || props.isSubmitting || props.disabled}
-            onClick={() => {
-              handleSend();
+          <IconButton
+            theme="base"
+            icon={TextAa}
+            disabled={props.disabled}
+            onclick={() => {
+              setShowFormatRibbon(!showFormatRibbon());
             }}
-            class="text-ink-muted bg-transparent rounded-full hover:scale-110! transition ease-in-out delay-150 flex flex-col justify-center items-center"
-          >
-            <div class="bg-transparent rounded-full size-8 flex flex-row justify-center items-center">
-              <Show
-                when={!isPendingUpload() && !props.isSubmitting}
-                fallback={
-                  <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
-                }
-              >
-                <ArrowFatLineUp
-                  width={20}
-                  height={20}
-                  class="text-accent-ink fill-accent rotate-90"
-                />
-              </Show>
-            </div>
-          </button>
+          />
         </div>
+        <button
+          type="button"
+          disabled={isPendingUpload() || props.isSubmitting || props.disabled}
+          onClick={() => {
+            handleSend();
+          }}
+          class="text-ink-muted focus:scale-110 hover:scale-110 transition ease-in-out delay-150 flex gap-2 justify-center items-center hover:bg-hover py-1 px-2 text-sm"
+        >
+          <Show
+            when={!isPendingUpload() && !props.isSubmitting}
+            fallback={<Spinner class="w-5 h-5 animate-spin cursor-disabled" />}
+          >
+            <span class="font-medium font-mono uppercase">Send</span>
+            <ArrowFatLineUp
+              width={20}
+              height={20}
+              class="text-accent-ink fill-accent rotate-90"
+            />
+          </Show>
+        </button>
       </div>
     </div>
   );
