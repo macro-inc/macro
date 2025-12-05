@@ -21,6 +21,7 @@ import {
 import { isErr } from '@core/util/maybeResult';
 import Caution from '@icon/regular/warning.svg';
 import { emailClient } from '@service-email/client';
+import type { SendMessageResponse } from '@service-email/generated/schemas';
 import { useMutation } from '@tanstack/solid-query';
 import {
   createMemo,
@@ -32,6 +33,17 @@ import {
   Switch,
 } from 'solid-js';
 import { ComposeEmailInput, type ComposeInputData } from './ComposeEmailInput';
+
+type EmailComposeErrors =
+  | 'no_recipient'
+  | 'no_message'
+  | 'no_subject'
+  | 'no_link'
+  | 'generic';
+type EmailComposeErrorObj = { type: EmailComposeErrors; messsage: string };
+type EmailComposeVariables = {
+  body: { text: string; html: string; raw: string; attachments?: [] };
+};
 
 export function EmailCompose() {
   const hasPaidAccess = useHasPaidAccess();
@@ -107,29 +119,31 @@ export function EmailCompose() {
 
   const { replaceSplit } = useSplitLayout();
 
-  const sendEmailMutation = useMutation(() => ({
-    async mutationFn(contents: {
-      body: { text: string; html: string; raw: string; attachments?: [] };
-    }) {
+  const sendEmailMutation = useMutation<
+    SendMessageResponse,
+    EmailComposeErrorObj | Error,
+    EmailComposeVariables
+  >(() => ({
+    async mutationFn(contents) {
       const _link = link();
 
       if (!selectedRecipients().length) {
         const e = 'Please select at least one recipient';
-        throw new Error(e);
+        throw { type: 'no_recipient', message: e };
       }
 
       if (!contents.body.raw.trim()) {
         const e = 'Please enter a message';
-        throw new Error(e);
+        throw { type: 'no_message', message: e };
       }
 
       if (!subject()?.trim()) {
         const e = 'Please enter a subject';
-        throw new Error(e);
+        throw { type: 'no_subject', message: e };
       }
       if (!_link) {
         const e = 'Unable to find linked email account';
-        throw new Error(e);
+        throw { type: 'no_link', message: e };
       }
 
       const result = await emailClient.sendMessage({
@@ -154,12 +168,17 @@ export function EmailCompose() {
 
       if (isErr(result)) {
         const e = 'Failed to send email';
-        throw new Error(e);
+        throw { type: 'generic', message: e };
       }
 
       return result[1];
     },
     mutationKey: ['compose-email'],
+    onError(error) {
+      if (error instanceof Error || error.type === 'generic') {
+        toast.failure(error instanceof Error ? error.message : error.messsage);
+      }
+    },
     onSuccess(data) {
       toast.success('Email sent');
       if (data.message.thread_db_id) {
