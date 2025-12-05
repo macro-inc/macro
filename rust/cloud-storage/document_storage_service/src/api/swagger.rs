@@ -103,7 +103,8 @@ use models_soup::chat::SoupChat;
 use models_soup::document::SoupDocument;
 use models_soup::email_thread::{
     SoupAttachment, SoupContact, SoupEmailThreadPreview, SoupEmailThreadPreviewMetadata,
-    SoupEnrichedEmailThreadPreview, SoupMacroAttachment,
+    SoupEnrichedEmailThreadPreview, SoupLabel, SoupLabelListVisibility, SoupLabelType,
+    SoupMacroAttachment, SoupMessageListVisibility,
 };
 use models_soup::item::SoupItem;
 use models_soup::item::SoupItemType;
@@ -289,6 +290,10 @@ use utoipa::OpenApi;
             SoupMacroAttachment,
             SoupContact,
             SoupEmailThreadPreviewMetadata,
+            SoupLabel,
+            SoupLabelListVisibility,
+            SoupMessageListVisibility,
+            SoupLabelType,
             PostSoupRequest,
 
 
