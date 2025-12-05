@@ -43,10 +43,12 @@ import {
 } from '@core/component/LexicalMarkdown/utils';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { shortcutBadgeStyles } from '@core/component/Themes';
+import { toast } from '@core/component/Toast/Toast';
 import { useTokenToHotkeyString } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import type { IOrganizationUser } from '@core/user';
+import { handleFileFolderDrop } from '@core/util/upload';
 import { $isDocumentMentionNode } from '@lexical-core';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { activeElement } from 'app/signal/focus';
@@ -321,9 +323,17 @@ function MarkdownArea(
     .use(tabIndentationPlugin())
     .use(
       filePastePlugin({
-        onPaste: (files: File[]) => {
-          if (props.onPasteFile) {
-            props.onPasteFile(files);
+        onPasteFilesAndDirs: (files, directories) => {
+          const onPasteFile = props.onPasteFile;
+          if (onPasteFile) {
+            if (directories.length > 0) {
+              toast.failure('Folder upload not supported here');
+              return;
+            }
+            handleFileFolderDrop(files, [], (entries) => {
+              const files = entries.map((entry) => entry.file);
+              onPasteFile(files);
+            });
           }
         },
       })
