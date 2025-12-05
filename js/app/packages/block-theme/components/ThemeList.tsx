@@ -93,7 +93,7 @@ export function ThemeList() {
                 z-index: 1;
               "
             >
-              <div>Theme List:</div>
+              <div>Theme List</div>
             </div>
             <div style="height: 41px;" />
           <For each={themes()}>
