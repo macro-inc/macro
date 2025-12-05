@@ -135,9 +135,9 @@ export function SettingsPanel() {
       }}
     >
       <SplitlikeContainer
-        spotlight={spotlight}
         setSpotlight={setSpotlight}
-        tl={!spotlight()}
+        spotlight={spotlight}
+        tr={!spotlight()}
       >
         <div class="flex flex-col h-full bg-panel">
             <Tabs

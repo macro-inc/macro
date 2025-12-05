@@ -40,7 +40,7 @@ export function Dock() {
   // const [debugOpen, setDebugOpen] = createSignal(false);
   const { track, TrackingEvents } = withAnalytics();
   const toggleRightPanel = useToggleRightPanel();
-  const { settingsOpen } = useSettingsState();
+  const { settingsOpen, toggleSettings } = useSettingsState();
   const hasPaid = useHasPaidAccess();
 
   const isSoupActive = createMemo(() => {
@@ -366,7 +366,7 @@ export function Dock() {
                   hotkeyToken: TOKENS.global.toggleSettings,
                 }}
                 theme={settingsOpen() ? 'accent' : 'clear'}
-                onDeepClick={() => { setSettingsOpen(true) }}
+                onClick={() => { toggleSettings() }}
                 icon={IconGear}
                 size="sm"
               />
