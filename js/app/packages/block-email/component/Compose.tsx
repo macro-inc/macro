@@ -125,6 +125,7 @@ export function EmailCompose() {
 
   const { replaceSplit } = useSplitLayout();
 
+  // TODO: We should handle these errors in a form not in the mutation
   const sendEmailMutation = useMutation<
     SendMessageResponse,
     EmailComposeError | Error,
