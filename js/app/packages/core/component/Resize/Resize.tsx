@@ -236,19 +236,14 @@ function Panel(props: ParentProps<PanelProps>) {
   createEffect(() => {
     const hidden = props.hidden?.();
     if (hidden === undefined) return;
-    
-    // For persistent panels, use hide/show to maintain registration
-    if (props.persistent) {
-      if (hidden) {
-        ctx.hide(props.id);
-      } else {
-        ctx.show(props.id);
-      }
-    } else {
-      // For non-persistent panels, unregister when hidden (original behavior)
-      if (hidden) {
-        ctx.unregister(props.id);
-      } else {
+
+    if(props.persistent){
+      if(hidden){ctx.hide(props.id)}
+      else{ctx.show(props.id)}
+    }
+    else{
+      if(hidden){ctx.unregister(props.id)}
+      else{
         ctx.register({
           id: props.id,
           minSize: props.minSize,

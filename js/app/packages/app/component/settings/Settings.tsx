@@ -1,5 +1,7 @@
 import { type SettingsTab, setSettingsOpen, useSettingsState } from '@core/constant/SettingsState';
 import { createEffect, createMemo, createSignal, For, onCleanup, Show, Suspense } from 'solid-js';
+import CornersOut from '@phosphor-icons/core/regular/corners-out.svg?component-solid';
+import CornersIn from '@phosphor-icons/core/regular/corners-in.svg?component-solid';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { DEV_MODE_ENV, ENABLE_AI_MEMORY } from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -11,9 +13,7 @@ import { registerHotkey } from 'core/hotkey/hotkeys';
 import { withAnalytics } from '@coparse/analytics';
 import { useOrganizationName } from '@core/user';
 import { AiMemory } from './AiMemory/AiMemory';
-
 import { Subscription } from './Subscription';
-import { TOKENS } from '@core/hotkey/tokens';
 import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
 import { Account } from './Account';
@@ -186,9 +186,9 @@ export function SettingsPanel() {
                             tabIndex={-1}
                             class="min-w-12 max-w-[40cqw] shrink-0 text-sm relative h-full flex items-center px-2"
                             classList={{
-                              'z-1 border-y border-edge-muted text-accent text-glow-sm':
+                              'z-1 text-accent text-glow-sm':
                                 isActive(),
-                              'border-y border-edge-muted text-ink-disabled hover:text-accent/70 hover-transition-text':
+                              'text-ink-disabled hover:text-accent/70 hover-transition-text':
                                 !isActive(),
                             }}
                           >
@@ -203,11 +203,20 @@ export function SettingsPanel() {
                       }}
                     </For>
                   </Tabs.List>
+                  <IconButton
+                    icon={spotlight() ? CornersIn : CornersOut}
+                    onClick={() => setSpotlight(!spotlight())}
+                    tooltip={{
+                      label: spotlight() ? 'Exit Spotlight' : 'Enter Spotlight Mode'
+                    }}
+                    theme="clear"
+                    size="sm"
+                  />
                 </div>
               </div>
 
               {/* Content area */}
-              <div class="flex-1 p-6 overflow-y-scroll">
+              <div style="display: grid; padding: var(--gutter-size); overflow-y: scroll; scrollbar-width: none;">
                 <Tabs.Content value="Account" class="h-full">
                   <Suspense>
                     <Account />
