@@ -8,13 +8,19 @@ import { CircleSpinner } from '@core/component/CircleSpinner';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { TextButton } from '@core/component/TextButton';
+import { toast } from '@core/component/Toast/Toast';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { useEmailLinks } from '@core/email-link';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
-import { useDisplayName, type WithCustomUserInput } from '@core/user';
+import {
+  type ContactInfo,
+  useDisplayName,
+  type WithCustomUserInput,
+} from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import Caution from '@icon/regular/warning.svg';
 import { emailClient } from '@service-email/client';
+import { useMutation } from '@tanstack/solid-query';
 import {
   createMemo,
   createResource,
@@ -24,8 +30,7 @@ import {
   Suspense,
   Switch,
 } from 'solid-js';
-import { createStore } from 'solid-js/store';
-import { ComposeEmailInput } from './ComposeEmailInput';
+import { ComposeEmailInput, type ComposeInputData } from './ComposeEmailInput';
 
 export function EmailCompose() {
   const hasPaidAccess = useHasPaidAccess();
@@ -33,10 +38,8 @@ export function EmailCompose() {
 
   const [subject, setSubject] = createSignal<string>('');
 
-  const [emailInputAttachmentsStore, setEmailInputAttachmentsStore] =
-    createStore<Record<string, any[]>>({});
-
   const [linkError, setLinkError] = createSignal<string | null>(null);
+
   const [link] = createResource(async () => {
     const maybeLinks = await emailClient.getLinks();
     if (isErr(maybeLinks)) {
@@ -98,6 +101,68 @@ export function EmailCompose() {
       }
     }
   });
+
+  const sendEmailMutation = useMutation(() => ({
+    async mutationFn(contents: {
+      body: { text: string; html: string; raw: string; attachments?: [] };
+    }) {
+      const _link = link();
+
+      if (!selectedRecipients().length) {
+        const e = 'Please select at least one recipient';
+        throw new Error(e);
+      }
+
+      if (!contents.body.raw.trim()) {
+        const e = 'Please enter a message';
+        throw new Error(e);
+      }
+
+      if (!subject()?.trim()) {
+        const e = 'Please enter a subject';
+        throw new Error(e);
+      }
+      if (!_link) {
+        const e = 'Unable to find linked email account';
+        throw new Error(e);
+      }
+
+      const result = await emailClient.sendMessage({
+        message: {
+          link_id: _link.id, // For new emails
+          to: convertToContactInfoArray(selectedRecipients()),
+          cc:
+            ccRecipients && ccRecipients.length > 0
+              ? convertToContactInfoArray(ccRecipients())
+              : [],
+          bcc:
+            bccRecipients && bccRecipients.length > 0
+              ? convertToContactInfoArray(bccRecipients())
+              : [],
+          subject: subject(),
+          body_text: contents.body.text,
+          body_html: contents.body.html,
+          body_macro: contents.body.raw,
+          attachments: [],
+        },
+      });
+
+      if (isErr(result)) {
+        const e = 'Failed to send email';
+        throw new Error(e);
+      }
+
+      return result[1];
+    },
+    mutationKey: ['compose-email'],
+    onSuccess() {
+      toast.success('Email sent');
+    },
+  }));
+
+  const onSubmit = (data: ComposeInputData) => {
+    sendEmailMutation.mutate(data);
+  };
 
   return (
     <>
@@ -289,16 +354,8 @@ export function EmailCompose() {
               >
                 <div class="mx-auto w-full h-full overflow-auto px-1">
                   <ComposeEmailInput
-                    selectedRecipients={selectedRecipients}
-                    ccRecipients={ccRecipients}
-                    bccRecipients={bccRecipients}
-                    subject={subject}
-                    link={link() ?? null}
-                    inputAttachments={{
-                      store: emailInputAttachmentsStore,
-                      setStore: setEmailInputAttachmentsStore,
-                      key: 'draft',
-                    }}
+                    onSubmit={onSubmit}
+                    isSubmitting={sendEmailMutation.isPending}
                   />
                 </div>
               </div>
@@ -308,4 +365,14 @@ export function EmailCompose() {
       </div>
     </>
   );
+}
+
+function convertToContactInfoArray(
+  recipients: WithCustomUserInput<'user' | 'contact'>[]
+): ContactInfo[] {
+  return recipients.map((recipient) => ({
+    email: recipient.data.email,
+    name:
+      'name' in recipient.data ? recipient.data.name || undefined : undefined,
+  }));
 }
