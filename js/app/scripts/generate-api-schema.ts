@@ -87,7 +87,7 @@ const processService = async (service: Service) => {
     await $`rm -rf ${generatedDir}`;
     await downloadJson(schemaUrl, path.join(outputDir, 'openapi.json'));
     await $`${biomePath} format --fix ${path.join(outputDir, 'openapi.json')}`;
-    await $`cd ${serviceClientsDir} && bun run orval --config orval.config.ts ${service.orvalKey}`;
+    await $`cd ${serviceClientsDir} && bun run orval --config orval.config.ts --project ${service.orvalKey}`;
     if (service.name === 'document-cognition')
       await $`bun scripts/generate-dcs-types.ts`;
     console.log(`[${service.name}] ✅ Successfully processed`);
