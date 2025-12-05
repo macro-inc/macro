@@ -56,11 +56,6 @@ export function AiMemory() {
 
   return (
     <div class="w-full h-full flex flex-col">
-      <TabContent title="AI Memory">
-        <div class="text-sm pb-8">
-          Macro AI remembers your preferences and who you are
-        </div>
-      </TabContent>
       <Switch>
         <Match when={insights()}>
           {(memories) => (

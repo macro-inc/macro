@@ -40,7 +40,6 @@ export function Appearance() {
   });
 
   return (
-    <TabContent title="Appearance">
       <div
         style={{
           'grid-template-rows': `min-content min-content ${isMobileWidth() ? '205px' : '269px'}`,
@@ -201,6 +200,5 @@ export function Appearance() {
           `}</style>
         </div>
       </div>
-    </TabContent>
   );
 }

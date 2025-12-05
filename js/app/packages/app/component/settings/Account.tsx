@@ -107,7 +107,6 @@ export function Account() {
   };
 
   return (
-    <TabContent title="Account">
       <div class="mb-12 text-ink">
         <Show when={ENABLE_PROFILE_PICTURES}>
           <TabContentRow
@@ -273,6 +272,5 @@ export function Account() {
           </div>
         </div>
       </div>
-    </TabContent>
   );
 }

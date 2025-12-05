@@ -63,6 +63,7 @@ import {
   untrack,
 } from 'solid-js';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
+import { settingsOpen } from '@core/constant/SettingsState';
 
 type ChatData = {
   messages: ChatMessageWithAttachments[];
@@ -661,7 +662,7 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
           <SplitlikeContainer
             spotlight={bigChatOpen}
             setSpotlight={setBigChatOpen}
-            tr={!bigChatOpen()}
+            tr={!bigChatOpen() && !settingsOpen()}
           >
             <Rightbar
               chatId={chatId()}
