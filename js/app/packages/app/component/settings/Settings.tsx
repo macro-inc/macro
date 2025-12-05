@@ -216,28 +216,28 @@ export function SettingsPanel() {
               </div>
 
               {/* Content area */}
-              <div style="display: grid; overflow-y: scroll; scrollbar-width: none;">
-                <Tabs.Content value="Account" class="h-full">
+              <div class="flex-1 min-h-0 relative">
+                <Tabs.Content value="Account" class="absolute inset-0">
                   <Suspense>
                     <Account />
                   </Suspense>
                 </Tabs.Content>
                 <Show when={!orgName() && !isNativeMobilePlatform()}>
-                  <Tabs.Content value="Subscription" class="h-full">
+                  <Tabs.Content value="Subscription" class="absolute inset-0">
                     <Subscription />
                   </Tabs.Content>
                 </Show>
                 <Show when={ orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)}>
-                  <Tabs.Content value="Organization" class="h-full">
+                  <Tabs.Content value="Organization" class="absolute inset-0">
                     <Organization />
                   </Tabs.Content>
                 </Show>
-                <Tabs.Content value="Appearance" class="h-full">
+                <Tabs.Content value="Appearance" class="absolute inset-0">
                   <Appearance />
                 </Tabs.Content>
 
                 <Show when={ENABLE_AI_MEMORY}>
-                  <Tabs.Content value="AI Memory" class="h-full">
+                  <Tabs.Content value="AI Memory" class="absolute inset-0">
                     <AiMemory />
                   </Tabs.Content>
                 </Show>

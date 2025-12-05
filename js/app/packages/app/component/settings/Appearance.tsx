@@ -17,14 +17,17 @@ export function Appearance() {
   return (
       <div
         style={{
-          'grid-template-rows': 'min-content min-content 1fr',
+          'grid-template-rows': 'min-content 1fr min-content 1fr',
           'background-color': 'var(--color-edge-muted)',
-          height: '800px',
+          'position': 'absolute',
+          overflow: 'hidden',
           display: 'grid',
+          'inset': '0',
           gap: '1px',
         }}
       >
         <ThemeTools />
+        <ThemeList />
         <ThemeEditorBasic />
 
         <div
@@ -32,10 +35,12 @@ export function Appearance() {
             'grid-template-columns': `${isMobileWidth() ? '1fr' : '1fr'}`,
             display: 'grid',
             gap: '1px',
+            overflow: 'auto',
+            'min-height': '0'
           }}
         >
           <ThemeEditorAdvanced />
-          <ThemeList />
+
         </div>
 
         {/*<Show when={ENABLE_CUSTOM_CURSOR}>
