@@ -74,18 +74,8 @@ export const PropertiesService = new Svc(
       schemas.getEntityPropertiesParams.description ||
       'Get all properties for an entity',
     args: {
-      entity_type: z.enum([
-        'CHANNEL',
-        'CHAT',
-        'DOCUMENT',
-        'PROJECT',
-        'THREAD',
-        'USER',
-      ]),
-      entity_id: z.string(),
-      query: z.object({
-        include_metadata: z.boolean().optional(),
-      }),
+      ...schemas.getEntityPropertiesParams.shape,
+      query: schemas.getEntityPropertiesQueryParams,
     },
     result: asRawShape(schemas.getEntityPropertiesResponse),
     throws: withFetchErrors(),
@@ -96,16 +86,7 @@ export const PropertiesService = new Svc(
       'Set or update a property value for an entity',
     modifies: true,
     args: {
-      entity_type: z.enum([
-        'CHANNEL',
-        'CHAT',
-        'DOCUMENT',
-        'PROJECT',
-        'THREAD',
-        'USER',
-      ]),
-      entity_id: z.string(),
-      property_id: z.string().uuid(),
+      ...schemas.setEntityPropertyParams.shape,
       body: schemas.setEntityPropertyBody,
     },
     result: asRawShape(z.object({ success: z.boolean() })),
