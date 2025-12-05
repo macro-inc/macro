@@ -46,8 +46,7 @@
           curl
           wget
           pkg-config
-          xdg-utils
-
+          just
           bun
           biome
           nodejs_24
