@@ -228,6 +228,7 @@ async fn handle_attachment_upload(
             gmail_access_token,
             link,
             &attachment,
+            false,
         )
         .await
         {
