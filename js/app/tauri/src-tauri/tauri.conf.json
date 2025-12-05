@@ -4,10 +4,10 @@
   "version": "0.1.0",
   "identifier": "com.macro.app.prod",
   "build": {
-    "frontendDist": "../packages/app/dist",
+    "frontendDist": "../../packages/app/dist",
     "devUrl": "http://localhost:3000",
-    "beforeDevCommand": "bun run dev:tauri",
-    "beforeBuildCommand": "bun run build:tauri"
+    "beforeDevCommand": { "script": "bun run dev:tauri", "cwd": "../.." },
+    "beforeBuildCommand": { "script": "bun run build:tauri", "cwd": "../.." }
   },
   "app": {
     "windows": [
@@ -37,6 +37,12 @@
   "plugins": {
     "deep-link": {
       "mobile": [
+        {
+          "scheme": [
+            "macro"
+          ],
+          "appLink": false
+        },
         {
           "host": "macro.com",
           "pathPrefix": [

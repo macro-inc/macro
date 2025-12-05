@@ -1,6 +1,6 @@
 use logger::Logger;
-use navigation_plugin::MacroNavigationPlugin;
 use navigation_plugin::scheme::MacroScheme;
+use navigation_plugin::{MacroNavigationPlugin, Platform};
 use reqwest::cookie::CookieStore;
 use reqwest::header::COOKIE;
 use rootcause::{Report, report};
@@ -71,7 +71,15 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_opener::init())
-        .plugin(MacroNavigationPlugin::new(ALLOWED_DOMAINS).expect("Domains must be valid urls"));
+        .plugin(
+            MacroNavigationPlugin::new(
+                ALLOWED_DOMAINS,
+                cfg!(mobile)
+                    .then_some(Platform::Mobile)
+                    .unwrap_or(Platform::Desktop),
+            )
+            .expect("Domains must be valid urls"),
+        );
 
     #[cfg(mobile)]
     {
