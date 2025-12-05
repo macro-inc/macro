@@ -409,7 +409,7 @@ export function EmailCompose() {
               </div>
 
               <div
-                class="w-full h-full flex flex-col min-h-0 overflow-hidden mt-4"
+                class="w-full h-full flex flex-col min-h-0 mt-4"
                 classList={{
                   'pointer-events-none opacity-50': hasLinkError(),
                 }}
