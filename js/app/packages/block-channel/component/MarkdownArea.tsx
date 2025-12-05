@@ -179,7 +179,10 @@ export type ConsumableMarkdownAreaProps = {
   placeholder?: string;
   users?: Accessor<IUser[]>;
   history?: Accessor<Item[]>;
-  onPasteFile?: (files: File[]) => void;
+  onPasteFilesAndDirs?: (
+    files: FileSystemFileEntry[],
+    directories: FileSystemDirectoryEntry[]
+  ) => void;
   dontFocusOnMount?: boolean;
   disableMentions?: boolean;
   useBlockBoundary?: boolean;
@@ -270,10 +273,10 @@ function MarkdownArea(props: MarkdownAreaProps & ConsumableMarkdownAreaProps) {
     );
   }
 
-  if (props.onPasteFile) {
+  if (props.onPasteFilesAndDirs) {
     plugins.use(
       filePastePlugin({
-        onPaste: props.onPasteFile,
+        onPasteFilesAndDirs: props.onPasteFilesAndDirs,
       })
     );
   }

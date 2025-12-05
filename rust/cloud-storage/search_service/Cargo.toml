@@ -40,6 +40,7 @@ utoipa = { workspace = true }
 utoipa-swagger-ui = { workspace = true }
 item_filters = { path = "../item_filters" }
 thiserror = { workspace = true }
+models_opensearch = { path = "../models_opensearch" }
 
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }

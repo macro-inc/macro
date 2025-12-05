@@ -1,18 +1,12 @@
 use crate::{
     OpensearchClient, Result,
-    search::{
-        self,
-        unified::{UnifiedSearchArgs, UnifiedSearchResponse},
-    },
+    search::{self, model::SearchHit, unified::UnifiedSearchArgs},
 };
 
 impl OpensearchClient {
     /// Performs a unified search
     #[tracing::instrument(skip(self, args))]
-    pub async fn search_unified(
-        &self,
-        args: UnifiedSearchArgs,
-    ) -> Result<Vec<UnifiedSearchResponse>> {
+    pub async fn search_unified(&self, args: UnifiedSearchArgs) -> Result<Vec<SearchHit>> {
         search::unified::search_unified(&self.inner, args).await
     }
 }

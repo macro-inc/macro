@@ -86,6 +86,7 @@ r#"
                 d."projectId" as "project_id",
                 NULL as "is_persistent",
                 di.sha as "sha",
+                (dt.document_id IS NOT NULL) as "is_task!",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", d."updatedAt")
@@ -94,6 +95,7 @@ r#"
                     ELSE d."updatedAt"
                 END::timestamptz as "sort_ts!"
             FROM "Document" d
+            LEFT JOIN document_task dt ON dt.document_id = d.id
             INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
             -- This MUST be a LEFT JOIN to support all three sort methods
             LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
@@ -130,6 +132,7 @@ r#"
                 c."projectId" as "project_id",
                 c."isPersistent" as "is_persistent",
                 NULL as "sha",
+                false as "is_task",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", c."updatedAt")
@@ -159,6 +162,7 @@ r#"
                 p."parentId" as "project_id",
                 NULL as "is_persistent",
                 NULL as "sha",
+                false as "is_task",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", p."updatedAt")
@@ -270,6 +274,7 @@ r#"
                 d."projectId" as "project_id",
                 NULL as "is_persistent",
                 di.sha as "sha",
+                (dt.document_id IS NOT NULL) as "is_task!",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", d."updatedAt")
@@ -278,6 +283,7 @@ r#"
                     ELSE d."updatedAt"
                 END::timestamptz as "sort_ts!"
             FROM "Document" d
+            LEFT JOIN document_task dt ON dt.document_id = d.id
             INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
             -- This MUST be a LEFT JOIN to support all three sort methods
             LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
@@ -314,6 +320,7 @@ r#"
                 c."projectId" as "project_id",
                 c."isPersistent" as "is_persistent",
                 NULL as "sha",
+                false as "is_task",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", c."updatedAt")
@@ -343,6 +350,7 @@ r#"
                 p."parentId" as "project_id",
                 NULL as "is_persistent",
                 NULL as "sha",
+                false as "is_task",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 CASE $2
                     WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", p."updatedAt")

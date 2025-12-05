@@ -129,6 +129,7 @@ async fn create_dss_document_record(
         project_id: None,
         created_at: Some(p.internal_date_ts),
         email_attachment_id: Some(p.attachment_db_id),
+        is_task: false,
     };
 
     dss_client

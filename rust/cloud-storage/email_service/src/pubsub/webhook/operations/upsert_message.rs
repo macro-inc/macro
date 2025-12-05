@@ -558,13 +558,13 @@ async fn send_notifications(
         return Ok(());
     }
 
-    let sender_address_ids: Vec<Uuid> = notifiable_messages
+    let message_ids: Vec<Uuid> = notifiable_messages
         .iter()
-        .filter_map(|message| message.from_contact_id)
+        .map(|message| message.db_id)
         .collect();
 
     let sender_contacts =
-        email_db_client::contacts::get::fetch_contact_info_by_ids(&ctx.db, &sender_address_ids)
+        email_db_client::contacts::get::fetch_sender_contact_info(&ctx.db, &message_ids)
             .await
             .map_err(|e| {
                 ProcessingError::Retryable(DetailedError {

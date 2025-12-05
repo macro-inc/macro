@@ -29,6 +29,9 @@ This could be the document_instance_id or document_bom_id depending on the file 
   fileType?: SoupDocumentFileType;
   /** The document id */
   id: string;
+  /** Whether or not the document is a task.
+This is only applicable for md documents. */
+  isTask: boolean;
   /** The name of the document */
   name: string;
   /** The owner of the document */

@@ -36,7 +36,7 @@ export const listPropertiesResponseItem = zod.union([zod.object({
   "scope": zod.enum(['user_and_organization']),
   "user_id": zod.string()
 }).describe('Both user and organization-scoped')]).describe('Defines who owns a property - user-scoped, org-scoped, or both.'),
-  "specific_entity_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'DOCUMENT', 'PROJECT', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
+  "specific_entity_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
   "updated_at": zod.string().datetime({})
 }).describe('Property definition model (service representation).'),zod.object({
   "definition": zod.object({
@@ -57,7 +57,7 @@ export const listPropertiesResponseItem = zod.union([zod.object({
   "scope": zod.enum(['user_and_organization']),
   "user_id": zod.string()
 }).describe('Both user and organization-scoped')]).describe('Defines who owns a property - user-scoped, org-scoped, or both.'),
-  "specific_entity_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'DOCUMENT', 'PROJECT', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
+  "specific_entity_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
   "updated_at": zod.string().datetime({})
 }).describe('Property definition model (service representation).'),
   "property_options": zod.array(zod.object({
@@ -116,7 +116,7 @@ export const createPropertyDefinitionBody = zod.union([zod.object({
   "type": zod.enum(['select_string'])
 }).describe('Select property with string options.'),zod.object({
   "multi": zod.boolean(),
-  "specific_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'DOCUMENT', 'PROJECT', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
+  "specific_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
   "type": zod.enum(['entity'])
 }).describe('Entity reference property.'),zod.object({
   "multi": zod.boolean(),
@@ -193,7 +193,7 @@ export const deletePropertyOptionParams = zod.object({
  * @summary Get all properties for an entity
  */
 export const getEntityPropertiesParams = zod.object({
-  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'DOCUMENT', 'PROJECT', 'THREAD', 'USER']).describe('Entity type (user, document, channel, project, thread)'),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Entity type (user, document, channel, project, thread)'),
   "entity_id": zod.string().describe('Entity ID')
 })
 
@@ -222,7 +222,7 @@ export const getEntityPropertiesResponse = zod.object({
   "scope": zod.enum(['user_and_organization']),
   "user_id": zod.string()
 }).describe('Both user and organization-scoped')]).describe('Defines who owns a property - user-scoped, org-scoped, or both.'),
-  "specific_entity_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'DOCUMENT', 'PROJECT', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
+  "specific_entity_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
   "updated_at": zod.string().datetime({})
 }).describe('Property definition model (service representation).'),
   "options": zod.array(zod.object({
@@ -242,7 +242,7 @@ export const getEntityPropertiesResponse = zod.object({
   "property": zod.object({
   "created_at": zod.string().datetime({}),
   "entity_id": zod.string(),
-  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'DOCUMENT', 'PROJECT', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
   "id": zod.string().uuid(),
   "property_definition_id": zod.string().uuid(),
   "updated_at": zod.string().datetime({})
@@ -266,7 +266,7 @@ export const getEntityPropertiesResponse = zod.object({
   "type": zod.enum(['EntityReference']),
   "value": zod.array(zod.object({
   "entity_id": zod.string(),
-  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'DOCUMENT', 'PROJECT', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')
 }).describe('Entity reference for entity-type property values.')).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)')
 }).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'),zod.object({
   "type": zod.enum(['Link']),
@@ -280,7 +280,7 @@ export const getEntityPropertiesResponse = zod.object({
  * @summary Set or update a property value for an entity, or attach a property without a value
  */
 export const setEntityPropertyParams = zod.object({
-  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'DOCUMENT', 'PROJECT', 'THREAD', 'USER']).describe('Entity type (user, document, channel, project, thread)'),
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Entity type (user, document, channel, project, thread)'),
   "entity_id": zod.string().describe('Entity ID'),
   "property_id": zod.string().uuid().describe('Property ID')
 })
@@ -307,13 +307,13 @@ export const setEntityPropertyBody = zod.object({
 }).describe('Multiple select options by ID (for multi-select properties)'),zod.object({
   "reference": zod.object({
   "entity_id": zod.string(),
-  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'DOCUMENT', 'PROJECT', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')
 }).describe('Entity reference for entity-type property values.'),
   "type": zod.enum(['entity_reference'])
 }).describe('Entity reference'),zod.object({
   "references": zod.array(zod.object({
   "entity_id": zod.string(),
-  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'DOCUMENT', 'PROJECT', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')
 }).describe('Entity reference for entity-type property values.')),
   "type": zod.enum(['multi_entity_reference'])
 }).describe('Multiple entity references (for multi-select entity properties)'),zod.object({

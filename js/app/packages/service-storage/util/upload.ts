@@ -1,7 +1,6 @@
 import { withAnalytics } from '@coparse/analytics';
 import type { FileTypeString, MimeType } from '@core/block';
 import { blockAcceptedMimetypeToFileExtension } from '@core/constant/allBlocks';
-import { ENABLE_FOLDER_UPLOAD } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { contentHash } from '@core/util/hash';
 import { isErr, type ResultError } from '@core/util/maybeResult';
@@ -124,7 +123,7 @@ export async function upload(
   const buffer = await file.arrayBuffer();
   const sha = await contentHash(buffer);
 
-  if (ENABLE_FOLDER_UPLOAD && isZip && options?.unzipFolder) {
+  if (isZip && options?.unzipFolder) {
     const res = await storageServiceClient.projects.createUploadZipRequest({
       sha,
       name,

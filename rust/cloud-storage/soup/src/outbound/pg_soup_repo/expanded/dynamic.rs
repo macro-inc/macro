@@ -77,6 +77,7 @@ static DOCUMENT_CLAUSE: &str = r#"
         d."projectId" as "project_id",
         NULL as "is_persistent",
         di.sha as "sha",
+        (dt.document_id IS NOT NULL) as "is_task",
         uh."updatedAt"::timestamptz as "viewed_at",
         CASE $2
             WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", d."updatedAt")
@@ -85,6 +86,7 @@ static DOCUMENT_CLAUSE: &str = r#"
             ELSE d."updatedAt"
         END::timestamptz as "sort_ts"
     FROM "Document" d
+    LEFT JOIN document_task dt ON dt.document_id = d.id
     INNER JOIN UserAccessibleItems uai ON uai.item_id = d.id AND uai.item_type = 'document'
     -- This MUST be a LEFT JOIN to support all three sort methods
     LEFT JOIN "UserHistory" uh ON uh."itemId" = d.id AND uh."itemType" = 'document' AND uh."userId" = $1
@@ -121,6 +123,7 @@ static CHAT_CLAUSE: &str = r#"
         c."projectId" as "project_id",
         c."isPersistent" as "is_persistent",
         NULL as "sha",
+        false as "is_task",
         uh."updatedAt"::timestamptz as "viewed_at",
         CASE $2
             WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", c."updatedAt")
@@ -150,6 +153,7 @@ static PROJECT_CLAUSE: &str = r#"
         p."parentId" as "project_id",
         NULL as "is_persistent",
         NULL as "sha",
+        false as "is_task",
         uh."updatedAt"::timestamptz as "viewed_at",
         CASE $2
             WHEN 'viewed_updated' THEN COALESCE(uh."updatedAt", p."updatedAt")
@@ -307,6 +311,7 @@ struct DocumentRow {
     created_at: DateTime<Utc>,
     updated_at: DateTime<Utc>,
     viewed_at: Option<DateTime<Utc>>,
+    is_task: bool,
 }
 
 #[derive(Debug, FromRow)]
@@ -371,6 +376,7 @@ impl SoupRow {
                 created_at,
                 updated_at,
                 viewed_at,
+                is_task,
             }) => SoupItem::Document(SoupDocument {
                 id: Uuid::parse_str(&id).map_err(type_err)?,
                 document_version_id: document_version_id
@@ -397,6 +403,7 @@ impl SoupRow {
                 created_at,
                 updated_at,
                 viewed_at,
+                is_task,
             }),
             SoupRow::Chat(ChatRow {
                 id,

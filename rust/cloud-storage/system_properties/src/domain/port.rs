@@ -1,0 +1,18 @@
+//! Port definitions for system properties.
+//!
+//! These traits define the interfaces that the domain layer uses.
+//! Implementations live in the outbound module.
+
+use crate::domain::model::SystemPropertyError;
+
+/// Repository trait for system property database operations.
+///
+/// This trait abstracts the database layer, allowing for different implementations
+/// (e.g., PostgreSQL, mock for testing).
+pub trait SystemPropertiesRepository: Clone + Send + Sync + 'static {
+    /// Bulk upsert property rows in a single query.
+    fn bulk_upsert_properties(
+        &self,
+        rows: Vec<crate::domain::model::PropertyRow>,
+    ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
+}

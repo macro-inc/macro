@@ -42,6 +42,7 @@ export const ws = new WebsocketBuilder(resolveWsUrl)
     new JsonSerializer<ToWebsocketMessage, FromWebsocketMessage>()
   )
   .withBackoff(new LinearBackoff(500, 500))
+  .withMaxRetries(20)
   .withHeartbeat({
     interval: 1_000,
     timeout: 1_000,

@@ -84,9 +84,11 @@ pub async fn get_sub_documents(
                 d."fileType" as "file_type?",
                 d."createdAt"::timestamptz as created_at,
                 d."updatedAt"::timestamptz as updated_at,
-                d."projectId" as "project_id?"
+                d."projectId" as "project_id?",
+                (dt.document_id IS NOT NULL) as "is_task!"
             FROM
                 "Document" d
+            LEFT JOIN document_task dt ON dt.document_id = d.id
             LEFT JOIN LATERAL (
                 SELECT
                     b.id
@@ -131,6 +133,7 @@ pub async fn get_sub_documents(
             created_at: row.created_at,
             updated_at: row.updated_at,
             deleted_at: None, // Don't care about the deleted_at
+            is_task: row.is_task,
         }
     })
     .fetch_all(transaction.as_mut())

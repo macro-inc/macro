@@ -28,6 +28,7 @@ pub struct Message {
     pub snippet: Option<String>,
     pub size_estimate: Option<i64>,
     pub subject: Option<String>,
+    pub from_name: Option<String>,
     pub from_contact_id: Option<Uuid>,
     pub sent_at: Option<DateTime<Utc>>,
     pub has_attachments: bool,
@@ -84,4 +85,5 @@ impl From<service::message::ScheduledMessage> for ScheduledMessage {
 pub struct MessageRecipient {
     pub contact_id: Uuid,
     pub recipient_type: EmailRecipientType,
+    pub name: Option<String>,
 }

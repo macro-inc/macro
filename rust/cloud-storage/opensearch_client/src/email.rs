@@ -1,6 +1,9 @@
 use crate::{
     OpensearchClient, Result, delete,
-    search::emails::{EmailSearchArgs, EmailSearchResponse, search_emails},
+    search::{
+        emails::{EmailSearchArgs, search_emails},
+        model::SearchHit,
+    },
     upsert::{self, email::UpsertEmailArgs},
 };
 
@@ -11,7 +14,7 @@ impl OpensearchClient {
         upsert::email::upsert_email_message(&self.inner, upsert_email_args).await
     }
 
-    pub async fn search_emails(&self, args: EmailSearchArgs) -> Result<Vec<EmailSearchResponse>> {
+    pub async fn search_emails(&self, args: EmailSearchArgs) -> Result<Vec<SearchHit>> {
         search_emails(&self.inner, args).await
     }
 

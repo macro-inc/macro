@@ -142,6 +142,7 @@ pub(in crate::document) async fn copy_docx_document(
         document_bom: Some(saved_bom_parts),
         created_at: document.created_at,
         updated_at: document.updated_at,
+        is_task: false, // docx documents are not tasks
     })
 }
 
@@ -233,6 +234,18 @@ pub(in crate::document) async fn copy_non_docx_document(
         None
     };
 
+    if original_document.is_task {
+        sqlx::query!(
+            r#"
+                INSERT INTO document_task (document_id)
+                VALUES ($1)
+            "#,
+            document.id
+        )
+        .execute(transaction.as_mut())
+        .await?;
+    }
+
     Ok(DocumentMetadata {
         document_id: document.id.clone(),
         owner: user_id.to_string(),
@@ -249,6 +262,7 @@ pub(in crate::document) async fn copy_non_docx_document(
         modification_data: original_modification_data,
         created_at: document.created_at,
         updated_at: document.updated_at,
+        is_task: original_document.is_task,
     })
 }
 
@@ -277,6 +291,7 @@ mod tests {
                 None,
                 None,
                 None,
+                false,
             ),
             "macro|user@user.com",
             "new name",

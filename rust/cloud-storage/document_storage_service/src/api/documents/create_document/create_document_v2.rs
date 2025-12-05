@@ -19,6 +19,7 @@ pub struct CreateDocumentParams<'a> {
     pub project_id: Option<&'a str>,
     pub email_attachment_id: Option<Uuid>,
     pub created_at: Option<&'a DateTime<Utc>>,
+    pub is_task: bool,
 }
 
 /// Creates a document in the database
@@ -40,7 +41,9 @@ pub async fn create_document(
         project_id,
         email_attachment_id,
         created_at,
+        is_task,
     } = params;
+
     tracing::trace!("creating document v2");
 
     let share_permission = if let Some(file_type) = file_type {
@@ -75,6 +78,7 @@ pub async fn create_document(
             skip_history: false,
             email_attachment_id,
             created_at,
+            is_task,
         },
     )
     .await

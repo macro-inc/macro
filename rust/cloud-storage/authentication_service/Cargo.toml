@@ -30,6 +30,9 @@ async-stripe = { workspace = true, default-features = false, features = [
   "runtime-tokio-hyper",
 ] }
 async-stripe-webhook = { version = "1.0.0-alpha.4", default-features = false }
+auth_service_rpc = { path = "../rpc-interface/auth_service", features = [
+  "server",
+] }
 aws-config = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 aws-sdk-sesv2 = { workspace = true }
@@ -40,12 +43,12 @@ chrono = { workspace = true }
 comms_service_client = { path = "../comms_service_client" }
 cookie = { workspace = true }
 document_storage_service_client = { path = "../document_storage_service_client" }
+doppleganger = { workspace = true }
 email_validator = { path = "../email_validator" }
 futures = { workspace = true }
 http-body-util = { workspace = true }
 jsonwebtoken = { workspace = true }
 macro_auth = { path = "../macro_auth" }
-macro_autoupdate_router = { path = "../macro_autoupdate_router" }
 macro_cache_client = { path = "../macro_cache_client", default-features = false, features = [
   "auth",
   "auth_rate_limit",
@@ -73,6 +76,7 @@ mockall = { workspace = true }
 model = { path = "../model" }
 model_notifications = { path = "../model_notifications" }
 models_team = { path = "../models_team" }
+native_app_service = { path = "../native_app_service" }
 non_empty = { path = "../non_empty" }
 notification_service_client = { path = "../notification_service_client" }
 openssl = { workspace = true }
