@@ -45,6 +45,7 @@ export type ComposeInputData = {
 
 type ComposeEmailInputProps = {
   onSubmit: (data: ComposeInputData) => void;
+  disabled?: boolean;
   isSubmitting?: boolean;
 };
 
@@ -193,7 +194,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
           <MarkdownTextarea
             captureEditor={setEditor}
             class="text-sm break-words text-ink"
-            editable={() => true}
+            editable={() => !props.disabled}
             placeholder="Use `@` to reference files"
             onChange={setContent}
             onFocusLeaveStart={(e) => {
@@ -214,6 +215,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                 theme="base"
                 icon={PaperclipIcon}
                 tooltip={{ label: 'Attach' }}
+                disabled={props.disabled}
                 onClick={() => setAttachMenuOpen(true)}
               />
               <AttachMenu
@@ -229,13 +231,14 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             <IconButton
               theme="base"
               icon={TextAa}
+              disabled={props.disabled}
               onclick={() => {
                 setShowFormatRibbon(!showFormatRibbon());
               }}
             />
           </div>
           <button
-            disabled={isPendingUpload() || props.isSubmitting}
+            disabled={isPendingUpload() || props.isSubmitting || props.disabled}
             onClick={() => {
               handleSend();
             }}

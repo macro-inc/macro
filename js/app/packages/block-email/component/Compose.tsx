@@ -41,6 +41,8 @@ export function EmailCompose() {
 
   const [linkError, setLinkError] = createSignal<string | null>(null);
 
+  const hasLinkError = createMemo(() => linkError() != null);
+
   const [link] = createResource(async () => {
     const maybeLinks = await emailClient.getLinks();
     if (isErr(maybeLinks)) {
@@ -183,7 +185,7 @@ export function EmailCompose() {
       </SplitHeaderLeft>
       <div class="relative flex flex-col w-full h-full panel min-h-0 overflow-hidden">
         <Switch>
-          <Match when={linkError()}>
+          <Match when={hasLinkError()}>
             <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
               <div class="flex items-center justify-between gap-2">
                 <Caution class="size-4" />
@@ -220,14 +222,14 @@ export function EmailCompose() {
         <div
           class="macro-message-width mx-auto w-full max-h-full my-12 overflow-hidden"
           classList={{
-            'pointer-events-none opacity-50': Boolean(linkError()),
+            'pointer-events-none opacity-50': hasLinkError(),
           }}
         >
           <ClippedPanel tl tr>
             <div
               class="w-full p-4 bg-input max-h-full overflow-hidden flex flex-col min-h-0"
               classList={{
-                'pointer-events-none opacity-50': Boolean(linkError()),
+                'pointer-events-none opacity-50': hasLinkError(),
               }}
             >
               <div class="macro-message-width mx-auto pb-1 w-full h-max shrink-0">
@@ -256,7 +258,7 @@ export function EmailCompose() {
                         type="button"
                         class="text-sm text-secondary-text hover:text-primary-text hover:bg-hover"
                         onClick={() => setShowCc(true)}
-                        disabled={!!linkError()}
+                        disabled={hasLinkError()}
                       >
                         + Cc
                       </button>
@@ -266,7 +268,7 @@ export function EmailCompose() {
                         type="button"
                         class="text-sm text-secondary-text hover:text-primary-text hover:bg-hover"
                         onClick={() => setShowBcc(true)}
-                        disabled={!!linkError()}
+                        disabled={hasLinkError()}
                       >
                         + Bcc
                       </button>
@@ -286,9 +288,10 @@ export function EmailCompose() {
                         setSelectedOptions={setSelectedRecipients}
                         placeholder="Macro users or email addresses"
                         triedToSubmit={triedToSubmit}
-                        focusOnMount={!linkError()}
+                        focusOnMount={!hasLinkError()}
                         hideBorder
                         noBrackets
+                        disabled={hasLinkError()}
                       />
                     </div>
                   </div>
@@ -307,6 +310,7 @@ export function EmailCompose() {
                           triedToSubmit={triedToSubmit}
                           hideBorder
                           noBrackets
+                          disabled={hasLinkError()}
                         />
                       </div>
                     </div>
@@ -326,6 +330,7 @@ export function EmailCompose() {
                           triedToSubmit={triedToSubmit}
                           hideBorder
                           noBrackets
+                          disabled={hasLinkError()}
                         />
                       </div>
                     </div>
@@ -345,7 +350,7 @@ export function EmailCompose() {
                         onInput={(e) => {
                           setSubject(e.currentTarget.value);
                         }}
-                        disabled={!!linkError()}
+                        disabled={hasLinkError()}
                       />
                     </div>
                   </div>
@@ -355,12 +360,13 @@ export function EmailCompose() {
               <div
                 class="w-full h-full pb-2 flex flex-col min-h-0 overflow-hidden mt-4"
                 classList={{
-                  'pointer-events-none opacity-50': Boolean(linkError()),
+                  'pointer-events-none opacity-50': hasLinkError(),
                 }}
               >
                 <ComposeEmailInput
                   onSubmit={onSubmit}
                   isSubmitting={sendEmailMutation.isPending}
+                  disabled={hasLinkError()}
                 />
               </div>
             </div>

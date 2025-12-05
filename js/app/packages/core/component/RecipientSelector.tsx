@@ -217,6 +217,7 @@ type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   noPadding?: boolean;
   noBrackets?: boolean;
   includeSelf?: boolean;
+  disabled?: boolean;
 };
 
 export function RecipientSelector<K extends CombinedRecipientKind>(
@@ -389,6 +390,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       closeOnSelection={true}
       open={isOpen()}
       onOpenChange={setIsOpen}
+      disabled={props.disabled}
       validationState={invalid() ? 'invalid' : 'valid'}
       options={options() as CombinedRecipientItem[]}
       optionLabel={getRecipientOptionLabel}
