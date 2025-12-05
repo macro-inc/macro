@@ -152,9 +152,9 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="relative flex flex-col flex-1 items-center justify-between"
+      class="relative flex flex-col flex-1 items-center justify-between overflow-hidden"
     >
-      <div class="w-full h-full flex flex-col">
+      <div class="w-full h-full flex flex-col overflow-hidden min-h-0">
         <Show when={showFormatRibbon()}>
           <FormatRibbon
             state={structuredClone(defaultSelectionData)}
@@ -168,7 +168,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
         </Show>
 
         <div
-          class="min-h-20 grow w-full h-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 sm:pb-4"
+          class="min-h-20 grow w-full h-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 sm:pb-4 overflow-auto"
           ref={bodyDiv}
           onclick={() => {
             editor()?.focus();
@@ -183,7 +183,6 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                 items.forEach((item) => {
                   makeAttachmentPublic(item.documentId);
                 });
-                // scheduleDraftSave();
               });
             },
           }}

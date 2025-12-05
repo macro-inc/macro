@@ -358,12 +358,10 @@ export function EmailCompose() {
                   'pointer-events-none opacity-50': Boolean(linkError()),
                 }}
               >
-                <div class="mx-auto w-full h-full overflow-auto px-1">
-                  <ComposeEmailInput
-                    onSubmit={onSubmit}
-                    isSubmitting={sendEmailMutation.isPending}
-                  />
-                </div>
+                <ComposeEmailInput
+                  onSubmit={onSubmit}
+                  isSubmitting={sendEmailMutation.isPending}
+                />
               </div>
             </div>
           </ClippedPanel>
