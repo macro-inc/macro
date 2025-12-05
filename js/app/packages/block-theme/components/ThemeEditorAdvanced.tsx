@@ -44,6 +44,7 @@ export function ThemeEditorAdvanced(){
 
       <div
         style="
+        background-color: var(--b1);
         font-family: var(--font-mono);
         scrollbar-width: none;
         position: relative;

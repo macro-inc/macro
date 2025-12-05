@@ -53,6 +53,7 @@ export function ThemeList() {
       <div
         style="
           font-family: var(--font-mono);
+          background-color: var(--b1);
           scrollbar-width: none;
           position: relative;
           overflow: hidden;
@@ -93,7 +94,7 @@ export function ThemeList() {
                 z-index: 1;
               "
             >
-              <div>Theme List</div>
+              <div style="font-size: var(--text-xs);">Theme List</div>
             </div>
             <div style="height: 41px;" />
           <For each={themes()}>

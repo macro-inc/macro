@@ -20,6 +20,7 @@ export function Appearance() {
         .appearance-container{
           grid-template-areas: "tools" "basic" "list" "advanced";
           grid-template-rows: min-content min-content 1fr 1fr;
+          grid-template-columns: 1fr;
         }
         @container(min-width: 650px){
           .appearance-container{
@@ -33,7 +34,6 @@ export function Appearance() {
         style="
           background-color: var(--color-edge-muted);
           container-type: inline-size;
-          grid-template-columns: 1fr;
           position: absolute;
           overflow: hidden;
           display: grid;
