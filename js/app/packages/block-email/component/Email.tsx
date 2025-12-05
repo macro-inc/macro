@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import { createMethodRegistration } from '@core/orchestrator';
@@ -38,7 +39,6 @@ import { createStore } from 'solid-js/store';
 import { URL_PARAMS } from '../constants';
 import { isScrollingToMessage } from '../signal/scrollState';
 import type { createThreadMessagesResource } from '../signal/threadMessages';
-import { useThreadNavigation } from '../signal/threadNavigation';
 import { registerEmailHotkeys } from '../util/emailHotkeys';
 import { getHeaderValue } from '../util/getHeaderValue';
 import {
@@ -64,8 +64,13 @@ export function Email(props: EmailProps) {
   const scopeId = blockHotkeyScopeSignal.get;
 
   const setIsScrollingToMessage = isScrollingToMessage.set;
-  const { navigateThread } = useThreadNavigation();
   const blockElement = blockElementSignal.get;
+  const {
+    unifiedListContext: {
+      entitiesSignal: [entities],
+      actionRegistry,
+    },
+  } = useSplitPanelOrThrow();
 
   const [searchParams] = useSearchParams();
   const searchParamsMessageId = () => {
@@ -475,11 +480,20 @@ export function Email(props: EmailProps) {
 
   const archiveThread = createCallback(() => {
     if (!props.threadData()) return false;
-    emailClient.flagArchived({
-      value: props.threadData()!.inbox_visible,
-      id: props.threadData()!.db_id!,
-    });
-    navigateThread('down');
+
+    const selectedEntity = entities()?.find(
+      (entity) => entity.id === props.threadData()!.db_id
+    );
+
+    if (selectedEntity) {
+      actionRegistry.execute('mark_as_done', selectedEntity);
+    } else {
+      emailClient.flagArchived({
+        value: props.threadData()!.inbox_visible,
+        id: props.threadData()!.db_id!,
+      });
+    }
+
     return true;
   });
 
