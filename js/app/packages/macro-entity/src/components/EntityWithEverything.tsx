@@ -1,4 +1,5 @@
 import { EntityIcon } from '@core/component/EntityIcon';
+import type { Property } from '@core/component/Properties/types';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { TOKENS } from '@core/hotkey/tokens';
 import { matches } from '@core/util/match';
@@ -12,6 +13,7 @@ import { StaticMarkdown } from 'core/component/LexicalMarkdown/component/core/St
 import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
 import { emailToId, useDisplayName } from 'core/user';
+import { syncServiceClient } from 'service-sync/client';
 import type { ParentProps, Ref } from 'solid-js';
 import {
   createDeferred,
@@ -40,8 +42,6 @@ import type {
   WithSearch,
 } from '../types/search';
 import type { EntityClickEvent, EntityClickHandler } from './Entity';
-import type { Property } from '@core/component/Properties/types';
-import { syncServiceClient } from 'service-sync/client';
 import { PropertyPills } from './PropertyPills';
 
 function UnreadIndicator(props: { active?: boolean }) {
