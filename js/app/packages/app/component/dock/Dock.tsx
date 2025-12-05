@@ -30,6 +30,7 @@ import { QuickAccess } from './QuickAccess';
 
 // import { Debug } from './Debug';
 import Hints from './Hints';
+import { isTauri } from '@core/util/platform';
 
 export function Dock() {
   const activeSplitId = createMemo(() => globalSplitManager()?.activeSplitId());
@@ -326,29 +327,30 @@ export function Dock() {
                 size="sm"
               />
 
-              <IconButton
-                tooltip={{
-                  hotkeyToken: TOKENS.global.createNewSplit,
-                  label: 'Create New Split'
-                }}
-                onClick={() => {
-                  const manager = globalSplitManager();
-                  if (manager) {
-                    const canFit = manager.resizeContext()?.canFit({ minSize: 400 }) ?? true;
-                    if (canFit) {
-                      manager.createNewSplit({
-                        id: 'unified-list',
-                        type: 'component',
-                      });
+              <div class="ios:hidden">
+                <IconButton
+                  tooltip={{
+                    hotkeyToken: TOKENS.global.createNewSplit,
+                    label: 'Create New Split'
+                  }}
+                  onClick={() => {
+                    const manager = globalSplitManager();
+                    if (manager) {
+                      const canFit = manager.resizeContext()?.canFit({ minSize: 400 }) ?? true;
+                      if (canFit) {
+                        manager.createNewSplit({
+                          id: 'unified-list',
+                          type: 'component',
+                        });
+                      }
                     }
-                  }
-                }}
-                icon={SplitIcon}
-                theme="clear"
-                size="sm"
-              />
-
-              <Show when={ENABLE_JACK_IN}>
+                  }}
+                  icon={SplitIcon}
+                  theme="clear"
+                  size="sm"
+                />
+              </div>
+              <Show when={ENABLE_JACK_IN && !isTauri()}>
                 <IconButton
                   tooltip={{
                     label: isPresentMode() ? 'Exit Present Mode' : 'Enter Present Mode'
