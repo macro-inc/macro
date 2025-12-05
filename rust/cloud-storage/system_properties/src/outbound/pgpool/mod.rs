@@ -1,5 +1,8 @@
 //! PostgreSQL implementation for system properties repository.
 
+#[cfg(test)]
+mod test;
+
 use sqlx::{Pool, Postgres};
 use uuid::Uuid;
 

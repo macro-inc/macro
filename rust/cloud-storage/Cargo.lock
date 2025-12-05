@@ -8578,6 +8578,8 @@ dependencies = [
 name = "system_properties"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "macro_db_migrator",
  "macro_uuid",
  "models_properties",
  "serde",
