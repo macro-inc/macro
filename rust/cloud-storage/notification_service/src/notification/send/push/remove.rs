@@ -44,7 +44,6 @@ pub fn clear_push_notifications(
 
             let _ = futures::stream::iter(notification_ids.iter())
                 .then(|notification_id| {
-                    let notification_id = notification_id.clone();
                     let sns_client = sns_client.clone();
                     let db = db.clone();
                     let user_id = user_id.clone();
