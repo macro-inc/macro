@@ -32,7 +32,7 @@ import {
   EntityIcon,
   type EntityWithValidIcon,
 } from 'core/component/EntityIcon';
-import { syncServiceClient } from 'service-sync/client';
+import { syncServiceClient } from '@service-sync/client';
 import {
   type Component,
   createMemo,

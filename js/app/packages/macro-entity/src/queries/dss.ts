@@ -19,9 +19,9 @@ import {
 } from '@tanstack/solid-query';
 import { SERVER_HOSTS } from 'core/constant/servers';
 import { platformFetch } from 'core/util/platformFetch';
-import type { GetItemsSoupParams } from 'service-storage/generated/schemas/getItemsSoupParams';
-import type { SoupPage } from 'service-storage/generated/schemas/soupPage';
-import { useInstructionsMdIdQuery } from 'service-storage/instructionsMd';
+import type { GetItemsSoupParams } from '@service-storage/generated/schemas/getItemsSoupParams';
+import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
+import { useInstructionsMdIdQuery } from '@service-storage/instructionsMd';
 import type { Accessor } from 'solid-js';
 import type {
   ChatEntity,

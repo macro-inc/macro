@@ -7,9 +7,9 @@ import {
 } from '@core/util/searchHighlight';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
 import { createEffect, createMemo, createSignal, on } from 'solid-js';
-import { searchClient } from '../../../service-search/client';
-import type { UnifiedSearchResponse } from '../../../service-search/generated/models/unifiedSearchResponse';
-import type { UnifiedSearchResponseItem } from '../../../service-search/generated/models/unifiedSearchResponseItem';
+import { searchClient } from '@service-search/client';
+import type { UnifiedSearchResponse } from '@service-search/generated/models/unifiedSearchResponse';
+import type { UnifiedSearchResponseItem } from '@service-search/generated/models/unifiedSearchResponseItem';
 import type { CommandItemCard } from './KonsoleItem';
 
 const convertSecondsToMillis = (timestamp?: number) =>

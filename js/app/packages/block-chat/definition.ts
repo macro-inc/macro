@@ -4,7 +4,7 @@ import { AllModels } from '@service-cognition/generated/schemas';
 import type { ChatAttachmentWithName } from '@service-cognition/generated/schemas/chatAttachmentWithName';
 import { storageServiceClient } from '@service-storage/client';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
-import { cognitionApiServiceClient } from 'service-cognition/client';
+import { cognitionApiServiceClient } from '@service-cognition/client';
 import BlockChat from './component/Block';
 
 export const DEFAULT_CHAT_NAME = 'New Chat';

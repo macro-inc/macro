@@ -46,7 +46,7 @@ import {
 } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { tabbable } from 'tabbable';
-import { staticFileClient } from '../../service-static-files/client';
+import { staticFileClient } from '@service-static-files/client';
 import { ActionButton } from './ActionButton';
 import { AttachMenu } from './AttachMenu';
 import { Attachment } from './Attachment';

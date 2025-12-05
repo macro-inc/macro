@@ -15,7 +15,7 @@ import {
   fileExtension,
   filenameWithoutExtension,
 } from '@service-storage/util/filename';
-import { waitExtractionStatus } from 'service-cognition/extraction';
+import { waitExtractionStatus } from '@service-cognition/extraction';
 import { createSignal, untrack } from 'solid-js';
 import { asFileType } from './attachment';
 

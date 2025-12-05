@@ -5,7 +5,7 @@ import { type ContactInfo, emailToId } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import { For, onMount, Show } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
-import { emailClient } from '../../service-email/client';
+import { emailClient } from '@service-email/client';
 
 const peopleAtCompanySignal = createBlockSignal<ContactInfo[]>([]);
 const isLoadingPeopleSignal = createBlockSignal(false);

@@ -4,7 +4,7 @@ import { idToDisplayName, idToEmail } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import { createSingletonRoot } from '@solid-primitives/rootless';
 import { createMemo, createResource } from 'solid-js';
-import { contactsClient } from '../../service-contacts/client';
+import { contactsClient } from '@service-contacts/client';
 
 async function getContacts() {
   let allContacts: IUser[] = [];

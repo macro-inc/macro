@@ -163,6 +163,12 @@
       "@service-sync": [
         "./packages/service-clients/service-sync"
       ],
+      "@service-sync/*": [
+        "./packages/service-clients/service-sync/*"
+      ],
+      "@service-contacts/*": [
+        "./packages/service-clients/service-contacts/*"
+      ],
       "@loro-mirror/*": [
         "./packages/loro-mirror/*"
       ],

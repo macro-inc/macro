@@ -49,7 +49,7 @@ import {
   Suspense,
 } from 'solid-js';
 import { type VirtualizerHandle, VList } from 'virtua/solid';
-import { syncServiceClient } from '../../service-sync/client';
+import { syncServiceClient } from '@service-sync/client';
 
 const DRAWER_ID = 'history';
 

@@ -8,7 +8,7 @@ import {
   type TextOp,
   type TreeOp,
 } from 'loro-crdt';
-import { syncServiceClient } from '../../service-sync/client';
+import { syncServiceClient } from '@service-sync/client';
 
 export type BaseHistory = {
   readonly userId: string;

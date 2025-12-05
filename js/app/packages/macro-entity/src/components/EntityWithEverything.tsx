@@ -14,7 +14,7 @@ import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
 import { emailToId, useDisplayName } from 'core/user';
 import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
-import { syncServiceClient } from 'service-sync/client';
+import { syncServiceClient } from '@service-sync/client';
 import type { ParentProps, Ref } from 'solid-js';
 import {
   createDeferred,
