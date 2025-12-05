@@ -5,10 +5,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UserProvider = typeof UserProvider[keyof typeof UserProvider];
+export type ApiLabelType = typeof ApiLabelType[keyof typeof ApiLabelType];
 
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const UserProvider = {
-  GMAIL: 'GMAIL',
+export const ApiLabelType = {
+  System: 'System',
+  User: 'User',
 } as const;

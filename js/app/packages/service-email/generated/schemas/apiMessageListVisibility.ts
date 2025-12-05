@@ -5,10 +5,11 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type UserProvider = typeof UserProvider[keyof typeof UserProvider];
+export type ApiMessageListVisibility = typeof ApiMessageListVisibility[keyof typeof ApiMessageListVisibility];
 
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const UserProvider = {
-  GMAIL: 'GMAIL',
+export const ApiMessageListVisibility = {
+  Show: 'Show',
+  Hide: 'Hide',
 } as const;

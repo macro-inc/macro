@@ -1,4 +1,6 @@
 import { isEntityType } from '@core/types/utils';
+import type { APIEmailThreadPreviewMetadata } from 'service-email/generated/schemas/aPIEmailThreadPreviewMetadata';
+import type { ApiLabel } from 'service-email/generated/schemas/apiLabel';
 import type { JSX } from 'solid-js';
 
 export type EntityBase = {
@@ -41,6 +43,7 @@ export const getEntityProjectId = (e: EntityData): string | false => {
   return 'projectId' in e ? (e.projectId ?? false) : false;
 };
 
+// We spread ApiThreadPreviewCursor into the email entity, should we explcitly include all those fields here, or only add them as needed?
 export type EmailEntity = EntityBase & {
   type: 'email';
   isRead: boolean;
@@ -50,6 +53,8 @@ export type EmailEntity = EntityBase & {
   participants?: Array<{ email: string; name: string }>;
   senderEmail?: string;
   senderName?: string;
+  labels?: ApiLabel[];
+  metadata?: APIEmailThreadPreviewMetadata;
 };
 
 export type ProjectEntity = EntityBase & {

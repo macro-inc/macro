@@ -28,10 +28,67 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "type": "array",
-                  "items": {
-                    "$ref": "#/components/schemas/GetAttachmentResponse"
-                  }
+                  "$ref": "#/components/schemas/GetAttachmentResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/email/attachments/{id}/document_id": {
+      "get": {
+        "tags": ["Attachments"],
+        "summary": "Get the Macro document id for an email attachment, uploading it if it doesn't already exist.",
+        "operationId": "get_attachment_document_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Attachment ID.",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GetAttachmentDocumentIDResponse"
                 }
               }
             }
@@ -375,7 +432,7 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": { "$ref": "#/components/schemas/InitResponse" }
               }
             }
           },
@@ -570,7 +627,7 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+                "schema": { "$ref": "#/components/schemas/ListLinksResponse" }
               }
             }
           },
@@ -830,6 +887,57 @@
         }
       }
     },
+    "/email/settings": {
+      "patch": {
+        "tags": ["Settings"],
+        "summary": "Patch user settings.",
+        "operationId": "patch_settings",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PatchSettingsRequest" }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/PatchSettingsResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/sync": {
       "post": {
         "tags": ["Sync"],
@@ -1016,10 +1124,7 @@
             "description": "",
             "content": {
               "application/json": {
-                "schema": {
-                  "type": "array",
-                  "items": { "$ref": "#/components/schemas/GetThreadResponse" }
-                }
+                "schema": { "$ref": "#/components/schemas/GetThreadResponse" }
               }
             }
           },
@@ -1117,7 +1222,7 @@
     },
     "/email/threads/{id}/messages": {
       "get": {
-        "tags": ["email::threads::get"],
+        "tags": ["Threads"],
         "operationId": "get_thread_messages_handler",
         "parameters": [
           {
@@ -1259,6 +1364,33 @@
   },
   "components": {
     "schemas": {
+      "APIEmailThreadPreviewMetadata": {
+        "type": "object",
+        "required": [
+          "known_sender",
+          "tabular",
+          "calendar_invite",
+          "generic_sender"
+        ],
+        "properties": {
+          "calendar_invite": {
+            "type": "boolean",
+            "description": "if any email contains a calendar invite"
+          },
+          "generic_sender": {
+            "type": "boolean",
+            "description": "if any sender in the thread is a generic email"
+          },
+          "known_sender": {
+            "type": "boolean",
+            "description": "if user has previously emailed any sender in the thread"
+          },
+          "tabular": {
+            "type": "boolean",
+            "description": "if any email contains a <table> html tag"
+          }
+        }
+      },
       "APIThread": {
         "type": "object",
         "description": "Thread object exposed to the FE in Get Threads Call",
@@ -1296,6 +1428,11 @@
           "updated_at": { "type": "string", "format": "date-time" }
         }
       },
+      "AccessLevel": {
+        "type": "string",
+        "description": "Ordered from least to most access top -> bottom",
+        "enum": ["view", "comment", "edit", "owner"]
+      },
       "ApiAttachment": {
         "type": "object",
         "required": ["id", "messageId", "createdAt"],
@@ -1331,6 +1468,42 @@
           "sfsPhotoUrl": { "type": ["string", "null"] }
         }
       },
+      "ApiLabel": {
+        "type": "object",
+        "required": [
+          "id",
+          "linkId",
+          "providerLabelId",
+          "name",
+          "createdAt",
+          "messageListVisibility",
+          "labelListVisibility",
+          "type"
+        ],
+        "properties": {
+          "createdAt": { "type": "string", "format": "date-time" },
+          "id": { "type": "string", "format": "uuid" },
+          "labelListVisibility": {
+            "$ref": "#/components/schemas/ApiLabelListVisibility"
+          },
+          "linkId": { "type": "string", "format": "uuid" },
+          "messageListVisibility": {
+            "$ref": "#/components/schemas/ApiMessageListVisibility"
+          },
+          "name": { "type": "string" },
+          "providerLabelId": { "type": "string" },
+          "type": { "$ref": "#/components/schemas/ApiLabelType" }
+        }
+      },
+      "ApiLabelListVisibility": {
+        "type": "string",
+        "enum": ["LabelShow", "LabelShowIfUnread", "LabelHide"]
+      },
+      "ApiLabelType": { "type": "string", "enum": ["System", "User"] },
+      "ApiMessageListVisibility": {
+        "type": "string",
+        "enum": ["Show", "Hide"]
+      },
       "ApiPaginatedThreadCursor": {
         "type": "object",
         "required": ["items"],
@@ -1352,7 +1525,13 @@
           { "$ref": "#/components/schemas/ApiThreadPreviewCursorInner" },
           {
             "type": "object",
-            "required": ["attachments", "macroAttachments", "contacts"],
+            "required": [
+              "attachments",
+              "macroAttachments",
+              "contacts",
+              "labels",
+              "metadata"
+            ],
             "properties": {
               "attachments": {
                 "type": "array",
@@ -1366,9 +1545,16 @@
                 "type": ["number", "null"],
                 "format": "double"
               },
+              "labels": {
+                "type": "array",
+                "items": { "$ref": "#/components/schemas/ApiLabel" }
+              },
               "macroAttachments": {
                 "type": "array",
                 "items": { "$ref": "#/components/schemas/ApiAttachmentMacro" }
+              },
+              "metadata": {
+                "$ref": "#/components/schemas/APIEmailThreadPreviewMetadata"
               }
             }
           }
@@ -1566,6 +1752,15 @@
         "required": ["job"],
         "properties": { "job": { "$ref": "#/components/schemas/BackfillJob" } }
       },
+      "GetAttachmentDocumentIDResponse": {
+        "type": "object",
+        "description": "The response returned from the get attachment endpoint",
+        "required": ["attachment_id", "document_id"],
+        "properties": {
+          "attachment_id": { "type": "string", "format": "uuid" },
+          "document_id": { "type": "string" }
+        }
+      },
       "GetAttachmentResponse": {
         "type": "object",
         "description": "The response returned from the get attachment endpoint",
@@ -1604,8 +1799,9 @@
       "GetThreadResponse": {
         "type": "object",
         "description": "The response returned from the get thread endpoint",
-        "required": ["thread"],
+        "required": ["thread", "access_level"],
         "properties": {
+          "access_level": { "$ref": "#/components/schemas/AccessLevel" },
           "thread": {
             "$ref": "#/components/schemas/APIThread",
             "description": "the thread, with messages inside"
@@ -1671,6 +1867,7 @@
           "email_address",
           "provider",
           "is_sync_active",
+          "settings",
           "created_at",
           "updated_at"
         ],
@@ -1682,6 +1879,8 @@
           "is_sync_active": { "type": "boolean" },
           "macro_id": { "type": "string" },
           "provider": { "$ref": "#/components/schemas/UserProvider" },
+          "settings": { "$ref": "#/components/schemas/Settings" },
+          "signature": { "type": ["string", "null"] },
           "updated_at": { "type": "string", "format": "date-time" }
         }
       },
@@ -1912,6 +2111,20 @@
           }
         }
       },
+      "PatchSettingsRequest": {
+        "type": "object",
+        "required": ["settings"],
+        "properties": {
+          "settings": { "$ref": "#/components/schemas/Settings" }
+        }
+      },
+      "PatchSettingsResponse": {
+        "type": "object",
+        "required": ["settings"],
+        "properties": {
+          "settings": { "$ref": "#/components/schemas/Settings" }
+        }
+      },
       "PreviewView": {
         "oneOf": [
           {
@@ -1955,6 +2168,12 @@
         "required": ["message"],
         "properties": {
           "message": { "$ref": "#/components/schemas/MessageToSend" }
+        }
+      },
+      "Settings": {
+        "type": "object",
+        "properties": {
+          "signature_on_replies_forwards": { "type": ["boolean", "null"] }
         }
       },
       "Thread": {
@@ -2088,7 +2307,7 @@
           }
         }
       },
-      "UserProvider": { "type": "string", "enum": ["Gmail"] },
+      "UserProvider": { "type": "string", "enum": ["GMAIL"] },
       "Value": {}
     }
   },

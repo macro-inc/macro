@@ -28,6 +28,7 @@ import { Appearance } from './Appearance';
 import { Notification } from './Notification';
 import Organization from './Organization/Organization';
 import { Subscription } from './Subscription';
+import { Inbox } from './Inbox';
 
 export const [viewportOffset, setViewportOffset] = createSignal(0);
 
@@ -121,8 +122,12 @@ export function Settings() {
 
     tabs.push({ value: 'Notification', label: 'Notification' });
 
-    if (isNativeMobilePlatform() && DEV_MODE_ENV) {
-      tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' });
+    if (isNativeMobilePlatform() && DEV_MODE_ENV){
+      tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' })
+    }
+
+    if (DEV_MODE_ENV){
+      tabs.push({ value: 'Inbox', label: 'Inbox' })
     }
 
     return tabs;
@@ -174,7 +179,7 @@ export function Settings() {
                   value === 'Appearance' ||
                   value === 'Notification' ||
                   value === 'Mobile' ||
-                  value === 'AI Memory')
+                  value === 'AI Memory' || value === 'Inbox')
               ) {
                 setActiveTabId(value as SettingsTab);
                 track(TrackingEvents.SETTINGS.CHANGETAB, { tab: value });
@@ -281,6 +286,11 @@ export function Settings() {
               <Tabs.Content value="Notification" class="h-full">
                 <Notification />
               </Tabs.Content>
+              <Show when={DEV_MODE_ENV}>
+                <Tabs.Content value="Inbox" class="h-full">
+                  <Inbox />
+                </Tabs.Content>
+              </Show>
             </div>
           </Tabs>
         </Dialog.Content>

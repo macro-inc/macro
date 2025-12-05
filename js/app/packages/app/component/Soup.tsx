@@ -14,11 +14,8 @@ import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import {
-  CONDITIONAL_VIEWS,
   DEFAULT_VIEWS,
   type DefaultView,
-  VIEWS,
-  type View,
   type ViewId,
   type ViewLabel,
 } from '@core/types/view';
@@ -80,51 +77,31 @@ const ViewTab: ParentComponent<{
   );
 };
 
-const DefaultViewTab: Component<{
-  viewId: ViewId;
-}> = (props) => {
-  return (
-    <ViewTab viewId={props.viewId}>
-      <Suspense>
-        <UnifiedListView />
-      </Suspense>
-    </ViewTab>
-  );
-};
-
-const ConditionalViewTab: ParentComponent<{
-  view: Exclude<View, DefaultView>;
-}> = (props) => {
-  return (
-    <Show when={VIEWS.includes(props.view)}>
-      <ViewTab viewId={props.view}>{props.children}</ViewTab>
-    </Show>
-  );
-};
-
 const ViewWithSearch: Component<{
   viewId: ViewId;
 }> = (props) => {
   return (
-    <Switch>
-      <Match when={props.viewId === 'emails'}>
-        <ConditionalViewTab view="emails">
+    <ViewTab viewId={props.viewId}>
+      <Switch>
+        {/* <Match
+          when={props.viewId === 'emails' && DEFAULT_VIEWS.includes('emails')}
+        >
           <Suspense>
             <EmailView />
           </Suspense>
-        </ConditionalViewTab>
-      </Match>
-      <Match when={props.viewId === 'all'}>
-        <ConditionalViewTab view="all">
+        </Match> */}
+        <Match when={props.viewId === 'all' && DEFAULT_VIEWS.includes('all')}>
           <Suspense>
             <AllView />
           </Suspense>
-        </ConditionalViewTab>
-      </Match>
-      <Match when={true}>
-        <DefaultViewTab viewId={props.viewId} />
-      </Match>
-    </Switch>
+        </Match>
+        <Match when={true}>
+          <Suspense>
+            <UnifiedListView />
+          </Suspense>
+        </Match>
+      </Switch>
+    </ViewTab>
   );
 };
 
@@ -245,7 +222,8 @@ export function Soup() {
 
   const entityQueryClient = useEntityQueryClient();
 
-  registerHotkey({
+  
+    registerHotkey({
     hotkey: ['shift+/'],
     scopeId: splitHotkeyScope,
     description: () =>
@@ -255,7 +233,7 @@ export function Soup() {
       if (showHelpDrawer().has(selectedView())) {
         setShowHelpDrawer(new Set<string>());
       } else {
-        setShowHelpDrawer(new Set([...DEFAULT_VIEWS, ...CONDITIONAL_VIEWS]));
+        setShowHelpDrawer(new Set(DEFAULT_VIEWS));
       }
       return true;
     },
@@ -324,7 +302,7 @@ export function Soup() {
   const TabContextMenu = (props: { value: ViewId; label: string }) => {
     const [isModalOpen, setIsModalOpen] = createSignal(false);
     const isDefaultView = () =>
-      VIEWCONFIG_DEFAULTS_IDS.includes(props.value as View);
+      VIEWCONFIG_DEFAULTS_IDS.includes(props.value as DefaultView);
     return (
       <Show when={!isDefaultView()}>
         <ContextMenu>
@@ -503,7 +481,7 @@ export const useUpsertSavedViewMutation = () => {
           }
     ) => {
       const isDefaultView = VIEWCONFIG_DEFAULTS_IDS.includes(
-        viewData.id as View
+        viewData.id as DefaultView
       );
       if ('config' in viewData) {
         // if data id is in defaults, exclude default, set up args to create new view

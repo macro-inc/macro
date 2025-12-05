@@ -4,18 +4,14 @@ import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
-import {
-  CONDITIONAL_VIEWS,
-  DEFAULT_VIEWS,
-  type View,
-  type ViewId,
-} from '@core/types/view';
+import { DEFAULT_VIEWS, type DefaultView, type ViewId } from '@core/types/view';
 import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
 import { getScrollParent } from '@core/util/scrollParent';
 import { waitForFrames } from '@core/util/sleep';
 import type { EntityData } from '@macro-entity';
 import { entityHasUnreadNotifications } from '@notifications';
+import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import { useTutorialCompleted } from '@service-gql/client';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -83,13 +79,13 @@ export type UnifiedListContext = {
   virtualizerHandleSignal: Signal<VirtualizerHandle | undefined>;
   entityListRefSignal: Signal<HTMLDivElement | undefined>;
   entitiesSignal: Signal<EntityData[] | undefined>;
-  emailViewSignal: Signal<'inbox' | 'sent' | 'drafts' | 'all'>;
+  emailViewSignal: Signal<PreviewViewStandardLabel>;
   showHelpDrawer: Accessor<Set<string>>;
   setShowHelpDrawer: Setter<Set<string>>;
   actionRegistry: EntityActionRegistry;
 };
 
-const DEFAULT_VIEW_ID: View = 'inbox';
+const DEFAULT_VIEW_ID: DefaultView = 'signal';
 
 const DEFAULT_VIEW_IDS_SET = new Set(VIEWCONFIG_DEFAULTS_IDS);
 
@@ -101,14 +97,10 @@ export function createSoupContext(): UnifiedListContext {
   const virtualizerHandleSignal = createSignal<VirtualizerHandle>();
   const entityListRefSignal = createSignal<HTMLDivElement>();
   const entitiesSignal = createSignal<EntityData[]>();
-  const emailViewSignal = createSignal<'inbox' | 'sent' | 'drafts' | 'all'>(
-    'inbox'
-  );
+  const emailViewSignal = createSignal<PreviewViewStandardLabel>('inbox');
   const tutorialCompleted = useTutorialCompleted();
   const [showHelpDrawer, setShowHelpDrawer] = createSignal<Set<string>>(
-    !tutorialCompleted()
-      ? new Set([...DEFAULT_VIEWS, ...CONDITIONAL_VIEWS])
-      : new Set()
+    !tutorialCompleted() ? new Set(DEFAULT_VIEWS) : new Set()
   );
   const setViewDataStore: SetStoreFunction<ViewDataMap> = (...args: any[]) => {
     // need to create new reference, causes bug where first entity persits highlighting
@@ -139,7 +131,7 @@ export function createSoupContext(): UnifiedListContext {
 }
 
 function createViewData(
-  view: View,
+  view: DefaultView,
   viewProps?: Omit<ViewConfigEnhanced, 'id'> &
     Partial<Pick<ViewConfigEnhanced, 'id'>>
 ): ViewData {
@@ -301,7 +293,7 @@ export function createNavigationEntityListShortcut({
     'mark_as_done',
     async (entities) => {
       const handler =
-        VIEWCONFIG_DEFAULTS[selectedView() as View]?.hotkeyOptions?.e;
+        VIEWCONFIG_DEFAULTS[selectedView() as DefaultView]?.hotkeyOptions?.e;
       if (handler) {
         if (isEntityLastItem()) {
           navigateThroughList({ axis: 'start', mode: 'step' });
@@ -1280,7 +1272,7 @@ const useAllViews = ({
   const [selectedView, setSelectedView] = selectedViewSignal;
   const initialState: ViewDataMap = {};
   for (const [view, viewProps] of Object.entries(VIEWCONFIG_DEFAULTS)) {
-    initialState[view] = createViewData(view as View, viewProps);
+    initialState[view] = createViewData(view as DefaultView, viewProps);
   }
 
   const [viewsData, setViewsData] = createStore(initialState);
@@ -1308,9 +1300,9 @@ const useAllViews = ({
         const savedViewConfigs = data.views.map((view) => {
           const config = view.config as ViewConfigBase;
 
-          return createViewData(view.name as View, {
+          return createViewData(view.name as DefaultView, {
             id: view.id,
-            view: view.name as View,
+            view: view.name as DefaultView,
             display: { ...VIEWCONFIG_BASE.display, ...config.display },
             filters: { ...VIEWCONFIG_BASE.filters, ...config.filters },
             sort: {
@@ -1329,7 +1321,7 @@ const useAllViews = ({
           Object.entries(viewsData).filter(
             ([viewId, viewData]) =>
               savedViewIds.has(viewId) ||
-              DEFAULT_VIEW_IDS_SET.has(viewId as View) ||
+              DEFAULT_VIEW_IDS_SET.has(viewId as DefaultView) ||
               viewData.viewType !== undefined
           )
         );

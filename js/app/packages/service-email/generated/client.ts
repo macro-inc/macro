@@ -15,14 +15,19 @@ import type {
   EmptyResponse,
   ErrorResponse,
   GetActiveBackfillJobResponse,
+  GetAttachmentDocumentIDResponse,
   GetAttachmentResponse,
   GetBackfillJobResponse,
   GetThreadMessagesHandlerParams,
   GetThreadParams,
   GetThreadResponse,
+  InitResponse,
   ListContactsResponse,
   ListLabelsResponse,
+  ListLinksResponse,
   ParsedMessage,
+  PatchSettingsRequest,
+  PatchSettingsResponse,
   PreviewsInboxCursorParams,
   SendMessageRequest,
   SendMessageResponse,
@@ -34,7 +39,7 @@ import type {
  * @summary Get an attachment by ID.
  */
 export type getAttachmentResponse200 = {
-  data: GetAttachmentResponse[]
+  data: GetAttachmentResponse
   status: 200
 }
 
@@ -90,6 +95,70 @@ export const getAttachment = async (id: string, options?: RequestInit): Promise<
   
   const data: getAttachmentResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as getAttachmentResponse
+}
+
+
+
+/**
+ * @summary Get the Macro document id for an email attachment, uploading it if it doesn't already exist.
+ */
+export type getAttachmentDocumentIdResponse200 = {
+  data: GetAttachmentDocumentIDResponse
+  status: 200
+}
+
+export type getAttachmentDocumentIdResponse400 = {
+  data: ErrorResponse
+  status: 400
+}
+
+export type getAttachmentDocumentIdResponse401 = {
+  data: ErrorResponse
+  status: 401
+}
+
+export type getAttachmentDocumentIdResponse404 = {
+  data: ErrorResponse
+  status: 404
+}
+
+export type getAttachmentDocumentIdResponse500 = {
+  data: ErrorResponse
+  status: 500
+}
+    
+export type getAttachmentDocumentIdResponseSuccess = (getAttachmentDocumentIdResponse200) & {
+  headers: Headers;
+};
+export type getAttachmentDocumentIdResponseError = (getAttachmentDocumentIdResponse400 | getAttachmentDocumentIdResponse401 | getAttachmentDocumentIdResponse404 | getAttachmentDocumentIdResponse500) & {
+  headers: Headers;
+};
+
+export type getAttachmentDocumentIdResponse = (getAttachmentDocumentIdResponseSuccess | getAttachmentDocumentIdResponseError)
+
+export const getGetAttachmentDocumentIdUrl = (id: string,) => {
+
+
+  
+
+  return `/email/attachments/${id}/document_id`
+}
+
+export const getAttachmentDocumentId = async (id: string, options?: RequestInit): Promise<getAttachmentDocumentIdResponse> => {
+  
+  const res = await fetch(getGetAttachmentDocumentIdUrl(id),
+  {      
+    ...options,
+    method: 'GET'
+    
+    
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: getAttachmentDocumentIdResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getAttachmentDocumentIdResponse
 }
 
 
@@ -459,7 +528,7 @@ export const deleteDraft = async (id: string, options?: RequestInit): Promise<de
  * @summary Initialize email functionality for the user. Populates initial threads and enables inbox syncing.
  */
 export type initUserResponse200 = {
-  data: EmptyResponse
+  data: InitResponse
   status: 200
 }
 
@@ -706,7 +775,7 @@ export const deleteLabel = async (id: string, options?: RequestInit): Promise<de
  * @summary List all links belonging to the user.
  */
 export type listLinksResponse200 = {
-  data: EmptyResponse
+  data: ListLinksResponse
   status: 200
 }
 
@@ -1010,6 +1079,66 @@ export const getMessage = async (id: string, options?: RequestInit): Promise<get
 
 
 /**
+ * @summary Patch user settings.
+ */
+export type patchSettingsResponse200 = {
+  data: PatchSettingsResponse
+  status: 200
+}
+
+export type patchSettingsResponse400 = {
+  data: ErrorResponse
+  status: 400
+}
+
+export type patchSettingsResponse401 = {
+  data: ErrorResponse
+  status: 401
+}
+
+export type patchSettingsResponse500 = {
+  data: ErrorResponse
+  status: 500
+}
+    
+export type patchSettingsResponseSuccess = (patchSettingsResponse200) & {
+  headers: Headers;
+};
+export type patchSettingsResponseError = (patchSettingsResponse400 | patchSettingsResponse401 | patchSettingsResponse500) & {
+  headers: Headers;
+};
+
+export type patchSettingsResponse = (patchSettingsResponseSuccess | patchSettingsResponseError)
+
+export const getPatchSettingsUrl = () => {
+
+
+  
+
+  return `/email/settings`
+}
+
+export const patchSettings = async (patchSettingsRequest: PatchSettingsRequest, options?: RequestInit): Promise<patchSettingsResponse> => {
+  
+  const res = await fetch(getPatchSettingsUrl(),
+  {      
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      patchSettingsRequest,)
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: patchSettingsResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as patchSettingsResponse
+}
+
+
+
+/**
  * @summary Enables inbox syncing for user.
  */
 export type enableSyncResponse201 = {
@@ -1199,7 +1328,7 @@ export const previewsInboxCursor = async (view: string,
  * @summary Get a thread with a paginated number of messages.
  */
 export type getThreadResponse200 = {
-  data: GetThreadResponse[]
+  data: GetThreadResponse
   status: 200
 }
 

@@ -130,6 +130,7 @@ import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { EmptyState } from './UnifiedListEmptyState';
 import {
+  applyClientFilters,
   type DisplayOptions,
   type DocumentTypeFilter,
   type FilterOptions,
@@ -371,7 +372,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     () => view()?.filters?.projectFilter ?? defaultFilterOptions.projectFilter
   );
 
-  const { all: emailRecipientOptions } = useCombinedRecipients(['user']);
+  // const { all: emailRecipientOptions } = useCombinedRecipients(['user']);
   const fromFilter = createMemo(() => view()?.filters.fromFilter);
   const hasFromFilter = createMemo(() => fromFilter() !== undefined);
   const shouldFilterEmails = createMemo(() => {
@@ -657,6 +658,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     if (notificationFilter() === 'notDone') filterFns.push(notDoneFilterFn);
 
+    const clientFilterFn = (entity: WithNotification<EntityData>) => {
+      const filtered = applyClientFilters([entity], selectedView(), {
+        soupContext: unifiedListContext,
+      });
+      return filtered.length > 0;
+    };
+    filterFns.push(clientFilterFn);
+
     setRequiredFilters(filterFns);
   });
 
@@ -827,11 +836,16 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   );
   const emailQueryParams = createMemo((): FetchPaginatedEmailsParams => {
     const sort = sortType();
+    const currentView = selectedView();
+    const emailViewValue =
+      currentView === 'noise' || currentView === 'signal'
+        ? emailView()
+        : 'inbox';
     return {
       limit: props.defaultDisplayOptions?.limit ?? 100,
       // email sort methods does not accept frecency yet
       sort_method: sort === 'frecency' ? 'viewed_updated' : sort,
-      view: selectedView() === 'emails' ? emailView() : 'inbox',
+      view: emailViewValue,
     };
   });
   const searchUnifiedNameContentQueryParams = createMemo(
