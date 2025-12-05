@@ -1,5 +1,5 @@
 import { isEntityType } from '@core/types/utils';
-import {
+import type {
   APIEmailThreadPreviewMetadata,
   ApiLabel,
 } from '@service-email/generated/schemas';

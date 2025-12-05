@@ -19,8 +19,8 @@ import {
 import { emailClient } from '@service-email/client';
 import stringify from 'json-stable-stringify';
 import { queryClient } from '../../macro-entity/src/queries/client';
-import { noiseFilter, signalFilter } from './soupFilters';
 import type { UnifiedListContext } from './SoupContext';
+import { noiseFilter, signalFilter } from './soupFilters';
 
 // for custom views that extend the unified list view
 export type ViewType = 'project';

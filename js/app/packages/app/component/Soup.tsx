@@ -7,7 +7,6 @@ import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { Button } from '@core/component/FormControls/Button';
-import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -52,7 +51,6 @@ import { EntityModal } from './EntityModal/EntityModal';
 import { HelpDrawer } from './HelpDrawer';
 import { SplitHeaderLeft } from './split-layout/components/SplitHeader';
 import { SplitTabs } from './split-layout/components/SplitTabs';
-import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
 import type { SplitPanelContextType } from './split-layout/context';
 import { SplitPanelContext } from './split-layout/context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
@@ -222,8 +220,7 @@ export function Soup() {
 
   const entityQueryClient = useEntityQueryClient();
 
-  
-    registerHotkey({
+  registerHotkey({
     hotkey: ['shift+/'],
     scopeId: splitHotkeyScope,
     description: () =>
@@ -439,32 +436,32 @@ function AllView() {
   return <UnifiedListView />;
 }
 
-function EmailView() {
-  const {
-    emailViewSignal: [emailView, setEmailView],
-    viewsDataStore,
-    selectedView,
-  } = useSplitPanelOrThrow().unifiedListContext;
-  const viewData = createMemo(() => viewsDataStore[selectedView()]);
+// function EmailView() {
+//   const {
+//     emailViewSignal: [emailView, setEmailView],
+//     viewsDataStore,
+//     selectedView,
+//   } = useSplitPanelOrThrow().unifiedListContext;
+//   const viewData = createMemo(() => viewsDataStore[selectedView()]);
 
-  return (
-    <>
-      <UnifiedListView />
-      <SplitToolbarRight>
-        <div class="flex flex-row items-center pr-2">
-          <SegmentedControl
-            disabled={!!viewData().searchText}
-            size="SM"
-            label="View"
-            list={['inbox', 'sent', 'drafts']}
-            value={emailView()}
-            onChange={setEmailView}
-          />
-        </div>
-      </SplitToolbarRight>
-    </>
-  );
-}
+//   return (
+//     <>
+//       <UnifiedListView />
+//       <SplitToolbarRight>
+//         <div class="flex flex-row items-center pr-2">
+//           <SegmentedControl
+//             disabled={!!viewData().searchText}
+//             size="SM"
+//             label="View"
+//             list={['inbox', 'sent', 'drafts']}
+//             value={emailView()}
+//             onChange={setEmailView}
+//           />
+//         </div>
+//       </SplitToolbarRight>
+//     </>
+//   );
+// }
 
 export const useUpsertSavedViewMutation = () => {
   const queryClient = useQueryClient();

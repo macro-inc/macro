@@ -1,4 +1,3 @@
-
 import type { ViewId } from '@core/types/view';
 import { createCallback } from '@solid-primitives/rootless';
 import { useContext } from 'solid-js';
