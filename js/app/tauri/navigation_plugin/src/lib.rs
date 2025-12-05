@@ -1,7 +1,7 @@
 use crate::scheme::MacroScheme;
 use logger::Logger;
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, collections::HashMap};
+use std::{borrow::Cow, collections::HashMap, sync::Arc};
 use tauri::{Manager, Runtime, plugin::Plugin};
 use tauri_plugin_opener::OpenerExt;
 use url::Url;
@@ -41,17 +41,43 @@ enum NavigationOutput<'a> {
     },
 }
 
+#[derive(Clone, Copy, Debug)]
+pub enum Platform {
+    Mobile,
+    Desktop,
+}
+
+#[derive(Clone)]
 pub struct MacroNavigationPlugin {
-    internal_domains: Vec<Url>,
+    internal_domains: Arc<[Url]>,
+    platform: Platform,
+}
+
+#[derive(Debug, Deserialize)]
+struct AuthCallbackQuery<'a> {
+    original_url: Option<Url>,
+    #[serde(flatten, borrow)]
+    remaining: HashMap<Cow<'a, str>, Cow<'a, str>>,
+}
+
+#[derive(Debug, Serialize)]
+struct MacroCallbackQuery<'a> {
+    original_url: MacroScheme,
+    #[serde(flatten, borrow)]
+    remaining: HashMap<Cow<'a, str>, Cow<'a, str>>,
 }
 
 impl MacroNavigationPlugin {
-    pub fn new(allow_list: &'static [&'static str]) -> Result<Self, url::ParseError> {
+    pub fn new(
+        allow_list: &'static [&'static str],
+        platform: Platform,
+    ) -> Result<Self, url::ParseError> {
         Ok(MacroNavigationPlugin {
             internal_domains: allow_list
                 .iter()
                 .map(|s| s.parse())
-                .collect::<Result<Vec<_>, _>>()?,
+                .collect::<Result<Arc<_>, _>>()?,
+            platform,
         })
     }
 
@@ -83,45 +109,31 @@ impl MacroNavigationPlugin {
             .ok_or(ExternalUrl(Cow::Borrowed(url)))
     }
 
-    #[tracing::instrument(ret, level = tracing::Level::DEBUG)]
-    fn transform_external(mut url: Url) -> Url {
+    #[tracing::instrument(ret, level = tracing::Level::DEBUG, skip(self))]
+    fn transform_external(&self, mut url: Url) -> Url {
         let Some(query) = url.query() else {
             return url;
         };
 
-        #[derive(Debug, Deserialize)]
-        struct AuthCallbackQuery<'a> {
-            original_url: Option<Url>,
-            #[serde(flatten, borrow)]
-            remaining: HashMap<Cow<'a, str>, Cow<'a, str>>,
-        }
-
-        #[derive(Debug, Serialize)]
-        struct MacroCallbackQuery<'a> {
-            original_url: MacroScheme,
-            #[serde(flatten, borrow)]
-            remaining: HashMap<Cow<'a, str>, Cow<'a, str>>,
-        }
-
         if let Ok(AuthCallbackQuery {
             original_url: Some(cb),
             remaining,
-        }) = serde_qs::from_str(query).log_err()
+        }) = dbg!(serde_qs::from_str(query)).log_err()
         {
             let Ok(macro_scheme) = MacroScheme::from_url(&cb) else {
                 return url;
             };
 
-            url.set_query(Some(
+            url.set_query(Some(dbg!(
                 serde_qs::to_string(&MacroCallbackQuery {
                     original_url: macro_scheme,
                     remaining,
                 })
                 .expect("serialization should not fail")
-                .as_str(),
-            ));
-            url.query_pairs_mut().append_pair("is_mobile", "true");
+                .as_str()
+            )));
         }
+        url.query_pairs_mut().append_pair("is_mobile", "true");
         url
     }
 }
@@ -142,10 +154,11 @@ impl<R: Runtime> Plugin<R> for MacroNavigationPlugin {
                 // on android this panics if called on the main thread
                 let app_handle = webview.app_handle().clone();
                 let url = external_url.0.into_owned();
+                let cloned = self.clone();
                 std::thread::spawn(move || {
                     app_handle
                         .opener()
-                        .open_url(Self::transform_external(url).as_str(), None::<&str>)
+                        .open_url(cloned.transform_external(url).as_str(), None::<&str>)
                         .log_and_consume();
                 });
                 false

@@ -20,6 +20,7 @@ impl MacroScheme {
         Ok(Self(url))
     }
     /// turn a http(s) url into a macro scheme url
+    #[tracing::instrument(err, ret)]
     pub(crate) fn from_url(url: &Url) -> Result<Self, SchemeError> {
         let ("http" | "https" | "tauri") = url.scheme() else {
             return Err(SchemeError::InvalidScheme {
@@ -28,9 +29,7 @@ impl MacroScheme {
             });
         };
 
-        let Some(rest) = url.fragment().map(|s| s.trim_start_matches('/')) else {
-            return Err(SchemeError::MissingFragment);
-        };
+        let rest = url.fragment().unwrap_or(url.path()).trim_start_matches('/');
         let query = url.query();
         let inner = match query {
             Some(q) => format!("macro://{rest}?{q}"),
@@ -58,7 +57,7 @@ impl Deref for MacroScheme {
 #[derive(Debug, Error)]
 pub enum SchemeError {
     #[error("The input url did not have a fragment")]
-    MissingFragment,
+    MissingPathOrFragment,
     #[error("{0}")]
     Parse(#[from] url::ParseError),
     #[error("Invalid scheme received. Expected {expected}, found {found}")]
