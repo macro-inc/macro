@@ -2,12 +2,14 @@ use std::collections::HashMap;
 
 use anyhow::Context;
 use aws_sdk_sns::types::MessageAttributeValue;
+use macro_entrypoint::MacroEntrypoint;
 use model_notifications::{APNSPushNotification, PushNotificationData};
 
 /// Sends a push notification to the provided ENDPOINT_ARN environment variable
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenv::dotenv().ok();
+    MacroEntrypoint::default().init();
+
     let aws_config = aws_config::defaults(aws_config::BehaviorVersion::latest())
         .region("us-east-1")
         .load()

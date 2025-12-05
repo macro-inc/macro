@@ -82,7 +82,6 @@ authentication_service_client = { path = "../authentication_service_client" }
 [dev-dependencies]
 macro_auth = { path = "../macro_auth", features = ["testing"] }
 macro_notify = { path = "../macro_notify" }
-dotenv = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["comms_service", "connection_gateway"]
