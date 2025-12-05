@@ -106,8 +106,14 @@ export function fileFolderDrop(
     const { fileEntries, directoryEntries } =
       extractFileSystemEntries(dataTransfer);
 
-    if (fileEntries.length > 0 || directoryEntries.length > 0) {
-      options?.onDrop?.(fileEntries, directoryEntries, e);
+    // If directories present, prefer directories to avoid duplicate phantom files, which result from selecting a folder and it's contents (e.g. in a list view with the folder toggled open), thus uploading both the directory (and all of its contents) and the contents separately.
+    if (directoryEntries.length > 0) {
+      options?.onDrop?.([], directoryEntries, e);
+      return;
+    }
+
+    if (fileEntries.length > 0) {
+      options?.onDrop?.(fileEntries, [], e);
       return;
     }
 

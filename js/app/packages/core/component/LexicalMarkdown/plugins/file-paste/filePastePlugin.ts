@@ -33,7 +33,12 @@ function registerFilePastePlugin(
           return false;
         }
 
-        props.onPasteFilesAndDirs(fileEntries, directoryEntries);
+        // If directories present, prefer directories to avoid duplicate phantom files, which result from selecting a folder and it's contents (e.g. in a list view with the folder toggled open), th us uploading both the directory (and all of its contents) and the contents separately.
+        if (directoryEntries.length > 0) {
+          props.onPasteFilesAndDirs([], directoryEntries);
+          return true;
+        }
+        props.onPasteFilesAndDirs(fileEntries, []);
         return true;
       },
       COMMAND_PRIORITY_NORMAL
