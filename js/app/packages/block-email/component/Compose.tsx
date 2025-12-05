@@ -4,6 +4,8 @@ import {
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
 import { useHasPaidAccess } from '@core/auth';
+import { CircleSpinner } from '@core/component/CircleSpinner';
+import { ClippedPanel } from '@core/component/ClippedPanel';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { TextButton } from '@core/component/TextButton';
 import { usePaywallState } from '@core/constant/PaywallState';
@@ -25,9 +27,6 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { ComposeEmailInput } from './ComposeEmailInput';
-import { CircleSpinner } from '@core/component/CircleSpinner';
-import { cornerClip } from '@core/util/clipPath';
-import { ClippedPanel } from '@core/component/ClippedPanel';
 
 false && fileDrop;
 
