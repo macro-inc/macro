@@ -65,8 +65,6 @@ function TauriProvider(props: { children: JSX.Element }) {
 
     document.body.classList.add('tauri')
     document.body.classList.add(`tauri-${value.os}`)
-
-    console.error(value)
   });
 
   return (
