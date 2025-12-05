@@ -50,6 +50,7 @@ export const definition = defineBlock({
           createdAt: chat.chat.createdAt,
           updatedAt: chat.chat.updatedAt,
           fileType: 'chat' as any,
+          isTask: false,
         } satisfies DocumentMetadata,
       });
     }

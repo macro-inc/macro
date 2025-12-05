@@ -7,11 +7,15 @@
 import type { ApiAttachment } from './apiAttachment';
 import type { ApiContact } from './apiContact';
 import type { ApiThreadPreviewCursorAllOfFrecencyScore } from './apiThreadPreviewCursorAllOfFrecencyScore';
+import type { ApiLabel } from './apiLabel';
 import type { ApiAttachmentMacro } from './apiAttachmentMacro';
+import type { APIEmailThreadPreviewMetadata } from './aPIEmailThreadPreviewMetadata';
 
 export type ApiThreadPreviewCursorAllOf = {
   attachments: ApiAttachment[];
   contacts: ApiContact[];
   frecencyScore?: ApiThreadPreviewCursorAllOfFrecencyScore;
+  labels: ApiLabel[];
   macroAttachments: ApiAttachmentMacro[];
+  metadata: APIEmailThreadPreviewMetadata;
 };

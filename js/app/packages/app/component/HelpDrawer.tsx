@@ -21,7 +21,12 @@ export function HelpDrawer(props: { viewId?: ViewId }) {
 
   return (
     <Switch>
-      <Match when={props.viewId === 'emails' && !emailActive()}>
+      <Match
+        when={
+          (props.viewId === 'noise' || props.viewId === 'signal') &&
+          !emailActive()
+        }
+      >
         <HelpDrawerInner
           title={'Macro is better with email.'}
           subtitle={
@@ -47,17 +52,13 @@ export function HelpDrawer(props: { viewId?: ViewId }) {
           }}
         />
       </Match>
-      <Match when={props.viewId === 'emails' && emailActive()}>
+      <Match when={props.viewId === 'noise' && emailActive()}>
         <HelpDrawerInner
-          title={'Email is better with Macro.'}
+          title={'Filter out the noise.'}
           subtitle={
             <span>
-              Use{' '}
-              <span class="font-mono bg-edge/20 rounded-xs md-inline-code p-0.3">
-                @mentions
-              </span>{' '}
-              to give email recipients access to anything in Macro. Ask AI to
-              search your emails.
+              This is where we gather everything we think you might not need to
+              see.
             </span>
           }
           hotkeyExamples={[
@@ -79,11 +80,11 @@ export function HelpDrawer(props: { viewId?: ViewId }) {
           ]}
         />
       </Match>
-      <Match when={props.viewId === 'inbox'}>
+      <Match when={props.viewId === 'signal'}>
         <HelpDrawerInner
           title={'Your unified inbox.'}
           subtitle={
-            'All your emails, messages, notifications, tasks in one place. Triage everything. No context switching.'
+            'All your important emails, messages, notifications, tasks in one place. Triage everything. No context switching.'
           }
           hotkeyExamples={[
             {

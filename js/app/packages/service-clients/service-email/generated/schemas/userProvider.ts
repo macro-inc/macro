@@ -10,5 +10,5 @@ export type UserProvider = typeof UserProvider[keyof typeof UserProvider];
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const UserProvider = {
-  Gmail: 'Gmail',
+  GMAIL: 'GMAIL',
 } as const;
