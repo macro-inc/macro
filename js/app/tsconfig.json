@@ -229,7 +229,7 @@
       "path": "./packages/websocket"
     },
     {
-      "path": "./packages/service-clients/service-properties"
+      "path": "./packages/service-clients"
     }
   ]
 }
