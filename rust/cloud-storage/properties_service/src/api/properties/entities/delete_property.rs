@@ -62,7 +62,7 @@ impl IntoResponse for DeleteEntityPropertyErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, user_context), fields(entity_property_id = %entity_property_uuid, user_id = %user_context.user_id))]
+#[tracing::instrument(skip(context, user_context), fields(entity_property_id = %entity_property_uuid, user_id = %user_context.user_id), err)]
 pub async fn delete_entity_property(
     Path(entity_property_uuid): Path<Uuid>,
     State(context): State<ApiContext>,

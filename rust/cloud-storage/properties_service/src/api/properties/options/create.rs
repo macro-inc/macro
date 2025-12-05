@@ -70,7 +70,7 @@ impl IntoResponse for AddPropertyOptionErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(context, user_context), fields(property_id = %property_uuid, request = ?request))]
+#[tracing::instrument(skip(context, user_context), fields(property_id = %property_uuid, request = ?request), err)]
 pub async fn add_property_option(
     Path(property_uuid): Path<Uuid>,
     State(context): State<ApiContext>,
@@ -91,7 +91,6 @@ pub async fn add_property_option(
         .ok_or(AddPropertyOptionErr::PropertyNotFound)?;
 
     if property.is_system {
-        tracing::warn!("attempted to add option to system property");
         return Err(AddPropertyOptionErr::SystemPropertyNotModifiable);
     }
 

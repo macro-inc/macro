@@ -56,7 +56,7 @@ impl IntoResponse for GetPropertyOptionsErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, _user_context))]
+#[tracing::instrument(skip(context, _user_context), err)]
 pub async fn get_property_options(
     Path(property_uuid): Path<Uuid>,
     State(context): State<ApiContext>,

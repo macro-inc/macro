@@ -68,7 +68,7 @@ impl IntoResponse for DeletePropertyOptionErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, user_context))]
+#[tracing::instrument(skip(context, user_context), err)]
 pub async fn delete_property_option(
     Path((def_uuid, option_uuid)): Path<(Uuid, Uuid)>,
     State(context): State<ApiContext>,
@@ -88,7 +88,6 @@ pub async fn delete_property_option(
         .ok_or(DeletePropertyOptionErr::PropertyNotFound)?;
 
     if property.is_system {
-        tracing::warn!("attempted to delete option from system property");
         return Err(DeletePropertyOptionErr::SystemPropertyNotModifiable);
     }
 
@@ -119,10 +118,6 @@ pub async fn delete_property_option(
         .ok_or(DeletePropertyOptionErr::OptionNotFound)?;
 
     if option.property_definition_id != def_uuid {
-        tracing::warn!(
-            actual_def_id = %option.property_definition_id,
-            "property option does not belong to specified definition"
-        );
         return Err(DeletePropertyOptionErr::OptionNotFound);
     }
 
@@ -139,7 +134,6 @@ pub async fn delete_property_option(
         tracing::info!("successfully deleted property option");
         Ok(StatusCode::NO_CONTENT)
     } else {
-        tracing::error!("property option disappeared between fetch and delete");
         Err(DeletePropertyOptionErr::OptionNotFound)
     }
 }

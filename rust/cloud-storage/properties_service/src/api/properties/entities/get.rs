@@ -69,7 +69,7 @@ impl IntoResponse for GetEntityPropertiesErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, user_context), fields(user_id = %user_context.user_id, entity_type = ?entity_type, include_metadata = query.include_metadata))]
+#[tracing::instrument(skip(context, user_context), fields(user_id = %user_context.user_id, entity_type = ?entity_type, include_metadata = query.include_metadata), err)]
 pub async fn get_entity_properties(
     Path((entity_type, entity_id)): Path<(EntityType, String)>,
     Query(query): Query<EntityQueryParams>,

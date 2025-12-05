@@ -64,7 +64,7 @@ impl IntoResponse for DeletePropertyDefinitionError {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, user_context))]
+#[tracing::instrument(skip(context, user_context), err)]
 pub async fn delete_property_definition(
     Path(property_uuid): Path<Uuid>,
     State(context): State<ApiContext>,
@@ -78,7 +78,6 @@ pub async fn delete_property_definition(
         .ok_or(DeletePropertyDefinitionError::NotFound)?;
 
     if property.is_system {
-        tracing::warn!("attempted to delete system property");
         return Err(DeletePropertyDefinitionError::SystemPropertyNotModifiable);
     }
 

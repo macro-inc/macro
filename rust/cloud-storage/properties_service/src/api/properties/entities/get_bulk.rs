@@ -57,7 +57,7 @@ impl IntoResponse for GetBulkEntityPropertiesErr {
     ),
     tag = "Internal"
 )]
-#[tracing::instrument(skip(context, request), fields(entity_count = request.entities.len()))]
+#[tracing::instrument(skip(context, request), fields(entity_count = request.entities.len()), err)]
 pub async fn get_bulk_entity_properties(
     State(context): State<ApiContext>,
     Json(request): Json<BulkEntityPropertiesRequest>,

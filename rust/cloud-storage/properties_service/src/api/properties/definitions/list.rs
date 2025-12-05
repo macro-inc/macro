@@ -94,7 +94,7 @@ pub enum PropertyDefinitionResponse {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, user_context))]
+#[tracing::instrument(skip(context, user_context), err)]
 pub async fn list_properties(
     Query(query): Query<ListPropertiesQuery>,
     State(context): State<ApiContext>,

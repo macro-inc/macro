@@ -55,7 +55,7 @@ impl IntoResponse for DeleteEntityErr {
     ),
     tag = "Internal"
 )]
-#[tracing::instrument(skip(context))]
+#[tracing::instrument(skip(context), err)]
 pub async fn delete_entity(
     Path((entity_type, entity_id)): Path<(EntityType, String)>,
     State(context): State<ApiContext>,

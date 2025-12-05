@@ -58,7 +58,7 @@ impl IntoResponse for CreatePropertyDefinitionErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(context, user_context), fields(user_id = %user_context.user_id))]
+#[tracing::instrument(skip(context, user_context), fields(user_id = %user_context.user_id), err)]
 pub async fn create_property_definition(
     State(context): State<ApiContext>,
     Extension(user_context): Extension<UserContext>,
