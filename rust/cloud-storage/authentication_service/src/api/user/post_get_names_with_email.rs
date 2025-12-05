@@ -25,6 +25,7 @@ pub struct GetNamesWithEmailRequestBody {
     operation_id = "get_user_names_with_email",
     responses(
             (status = 200, body=UserNames),
+            (status = 400, body=String),
             (status = 401, body=String),
             (status = 500, body=ErrorResponse),
     ),
