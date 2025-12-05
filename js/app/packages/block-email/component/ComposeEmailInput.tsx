@@ -169,7 +169,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
         </Show>
 
         <div
-          class="min-h-20 grow w-full h-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 sm:pb-4 overflow-auto"
+          class="min-h-60 grow w-full h-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 overflow-auto"
           ref={bodyDiv}
           onclick={() => {
             editor()?.focus();
@@ -208,7 +208,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             portalScope="local"
           />
         </div>
-        <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets">
+        <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets mt-2">
           <div class="flex flex-row items-center gap-2">
             <div class="relative" ref={attachButtonRef}>
               <IconButton
