@@ -24,7 +24,7 @@ use crate::{
 };
 
 use crate::SearchOn;
-use models_opensearch::SearchEntityType;
+use models_opensearch::{SearchEntityType, SearchIndex};
 use opensearch_query_builder::*;
 
 #[derive(Debug, Default, Clone)]
@@ -541,7 +541,14 @@ pub(crate) async fn search_unified(
 ) -> Result<Vec<SearchHit>> {
     let search_request = build_unified_search_request(&args)?.to_json();
 
-    let search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.as_ref()).collect();
+    let mut search_indices: Vec<&str> = args.search_indices.iter().map(|i| i.as_ref()).collect();
+
+    match args.search_on {
+        SearchOn::NameContent | SearchOn::Name => {
+            search_indices.push(SearchIndex::Names.as_ref());
+        }
+        SearchOn::Content => {}
+    }
 
     let response = client
         .search(opensearch::SearchParts::Index(&search_indices))
