@@ -179,19 +179,18 @@ pub async fn create_document(
     .await;
 
     // Attach task properties if creating a task
-    if is_task {
-        if let Err(e) = ctx
+    if is_task
+        && let Err(e) = ctx
             .system_properties_service
             .attach_task_properties(vec![document_metadata.document_id.clone()])
             .await
-        {
-            tracing::error!(error=?e, document_id=?document_metadata.document_id, "failed to attach task properties");
-            return Err((
-                StatusCode::INTERNAL_SERVER_ERROR,
-                "failed to attach task properties".to_string(),
-                Some(document_metadata.document_id),
-            ));
-        }
+    {
+        tracing::error!(error=?e, document_id=?document_metadata.document_id, "failed to attach task properties");
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to attach task properties".to_string(),
+            Some(document_metadata.document_id),
+        ));
     }
 
     let response_data = CreateDocumentResponseData {

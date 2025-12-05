@@ -293,22 +293,21 @@ pub async fn copy_document<'a>(
     }
 
     // Copy task properties if the original document is a task
-    if original_document_metadata.is_task {
-        if let Err(e) = ctx
+    if original_document_metadata.is_task
+        && let Err(e) = ctx
             .system_properties_service
             .copy_task_properties(
                 &original_document_metadata.document_id,
                 &updated_document_metadata.document_id,
             )
             .await
-        {
-            tracing::error!(error=?e, document_id=?updated_document_metadata.document_id, "failed to copy task properties");
-            return Err((
-                Some(updated_document_metadata.document_id.clone()),
-                e.into(),
-                "failed to copy task properties",
-            ));
-        }
+    {
+        tracing::error!(error=?e, document_id=?updated_document_metadata.document_id, "failed to copy task properties");
+        return Err((
+            Some(updated_document_metadata.document_id.clone()),
+            e.into(),
+            "failed to copy task properties",
+        ));
     }
 
     let response_data = DocumentResponse {
