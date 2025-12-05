@@ -33,7 +33,6 @@ import {
   useEmailLinksStatus,
 } from '@core/email-link';
 import { BetaTooltip } from '../BetaTooltip';
-import { Switch } from '@kobalte/core/switch';
 import {
   type SupportedNotificationSettings,
   useNotificationSettings,
@@ -304,16 +303,11 @@ function NotificationSettings(props: {
   return (
     <div class="flex items-center justify-between mb-[18px]">
       <div class="text-sm">Notifications</div>
-      <Switch
-        checked={props.settings.isEnabled()}
-        onChange={props.settings.toggle}
-        class="focus-bracket-within"
-      >
-        <Switch.Input class="sr-only" />
-        <Switch.Control class="mt-1 inline-flex h-6 w-11 hover:ring-1 hover:ring-edge rounded-full border-2 border-transparent transition-colors bg-edge focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 data-[checked]:bg-accent">
-          <Switch.Thumb class="block h-5 w-5 rounded-full bg-dialog transition-transform data-[checked]:translate-x-5" />
-        </Switch.Control>
-      </Switch>
+      <TextButton
+        theme="base"
+        text={props.settings.isEnabled() ? "Disable" : "Enable"}
+        onClick={() => props.settings.toggle(!props.settings.isEnabled())}
+      />
     </div>
   );
 }
