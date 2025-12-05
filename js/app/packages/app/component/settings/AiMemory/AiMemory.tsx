@@ -55,8 +55,10 @@ export function AiMemory() {
   onMount(() => fetchMemories());
 
   return (
-    <div class="w-full h-full flex flex-col">
-      <Switch>
+    <div class="absolute inset-0 overflow-y-auto" style="scrollbar-width: none;">
+      <div class="p-2">
+        <div class="w-full h-full flex flex-col">
+          <Switch>
         <Match when={insights()}>
           {(memories) => (
             <MemoryList
@@ -76,7 +78,9 @@ export function AiMemory() {
             Error loading memory
           </div>
         </Match>
-      </Switch>
+          </Switch>
+        </div>
+      </div>
     </div>
   );
 }

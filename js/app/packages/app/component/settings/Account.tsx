@@ -112,8 +112,10 @@ export function Account() {
   };
 
   return (
-      <div class="mb-12 text-ink">
-        <Show when={ENABLE_PROFILE_PICTURES}>
+    <div class="absolute inset-0 overflow-y-auto" style="scrollbar-width: none;">
+        <div class="p-2">
+          <div class="mb-12 text-ink">
+          <Show when={ENABLE_PROFILE_PICTURES}>
           <TabContentRow
             isLoading={!userId()}
             text="Profile Picture"
@@ -276,8 +278,10 @@ export function Account() {
             <Logout class="w-4 h-4" />
             <div class="text-sm select-none">Logout</div>
           </div>
+          </div>
         </div>
       </div>
+    </div>
   );
 }
 
