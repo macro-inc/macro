@@ -1,16 +1,16 @@
+use crate::api::context::ApiContext;
 use axum::{
     Extension, Json,
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Response},
 };
-
-use crate::api::context::ApiContext;
-
+use doppleganger::Doppleganger;
 use model::response::ErrorResponse;
 use model::user::UserContext;
 
-#[derive(Debug, serde::Serialize, utoipa::ToSchema)]
+#[derive(Debug, serde::Serialize, utoipa::ToSchema, Doppleganger)]
+#[dg(forward = auth_service_rpc::UserOrganizationResponse)]
 #[serde(rename_all = "camelCase")]
 pub struct UserOrganizationResponse {
     /// The id of the organization
