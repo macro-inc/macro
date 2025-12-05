@@ -11,7 +11,7 @@ import { registerHotkey } from 'core/hotkey/hotkeys';
 import { withAnalytics } from '@coparse/analytics';
 import { useOrganizationName } from '@core/user';
 import { AiMemory } from './AiMemory/AiMemory';
-import { Notification } from './Notification';
+
 import { Subscription } from './Subscription';
 import { TOKENS } from '@core/hotkey/tokens';
 import { Appearance } from './Appearance';
@@ -101,7 +101,7 @@ export function SettingsPanel() {
       tabs.push({value: 'Organization', label: 'Organization'})
     }
 
-    tabs.push({value: 'Notification', label: 'Notification'});
+
 
     if(isNativeMobilePlatform() && DEV_MODE_ENV){
       tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' })
@@ -143,7 +143,7 @@ export function SettingsPanel() {
             <Tabs
               value={activeTabId()}
               onChange={(value: string | undefined) => {
-                if(value && (value === 'Account' || value === 'Subscription' || value === 'Organization' || value === 'Appearance' || value === 'Notification' || value === 'Mobile' || value === 'AI Memory')){
+                if(value && (value === 'Account' || value === 'Subscription' || value === 'Organization' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory')){
                   setActiveTabId(value as SettingsTab);
                   track(TrackingEvents.SETTINGS.CHANGETAB, { tab: value });
                 }
@@ -254,9 +254,7 @@ export function SettingsPanel() {
                 <Tabs.Content value="Appearance" class="h-full">
                   <Appearance />
                 </Tabs.Content>
-                <Tabs.Content value="Notification" class="h-full">
-                  <Notification />
-                </Tabs.Content>
+
                 <Show when={ENABLE_AI_MEMORY}>
                   <Tabs.Content value="AI Memory" class="h-full">
                     <AiMemory />
