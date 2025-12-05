@@ -5714,6 +5714,7 @@ dependencies = [
  "connection_gateway",
  "document_cognition_service_client",
  "document_storage_service_client",
+ "dotenv",
  "email_validator",
  "futures",
  "http-body-util",
