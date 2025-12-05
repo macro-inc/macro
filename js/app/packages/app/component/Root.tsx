@@ -233,7 +233,7 @@ const ROUTES: RouteDefinition[] = [
   {
     path: '/login',
     component: () => (
-      <div class="flex w-full h-dvh overflow-y-hidden pb-[max(env(safe-area-inset-bottom),var(--tauri-inset-bottom))] pt-[max(env(safe-area-inset-top),var(--tauri-inset-top))]">
+      <div class="flex w-full h-dvh overflow-y-hidden">
         <Login />
       </div>
     ),
@@ -243,12 +243,6 @@ const ROUTES: RouteDefinition[] = [
     component: () => (
       <div
         class="flex *:flex-1 w-full h-dvh overflow-y-hidden"
-        style={{
-          'padding-top':
-            'max(env(safe-area-inset-top, 0px), var(--tauri-inset-top, 0px))',
-          'padding-bottom':
-            'max(env(safe-area-inset-bottom, 0px), var(--tauri-inset-bottom, 0px))',
-        }}
       >
         <Onboarding />
       </div>
