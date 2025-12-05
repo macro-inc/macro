@@ -203,84 +203,86 @@ export function EmailCompose() {
                   </div>
                 </div>
 
-                <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
-                  <div class="text-base w-4 shrink-0 text-ink-placeholder/70">
-                    To
-                  </div>
-                  <div class="flex-1">
-                    <RecipientSelector<'user' | 'contact'>
-                      options={destinationOptions}
-                      selectedOptions={selectedRecipients}
-                      setSelectedOptions={setSelectedRecipients}
-                      placeholder="Macro users or email addresses"
-                      triedToSubmit={triedToSubmit}
-                      focusOnMount={!linkError()}
-                      hideBorder
-                      noBrackets
-                    />
-                  </div>
-                </div>
-
-                <Show when={showCc()}>
+                <div class="flex flex-col gap-2">
                   <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
-                    <div class="text-sm w-4 shrink-0 text-ink-placeholder/70">
-                      Cc
+                    <div class="text-base w-4 shrink-0 text-ink-placeholder/70">
+                      To
                     </div>
                     <div class="flex-1">
                       <RecipientSelector<'user' | 'contact'>
                         options={destinationOptions}
-                        selectedOptions={ccRecipients}
-                        setSelectedOptions={setCcRecipients}
+                        selectedOptions={selectedRecipients}
+                        setSelectedOptions={setSelectedRecipients}
                         placeholder="Macro users or email addresses"
                         triedToSubmit={triedToSubmit}
+                        focusOnMount={!linkError()}
                         hideBorder
                         noBrackets
                       />
                     </div>
                   </div>
-                </Show>
 
-                <Show when={showBcc()}>
-                  <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
-                    <div class="text-sm w-4 shrink-0 text-ink-placeholder/70">
-                      Bcc
+                  <Show when={showCc()}>
+                    <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
+                      <div class="text-sm w-4 shrink-0 text-ink-placeholder/70">
+                        Cc
+                      </div>
+                      <div class="flex-1">
+                        <RecipientSelector<'user' | 'contact'>
+                          options={destinationOptions}
+                          selectedOptions={ccRecipients}
+                          setSelectedOptions={setCcRecipients}
+                          placeholder="Macro users or email addresses"
+                          triedToSubmit={triedToSubmit}
+                          hideBorder
+                          noBrackets
+                        />
+                      </div>
                     </div>
+                  </Show>
+
+                  <Show when={showBcc()}>
+                    <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
+                      <div class="text-sm w-4 shrink-0 text-ink-placeholder/70">
+                        Bcc
+                      </div>
+                      <div class="flex-1">
+                        <RecipientSelector<'user' | 'contact'>
+                          options={destinationOptions}
+                          selectedOptions={bccRecipients}
+                          setSelectedOptions={setBccRecipients}
+                          placeholder="Macro users or email addresses"
+                          triedToSubmit={triedToSubmit}
+                          hideBorder
+                          noBrackets
+                        />
+                      </div>
+                    </div>
+                  </Show>
+
+                  <div class="w-full flex items-center gap-2 border-b border-edge-muted focus-within:border-accent py-2">
+                    <div class="text-base shrink-0 text-ink-placeholder/70">
+                      Subject
+                    </div>
+
                     <div class="flex-1">
-                      <RecipientSelector<'user' | 'contact'>
-                        options={destinationOptions}
-                        selectedOptions={bccRecipients}
-                        setSelectedOptions={setBccRecipients}
-                        placeholder="Macro users or email addresses"
-                        triedToSubmit={triedToSubmit}
-                        hideBorder
-                        noBrackets
+                      <input
+                        type="text"
+                        value={subject()}
+                        placeholder="Subject"
+                        class="text-base resize-none placeholder:text-ink-placeholder p-1 ml-1"
+                        onInput={(e) => {
+                          setSubject(e.currentTarget.value);
+                        }}
+                        disabled={!!linkError()}
                       />
                     </div>
-                  </div>
-                </Show>
-
-                <div class="w-full flex items-center gap-2 border-b border-edge-muted focus-within:border-accent my-4 py-2">
-                  <div class="text-base shrink-0 text-ink-placeholder/70">
-                    Subject
-                  </div>
-
-                  <div class="flex-1">
-                    <input
-                      type="text"
-                      value={subject()}
-                      placeholder="Subject"
-                      class="text-base resize-none placeholder:text-ink-placeholder p-1 ml-1"
-                      onInput={(e) => {
-                        setSubject(e.currentTarget.value);
-                      }}
-                      disabled={!!linkError()}
-                    />
                   </div>
                 </div>
               </div>
 
               <div
-                class="w-full h-full pb-2 flex flex-col min-h-0 overflow-hidden"
+                class="w-full h-full pb-2 flex flex-col min-h-0 overflow-hidden mt-4"
                 classList={{
                   'pointer-events-none opacity-50': Boolean(linkError()),
                 }}
