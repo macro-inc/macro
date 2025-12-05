@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.tauri.dev",
+      "sha256_cert_fingerprints": [
+        "30:5B:31:07:B9:52:A7:97:80:4C:BA:50:0C:12:9F:97:2F:53:36:25:D8:66:B2:41:0E:88:AE:60:48:F1:0B:7C"
+      ]
+    }
+  }
+]
