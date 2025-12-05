@@ -47,7 +47,7 @@ pub(crate) struct ApiContext {
     pub email_service_client: Arc<EmailServiceClient>,
     pub conn_gateway_client: Arc<ConnectionGatewayClient>,
     pub sync_service_client: Arc<SyncServiceClient>,
-    pub system_properties_service: SystemPropertiesService,
+    pub system_properties_service: Arc<SystemPropertiesService>,
     pub jwt_validation_args: JwtValidationArgs,
     pub config: Arc<Config>,
     pub dss_auth_key: DocumentStorageServiceAuthKey,

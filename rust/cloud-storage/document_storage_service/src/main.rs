@@ -212,7 +212,7 @@ async fn main() -> anyhow::Result<()> {
         comms_service_client: Arc::new(comms_service_client),
         conn_gateway_client: Arc::new(conn_gateway_client),
         sync_service_client: Arc::new(sync_service_client),
-        system_properties_service,
+        system_properties_service: Arc::new(system_properties_service),
         config: Arc::new(config),
         jwt_validation_args,
         dss_auth_key,
