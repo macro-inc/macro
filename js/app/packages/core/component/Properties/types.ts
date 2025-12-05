@@ -100,14 +100,7 @@ export type PropertyDefinitionFlat = {
         user_id: string;
         organization_id: number;
       };
-  specific_entity_type?:
-    | 'CHANNEL'
-    | 'CHAT'
-    | 'DOCUMENT'
-    | 'PROJECT'
-    | 'THREAD'
-    | 'USER'
-    | null;
+  specific_entity_type?: EntityType | null;
   updated_at: string;
 };
 
