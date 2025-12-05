@@ -15,18 +15,32 @@ export function Appearance() {
   let state = true;
 
   return (
+    <>
+      <style>{`
+        .appearance-container{
+          grid-template-areas: "tools" "basic" "list" "advanced";
+          grid-template-rows: min-content min-content 1fr 1fr;
+        }
+        @container(min-width: 650px){
+          .appearance-container{
+            grid-template-areas: "tools tools" "basic basic" "list advanced";
+            grid-template-rows: min-content min-content 1fr;
+            grid-template-columns: 1fr 1fr;
+          }
+        }
+      `}</style>
       <div
-        style={{
-          'grid-template-areas': `${state ? "'tools' 'basic' 'list' 'advanced'" : "'tools tools' 'basic basic' 'list advanced'"}`,
-          'grid-template-rows': `${state ? 'min-content min-content 1fr 1fr' : 'min-content min-content 1fr'}`,
-          'grid-template-columns': `${state ? '1fr' : '1fr 1fr'}`,
-          'background-color': 'var(--color-edge-muted)',
-          'position': 'absolute',
-          'overflow': 'hidden',
-          'display': 'grid',
-          'inset': '0',
-          'gap': '1px',
-        }}
+        style="
+          background-color: var(--color-edge-muted);
+          container-type: inline-size;
+          grid-template-columns: 1fr;
+          position: absolute;
+          overflow: hidden;
+          display: grid;
+          inset: 0;
+          gap: 1px;
+        "
+        class="appearance-container"
       >
         <div style="grid-area: tools;"><ThemeTools /></div>
         <div style="grid-area: basic;"><ThemeEditorBasic /></div>
@@ -54,5 +68,6 @@ export function Appearance() {
           </div>
         </Show>*/}
       </div>
+    </>
   );
 }
