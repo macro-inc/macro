@@ -1,5 +1,5 @@
 import { type SettingsTab, setSettingsOpen, useSettingsState } from '@core/constant/SettingsState';
-import { createEffect, createMemo, createSignal, For, onCleanup, Show, Suspense } from 'solid-js';
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, Suspense } from 'solid-js';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { DEV_MODE_ENV, ENABLE_AI_MEMORY } from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -80,6 +80,25 @@ export function SettingsPanel() {
     }
   });
 
+  onMount(() => {
+    setTimeout(() => {
+      const activeTab = document.querySelector(`[data-value="${activeTabId()}"]`) as HTMLElement;
+      if(activeTab){updateIndicatorPosition(activeTab)}
+    }, 0);
+  });
+
+  createEffect(() => {
+    if (settingsOpen()){
+      setTimeout(() => {
+        const activeTab = document.querySelector(`[data-value="${activeTabId()}"]`) as HTMLElement;
+        if(activeTab){
+          updateIndicatorPosition(activeTab);
+          updateClipIndicators();
+        }
+      }, 10);
+    }
+  });
+
   /*
   very verbose way to choose which tabs should be shown
   this will be replaced with <Show when={}>
@@ -123,7 +142,7 @@ export function SettingsPanel() {
             >
               {/* Header with tabs */}
               <div class="relative isolate shrink-0 border-b border-edge-muted">
-                <div class="flex items-center justify-between px-2 h-[2.5rem]">
+                <div class="flex items-center px-2 h-[2.5rem]">
                   <IconButton
                     icon={CloseIcon}
                     onClick={closeSettings}
@@ -182,12 +201,11 @@ export function SettingsPanel() {
                             value={value}
                             ref={ref}
                             tabIndex={-1}
+                            data-value={value}
                             class="min-w-12 max-w-[40cqw] shrink-0 text-sm relative h-full flex items-center px-2"
                             classList={{
-                              'z-1 text-accent text-glow-sm':
-                                isActive(),
-                              'text-ink-disabled hover:text-accent/70 hover-transition-text':
-                                !isActive(),
+                              'z-1 text-accent text-glow-sm': isActive(),
+                              'text-ink-disabled hover:text-accent/70 hover-transition-text': !isActive(),
                             }}
                           >
                             <span class="flex items-center gap-1 w-full">
@@ -201,6 +219,8 @@ export function SettingsPanel() {
                       }}
                     </For>
                   </Tabs.List>
+
+                  <div class="flex-1" />
 
                   <IconButton
                     icon={spotlight() ? ContractIcon : ExpandIcon}
