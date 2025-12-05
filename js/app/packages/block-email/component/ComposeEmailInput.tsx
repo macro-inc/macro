@@ -252,7 +252,7 @@ export function ComposeEmailInput(props: {
       ref={(el) => {
         composeContainerRef = el;
       }}
-      class="relative flex flex-col flex-1 items-center justify-between bg-input border-t border-x border-edge-muted rounded-t-[5px] -mb-[7px]"
+      class="relative flex flex-col flex-1 items-center justify-between"
     >
       <Show when={error()}>
         <div class="text-failure-ink text-sm mt-1">{errorMsg()}</div>
@@ -271,7 +271,7 @@ export function ComposeEmailInput(props: {
         </Show>
 
         <div
-          class="min-h-20 grow w-full h-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 px-3 pt-2 sm:pb-4"
+          class="min-h-20 grow w-full h-full flex flex-col cursor-text placeholder:text-ink-placeholder placeholder:opacity-50 sm:pb-4"
           ref={bodyDiv}
           onclick={() => {
             editor()?.focus();
@@ -308,16 +308,10 @@ export function ComposeEmailInput(props: {
               e.preventDefault();
               focusSibling('next');
             }}
-            // onDocumentMention={(item) => {
-            //   makeAttachmentPublic(item.id);
-            // }}
-            // onUserMention={handleUserMention}
             portalScope="local"
-            // formatState={formatState}
-            // setFormatState={setFormatState}
           />
         </div>
-        <div class="flex flex-row w-full h-8 justify-between items-center p-2 mb-2 space-x-2 allow-css-brackets">
+        <div class="flex flex-row w-full h-8 justify-between items-center space-x-2 allow-css-brackets">
           <div class="flex flex-row items-center gap-2">
             <div class="relative" ref={attachButtonRef}>
               <IconButton
