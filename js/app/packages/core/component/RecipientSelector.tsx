@@ -313,7 +313,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
           if (o.kind === 'custom') {
             return o.data.invalid === false;
           }
-          return true;
+          return false;
         }) as WithCustomUserInput<K>[]
       );
       props.setSelectedOptions(value as CombinedRecipientItem<K>[]);
