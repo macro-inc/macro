@@ -1,4 +1,10 @@
+#[cfg(test)]
+mod tests;
+
+use macro_user_id::lowercased::Lowercase;
+use macro_user_id::user_id::MacroUserId;
 use model::user::UserName;
+use non_empty::NonEmpty;
 
 #[tracing::instrument(skip(db))]
 pub async fn get_user_name(db: &sqlx::PgPool, macro_user_id: &str) -> anyhow::Result<UserName> {
@@ -49,12 +55,14 @@ pub async fn get_user_names(
 }
 
 /// gets macro user names for passed user profile ids, falling back to the user's email contacts if they have any
-#[tracing::instrument(skip(db))]
+#[tracing::instrument(skip(db), err)]
 pub async fn get_user_names_with_email(
     db: &sqlx::PgPool,
     macro_user_id: &str,
-    user_profile_ids: &Vec<String>,
+    user_profile_ids: NonEmpty<Vec<MacroUserId<Lowercase<'_>>>>,
 ) -> anyhow::Result<Vec<UserName>> {
+    let user_profile_ids_str: Vec<&str> = user_profile_ids.iter().map(|id| id.as_ref()).collect();
+
     let user_names = sqlx::query!(
         r#"
         WITH requested_ids AS (
@@ -131,7 +139,7 @@ pub async fn get_user_names_with_email(
         ORDER BY user_profile_id
         "#,
         macro_user_id,
-        user_profile_ids
+        &user_profile_ids_str as &[&str]
     )
         .map(|row| UserName {
             id: row.user_profile_id,
@@ -142,148 +150,4 @@ pub async fn get_user_names_with_email(
         .await?;
 
     Ok(user_names)
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use sqlx::{Pool, Postgres};
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_names_with_email")))]
-    async fn test_get_user_names_with_email_basic(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let user_profile_ids = vec![
-            "macro|user_profile_1@macro.com".to_string(),
-            "macro|user_profile_2@macro.com".to_string(),
-        ];
-
-        let names =
-            get_user_names_with_email(&pool, "macro|user_profile_1@macro.com", &user_profile_ids)
-                .await?;
-
-        assert_eq!(names.len(), 2);
-
-        let john = names
-            .iter()
-            .find(|n| n.id == "macro|user_profile_1@macro.com")
-            .unwrap();
-        assert_eq!(john.first_name, Some("JohnMacroContact".to_string()));
-        assert_eq!(john.last_name, Some("DoeMacroContact".to_string()));
-
-        let jane = names
-            .iter()
-            .find(|n| n.id == "macro|user_profile_2@macro.com")
-            .unwrap();
-        assert_eq!(jane.first_name, Some("JaneMacroContact".to_string()));
-        assert_eq!(jane.last_name, Some("SmithMacroContact".to_string()));
-
-        Ok(())
-    }
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_names_with_email")))]
-    async fn test_get_user_names_with_email_fallback_to_contact(
-        pool: Pool<Postgres>,
-    ) -> anyhow::Result<()> {
-        // User with N/A name should fall back to email contact name
-        let user_profile_ids = vec!["macro|user_profile_3@macro.com".to_string()];
-
-        let names =
-            get_user_names_with_email(&pool, "macro|user_profile_1@macro.com", &user_profile_ids)
-                .await?;
-
-        assert_eq!(names.len(), 1);
-
-        let bob = &names[0];
-        assert_eq!(bob.id, "macro|user_profile_3@macro.com");
-        assert_eq!(bob.first_name, Some("BobEmailContact".to_string()));
-        assert_eq!(bob.last_name, Some("JohnsonEmailContact".to_string()));
-
-        Ok(())
-    }
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_names_with_email")))]
-    async fn test_get_user_names_with_email_contact_only(
-        pool: Pool<Postgres>,
-    ) -> anyhow::Result<()> {
-        // User not in User table, only in email_contacts
-        let user_profile_ids = vec!["macro|contact@example.com".to_string()];
-
-        let names =
-            get_user_names_with_email(&pool, "macro|user_profile_1@macro.com", &user_profile_ids)
-                .await?;
-
-        assert_eq!(names.len(), 1);
-
-        let alice = &names[0];
-        assert_eq!(alice.id, "macro|contact@example.com");
-        assert_eq!(alice.first_name, Some("AliceEmailContact".to_string()));
-        assert_eq!(alice.last_name, Some("WilliamsEmailContact".to_string()));
-
-        Ok(())
-    }
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_names_with_email")))]
-    async fn test_get_user_names_with_email_mixed(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        // Mix of users with names, N/A fallback, and contact-only
-        let user_profile_ids = vec![
-            "macro|user_profile_1@macro.com".to_string(),
-            "macro|user_profile_3@macro.com".to_string(),
-            "macro|contact@example.com".to_string(),
-        ];
-
-        let names =
-            get_user_names_with_email(&pool, "macro|user_profile_1@macro.com", &user_profile_ids)
-                .await?;
-
-        assert_eq!(names.len(), 3);
-
-        let john = names
-            .iter()
-            .find(|n| n.id == "macro|user_profile_1@macro.com")
-            .unwrap();
-        assert_eq!(john.first_name, Some("JohnMacroContact".to_string()));
-        assert_eq!(john.last_name, Some("DoeMacroContact".to_string()));
-
-        let bob = names
-            .iter()
-            .find(|n| n.id == "macro|user_profile_3@macro.com")
-            .unwrap();
-        assert_eq!(bob.first_name, Some("BobEmailContact".to_string()));
-        assert_eq!(bob.last_name, Some("JohnsonEmailContact".to_string()));
-
-        let alice = names
-            .iter()
-            .find(|n| n.id == "macro|contact@example.com")
-            .unwrap();
-        assert_eq!(alice.first_name, Some("AliceEmailContact".to_string()));
-        assert_eq!(alice.last_name, Some("WilliamsEmailContact".to_string()));
-
-        Ok(())
-    }
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_names_with_email")))]
-    async fn test_get_user_names_with_email_empty_list(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let user_profile_ids = vec![];
-
-        let names =
-            get_user_names_with_email(&pool, "macro|user_profile_1@macro.com", &user_profile_ids)
-                .await?;
-
-        assert_eq!(names.len(), 0);
-
-        Ok(())
-    }
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_names_with_email")))]
-    async fn test_get_user_names_with_email_not_found(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        let user_profile_ids = vec!["nonexistent_user".to_string()];
-
-        let names =
-            get_user_names_with_email(&pool, "macro|user_profile_1@macro.com", &user_profile_ids)
-                .await?;
-
-        // Should return empty list for users that don't exist
-        assert_eq!(names.len(), 0);
-
-        Ok(())
-    }
 }

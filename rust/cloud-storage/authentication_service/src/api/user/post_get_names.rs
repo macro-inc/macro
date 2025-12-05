@@ -22,7 +22,6 @@ pub struct PostGetNamesRequestBody {
         post,
         path = "/user/get_names",
         operation_id = "get_user_names",
-        request_body = PostGetNamesRequestBody,
         responses(
             (status = 200, body=UserNames),
             (status = 401, body=String),
