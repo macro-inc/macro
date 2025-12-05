@@ -355,7 +355,7 @@ export function ComposeEmailInput(props: {
                 <ArrowFatLineUp
                   width={20}
                   height={20}
-                  class="!text-accent-ink !fill-accent"
+                  class="text-accent-ink fill-accent rotate-90"
                 />
               </Show>
             </div>
