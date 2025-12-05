@@ -26,6 +26,8 @@ import {
 import { createStore } from 'solid-js/store';
 import { ComposeEmailInput } from './ComposeEmailInput';
 import { CircleSpinner } from '@core/component/CircleSpinner';
+import { cornerClip } from '@core/util/clipPath';
+import { ClippedPanel } from '@core/component/ClippedPanel';
 
 false && fileDrop;
 
@@ -112,7 +114,7 @@ export function EmailCompose() {
           ]}
         />
       </SplitHeaderLeft>
-      <div class="relative flex flex-col w-full h-full panel">
+      <div class="relative flex flex-col w-full h-full panel min-h-0 overflow-hidden">
         <Switch>
           <Match when={linkError()}>
             <div class="w-full bg-alert-bg border-b border-t border-alert/20 text-alert-ink p-2">
@@ -147,132 +149,162 @@ export function EmailCompose() {
             </div>
           </Match>
         </Switch>
+
         <div
-          class="pt-2 h-full w-full overflow-y-auto px-4 flex flex-col"
+          class="macro-message-width mx-auto w-full max-h-full my-12 overflow-hidden"
           classList={{
             'pointer-events-none opacity-50': Boolean(linkError()),
           }}
         >
-          <div class="macro-message-width mx-auto pb-1 w-full">
-            <div class="mb-4 mt-12 h-6 flex items-center justify-between">
-              <Show when={link()}>
-                {(link) => (
-                  <div class="text-xs text-ink-extra-muted/50">
-                    from {link().email_address}
-                  </div>
-                )}
-              </Show>
-              <div class="flex gap-2">
-                <Show when={!showCc()}>
-                  <button
-                    type="button"
-                    class="text-sm text-secondary-text hover:text-primary-text hover:bg-hover"
-                    onClick={() => setShowCc(true)}
-                    disabled={!!linkError()}
-                  >
-                    + Cc
-                  </button>
-                </Show>
-                <Show when={!showBcc()}>
-                  <button
-                    type="button"
-                    class="text-sm text-secondary-text hover:text-primary-text hover:bg-hover"
-                    onClick={() => setShowBcc(true)}
-                    disabled={!!linkError()}
-                  >
-                    + Bcc
-                  </button>
-                </Show>
-              </div>
-            </div>
-
-            <div class="flex items-center gap-2 focus-within:bracket-offset-2 border-edge-muted border-b">
-              <div class="text-sm w-8 shrink-0 text-ink-placeholder/70">To</div>
-              <div class="flex-1">
-                <RecipientSelector<'user' | 'contact'>
-                  options={destinationOptions}
-                  selectedOptions={selectedRecipients}
-                  setSelectedOptions={setSelectedRecipients}
-                  placeholder="Macro users or email addresses"
-                  triedToSubmit={triedToSubmit}
-                  focusOnMount={!linkError()}
-                  hideBorder
-                  noBrackets
-                />
-              </div>
-            </div>
-
-            <Show when={showCc()}>
-              <div class="flex items-center gap-2 focus-within:bracket-offset-2 border-edge-muted border-b">
-                <div class="text-sm w-8 shrink-0 text-ink-placeholder/70">
-                  Cc
-                </div>
-                <div class="flex-1">
-                  <RecipientSelector<'user' | 'contact'>
-                    options={destinationOptions}
-                    selectedOptions={ccRecipients}
-                    setSelectedOptions={setCcRecipients}
-                    placeholder="Macro users or email addresses"
-                    triedToSubmit={triedToSubmit}
-                    hideBorder
-                    noBrackets
-                  />
-                </div>
-              </div>
-            </Show>
-
-            <Show when={showBcc()}>
-              <div class="mb-2 flex items-center gap-2 border-edge-muted border-b focus-within:bracket-offset-2">
-                <div class="text-sm w-8 shrink-0 text-ink-placeholder/70">
-                  Bcc
-                </div>
-                <div class="flex-1">
-                  <RecipientSelector<'user' | 'contact'>
-                    options={destinationOptions}
-                    selectedOptions={bccRecipients}
-                    setSelectedOptions={setBccRecipients}
-                    placeholder="Macro users or email addresses"
-                    triedToSubmit={triedToSubmit}
-                    hideBorder
-                    noBrackets
-                  />
-                </div>
-              </div>
-            </Show>
-
-            <input
-              type="text"
-              value={subject()}
-              placeholder="Subject"
-              class="text-xl mt-4 font-medium mb-6 bg-transparent border-none outline-none w-full resize-none appearance-none focus:ring-0"
-              style="box-shadow: none;"
-              onInput={(e) => {
-                setSubject(e.currentTarget.value);
+          <ClippedPanel tl tr>
+            <div
+              class="w-full p-4 bg-input max-h-full overflow-hidden flex flex-col min-h-0"
+              classList={{
+                'pointer-events-none opacity-50': Boolean(linkError()),
               }}
-              disabled={!!linkError()}
-            />
-          </div>
-          <div
-            class="shrink-0 w-full pb-2 grow"
-            classList={{
-              'pointer-events-none opacity-50': Boolean(linkError()),
-            }}
-          >
-            <div class="mx-auto w-full h-full macro-message-width">
-              <ComposeEmailInput
-                selectedRecipients={selectedRecipients}
-                ccRecipients={ccRecipients}
-                bccRecipients={bccRecipients}
-                subject={subject}
-                link={link()}
-                inputAttachments={{
-                  store: emailInputAttachmentsStore,
-                  setStore: setEmailInputAttachmentsStore,
-                  key: 'draft',
+            >
+              <div class="macro-message-width mx-auto pb-1 w-full h-max shrink-0">
+                <div class="mb-4 h-6 flex items-center justify-between">
+                  <Suspense
+                    fallback={
+                      <div class="flex gap-1 items-center">
+                        <CircleSpinner class="w-4 h-4 animate-spin" />
+                        <span class="text-ink-extra-muted/50 text-xs">
+                          Processing...
+                        </span>
+                      </div>
+                    }
+                  >
+                    <Show when={link()}>
+                      {(link) => (
+                        <div class="text-xs text-ink-extra-muted/50">
+                          from {link().email_address}
+                        </div>
+                      )}
+                    </Show>
+                  </Suspense>
+                  <div class="flex gap-2 ml-auto">
+                    <Show when={!showCc()}>
+                      <button
+                        type="button"
+                        class="text-sm text-secondary-text hover:text-primary-text hover:bg-hover"
+                        onClick={() => setShowCc(true)}
+                        disabled={!!linkError()}
+                      >
+                        + Cc
+                      </button>
+                    </Show>
+                    <Show when={!showBcc()}>
+                      <button
+                        type="button"
+                        class="text-sm text-secondary-text hover:text-primary-text hover:bg-hover"
+                        onClick={() => setShowBcc(true)}
+                        disabled={!!linkError()}
+                      >
+                        + Bcc
+                      </button>
+                    </Show>
+                  </div>
+                </div>
+
+                <div class="flex items-center gap-2 border-b border-edge-muted focus-within:border-accent">
+                  <div class="text-base w-4 shrink-0 text-ink-placeholder/70">
+                    To
+                  </div>
+                  <div class="flex-1">
+                    <RecipientSelector<'user' | 'contact'>
+                      options={destinationOptions}
+                      selectedOptions={selectedRecipients}
+                      setSelectedOptions={setSelectedRecipients}
+                      placeholder="Macro users or email addresses"
+                      triedToSubmit={triedToSubmit}
+                      focusOnMount={!linkError()}
+                      hideBorder
+                      noBrackets
+                    />
+                  </div>
+                </div>
+
+                <Show when={showCc()}>
+                  <div class="flex items-center gap-2 focus-within:bracket-offset-2 border-edge-muted border-b">
+                    <div class="text-sm w-8 shrink-0 text-ink-placeholder/70">
+                      Cc
+                    </div>
+                    <div class="flex-1">
+                      <RecipientSelector<'user' | 'contact'>
+                        options={destinationOptions}
+                        selectedOptions={ccRecipients}
+                        setSelectedOptions={setCcRecipients}
+                        placeholder="Macro users or email addresses"
+                        triedToSubmit={triedToSubmit}
+                        hideBorder
+                        noBrackets
+                      />
+                    </div>
+                  </div>
+                </Show>
+
+                <Show when={showBcc()}>
+                  <div class="mb-2 flex items-center gap-2 border-edge-muted border-b focus-within:bracket-offset-2">
+                    <div class="text-sm w-8 shrink-0 text-ink-placeholder/70">
+                      Bcc
+                    </div>
+                    <div class="flex-1">
+                      <RecipientSelector<'user' | 'contact'>
+                        options={destinationOptions}
+                        selectedOptions={bccRecipients}
+                        setSelectedOptions={setBccRecipients}
+                        placeholder="Macro users or email addresses"
+                        triedToSubmit={triedToSubmit}
+                        hideBorder
+                        noBrackets
+                      />
+                    </div>
+                  </div>
+                </Show>
+
+                <div class="w-full flex items-center gap-2 border-b border-edge-muted focus-within:border-accent my-4 py-2">
+                  <div class="text-base shrink-0 text-ink-placeholder/70">
+                    Subject
+                  </div>
+
+                  <div class="flex-1">
+                    <input
+                      type="text"
+                      value={subject()}
+                      placeholder="Subject"
+                      class="text-base resize-none placeholder:text-ink-placeholder p-1 ml-1"
+                      onInput={(e) => {
+                        setSubject(e.currentTarget.value);
+                      }}
+                      disabled={!!linkError()}
+                    />
+                  </div>
+                </div>
+              </div>
+              <div
+                class="w-full h-full pb-2 flex flex-col min-h-0 overflow-hidden"
+                classList={{
+                  'pointer-events-none opacity-50': Boolean(linkError()),
                 }}
-              />
+              >
+                <div class="mx-auto w-full h-full overflow-auto px-1">
+                  <ComposeEmailInput
+                    selectedRecipients={selectedRecipients}
+                    ccRecipients={ccRecipients}
+                    bccRecipients={bccRecipients}
+                    subject={subject}
+                    link={link() ?? null}
+                    inputAttachments={{
+                      store: emailInputAttachmentsStore,
+                      setStore: setEmailInputAttachmentsStore,
+                      key: 'draft',
+                    }}
+                  />
+                </div>
+              </div>
             </div>
-          </div>
+          </ClippedPanel>
         </div>
       </div>
     </>
