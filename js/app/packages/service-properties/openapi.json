@@ -508,7 +508,16 @@
       "EntityType": {
         "type": "string",
         "description": "Type of entity that can be referenced by entity properties.",
-        "enum": ["CHANNEL", "CHAT", "DOCUMENT", "PROJECT", "THREAD", "USER"]
+        "enum": [
+          "CHANNEL",
+          "CHAT",
+          "COMPANY",
+          "DOCUMENT",
+          "PROJECT",
+          "TASK",
+          "THREAD",
+          "USER"
+        ]
       },
       "ListPropertiesQuery": {
         "type": "object",
