@@ -14,7 +14,7 @@ use crate::{api::context::ApiContext, config::APPLE_BUNDLE_ID};
 #[tracing::instrument(skip(ctx))]
 pub fn clear_push_notifications(
     ctx: ApiContext,
-    notification_ids: &[String],
+    notification_ids: &[uuid::Uuid],
     user_id: &str,
 ) -> anyhow::Result<()> {
     tracing::trace!("clearing potential push notifications");
@@ -55,12 +55,12 @@ pub fn clear_push_notifications(
                                 &db,
                                 &sns_client,
                                 &device_endpoints,
-                                Some(&notification_id),
+                                Some(&notification_id.to_string()),
                                 None,
                             )
                             .await
                         {
-                            tracing::error!(error=?e, notification_id=notification_id, user_id=user_id, "failed to remove push notification");
+                            tracing::error!(error=?e, notification_id=notification_id.to_string(), user_id=user_id, "failed to remove push notification");
                         }
 
                         Ok(())

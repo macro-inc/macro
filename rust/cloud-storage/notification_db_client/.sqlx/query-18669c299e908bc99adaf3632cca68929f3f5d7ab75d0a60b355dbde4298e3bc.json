@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE user_notification\n        SET done = true\n        WHERE user_id = $1\n        AND notification_id = ANY($2)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "UuidArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "18669c299e908bc99adaf3632cca68929f3f5d7ab75d0a60b355dbde4298e3bc"
+}
