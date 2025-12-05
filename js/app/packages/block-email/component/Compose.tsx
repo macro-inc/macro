@@ -3,11 +3,13 @@ import {
   SplitHeaderBadge,
   StaticSplitLabel,
 } from '@app/component/split-layout/components/SplitLabel';
+import { useSplitLayout } from '@app/component/split-layout/layout';
 import { useHasPaidAccess } from '@core/auth';
 import { CircleSpinner } from '@core/component/CircleSpinner';
 import { ClippedPanel } from '@core/component/ClippedPanel';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { TextButton } from '@core/component/TextButton';
+import { toast } from '@core/component/Toast/Toast';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { useEmailLinks } from '@core/email-link';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
@@ -19,6 +21,7 @@ import {
 import { isErr } from '@core/util/maybeResult';
 import Caution from '@icon/regular/warning.svg';
 import { emailClient } from '@service-email/client';
+import { useMutation } from '@tanstack/solid-query';
 import {
   createMemo,
   createResource,
@@ -29,9 +32,6 @@ import {
   Switch,
 } from 'solid-js';
 import { ComposeEmailInput, type ComposeInputData } from './ComposeEmailInput';
-import { useMutation } from '@tanstack/solid-query';
-import { toast } from '@core/component/Toast/Toast';
-import { useSplitLayout } from '@app/component/split-layout/layout';
 
 export function EmailCompose() {
   const hasPaidAccess = useHasPaidAccess();
