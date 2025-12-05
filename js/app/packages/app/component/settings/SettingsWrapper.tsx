@@ -29,6 +29,7 @@ export const SettingsWrapper = () => {
         minSize={400}
         maxSize={800}
         hidden={() => !isSettingsPanelOpen()}
+        persistent={true}
       >
         <SettingsPanel />
       </Resize.Panel>

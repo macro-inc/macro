@@ -649,6 +649,7 @@ export const RightbarWrapper = (_props: { isBigChat?: boolean }) => {
         minSize={324}
         maxSize={1000}
         hidden={() => !isRightPanelOpen()}
+        persistent={true}
       >
         <div
           class="size-full invisible"
