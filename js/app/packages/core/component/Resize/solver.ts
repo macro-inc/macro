@@ -10,7 +10,7 @@ import type { LayoutResult, Panel, PanelConfig, PanelId } from './types';
 
 export type ResizeSolver = {
   readonly direction: 'horizontal' | 'vertical';
-  addPanel: (panel: PanelConfig) => void;
+  addPanel: (panel: PanelConfig, index?: number) => void;
   dropPanel: (id: PanelId) => void;
   solve: () => LayoutResult;
   reset: () => void;

@@ -84,7 +84,10 @@ function Zone(props: ParentProps<ZoneProps>) {
   });
 
   function register(config: PanelConfig, index?: number) {
-    solver.addPanel({ ...config, minSize: config?.minSize ?? minSize() }, index);
+    solver.addPanel(
+      { ...config, minSize: config?.minSize ?? minSize() },
+      index
+    );
   }
 
   function unregister(id: PanelId) {
