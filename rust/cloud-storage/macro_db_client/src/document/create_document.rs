@@ -176,6 +176,8 @@ pub async fn create_document(
         project_name.as_deref(),
         document_version.created_at,
         document_version.updated_at,
+        false, // TODO: @daniel please update this when you add in task creation in create document
+               // endpoint
     ))
 }
 

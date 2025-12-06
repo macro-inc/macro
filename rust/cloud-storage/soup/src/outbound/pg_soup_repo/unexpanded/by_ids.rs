@@ -66,9 +66,11 @@ pub async fn unexpanded_soup_by_ids<'a>(
                 d."projectId" as "project_id",
                 NULL as "is_persistent",
                 di.sha as "sha",
+                (dt.document_id IS NOT NULL) as "is_task!",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 d."updatedAt"::timestamptz as "sort_ts!"
             FROM "Document" d
+            LEFT JOIN document_task dt ON dt.document_id = d.id
             INNER JOIN UserAccessibleItems uai 
                 ON uai.item_id = d.id 
                 AND uai.item_type = 'document'
@@ -110,6 +112,7 @@ pub async fn unexpanded_soup_by_ids<'a>(
                 c."projectId" as "project_id",
                 c."isPersistent" as "is_persistent",
                 NULL as "sha",
+                false as "is_task",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 c."updatedAt"::timestamptz as "sort_ts!"
             FROM "Chat" c
@@ -140,6 +143,7 @@ pub async fn unexpanded_soup_by_ids<'a>(
                 p."parentId" as "project_id",
                 NULL as "is_persistent",
                 NULL as "sha",
+                false as "is_task",
                 uh."updatedAt"::timestamptz as "viewed_at",
                 p."updatedAt"::timestamptz as "sort_ts!"
             FROM "Project" p

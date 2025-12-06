@@ -1,9 +1,6 @@
 use crate::{
     OpensearchClient, Result, delete,
-    search::{
-        self,
-        channels::{ChannelMessageSearchResponse, search_channel_messages},
-    },
+    search::{self, channels::search_channel_messages, model::SearchHit},
     upsert::{self, channel_message::UpsertChannelMessageArgs},
 };
 
@@ -42,7 +39,7 @@ impl OpensearchClient {
     pub async fn search_channel_messages(
         &self,
         args: search::channels::ChannelMessageSearchArgs,
-    ) -> Result<Vec<ChannelMessageSearchResponse>> {
+    ) -> Result<Vec<SearchHit>> {
         search_channel_messages(&self.inner, args).await
     }
 }

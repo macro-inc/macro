@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH requested_ids AS (\n            SELECT UNNEST($2::text[]) as id\n        ),\n        user_links AS (\n            SELECT id as link_id\n            FROM email_links\n            WHERE macro_id = $1\n        ),\n        users_found AS (\n            SELECT\n                u.id as user_profile_id,\n                mui.first_name as mui_first_name,\n                mui.last_name as mui_last_name\n            FROM requested_ids req\n            JOIN \"User\" u ON u.id = req.id\n            LEFT JOIN macro_user_info mui ON u.macro_user_id = mui.macro_user_id\n        ),\n        contacts_requested AS (\n            SELECT\n                req.id as user_profile_id,\n                ec.name as contact_name\n            FROM requested_ids req\n            CROSS JOIN user_links li\n            JOIN email_contacts ec\n                ON ec.link_id = li.link_id\n                AND ec.email_address = REPLACE(req.id, 'macro|', '')\n                AND ec.name IS NOT NULL\n        )\n        SELECT DISTINCT ON (user_profile_id)\n            user_profile_id as \"user_profile_id!\",\n            -- user's name in macro takes precedence over email contact name\n            COALESCE(\n                NULLIF(mui_first_name, 'N/A'),\n                -- first word in email contact name is approximation of first name\n                SPLIT_PART(contact_name, ' ', 1)\n            ) as \"first_name\",\n            -- user's name in macro takes precedence over email contact name\n            COALESCE(\n                NULLIF(mui_last_name, 'N/A'),\n                CASE\n                    -- if there is a space in the email contact name, the rest is the last name\n                    WHEN POSITION(' ' IN contact_name) > 0\n                    THEN NULLIF(TRIM(SUBSTRING(contact_name FROM POSITION(' ' IN contact_name) + 1)), '')\n                    ELSE NULL\n                END\n            ) as \"last_name\"\n        FROM (\n            -- Users in User table with contact fallback (in case user hasn't set name in Macro)\n            SELECT\n                uf.user_profile_id,\n                uf.mui_first_name,\n                uf.mui_last_name,\n                cr.contact_name\n            FROM users_found uf\n            LEFT JOIN contacts_requested cr ON cr.user_profile_id = uf.user_profile_id\n\n            UNION ALL\n\n            -- People only in email_contacts (haven't joined Macro yet)\n            SELECT\n                cr.user_profile_id,\n                NULL::text as mui_first_name,\n                NULL::text as mui_last_name,\n                cr.contact_name\n            FROM contacts_requested cr\n            WHERE NOT EXISTS (\n                SELECT 1\n                FROM users_found uf\n                WHERE uf.user_profile_id = cr.user_profile_id\n            )\n        ) combined\n        ORDER BY user_profile_id\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_profile_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "first_name",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "last_name",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      null,
+      null,
+      null
+    ]
+  },
+  "hash": "18fb7105aab4316c3b3b13531513d7885f651652b20ad9b4234b8935bed6958a"
+}

@@ -31,7 +31,10 @@ export function SettingsPanel() {
   let scrollCleanup: (() => void) | undefined;
   const [leftOpacity, setLeftOpacity] = createSignal(0);
   const [rightOpacity, setRightOpacity] = createSignal(0);
-  const [indicatorStyle, setIndicatorStyle] = createSignal({left: 0, width: 0 });
+  const [indicatorStyle, setIndicatorStyle] = createSignal({
+    left: 0,
+    width: 0,
+  });
 
   const updateClipIndicators = () => {
     if (!scrollRef) return;
@@ -56,14 +59,14 @@ export function SettingsPanel() {
     });
   };
 
-  function setupScrollListeners(element: HTMLDivElement){
-    function listener(e: WheelEvent){
+  function setupScrollListeners(element: HTMLDivElement) {
+    function listener(e: WheelEvent) {
       e.preventDefault();
       const { deltaX, deltaY } = e;
       const delta = Math.abs(deltaX) > Math.abs(deltaY) ? deltaX : deltaY;
       element.scrollLeft += delta;
       updateClipIndicators();
-    };
+    }
     element.addEventListener('wheel', listener);
     element.addEventListener('scroll', updateClipIndicators);
     updateClipIndicators();
@@ -71,10 +74,10 @@ export function SettingsPanel() {
       element.removeEventListener('wheel', listener);
       element.removeEventListener('scroll', updateClipIndicators);
     };
-  };
+  }
 
   onCleanup(() => {
-    if(scrollCleanup){
+    if (scrollCleanup) {
       scrollCleanup();
     }
   });

@@ -1,4 +1,4 @@
-import type { View } from '@core/types/view';
+import type { DefaultView } from '@core/types/view';
 import {
   type Accessor,
   createContext,
@@ -8,7 +8,7 @@ import {
 
 export const SoupContext = createContext<{
   splitHotkeyScope: string;
-  setSelectedView: Setter<View>;
+  setSelectedView: Setter<DefaultView>;
   tabButtonsRef: Accessor<HTMLDivElement | null>;
 }>();
 

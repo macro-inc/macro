@@ -12,11 +12,13 @@ use uuid::Uuid;
 type Result<T> = std::result::Result<T, PropertiesDatabaseError>;
 
 /// Gets property definitions based on optional organization and optional user access.
+/// Set `include_system` to true to also include system properties.
 #[tracing::instrument(skip(db))]
 pub async fn get_properties(
     db: &Pool<Postgres>,
     organization_id: Option<i32>,
     user_id: Option<&str>,
+    include_system: bool,
 ) -> Result<Vec<PropertyDefinition>> {
     let rows = sqlx::query!(
         r#"
@@ -29,15 +31,20 @@ pub async fn get_properties(
             is_multi_select,
             specific_entity_type as "specific_entity_type: Option<EntityType>",
             created_at,
-            updated_at
+            updated_at,
+            is_system
         FROM property_definitions
         WHERE 
-            ($1::int IS NOT NULL AND organization_id = $1) 
-            OR ($2::text IS NOT NULL AND user_id = $2)
+            ($3 AND is_system)
+            OR (
+                ($1::int IS NOT NULL AND organization_id = $1) 
+                OR ($2::text IS NOT NULL AND user_id = $2)
+            )
         ORDER BY LOWER(display_name) ASC
         "#,
         organization_id,
-        user_id
+        user_id,
+        include_system
     )
     .fetch_all(db)
     .await?;
@@ -55,6 +62,7 @@ pub async fn get_properties(
                 specific_entity_type: row.specific_entity_type.flatten(),
                 created_at: row.created_at,
                 updated_at: row.updated_at,
+                is_system: row.is_system,
             };
             PropertyDefinition::from(db_def)
         })
@@ -63,7 +71,7 @@ pub async fn get_properties(
     Ok(result)
 }
 
-/// Gets a single property definition by ID.
+/// Gets a single property definition by ID (includes system properties).
 #[tracing::instrument(skip(db))]
 pub async fn get_property_definition(
     db: &Pool<Postgres>,
@@ -80,7 +88,8 @@ pub async fn get_property_definition(
             is_multi_select,
             specific_entity_type as "specific_entity_type: Option<EntityType>",
             created_at,
-            updated_at
+            updated_at,
+            is_system
         FROM property_definitions
         WHERE id = $1
         "#,
@@ -100,6 +109,7 @@ pub async fn get_property_definition(
             specific_entity_type: row.specific_entity_type.flatten(),
             created_at: row.created_at,
             updated_at: row.updated_at,
+            is_system: row.is_system,
         };
         PropertyDefinition::from(db_prop)
     });
@@ -108,7 +118,8 @@ pub async fn get_property_definition(
 }
 
 /// Gets a single property definition by ID with ownership validation.
-/// Returns None if the property doesn't exist or if the user doesn't own it.
+/// Returns None if the property doesn't exist, if the user doesn't own it, or if it's a system property.
+/// System properties don't have owners and should be fetched via `get_property_definition`.
 #[tracing::instrument(skip(db))]
 pub async fn get_property_definition_with_owner(
     db: &Pool<Postgres>,
@@ -127,9 +138,11 @@ pub async fn get_property_definition_with_owner(
             is_multi_select,
             specific_entity_type as "specific_entity_type: Option<EntityType>",
             created_at,
-            updated_at
+            updated_at,
+            is_system
         FROM property_definitions
         WHERE id = $1
+          AND is_system = FALSE
           AND (
             user_id = $2
             OR ($3::int IS NOT NULL AND organization_id = $3)
@@ -153,6 +166,7 @@ pub async fn get_property_definition_with_owner(
             specific_entity_type: row.specific_entity_type.flatten(),
             created_at: row.created_at,
             updated_at: row.updated_at,
+            is_system: row.is_system,
         };
         PropertyDefinition::from(db_prop)
     });
@@ -161,11 +175,13 @@ pub async fn get_property_definition_with_owner(
 }
 
 /// Gets property definitions with options based on organization and optional user access.
+/// Set `include_system` to true to also include system properties.
 #[tracing::instrument(skip(db))]
 pub async fn get_properties_with_options(
     db: &Pool<Postgres>,
     organization_id: Option<i32>,
     user_id: Option<&str>,
+    include_system: bool,
 ) -> Result<Vec<PropertyDefinitionWithOptions>> {
     let rows = sqlx::query!(
         r#"
@@ -179,6 +195,7 @@ pub async fn get_properties_with_options(
             pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
             pd.created_at,
             pd.updated_at,
+            pd.is_system,
             po.id as "option_id?",
             po.display_order as "option_display_order?",
             po.number_value as option_number_value,
@@ -188,12 +205,16 @@ pub async fn get_properties_with_options(
         FROM property_definitions pd
         LEFT JOIN property_options po ON pd.id = po.property_definition_id
         WHERE 
-            ($1::int IS NOT NULL AND pd.organization_id = $1) 
-            OR ($2::text IS NOT NULL AND pd.user_id = $2)
+            ($3 AND pd.is_system)
+            OR (
+                ($1::int IS NOT NULL AND pd.organization_id = $1) 
+                OR ($2::text IS NOT NULL AND pd.user_id = $2)
+            )
         ORDER BY LOWER(pd.display_name), po.display_order, po.number_value, LOWER(po.string_value)
         "#,
         organization_id,
-        user_id
+        user_id,
+        include_system
     )
     .fetch_all(db)
     .await?;
@@ -204,8 +225,8 @@ pub async fn get_properties_with_options(
         let owner = models_properties::PropertyOwner::from_optional_ids(
             row.organization_id,
             row.user_id.clone(),
-        )
-        .unwrap();
+            row.is_system,
+        );
 
         let property_def = PropertyDefinition {
             id: row.id,
@@ -216,6 +237,7 @@ pub async fn get_properties_with_options(
             specific_entity_type: row.specific_entity_type.flatten(),
             created_at: row.created_at,
             updated_at: row.updated_at,
+            is_system: row.is_system,
             is_metadata: false,
         };
 
@@ -289,21 +311,21 @@ mod tests {
     async fn test_get_properties_by_organization(pool: Pool<Postgres>) -> anyhow::Result<()> {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS; // Dummy reference for IDE
 
-        let properties = get_properties(&pool, Some(1), None).await?;
+        let properties = get_properties(&pool, Some(1), None, false).await?;
 
         assert_eq!(properties.len(), 10); // Organization 1 has 10 properties
 
         // Verify they are sorted by display name (case-insensitive alphabetical)
-        assert_eq!(properties[0].display_name, "Assigned To");
-        assert_eq!(properties[1].display_name, "Budget");
-        assert_eq!(properties[2].display_name, "Completed");
-        assert_eq!(properties[3].display_name, "Department");
-        assert_eq!(properties[4].display_name, "Description");
-        assert_eq!(properties[5].display_name, "Due Date");
-        assert_eq!(properties[6].display_name, "Priority");
-        assert_eq!(properties[7].display_name, "Relevant Documents");
-        assert_eq!(properties[8].display_name, "Score");
-        assert_eq!(properties[9].display_name, "Website");
+        assert_eq!(properties[0].display_name, "Test Assigned To");
+        assert_eq!(properties[1].display_name, "Test Budget");
+        assert_eq!(properties[2].display_name, "Test Completed");
+        assert_eq!(properties[3].display_name, "Test Department");
+        assert_eq!(properties[4].display_name, "Test Description");
+        assert_eq!(properties[5].display_name, "Test Due Date");
+        assert_eq!(properties[6].display_name, "Test Priority");
+        assert_eq!(properties[7].display_name, "Test Relevant Documents");
+        assert_eq!(properties[8].display_name, "Test Score");
+        assert_eq!(properties[9].display_name, "Test Website");
 
         Ok(())
     }
@@ -315,11 +337,11 @@ mod tests {
     async fn test_get_properties_by_user(pool: Pool<Postgres>) -> anyhow::Result<()> {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
-        let properties = get_properties(&pool, None, Some("user1")).await?;
+        let properties = get_properties(&pool, None, Some("user1"), false).await?;
 
         assert_eq!(properties.len(), 2); // User1 has 2 properties
-        assert_eq!(properties[0].display_name, "Notes");
-        assert_eq!(properties[1].display_name, "Personal Priority");
+        assert_eq!(properties[0].display_name, "Test Notes");
+        assert_eq!(properties[1].display_name, "Test Personal Priority");
 
         Ok(())
     }
@@ -338,7 +360,7 @@ mod tests {
 
         assert!(property.is_some());
         let property = property.unwrap();
-        assert_eq!(property.display_name, "Priority");
+        assert_eq!(property.display_name, "Test Priority");
         assert_eq!(property.data_type, DataType::SelectString);
         assert!(!property.is_multi_select);
 
@@ -393,14 +415,14 @@ mod tests {
     async fn test_get_properties_with_options(pool: Pool<Postgres>) -> anyhow::Result<()> {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
-        let properties = get_properties_with_options(&pool, Some(1), None).await?;
+        let properties = get_properties_with_options(&pool, Some(1), None, false).await?;
 
         assert_eq!(properties.len(), 10);
 
         // Find Priority property which should have 4 options
         let priority_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Priority")
+            .find(|p| p.definition.display_name == "Test Priority")
             .unwrap();
 
         assert_eq!(priority_prop.property_options.len(), 4);
@@ -427,12 +449,12 @@ mod tests {
     ) -> anyhow::Result<()> {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
-        let properties = get_properties_with_options(&pool, Some(1), None).await?;
+        let properties = get_properties_with_options(&pool, Some(1), None, false).await?;
 
         // Find non-select properties (should have 0 options)
         let completed_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Completed")
+            .find(|p| p.definition.display_name == "Test Completed")
             .unwrap();
 
         assert_eq!(completed_prop.definition.data_type, DataType::Boolean);
@@ -448,12 +470,12 @@ mod tests {
     async fn test_get_properties_with_number_options(pool: Pool<Postgres>) -> anyhow::Result<()> {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
-        let properties = get_properties_with_options(&pool, Some(1), None).await?;
+        let properties = get_properties_with_options(&pool, Some(1), None, false).await?;
 
         // Find Score property which has number options
         let score_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Score")
+            .find(|p| p.definition.display_name == "Test Score")
             .unwrap();
 
         assert_eq!(score_prop.property_options.len(), 5);
@@ -480,12 +502,12 @@ mod tests {
     ) -> anyhow::Result<()> {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
-        let properties = get_properties_with_options(&pool, Some(1), None).await?;
+        let properties = get_properties_with_options(&pool, Some(1), None, false).await?;
 
         // Find Department property which is multi-select
         let dept_prop = properties
             .iter()
-            .find(|p| p.definition.display_name == "Department")
+            .find(|p| p.definition.display_name == "Test Department")
             .unwrap();
 
         assert!(dept_prop.definition.is_multi_select);

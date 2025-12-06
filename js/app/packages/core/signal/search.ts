@@ -1,13 +1,13 @@
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
 import { isErr, type MaybeResult } from '@core/util/maybeResult';
 import { logger } from '@observability';
+import { searchClient } from '@service-search/client';
+import type { ChatSearchResponse } from '@service-search/generated/models/chatSearchResponse';
+import type { DocumentSearchResponse } from '@service-search/generated/models/documentSearchResponse';
+import type { EmailSearchResponseItem } from '@service-search/generated/models/emailSearchResponseItem';
+import type { UnifiedSearchResponse } from '@service-search/generated/models/unifiedSearchResponse';
 import { makeAbortable } from '@solid-primitives/resource';
 import { createMemo, createResource } from 'solid-js';
-import { searchClient } from '../../service-search/client';
-import type { ChatSearchResponse } from '../../service-search/generated/models/chatSearchResponse';
-import type { DocumentSearchResponse } from '../../service-search/generated/models/documentSearchResponse';
-import type { EmailSearchResponseItem } from '../../service-search/generated/models/emailSearchResponseItem';
-import type { UnifiedSearchResponse } from '../../service-search/generated/models/unifiedSearchResponse';
 
 function createSearchResource<T>(
   searchTerm: () => string,
@@ -188,6 +188,7 @@ export function createUnifiedSearchResource(
       const result = await searchClient.search(
         {
           request: {
+            search_on: 'content',
             match_type: 'partial',
             query: term,
             // in order for an index to be searched on, the key needs to exist in "filters"

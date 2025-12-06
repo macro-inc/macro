@@ -34,6 +34,7 @@ pub async fn create_instructions_document(
             skip_history: false,
             email_attachment_id: None,
             created_at: None,
+            is_task: false,
         },
     )
     .await?;

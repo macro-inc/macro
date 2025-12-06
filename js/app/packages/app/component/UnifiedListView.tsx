@@ -38,8 +38,7 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { supportedExtensions } from '@lexical-core/utils';
 import {
   createChannelsQuery,
-  createDssInfiniteQueryGet,
-  createDssInfiniteQueryPost,
+  createDssInfiniteQuery,
   createEmailsInfiniteQuery,
   createFilterComposer,
   createProjectFilterFn,
@@ -131,6 +130,7 @@ import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { EmptyState } from './UnifiedListEmptyState';
 import {
+  applyClientFilters,
   type DisplayOptions,
   type DocumentTypeFilter,
   type FilterOptions,
@@ -140,7 +140,6 @@ import {
   type SystemSortOption,
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_IDS,
-  VIEWCONFIG_DEFAULTS_IDS_ENUM,
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
@@ -659,6 +658,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     if (notificationFilter() === 'notDone') filterFns.push(notDoneFilterFn);
 
+    const clientFilterFn = (entity: WithNotification<EntityData>) => {
+      const filtered = applyClientFilters([entity], selectedView(), {
+        soupContext: unifiedListContext,
+      });
+      return filtered.length > 0;
+    };
+    filterFns.push(clientFilterFn);
+
     setRequiredFilters(filterFns);
   });
 
@@ -788,25 +795,40 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     })
   );
   const GARBAGE_UUID = '00000000-0000-0000-0000-000000000000';
-  const dssQueryPOSTRequestBody = createMemo(
+  const dssQueryRequestBody = createMemo(
     (): PostSoupRequest => ({
       channel_filters: {
         channel_ids: [GARBAGE_UUID],
       },
       document_filters: {
-        document_ids: entityTypeFilter().includes('document')
-          ? []
-          : [GARBAGE_UUID],
+        document_ids:
+          entityTypeFilter().includes('document') ||
+          entityTypeFilter().length === 0
+            ? []
+            : [GARBAGE_UUID],
         project_ids: view().viewType === 'project' ? [view().id] : [],
       },
       chat_filters: {
-        chat_ids: [GARBAGE_UUID],
+        chat_ids:
+          entityTypeFilter().includes('chat') || entityTypeFilter().length === 0
+            ? []
+            : [GARBAGE_UUID],
       },
       email_filters: {
-        recipients: [GARBAGE_UUID],
+        recipients:
+          entityTypeFilter().includes('email') ||
+          entityTypeFilter().length === 0
+            ? []
+            : [GARBAGE_UUID],
       },
       project_filters: {
-        project_ids: view().viewType === 'project' ? [view().id] : [],
+        project_ids:
+          view().viewType === 'project'
+            ? [view().id]
+            : entityTypeFilter().includes('project') ||
+                entityTypeFilter().length === 0
+              ? []
+              : [GARBAGE_UUID],
       },
       limit: props.defaultDisplayOptions?.limit ?? 100,
       sort_method: sortType(),
@@ -814,11 +836,16 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   );
   const emailQueryParams = createMemo((): FetchPaginatedEmailsParams => {
     const sort = sortType();
+    const currentView = selectedView();
+    const emailViewValue =
+      currentView === 'noise' || currentView === 'signal'
+        ? emailView()
+        : 'inbox';
     return {
       limit: props.defaultDisplayOptions?.limit ?? 100,
       // email sort methods does not accept frecency yet
       sort_method: sort === 'frecency' ? 'viewed_updated' : sort,
-      view: selectedView() === 'emails' ? emailView() : 'inbox',
+      view: emailViewValue,
     };
   });
   const searchUnifiedNameContentQueryParams = createMemo(
@@ -870,23 +897,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return false;
   });
 
-  const disableDssInfiniteQueryGET = createMemo(() => {
-    if (view().viewType === 'project') return true;
-    if (view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.folders) return true;
-
-    const typeFilter = entityTypeFilter();
-    if (typeFilter.length === 0) return false;
-    const dssTypes = ['document', 'chat', 'project'];
-    const hasDssTypes = typeFilter.some((t) => dssTypes.includes(t));
-    return !hasDssTypes;
-  });
-  const disableDssInfiniteQueryPost = createMemo(() => {
-    if (
-      view().viewType !== 'project' &&
-      view().id !== VIEWCONFIG_DEFAULTS_IDS_ENUM.folders
-    )
-      return true;
-
+  const disableDssInfiniteQuery = createMemo(() => {
     const typeFilter = entityTypeFilter();
     if (typeFilter.length === 0) return false;
     const dssTypes = ['document', 'chat', 'project'];
@@ -903,12 +914,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const channelsQuery = createChannelsQuery({
     disabled: disableChannelsQuery,
   });
-  const dssInfiniteQueryGET = createDssInfiniteQueryGet(dssQueryParams, {
-    disabled: disableDssInfiniteQueryGET,
-  });
-  const dssInfiniteQueryPOST = createDssInfiniteQueryPost(dssQueryParams, {
-    disabled: disableDssInfiniteQueryPost,
-    requestBody: dssQueryPOSTRequestBody,
+  const dssInfiniteQuery = createDssInfiniteQuery(dssQueryParams, {
+    disabled: disableDssInfiniteQuery,
+    requestBody: dssQueryRequestBody,
   });
   const emailsInfiniteQuery = createEmailsInfiniteQuery(emailQueryParams, {
     refetchInterval: () => emailRefetchInterval(),
@@ -985,11 +993,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     >({
       entityInfiniteQueries: [
         {
-          query: dssInfiniteQueryGET,
-          operations: { filter: true, search: true },
-        },
-        {
-          query: dssInfiniteQueryPOST,
+          query: dssInfiniteQuery,
           operations: { filter: true, search: true },
         },
         {

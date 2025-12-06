@@ -20,6 +20,8 @@ use crate::api::user::get_user_organization::UserOrganizationResponse;
 use crate::api::user::patch_tutorial::PatchUserTutorialRequest;
 use crate::api::user::patch_user_group::PatchUserGroupRequest;
 use crate::api::user::patch_user_onboarding::PatchUserOnboardingRequest;
+use crate::api::user::post_get_names::PostGetNamesRequestBody;
+use crate::api::user::post_get_names_with_email::GetNamesWithEmailRequestBody;
 use crate::api::{
     email, health, jwt, link, login, logout, merge, oauth, oauth2, permissions, session, team, user,
 };
@@ -79,6 +81,7 @@ use model::user::{
                 user::patch_user_group::handler,
                 user::patch_user_onboarding::handler,
                 user::post_get_names::handler_external,
+                user::post_get_names_with_email::handler,
                 user::get_user_link_exists::handler,
                 user::get_user_organization::handler,
                 user::get_user_quota::handler,
@@ -129,6 +132,8 @@ use model::user::{
                         PutUserNameQueryParams,
                         UserName,
                         UserNames,
+                        GetNamesWithEmailRequestBody,
+                        PostGetNamesRequestBody,
                         UserTokensResponse,
                         UserLinkResponse,
                         MacroApiTokenResponse,

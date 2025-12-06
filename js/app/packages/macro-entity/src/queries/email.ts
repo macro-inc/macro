@@ -1,4 +1,6 @@
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
+import type { ApiPaginatedThreadCursor } from '@service-email/generated/schemas/apiPaginatedThreadCursor';
+import type { PreviewsInboxCursorParams } from '@service-email/generated/schemas/previewsInboxCursorParams';
 import {
   type InfiniteData,
   partialMatchKey,
@@ -6,8 +8,6 @@ import {
 } from '@tanstack/solid-query';
 import { SERVER_HOSTS } from 'core/constant/servers';
 import { platformFetch } from 'core/util/platformFetch';
-import type { ApiPaginatedThreadCursor } from 'service-email/generated/schemas/apiPaginatedThreadCursor';
-import type { PreviewsInboxCursorParams } from 'service-email/generated/schemas/previewsInboxCursorParams';
 import { type Accessor, createMemo } from 'solid-js';
 import type { EmailEntity } from '../types/entity';
 import { createApiTokenQuery } from './auth';

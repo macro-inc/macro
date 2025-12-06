@@ -6,6 +6,7 @@ import { matches } from '@core/util/match';
 import CheckIcon from '@icon/regular/check.svg';
 import { tryToTypedNotification } from '@notifications';
 import { useEmail, useUserId } from '@service-gql/client';
+import { syncServiceClient } from '@service-sync/client';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createDraggable, createDroppable } from '@thisbeyond/solid-dnd';
 import { getIconConfig } from 'core/component/EntityIcon';
@@ -14,7 +15,6 @@ import { unifiedListMarkdownTheme } from 'core/component/LexicalMarkdown/theme';
 import { UserIcon } from 'core/component/UserIcon';
 import { emailToId, useDisplayName } from 'core/user';
 import { onKeyDownClick, onKeyUpClick } from 'core/util/click';
-import { syncServiceClient } from 'service-sync/client';
 import type { ParentProps, Ref } from 'solid-js';
 import {
   createDeferred,

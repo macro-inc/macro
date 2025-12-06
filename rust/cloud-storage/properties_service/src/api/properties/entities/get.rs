@@ -18,15 +18,15 @@ use properties_db_client::{
 
 #[derive(Debug, Error)]
 pub enum GetEntityPropertiesErr {
-    #[error("An unknown error has occurred")]
+    #[error("An internal error occurred")]
     Internal(#[from] anyhow::Error),
-    #[error("Database error: {0}")]
+    #[error("An internal error occurred")]
     Database(#[from] PropertiesDatabaseError),
 
-    #[error("Document metadata error: {0}")]
+    #[error("{0}")]
     Metadata(#[from] crate::api::properties::metadata::MetadataError),
 
-    #[error("Permission error: {0}")]
+    #[error("{0}")]
     Permission(#[from] crate::api::permissions::PermissionError),
 }
 
@@ -69,7 +69,7 @@ impl IntoResponse for GetEntityPropertiesErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, user_context), fields(user_id = %user_context.user_id, entity_type = ?entity_type, include_metadata = query.include_metadata))]
+#[tracing::instrument(skip(context, user_context), fields(user_id = %user_context.user_id, entity_type = ?entity_type, include_metadata = query.include_metadata), err)]
 pub async fn get_entity_properties(
     Path((entity_type, entity_id)): Path<(EntityType, String)>,
     Query(query): Query<EntityQueryParams>,
@@ -78,8 +78,6 @@ pub async fn get_entity_properties(
 ) -> Result<Json<EntityPropertiesResponse>, GetEntityPropertiesErr> {
     tracing::info!(
         entity_id = %entity_id,
-        entity_type = ?entity_type,
-        include_metadata = query.include_metadata,
         "retrieving entity properties"
     );
 
@@ -126,7 +124,6 @@ pub async fn get_entity_properties(
             tracing::error!(
                 error = ?e,
                 entity_id = %entity_id,
-                entity_type = ?entity_type,
                 "failed to retrieve entity properties from database"
             );
         })?;
@@ -135,7 +132,6 @@ pub async fn get_entity_properties(
             tracing::error!(
                 error = ?e,
                 entity_id = %entity_id,
-                entity_type = ?entity_type,
                 "failed to get document system properties"
             );
         })?;
@@ -154,7 +150,6 @@ pub async fn get_entity_properties(
             tracing::error!(
                 error = ?e,
                 entity_id = %entity_id,
-                entity_type = ?entity_type,
                 "failed to retrieve entity properties from database"
             );
         })?;
@@ -173,8 +168,6 @@ pub async fn get_entity_properties(
     tracing::info!(
         entity_id = %entity_id,
         properties_count = response.properties.len(),
-        include_metadata = query.include_metadata,
-        user_id = %user_context.user_id,
         "successfully retrieved entity properties"
     );
 

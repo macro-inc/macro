@@ -107,7 +107,7 @@ import {
   ENABLE_MARKDOWN_LIVE_COLLABORATION,
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
-import { fileDrop } from '@core/directive/fileDrop';
+import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { HEIC_EXTENSIONS } from '@core/heic/constants';
 import { blockElementSignal } from '@core/signal/blockElement';
 import {
@@ -121,7 +121,13 @@ import { useCanComment, useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { isSourceDSS, isSourceSyncService } from '@core/util/source';
 import { bufToString } from '@core/util/string';
-import { uploadFile } from '@core/util/upload';
+import {
+  forceDssRuleset,
+  handleFileFolderDrop,
+  isFileUploadEntry,
+  type UploadInput,
+  uploadFiles,
+} from '@core/util/upload';
 import WarningIcon from '@icon/regular/warning.svg';
 import {
   $createDocumentMentionNode,
@@ -133,6 +139,7 @@ import {
   peerIdPlugin,
 } from '@lexical-core';
 import type { MarkdownRewriteOutput } from '@service-cognition/generated/tools/types';
+import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
 import { fileExtension } from '@service-storage/util/filename';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce, throttle } from '@solid-primitives/scheduled';
@@ -152,6 +159,7 @@ import {
   $isElementNode,
   type EditorState,
 } from 'lexical';
+
 import {
   type Accessor,
   createEffect,
@@ -175,7 +183,7 @@ import { useBlockSave, useSaveMarkdownDocument } from '../signal/save';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
 
-false && fileDrop;
+false && fileFolderDrop;
 
 const DEBUG = LOCAL_ONLY;
 
@@ -304,62 +312,137 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     return { key, position };
   };
 
-  // handler for the file paste directive
-  const onPasteFiles = async (
-    files: File[],
-    position?: ReturnType<typeof getDragDropPosition>
-  ) => {
+  async function processInlineMediaFiles(files: File[]) {
+    let success = false;
     for (const file of files) {
       const ext = fileExtension(file.name);
-
-      let success = false;
-
       if (ext != null && IMAGE_EXTENSIONS_HEIC.includes(ext)) {
         const res = await addMediaFromFile(editor, file, 'image');
-        success = res.success;
+        success = success && res.success;
       } else if (ext != null && VIDEO_EXTENSIONS.includes(ext)) {
         const res = await addMediaFromFile(editor, file, 'video');
-        success = res.success;
-      } else {
-        const res = await uploadFile(file, 'dss');
-        if (!res.failed && !res.pending && res.type === 'document') {
-          success = true;
-          const mentionId = await trackMention(
-            blockId,
-            'document',
-            res.documentId
-          );
-          editor.update(() => {
-            const mention = $createDocumentMentionNode({
-              documentId: res.documentId,
-              blockName: fileTypeToBlockName(res.fileType),
-              mentionUuid: mentionId,
-              documentName: file.name,
-            });
-            if (position && position.key) {
-              if (position.position === 'before') {
-                $insertWrappedBefore(position.key, mention);
-              } else {
-                $insertWrappedAfter(position.key, mention);
-              }
-            } else {
-              $getSelection()?.insertNodes([mention]);
-            }
-            mention.selectEnd();
-          });
-        }
-      }
-
-      if (!success) {
-        toast.failure('Invalid file for upload');
+        success = success && res.success;
       }
     }
-  };
+    return success;
+  }
 
-  // handler for the file drop directive - file paste plus calc drop pos.
-  const onDropFiles = (files: File[], e: DragEvent) => {
-    onPasteFiles(files, getDragDropPosition(e, true));
-  };
+  async function insertMention(
+    documentId: string,
+    documentName: string,
+    blockName: string,
+    position?: ReturnType<typeof getDragDropPosition>
+  ) {
+    const mentionId = await trackMention(blockId, 'document', documentId);
+    editor.update(() => {
+      const mention = $createDocumentMentionNode({
+        documentId,
+        documentName,
+        blockName: blockName,
+        mentionUuid: mentionId,
+      });
+      if (position && position.key) {
+        if (position.position === 'before') {
+          $insertWrappedBefore(position.key, mention);
+        } else {
+          $insertWrappedAfter(position.key, mention);
+        }
+      } else {
+        $getSelection()?.insertNodes([mention]);
+      }
+      mention.selectEnd();
+    });
+  }
+
+  async function handleUploadEntriesForEditor(
+    uploadEntries: UploadInput[],
+    position?: ReturnType<typeof getDragDropPosition>
+  ): Promise<void> {
+    const mediaFiles: File[] = [];
+    const filesToUpload: UploadInput[] = [];
+
+    for (const entry of uploadEntries) {
+      if (isFileUploadEntry(entry) && entry.isFolder) {
+        filesToUpload.push(entry);
+      } else {
+        const file = isFileUploadEntry(entry) ? entry.file : entry;
+        const ext = fileExtension(file.name);
+        if (
+          ext != null &&
+          (IMAGE_EXTENSIONS_HEIC.includes(ext) ||
+            VIDEO_EXTENSIONS.includes(ext))
+        ) {
+          mediaFiles.push(file);
+        } else {
+          filesToUpload.push(entry);
+        }
+      }
+    }
+
+    const processInlineMediaFilesSuccess =
+      await processInlineMediaFiles(mediaFiles);
+
+    // exit early if we can't process media files
+    if (!processInlineMediaFilesSuccess) {
+      toast.failure('Invalid media attachment file(s)');
+      return;
+    }
+
+    if (filesToUpload.length === 0) {
+      return;
+    }
+
+    const results = await uploadFiles(filesToUpload, forceDssRuleset);
+
+    const failedUploads: string[] = [];
+    const failedFolders: string[] = [];
+
+    for (const result of results) {
+      if (result.failed) {
+        failedUploads.push(result.name);
+        continue;
+      }
+
+      if (result.destination !== 'dss') {
+        continue;
+      }
+
+      if (result.type === 'document') {
+        const blockName = fileTypeToBlockName(result.fileType, true);
+        if (blockName) {
+          await insertMention(
+            result.documentId,
+            result.name,
+            blockName,
+            position
+          );
+        }
+      } else if (result.type === 'folder') {
+        const projectId = await waitBulkUploadStatus(result.requestId);
+        if (projectId) {
+          await insertMention(projectId, result.name, 'project', position);
+        } else {
+          failedFolders.push(result.name);
+        }
+      }
+    }
+
+    // Aggregate and show failure toasts
+    if (failedUploads.length > 0 || failedFolders.length > 0) {
+      const failures: string[] = [];
+      if (failedUploads.length > 0) {
+        failures.push(
+          `${failedUploads.length} file${failedUploads.length > 1 ? 's' : ''} failed to upload`
+        );
+      }
+      if (failedFolders.length > 0) {
+        failures.push(
+          `${failedFolders.length} folder${failedFolders.length > 1 ? 's' : ''} failed to upload`
+        );
+      }
+      toast.failure(failures.join('. '));
+    }
+  }
 
   // store for the drag insert pluign.
   const [dragInsertStore, setDragInsertStore] = createDragInsertStore();
@@ -599,7 +682,16 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     )
     .use(tableCellResizerPlugin())
     .use(tableActionMenuPlugin(tableActionsMenuPluginProps))
-    .use(filePastePlugin({ onPaste: onPasteFiles }))
+    .use(
+      filePastePlugin({
+        onPasteFilesAndDirs: (fileEntries, directories) =>
+          handleFileFolderDrop(
+            fileEntries,
+            directories,
+            handleUploadEntriesForEditor
+          ),
+      })
+    )
     .use(
       findAndReplacePlugin({
         setListOffset: onSetListOffset,
@@ -935,11 +1027,13 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       <div
         class="relative"
         ref={editorContainerRef}
-        use:fileDrop={{
-          onDrop: (files, event) => {
-            onDropFiles(files, event);
+        use:fileFolderDrop={{
+          onDrop: (fileEntries, folderEntries, e) => {
+            handleFileFolderDrop(fileEntries, folderEntries, (entries) => {
+              const position = e ? getDragDropPosition(e, true) : undefined;
+              handleUploadEntriesForEditor(entries, position);
+            });
           },
-          multiple: true,
         }}
         use:droppable
       >

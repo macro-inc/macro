@@ -1,0 +1,17 @@
+[package]
+edition = "2024"
+name = "axum_rpc_emit"
+publish = false
+version = "0.1.0"
+
+[lib]
+proc-macro = true
+
+[dependencies]
+axum_rpc_parse = { path = "../axum_rpc_parse" }
+proc-macro2 = "1.0.103"
+quote = { workspace = true }
+unsynn = { workspace = true }
+
+[dev-dependencies]
+cool_asserts = "2"

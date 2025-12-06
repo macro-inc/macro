@@ -6,6 +6,7 @@ use macro_cache_client::MacroCache;
 use macro_env::Environment;
 use macro_env_var::env_var;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use native_app_service::{domain::service::NativeAppServiceImpl, outbound::DefaultBundleFetcher};
 use remote_env_var::LocalOrRemoteSecret;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
@@ -43,6 +44,7 @@ pub(crate) struct ApiContext {
             UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
         >,
     >,
+    pub native_app_service: Arc<NativeAppServiceImpl<DefaultBundleFetcher>>,
 }
 
 env_var! {

@@ -6,6 +6,7 @@ use axum::http::HeaderName;
 use axum::http::Method;
 use axum::middleware::Next;
 use macro_auth::constant::MACRO_REFRESH_TOKEN_HEADER;
+use native_app_service::inbound::RouterState;
 use tower::ServiceBuilder;
 use tower_http::trace::TraceLayer;
 use utoipa::OpenApi;
@@ -69,6 +70,11 @@ pub async fn setup_and_serve(state: ApiContext, port: usize) -> anyhow::Result<(
 
 fn api_router(state: ApiContext) -> Router<ApiContext> {
     Router::new()
+        .merge(native_app_service::inbound::native_app_router(
+            RouterState {
+                inner: state.native_app_service.clone(),
+            },
+        ))
         .nest("/internal", internal::router())
         .nest("/permissions", permissions::router(state.jwt_args.clone()))
         .nest("/login", login::router(state.clone()))
@@ -77,47 +83,11 @@ fn api_router(state: ApiContext) -> Router<ApiContext> {
         .nest("/oauth2", oauth2::router())
         .nest("/user", user::router(state.clone(), state.jwt_args.clone()))
         .nest(
-            "/update",
-            macro_autoupdate_router::routes(state.environment),
-        )
-        .nest(
             "/team",
             team::router(state.jwt_args.clone()).layer(ServiceBuilder::new().layer(
                 axum::middleware::from_fn(macro_middleware::tracking::attach_ip_context_handler),
             )),
         )
-        // .nest(
-        //     "/merge",
-        //     merge::router().layer(
-        //         ServiceBuilder::new()
-        //             .layer(axum::middleware::from_fn(
-        //                 macro_middleware::tracking::attach_ip_context_handler,
-        //             ))
-        //             .layer(axum::middleware::from_fn_with_state(
-        //                 state.jwt_args.clone(),
-        //                 macro_middleware::auth::decode_jwt::handler,
-        //             )),
-        //     ),
-        // )
-        // .nest(
-        //     "/email",
-        //     email::router(state.jwt_args.clone()).layer(ServiceBuilder::new().layer(
-        //         axum::middleware::from_fn(macro_middleware::tracking::attach_ip_context_handler),
-        //     )),
-        // )
-        // .nest(
-        //     "/link",
-        //     link::router().layer(
-        //         ServiceBuilder::new()
-        //             .layer(axum::middleware::from_fn(
-        //                 macro_middleware::tracking::attach_ip_context_handler,
-        //             ))
-        //             .layer(axum::middleware::from_fn_with_state(
-        //                 state.jwt_args.clone(),
-        //                 macro_middleware::auth::decode_jwt::handler,
-        //             )),
-        //     ),
-        // )
         .nest("/jwt", jwt::router(state.jwt_args))
         .nest("/session", session::router())
         .nest(
