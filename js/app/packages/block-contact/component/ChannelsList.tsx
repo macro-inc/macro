@@ -3,9 +3,9 @@ import { type ChannelWithParticipants, emailToId } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import Hash from '@icon/regular/hash.svg?component-solid';
 import Users from '@icon/regular/users.svg?component-solid';
+import { commsServiceClient } from '@service-comms/client';
 import { For, onMount, Show } from 'solid-js';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
-import { commsServiceClient } from '../../service-comms/client';
 import {
   contactChannelsSignal,
   isLoadingChannelsSignal,

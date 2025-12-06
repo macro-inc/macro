@@ -17,6 +17,8 @@ pub struct PropertyDefinition {
     pub specific_entity_type: Option<EntityType>,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,
+    /// Flag to indicate if this is a system property (stored in DB).
+    pub is_system: bool,
     /// Flag to indicate if this is a system-generated metadata property.
     /// Not stored in database - computed at service layer.
     pub is_metadata: bool,
@@ -33,6 +35,7 @@ impl From<PropertyDefinition> for crate::api::PropertyDefinitionResponse {
             data_type: svc.data_type,
             is_multi_select: svc.is_multi_select,
             specific_entity_type: svc.specific_entity_type,
+            is_system: svc.is_system,
             is_metadata: svc.is_metadata,
             created_at: Some(svc.created_at),
             updated_at: Some(svc.updated_at),

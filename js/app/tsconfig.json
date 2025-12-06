@@ -7,7 +7,7 @@
     "./tests/**/*",
     "./packages/core/**/*.spec.ts",
     "./packages/block-code/scripts/**/*",
-    "./packages/service-sync/scripts/**/*",
+    "./packages/service-clients/service-sync/scripts/**/*",
     "./packages/loro-mirror/packages/react/**/*",
   ],
   "compilerOptions": {
@@ -74,49 +74,49 @@
         "./packages/block-project/*"
       ],
       "@service-gql/*": [
-        "./packages/service-gql/*"
+        "./packages/service-clients/service-gql/*"
       ],
       "@service-auth/*": [
-        "./packages/service-auth/*"
+        "./packages/service-clients/service-auth/*"
       ],
       "@service-stripe/*": [
-        "./packages/service-stripe/*"
+        "./packages/service-clients/service-stripe/*"
       ],
       "@service-storage/*": [
-        "./packages/service-storage/*"
+        "./packages/service-clients/service-storage/*"
       ],
       "@service-search/*": [
-        "./packages/service-search/*"
+        "./packages/service-clients/service-search/*"
       ],
       "@service-static-files/*": [
-        "./packages/service-static-files/*"
+        "./packages/service-clients/service-static-files/*"
       ],
       "@service-cognition/*": [
-        "./packages/service-cognition/*"
+        "./packages/service-clients/service-cognition/*"
       ],
       "@service-organization/*": [
-        "./packages/service-organization/*"
+        "./packages/service-clients/service-organization/*"
       ],
       "@service-connection/*": [
-        "./packages/service-connection/*"
+        "./packages/service-clients/service-connection/*"
       ],
       "@service-notification/*": [
-        "./packages/service-notification/*"
+        "./packages/service-clients/service-notification/*"
       ],
       "@service-comms/*": [
-        "./packages/service-comms/*"
+        "./packages/service-clients/service-comms/*"
       ],
       "@service-unfurl/*": [
-        "./packages/service-unfurl/*"
+        "./packages/service-clients/service-unfurl/*"
       ],
       "@service-email/*": [
-        "./packages/service-email/*"
+        "./packages/service-clients/service-email/*"
       ],
       "@service-insight/*": [
-        "./packages/service-insight/*"
+        "./packages/service-clients/service-insight/*"
       ],
       "@service-properties/*": [
-        "./packages/service-properties/*"
+        "./packages/service-clients/service-properties/*"
       ],
       "@block-chat/*": [
         "./packages/block-chat/*"
@@ -161,7 +161,13 @@
         "./packages/observability/src/*"
       ],
       "@service-sync": [
-        "./packages/service-sync"
+        "./packages/service-clients/service-sync"
+      ],
+      "@service-sync/*": [
+        "./packages/service-clients/service-sync/*"
+      ],
+      "@service-contacts/*": [
+        "./packages/service-clients/service-contacts/*"
       ],
       "@loro-mirror/*": [
         "./packages/loro-mirror/*"
@@ -223,7 +229,7 @@
       "path": "./packages/websocket"
     },
     {
-      "path": "./packages/service-properties"
+      "path": "./packages/service-clients"
     }
   ]
 }

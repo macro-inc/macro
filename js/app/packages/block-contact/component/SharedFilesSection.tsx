@@ -12,11 +12,11 @@ import FileDocIcon from '@icon/regular/file-doc.svg?component-solid';
 import FileImageIcon from '@icon/regular/file-image.svg?component-solid';
 import FilePdfIcon from '@icon/regular/file-pdf.svg?component-solid';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { commsServiceClient } from '@service-comms/client';
 import type { Attachment } from '@service-comms/generated/models/attachment';
 import { type Component, createSignal, onMount, Show } from 'solid-js';
 import { VList } from 'virtua/solid';
 import { useSplitLayout } from '../../app/component/split-layout/layout';
-import { commsServiceClient } from '../../service-comms/client';
 import {
   channelIdSignal,
   isLoadingFilesSignal,

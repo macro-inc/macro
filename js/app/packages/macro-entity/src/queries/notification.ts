@@ -1,12 +1,12 @@
+import type { BulkGetUserNotificationsByEventItemIdRequest } from '@service-notification/generated/schemas/bulkGetUserNotificationsByEventItemIdRequest';
+import type { GetAllUserNotificationsResponse } from '@service-notification/generated/schemas/getAllUserNotificationsResponse';
+import type { UserNotification } from '@service-notification/generated/schemas/userNotification';
 import {
   type UseInfiniteQueryResult,
   useInfiniteQuery,
 } from '@tanstack/solid-query';
 import { SERVER_HOSTS } from 'core/constant/servers';
 import { platformFetch } from 'core/util/platformFetch';
-import type { BulkGetUserNotificationsByEventItemIdRequest } from 'service-notification/generated/schemas/bulkGetUserNotificationsByEventItemIdRequest';
-import type { GetAllUserNotificationsResponse } from 'service-notification/generated/schemas/getAllUserNotificationsResponse';
-import type { UserNotification } from 'service-notification/generated/schemas/userNotification';
 import { createEffect, createMemo, createSelector } from 'solid-js';
 import { unwrap } from 'solid-js/store';
 import type { EntityData } from '../types/entity';

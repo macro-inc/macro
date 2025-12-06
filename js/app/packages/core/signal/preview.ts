@@ -7,9 +7,9 @@ import { commsServiceClient } from '@service-comms/client';
 import { emailClient } from '@service-email/client';
 import { type ItemType, storageServiceClient } from '@service-storage/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
+import { syncServiceClient } from '@service-sync/client';
 import { type Accessor, createEffect, createSignal } from 'solid-js';
 import { createStore, unwrap } from 'solid-js/store';
-import { syncServiceClient } from '../../service-sync/client';
 
 /** Default cache duration in seconds */
 const DEFAULT_CACHE_TIME_SECONDS = 60 * 10;

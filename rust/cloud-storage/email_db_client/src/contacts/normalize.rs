@@ -1,3 +1,6 @@
+#[cfg(test)]
+mod tests;
+
 use models_email::db::contact::ContactPhotoless;
 use once_cell::sync::Lazy;
 use regex::Regex;
@@ -6,10 +9,13 @@ pub fn normalize_contact(contact: ContactPhotoless) -> ContactPhotoless {
     let normalized_name = if email_utils::is_generic_email(&contact.email_address) {
         None
     } else {
-        contact
-            .name
-            .as_ref()
-            .map(|name_str| remove_name_suffix(name_str))
+        contact.name.as_ref().and_then(|name_str| {
+            if contains_email(name_str) {
+                None
+            } else {
+                Some(remove_name_suffix(name_str))
+            }
+        })
     };
 
     ContactPhotoless {
@@ -18,6 +24,15 @@ pub fn normalize_contact(contact: ContactPhotoless) -> ContactPhotoless {
         email_address: contact.email_address.to_lowercase(),
         name: normalized_name,
     }
+}
+
+/// Checks if a string contains an email address pattern
+///
+/// This function detects email patterns like "user@domain.com" but not
+/// patterns like "Gordon @ Calendly" (spaces around @ without domain).
+fn contains_email(text: &str) -> bool {
+    static EMAIL_PATTERN: Lazy<Regex> = Lazy::new(|| Regex::new(r"\S+@\S+\.\S+").unwrap());
+    EMAIL_PATTERN.is_match(text)
 }
 
 /// Removes service suffixes from a contact name and normalizes spaces
@@ -51,82 +66,4 @@ fn remove_name_suffix(name: &str) -> String {
     let name = VIA_PARENS_PATTERN.replace(&name, "").to_string();
 
     SPECIFIC_SUFFIX_PATTERN.replace(&name, "").to_string()
-}
-
-#[test]
-fn test_remove_name_suffix() {
-    // Test "via X" pattern (without parentheses)
-    assert_eq!(remove_name_suffix("John Doe via Gmail"), "John Doe");
-    assert_eq!(remove_name_suffix("Jane Smith via Outlook"), "Jane Smith");
-    assert_eq!(
-        remove_name_suffix("Alice Johnson via Yahoo Mail"),
-        "Alice Johnson"
-    );
-
-    // Test "(via X)" pattern (with parentheses)
-    assert_eq!(
-        remove_name_suffix("Bob Williams (via Gmail)"),
-        "Bob Williams"
-    );
-    assert_eq!(
-        remove_name_suffix("Charlie Brown (via Outlook)"),
-        "Charlie Brown"
-    );
-    assert_eq!(
-        remove_name_suffix("Diana Prince (via Yahoo Mail)"),
-        "Diana Prince"
-    );
-
-    // Test specific common suffixes
-    assert_eq!(remove_name_suffix("Ethan Hunt (Figma)"), "Ethan Hunt");
-    assert_eq!(
-        remove_name_suffix("Fiona Apple (Google Calendar)"),
-        "Fiona Apple"
-    );
-    assert_eq!(
-        remove_name_suffix("George Lucas (Shared via Google)"),
-        "George Lucas"
-    );
-    assert_eq!(
-        remove_name_suffix("Hannah Montana (Google Drive)"),
-        "Hannah Montana"
-    );
-    assert_eq!(remove_name_suffix("Ian McKellen (Dropbox)"), "Ian McKellen");
-    assert_eq!(
-        remove_name_suffix("Jennifer Lopez (Microsoft 365)"),
-        "Jennifer Lopez"
-    );
-
-    // Test with non-breaking spaces
-    let name_with_nbsp = format!("John{}Doe via Teams", '\u{00A0}');
-    assert_eq!(remove_name_suffix(&name_with_nbsp), "John Doe");
-
-    // Test with combined issues
-    let complex_name = format!("Jane{}Smith (via Microsoft 365)", '\u{00A0}');
-    assert_eq!(remove_name_suffix(&complex_name), "Jane Smith");
-
-    // Test with no changes needed
-    assert_eq!(remove_name_suffix("Regular Name"), "Regular Name");
-
-    // Test with more complex cases
-    assert_eq!(
-        remove_name_suffix("Team Notification via Slack"),
-        "Team Notification"
-    );
-    assert_eq!(
-        remove_name_suffix("Project Update (via Jira Cloud)"),
-        "Project Update"
-    );
-    assert_eq!(
-        remove_name_suffix("Marketing Team via MailChimp"),
-        "Marketing Team"
-    );
-    assert_eq!(
-        remove_name_suffix("Olivia Rios (via MailChimp)"),
-        "Olivia Rios"
-    );
-    assert_eq!(
-        remove_name_suffix("Aviation Week & Space Technology"),
-        "Aviation Week & Space Technology"
-    );
 }
