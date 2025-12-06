@@ -655,8 +655,10 @@ export function createSplitLayout(
 
     if (!changed) return;
 
+    const originalSplits = [...state.splits];
+
     const lookup = (type: BlockName, id: string) =>
-      state.splits.find((s) => s.content.type === type && s.content.id === id);
+      originalSplits.find((s) => s.content.type === type && s.content.id === id);
 
     const splitsToRemove = [
       // just remount all the components

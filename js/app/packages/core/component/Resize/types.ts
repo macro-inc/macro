@@ -34,7 +34,7 @@ export type LayoutResult = {
 
 export type ResizeZoneCtx = {
   direction: 'horizontal' | 'vertical';
-  register: (panel: PanelConfig) => void;
+  register: (panel: PanelConfig, index?: number) => void;
   unregister: (id: PanelId) => void;
   gutterSize: () => number;
   size: () => number;

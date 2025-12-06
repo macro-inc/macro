@@ -317,7 +317,7 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
       >
         <For each={ids()}>
           {(id, index) => (
-            <Resize.Panel id={id} minSize={400}>
+            <Resize.Panel id={id} minSize={400} index={index()}>
               <SplitPanel
                 split={splits()[index()]!}
                 handle={splitManager.getSplit(id)!}

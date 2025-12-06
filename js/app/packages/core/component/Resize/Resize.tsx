@@ -83,8 +83,8 @@ function Zone(props: ParentProps<ZoneProps>) {
     panels: [],
   });
 
-  function register(config: PanelConfig) {
-    solver.addPanel({ ...config, minSize: config?.minSize ?? minSize() });
+  function register(config: PanelConfig, index?: number) {
+    solver.addPanel({ ...config, minSize: config?.minSize ?? minSize() }, index);
   }
 
   function unregister(id: PanelId) {
@@ -175,6 +175,8 @@ type PanelProps = {
   maxSize?: number;
   collapsed?: () => boolean;
   hidden?: () => boolean;
+  /** The index position for this panel in the layout order */
+  index?: number;
 };
 
 /**
@@ -209,11 +211,14 @@ function Panel(props: ParentProps<PanelProps>) {
 
   onMount(() => {
     if (props.collapsed?.() === false) return;
-    ctx.register({
-      id: props.id,
-      minSize: props.minSize,
-      maxSize: props.maxSize ?? Infinity,
-    });
+    ctx.register(
+      {
+        id: props.id,
+        minSize: props.minSize,
+        maxSize: props.maxSize ?? Infinity,
+      },
+      props.index
+    );
   });
 
   createEffect(() => {
@@ -222,11 +227,14 @@ function Panel(props: ParentProps<PanelProps>) {
     if (collapsed) {
       ctx.unregister(props.id);
     } else {
-      ctx.register({
-        id: props.id,
-        minSize: props.minSize,
-        maxSize: props.maxSize ?? Infinity,
-      });
+      ctx.register(
+        {
+          id: props.id,
+          minSize: props.minSize,
+          maxSize: props.maxSize ?? Infinity,
+        },
+        props.index
+      );
     }
   });
 
@@ -236,11 +244,14 @@ function Panel(props: ParentProps<PanelProps>) {
     if (hidden) {
       ctx.unregister(props.id);
     } else {
-      ctx.register({
-        id: props.id,
-        minSize: props.minSize,
-        maxSize: props.maxSize ?? Infinity,
-      });
+      ctx.register(
+        {
+          id: props.id,
+          minSize: props.minSize,
+          maxSize: props.maxSize ?? Infinity,
+        },
+        props.index
+      );
     }
   });
 
