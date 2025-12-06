@@ -11,7 +11,6 @@ import Organization from './Organization/Organization';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
 import { withAnalytics } from '@coparse/analytics';
 import { useOrganizationName } from '@core/user';
-import { AiMemory } from './AiMemory/AiMemory';
 import { Subscription } from './Subscription';
 import { Appearance } from './Appearance';
 import { Tabs } from '@kobalte/core/tabs';
