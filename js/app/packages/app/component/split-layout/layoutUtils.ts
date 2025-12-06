@@ -1,3 +1,4 @@
+import type { ViewId } from '@core/types/view';
 import { createCallback } from '@solid-primitives/rootless';
 import { useContext } from 'solid-js';
 import { SplitLayoutContext, SplitPanelContext } from './context';
@@ -79,9 +80,9 @@ export function globalRemoveFromSplitHistory(
 }
 
 /**
- * Check if there's a unified-list split with the inbox view active.
+ * Check if there's a unified-list split with a particular view open.
  */
-export function isInboxOpen(manager: SplitManager): boolean {
+export function isViewOpen(manager: SplitManager, viewId: ViewId): boolean {
   const split = manager.getSplitByContent('component', 'unified-list');
-  return split?.meta()?.viewId === 'inbox';
+  return split?.meta()?.viewId === viewId;
 }

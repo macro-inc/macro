@@ -14,7 +14,7 @@ pub enum MetadataError {
     #[error("Document not found")]
     NotFound,
 
-    #[error("Failed to fetch document metadata from database: {0}")]
+    #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
 }
 
@@ -36,13 +36,7 @@ pub async fn get_document_metadata_properties(
                     "failed to get document metadata from database"
                 );
             })?
-            .ok_or_else(|| {
-                tracing::warn!(
-                    document_id = %document_id,
-                    "document not found in database"
-                );
-                MetadataError::NotFound
-            })?;
+            .ok_or(MetadataError::NotFound)?;
 
     tracing::debug!(
         document_id = %document_id,
@@ -56,7 +50,7 @@ pub async fn get_document_metadata_properties(
 
     // 1. Document name property
     if !document_metadata.name.is_empty() {
-        metadata_properties.push(create_system_property_str(
+        metadata_properties.push(create_metadata_property_str(
             metadata::DOCUMENT_NAME,
             models_properties::DataType::String,
             document_metadata.name,
@@ -70,7 +64,7 @@ pub async fn get_document_metadata_properties(
             entity_id: document_metadata.owner,
             entity_type: EntityType::User,
         };
-        metadata_properties.push(create_system_property_entity_ref(
+        metadata_properties.push(create_metadata_property_entity_ref(
             metadata::OWNER,
             models_properties::DataType::Entity,
             owner_entity_ref,
@@ -79,7 +73,7 @@ pub async fn get_document_metadata_properties(
     }
 
     // 3. Created time property
-    metadata_properties.push(create_system_property_date(
+    metadata_properties.push(create_metadata_property_date(
         metadata::CREATED_AT,
         models_properties::DataType::Date,
         document_metadata.created_at,
@@ -87,7 +81,7 @@ pub async fn get_document_metadata_properties(
     ));
 
     // 4. Last updated time property
-    metadata_properties.push(create_system_property_date(
+    metadata_properties.push(create_metadata_property_date(
         metadata::LAST_UPDATED,
         models_properties::DataType::Date,
         document_metadata.updated_at,
@@ -100,7 +94,7 @@ pub async fn get_document_metadata_properties(
             entity_id: project_id,
             entity_type: EntityType::Project,
         };
-        metadata_properties.push(create_system_property_entity_ref(
+        metadata_properties.push(create_metadata_property_entity_ref(
             metadata::PROJECT,
             models_properties::DataType::Entity,
             project_entity_ref,
@@ -108,7 +102,7 @@ pub async fn get_document_metadata_properties(
         ));
     } else {
         // Add project property with null value
-        metadata_properties.push(create_system_property_null(
+        metadata_properties.push(create_metadata_property_null(
             metadata::PROJECT,
             models_properties::DataType::Entity,
             EntityType::Document,
@@ -118,54 +112,52 @@ pub async fn get_document_metadata_properties(
     tracing::debug!(
         document_id = %document_id,
         metadata_properties_count = metadata_properties.len(),
-        "created document system properties"
+        "created document metadata properties"
     );
 
     Ok(metadata_properties)
 }
 
-/// Create a system property with a value (metadata properties are always single-value)
-pub fn create_system_property_str(
+/// Create a metadata property with a string value
+pub fn create_metadata_property_str(
     display_name: &str,
     data_type: models_properties::DataType,
     value: String,
     entity_type: EntityType,
 ) -> EntityPropertyWithDefinition {
     let property_value = PropertyValue::Str(value);
-    create_system_property_inner(display_name, data_type, Some(property_value), entity_type)
+    create_metadata_property_inner(display_name, data_type, Some(property_value), entity_type)
 }
 
-pub fn create_system_property_date(
+pub fn create_metadata_property_date(
     display_name: &str,
     data_type: models_properties::DataType,
     value: chrono::DateTime<chrono::Utc>,
     entity_type: EntityType,
 ) -> EntityPropertyWithDefinition {
     let property_value = PropertyValue::Date(value);
-    create_system_property_inner(display_name, data_type, Some(property_value), entity_type)
+    create_metadata_property_inner(display_name, data_type, Some(property_value), entity_type)
 }
 
-pub fn create_system_property_entity_ref(
+pub fn create_metadata_property_entity_ref(
     display_name: &str,
     data_type: models_properties::DataType,
     value: EntityReference,
     entity_type: EntityType,
 ) -> EntityPropertyWithDefinition {
     let property_value = PropertyValue::EntityRef(vec![value]);
-    create_system_property_inner(display_name, data_type, Some(property_value), entity_type)
+    create_metadata_property_inner(display_name, data_type, Some(property_value), entity_type)
 }
 
-fn create_system_property_inner(
+fn create_metadata_property_inner(
     display_name: &str,
     data_type: models_properties::DataType,
     value: Option<PropertyValue>,
     entity_type: EntityType,
 ) -> EntityPropertyWithDefinition {
-    // System properties don't have a real owner, use a placeholder
-    // These are computed on-the-fly and never persisted
-    let owner = models_properties::PropertyOwner::User {
-        user_id: String::new(),
-    };
+    // Metadata properties are computed on-the-fly and never persisted
+    // Use System owner since they don't belong to any user or org
+    let owner = models_properties::PropertyOwner::System;
 
     let property_definition = PropertyDefinition {
         id: METADATA_PROPERTY_ID,
@@ -176,6 +168,7 @@ fn create_system_property_inner(
         specific_entity_type: None,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
+        is_system: false, // Metadata properties are not DB-stored system properties
         is_metadata: true,
     };
 
@@ -196,11 +189,11 @@ fn create_system_property_inner(
     }
 }
 
-/// Helper function to create a system property with null/empty value
-pub fn create_system_property_null(
+/// Create a metadata property with null/empty value
+pub fn create_metadata_property_null(
     property_name: &str,
     data_type: models_properties::DataType,
     entity_type: EntityType,
 ) -> EntityPropertyWithDefinition {
-    create_system_property_inner(property_name, data_type, None, entity_type)
+    create_metadata_property_inner(property_name, data_type, None, entity_type)
 }

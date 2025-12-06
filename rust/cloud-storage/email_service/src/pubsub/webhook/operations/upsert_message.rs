@@ -247,7 +247,7 @@ async fn handle_contacts_sync(
     provider_message_id: &str,
 ) -> result::Result<(), ProcessingError> {
     // if the user sent the message, upsert contacts for its recipients in contacts-service.
-    if cfg!(feature = "contacts_sync") || !is_sent || recipient_emails.is_empty() {
+    if cfg!(not(feature = "contacts_sync")) || !is_sent || recipient_emails.is_empty() {
         return Ok(());
     }
 

@@ -1,7 +1,7 @@
+import type { GetChannelsResponse } from '@service-comms/generated/models/getChannelsResponse';
 import { useQuery } from '@tanstack/solid-query';
 import { SERVER_HOSTS } from 'core/constant/servers';
 import { platformFetch } from 'core/util/platformFetch';
-import type { GetChannelsResponse } from 'service-comms/generated/models/getChannelsResponse';
 import type { Accessor } from 'solid-js';
 import type { ChannelEntity } from '../types/entity';
 import { createApiTokenQuery } from './auth';

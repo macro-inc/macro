@@ -2,7 +2,5 @@
   "name": "block-unknown",
   "private": true,
   "scripts": {},
-  "dependencies": {
-    "service-storage": "workspace:*"
-  }
+  "dependencies": {}
 }

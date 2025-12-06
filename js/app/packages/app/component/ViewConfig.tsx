@@ -1,6 +1,6 @@
 import {
-  VIEWS,
-  type View,
+  DEFAULT_VIEWS,
+  type DefaultView,
   type ViewId,
   type ViewLabel,
 } from '@core/types/view';
@@ -20,6 +20,7 @@ import { emailClient } from '@service-email/client';
 import stringify from 'json-stable-stringify';
 import { queryClient } from '../../macro-entity/src/queries/client';
 import type { UnifiedListContext } from './SoupContext';
+import { noiseFilter, signalFilter } from './soupFilters';
 
 // for custom views that extend the unified list view
 export type ViewType = 'project';
@@ -62,7 +63,6 @@ export type FilterOptions = {
   typeFilter: EntityType[];
   documentTypeFilter: DocumentTypeFilter[];
   projectFilter?: string;
-  emailFilter?: 'inbox' | 'sent' | 'drafts' | 'all';
   fromFilter?: WithCustomUserInput<'user' | 'contact'>[];
 };
 
@@ -113,6 +113,18 @@ export type ViewConfigEnhanced = {
   hotkeyOptions?: Partial<HotkeyOptions>;
 } & ViewConfigBase;
 
+export type ClientFilterContext = {
+  soupContext?: UnifiedListContext;
+};
+
+export type ClientFilter = {
+  id: string;
+  predicate: (
+    entity: WithNotification<EntityData>,
+    ctx?: ClientFilterContext
+  ) => boolean;
+};
+
 export const VIEWCONFIG_BASE: ViewConfigBase = {
   sort: {
     type: 'systemSortOption',
@@ -161,11 +173,10 @@ export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
 };
 
 const ALL_VIEWCONFIG_DEFAULTS = {
-  inbox: {
-    view: 'Inbox',
+  signal: {
+    view: 'Signal',
     filters: {
       notificationFilter: 'notDone',
-      emailFilter: 'sent',
     },
     sort: {
       sortBy: 'updated_at',
@@ -188,43 +199,34 @@ const ALL_VIEWCONFIG_DEFAULTS = {
       },
     },
   },
-  emails: {
-    view: 'Emails',
+  noise: {
+    view: 'Noise',
     filters: {
-      typeFilter: ['email'],
+      notificationFilter: 'notDone',
     },
     sort: {
       sortBy: 'updated_at',
     },
     display: {
+      unrollNotifications: true,
       showUnreadIndicator: true,
     },
     hotkeyOptions: {
       e: (entity, extra) => {
-        if (extra?.soupContext) {
-          const {
-            emailViewSignal: [emailView],
-          } = extra.soupContext;
-          if (emailView() === 'inbox') {
-            if (entity.type === 'email') {
-              archiveEmail(entity.id, {
-                isDone: entity.done,
-                optimisticallyExclude: true,
-              });
-            }
-            return true;
-          }
-        }
-
         if (entity.type === 'email') {
-          archiveEmail(entity.id, { isDone: entity.done });
+          archiveEmail(entity.id, {
+            isDone: entity.done,
+          });
+        }
+        if (extra?.notificationSource) {
+          markNotificationsForEntityAsDone(extra.notificationSource, entity);
         }
         return true;
       },
     },
   },
-  comms: {
-    view: 'Comms',
+  people: {
+    view: 'People',
     filters: {
       typeFilter: ['channel'],
     },
@@ -232,16 +234,10 @@ const ALL_VIEWCONFIG_DEFAULTS = {
       showUnreadIndicator: true,
     },
   },
-  docs: {
-    view: 'Docs',
+  files: {
+    view: 'Files',
     filters: {
       typeFilter: ['document'],
-    },
-  },
-  ai: {
-    view: 'Ai',
-    filters: {
-      typeFilter: ['chat'],
     },
   },
   folders: {
@@ -264,22 +260,22 @@ const ALL_VIEWCONFIG_DEFAULTS = {
       },
     },
   },
-} satisfies Record<View, Omit<DeepPartial<ViewConfigEnhanced>, 'id'>>;
+} satisfies Record<DefaultView, Omit<DeepPartial<ViewConfigEnhanced>, 'id'>>;
 
 export const VIEWCONFIG_DEFAULTS = Object.fromEntries(
   Object.entries(ALL_VIEWCONFIG_DEFAULTS).filter(([key]) =>
-    VIEWS.includes(key as View)
+    DEFAULT_VIEWS.includes(key as DefaultView)
   )
-) as Record<View, Omit<ViewConfigEnhanced, 'id'>>;
+) as Record<DefaultView, Omit<ViewConfigEnhanced, 'id'>>;
 
 export const VIEWCONFIG_DEFAULTS_IDS = Object.keys(
   VIEWCONFIG_DEFAULTS
-) as View[];
+) as DefaultView[];
 export const VIEWCONFIG_DEFAULTS_IDS_ENUM = Object.fromEntries(
   Object.entries(VIEWCONFIG_DEFAULTS).map(([key]) => {
     return [key, key];
   })
-) as Record<View, string>;
+) as Record<DefaultView, string>;
 
 export const VIEWCONFIG_FILTER_SHOW_OPTIONS: readonly FilterOptions['notificationFilter'][] =
   ['all', 'unread', 'notDone'] as const;
@@ -297,13 +293,32 @@ export const VIEWCONFIG_SORT_ORDER: readonly SortOptions['sortOrder'][] = [
   'ascending',
   'descending',
 ] as const;
-export const VIEWCONFIG_FILTER_EMAIL_OPTIONS: readonly NonNullable<
-  FilterOptions['emailFilter']
->[] = ['inbox', 'sent', 'drafts', 'all'] as const;
 export const VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER: readonly FilterOptions['documentTypeFilter'][number][] =
   ['md', 'code', 'image', 'canvas', 'pdf', 'unknown'] as const;
 export const VIEWCONFIG_FILTER_ENTITY_TYPE: readonly FilterOptions['typeFilter'][number][] =
   ['channel', 'chat', 'document', 'email', 'project'] as const;
+
+export const VIEW_CLIENT_FILTERS: Record<ViewId, ClientFilter[]> = {
+  signal: [signalFilter],
+  noise: [noiseFilter],
+  people: [],
+  files: [],
+  folders: [],
+  all: [],
+};
+
+export function applyClientFilters(
+  entityList: WithNotification<EntityData>[],
+  viewId: ViewId,
+  ctx?: ClientFilterContext
+): WithNotification<EntityData>[] {
+  const filters = VIEW_CLIENT_FILTERS[viewId] ?? [];
+  if (filters.length === 0) return entityList;
+
+  return entityList.filter((entity) => {
+    return filters.every((filter) => filter.predicate(entity, ctx));
+  });
+}
 
 export async function archiveEmail(
   id: string,

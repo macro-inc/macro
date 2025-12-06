@@ -21,6 +21,8 @@ pub struct PropertyDefinitionResponse {
     pub data_type: DataType,
     pub is_multi_select: bool,
     pub specific_entity_type: Option<EntityType>,
+    /// Flag to indicate if this is a system property (managed by the system)
+    pub is_system: bool,
     /// Flag to indicate if this is a system-generated metadata property
     pub is_metadata: bool,
     #[serde(skip_serializing_if = "Option::is_none")]

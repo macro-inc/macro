@@ -18,9 +18,9 @@ use properties_db_client::{
 
 #[derive(Debug, Error)]
 pub enum CreatePropertyDefinitionErr {
-    #[error("An unknown error has occurred")]
+    #[error("An internal error occurred")]
     InternalError(#[from] anyhow::Error),
-    #[error("Database error: {0}")]
+    #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
     #[error("{0}")]
     InvalidRequest(String),
@@ -58,7 +58,7 @@ impl IntoResponse for CreatePropertyDefinitionErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(context, user_context), fields(user_id = %user_context.user_id))]
+#[tracing::instrument(skip(context, user_context), fields(user_id = %user_context.user_id), err)]
 pub async fn create_property_definition(
     State(context): State<ApiContext>,
     Extension(user_context): Extension<UserContext>,

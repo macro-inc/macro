@@ -7,7 +7,8 @@ export type SettingsTab =
   | 'Appearance'
   | 'Notification'
   | 'Mobile'
-  | 'AI Memory';
+  | 'AI Memory'
+  | 'Inbox';
 
 export const [settingsOpen, setSettingsOpen] = createSignal(false);
 export const [activeTabId, setActiveTabId] =

@@ -114,8 +114,6 @@ export const ENABLE_PROPERTIES_METADATA = DEV_MODE_ENV;
 export const ENABLE_PROPERTY_DISPLAY_CONTROL =
   ENABLE_PROPERTIES_METADATA && DEV_MODE_ENV;
 
-export const ENABLE_EMAIL_VIEW = true;
-
 // TODO: re-enable when supported in backend
 export const ENABLE_SOUP_FROM_FILTER = false;
 

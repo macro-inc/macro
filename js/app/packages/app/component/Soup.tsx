@@ -7,18 +7,14 @@ import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { Button } from '@core/component/FormControls/Button';
-import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { BlockOrchestrator } from '@core/orchestrator';
 import {
-  CONDITIONAL_VIEWS,
   DEFAULT_VIEWS,
   type DefaultView,
-  VIEWS,
-  type View,
   type ViewId,
   type ViewLabel,
 } from '@core/types/view';
@@ -55,7 +51,6 @@ import { EntityModal } from './EntityModal/EntityModal';
 import { HelpDrawer } from './HelpDrawer';
 import { SplitHeaderLeft } from './split-layout/components/SplitHeader';
 import { SplitTabs } from './split-layout/components/SplitTabs';
-import { SplitToolbarRight } from './split-layout/components/SplitToolbar';
 import type { SplitPanelContextType } from './split-layout/context';
 import { SplitPanelContext } from './split-layout/context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
@@ -80,51 +75,31 @@ const ViewTab: ParentComponent<{
   );
 };
 
-const DefaultViewTab: Component<{
-  viewId: ViewId;
-}> = (props) => {
-  return (
-    <ViewTab viewId={props.viewId}>
-      <Suspense>
-        <UnifiedListView />
-      </Suspense>
-    </ViewTab>
-  );
-};
-
-const ConditionalViewTab: ParentComponent<{
-  view: Exclude<View, DefaultView>;
-}> = (props) => {
-  return (
-    <Show when={VIEWS.includes(props.view)}>
-      <ViewTab viewId={props.view}>{props.children}</ViewTab>
-    </Show>
-  );
-};
-
 const ViewWithSearch: Component<{
   viewId: ViewId;
 }> = (props) => {
   return (
-    <Switch>
-      <Match when={props.viewId === 'emails'}>
-        <ConditionalViewTab view="emails">
+    <ViewTab viewId={props.viewId}>
+      <Switch>
+        {/* <Match
+          when={props.viewId === 'emails' && DEFAULT_VIEWS.includes('emails')}
+        >
           <Suspense>
             <EmailView />
           </Suspense>
-        </ConditionalViewTab>
-      </Match>
-      <Match when={props.viewId === 'all'}>
-        <ConditionalViewTab view="all">
+        </Match> */}
+        <Match when={props.viewId === 'all' && DEFAULT_VIEWS.includes('all')}>
           <Suspense>
             <AllView />
           </Suspense>
-        </ConditionalViewTab>
-      </Match>
-      <Match when={true}>
-        <DefaultViewTab viewId={props.viewId} />
-      </Match>
-    </Switch>
+        </Match>
+        <Match when={true}>
+          <Suspense>
+            <UnifiedListView />
+          </Suspense>
+        </Match>
+      </Switch>
+    </ViewTab>
   );
 };
 
@@ -255,7 +230,7 @@ export function Soup() {
       if (showHelpDrawer().has(selectedView())) {
         setShowHelpDrawer(new Set<string>());
       } else {
-        setShowHelpDrawer(new Set([...DEFAULT_VIEWS, ...CONDITIONAL_VIEWS]));
+        setShowHelpDrawer(new Set(DEFAULT_VIEWS));
       }
       return true;
     },
@@ -324,7 +299,7 @@ export function Soup() {
   const TabContextMenu = (props: { value: ViewId; label: string }) => {
     const [isModalOpen, setIsModalOpen] = createSignal(false);
     const isDefaultView = () =>
-      VIEWCONFIG_DEFAULTS_IDS.includes(props.value as View);
+      VIEWCONFIG_DEFAULTS_IDS.includes(props.value as DefaultView);
     return (
       <Show when={!isDefaultView()}>
         <ContextMenu>
@@ -461,32 +436,32 @@ function AllView() {
   return <UnifiedListView />;
 }
 
-function EmailView() {
-  const {
-    emailViewSignal: [emailView, setEmailView],
-    viewsDataStore,
-    selectedView,
-  } = useSplitPanelOrThrow().unifiedListContext;
-  const viewData = createMemo(() => viewsDataStore[selectedView()]);
+// function EmailView() {
+//   const {
+//     emailViewSignal: [emailView, setEmailView],
+//     viewsDataStore,
+//     selectedView,
+//   } = useSplitPanelOrThrow().unifiedListContext;
+//   const viewData = createMemo(() => viewsDataStore[selectedView()]);
 
-  return (
-    <>
-      <UnifiedListView />
-      <SplitToolbarRight>
-        <div class="flex flex-row items-center pr-2">
-          <SegmentedControl
-            disabled={!!viewData().searchText}
-            size="SM"
-            label="View"
-            list={['inbox', 'sent', 'drafts']}
-            value={emailView()}
-            onChange={setEmailView}
-          />
-        </div>
-      </SplitToolbarRight>
-    </>
-  );
-}
+//   return (
+//     <>
+//       <UnifiedListView />
+//       <SplitToolbarRight>
+//         <div class="flex flex-row items-center pr-2">
+//           <SegmentedControl
+//             disabled={!!viewData().searchText}
+//             size="SM"
+//             label="View"
+//             list={['inbox', 'sent', 'drafts']}
+//             value={emailView()}
+//             onChange={setEmailView}
+//           />
+//         </div>
+//       </SplitToolbarRight>
+//     </>
+//   );
+// }
 
 export const useUpsertSavedViewMutation = () => {
   const queryClient = useQueryClient();
@@ -503,7 +478,7 @@ export const useUpsertSavedViewMutation = () => {
           }
     ) => {
       const isDefaultView = VIEWCONFIG_DEFAULTS_IDS.includes(
-        viewData.id as View
+        viewData.id as DefaultView
       );
       if ('config' in viewData) {
         // if data id is in defaults, exclude default, set up args to create new view
