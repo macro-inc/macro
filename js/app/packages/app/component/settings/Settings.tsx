@@ -1,5 +1,5 @@
-import { type SettingsTab, setSettingsOpen, useSettingsState } from '@core/constant/SettingsState';
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, Suspense } from 'solid-js';
+import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { DEV_MODE_ENV, ENABLE_AI_MEMORY } from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
@@ -9,7 +9,6 @@ import { IconButton } from '@core/component/IconButton';
 import ContractIcon from '@icon/regular/arrows-in.svg';
 import Organization from './Organization/Organization';
 import ExpandIcon from '@icon/regular/arrows-out.svg';
-import { registerHotkey } from 'core/hotkey/hotkeys';
 import { withAnalytics } from '@coparse/analytics';
 import { useOrganizationName } from '@core/user';
 import { AiMemory } from './AiMemory/AiMemory';
@@ -23,7 +22,7 @@ const SCROLL_THRESHOLD = 10;
 const { track, TrackingEvents } = withAnalytics();
 
 export function SettingsPanel() {
-  const { settingsOpen, closeSettings, activeTabId, setActiveTabId, toggleSettings } = useSettingsState();
+  const { settingsOpen, closeSettings, activeTabId, setActiveTabId } = useSettingsState();
   const permissions = usePermissions();
   const orgName = useOrganizationName();
   const [spotlight, setSpotlight] = createSignal(false);

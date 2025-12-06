@@ -3,7 +3,6 @@ import { Resize } from '@core/component/Resize';
 import { isSettingsPanelOpen, useToggleSettingsPanel } from '@core/signal/layout/settings';
 import { useIsAuthenticated } from '@core/auth';
 import { registerHotkey } from 'core/hotkey/hotkeys';
-import { TOKENS } from '@core/hotkey/tokens';
 import { SettingsPanel } from './Settings';
 
 export const SettingsWrapper = () => {

@@ -1,5 +1,4 @@
 import { LoadingSpinner } from '@core/component/LoadingSpinner';
-import { TabContent } from '@core/component/TabContent';
 import { isErr } from '@core/util/maybeResult';
 import { insightClient } from '@service-insight/client';
 import { Match, onMount, Switch } from 'solid-js';

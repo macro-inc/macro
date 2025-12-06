@@ -1,5 +1,9 @@
+import {
+  isSettingsPanelOpen,
+  setIsSettingsPanelOpen,
+  useToggleSettingsPanel,
+} from '@core/signal/layout/settings';
 import { createEffect, createSignal } from 'solid-js';
-import { isSettingsPanelOpen, setIsSettingsPanelOpen, useToggleSettingsPanel } from '@core/signal/layout/settings';
 
 export type SettingsTab =
   | 'Account'
@@ -16,7 +20,7 @@ export const [activeTabId, setActiveTabId] =
 
 export const useSettingsState = () => {
   const toggleSettingsPanel = useToggleSettingsPanel();
-  
+
   const openSettings = (activeTabId?: SettingsTab) => {
     setIsSettingsPanelOpen(true);
     if (activeTabId) setActiveTabId(activeTabId);

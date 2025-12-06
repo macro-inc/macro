@@ -62,7 +62,6 @@ export function Layout(props: RouteSectionProps) {
         '--viewport-height',
         `${window.visualViewport.height}px`
       );
-
     }
   };
 

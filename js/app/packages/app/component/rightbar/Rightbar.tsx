@@ -24,6 +24,7 @@ import { ReferencesModal } from '@core/component/ReferencesModal';
 import { Resize } from '@core/component/Resize';
 import { ENABLE_REFERENCES_MODAL } from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
+import { settingsOpen } from '@core/constant/SettingsState';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import {
@@ -63,7 +64,6 @@ import {
   untrack,
 } from 'solid-js';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
-import { settingsOpen } from '@core/constant/SettingsState';
 
 type ChatData = {
   messages: ChatMessageWithAttachments[];
