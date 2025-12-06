@@ -903,6 +903,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   // createEffect(() => emailSource.setQueryParams(emailQueryParams()));
 
   const notificationSource = useGlobalNotificationSource();
+
   const markEntityAsDone = (entity: EntityData) => {
     const actions = unifiedListContext.actionRegistry;
     if (actions.isActionEnabled('mark_as_done', entity)) {
@@ -940,13 +941,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return blockHandle?.goToLocationFromParams({ message_id, thread_id });
   };
 
-  const entityMapper = (entity: EntityData) => {
-    return {
-      ...unwrap(entity),
-      notifications: useNotificationsForEntity(notificationSource, entity),
-    };
-  };
-
   const { SortComponent, sortFn: entitySort } = createSort({
     sortOptions,
     defaultSortOption: getSystemSortOption(defaultSortOptions as SortOptions),
@@ -978,6 +972,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       searchUnifiedNameContentQueryParams,
       { disabled: disableSearchService }
     );
+    const notificationSource = useGlobalNotificationSource();
+
+    const entityMapper = (entity: EntityData) => {
+      return {
+        ...unwrap(entity),
+        notifications: useNotificationsForEntity(notificationSource, entity),
+      };
+    };
 
     const { UnifiedListComponent, entities, isLoading } =
       createUnifiedInfiniteList<
