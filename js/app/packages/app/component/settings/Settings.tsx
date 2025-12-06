@@ -1,10 +1,10 @@
 import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, Suspense } from 'solid-js';
 import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
 import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
-import { DEV_MODE_ENV, ENABLE_AI_MEMORY } from '@core/constant/featureFlags';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { MacroPermissions, usePermissions } from '@service-gql/client';
+import { DEV_MODE_ENV } from '@core/constant/featureFlags';
 import { IconButton } from '@core/component/IconButton';
 import ContractIcon from '@icon/regular/arrows-in.svg';
 import Organization from './Organization/Organization';
@@ -111,7 +111,6 @@ export function SettingsPanel() {
     if(!orgName() && !isNativeMobilePlatform()){tabs.push({value: 'Subscription', label: 'Subscription'})}
     if(orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)){tabs.push({value: 'Organization', label: 'Organization'})}
     if(isNativeMobilePlatform() && DEV_MODE_ENV){tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' })}
-    if(ENABLE_AI_MEMORY){tabs.push({ value: 'AI Memory', label: 'AI Memory' })}
 
     return tabs;
   });
@@ -253,12 +252,6 @@ export function SettingsPanel() {
                 <Tabs.Content value="Appearance" class="absolute inset-0">
                   <Appearance />
                 </Tabs.Content>
-
-                <Show when={ENABLE_AI_MEMORY}>
-                  <Tabs.Content value="AI Memory" class="absolute inset-0">
-                    <AiMemory />
-                  </Tabs.Content>
-                </Show>
               </div>
             </Tabs>
           </div>
