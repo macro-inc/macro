@@ -129,12 +129,13 @@ async fn create_dss_document_record(
         project_id: None,
         created_at: Some(p.internal_date_ts),
         email_attachment_id: Some(p.attachment_db_id),
+        is_task: false,
     };
 
     dss_client
         .create_document_internal(request, link.macro_id.0.as_ref())
         .await
-        .context("Failed to create document record in DSS")
+        .map_err(|e| anyhow::anyhow!("Failed to create document record in DSS: {}", e))
 }
 
 /// Uploads the provided data to the presigned URL from the DSS response.

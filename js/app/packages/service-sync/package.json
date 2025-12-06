@@ -1,8 +1,0 @@
-{
-  "name": "service-sync",
-  "private": true,
-  "dependencies": {},
-  "scripts": {
-    "test": "vitest"
-  }
-}

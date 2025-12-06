@@ -121,6 +121,7 @@ async fn traverse_with_ids(
                         skip_history: true,
                         email_attachment_id: None,
                         created_at: None,
+                        is_task: false,
                     },
                 )
                 .await?;

@@ -9,7 +9,7 @@ import { BrightJoins } from '@core/component/BrightJoins';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
 import { setEditorStateFromMarkdown } from '@core/component/LexicalMarkdown/utils';
-import { fileDrop } from '@core/directive/fileDrop';
+import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
@@ -20,6 +20,8 @@ import {
   STATIC_VIDEO,
 } from '@core/store/cacheChannelInput';
 import type { IUser } from '@core/user';
+import type { UploadInput } from '@core/util/upload';
+import { handleFileFolderDrop } from '@core/util/upload';
 import ArrowUp from '@icon/bold/arrow-up-bold.svg';
 import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import PlusIcon from '@icon/regular/plus.svg';
@@ -28,6 +30,7 @@ import Trash from '@icon/regular/trash.svg';
 import XIcon from '@icon/regular/x.svg';
 import { logger } from '@observability';
 import type { SimpleMention } from '@service-comms/generated/models/simpleMention';
+import { staticFileClient } from '@service-static-files/client';
 import { createCallback } from '@solid-primitives/rootless';
 import { leading, throttle } from '@solid-primitives/scheduled';
 import { activeElement } from 'app/signal/focus';
@@ -46,14 +49,13 @@ import {
 } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { tabbable } from 'tabbable';
-import { staticFileClient } from '../../service-static-files/client';
 import { ActionButton } from './ActionButton';
 import { AttachMenu } from './AttachMenu';
 import { Attachment } from './Attachment';
 import { FormatRibbon } from './FormatRibbon';
 import { useChannelMarkdownArea } from './MarkdownArea';
 
-false && fileDrop;
+false && fileFolderDrop;
 
 type InputAttachmentsStore = {
   store: Record<string, InputAttachment[]>;
@@ -374,14 +376,16 @@ export function BaseInput(props: BaseInputProps) {
     }
   }
 
-  async function onMarkdownAreaPaste(files: File[]) {
-    let uploadedCount = 0;
-    handleFileUpload(files, props.inputAttachments, () => {
-      uploadedCount++;
-      if (uploadedCount === files.length) {
+  async function onMarkdownAreaPasteFilesAndDirs(
+    files: FileSystemFileEntry[],
+    directories: FileSystemDirectoryEntry[]
+  ) {
+    const onFilesReady = (uploadEntries: UploadInput[]) => {
+      handleFileUpload(uploadEntries, props.inputAttachments, (_attachment) => {
         props.onChange(markdownState());
-      }
-    });
+      });
+    };
+    return handleFileFolderDrop(files, directories, onFilesReady);
   }
 
   const videoAttachments = () =>
@@ -408,11 +412,16 @@ export function BaseInput(props: BaseInputProps) {
         'rounded-b-[5px] border-b mb-4': props.isReplyInput,
       }}
       ref={containerRef}
-      use:fileDrop={{
-        onDrop: (files) => {
-          handleFileUpload(files, props.inputAttachments, () => {
-            setIsDraggingOverChannel(false);
-          });
+      use:fileFolderDrop={{
+        onDrop: (files, folders) => {
+          setIsDraggingOverChannel(false);
+          handleFileFolderDrop(files, folders, (uploadEntries) =>
+            handleFileUpload(uploadEntries, {
+              store: props.inputAttachments.store,
+              setStore: props.inputAttachments.setStore,
+              key: key,
+            })
+          );
         },
         onDragStart: () => {
           setIsDraggedOver(true);
@@ -471,7 +480,7 @@ export function BaseInput(props: BaseInputProps) {
           }}
           users={props.channelUsers}
           onChange={handleChange}
-          onPasteFile={onMarkdownAreaPaste}
+          onPasteFilesAndDirs={onMarkdownAreaPasteFilesAndDirs}
           initialValue={props.initialValue?.()}
           useBlockBoundary={true}
           onEscape={handleBlur}

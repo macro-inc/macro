@@ -156,6 +156,7 @@ pub async fn create_blank_docx(
         modification_data: None,
         created_at: document_version.created_at,
         updated_at: document_version.updated_at,
+        is_task: false, // docx documents are not tasks
     })
 }
 

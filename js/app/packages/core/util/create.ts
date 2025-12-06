@@ -10,7 +10,7 @@ import { staticFileClient } from '@service-static-files/client';
 import { storageServiceClient } from '@service-storage/client';
 import { postNewHistoryItem } from '@service-storage/history';
 import { uploadToPresignedUrl } from '@service-storage/util/uploadToPresignedUrl';
-import { syncServiceClient } from '../../service-sync/client';
+import { syncServiceClient } from '@service-sync/client';
 import { contentHash } from './hash';
 import {
   getExtensionForLanguage,

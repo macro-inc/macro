@@ -36,8 +36,10 @@ pub async fn get_user_history(db: &Pool<Postgres>, user_id: &str) -> anyhow::Res
             d."projectId" as "project_id",
             d."deletedAt"::timestamptz as "deleted_at",
             NULL as "is_persistent",
-            di.sha as "sha"
+            di.sha as "sha",
+            (dt.document_id IS NOT NULL) as "is_task!"
         FROM "Document" d
+        LEFT JOIN document_task dt ON dt.document_id = d.id
         INNER JOIN UserHistories uh ON uh.item_id = d.id AND uh.item_type = 'document'
         LEFT JOIN LATERAL (
             SELECT
@@ -81,7 +83,8 @@ pub async fn get_user_history(db: &Pool<Postgres>, user_id: &str) -> anyhow::Res
             c."projectId" as "project_id",
             c."deletedAt"::timestamptz as "deleted_at",
             c."isPersistent" as "is_persistent",
-            NULL as "sha"
+            NULL as "sha",
+            false as "is_task"
         FROM "Chat" c
         INNER JOIN UserHistories uh ON uh.item_id = c.id AND uh.item_type = 'chat'
         UNION ALL
@@ -100,7 +103,8 @@ pub async fn get_user_history(db: &Pool<Postgres>, user_id: &str) -> anyhow::Res
             p."parentId" as "project_id",
             p."deletedAt"::timestamptz as "deleted_at",
             NULL as "is_persistent",
-            NULL as "sha"
+            NULL as "sha",
+            false as "is_task"
         FROM "Project" p
         INNER JOIN UserHistories uh ON uh.item_id = p.id AND uh.item_type = 'project'
     )
@@ -125,6 +129,7 @@ pub async fn get_user_history(db: &Pool<Postgres>, user_id: &str) -> anyhow::Res
                 r.branched_from_id,
                 r.branched_from_version_id,
                 r.project_id,
+                r.is_task,
             )
             .map_err(|e| sqlx::Error::TypeNotFound {
                 type_name: e.to_string(),

@@ -220,7 +220,6 @@ deny = [
 skip = [
   # These duplicates are due to complex dependency trees from AWS SDK, async-stripe, axum, and other major dependencies
   { crate = "base64", reason = "AWS SDK and other dependencies require different versions" },
-  { crate = "bitflags", reason = "Different dependencies require bitflags v1 and v2" },
   { crate = "core-foundation", reason = "Different dependencies require different versions" },
   { crate = "crypto-bigint", reason = "AWS cryptographic dependencies version mismatch" },
   { crate = "cssparser", reason = "HTML parsing dependencies version mismatch" },
@@ -229,7 +228,6 @@ skip = [
   { crate = "getrandom", reason = "Random number generation dependencies" },
   { crate = "h2", reason = "HTTP/2 dependencies version mismatch" },
   { crate = "hashbrown", reason = "Different dependencies require different versions" },
-  { crate = "heck", reason = "Case conversion dependencies" },
   { crate = "html5ever", reason = "HTML parsing dependencies" },
   { crate = "http", reason = "Hyper and AWS SDK version mismatch" },
   { crate = "http-body", reason = "Hyper and AWS SDK version mismatch" },
@@ -277,6 +275,8 @@ skip = [
   { crate = "windows_x86_64_gnullvm", reason = "Windows dependencies" },
   { crate = "windows_x86_64_msvc", reason = "Windows dependencies" },
   { crate = "zerocopy", reason = "Zero-copy serialization dependencies" },
+  { crate = "zune-core", reason = "Duplicated dep" },
+  { crate = "zune-jpeg", reason = "Deuplicated dep" },
 ]
 # Similarly to `skip` allows you to skip certain crates during duplicate
 # detection. Unlike skip, it also includes the entire tree of transitive
@@ -301,7 +301,7 @@ unknown-git = "warn"
 # if not specified. If it is specified but empty, no registries are allowed.
 allow-registry = ["https://github.com/rust-lang/crates.io-index"]
 # List of URLs for allowed Git repositories
-allow-git = []
+allow-git = ["git+https://github.com/seanaye/reqwest-middleware"]
 
 [sources.allow-org]
 # github.com organizations to allow git sources for

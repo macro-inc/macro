@@ -30,6 +30,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
                             "project_name": "test"
                         }
                     },
+                    {"term": {"_index": "projects"}},
                 ],
                 "should": [
                     {

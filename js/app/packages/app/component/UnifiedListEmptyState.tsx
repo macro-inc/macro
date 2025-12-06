@@ -21,26 +21,26 @@ export function EmptyState(props: { viewId?: ViewId }) {
   } = splitPanelContext;
   return (
     <Switch>
-      <Match when={props.viewId === 'emails' && !emailActive()}>
+      <Match when={props.viewId === 'noise' && !emailActive()}>
         {(_) => {
           onMount(() =>
-            setShowHelpDrawer((prev) => new Set([...prev, 'emails']))
+            setShowHelpDrawer((prev) => new Set([...prev, 'noise']))
           );
           return <EmptyStateInner emptyMessage={'Email not connected.'} />;
         }}
       </Match>
       <Match
         when={
-          (props.viewId === 'emails' || props.viewId === 'inbox') &&
+          (props.viewId === 'noise' || props.viewId === 'signal') &&
           emailActive()
         }
       >
         <EmptyStateInner emptyMessage={'Inbox zero.'} />
       </Match>
-      <Match when={props.viewId === 'inbox' && !emailActive()}>
+      <Match when={props.viewId === 'signal' && !emailActive()}>
         {(_) => {
           onMount(() =>
-            setShowHelpDrawer((prev) => new Set([...prev, 'inbox']))
+            setShowHelpDrawer((prev) => new Set([...prev, 'signal']))
           );
           return (
             <EmptyStateInner

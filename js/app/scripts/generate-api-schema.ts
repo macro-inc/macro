@@ -30,6 +30,8 @@ if (!biomePath) {
   }
 }
 
+const serviceClientsDir = path.resolve(import.meta.dirname, '../packages/service-clients');
+
 async function downloadJson(url: string, outputFile: string): Promise<void> {
   try {
     const response = await fetch(url);
@@ -84,7 +86,8 @@ const processService = async (service: Service) => {
     console.log(`[${service.name}] output dir`, outputDir);
     await $`rm -rf ${generatedDir}`;
     await downloadJson(schemaUrl, path.join(outputDir, 'openapi.json'));
-    await $`cd ${outputDir} && ${biomePath} format --fix openapi.json && bun run orval`;
+    await $`${biomePath} format --fix ${path.join(outputDir, 'openapi.json')}`;
+    await $`cd ${serviceClientsDir} && bun run orval --config orval.config.ts --project ${service.orvalKey}`;
     if (service.name === 'document-cognition')
       await $`bun scripts/generate-dcs-types.ts`;
     console.log(`[${service.name}] ✅ Successfully processed`);

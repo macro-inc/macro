@@ -48,6 +48,7 @@ use crate::{
                 user_notification::bulk_mark_user_notification_done::handler,
                 user_notification::get_user_notifications_by_event_item_id::handler,
                 user_notification::bulk_get_user_notifications_by_event_item_id::handler,
+                user_notification::bulk_mark_user_notification_undone::handler,
 
                 /// /unsubscribe
                 unsubscribe::get_unsubscribes::handler,

@@ -167,6 +167,7 @@ macro_rules! map_soup_type {
                     created_at: r.created_at,
                     updated_at: r.updated_at,
                     viewed_at: r.viewed_at,
+                    is_task: r.is_task,
                 },
             )),
             "chat" => Ok(::models_soup::item::SoupItem::Chat(

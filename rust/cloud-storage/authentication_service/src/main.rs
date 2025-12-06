@@ -5,6 +5,10 @@ use document_storage_service_client::DocumentStorageServiceClient;
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_entrypoint::MacroEntrypoint;
 use macro_middleware::auth::internal_access::InternalApiSecretKey;
+use native_app_service::{
+    domain::{models::PlatformData, service::NativeAppServiceImpl},
+    outbound::DefaultBundleFetcher,
+};
 use notification_service_client::NotificationServiceClient;
 use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
@@ -227,9 +231,22 @@ async fn main() -> anyhow::Result<()> {
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service: Arc::new(teams_service_impl),
+            native_app_service: Arc::new(NativeAppServiceImpl {
+                bundle_fetcher: DefaultBundleFetcher::default(),
+                environment: config.environment,
+                platform_data: PlatformData {
+                    ios_development_team_id: IOS_DEVELOPMENT_TEAM_ID.to_string(),
+                    ios_app_bundle_id: IOS_APP_BUNDLE_ID.to_string(),
+                },
+            }),
         },
         config.port,
     )
     .await?;
     Ok(())
 }
+
+// SAFETY: this is not a secret value
+const IOS_DEVELOPMENT_TEAM_ID: &str = "TY74Q77JBD";
+// SAFETY: this is not a secret value
+const IOS_APP_BUNDLE_ID: &str = "com.macro.app.prod";
