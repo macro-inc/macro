@@ -1,7 +1,6 @@
 import { BlockRegistry } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { LiveIndicators } from '@core/component/LiveIndicators';
-import { FileMenu } from '@core/component/TopBar/FileMenu';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import MacroBrandLoader from '@macro-icons/macro-brand-loader.svg';
 import MacroGridLoader from '@macro-icons/macro-grid-noise-loader.svg';
@@ -73,29 +72,6 @@ const App: Component = () => {
   return (
     <div class="flex flex-col gap-4 w-full">
       <Bar
-        left={
-          <Left>
-            <FileMenu
-              id="123"
-              itemType="document"
-              projectName="Core"
-              name="Component"
-            >
-              <MenuItem
-                onClick={() => alert('World')}
-                text="Hello"
-                icon={Sparkle}
-              />
-              <MenuItem onClick={() => {}} text="Butterfly" icon={Sparkle} />
-              <MenuItem onClick={() => {}} text="Ocean" icon={Sparkle} />
-              <MenuItem onClick={() => {}} text="Mountain" icon={Sparkle} />
-              <MenuItem onClick={() => {}} text="Forest" icon={Sparkle} />
-              <MenuItem onClick={() => {}} text="River" icon={Sparkle} />
-              <MenuItem onClick={() => {}} text="Valley" icon={Sparkle} />
-              <MenuItem onClick={() => {}} text="Delete" icon={TrashSimple} />
-            </FileMenu>
-          </Left>
-        }
         center={
           <Center>
             <TextButton
