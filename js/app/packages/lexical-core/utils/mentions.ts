@@ -76,10 +76,10 @@ export function buildMentionMarkdownString(info: MentionInfo): string {
 }
 
 export {
-  parseUserMentions,
+  markdownToPlainText,
   parseContactMentions,
   parseDateMentions,
   parseDocumentMentions,
   parseLinks,
-  markdownToPlainText,
+  parseUserMentions,
 } from './parsers';
