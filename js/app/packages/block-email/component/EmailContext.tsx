@@ -10,7 +10,6 @@ import {
   useContext,
 } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
-import type { createThreadMessagesResource } from '../signal/threadMessages';
 
 export type EmailRecipient = WithCustomUserInput<'user' | 'contact'>;
 
@@ -23,13 +22,15 @@ export type EmailContextValue = {
   >;
   messagesRef: Accessor<HTMLDivElement | undefined>;
   setMessagesRef: Setter<HTMLDivElement | undefined>;
-  threadMessagesResource: Accessor<ReturnType<
-    typeof createThreadMessagesResource
-  > | null>;
+  threadId: Accessor<string>;
   focusedMessageId: Accessor<string | undefined>;
   setFocusedMessageId: Setter<string | undefined>;
   filteredMessages: Accessor<MessageWithBodyReplyless[]>;
   threadData: Accessor<Thread | undefined>;
+  hasMore: Accessor<boolean>;
+  isFetching: Accessor<boolean>;
+  fetchNextPage: () => void;
+  refetch: () => void;
   archiveThread: Accessor<boolean>;
   activeTargetMessageId: Accessor<string | undefined>;
 };

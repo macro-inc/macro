@@ -1,5 +1,5 @@
 import { createQueryKeys } from '@lukemorales/query-key-factory';
-import type { PreviewViewStandardLabel } from './client';
+import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 
 export const emailKeys = createQueryKeys('email', {
   all: null,

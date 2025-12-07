@@ -26,9 +26,6 @@ export function EmailInput(props: EmailInputProps) {
   });
 
   function afterSend(newMessageId: MessageToSendDbId | null) {
-    const resource = ctx.threadMessagesResource();
-    if (!resource) return;
-
     // Delete the draft from our store
     const parentId = props.replyingTo()?.db_id?.toString();
     if (parentId) {
@@ -42,7 +39,7 @@ export function EmailInput(props: EmailInputProps) {
     props.setShowReply?.(false);
 
     // Refresh to get the new message
-    resource.refresh();
+    ctx.refetch();
 
     // Set focus to new message if provided
     if (newMessageId) ctx.setFocusedMessageId(newMessageId);

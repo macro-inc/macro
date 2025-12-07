@@ -1,9 +1,7 @@
 import { defineBlock, type ExtractLoadType, LoadErrors } from '@core/block';
-import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
 import { isErr, ok } from '@core/util/maybeResult';
-import { emailClient } from '@service-email/client';
+import { fetchAndCacheThread } from '@queries/email/thread';
 import EmailBlock from './component/Block';
-import { fetchAndCacheThread } from '../queries/email/thread-queries';
 
 export const definition = defineBlock({
   name: 'email',

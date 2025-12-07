@@ -16,6 +16,8 @@ import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
 
+const DEFAULT_STALE_TIME = 5 * 60 * 1000; // 5 minutes
+
 /**
  * Shared infinite query options for thread fetching.
  */
@@ -41,6 +43,7 @@ function threadQueryOptions(threadId: string) {
       }
       return allPages.reduce((sum, p) => sum + p.messages.length, 0);
     },
+    staleTime: DEFAULT_STALE_TIME,
   };
 }
 
@@ -69,7 +72,7 @@ export async function fetchAndCacheThread(
     staleTime?: number;
   }
 ): ReturnType<typeof emailClient.getThread> {
-  const staleTime = options?.staleTime ?? 5 * 60 * 1000;
+  const staleTime = options?.staleTime ?? DEFAULT_STALE_TIME;
 
   if (options?.forceRefresh) {
     await queryClient.invalidateQueries({
