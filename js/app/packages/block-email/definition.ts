@@ -14,38 +14,28 @@ export const definition = defineBlock({
 
   async load(source) {
     if (source.type === 'dss') {
-      // let email = await emailClient.getThread({
-      //   thread_id: source.id,
-      //   offset: 0,
-      //   limit: DEFAULT_THREAD_MESSAGES_LIMIT,
-      // });
-
-      let email = await fetchAndCacheThread(
-        source.id,
-      )
-
-      console.log('email', email)
+      let email = await fetchAndCacheThread(source.id);
 
       if (!email) {
         return LoadErrors.MISSING;
       }
 
-      // if (isErr(email)) {
-      //   if (isErr(email, 'MISSING')) {
-      //     return LoadErrors.MISSING;
-      //   } else if (isErr(email, 'UNAUTHORIZED')) {
-      //     return LoadErrors.UNAUTHORIZED;
-      //   } else if (isErr(email, 'GONE')) {
-      //     return LoadErrors.GONE;
-      //   } else {
-      //     return LoadErrors.INVALID;
-      //   }
-      // }
+      if (isErr(email)) {
+        if (isErr(email, 'MISSING')) {
+          return LoadErrors.MISSING;
+        } else if (isErr(email, 'UNAUTHORIZED')) {
+          return LoadErrors.UNAUTHORIZED;
+        } else if (isErr(email, 'GONE')) {
+          return LoadErrors.GONE;
+        } else {
+          return LoadErrors.INVALID;
+        }
+      }
 
-      // const [, emailData] = email;
+      const [, emailData] = email;
 
       return ok({
-        ...email,
+        ...emailData,
       });
     }
     return LoadErrors.INVALID;

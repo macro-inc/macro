@@ -1,8 +1,7 @@
 import { DEFAULT_THREAD_MESSAGES_LIMIT } from '@core/constant/pagination';
-import { isErr } from '@core/util/maybeResult';
+import { catchToResult, isErr, ok, throwOnErr } from '@core/util/maybeResult';
 import { emailClient } from '@service-email/client';
 import type {
-  GetThreadResponse,
   MessageToSend,
   SendMessageResponse,
   Thread,
@@ -24,20 +23,16 @@ function threadQueryOptions(threadId: string) {
   return {
     queryKey: emailKeys.threadMessages(threadId).queryKey,
     queryFn: async ({ pageParam }: { pageParam: number }) => {
-      const result = await emailClient.getThread({
-        thread_id: threadId,
-        offset: pageParam,
-        limit: DEFAULT_THREAD_MESSAGES_LIMIT,
-      });
+      const result = await throwOnErr(
+        async () =>
+          await emailClient.getThread({
+            thread_id: threadId,
+            offset: pageParam,
+            limit: DEFAULT_THREAD_MESSAGES_LIMIT,
+          })
+      );
 
-      if (isErr(result)) {
-        console.log(result[0])
-        throw new Error("SOMETHING");
-      }
-
-      const threadData = result[1];
-
-      return threadData.thread;
+      return result.thread;
     },
     initialPageParam: 0,
     getNextPageParam: (lastPage: Thread, allPages: Thread[]) => {
@@ -73,35 +68,33 @@ export async function fetchAndCacheThread(
     forceRefresh?: boolean;
     staleTime?: number;
   }
-): Promise<GetThreadResponse | undefined> {
+): ReturnType<typeof emailClient.getThread> {
   const staleTime = options?.staleTime ?? 5 * 60 * 1000;
 
-  try {
-    if (options?.forceRefresh) {
-      await queryClient.invalidateQueries({
-        queryKey: emailKeys.threadMessages(threadId).queryKey,
-      });
-    }
-
-    let data: InfiniteData<Thread, number> | undefined;
-
-    try {
-
-    data = await queryClient.fetchInfiniteQuery({
-      ...threadQueryOptions(threadId),
-      staleTime,
+  if (options?.forceRefresh) {
+    await queryClient.invalidateQueries({
+      queryKey: emailKeys.threadMessages(threadId).queryKey,
     });
-
-    } catch (error) {
-      console.error('Failed to fetch thread!!!', error);
-      return undefined;
-    }
-
-    const thread = flattenThreadPages(data);
-    return thread ? { thread } : undefined;
-  } catch {
-    return undefined;
   }
+
+  let data: InfiniteData<Thread, number> | undefined;
+
+  const result = await catchToResult(
+    async () =>
+      await queryClient.fetchInfiniteQuery({
+        ...threadQueryOptions(threadId),
+        staleTime,
+      })
+  );
+
+  if (isErr(result)) {
+    return result;
+  }
+
+  data = result[1];
+
+  const thread = flattenThreadPages(data);
+  return ok({ thread: thread! });
 }
 
 export type ThreadQueryData = {
@@ -246,14 +239,12 @@ export function useSendMessageMutation(
     ...withCallbacks<SendMessageResponse, Error, SendMessageParams>(
       {
         onSuccess: (_data, vars) => {
-          // Invalidate thread to show the new message
           if (vars.message.thread_db_id) {
             queryClient.invalidateQueries({
               queryKey: emailKeys.threadMessages(vars.message.thread_db_id)
                 .queryKey,
             });
           }
-          // Invalidate previews to update thread list
           queryClient.invalidateQueries({
             queryKey: emailKeys.previews._def,
           });
