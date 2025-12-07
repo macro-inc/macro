@@ -176,17 +176,9 @@ export function KommandMenuInner(props: {
   });
 
   const searchItems = createMemo(() => {
-    let actionItems: CommandItemCard[] = [];
-    const otherItems = freshSearch(allItems(), debouncedLocalQuery())
-      .map((result) => result.item)
-      .filter((item) => {
-        if (item.type === 'command') {
-          actionItems.push(item);
-          return false;
-        }
-        return true;
-      });
-    return [...actionItems, ...otherItems];
+    return freshSearch(allItems(), debouncedLocalQuery()).map(
+      (result) => result.item
+    );
   });
 
   createModeListenerEffects();
