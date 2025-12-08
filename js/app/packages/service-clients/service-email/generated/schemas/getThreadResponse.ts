@@ -4,14 +4,12 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
-import type { AccessLevel } from './accessLevel';
 import type { APIThread } from './aPIThread';
 
 /**
  * The response returned from the get thread endpoint
  */
 export interface GetThreadResponse {
-  access_level: AccessLevel;
   /** the thread, with messages inside */
   thread: APIThread;
 }

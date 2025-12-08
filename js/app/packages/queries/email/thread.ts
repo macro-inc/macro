@@ -4,7 +4,7 @@ import { emailClient } from '@service-email/client';
 import type {
   MessageToSend,
   SendMessageResponse,
-  Thread,
+  APIThread as Thread,
 } from '@service-email/generated/schemas';
 import {
   type InfiniteData,

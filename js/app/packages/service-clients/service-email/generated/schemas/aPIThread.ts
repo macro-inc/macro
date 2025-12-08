@@ -4,6 +4,7 @@
  * email_service
  * OpenAPI spec version: 0.1.0
  */
+import type { AccessLevel } from './accessLevel';
 import type { APIThreadDbId } from './aPIThreadDbId';
 import type { APIThreadLatestInboundMessageTs } from './aPIThreadLatestInboundMessageTs';
 import type { APIThreadLatestNonSpamMessageTs } from './aPIThreadLatestNonSpamMessageTs';
@@ -15,6 +16,7 @@ import type { APIThreadProviderId } from './aPIThreadProviderId';
  * Thread object exposed to the FE in Get Threads Call
  */
 export interface APIThread {
+  access_level: AccessLevel;
   created_at: string;
   db_id?: APIThreadDbId;
   inbox_visible: boolean;
