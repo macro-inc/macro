@@ -1,14 +1,13 @@
 import { ENABLE_CONTACTS } from '@core/constant/featureFlags';
 import type { IUser } from '@core/user';
-import { idToDisplayName, idToEmail } from '@core/user';
+import { idToEmail } from '@core/user';
+import { batchFetchNames, defaultNameTransform } from '@core/user/displayName';
 import { isErr } from '@core/util/maybeResult';
 import { contactsClient } from '@service-contacts/client';
 import { createSingletonRoot } from '@solid-primitives/rootless';
 import { createMemo, createResource } from 'solid-js';
 
 async function getContacts() {
-  let allContacts: IUser[] = [];
-
   if (!ENABLE_CONTACTS) {
     console.error('Contacts disabled, returning empty list');
     return [];
@@ -22,15 +21,13 @@ async function getContacts() {
   const [, data] = result;
   const { contacts } = data;
 
-  allContacts = contacts.map((id) => {
-    return {
-      id: id,
-      email: idToEmail(id),
-      name: idToDisplayName(id),
-    };
-  });
+  const results = await batchFetchNames(contacts.map((c) => c));
 
-  return allContacts;
+  return results.map((r) => ({
+    id: r.id,
+    email: idToEmail(r.id),
+    name: defaultNameTransform(r),
+  }));
 }
 
 const contactsResource = createSingletonRoot(() =>
