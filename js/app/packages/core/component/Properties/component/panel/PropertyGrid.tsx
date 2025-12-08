@@ -10,11 +10,12 @@ interface PropertiesListProps {
 export const PropertyGrid: Component<PropertiesListProps> = (props) => {
   const { openPropertyEditor, openDatePicker } = usePropertiesContext();
 
-  // Single pass through properties array to split into metadata and editable
-  // More efficient than two separate filter operations
+  // Single pass through properties array to split into metadata, system, and user properties
+  // More efficient than multiple separate filter operations
   const propertyGroups = createMemo(() => {
     const metadata: Property[] = [];
-    const editable: Property[] = [];
+    const systemProperties: Property[] = [];
+    const userProperties: Property[] = [];
 
     for (const prop of props.properties) {
       if (prop.isMetadata) {
@@ -22,18 +23,27 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
         if (prop.value != null) {
           metadata.push(prop);
         }
+      } else if (prop.isSystemProperty) {
+        systemProperties.push(prop);
       } else {
-        editable.push(prop);
+        userProperties.push(prop);
       }
     }
 
-    return { metadata, editable };
+    return { metadata, systemProperties, userProperties };
   });
 
-  const showSeparator = createMemo(
+  const showSeparatorAboveSystem = createMemo(
     () =>
       propertyGroups().metadata.length > 0 &&
-      propertyGroups().editable.length > 0
+      propertyGroups().systemProperties.length > 0
+  );
+
+  const showSeparatorAboveUser = createMemo(
+    () =>
+      (propertyGroups().metadata.length > 0 ||
+        propertyGroups().systemProperties.length > 0) &&
+      propertyGroups().userProperties.length > 0
   );
 
   const handleValueClick = (property: Property, anchor?: HTMLElement) => {
@@ -59,6 +69,7 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
       }
     >
       <div class="grid grid-cols-[minmax(120px,50%)_minmax(150px,1fr)] gap-x-4 gap-y-3 pt-2 min-w-fit">
+        {/* Metadata properties */}
         <Show when={propertyGroups().metadata.length > 0}>
           <For each={propertyGroups().metadata}>
             {(property) => (
@@ -70,12 +81,31 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
           </For>
         </Show>
 
-        <Show when={showSeparator()}>
-          <div class="col-span-2 border-t border-edge my-4" />
+        {/* System properties */}
+        <Show when={propertyGroups().systemProperties.length > 0}>
+          {/* Separator above system */}
+          <Show when={showSeparatorAboveSystem()}>
+            <div class="col-span-2 border-t border-edge my-4" />
+          </Show>
+
+          <For each={propertyGroups().systemProperties}>
+            {(property) => (
+              <PropertyRow
+                property={property}
+                onValueClick={handleValueClick}
+              />
+            )}
+          </For>
         </Show>
 
-        <Show when={propertyGroups().editable.length > 0}>
-          <For each={propertyGroups().editable}>
+        {/* User properties */}
+        <Show when={propertyGroups().userProperties.length > 0}>
+          {/* Separator between above user */}
+          <Show when={showSeparatorAboveUser()}>
+            <div class="col-span-2 border-t border-edge my-4" />
+          </Show>
+
+          <For each={propertyGroups().userProperties}>
             {(property) => (
               <PropertyRow
                 property={property}
