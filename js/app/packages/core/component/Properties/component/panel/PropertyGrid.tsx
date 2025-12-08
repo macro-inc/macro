@@ -1,4 +1,6 @@
+import { useBlockName } from '@core/block';
 import { type Component, createMemo, For, Show } from 'solid-js';
+import { getBuiltinPropertyIds } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
 import { PropertyRow } from './PropertyRow';
@@ -9,12 +11,13 @@ interface PropertiesListProps {
 
 export const PropertyGrid: Component<PropertiesListProps> = (props) => {
   const { openPropertyEditor, openDatePicker } = usePropertiesContext();
+  const blockName = useBlockName();
+  const builtinPropertyIds = getBuiltinPropertyIds(blockName);
 
-  // Single pass through properties array to split into metadata, system, and user properties
-  // More efficient than multiple separate filter operations
+  // Single pass through properties array to split into metadata, builtin, and user properties
   const propertyGroups = createMemo(() => {
     const metadata: Property[] = [];
-    const systemProperties: Property[] = [];
+    const builtinProperties: Property[] = [];
     const userProperties: Property[] = [];
 
     for (const prop of props.properties) {
@@ -23,26 +26,33 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
         if (prop.value != null) {
           metadata.push(prop);
         }
-      } else if (prop.isSystemProperty) {
-        systemProperties.push(prop);
+      } else if (builtinPropertyIds.includes(prop.propertyDefinitionId)) {
+        builtinProperties.push(prop);
       } else {
         userProperties.push(prop);
       }
     }
 
-    return { metadata, systemProperties, userProperties };
+    // Sort builtin properties by the order defined in constants
+    builtinProperties.sort((a, b) => {
+      const indexA = builtinPropertyIds.indexOf(a.propertyDefinitionId);
+      const indexB = builtinPropertyIds.indexOf(b.propertyDefinitionId);
+      return indexA - indexB;
+    });
+
+    return { metadata, builtinProperties, userProperties };
   });
 
-  const showSeparatorAboveSystem = createMemo(
+  const showSeparatorAboveBuiltin = createMemo(
     () =>
       propertyGroups().metadata.length > 0 &&
-      propertyGroups().systemProperties.length > 0
+      propertyGroups().builtinProperties.length > 0
   );
 
   const showSeparatorAboveUser = createMemo(
     () =>
       (propertyGroups().metadata.length > 0 ||
-        propertyGroups().systemProperties.length > 0) &&
+        propertyGroups().builtinProperties.length > 0) &&
       propertyGroups().userProperties.length > 0
   );
 
@@ -81,14 +91,14 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
           </For>
         </Show>
 
-        {/* System properties */}
-        <Show when={propertyGroups().systemProperties.length > 0}>
-          {/* Separator above system */}
-          <Show when={showSeparatorAboveSystem()}>
+        {/* Builtin properties (block-specific, non-removable) */}
+        <Show when={propertyGroups().builtinProperties.length > 0}>
+          {/* Separator above builtin */}
+          <Show when={showSeparatorAboveBuiltin()}>
             <div class="col-span-2 border-t border-edge my-4" />
           </Show>
 
-          <For each={propertyGroups().systemProperties}>
+          <For each={propertyGroups().builtinProperties}>
             {(property) => (
               <PropertyRow
                 property={property}
