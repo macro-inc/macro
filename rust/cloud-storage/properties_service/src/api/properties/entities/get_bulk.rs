@@ -17,11 +17,11 @@ use properties_db_client::{
 
 #[derive(Debug, Error)]
 pub enum GetBulkEntityPropertiesErr {
-    #[error("An unknown error has occurred")]
+    #[error("An internal error occurred")]
     InternalError(#[from] anyhow::Error),
-    #[error("Database error: {0}")]
+    #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
-    #[error("Invalid request: entities array cannot be empty")]
+    #[error("Entities array cannot be empty")]
     InvalidRequest,
 }
 
@@ -57,7 +57,7 @@ impl IntoResponse for GetBulkEntityPropertiesErr {
     ),
     tag = "Internal"
 )]
-#[tracing::instrument(skip(context, request), fields(entity_count = request.entities.len()))]
+#[tracing::instrument(skip(context, request), fields(entity_count = request.entities.len()), err)]
 pub async fn get_bulk_entity_properties(
     State(context): State<ApiContext>,
     Json(request): Json<BulkEntityPropertiesRequest>,
@@ -67,10 +67,7 @@ pub async fn get_bulk_entity_properties(
         return Err(GetBulkEntityPropertiesErr::InvalidRequest);
     }
 
-    tracing::info!(
-        entity_count = request.entities.len(),
-        "retrieving bulk entity properties"
-    );
+    tracing::info!("retrieving bulk entity properties");
 
     let bulk_properties =
         entity_properties_get::get_bulk_entity_properties_values(&context.db, &request.entities)
@@ -78,7 +75,6 @@ pub async fn get_bulk_entity_properties(
             .inspect_err(|e| {
                 tracing::error!(
                     error = ?e,
-                    entity_count = request.entities.len(),
                     "failed to retrieve bulk entity properties"
                 );
             })?;

@@ -6,6 +6,8 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use doppleganger::Doppleganger;
+use macro_middleware::user_permissions::attach_user_permissions::PermissionsExtractor;
 use macro_user_id::user_id::MacroUserId;
 use roles_and_permissions::domain::model::PermissionId;
 
@@ -14,7 +16,8 @@ use crate::api::context::ApiContext;
 use model::response::ErrorResponse;
 use model::user::UserContext;
 
-#[derive(serde::Serialize, Debug, utoipa::ToSchema)]
+#[derive(serde::Serialize, Debug, utoipa::ToSchema, Doppleganger)]
+#[dg(forward = auth_service_rpc::GetLegacyUserPermissionsResponse)]
 #[serde(rename_all = "camelCase")]
 pub struct GetLegacyUserPermissionsResponse {
     /// The user id
@@ -30,11 +33,18 @@ pub struct GetLegacyUserPermissionsResponse {
     /// Whether the user has completed the tutorial
     tutorial_complete: bool,
     /// The user's group
-    group: Option<String>,
+    group: Option<ABGroup>,
     /// Whether the user has the chrome extension
     has_chrome_ext: bool,
     /// Whether the user has trialed through stripe
     has_trialed: bool,
+}
+
+#[derive(serde::Serialize, Debug, utoipa::ToSchema, Doppleganger)]
+#[dg(forward = auth_service_rpc::ABGroup)]
+enum ABGroup {
+    A,
+    B,
 }
 
 #[derive(thiserror::Error, Debug)]
@@ -87,22 +97,17 @@ impl IntoResponse for GetLegacyUserPermissionsError {
             (status = 500, body=ErrorResponse),
         )
     )]
-#[tracing::instrument(skip(ctx, user_context), err, fields(user_id=%user_context.user_id))]
+#[tracing::instrument(skip(ctx, user_context, permissions), err, fields(user_id=%user_context.user_id))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     user_context: Extension<UserContext>,
-) -> Result<Json<GetLegacyUserPermissionsResponse>, GetLegacyUserPermissionsError> {
+    PermissionsExtractor(permissions): PermissionsExtractor,
+) -> Result<GetLegacyUserPermissionsResponse, GetLegacyUserPermissionsError> {
     let user_id = MacroUserId::parse_from_str(&user_context.user_id)
         .map_err(|_| GetLegacyUserPermissionsError::InvalidMacroUserId)?
         .lowercase();
 
     let email = user_id.email_part().lowercase();
-
-    let permissions: Vec<String> = if let Some(permissions) = user_context.permissions.as_ref() {
-        permissions.iter().cloned().collect()
-    } else {
-        vec![]
-    };
 
     let legacy_user_info = macro_db_client::user::get::get_legacy_user_info(&ctx.db, &user_id)
         .await
@@ -111,19 +116,13 @@ pub async fn handler(
     let license_status = if user_context.organization_id.is_some() {
         // organizations default to active license status
         "active"
-    } else if let Some(permissions) = user_context.permissions.as_ref() {
+    } else if permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string()) {
         // If the user has premium permission their license status is active
-        if permissions.contains(&PermissionId::ReadProfessionalFeatures.to_string()) {
-            "active"
-        } else {
-            // By default, we can be lazy and just say they are inactive
-            // If the requirements change, we will need to update this to actually check the user's
-            // stripe subscription if present
-            "inactive"
-        }
+        "active"
     } else {
-        // The user is not part of an organization and has no stripe customer id
-        // They do not have a license
+        // By default, we can be lazy and just say they are inactive
+        // If the requirements change, we will need to update this to actually check the user's
+        // stripe subscription if present
         "inactive"
     };
 
@@ -144,15 +143,19 @@ pub async fn handler(
         false
     };
 
-    Ok(Json(GetLegacyUserPermissionsResponse {
+    Ok(GetLegacyUserPermissionsResponse {
         user_id: user_id.as_ref().to_string(),
         email: email.as_ref().to_string(),
-        permissions,
+        permissions: permissions.into_iter().collect(),
         name: legacy_user_info.name,
         license_status: license_status.to_string(),
         tutorial_complete: legacy_user_info.tutorial_complete,
-        group: legacy_user_info.group,
+        group: match legacy_user_info.group.as_deref() {
+            Some("A" | "a") => Some(ABGroup::A),
+            Some("B" | "b") => Some(ABGroup::B),
+            _ => None,
+        },
         has_chrome_ext: legacy_user_info.has_chrome_ext,
         has_trialed,
-    }))
+    })
 }

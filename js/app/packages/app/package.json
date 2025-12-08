@@ -19,9 +19,6 @@
     "core": "workspace:*",
     "mermaid": "^11.6.0",
     "overlayscrollbars-solid": "^0.5.5",
-    "service-auth": "workspace:*",
-    "service-cognition": "workspace:*",
-    "service-gql": "workspace:*",
     "three": "^0.178.0"
   },
   "devDependencies": {

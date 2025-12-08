@@ -15,6 +15,7 @@ use soup::{
 use sqlx::PgPool;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
+use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 
 #[derive(Debug, Clone)]
 pub struct InternalFlag {
@@ -30,6 +31,8 @@ type DssSoupState = SoupRouterState<
     EmailServiceImpl<EmailPgRepo, FrecencyQueryServiceImpl<FrecencyPgStorage>>,
 >;
 
+type SystemPropertiesService = SystemPropertiesServiceImpl<PgSystemPropertiesRepository>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
@@ -44,6 +47,7 @@ pub(crate) struct ApiContext {
     pub email_service_client: Arc<EmailServiceClient>,
     pub conn_gateway_client: Arc<ConnectionGatewayClient>,
     pub sync_service_client: Arc<SyncServiceClient>,
+    pub system_properties_service: Arc<SystemPropertiesService>,
     pub jwt_validation_args: JwtValidationArgs,
     pub config: Arc<Config>,
     pub dss_auth_key: DocumentStorageServiceAuthKey,

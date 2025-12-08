@@ -1,3 +1,4 @@
+use document_sub_type::DocumentSubType;
 use utoipa::OpenApi;
 
 use crate::api::{health, search};
@@ -61,6 +62,7 @@ use models_search::{MatchType, SearchHighlight};
                         EmptyResponse,
                         MatchType,
                         SearchHighlight,
+                        DocumentSubType,
 
                         // Document
                         FileType, DocumentSearchRequest, DocumentSearchResult, DocumentSearchResponseItem, DocumentSearchResponse,

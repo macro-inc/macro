@@ -23,7 +23,7 @@ import {
   ENABLE_PROPERTY_DISPLAY_CONTROL,
   ENABLE_SOUP_FROM_FILTER,
 } from '@core/constant/featureFlags';
-import { emailRefetchInterval, useEmailLinksStatus } from '@core/email-link';
+import { useEmailLinksStatus } from '@core/email-link';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -38,9 +38,7 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { supportedExtensions } from '@lexical-core/utils';
 import {
   createChannelsQuery,
-  createDssInfiniteQueryGet,
-  createDssInfiniteQueryPost,
-  createEmailsInfiniteQuery,
+  createDssInfiniteQuery,
   createFilterComposer,
   createProjectFilterFn,
   createSort,
@@ -106,7 +104,6 @@ import {
 } from 'solid-js';
 import { createStore, type SetStoreFunction, unwrap } from 'solid-js/store';
 import { EntityWithEverything } from '../../macro-entity/src/components/EntityWithEverything';
-import type { FetchPaginatedEmailsParams } from '../../macro-entity/src/queries/email';
 import {
   resetCommandCategoryIndex,
   searchCategories,
@@ -131,6 +128,7 @@ import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { EmptyState } from './UnifiedListEmptyState';
 import {
+  applyClientFilters,
   type DisplayOptions,
   type DocumentTypeFilter,
   type FilterOptions,
@@ -140,7 +138,6 @@ import {
   type SystemSortOption,
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_IDS,
-  VIEWCONFIG_DEFAULTS_IDS_ENUM,
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
@@ -221,7 +218,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     virtualizerHandleSignal: [, setVirtualizerHandle],
     entityListRefSignal: [, setEntityListRef],
     entitiesSignal: [_entities, setEntities],
-    emailViewSignal: [emailView],
+    emailViewSignal: [_emailView],
   } = unifiedListContext;
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);
@@ -659,6 +656,14 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     if (notificationFilter() === 'notDone') filterFns.push(notDoneFilterFn);
 
+    const clientFilterFn = (entity: WithNotification<EntityData>) => {
+      const filtered = applyClientFilters([entity], selectedView(), {
+        soupContext: unifiedListContext,
+      });
+      return filtered.length > 0;
+    };
+    filterFns.push(clientFilterFn);
+
     setRequiredFilters(filterFns);
   });
 
@@ -781,6 +786,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return filters;
   });
 
+  const emailActive = useEmailLinksStatus();
+
   const dssQueryParams = createMemo(
     (): GetItemsSoupParams => ({
       limit: props.defaultDisplayOptions?.limit ?? 100,
@@ -788,39 +795,47 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     })
   );
   const GARBAGE_UUID = '00000000-0000-0000-0000-000000000000';
-  const dssQueryPOSTRequestBody = createMemo(
+  const dssQueryRequestBody = createMemo(
     (): PostSoupRequest => ({
       channel_filters: {
         channel_ids: [GARBAGE_UUID],
       },
       document_filters: {
-        document_ids: entityTypeFilter().includes('document')
-          ? []
-          : [GARBAGE_UUID],
+        document_ids:
+          entityTypeFilter().includes('document') ||
+          entityTypeFilter().length === 0
+            ? []
+            : [GARBAGE_UUID],
         project_ids: view().viewType === 'project' ? [view().id] : [],
       },
       chat_filters: {
-        chat_ids: [GARBAGE_UUID],
+        chat_ids:
+          entityTypeFilter().includes('chat') || entityTypeFilter().length === 0
+            ? []
+            : [GARBAGE_UUID],
       },
       email_filters: {
-        recipients: [GARBAGE_UUID],
+        recipients:
+          emailActive() &&
+          view().viewType !== 'project' &&
+          (entityTypeFilter().includes('email') ||
+            entityTypeFilter().length === 0)
+            ? []
+            : [GARBAGE_UUID],
       },
       project_filters: {
-        project_ids: view().viewType === 'project' ? [view().id] : [],
+        project_ids:
+          view().viewType === 'project'
+            ? [view().id]
+            : entityTypeFilter().includes('project') ||
+                entityTypeFilter().length === 0
+              ? []
+              : [GARBAGE_UUID],
       },
       limit: props.defaultDisplayOptions?.limit ?? 100,
       sort_method: sortType(),
     })
   );
-  const emailQueryParams = createMemo((): FetchPaginatedEmailsParams => {
-    const sort = sortType();
-    return {
-      limit: props.defaultDisplayOptions?.limit ?? 100,
-      // email sort methods does not accept frecency yet
-      sort_method: sort === 'frecency' ? 'viewed_updated' : sort,
-      view: selectedView() === 'emails' ? emailView() : 'inbox',
-    };
-  });
   const searchUnifiedNameContentQueryParams = createMemo(
     (): PaginatedSearchArgs => ({
       params: {
@@ -857,36 +872,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return !isSearchActive();
   });
 
-  const emailActive = useEmailLinksStatus();
-
-  const disableEmailQuery = createMemo(() => {
-    // NOTE: at the moment emails are not supported in project blocks
-    // so it doesn't make sense to do an expensive email query
-    if (projectFilter()) return true;
-    if (isSearchActive()) return true;
-    if (!emailActive()) return true;
-    const typeFilter = entityTypeFilter();
-    if (typeFilter.length > 0 && !typeFilter.includes('email')) return true;
-    return false;
-  });
-
-  const disableDssInfiniteQueryGET = createMemo(() => {
-    if (view().viewType === 'project') return true;
-    if (view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.folders) return true;
-
-    const typeFilter = entityTypeFilter();
-    if (typeFilter.length === 0) return false;
-    const dssTypes = ['document', 'chat', 'project'];
-    const hasDssTypes = typeFilter.some((t) => dssTypes.includes(t));
-    return !hasDssTypes;
-  });
-  const disableDssInfiniteQueryPost = createMemo(() => {
-    if (
-      view().viewType !== 'project' &&
-      view().id !== VIEWCONFIG_DEFAULTS_IDS_ENUM.folders
-    )
-      return true;
-
+  const disableDssInfiniteQuery = createMemo(() => {
     const typeFilter = entityTypeFilter();
     if (typeFilter.length === 0) return false;
     const dssTypes = ['document', 'chat', 'project'];
@@ -903,16 +889,9 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const channelsQuery = createChannelsQuery({
     disabled: disableChannelsQuery,
   });
-  const dssInfiniteQueryGET = createDssInfiniteQueryGet(dssQueryParams, {
-    disabled: disableDssInfiniteQueryGET,
-  });
-  const dssInfiniteQueryPOST = createDssInfiniteQueryPost(dssQueryParams, {
-    disabled: disableDssInfiniteQueryPost,
-    requestBody: dssQueryPOSTRequestBody,
-  });
-  const emailsInfiniteQuery = createEmailsInfiniteQuery(emailQueryParams, {
-    refetchInterval: () => emailRefetchInterval(),
-    disabled: disableEmailQuery,
+  const dssInfiniteQuery = createDssInfiniteQuery(dssQueryParams, {
+    disabled: disableDssInfiniteQuery,
+    requestBody: dssQueryRequestBody,
   });
   const searchNameContentInfiniteQuery = createUnifiedSearchInfiniteQuery(
     searchUnifiedNameContentQueryParams,
@@ -985,16 +964,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     >({
       entityInfiniteQueries: [
         {
-          query: dssInfiniteQueryGET,
+          query: dssInfiniteQuery,
           operations: { filter: true, search: true },
-        },
-        {
-          query: dssInfiniteQueryPOST,
-          operations: { filter: true, search: true },
-        },
-        {
-          query: emailsInfiniteQuery,
-          operations: { filter: true, search: false },
         },
         {
           query: searchNameContentInfiniteQuery,

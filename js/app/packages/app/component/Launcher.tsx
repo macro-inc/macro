@@ -2,6 +2,7 @@ import type { BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { Hotkey } from '@core/component/Hotkey';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import { ENABLE_CREATE_TASK } from '@core/constant/featureFlags';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -14,11 +15,13 @@ import {
   createChat,
   createCodeFileFromText,
   createMarkdownFile,
+  createTask,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { isErr, ok } from '@core/util/maybeResult';
 import { Dialog } from '@kobalte/core/dialog';
 import PixelArrowRight from '@macro-icons/pixel/arrow-right.svg';
+import WideTask from '@macro-icons/pixel/task.svg';
 import WideChat from '@macro-icons/wide/chat.svg';
 import WideDiagram from '@macro-icons/wide/diagram.svg';
 import WideEmail from '@macro-icons/wide/email.svg';
@@ -107,6 +110,33 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
       return true;
     },
   },
+  ...(ENABLE_CREATE_TASK
+    ? [
+        {
+          label: 'Task',
+          icon: () => <WideTask />,
+          description: 'Create task',
+          blockName: 'task' as BlockName,
+          hotkeyToken: TOKENS.create.task,
+          altHotkeyToken: TOKENS.create.taskNewSplit,
+          hotkey: 't' as const,
+          keyDownHandler: () => {
+            createBlock({
+              blockName: 'task',
+              loading: true,
+              createFn: () =>
+                createTask({
+                  title: '',
+                  content: '',
+                  projectId: undefined,
+                }),
+              shouldInsert: pressedKeys().has('opt'),
+            });
+            return true;
+          },
+        },
+      ]
+    : []),
   {
     label: 'Email',
     icon: () => <WideEmail />,

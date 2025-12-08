@@ -151,6 +151,7 @@ export class UnfurlService extends pulumi.ComponentResource {
             service: {
               name: BASE_NAME,
               image: image.image.imageUri,
+              stopTimeout: 10, // 10 seconds to force kill the task
               cpu: 256,
               memory: 512,
               environment: containerEnvVars,

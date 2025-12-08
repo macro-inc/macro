@@ -19,17 +19,17 @@ use properties_db_client::{
 
 #[derive(Debug, Error)]
 pub enum SetEntityPropertyErr {
-    #[error("An unknown error has occurred")]
+    #[error("An internal error occurred")]
     InternalError(#[from] anyhow::Error),
-    #[error("Database error: {0}")]
+    #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
-    #[error("Permission error: {0}")]
+    #[error("{0}")]
     Permission(#[from] crate::api::permissions::PermissionError),
     #[error("Property definition not found")]
     PropertyNotFound,
     #[error("{0}")]
     InvalidRequest(String),
-    #[error("One or more option IDs do not belong to this property")]
+    #[error("Invalid property options")]
     InvalidPropertyOptions,
 }
 
@@ -75,7 +75,7 @@ impl IntoResponse for SetEntityPropertyErr {
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(context, user_context), fields(entity_id = %entity_id, property_id = %property_uuid, entity_type = ?entity_type, user_id = %user_context.user_id, request = ?request))]
+#[tracing::instrument(skip(context, user_context), fields(entity_id = %entity_id, property_id = %property_uuid, entity_type = ?entity_type, user_id = %user_context.user_id, request = ?request), err)]
 pub async fn set_entity_property(
     Path((entity_type, entity_id, property_uuid)): Path<(EntityType, String, Uuid)>,
     State(context): State<ApiContext>,
@@ -101,17 +101,10 @@ pub async fn set_entity_property(
             .inspect_err(|e| {
                 tracing::error!(
                     error = ?e,
-                    property_id = %property_uuid,
                     "failed to get property definition"
                 );
             })?
-            .ok_or_else(|| {
-                tracing::error!(
-                    property_id = %property_uuid,
-                    "property definition not found"
-                );
-                SetEntityPropertyErr::PropertyNotFound
-            })?;
+            .ok_or(SetEntityPropertyErr::PropertyNotFound)?;
 
     // Determine the value to set (if any) and validate
     let property_value = match &request.value {
@@ -122,7 +115,6 @@ pub async fn set_entity_property(
                 property_definition.is_multi_select,
             ) {
                 tracing::error!(
-                    property_id = %property_uuid,
                     data_type = ?property_definition.data_type,
                     is_multi_select = property_definition.is_multi_select,
                     value_type = ?value,
@@ -155,8 +147,6 @@ pub async fn set_entity_property(
             if matches!(e, PropertiesDatabaseError::InvalidPropertyOptions { .. }) {
                 tracing::warn!(
                     error = %e,
-                    entity_id = %entity_id,
-                    property_id = %property_uuid,
                     "invalid property options provided"
                 );
                 return SetEntityPropertyErr::InvalidPropertyOptions;
@@ -186,8 +176,6 @@ pub async fn set_entity_property(
         if matches!(e, PropertiesDatabaseError::InvalidPropertyOptions { .. }) {
             tracing::warn!(
                 error = %e,
-                entity_id = %entity_id,
-                property_id = %property_uuid,
                 "invalid property options provided"
             );
             return SetEntityPropertyErr::InvalidPropertyOptions;
@@ -195,9 +183,6 @@ pub async fn set_entity_property(
 
         tracing::error!(
             error = ?e,
-            entity_id = %entity_id,
-            property_id = %property_uuid,
-            entity_type = ?entity_type,
             "failed to set entity property"
         );
         SetEntityPropertyErr::InternalError(anyhow::anyhow!(
@@ -206,13 +191,7 @@ pub async fn set_entity_property(
         ))
     })?;
 
-    tracing::info!(
-        entity_id = %entity_id,
-        property_id = %property_uuid,
-        entity_type = ?entity_type,
-        has_value = has_value,
-        "successfully set entity property"
-    );
+    tracing::info!(has_value = has_value, "successfully set entity property");
 
     Ok(StatusCode::NO_CONTENT)
 }

@@ -43,10 +43,16 @@ fn api_router(app_state: ApiContext) -> Router {
     Router::new()
         .nest(
             "/properties",
-            properties::router().layer(axum::middleware::from_fn_with_state(
-                app_state.jwt_args.clone(),
-                macro_middleware::auth::decode_jwt::handler,
-            )),
+            properties::router().layer(
+                tower::ServiceBuilder::new()
+                    .layer(axum::middleware::from_fn(
+                        macro_middleware::auth::initialize_user_context::handler,
+                    ))
+                    .layer(axum::middleware::from_fn_with_state(
+                        app_state.jwt_args.clone(),
+                        macro_middleware::auth::attach_user::handler,
+                    )),
+            ),
         )
         .nest(
             "/internal",

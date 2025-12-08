@@ -1,11 +1,13 @@
 use crate::api::context::ApiContext;
 use axum::http::StatusCode;
 use chrono::{DateTime, Utc};
+use document_sub_type::DocumentSubType;
 use model::document::response::CreateDocumentResponseData;
 use model::document::response::{DocumentResponse, DocumentResponseMetadata};
 use model::document::{ContentType, FileType, build_cloud_storage_bucket_document_key};
 use models_permissions::share_permission::access_level::AccessLevel;
 use models_permissions::share_permission::{IS_PUBLIC_DEFAULT, SharePermissionV2};
+use system_properties::SystemPropertiesService;
 use uuid::Uuid;
 
 /// Parameters for creating a document
@@ -176,6 +178,21 @@ pub async fn create_document(
         },
     )
     .await;
+
+    // Attach task properties if creating a task
+    if document_response_metadata.sub_type == Some(DocumentSubType::Task)
+        && let Err(e) = ctx
+            .system_properties_service
+            .attach_task_properties(vec![document_response_metadata.document_id.clone()])
+            .await
+    {
+        tracing::error!(error=?e, document_id=?document_response_metadata.document_id, "failed to attach task properties");
+        return Err((
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "failed to attach task properties".to_string(),
+            Some(document_response_metadata.document_id),
+        ));
+    }
 
     let response_data = CreateDocumentResponseData {
         document_response: DocumentResponse {

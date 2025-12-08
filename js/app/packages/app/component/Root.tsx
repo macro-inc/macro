@@ -11,7 +11,6 @@ import {
   ENABLE_WEBSOCKET_DEBUGGER,
   PROD_MODE_ENV,
 } from '@core/constant/featureFlags';
-import { useEmailLinksStatus } from '@core/email-link';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { createBlockOrchestrator } from '@core/orchestrator';
 import { formatTabTitle, tabTitleSignal } from '@core/signal/tabTitle';
@@ -19,7 +18,7 @@ import { licenseChannel } from '@core/util/licenseUpdateBroadcastChannel';
 import { isErr } from '@core/util/maybeResult';
 import { transformShortIdInUrlPathname } from '@core/util/url';
 import { isTauri, MaybeTauriProvider } from '@macro/tauri';
-import { createEmailSource, Provider as EntityProvider } from '@macro-entity';
+import { Provider as EntityProvider } from '@macro-entity';
 import {
   createNotificationSource,
   type UnifiedNotification,
@@ -275,17 +274,11 @@ export function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     onNotification
   );
 
-  const emailActive = useEmailLinksStatus();
-  const emailSource = createEmailSource(undefined, undefined, {
-    disabled: () => !emailActive(),
-  });
-
   const blockOrchestrator = createBlockOrchestrator();
 
   return (
     <GlobalAppStateProvider
       notificationSource={notificationSource}
-      emailSource={emailSource}
       blockOrchestrator={blockOrchestrator}
     >
       {props.children}
