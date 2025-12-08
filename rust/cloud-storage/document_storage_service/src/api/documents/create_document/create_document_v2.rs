@@ -1,6 +1,7 @@
 use crate::api::context::ApiContext;
 use axum::http::StatusCode;
 use chrono::{DateTime, Utc};
+use document_sub_type::DocumentSubType;
 use model::document::response::CreateDocumentResponseData;
 use model::document::response::{DocumentResponse, DocumentResponseMetadata};
 use model::document::{ContentType, FileType, build_cloud_storage_bucket_document_key};
@@ -179,7 +180,7 @@ pub async fn create_document(
     .await;
 
     // Attach task properties if creating a task
-    if document_response_metadata.is_task
+    if document_response_metadata.sub_type == Some(DocumentSubType::Task)
         && let Err(e) = ctx
             .system_properties_service
             .attach_task_properties(vec![document_response_metadata.document_id.clone()])
