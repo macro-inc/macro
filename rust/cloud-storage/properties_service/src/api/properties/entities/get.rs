@@ -102,7 +102,7 @@ pub async fn get_entity_properties(
             ),
             async {
                 match entity_type {
-                    EntityType::Document => {
+                    EntityType::Document | EntityType::Task => {
                         super::super::metadata::get_document_metadata_properties(
                             &context.db,
                             &entity_id,
