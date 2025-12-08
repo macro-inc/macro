@@ -1,7 +1,4 @@
 //! Entity property get operations.
-//!
-//! TODO: The `pd.is_system = FALSE` filters are temporary. In a future PR, system properties
-//!       will be properly supported and returned to users via the API.
 
 use crate::error::PropertiesDatabaseError;
 use sqlx::{Pool, Postgres};
@@ -32,6 +29,7 @@ struct EntityPropertyRow {
     specific_entity_type: Option<Option<EntityType>>,
     definition_created_at: chrono::DateTime<chrono::Utc>,
     definition_updated_at: chrono::DateTime<chrono::Utc>,
+    definition_is_system: bool,
     values: Option<sqlx::types::JsonValue>,
 }
 
@@ -42,8 +40,8 @@ fn row_to_entity_property_with_definition(
     let owner = models_properties::PropertyOwner::from_optional_ids(
         row.definition_organization_id,
         row.definition_user_id,
-    )
-    .unwrap();
+        row.definition_is_system,
+    );
 
     let property_definition = PropertyDefinition {
         id: row.property_definition_id,
@@ -54,6 +52,7 @@ fn row_to_entity_property_with_definition(
         specific_entity_type: row.specific_entity_type.flatten(),
         created_at: row.definition_created_at,
         updated_at: row.definition_updated_at,
+        is_system: row.definition_is_system,
         is_metadata: false,
     };
 
@@ -231,6 +230,9 @@ async fn attach_property_options(
 
 /// Gets the entity_id and entity_type for a given entity_property_id.
 /// Used for permission checking before deletion.
+///
+/// Note: This excludes system properties (is_system = TRUE). System properties
+/// cannot be deleted, so this function will return None for them.
 #[tracing::instrument(skip(db))]
 pub async fn get_entity_type_from_entity_property(
     db: &Pool<Postgres>,
@@ -239,10 +241,12 @@ pub async fn get_entity_type_from_entity_property(
     let row = sqlx::query!(
         r#"
         SELECT 
-            entity_id,
-            entity_type as "entity_type: EntityType"
-        FROM entity_properties
-        WHERE id = $1
+            ep.entity_id,
+            ep.entity_type as "entity_type: EntityType"
+        FROM entity_properties ep
+        JOIN property_definitions pd ON ep.property_definition_id = pd.id
+        WHERE ep.id = $1
+          AND pd.is_system = FALSE
         "#,
         entity_property_id
     )
@@ -256,6 +260,7 @@ pub async fn get_entity_type_from_entity_property(
 }
 
 /// Gets entity properties with their definitions and values.
+/// Includes both custom and system properties.
 #[tracing::instrument(skip(db))]
 pub async fn get_entity_properties_values(
     db: &Pool<Postgres>,
@@ -279,11 +284,11 @@ pub async fn get_entity_properties_values(
             pd.is_multi_select,
             pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
             pd.created_at as definition_created_at,
-            pd.updated_at as definition_updated_at
+            pd.updated_at as definition_updated_at,
+            pd.is_system as definition_is_system
         FROM entity_properties ep
         INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
         WHERE ep.entity_id = $1 AND ep.entity_type = $2
-          AND pd.is_system = FALSE
         "#,
         entity_id,
         entity_type as EntityType
@@ -309,6 +314,7 @@ pub async fn get_entity_properties_values(
                 specific_entity_type: row.specific_entity_type,
                 definition_created_at: row.definition_created_at,
                 definition_updated_at: row.definition_updated_at,
+                definition_is_system: row.definition_is_system,
                 values: row.values,
             })
         })
@@ -325,6 +331,7 @@ pub async fn get_entity_properties_values(
 
 /// Gets entity properties with their definitions and values for multiple entities.
 /// Returns a HashMap where the key is the entity_id and the value is Vec<EntityPropertyWithDefinition>.
+/// Includes both custom and system properties.
 #[tracing::instrument(skip(db))]
 pub async fn get_bulk_entity_properties_values(
     db: &Pool<Postgres>,
@@ -355,13 +362,13 @@ pub async fn get_bulk_entity_properties_values(
             pd.is_multi_select,
             pd.specific_entity_type as "specific_entity_type: Option<EntityType>",
             pd.created_at as definition_created_at,
-            pd.updated_at as definition_updated_at
+            pd.updated_at as definition_updated_at,
+            pd.is_system as definition_is_system
         FROM entity_properties ep
         INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id
         WHERE (ep.entity_id, ep.entity_type) IN (
             SELECT * FROM UNNEST($1::TEXT[], $2::property_entity_type[])
         )
-          AND pd.is_system = FALSE
         "#,
         &entity_ids,
         &entity_types as &[EntityType]
@@ -390,6 +397,7 @@ pub async fn get_bulk_entity_properties_values(
             specific_entity_type: row.specific_entity_type,
             definition_created_at: row.definition_created_at,
             definition_updated_at: row.definition_updated_at,
+            definition_is_system: row.definition_is_system,
             values: row.values,
         })?;
 

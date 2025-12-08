@@ -2647,6 +2647,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "sync_service_client",
+ "system_properties",
  "thiserror 2.0.17",
  "tokio",
  "tower 0.5.2",
@@ -5729,6 +5730,7 @@ dependencies = [
  "serde",
  "sqlx",
  "tracing",
+ "uuid",
 ]
 
 [[package]]
@@ -5781,6 +5783,7 @@ dependencies = [
  "url",
  "utoipa",
  "utoipa-swagger-ui",
+ "uuid",
 ]
 
 [[package]]
@@ -8578,6 +8581,9 @@ dependencies = [
 name = "system_properties"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "macro_db_migrator",
+ "macro_uuid",
  "models_properties",
  "serde",
  "serde_json",

@@ -18,12 +18,14 @@ use properties_db_client::{
 
 #[derive(Debug, Error)]
 pub enum AddPropertyOptionErr {
-    #[error("An unknown error has occurred")]
+    #[error("An internal error occurred")]
     InternalError(#[from] anyhow::Error),
-    #[error("Database error: {0}")]
+    #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
-    #[error("Property not found")]
+    #[error("Property definition not found")]
     PropertyNotFound,
+    #[error("Cannot modify system properties")]
+    SystemPropertyNotModifiable,
     #[error("{0}")]
     InvalidRequest(String),
 }
@@ -35,6 +37,7 @@ impl IntoResponse for AddPropertyOptionErr {
                 StatusCode::INTERNAL_SERVER_ERROR
             }
             AddPropertyOptionErr::PropertyNotFound => StatusCode::NOT_FOUND,
+            AddPropertyOptionErr::SystemPropertyNotModifiable => StatusCode::FORBIDDEN,
             AddPropertyOptionErr::InvalidRequest(_) => StatusCode::BAD_REQUEST,
         };
 
@@ -61,12 +64,13 @@ impl IntoResponse for AddPropertyOptionErr {
     responses(
         (status = 201, description = "Property option created successfully", body = PropertyOption),
         (status = 400, description = "Invalid request"),
+        (status = 403, description = "Cannot modify system properties"),
         (status = 404, description = "Property not found"),
         (status = 500, description = "Internal server error")
     ),
     tags = ["Properties"]
 )]
-#[tracing::instrument(skip(context, user_context), fields(property_id = %property_uuid, request = ?request))]
+#[tracing::instrument(skip(context, user_context), fields(property_id = %property_uuid, request = ?request), err)]
 pub async fn add_property_option(
     Path(property_uuid): Path<Uuid>,
     State(context): State<ApiContext>,
@@ -75,6 +79,22 @@ pub async fn add_property_option(
 ) -> Result<(StatusCode, Json<PropertyOption>), AddPropertyOptionErr> {
     tracing::info!("adding property option");
 
+    // First check if property exists and if it's a system property
+    let property = property_definitions_get::get_property_definition(&context.db, property_uuid)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(
+                error = ?e,
+                "failed to fetch property definition"
+            );
+        })?
+        .ok_or(AddPropertyOptionErr::PropertyNotFound)?;
+
+    if property.is_system {
+        return Err(AddPropertyOptionErr::SystemPropertyNotModifiable);
+    }
+
+    // Then verify ownership
     let property_definition = property_definitions_get::get_property_definition_with_owner(
         &context.db,
         property_uuid,
@@ -84,16 +104,14 @@ pub async fn add_property_option(
     .await
     .inspect_err(|e| {
         tracing::error!(
-            property_id = %property_uuid,
             error = ?e,
-            "failed to fetch property definition"
+            "failed to fetch property definition with owner"
         );
     })?
     .ok_or(AddPropertyOptionErr::PropertyNotFound)?;
 
     if let Err(err) = request.validate() {
         tracing::error!(
-            property_id = %property_uuid,
             error = %err,
             "option value validation failed"
         );
@@ -102,7 +120,6 @@ pub async fn add_property_option(
 
     if let Err(err) = request.validate_compatibility(&property_definition.data_type) {
         tracing::error!(
-            property_id = %property_uuid,
             data_type = ?property_definition.data_type,
             request_type = ?request,
             error = %err,
@@ -132,13 +149,11 @@ pub async fn add_property_option(
     .inspect_err(|e| {
         tracing::error!(
             error = ?e,
-            property_id = %property_uuid,
             "failed to add property option"
         );
     })?;
 
     tracing::info!(
-        property_id = %property_uuid,
         option_id = %option.id,
         display_order = option.display_order,
         "successfully added property option"

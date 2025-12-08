@@ -69,6 +69,7 @@ pub async fn create_property_definition(
         specific_entity_type: row.specific_entity_type.flatten(),
         created_at: row.created_at,
         updated_at: row.updated_at,
+        is_system: false, // User-created properties are never system properties
     };
 
     Ok(PropertyDefinition::from(db_result))
@@ -159,6 +160,7 @@ pub async fn create_property_definition_with_options(
         specific_entity_type: row.specific_entity_type.flatten(),
         created_at: row.created_at,
         updated_at: row.updated_at,
+        is_system: false, // User-created properties are never system properties
     };
 
     for option in options {

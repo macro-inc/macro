@@ -20,6 +20,25 @@ pub trait SystemPropertiesService: Clone + Send + Sync + 'static {
         &self,
         items: Vec<EmailAttachmentInput>,
     ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
+
+    /// Set empty task system properties for multiple entities.
+    ///
+    /// Initializes all task-related system properties with null values.
+    /// All properties are upserted in a single query.
+    fn attach_task_properties(
+        &self,
+        entity_ids: Vec<String>,
+    ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
+
+    /// Copy all task properties from one entity to another.
+    ///
+    /// Copies all task-related system properties from the source entity
+    /// to the destination entity, overwriting any existing values.
+    fn copy_task_properties(
+        &self,
+        from_task_id: &str,
+        to_task_id: &str,
+    ) -> impl Future<Output = Result<(), SystemPropertyError>> + Send;
 }
 
 /// Implementation of SystemPropertiesService using a repository.
@@ -56,6 +75,30 @@ where
             .collect();
 
         self.repository.bulk_upsert_properties(rows).await
+    }
+
+    #[tracing::instrument(skip(self, entity_ids))]
+    async fn attach_task_properties(
+        &self,
+        entity_ids: Vec<String>,
+    ) -> Result<(), SystemPropertyError> {
+        let rows: Vec<PropertyRow> = entity_ids
+            .iter()
+            .flat_map(|entity_id| collect_task_property_rows(entity_id))
+            .collect();
+
+        self.repository.bulk_upsert_properties(rows).await
+    }
+
+    #[tracing::instrument(skip(self))]
+    async fn copy_task_properties(
+        &self,
+        from_task_id: &str,
+        to_task_id: &str,
+    ) -> Result<(), SystemPropertyError> {
+        self.repository
+            .copy_task_properties(from_task_id, to_task_id)
+            .await
     }
 }
 
@@ -127,4 +170,42 @@ fn collect_email_property_rows(
     }
 
     rows
+}
+
+/// Collect property rows for a single entity's task properties.
+/// All task properties are initialized with null values.
+/// Tasks are always applied to Task entities.
+fn collect_task_property_rows(entity_id: &str) -> Vec<PropertyRow> {
+    let entity_type = EntityType::Task;
+
+    vec![
+        // Assignees
+        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::Assignees.uuid()),
+        // Status
+        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::Status.uuid()),
+        // Priority
+        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::Priority.uuid()),
+        // Due Date
+        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::DueDate.uuid()),
+        // Parent Task
+        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::ParentTask.uuid()),
+        // Subtasks
+        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::Subtasks.uuid()),
+        // Depends On
+        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::DependsOn.uuid()),
+        // Effort
+        PropertyRow::null_value(entity_id, entity_type, SystemPropertyKey::Effort.uuid()),
+        // Story Points
+        PropertyRow::null_value(
+            entity_id,
+            entity_type,
+            SystemPropertyKey::StoryPoints.uuid(),
+        ),
+        // Relevant Documents
+        PropertyRow::null_value(
+            entity_id,
+            entity_type,
+            SystemPropertyKey::RelevantDocuments.uuid(),
+        ),
+    ]
 }

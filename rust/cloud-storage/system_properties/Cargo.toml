@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+macro_uuid = { path = "../macro_uuid" }
 models_properties = { path = "../models_properties" }
 serde = { workspace = true }
 serde_json = { workspace = true }
@@ -12,3 +13,7 @@ sqlx = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
+
+[dev-dependencies]
+anyhow = { workspace = true }
+macro_db_migrator = { path = "../macro_db_migrator" }

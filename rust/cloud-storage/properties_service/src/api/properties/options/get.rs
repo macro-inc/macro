@@ -16,9 +16,9 @@ use properties_db_client::{
 
 #[derive(Debug, Error)]
 pub enum GetPropertyOptionsErr {
-    #[error("An unknown error has occurred")]
+    #[error("An internal error occurred")]
     Internal(#[from] anyhow::Error),
-    #[error("Database error: {0}")]
+    #[error("An internal error occurred")]
     Database(#[from] PropertiesDatabaseError),
 }
 
@@ -56,7 +56,7 @@ impl IntoResponse for GetPropertyOptionsErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, _user_context))]
+#[tracing::instrument(skip(context, _user_context), err)]
 pub async fn get_property_options(
     Path(property_uuid): Path<Uuid>,
     State(context): State<ApiContext>,
@@ -69,13 +69,11 @@ pub async fn get_property_options(
         .inspect_err(|e| {
             tracing::error!(
                 error = ?e,
-                property_id = %property_uuid,
                 "failed to retrieve property options"
             );
         })?;
 
     tracing::info!(
-        property_id = %property_uuid,
         options_count = options.len(),
         "successfully retrieved property options"
     );
