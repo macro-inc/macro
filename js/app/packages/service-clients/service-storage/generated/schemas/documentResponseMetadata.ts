@@ -10,6 +10,7 @@ import type { DocumentResponseMetadataDocumentBom } from './documentResponseMeta
 import type { DocumentResponseMetadataDocumentFamilyId } from './documentResponseMetadataDocumentFamilyId';
 import type { DocumentResponseMetadataFileType } from './documentResponseMetadataFileType';
 import type { DocumentResponseMetadataSha } from './documentResponseMetadataSha';
+import type { DocumentResponseMetadataSubType } from './documentResponseMetadataSubType';
 
 export interface DocumentResponseMetadata {
   /** The id of the document this document branched from */
@@ -34,9 +35,6 @@ the file type */
   documentVersionId: number;
   /** The file type of the document */
   fileType?: DocumentResponseMetadataFileType;
-  /** Whether or not the document is a task.
-This is only applicable for md documents. */
-  isTask: boolean;
   /** The modification data for the document instance.
 This is only used for PDF documents. */
   modificationData?: unknown;
@@ -45,6 +43,7 @@ This is only used for PDF documents. */
   /** If the document is a PDF, this is the SHA of the pdf
 If the document is a DOCX, this will not be present */
   sha?: DocumentResponseMetadataSha;
+  subType?: DocumentResponseMetadataSubType;
   /** The time the document instance / document BOM was updated */
   updatedAt: number;
 }

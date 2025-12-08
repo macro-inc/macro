@@ -72,6 +72,7 @@ export class DatadogServiceEntity extends ComponentResource {
 export const fargateLogRouterSidecarContainer = {
   essential: true,
   image: 'amazon/aws-for-fluent-bit:latest',
+  stopTimeout: 10, // 10 seconds to force kill the task
   name: 'log_router',
   firelensConfiguration: {
     type: 'fluentbit',
@@ -101,6 +102,7 @@ export const fargateLogRouterSidecarContainer = {
 export const datadogAgentContainer = {
   name: 'datadog-agent',
   image: 'public.ecr.aws/datadog/agent:latest',
+  stopTimeout: 10, // 10 seconds to force kill the task
   environment: [
     {
       name: 'ECS_FARGATE',

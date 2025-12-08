@@ -10,6 +10,7 @@ import type { SoupDocumentDocumentFamilyId } from './soupDocumentDocumentFamilyI
 import type { SoupDocumentFileType } from './soupDocumentFileType';
 import type { SoupDocumentProjectId } from './soupDocumentProjectId';
 import type { SoupDocumentSha } from './soupDocumentSha';
+import type { SoupDocumentSubType } from './soupDocumentSubType';
 import type { SoupDocumentViewedAt } from './soupDocumentViewedAt';
 
 export interface SoupDocument {
@@ -29,9 +30,6 @@ This could be the document_instance_id or document_bom_id depending on the file 
   fileType?: SoupDocumentFileType;
   /** The document id */
   id: string;
-  /** Whether or not the document is a task.
-This is only applicable for md documents. */
-  isTask: boolean;
   /** The name of the document */
   name: string;
   /** The owner of the document */
@@ -41,6 +39,7 @@ This is only applicable for md documents. */
   /** If the document is a PDF, this is the SHA of the pdf
 If the document is a DOCX, this will not be present */
   sha?: SoupDocumentSha;
+  subType?: SoupDocumentSubType;
   /** The time the document instance / document BOM was updated */
   updatedAt: number;
   /** The time the document was last viewed */

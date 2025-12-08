@@ -3,7 +3,7 @@
 // Runtime types generated with workerd@1.20250712.0 2025-07-22 
 declare namespace Cloudflare {
 	interface Env {
-		SYNC_SERVICE_URL: "https://sync-service-prod.macroverse.workers.dev" | "https://sync-service-dev2.macroverse.workers.dev";
+		SYNC_SERVICE_URL: "https://sync-service-prod.macroverse.workers.dev" | "https://sync-service-dev3.macroverse.workers.dev";
 		SYNC_SERVICE: Fetcher /* sync-service-prod */;
 	}
 }

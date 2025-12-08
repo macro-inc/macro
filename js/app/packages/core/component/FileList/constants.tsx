@@ -71,4 +71,5 @@ export const fileTypeColors: Record<BlockName | 'default', string> = {
   email: defaultFileColor,
   project: defaultFileColor,
   unknown: defaultFileColor,
+  task: defaultFileColor,
 };

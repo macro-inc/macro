@@ -22,18 +22,18 @@
   "env": {
     "local": {
       "vars": {
-        "SYNC_SERVICE_URL": "https://sync-service-dev2.macroverse.workers.dev",
+        "SYNC_SERVICE_URL": "https://sync-service-dev3.macroverse.workers.dev",
       }
     },
     "dev": {
       "services": [
         {
           "binding": "SYNC_SERVICE",
-          "service": "sync-service-dev2"
+          "service": "sync-service-dev3"
         }
       ],
       "vars": {
-        "SYNC_SERVICE_URL": "https://sync-service-dev2.macroverse.workers.dev",
+        "SYNC_SERVICE_URL": "https://sync-service-dev3.macroverse.workers.dev",
       }
     },
     "prod": {
