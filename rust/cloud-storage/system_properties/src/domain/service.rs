@@ -67,7 +67,7 @@ where
     #[tracing::instrument(skip(self, items))]
     async fn set_email_attachment_properties(
         &self,
-        items: Vec<EmailAttachmentInput>,
+        items: Vec<EmailAttachmentInput<'_>>,
     ) -> Result<(), SystemPropertyError> {
         let rows: Vec<PropertyRow> = items
             .into_iter()
@@ -142,7 +142,7 @@ fn collect_email_property_rows(
             entity_type,
             SystemPropertyKey::Sender.uuid(),
             EntityType::User,
-            vec![user_id],
+            vec![user_id.as_ref().to_string()],
             None,
         ));
     }
@@ -154,7 +154,10 @@ fn collect_email_property_rows(
             entity_type,
             SystemPropertyKey::Recipients.uuid(),
             EntityType::User,
-            user_ids,
+            user_ids
+                .iter()
+                .map(|s| s.as_ref().to_string())
+                .collect::<Vec<_>>(),
             None,
         ));
     }

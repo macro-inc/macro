@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT\n            a.id AS attachment_db_id,\n            m.provider_id as \"email_provider_id!\",\n            a.provider_attachment_id as \"provider_attachment_id!\",\n            a.filename as \"filename!\",\n            a.mime_type as \"mime_type!\",\n            m.internal_date_ts as \"internal_date_ts!\",\n            m.id as message_db_id,\n            m.thread_id as thread_db_id,\n            m.subject as subject\n        FROM email_attachments a\n        JOIN email_messages m ON a.message_id = m.id\n        JOIN email_threads t ON m.thread_id = t.id\n        WHERE a.id = $1 AND t.link_id = $2\n        ",
+  "query": "\n        SELECT\n            a.id AS attachment_db_id,\n            m.provider_id as \"email_provider_id!\",\n            a.provider_attachment_id as \"provider_attachment_id!\",\n            a.filename as \"filename!\",\n            a.mime_type as \"mime_type!\",\n            m.internal_date_ts as \"internal_date_ts!\",\n            m.id as message_db_id,\n            m.thread_id as thread_db_id,\n            from_contact.email_address as sender_email,\n            m.subject as subject\n        FROM email_attachments a\n        JOIN email_messages m ON a.message_id = m.id\n        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id\n        JOIN email_threads t ON m.thread_id = t.id\n        WHERE a.id = $1 AND t.link_id = $2\n        ",
   "describe": {
     "columns": [
       {
@@ -45,6 +45,11 @@
       },
       {
         "ordinal": 8,
+        "name": "sender_email",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
         "name": "subject",
         "type_info": "Text"
       }
@@ -64,8 +69,9 @@
       true,
       false,
       false,
+      false,
       true
     ]
   },
-  "hash": "b5a0b77f095a98599936b6beafbc3ac4da78759af9faf73610f1db94dc3a29ab"
+  "hash": "8a72f7a40f3e48b76158dd067cdff99f4c525078a5bf5a2fe810ee39cbf977d8"
 }

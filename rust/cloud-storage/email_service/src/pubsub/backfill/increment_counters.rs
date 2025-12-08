@@ -300,16 +300,17 @@ async fn send_attachment_backfill_messages(
 
     for attachment in attachments {
         // get the email addresses of the recipients of the message
-        let recipients: Vec<String> = message_recipients
+        let recipient_emails: Vec<String> = message_recipients
             .get(&attachment.message_db_id)
-            .unwrap_or_default()
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
             .iter()
-            .filter(|(_, recipient_type)| **recipient_type == EmailRecipientType::To)
-            .filter_map(|(contact, _)| contact.as_ref().map(|c| c.email_address.clone()))
+            .filter(|(_, recipient_type)| *recipient_type == EmailRecipientType::To)
+            .filter_map(|(contact, _)| contact.email_address.clone())
             .collect();
 
         let attachment2 = AttachmentUploadMetadata2 {
-            recipients,
+            recipient_emails,
             attachment_metadata: attachment,
         };
 

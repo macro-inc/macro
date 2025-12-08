@@ -18,12 +18,14 @@ use model::insight_context::email_insights::{
 use model_notifications::{
     NewEmailMetadata, NotificationEntity, NotificationEvent, NotificationQueueMessage,
 };
+use models_email::db::address::EmailRecipientType;
 use models_email::email::service;
 use models_email::email::service::link;
 use models_email::email::service::message::SimpleMessage;
 use models_email::email::service::thread::UserThreadIds;
 use models_email::gmail::operations::GmailApiOperation;
 use models_email::gmail::webhook::{UpsertMessagePayload, WebhookOperation};
+use models_email::service::attachment::AttachmentUploadMetadata2;
 use models_email::service::message::Message;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_opensearch::SearchEntityType;
@@ -33,8 +35,6 @@ use sqs_client::search::name::EntityName;
 use std::collections::{HashMap, HashSet};
 use std::result;
 use uuid::Uuid;
-use models_email::db::address::EmailRecipientType;
-use models_email::service::attachment::AttachmentUploadMetadata2;
 
 // upsert a message into the db. could be a new message or an existing one that had changes
 #[tracing::instrument(skip(ctx))]
@@ -232,26 +232,25 @@ async fn handle_attachment_upload(
                     ProcessingError::NonRetryable(DetailedError {
                         reason: FailureReason::DatabaseQueryFailed,
                         source: e.context(
-                            "Failed to fetch db recipients for thread attachment backfill".to_string(),
+                            "Failed to fetch db recipients for thread attachment backfill"
+                                .to_string(),
                         ),
                     })
                 })?;
 
-
-
-
         for attachment in attachments {
             // get the email addresses of the recipients of the message
-            let recipients: Vec<String> = message_recipients
+            let recipient_emails: Vec<String> = message_recipients
                 .get(&attachment.message_db_id)
-                .unwrap_or_default()
+                .map(|v| v.as_slice())
+                .unwrap_or(&[])
                 .iter()
-                .filter(|(_, recipient_type)| **recipient_type == EmailRecipientType::To)
-                .filter_map(|(contact, _)| contact.as_ref().map(|c| c.email_address.clone()))
+                .filter(|(_, recipient_type)| *recipient_type == EmailRecipientType::To)
+                .filter_map(|(contact, _)| contact.email_address.clone())
                 .collect();
 
             let attachment2 = AttachmentUploadMetadata2 {
-                recipients,
+                recipient_emails,
                 attachment_metadata: attachment,
             };
 
@@ -260,9 +259,10 @@ async fn handle_attachment_upload(
                 &ctx.redis_client,
                 &ctx.gmail_client,
                 &ctx.dss_client,
+                &ctx.system_properties_service,
                 gmail_access_token,
                 link,
-                &attachment,
+                &attachment2,
             )
             .await
             {

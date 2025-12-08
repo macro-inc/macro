@@ -1,6 +1,6 @@
 use crate::email::db::backfill as db_backfill;
 use crate::email::service::thread::ListThreadsPayload;
-use crate::service::attachment::{AttachmentUploadMetadata, AttachmentUploadMetadata2};
+use crate::service::attachment::AttachmentUploadMetadata2;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use sqlx::FromRow;

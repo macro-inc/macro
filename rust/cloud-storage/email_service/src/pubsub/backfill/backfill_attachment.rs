@@ -16,7 +16,13 @@ pub async fn backfill_attachment(
     p: &BackfillAttachmentPayload,
 ) -> Result<(), ProcessingError> {
     // Check if a document for this attachment already exists before uploading.
-    if attachment_document_exists(ctx, link.id, p.metadata.attachment_db_id).await? {
+    if attachment_document_exists(
+        ctx,
+        link.id,
+        p.metadata.attachment_metadata.attachment_db_id,
+    )
+    .await?
+    {
         return Ok(());
     }
 
@@ -24,6 +30,7 @@ pub async fn backfill_attachment(
         &ctx.redis_client,
         &ctx.gmail_client,
         &ctx.dss_client,
+        &ctx.system_properties_service,
         access_token,
         link,
         &p.metadata,

@@ -103,24 +103,25 @@ pub async fn handler(
     .await
     .map_err(GetAttachmentDocumentIdError::DatabaseError)?;
 
-    let recipients: Vec<String> = recipients
+    let recipient_emails: Vec<String> = recipients
         .iter()
-        .filter(|(_, recipient_type)| **recipient_type == EmailRecipientType::To)
-        .filter_map(|(contact, _)| contact.as_ref().map(|c| c.email_address.clone()))
+        .filter(|(_, recipient_type)| *recipient_type == EmailRecipientType::To)
+        .filter_map(|(contact, _)| contact.email_address.clone())
         .collect();
 
-    let attachment2= AttachmentUploadMetadata2 {
+    let attachment2 = AttachmentUploadMetadata2 {
         attachment_metadata,
-        recipients,
+        recipient_emails,
     };
 
     let document_id = upload_attachment(
         &ctx.redis_client,
         &ctx.gmail_client,
         &ctx.dss_client,
+        &ctx.system_properties_service,
         &gmail_token,
         &link,
-        &attachment_metadata,
+        &attachment2,
     )
     .await
     .map_err(GetAttachmentDocumentIdError::UploadError)?;
