@@ -33,8 +33,7 @@ export function serviceLoadBalancer(
     `${serviceName}-tg-${stack}`,
     {
       name: `${serviceName}-tg-${stack}`,
-      // TODO: might want to make this smaller?
-      deregistrationDelay: 120,
+      deregistrationDelay: 30, // let any active calls finish within 30 seconds
       port: serviceContainerPort,
       protocol: 'HTTP',
       targetType: 'ip',

@@ -254,6 +254,7 @@ export class NotificationService extends pulumi.ComponentResource {
             service: {
               name: BASE_NAME,
               image: image.image.imageUri,
+              stopTimeout: 10, // 10 seconds to force kill the task
               cpu: stack === 'prod' ? 1024 : 256,
               memory: stack === 'prod' ? 2048 : 512,
               environment: [
