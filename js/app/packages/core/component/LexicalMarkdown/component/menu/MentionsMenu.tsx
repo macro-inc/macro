@@ -29,8 +29,14 @@ import BuildingIcon from '@icon/regular/buildings.svg';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
 import UserIconSolid from '@icon/regular/user.svg';
-import { type EmailEntity, useEmails } from '@macro-entity';
+import type { EntityData, WithSearch } from '@macro-entity';
+import {
+  createUnifiedSearchInfiniteQuery,
+  type EmailEntity,
+  useEmails,
+} from '@macro-entity';
 import type { DocumentMentionMetadata } from '@service-notification/client';
+import type { PaginatedSearchArgs } from '@service-search/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { useHistory } from '@service-storage/history';
@@ -45,6 +51,7 @@ import {
   createSignal,
   For,
   type JSXElement,
+  on,
   onCleanup,
   onMount,
   type ParentProps,
@@ -698,6 +705,9 @@ export function MentionsMenu(props: {
   onEmailMention?: (item: EmailEntity) => void;
   disableMentionTracking?: boolean;
 }) {
+  const [searchTerm, setSearchTerm] = createSignal<string>(
+    props.menu.searchTerm()
+  );
   const historyAccessor = props.history ?? useHistory();
   const history = createMemo(() => {
     return historyAccessor().map(entityMapper('item'));
@@ -755,6 +765,51 @@ export function MentionsMenu(props: {
       return userChannels().map(entityMapper('channel')).filter(allItemFilter);
     });
   }
+
+  const args = createMemo((): PaginatedSearchArgs => {
+    return {
+      params: {
+        page: 0,
+        // small -> fast!
+        page_size: 10,
+      },
+      request: {
+        match_type: 'partial',
+        search_on: 'name',
+        include: ['emails'],
+        query: searchTerm(),
+      },
+    };
+  });
+
+  const emailUnifiedSearchInfiniteQuery =
+    createUnifiedSearchInfiniteQuery(args);
+
+  const foundEmails = createMemo((): Entity<'email'>[] => {
+    if (emailUnifiedSearchInfiniteQuery.status === 'success') {
+      function isEmail(
+        e: WithSearch<EntityData>
+      ): e is WithSearch<EmailEntity> {
+        return e.type === 'email';
+      }
+
+      function entityDataToMentionEntity<T extends EmailEntity>(
+        e: T
+      ): Entity<'email'> {
+        return {
+          data: e,
+          id: e.id,
+          kind: 'email',
+        };
+      }
+
+      return emailUnifiedSearchInfiniteQuery.data
+        .filter(isEmail)
+        .map(entityDataToMentionEntity);
+    } else {
+      return [];
+    }
+  });
 
   // Get open tabs from split manager
   const openTabs = createMemo(() => {
@@ -843,16 +898,15 @@ export function MentionsMenu(props: {
 
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
 
-  const [searchTerm, setSearchTerm] = createSignal(props.menu.searchTerm());
-
   const debouncedSetSearchTerm = debounce(
     (term: string) => setSearchTerm(term.toLowerCase()),
     60
   );
 
-  createEffect(() => {
+  const effect = () => {
     debouncedSetSearchTerm(props.menu.searchTerm());
-  });
+  };
+  createEffect(effect);
 
   const itemSearch = createFreshSearch<CombinedEntity<'item' | 'channel'>>(
     {},
@@ -909,7 +963,22 @@ export function MentionsMenu(props: {
   );
 
   const filteredEmails = createMemo(() => {
-    return emailSearch(emails(), searchTerm()).map((result) => result.item);
+    const mail = emailSearch(emails(), searchTerm()).map(
+      (result) => result.item
+    );
+
+    const otherMail = foundEmails();
+
+    // dedup / preserve order
+    function merge<T extends keyof EntityMap>(
+      local: Entity<T>[],
+      unifiedSearch: Entity<T>[]
+    ): Entity<T>[] {
+      let ids = new Set(local.map((e) => e.id));
+      return [...local, ...unifiedSearch.filter((e) => !ids.has(e.id))];
+    }
+
+    return merge(mail, otherMail);
   });
 
   const dateSuggestions = createMemo(() => {
@@ -1151,10 +1220,11 @@ export function MentionsMenu(props: {
     });
   });
 
-  const focusOut = () => {
+  const focusOut = (e) => {
     props.editor.dispatchCommand(CLOSE_INLINE_SEARCH_COMMAND, undefined);
     setMenuOpen(false);
   };
+
   onMount(() => {
     document.addEventListener('focusout', focusOut);
     onCleanup(() => {
@@ -1265,11 +1335,14 @@ export function MentionsMenu(props: {
     const dates = dateSuggestions().slice(0, bins().dates);
     const emailList = filteredEmails().slice(0, bins().emails);
     const totalLength = () =>
-      users.length + docs.length + contactsList.length + dates.length;
+      users.length +
+      docs.length +
+      contactsList.length +
+      dates.length +
+      emailList.length;
 
     const renderOptions = createMemo(() => {
       const options = [];
-
       if (users.length > 0) {
         options.push(
           <ItemBin
