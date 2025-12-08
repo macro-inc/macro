@@ -1,4 +1,5 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
@@ -449,8 +450,45 @@ export function createNavigationEntityListShortcut({
     },
     {
       testEnabled: (entity) => {
-        // can't rename these bad boys yet.
-        if (entity.type === 'channel' || entity.type === 'email') return false;
+        if (entity.type === 'channel') {
+          const currentUserId = userId();
+          if (!currentUserId) return false;
+
+          // Check if user is the owner
+          if (entity.ownerId === currentUserId) {
+            return true;
+          }
+
+          // Check if user is an admin by looking up channel participant data
+          try {
+            const channelsContext = useChannelsContext();
+            const channel = channelsContext
+              .channels()
+              .find((c) => c.id === entity.id);
+            if (channel) {
+              const participant = channel.participants.find(
+                (p) => p.user_id === currentUserId
+              );
+              if (
+                participant &&
+                ['admin', 'owner'].includes(participant.role)
+              ) {
+                return true;
+              }
+            }
+          } catch (err) {
+            // ChannelsContext might not be available in all contexts
+            // Fall back to owner check only
+            console.warn(
+              'Could not access ChannelsContext for permission check',
+              err
+            );
+          }
+
+          return false;
+        }
+        if (entity.type === 'email') return false;
+
         // only rename what you own.
         return entity.ownerId === userId();
       },
