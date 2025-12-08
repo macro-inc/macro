@@ -23,7 +23,7 @@ function queueItemsForFetch(items: string[]) {
   setDisplayNameFetchQueue((prev) => [...prev, ...items]);
 }
 
-export function defaultNameTransform(item: UserNameItem): string {
+function defaultNameTransform(item: UserNameItem): string {
   const email = idToEmail(item.id);
 
   if (item.loading) return email;
@@ -93,7 +93,7 @@ const processFetchQueue = debounce(async () => {
   await batchFetchNames(items);
 }, 50);
 
-export async function batchFetchNames(ids: string[]) {
+async function batchFetchNames(ids: string[]) {
   const [nameResults] = await Promise.all([
     ids.length > 0 ? fetchDisplayNames(ids) : Promise.resolve([]),
   ]);
@@ -104,8 +104,6 @@ export async function batchFetchNames(ids: string[]) {
   }, {} as DisplayNameStore);
 
   setUserDisplayNames((prev) => ({ ...prev, ...updates }));
-
-  return nameResults;
 }
 
 export function useDisplayName(
