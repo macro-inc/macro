@@ -1,10 +1,8 @@
-import { registerClient } from '@core/util/mockClient';
-import { LegacyApiRpcClient } from '../codegen/auth_service/auth_service_rpc';
-import { getAccessToken } from '@service-auth/client';
 import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
-
-
+import { registerClient } from '@core/util/mockClient';
+import { getAccessToken } from '@service-auth/client';
+import { LegacyApiRpcClient } from '../codegen/auth_service/auth_service_rpc';
 
 // Create a singleton instance of the RPC client
 let rpcClientInstance: LegacyApiRpcClient | null = null;
@@ -19,7 +17,7 @@ async function getRpcClient(): Promise<LegacyApiRpcClient> {
     }
 
     rpcClientInstance = LegacyApiRpcClient.construct_with_headers(
-    `${SERVER_HOSTS['auth-service']}/user`,
+      `${SERVER_HOSTS['auth-service']}/user`,
       () => headers
     );
   }
@@ -39,7 +37,7 @@ export const stripeServiceClient = {
     };
 
     const client = await getRpcClient();
-    const data = await client.create_checkout_session(variables)
+    const data = await client.create_checkout_session(variables);
 
     return data.url;
   },
@@ -55,9 +53,8 @@ export const stripeServiceClient = {
     const client = await getRpcClient();
     const res = await client.create_portal_session(variables);
 
-    return res.url
+    return res.url;
   },
 };
 
 registerClient('stripe', stripeServiceClient);
-

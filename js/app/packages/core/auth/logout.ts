@@ -30,17 +30,17 @@ export function useLogout() {
     mutateUserInfo(() => [
       null,
       {
-          id: '',
-          permissions: [],
-          email: '',
-          name: null,
-          licenseStatus: 'inactive',
-          tutorialComplete: false,
-          group: null,
-          hasChromeExt: false,
-          authenticated: false,
-          userId: '',
-          hasTrialed: false,
+        id: '',
+        permissions: [],
+        email: '',
+        name: null,
+        licenseStatus: 'inactive',
+        tutorialComplete: false,
+        group: null,
+        hasChromeExt: false,
+        authenticated: false,
+        userId: '',
+        hasTrialed: false,
       },
     ]);
     mutateOrganization(() => ({

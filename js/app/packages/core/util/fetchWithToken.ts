@@ -102,7 +102,6 @@ export async function fetchWithToken<T extends ObjectLike>(
 
   let result = await fetchWithCredentials<T>(input, init);
 
-
   if (isErr(result, 'UNAUTHORIZED')) {
     // Unset the token promise on UNAUTHORIZED error
     tokenPromise = null;
