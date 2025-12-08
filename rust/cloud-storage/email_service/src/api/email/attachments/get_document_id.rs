@@ -5,7 +5,9 @@ use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
 use axum::{Extension, Json};
 use model::response::ErrorResponse;
+use models_email::db::address::EmailRecipientType;
 use models_email::email::service::link::Link;
+use models_email::service::attachment::AttachmentUploadMetadata2;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -93,6 +95,24 @@ pub async fn handler(
         .await
         .map_err(GetAttachmentDocumentIdError::DatabaseError)?
         .ok_or(GetAttachmentDocumentIdError::AttachmentNotFound)?;
+
+    let recipients = email_db_client::contacts::get::fetch_db_recipients(
+        &ctx.db,
+        attachment_metadata.message_db_id,
+    )
+    .await
+    .map_err(GetAttachmentDocumentIdError::DatabaseError)?;
+
+    let recipients: Vec<String> = recipients
+        .iter()
+        .filter(|(_, recipient_type)| **recipient_type == EmailRecipientType::To)
+        .filter_map(|(contact, _)| contact.as_ref().map(|c| c.email_address.clone()))
+        .collect();
+
+    let attachment2= AttachmentUploadMetadata2 {
+        attachment_metadata,
+        recipients,
+    };
 
     let document_id = upload_attachment(
         &ctx.redis_client,

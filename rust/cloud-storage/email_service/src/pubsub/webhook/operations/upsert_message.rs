@@ -33,6 +33,8 @@ use sqs_client::search::name::EntityName;
 use std::collections::{HashMap, HashSet};
 use std::result;
 use uuid::Uuid;
+use models_email::db::address::EmailRecipientType;
+use models_email::service::attachment::AttachmentUploadMetadata2;
 
 // upsert a message into the db. could be a new message or an existing one that had changes
 #[tracing::instrument(skip(ctx))]
@@ -217,21 +219,55 @@ async fn handle_attachment_upload(
                 .map(|a| a.attachment_db_id)
                 .collect::<Vec<_>>()
         );
-    }
 
-    for attachment in attachments {
-        // keep processing if it fails, best effort
-        if let Err(e) = upload_attachment(
-            &ctx.redis_client,
-            &ctx.gmail_client,
-            &ctx.dss_client,
-            gmail_access_token,
-            link,
-            &attachment,
-        )
-        .await
-        {
-            tracing::error!("Failed to upload attachment to Macro: {e}");
+        let message_ids = attachments
+            .iter()
+            .map(|a| a.message_db_id)
+            .collect::<Vec<_>>();
+
+        let message_recipients =
+            email_db_client::contacts::get::fetch_db_recipients_in_bulk(&ctx.db, &message_ids)
+                .await
+                .map_err(|e| {
+                    ProcessingError::NonRetryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: e.context(
+                            "Failed to fetch db recipients for thread attachment backfill".to_string(),
+                        ),
+                    })
+                })?;
+
+
+
+
+        for attachment in attachments {
+            // get the email addresses of the recipients of the message
+            let recipients: Vec<String> = message_recipients
+                .get(&attachment.message_db_id)
+                .unwrap_or_default()
+                .iter()
+                .filter(|(_, recipient_type)| **recipient_type == EmailRecipientType::To)
+                .filter_map(|(contact, _)| contact.as_ref().map(|c| c.email_address.clone()))
+                .collect();
+
+            let attachment2 = AttachmentUploadMetadata2 {
+                recipients,
+                attachment_metadata: attachment,
+            };
+
+            // keep processing if it fails, best effort
+            if let Err(e) = upload_attachment(
+                &ctx.redis_client,
+                &ctx.gmail_client,
+                &ctx.dss_client,
+                gmail_access_token,
+                link,
+                &attachment,
+            )
+            .await
+            {
+                tracing::error!("Failed to upload attachment to Macro: {e}");
+            }
         }
     }
 
