@@ -3,6 +3,7 @@ import { createSignal } from 'solid-js';
 
 export * from './bigChat';
 export * from './rightbar';
+export * from './settings';
 
 export const LAYOUT_CONTEXT_ID = 'layout';
 

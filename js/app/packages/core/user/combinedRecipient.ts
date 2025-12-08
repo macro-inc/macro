@@ -1,4 +1,3 @@
-import type { PersonEmailContact } from './emailContacts';
 import type { ChannelWithParticipants, ContactInfo, IUser } from './types';
 
 // this type is extracted from the user's message info
@@ -16,7 +15,7 @@ export type CustomUserInput = {
 type EntityMap = {
   user: IUser;
   channel: ChannelWithParticipants;
-  contact: ExtractedContactInfo | PersonEmailContact;
+  contact: ExtractedContactInfo;
   custom: CustomUserInput;
 };
 

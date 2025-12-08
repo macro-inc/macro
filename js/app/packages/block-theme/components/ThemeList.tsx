@@ -53,23 +53,50 @@ export function ThemeList() {
       <div
         style="
           font-family: var(--font-mono);
-          border: 1px solid var(--b4);
-          overscoll-behavior: none;
+          background-color: var(--b1);
           scrollbar-width: none;
-          overflow-y: scroll;
+          position: relative;
+          overflow: hidden;
           font-size: 14px;
+          display: block;
+          height: 100%;
         "
       >
         <div
           style="
-            background-color: var(--b4);
             overscroll-behavior: none;
             box-sizing: border-box;
-            overflow-x: hidden;
-            display: grid;
-            gap: 1px;
+            scrollbar-width: none;
+            overflow-y: scroll;
+            height: 100%;
+            width: 100%;
           "
         >
+          <div
+            style="
+              background-color: var(--color-edge-muted);
+              box-sizing: border-box;
+              overflow-x: hidden;
+              display: grid;
+              gap: 1px;
+            "
+          >
+            <div
+              style="
+                border-bottom: 1px solid var(--color-edge-muted);
+                background-color: var(--b1);
+                align-items: center;
+                position: absolute;
+                padding: 0 20px;
+                display: grid;
+                height: 42px;
+                width: 100%;
+                z-index: 1;
+              "
+            >
+              <div style="font-size: var(--text-xs);">Theme List</div>
+            </div>
+            <div style="height: 41px;" />
           <For each={themes()}>
             {(theme) => (
               <div
@@ -77,7 +104,7 @@ export function ThemeList() {
                 onPointerDown={() => {applyTheme(theme.id)}}
                 style="
                   grid-template-columns: min-content 1fr min-content;
-                  background-color: var(--b0);
+                  background-color: var(--b1);
                   align-items: center;
                   padding: 10px 20px;
                   cursor: var(--cursor-pointer);
@@ -109,8 +136,8 @@ export function ThemeList() {
                 <hr
                   style="
                     border: none;
+                    border-top: 1px dashed var(--color-edge-muted);
                     transition: border-color var(--transition);
-                    border-top: 1px dashed var(--b4);
                     box-sizing: border-box;
                     width: 100%;
                   "
@@ -128,6 +155,7 @@ export function ThemeList() {
               </div>
             )}
           </For>
+          </div>
         </div>
       </div>
     </>

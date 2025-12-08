@@ -259,6 +259,15 @@ export const authServiceClient = {
       (result) => result
     );
   },
+  async getUserNamesWithEmail(args: PostGetNamesRequestBody) {
+    return mapOk(
+      await fetchWithAuth<UserNames>(`${authHost}/user/get_names_with_email`, {
+        method: 'POST',
+        body: JSON.stringify(args),
+      }),
+      (result) => result
+    );
+  },
   async checkLinkExists(args: { idp_name?: string; idp_id?: string }) {
     const queryParams: string[] = [];
     if (args.idp_name !== undefined && args.idp_name !== null) {

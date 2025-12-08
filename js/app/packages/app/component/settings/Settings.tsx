@@ -1,50 +1,30 @@
-import { withAnalytics } from '@coparse/analytics';
-import { DEV_MODE_ENV } from '@core/constant/featureFlags';
-import {
-  type SettingsTab,
-  setSettingsOpen,
-  useSettingsState,
-} from '@core/constant/SettingsState';
-import { TOKENS } from '@core/hotkey/tokens';
+import { createEffect, createMemo, createSignal, For, onCleanup, onMount, Show, Suspense } from 'solid-js';
+import { type SettingsTab, useSettingsState } from '@core/constant/SettingsState';
+import { SplitlikeContainer } from '../split-layout/components/SplitContainer';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { isMobileWidth } from '@core/mobile/mobileWidth';
-import { useOrganizationName } from '@core/user';
-import Dialog from '@corvu/dialog';
-import { Tabs } from '@kobalte/core/tabs';
+import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
 import { MacroPermissions, usePermissions } from '@service-gql/client';
-import { registerHotkey } from 'core/hotkey/hotkeys';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  onCleanup,
-  Show,
-  Suspense,
-} from 'solid-js';
-import MacroJump from '../MacroJump';
-import { Account } from './Account';
-import { Appearance } from './Appearance';
-import { Notification } from './Notification';
+import { DEV_MODE_ENV } from '@core/constant/featureFlags';
+import { IconButton } from '@core/component/IconButton';
+import ContractIcon from '@icon/regular/arrows-in.svg';
 import Organization from './Organization/Organization';
+import ExpandIcon from '@icon/regular/arrows-out.svg';
+import { withAnalytics } from '@coparse/analytics';
+import { useOrganizationName } from '@core/user';
 import { Subscription } from './Subscription';
-import { Inbox } from './Inbox';
-
-export const [viewportOffset, setViewportOffset] = createSignal(0);
+import { Appearance } from './Appearance';
+import { Tabs } from '@kobalte/core/tabs';
+import { Account } from './Account';
 
 const SCROLL_THRESHOLD = 10;
 
 const { track, TrackingEvents } = withAnalytics();
-export function Settings() {
-  const {
-    settingsOpen,
-    closeSettings,
-    activeTabId,
-    setActiveTabId,
-    toggleSettings,
-  } = useSettingsState();
+
+export function SettingsPanel() {
+  const { settingsOpen, closeSettings, activeTabId, setActiveTabId } = useSettingsState();
   const permissions = usePermissions();
   const orgName = useOrganizationName();
+  const [spotlight, setSpotlight] = createSignal(false);
 
   let scrollRef!: HTMLDivElement;
   let scrollCleanup: (() => void) | undefined;
@@ -101,201 +81,183 @@ export function Settings() {
     }
   });
 
+  onMount(() => {
+    setTimeout(() => {
+      const activeTab = document.querySelector(`[data-value="${activeTabId()}"]`) as HTMLElement;
+      if(activeTab){updateIndicatorPosition(activeTab)}
+    }, 0);
+  });
+
+  createEffect(() => {
+    if (settingsOpen()){
+      setTimeout(() => {
+        const activeTab = document.querySelector(`[data-value="${activeTabId()}"]`) as HTMLElement;
+        if(activeTab){
+          updateIndicatorPosition(activeTab);
+          updateClipIndicators();
+        }
+      }, 10);
+    }
+  });
+
   /*
   very verbose way to choose which tabs should be shown
   this will be replaced with <Show when={}>
   */
   const settingsTabs = createMemo(() => {
-    const tabs: { value: string; label: string }[] = [];
+    const tabs: {value: string; label: string }[] = [
+      {value: 'Appearance', label: 'Appearance'},
+      {value: 'Account', label: 'Account'}
+    ];
 
-    tabs.push({ value: 'Appearance', label: 'Appearance' });
-
-    tabs.push({ value: 'Account', label: 'Account' });
-
-    if (!orgName() && !isNativeMobilePlatform()) {
-      tabs.push({ value: 'Subscription', label: 'Subscription' });
-    }
-
-    if (orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)) {
-      tabs.push({ value: 'Organization', label: 'Organization' });
-    }
-
-    tabs.push({ value: 'Notification', label: 'Notification' });
-
-    if (isNativeMobilePlatform() && DEV_MODE_ENV){
-      tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' })
-    }
-
-    if (DEV_MODE_ENV){
-      tabs.push({ value: 'Inbox', label: 'Inbox' })
-    }
+    if(!orgName() && !isNativeMobilePlatform()){tabs.push({value: 'Subscription', label: 'Subscription'})}
+    if(orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)){tabs.push({value: 'Organization', label: 'Organization'})}
+    if(isNativeMobilePlatform() && DEV_MODE_ENV){tabs.push({ value: 'Mobile', label: 'Mobile Dev Tools' })}
 
     return tabs;
   });
 
-  registerHotkey({
-    hotkeyToken: TOKENS.global.toggleSettings,
-    hotkey: 'cmd+;',
-    scopeId: 'global',
-    description: () => {
-      return settingsOpen() ? 'Close Settings Panel' : 'Open Settings Panel';
-    },
-    keyDownHandler: () => {
-      toggleSettings();
-      return true;
-    },
-    runWithInputFocused: true,
-  });
-
-  let settingsContentEl!: HTMLDivElement;
-
   return (
-    <Dialog
-      open={settingsOpen()}
-      onOpenChange={setSettingsOpen}
-      onEscapeKeyDown={closeSettings}
-      trapFocus={true}
+    <div
+      class="size-full invisible"
+      classList={{
+        visible: settingsOpen() || spotlight(),
+      }}
     >
-      <Dialog.Portal>
-        <Dialog.Overlay class="dialog-overlay fixed inset-0 z-modal-overlay w-full bg-modal-overlay" />
-        <Dialog.Content
-          class="dialog-content bg-dialog text-ink fixed sm:left-1/2 sm:top-1/2 z-modal sm:-translate-x-1/2 sm:-translate-y-1/2 w-dvw sm:w-[90vw] flex flex-col sm:shadow-2xl border-2 border-accent"
-          style={{
-            height: isMobileWidth() ? `calc(100dvh)` : '90dvh',
-            top: isMobileWidth()
-              ? `calc(${viewportOffset()}px + env(safe-area-inset-top))`
-              : '50%',
-          }}
-          ref={settingsContentEl}
-        >
-          <Tabs
-            value={activeTabId()}
-            onChange={(value: string | undefined) => {
-              if (
-                value &&
-                (value === 'Account' ||
-                  value === 'Subscription' ||
-                  value === 'Organization' ||
-                  value === 'Appearance' ||
-                  value === 'Notification' ||
-                  value === 'Mobile' ||
-                  value === 'AI Memory' || value === 'Inbox')
-              ) {
-                setActiveTabId(value as SettingsTab);
-                track(TrackingEvents.SETTINGS.CHANGETAB, { tab: value });
-              }
-            }}
-            class="flex flex-col h-full"
-          >
-            <div class="relative isolate shrink-0">
-              {/* Left clip boundary indicator */}
-              <div
-                class="absolute pointer-events-none left-0 top-px bottom-px w-3 z-2 pattern-diagonal-4 pattern-edge mask-r-from-0% border-l border-edge-muted transition-opacity duration-150"
-                style={{ opacity: leftOpacity() }}
-              />
-              {/* Right clip boundary indicator */}
-              <div
-                class="absolute pointer-events-none right-0 top-px bottom-px w-3 z-2 pattern-diagonal-4 pattern-edge mask-l-from-0% border-r border-edge-muted transition-opacity duration-150"
-                style={{ opacity: rightOpacity() }}
-              />
-
-              <Tabs.List
-                class="flex flex-row suppress-css-brackets h-full bg-panel overflow-x-scroll overscroll-none scrollbar-hidden scroll-shadows-x relative"
-                as="div"
-                ref={(el) => {
-                  scrollRef = el;
-                  if (el) {
-                    scrollCleanup = setupScrollListeners(el);
-                  }
-                }}
-              >
-                {/* Sliding indicator line */}
-                <div
-                  class="absolute bottom-0 h-px bg-accent z-10 pointer-events-none transition-all duration-150 ease-out"
-                  style={{
-                    transform: `translateX(${indicatorStyle().left}px)`,
-                    width: `${indicatorStyle().width}px`,
-                  }}
-                />
-
-                <For each={settingsTabs()}>
-                  {({ value, label }, i) => {
-                    const isActive = createMemo(() => value === activeTabId());
-
-                    let ref: HTMLDivElement | undefined;
-                    createEffect(() => {
-                      if (isActive() && ref) {
-                        ref.scrollIntoView({
-                          inline: 'end',
-                        });
-                        updateIndicatorPosition(ref);
-                        setTimeout(updateClipIndicators, 0);
-                      }
-                    });
-
-                    return (
-                      <Tabs.Trigger
-                        value={value}
-                        ref={ref}
-                        tabIndex={-1}
-                        class="min-w-12 max-w-[40cqw] shrink-0 text-sm relative h-full flex items-center px-2"
-                        classList={{
-                          'z-1 border-y border-edge-muted text-accent text-glow-sm':
-                            isActive(),
-                          'border-y border-edge-muted text-ink-disabled hover:text-accent/70 hover-transition-text':
-                            !isActive(),
-                        }}
-                      >
-                        <span class="flex items-center gap-1 w-full">
-                          <span class="text-xs font-mono opacity-70 mr-0.5">
-                            {(i() + 1).toString()}
-                          </span>
-                          <span class="truncate">{label}</span>
-                        </span>
-                      </Tabs.Trigger>
-                    );
-                  }}
-                </For>
-              </Tabs.List>
-            </div>
-
-            <div class="flex-1 p-6 overflow-y-scroll">
-              <Tabs.Content value="Account" class="h-full">
-                <Suspense>
-                  <Account />
-                </Suspense>
-              </Tabs.Content>
-              <Show when={!orgName() && !isNativeMobilePlatform()}>
-                <Tabs.Content value="Subscription" class="h-full">
-                  <Subscription />
-                </Tabs.Content>
-              </Show>
-              <Show
-                when={
-                  orgName() &&
-                  permissions()?.includes(MacroPermissions.WriteItPanel)
+      <SplitlikeContainer
+        setSpotlight={setSpotlight}
+        spotlight={spotlight}
+        tr={!spotlight()}
+      >
+        <div class="flex flex-col h-full bg-panel">
+            <Tabs
+              value={activeTabId()}
+              onChange={(value: string | undefined) => {
+                if(value && (value === 'Account' || value === 'Subscription' || value === 'Organization' || value === 'Appearance' || value === 'Mobile' || value === 'AI Memory')){
+                  setActiveTabId(value as SettingsTab);
+                  track(TrackingEvents.SETTINGS.CHANGETAB, { tab: value });
                 }
-              >
-                <Tabs.Content value="Organization" class="h-full">
-                  <Organization />
+              }}
+              class="flex flex-col h-full"
+            >
+              {/* Header with tabs */}
+              <div class="relative isolate shrink-0 border-b border-edge-muted">
+                <div class="flex items-center px-2 h-[2.5rem]">
+                  <IconButton
+                    icon={CloseIcon}
+                    onClick={closeSettings}
+                    tooltip={{ label: 'Close Settings' }}
+                    theme="clear"
+                    size="sm"
+                  />
+
+                  {/* Left clip boundary indicator */}
+                  <div
+                    class="absolute pointer-events-none left-0 top-[2.5rem] bottom-px w-3 z-2 pattern-diagonal-4 pattern-edge mask-r-from-0% border-l border-edge-muted transition-opacity duration-150"
+                    style={{ opacity: leftOpacity() }}
+                  />
+                  {/* Right clip boundary indicator */}
+                  <div
+                    class="absolute pointer-events-none right-0 top-[2.5rem] bottom-px w-3 z-2 pattern-diagonal-4 pattern-edge mask-l-from-0% border-r border-edge-muted transition-opacity duration-150"
+                    style={{ opacity: rightOpacity() }}
+                  />
+
+                  <Tabs.List
+                    class="flex flex-row suppress-css-brackets h-10 bg-panel overflow-x-scroll overscroll-none scrollbar-hidden scroll-shadows-x relative"
+                    as="div"
+                    ref={(el) => {
+                      scrollRef = el;
+                      if (el) {
+                        scrollCleanup = setupScrollListeners(el);
+                      }
+                    }}
+                  >
+                    {/* Sliding indicator line */}
+                    <div
+                      class="absolute bottom-0 h-px bg-accent z-10 pointer-events-none transition-all duration-150 ease-out"
+                      style={{
+                        transform: `translateX(${indicatorStyle().left}px)`,
+                        width: `${indicatorStyle().width}px`,
+                      }}
+                    />
+
+                    <For each={settingsTabs()}>
+                      {({ value, label }, i) => {
+                        const isActive = createMemo(() => value === activeTabId());
+
+                        let ref: HTMLDivElement | undefined;
+                        createEffect(() => {
+                          if (isActive() && ref) {
+                            ref.scrollIntoView({
+                              inline: 'end',
+                            });
+                            updateIndicatorPosition(ref);
+                            setTimeout(updateClipIndicators, 0);
+                          }
+                        });
+
+                        return (
+                          <Tabs.Trigger
+                            value={value}
+                            ref={ref}
+                            tabIndex={-1}
+                            data-value={value}
+                            class="min-w-12 max-w-[40cqw] shrink-0 text-sm relative h-full flex items-center px-2"
+                            classList={{
+                              'z-1 text-accent text-glow-sm': isActive(),
+                              'text-ink-disabled hover:text-accent/70 hover-transition-text': !isActive(),
+                            }}
+                          >
+                            <span class="flex items-center gap-1 w-full">
+                              <span class="text-xs font-mono opacity-70 mr-0.5">
+                                {(i() + 1).toString()}
+                              </span>
+                              <span class="truncate">{label}</span>
+                            </span>
+                          </Tabs.Trigger>
+                        );
+                      }}
+                    </For>
+                  </Tabs.List>
+
+                  <div class="flex-1" />
+
+                  <IconButton
+                    icon={spotlight() ? ContractIcon : ExpandIcon}
+                    onClick={() => setSpotlight(!spotlight())}
+                    tooltip={{
+                      label: spotlight() ? 'Exit Spotlight' : 'Enter Spotlight Mode'
+                    }}
+                    theme="clear"
+                    size="sm"
+                  />
+                </div>
+              </div>
+
+              {/* Content area */}
+              <div class="flex-1 min-h-0 relative">
+                <Tabs.Content value="Account" class="absolute inset-0">
+                  <Suspense>
+                    <Account />
+                  </Suspense>
                 </Tabs.Content>
-              </Show>
-              <Tabs.Content value="Appearance" class="h-full">
-                <Appearance />
-              </Tabs.Content>
-              <Tabs.Content value="Notification" class="h-full">
-                <Notification />
-              </Tabs.Content>
-              <Show when={DEV_MODE_ENV}>
-                <Tabs.Content value="Inbox" class="h-full">
-                  <Inbox />
+                <Show when={!orgName() && !isNativeMobilePlatform()}>
+                  <Tabs.Content value="Subscription" class="absolute inset-0">
+                    <Subscription />
+                  </Tabs.Content>
+                </Show>
+                <Show when={ orgName() && permissions()?.includes(MacroPermissions.WriteItPanel)}>
+                  <Tabs.Content value="Organization" class="absolute inset-0">
+                    <Organization />
+                  </Tabs.Content>
+                </Show>
+                <Tabs.Content value="Appearance" class="absolute inset-0">
+                  <Appearance />
                 </Tabs.Content>
-              </Show>
-            </div>
-          </Tabs>
-        </Dialog.Content>
-        <MacroJump tabbableParent={() => settingsContentEl} />
-      </Dialog.Portal>
-    </Dialog>
+              </div>
+            </Tabs>
+          </div>
+        </SplitlikeContainer>
+      </div>
   );
 }

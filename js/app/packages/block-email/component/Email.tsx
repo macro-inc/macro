@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
@@ -11,11 +12,8 @@ import {
 import { blockHandleSignal } from '@core/signal/load';
 import {
   type ContactInfo,
-  isPersonEmailContact,
   recipientEntityMapper,
   useContacts,
-  useEmailContacts,
-  useOrganizationUsers,
 } from '@core/user';
 import {
   createEffectOnEntityTypeNotification,
@@ -40,7 +38,6 @@ import {
 import { createStore } from 'solid-js/store';
 import { URL_PARAMS } from '../constants';
 import { isScrollingToMessage } from '../signal/scrollState';
-import { useThreadNavigation } from '../signal/threadNavigation';
 import { registerEmailHotkeys } from '../util/emailHotkeys';
 import { getHeaderValue } from '../util/getHeaderValue';
 import {
@@ -63,8 +60,13 @@ export function Email(props: EmailProps) {
   const scopeId = blockHotkeyScopeSignal.get;
 
   const setIsScrollingToMessage = isScrollingToMessage.set;
-  const { navigateThread } = useThreadNavigation();
   const blockElement = blockElementSignal.get;
+  const {
+    unifiedListContext: {
+      entitiesSignal: [entities],
+      actionRegistry,
+    },
+  } = useSplitPanelOrThrow();
 
   const threadQuery = useThreadQuery(props.threadId);
   const threadData = () => threadQuery.data?.thread;
@@ -138,10 +140,7 @@ export function Email(props: EmailProps) {
   // ============================================
   // SHARED RECIPIENT OPTIONS
   // ============================================
-  const organizationUsers = useOrganizationUsers();
   const contacts = useContacts();
-  const emailContacts = useEmailContacts();
-  const personEmailContacts = emailContacts().filter(isPersonEmailContact);
 
   const [augmentedRecipients, setAugmentedRecipients] = createSignal<
     EmailRecipient[]
@@ -169,24 +168,20 @@ export function Email(props: EmailProps) {
   const recipientOptions = createMemo<EmailRecipient[]>(() => {
     const optionsMap = new Map<string, EmailRecipient>();
 
-    organizationUsers()
-      .map(recipientEntityMapper('user'))
-      .forEach((u) => optionsMap.set(u.data.email, u));
     contacts()
       .map(recipientEntityMapper('user'))
       .forEach((u) => optionsMap.set(u.data.email, u));
-    personEmailContacts
-      .map(recipientEntityMapper('contact'))
-      .forEach((c) => optionsMap.set(c.data.email, c));
 
     const t = threadData();
     if (t) {
       const seen = new Map<string, ContactInfo>();
+
+      const add = (c: ContactInfo) => {
+        const existing = seen.get(c.email);
+        if (!existing || (!existing.name && c.name)) seen.set(c.email, c);
+      };
+
       t.messages.forEach((m) => {
-        const add = (c: ContactInfo) => {
-          const existing = seen.get(c.email);
-          if (!existing || (!existing.name && c.name)) seen.set(c.email, c);
-        };
         m.to.forEach(add);
         m.cc.forEach(add);
         m.bcc.forEach(add);
@@ -473,7 +468,22 @@ export function Email(props: EmailProps) {
       threadId: thread.db_id,
       archive: thread.inbox_visible,
     });
-    navigateThread('down');
+
+    if (!props) return false;
+
+    const selectedEntity = entities()?.find(
+      (entity) => entity.id === threadData()!.db_id
+    );
+
+    if (selectedEntity) {
+      actionRegistry.execute('mark_as_done', selectedEntity);
+    } else {
+      archiveThreadMutate({
+        threadId: thread.db_id,
+        archive: thread.inbox_visible,
+      });
+    }
+
     return true;
   });
 
