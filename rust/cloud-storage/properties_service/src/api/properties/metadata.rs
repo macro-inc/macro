@@ -55,7 +55,7 @@ pub async fn get_document_metadata_properties(
             metadata::DOCUMENT_NAME,
             models_properties::DataType::String,
             document_metadata.name,
-            entity_type.clone(),
+            entity_type,
         ));
     }
 
@@ -69,7 +69,7 @@ pub async fn get_document_metadata_properties(
             metadata::OWNER,
             models_properties::DataType::Entity,
             owner_entity_ref,
-            entity_type.clone(),
+            entity_type,
             Some(EntityType::User),
         ));
     }
@@ -79,7 +79,7 @@ pub async fn get_document_metadata_properties(
         metadata::CREATED_AT,
         models_properties::DataType::Date,
         document_metadata.created_at,
-        entity_type.clone(),
+        entity_type,
     ));
 
     // 4. Last updated time property
@@ -87,7 +87,7 @@ pub async fn get_document_metadata_properties(
         metadata::LAST_UPDATED,
         models_properties::DataType::Date,
         document_metadata.updated_at,
-        entity_type.clone(),
+        entity_type,
     ));
 
     // 5. Project property
@@ -100,7 +100,7 @@ pub async fn get_document_metadata_properties(
             metadata::PROJECT,
             models_properties::DataType::Entity,
             project_entity_ref,
-            entity_type.clone(),
+            entity_type,
             Some(EntityType::Project),
         ));
     } else {
@@ -108,7 +108,7 @@ pub async fn get_document_metadata_properties(
         metadata_properties.push(create_metadata_property_null(
             metadata::PROJECT,
             models_properties::DataType::Entity,
-            entity_type.clone(),
+            entity_type,
             Some(EntityType::Project),
         ));
     }
