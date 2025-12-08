@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT \n            ep.id as entity_property_id,\n            ep.entity_id,\n            ep.entity_type as \"entity_type: EntityType\",\n            ep.property_definition_id,\n            ep.values as \"values: sqlx::types::JsonValue\",\n            ep.created_at as entity_property_created_at,\n            ep.updated_at as entity_property_updated_at,\n            pd.organization_id as definition_organization_id,\n            pd.user_id as definition_user_id,\n            pd.display_name,\n            pd.data_type as \"data_type: DataType\",\n            pd.is_multi_select,\n            pd.specific_entity_type as \"specific_entity_type: Option<EntityType>\",\n            pd.created_at as definition_created_at,\n            pd.updated_at as definition_updated_at\n        FROM entity_properties ep\n        INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id\n        WHERE ep.entity_id = $1 AND ep.entity_type = $2\n          AND pd.is_system = FALSE\n        ",
+  "query": "\n        SELECT \n            ep.id as entity_property_id,\n            ep.entity_id,\n            ep.entity_type as \"entity_type: EntityType\",\n            ep.property_definition_id,\n            ep.values as \"values: sqlx::types::JsonValue\",\n            ep.created_at as entity_property_created_at,\n            ep.updated_at as entity_property_updated_at,\n            pd.organization_id as definition_organization_id,\n            pd.user_id as definition_user_id,\n            pd.display_name,\n            pd.data_type as \"data_type: DataType\",\n            pd.is_multi_select,\n            pd.specific_entity_type as \"specific_entity_type: Option<EntityType>\",\n            pd.created_at as definition_created_at,\n            pd.updated_at as definition_updated_at,\n            pd.is_system as definition_is_system\n        FROM entity_properties ep\n        INNER JOIN property_definitions pd ON ep.property_definition_id = pd.id\n        WHERE (ep.entity_id, ep.entity_type) IN (\n            SELECT * FROM UNNEST($1::TEXT[], $2::property_entity_type[])\n        )\n        ",
   "describe": {
     "columns": [
       {
@@ -125,25 +125,37 @@
         "ordinal": 14,
         "name": "definition_updated_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 15,
+        "name": "definition_is_system",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "Text",
+        "TextArray",
         {
           "Custom": {
-            "name": "property_entity_type",
+            "name": "property_entity_type[]",
             "kind": {
-              "Enum": [
-                "CHANNEL",
-                "CHAT",
-                "DOCUMENT",
-                "PROJECT",
-                "THREAD",
-                "USER",
-                "COMPANY",
-                "TASK"
-              ]
+              "Array": {
+                "Custom": {
+                  "name": "property_entity_type",
+                  "kind": {
+                    "Enum": [
+                      "CHANNEL",
+                      "CHAT",
+                      "DOCUMENT",
+                      "PROJECT",
+                      "THREAD",
+                      "USER",
+                      "COMPANY",
+                      "TASK"
+                    ]
+                  }
+                }
+              }
             }
           }
         }
@@ -164,8 +176,9 @@
       false,
       true,
       false,
+      false,
       false
     ]
   },
-  "hash": "d77d511766deedda664b4732067506878765eb029f4a63a32374284de29a33f3"
+  "hash": "9eae6bc7ff21a0c2f6f7aea33188ba4097305e77f341ac67c7d9779889ed7434"
 }

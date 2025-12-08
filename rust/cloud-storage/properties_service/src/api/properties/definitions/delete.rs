@@ -17,11 +17,13 @@ use properties_db_client::{
 
 #[derive(Debug, Error)]
 pub enum DeletePropertyDefinitionError {
-    #[error("property definition not found")]
+    #[error("Property definition not found")]
     NotFound,
-    #[error("internal server error")]
+    #[error("Cannot modify system properties")]
+    SystemPropertyNotModifiable,
+    #[error("An internal error occurred")]
     InternalServerError(#[from] anyhow::Error),
-    #[error("Database error: {0}")]
+    #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
 }
 
@@ -29,6 +31,7 @@ impl IntoResponse for DeletePropertyDefinitionError {
     fn into_response(self) -> Response {
         let status_code = match &self {
             DeletePropertyDefinitionError::NotFound => StatusCode::NOT_FOUND,
+            DeletePropertyDefinitionError::SystemPropertyNotModifiable => StatusCode::FORBIDDEN,
             DeletePropertyDefinitionError::InternalServerError(_)
             | DeletePropertyDefinitionError::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
@@ -55,22 +58,30 @@ impl IntoResponse for DeletePropertyDefinitionError {
     responses(
         (status = 204, description = "Property definition deleted successfully"),
         (status = 400, description = "Invalid property ID"),
+        (status = 403, description = "Cannot modify system properties"),
         (status = 404, description = "Property definition not found"),
         (status = 500, description = "Internal server error")
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, user_context))]
+#[tracing::instrument(skip(context, user_context), err)]
 pub async fn delete_property_definition(
     Path(property_uuid): Path<Uuid>,
     State(context): State<ApiContext>,
     Extension(user_context): Extension<UserContext>,
 ) -> Result<Response, DeletePropertyDefinitionError> {
-    tracing::info!(
-        property_id = %property_uuid,
-        "deleting property definition"
-    );
+    tracing::info!("deleting property definition");
 
+    // First check if property exists and if it's a system property
+    let property = property_definitions_get::get_property_definition(&context.db, property_uuid)
+        .await?
+        .ok_or(DeletePropertyDefinitionError::NotFound)?;
+
+    if property.is_system {
+        return Err(DeletePropertyDefinitionError::SystemPropertyNotModifiable);
+    }
+
+    // Then verify ownership
     let _property = property_definitions_get::get_property_definition_with_owner(
         &context.db,
         property_uuid,
@@ -82,10 +93,7 @@ pub async fn delete_property_definition(
 
     property_definitions_delete::delete_property_definition(&context.db, property_uuid).await?;
 
-    tracing::info!(
-        property_id = %property_uuid,
-        "successfully deleted property definition"
-    );
+    tracing::info!("successfully deleted property definition");
 
     Ok(StatusCode::NO_CONTENT.into_response())
 }

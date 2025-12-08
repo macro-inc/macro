@@ -1,4 +1,3 @@
-import { refetchDocumentFileMenuResource } from '@core/component/TopBar/FileMenu';
 import { refetchDocumentShareButtonResource } from '@core/component/TopBar/ShareButton';
 import { invalidateUserQuota } from '@service-auth/userQuota';
 import { refetchDeletedItems } from '@service-storage/deleted';
@@ -28,6 +27,5 @@ export function refetchResources(options?: RefetchResourcesOptions) {
 export async function refetchProjectResources(force = false) {
   await refetchProjects(force);
 
-  refetchDocumentFileMenuResource();
   refetchDocumentShareButtonResource();
 }

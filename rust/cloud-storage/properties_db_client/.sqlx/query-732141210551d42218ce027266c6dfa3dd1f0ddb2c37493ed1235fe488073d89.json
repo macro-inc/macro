@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT \n            id,\n            organization_id,\n            user_id,\n            display_name,\n            data_type as \"data_type: DataType\",\n            is_multi_select,\n            specific_entity_type as \"specific_entity_type: Option<EntityType>\",\n            created_at,\n            updated_at\n        FROM property_definitions\n        WHERE id = $1\n          AND is_system = FALSE\n          AND (\n            user_id = $2\n            OR ($3::int IS NOT NULL AND organization_id = $3)\n          )\n        ",
+  "query": "\n        SELECT \n            id,\n            organization_id,\n            user_id,\n            display_name,\n            data_type as \"data_type: DataType\",\n            is_multi_select,\n            specific_entity_type as \"specific_entity_type: Option<EntityType>\",\n            created_at,\n            updated_at,\n            is_system\n        FROM property_definitions\n        WHERE id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -79,13 +79,16 @@
         "ordinal": 8,
         "name": "updated_at",
         "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 9,
+        "name": "is_system",
+        "type_info": "Bool"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Text",
-        "Int4"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -97,8 +100,9 @@
       false,
       true,
       false,
+      false,
       false
     ]
   },
-  "hash": "f476964b8bcedb7b69ad1bb708586065adea1bd5c2f00e3f3050ae00470546c3"
+  "hash": "732141210551d42218ce027266c6dfa3dd1f0ddb2c37493ed1235fe488073d89"
 }

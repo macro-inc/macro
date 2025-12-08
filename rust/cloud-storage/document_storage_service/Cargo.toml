@@ -98,6 +98,7 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
   "search",
 ] }
 sync_service_client = { path = "../sync_service_client" }
+system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }

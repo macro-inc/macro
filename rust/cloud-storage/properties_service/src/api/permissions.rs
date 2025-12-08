@@ -7,13 +7,13 @@ use crate::api::context::ApiContext;
 
 #[derive(Debug, Error)]
 pub enum PermissionError {
-    #[error("Entity type not supported for property operations")]
+    #[error("Unsupported entity type")]
     UnsupportedEntityType,
 
-    #[error("Unauthorized: user does not have sufficient access")]
+    #[error("Access denied")]
     Unauthorized,
 
-    #[error("Internal error checking permissions: {0}")]
+    #[error("An internal error occurred")]
     InternalError(String),
 }
 
@@ -30,7 +30,7 @@ impl PermissionError {
 /// Checks if a user has view access to an entity (View, Comment, Edit, or Owner level).
 /// Supports: Document, Chat, Project, Thread, Channel, Macro.
 /// For anonymous users (empty user_id), only allows access to publicly shared entities.
-#[tracing::instrument(skip(context), fields(user_id = %user_id, entity_id = %entity_ref.entity_id, entity_type = ?entity_ref.entity_type))]
+#[tracing::instrument(skip(context), fields(user_id = %user_id, entity_id = %entity_ref.entity_id, entity_type = ?entity_ref.entity_type), err)]
 pub async fn check_entity_view_permission(
     context: &ApiContext,
     user_id: &str,
@@ -46,7 +46,7 @@ pub async fn check_entity_view_permission(
 
 /// Checks if a user has edit access to an entity (Edit or Owner level).
 /// Supports: Document, Chat, Project, Thread, Channel, Macro.
-#[tracing::instrument(skip(context), fields(user_id = %user_id, entity_id = %entity_ref.entity_id, entity_type = ?entity_ref.entity_type))]
+#[tracing::instrument(skip(context), fields(user_id = %user_id, entity_id = %entity_ref.entity_id, entity_type = ?entity_ref.entity_type), err)]
 pub async fn check_entity_edit_permission(
     context: &ApiContext,
     user_id: &str,
@@ -64,7 +64,7 @@ pub async fn check_entity_edit_permission(
 ///
 /// NOTE: Makes a separate DB query (+ HTTP call for channels). Not worth inlining into
 /// properties query due to complex recursive CTEs and entity-specific permission logic.
-#[tracing::instrument(skip(context), fields(user_id = %user_id, entity_id = %entity_ref.entity_id, entity_type = ?entity_ref.entity_type))]
+#[tracing::instrument(skip(context), fields(user_id = %user_id, entity_id = %entity_ref.entity_id, entity_type = ?entity_ref.entity_type), err)]
 async fn get_access_level(
     context: &ApiContext,
     user_id: &str,
@@ -94,7 +94,6 @@ async fn get_access_level(
         tracing::error!(
             status_code = ?status_code,
             message = %message,
-            entity_type = ?entity_ref.entity_type,
             "failed to get user access level"
         );
         PermissionError::InternalError(message)
