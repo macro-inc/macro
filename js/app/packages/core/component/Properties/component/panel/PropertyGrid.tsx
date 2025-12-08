@@ -1,4 +1,6 @@
+import { useBlockName } from '@core/block';
 import { type Component, createMemo, For, Show } from 'solid-js';
+import { getBuiltinPropertyIds } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
 import { PropertyRow } from './PropertyRow';
@@ -9,12 +11,14 @@ interface PropertiesListProps {
 
 export const PropertyGrid: Component<PropertiesListProps> = (props) => {
   const { openPropertyEditor, openDatePicker } = usePropertiesContext();
+  const blockName = useBlockName();
+  const builtinPropertyIds = getBuiltinPropertyIds(blockName);
 
-  // Single pass through properties array to split into metadata and editable
-  // More efficient than two separate filter operations
+  // Single pass through properties array to split into metadata, builtin, and user properties
   const propertyGroups = createMemo(() => {
     const metadata: Property[] = [];
-    const editable: Property[] = [];
+    const builtinProperties: Property[] = [];
+    const userProperties: Property[] = [];
 
     for (const prop of props.properties) {
       if (prop.isMetadata) {
@@ -22,18 +26,34 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
         if (prop.value != null) {
           metadata.push(prop);
         }
+      } else if (builtinPropertyIds.includes(prop.propertyDefinitionId)) {
+        builtinProperties.push(prop);
       } else {
-        editable.push(prop);
+        userProperties.push(prop);
       }
     }
 
-    return { metadata, editable };
+    // Sort builtin properties by the order defined in constants
+    builtinProperties.sort((a, b) => {
+      const indexA = builtinPropertyIds.indexOf(a.propertyDefinitionId);
+      const indexB = builtinPropertyIds.indexOf(b.propertyDefinitionId);
+      return indexA - indexB;
+    });
+
+    return { metadata, builtinProperties, userProperties };
   });
 
-  const showSeparator = createMemo(
+  const showSeparatorAboveBuiltin = createMemo(
     () =>
       propertyGroups().metadata.length > 0 &&
-      propertyGroups().editable.length > 0
+      propertyGroups().builtinProperties.length > 0
+  );
+
+  const showSeparatorAboveUser = createMemo(
+    () =>
+      (propertyGroups().metadata.length > 0 ||
+        propertyGroups().builtinProperties.length > 0) &&
+      propertyGroups().userProperties.length > 0
   );
 
   const handleValueClick = (property: Property, anchor?: HTMLElement) => {
@@ -59,6 +79,7 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
       }
     >
       <div class="grid grid-cols-[minmax(120px,50%)_minmax(150px,1fr)] gap-x-4 gap-y-3 pt-2 min-w-fit">
+        {/* Metadata properties */}
         <Show when={propertyGroups().metadata.length > 0}>
           <For each={propertyGroups().metadata}>
             {(property) => (
@@ -70,12 +91,31 @@ export const PropertyGrid: Component<PropertiesListProps> = (props) => {
           </For>
         </Show>
 
-        <Show when={showSeparator()}>
-          <div class="col-span-2 border-t border-edge my-4" />
+        {/* Builtin properties (block-specific, non-removable) */}
+        <Show when={propertyGroups().builtinProperties.length > 0}>
+          {/* Separator above builtin */}
+          <Show when={showSeparatorAboveBuiltin()}>
+            <div class="col-span-2 border-t border-edge my-4" />
+          </Show>
+
+          <For each={propertyGroups().builtinProperties}>
+            {(property) => (
+              <PropertyRow
+                property={property}
+                onValueClick={handleValueClick}
+              />
+            )}
+          </For>
         </Show>
 
-        <Show when={propertyGroups().editable.length > 0}>
-          <For each={propertyGroups().editable}>
+        {/* User properties */}
+        <Show when={propertyGroups().userProperties.length > 0}>
+          {/* Separator between above user */}
+          <Show when={showSeparatorAboveUser()}>
+            <div class="col-span-2 border-t border-edge my-4" />
+          </Show>
+
+          <For each={propertyGroups().userProperties}>
             {(property) => (
               <PropertyRow
                 property={property}

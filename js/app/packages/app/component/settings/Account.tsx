@@ -1,11 +1,11 @@
-import { capitalize } from '@block-pdf/util/StringUtils';
-import { useHasPaidAccess } from '@core/auth/license';
-import { useLogout } from '@core/auth/logout';
-import EditableField from '@core/component/EditableField';
 import { uploadProfilePicture } from '@core/component/ProfilePicture';
-import { TabContent, TabContentRow } from '@core/component/TabContent';
+import { TabContentRow } from '@core/component/TabContent';
+import EditableField from '@core/component/EditableField';
+import { capitalize } from '@block-pdf/util/StringUtils';
 import { TextButton } from '@core/component/TextButton';
+import { useHasPaidAccess } from '@core/auth/license';
 import { UserIcon } from '@core/component/UserIcon';
+import { useLogout } from '@core/auth/logout';
 import {
   blockNameToFileExtensions,
   blockNameToMimeTypes,
@@ -33,6 +33,10 @@ import {
   useEmailLinksStatus,
 } from '@core/email-link';
 import { BetaTooltip } from '../BetaTooltip';
+import {
+  type SupportedNotificationSettings,
+  useNotificationSettings,
+} from '@notifications';
 
 // NOTE: solid directives
 false && fileSelector;
@@ -107,9 +111,10 @@ export function Account() {
   };
 
   return (
-    <TabContent title="Account">
-      <div class="mb-12 text-ink">
-        <Show when={ENABLE_PROFILE_PICTURES}>
+    <div class="absolute inset-0 overflow-y-auto" style="scrollbar-width: none;">
+        <div class="p-2">
+          <div class="mb-12 text-ink">
+          <Show when={ENABLE_PROFILE_PICTURES}>
           <TabContentRow
             isLoading={!userId()}
             text="Profile Picture"
@@ -263,6 +268,7 @@ export function Account() {
             </div>
           </div>
         </Show>
+        <NotificationToggle />
         <div class="flex flex-row justify-between items-center border-t border-edge pt-2">
           <div
             class="mb-4.5 flex flex-row justify-start items-center gap-1"
@@ -271,8 +277,46 @@ export function Account() {
             <Logout class="w-4 h-4" />
             <div class="text-sm select-none">Logout</div>
           </div>
+          </div>
         </div>
       </div>
-    </TabContent>
+    </div>
+  );
+}
+
+function NotificationToggle() {
+  const settings = useNotificationSettings();
+
+  return (
+    <Show
+      when={settings.isSupported && settings}
+      fallback={<NotificationNotSupported />}
+    >
+      {(s) => <NotificationSettings settings={s()} />}
+    </Show>
+  );
+}
+
+function NotificationSettings(props: {
+  settings: SupportedNotificationSettings;
+}) {
+  return (
+    <div class="flex items-center justify-between mb-[18px]">
+      <div class="text-sm">Notifications</div>
+      <TextButton
+        theme="base"
+        text={props.settings.isEnabled() ? "Disable" : "Enable"}
+        onClick={() => props.settings.toggle(!props.settings.isEnabled())}
+      />
+    </div>
+  );
+}
+
+function NotificationNotSupported() {
+  return (
+    <div class="flex items-center justify-between mb-[18px]">
+      <div class="text-sm">Notifications</div>
+      <span class="text-sm text-ink-muted">Not supported on this device</span>
+    </div>
   );
 }

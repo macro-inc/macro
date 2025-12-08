@@ -48,6 +48,7 @@ export type Property = {
   displayName: string;
   isMultiSelect: boolean;
   isMetadata?: boolean;
+  isSystemProperty?: boolean;
   options?: PropertyOption[];
   owner: PropertyOwner;
   specificEntityType?: EntityType | null;

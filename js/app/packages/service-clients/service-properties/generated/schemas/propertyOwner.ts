@@ -7,8 +7,9 @@
 import type { PropertyOwnerOneOf } from './propertyOwnerOneOf';
 import type { PropertyOwnerOneOfThree } from './propertyOwnerOneOfThree';
 import type { PropertyOwnerOneOfFive } from './propertyOwnerOneOfFive';
+import type { PropertyOwnerOneOfSeven } from './propertyOwnerOneOfSeven';
 
 /**
- * Defines who owns a property - user-scoped, org-scoped, or both.
+ * Defines who owns a property - user-scoped, org-scoped, system, or both user and org.
  */
-export type PropertyOwner = PropertyOwnerOneOf | PropertyOwnerOneOfThree | PropertyOwnerOneOfFive;
+export type PropertyOwner = PropertyOwnerOneOf | PropertyOwnerOneOfThree | PropertyOwnerOneOfFive | PropertyOwnerOneOfSeven;

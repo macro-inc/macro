@@ -91,6 +91,7 @@ import {
   createEffect,
   createMemo,
   createRenderEffect,
+  createRoot,
   createSelector,
   createSignal,
   mergeProps,
@@ -875,9 +876,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const disableDssInfiniteQuery = createMemo(() => {
     const typeFilter = entityTypeFilter();
     if (typeFilter.length === 0) return false;
-    const dssTypes = ['document', 'chat', 'project'];
-    const hasDssTypes = typeFilter.some((t) => dssTypes.includes(t));
-    return !hasDssTypes;
+
+    function onlyHas<T>(arr: readonly T[], value: T): boolean {
+      return arr.length === 1 && arr[0] === value;
+    }
+
+    if (onlyHas(typeFilter, 'channel')) return true;
+    return false;
   });
 
   const disableChannelsQuery = createMemo(() => {
@@ -885,18 +890,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     if (typeFilter.length > 0 && !typeFilter.includes('channel')) return true;
     return false;
   });
-
-  const channelsQuery = createChannelsQuery({
-    disabled: disableChannelsQuery,
-  });
-  const dssInfiniteQuery = createDssInfiniteQuery(dssQueryParams, {
-    disabled: disableDssInfiniteQuery,
-    requestBody: dssQueryRequestBody,
-  });
-  const searchNameContentInfiniteQuery = createUnifiedSearchInfiniteQuery(
-    searchUnifiedNameContentQueryParams,
-    { disabled: disableSearchService }
-  );
 
   // TODO: fix email source
   // const emailSource = useGlobalEmailSource();
@@ -940,13 +933,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return blockHandle?.goToLocationFromParams({ message_id, thread_id });
   };
 
-  const entityMapper = (entity: EntityData) => {
-    return {
-      ...unwrap(entity),
-      notifications: useNotificationsForEntity(notificationSource, entity),
-    };
-  };
-
   const { SortComponent, sortFn: entitySort } = createSort({
     sortOptions,
     defaultSortOption: getSystemSortOption(defaultSortOptions as SortOptions),
@@ -958,36 +944,83 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     disabled: isSearchActive,
   });
 
-  const { UnifiedListComponent, entities, isLoading } =
-    createUnifiedInfiniteList<
-      WithNotification<WithSearch<EntityData> | EntityData>
-    >({
-      entityInfiniteQueries: [
-        {
-          query: dssInfiniteQuery,
-          operations: { filter: true, search: true },
-        },
-        {
-          query: searchNameContentInfiniteQuery,
-          operations: { filter: false, search: false },
-        },
-      ],
-      entityMapper,
-      entityQueries: [
-        { query: channelsQuery, operations: { filter: true, search: true } },
-      ],
-      requiredFilter,
-      optionalFilter,
-      entitySort,
-      searchFilter: nameFuzzySearchFilter,
-      isSearchActive,
+  const {
+    dispose: disposeUnifiedListQueries,
+    UnifiedListComponent,
+    isLoading,
+  } = createRoot((dispose) => {
+    const channelsQuery = createChannelsQuery({
+      disabled: disableChannelsQuery,
+    });
+    const dssInfiniteQuery = createDssInfiniteQuery(dssQueryParams, {
+      disabled: disableDssInfiniteQuery,
+      requestBody: dssQueryRequestBody,
+    });
+    const searchNameContentInfiniteQuery = createUnifiedSearchInfiniteQuery(
+      searchUnifiedNameContentQueryParams,
+      { disabled: disableSearchService }
+    );
+    const notificationSource = useGlobalNotificationSource();
+
+    const entityMapper = (entity: EntityData) => {
+      return {
+        ...unwrap(entity),
+        notifications: useNotificationsForEntity(notificationSource, entity),
+      };
+    };
+
+    const { UnifiedListComponent, entities, isLoading } =
+      createUnifiedInfiniteList<
+        WithNotification<WithSearch<EntityData> | EntityData>
+      >({
+        entityInfiniteQueries: [
+          {
+            query: dssInfiniteQuery,
+            operations: { filter: true, search: true },
+          },
+          {
+            query: searchNameContentInfiniteQuery,
+            operations: { filter: false, search: false },
+          },
+        ],
+        entityMapper,
+        entityQueries: [
+          { query: channelsQuery, operations: { filter: true, search: true } },
+        ],
+        requiredFilter,
+        optionalFilter,
+        entitySort,
+        searchFilter: nameFuzzySearchFilter,
+        isSearchActive,
+      });
+
+    createEffect(() => {
+      setEntities(entities());
     });
 
-  createEffect(() => setEntities(entities()));
+    return { dispose, isLoading, UnifiedListComponent };
+  });
 
   createEffect(() => {
     const loading = isLoading();
     setIsSearchLoading(loading);
+  });
+
+  onCleanup(() => {
+    createRoot((dispose) => {
+      createEffect(() => {
+        // don't dispose on blocks, such as email block when marking as done, in order to update entity navigation indicator
+        if (
+          splitContext.panelRef()?.isConnected &&
+          splitContext.handle.content().id !== 'unified-list'
+        ) {
+          return;
+        }
+
+        disposeUnifiedListQueries();
+        dispose();
+      });
+    });
   });
 
   const documentEntityClickHandler: EntityClickHandler<

@@ -4,7 +4,7 @@ export function ColorSwatch(props: { width: string; color: string }) {
       class="theme-color-swatch"
       style="
         transition: border-color var(--transition);
-        border: 1px solid var(--b4);
+        border: 1px solid var(--color-edge-muted);
         padding: 3px;
       "
     >

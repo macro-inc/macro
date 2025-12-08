@@ -3,8 +3,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import type { ChannelWithParticipants, IUser } from '@core/user';
-import { useContacts, useOrganizationUsers } from '@core/user';
-import { mergeByKey } from '@core/util/compareUtils';
+import { useContacts } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import ChannelBuildingIcon from '@icon/duotone/building-office-duotone.svg';
@@ -132,29 +131,26 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   let searchInputRef!: HTMLInputElement;
 
   const history = useHistory();
-  const organizationUsers = useOrganizationUsers();
   const contacts = useContacts();
   const channelsContext = useChannelsContext();
   const channels = () => channelsContext.channels();
 
-  const entities = createMemo((): CombinedEntity[] => {
+  const entities = createMemo(() => {
     const { specificEntityType } = props.property;
 
     if (!specificEntityType) {
-      const allUsers = mergeByKey('id', contacts(), organizationUsers());
       return [
-        ...allUsers.map(entityMapper('user')),
+        ...contacts().map(entityMapper('user')),
         ...history().map(entityMapper('item')),
         ...channels().map(entityMapper('channel')),
       ];
     }
 
-    if (specificEntityType === ('USER' as EntityType)) {
-      const users = mergeByKey('id', contacts(), organizationUsers());
-      return users.map(entityMapper('user'));
+    if (specificEntityType === 'USER') {
+      return contacts().map(entityMapper('user'));
     }
 
-    if (specificEntityType === ('CHANNEL' as EntityType)) {
+    if (specificEntityType === 'CHANNEL') {
       return channels().map(entityMapper('channel'));
     }
 

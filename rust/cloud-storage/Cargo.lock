@@ -5481,6 +5481,7 @@ dependencies = [
  "macro_user_id",
  "macro_uuid",
  "models_pagination",
+ "models_permissions",
  "regex",
  "schemars",
  "scraper",

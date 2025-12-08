@@ -357,6 +357,7 @@ export function createResizeSolver(params: {
     const shares = ids.map((id) => panelData[id]!.share);
 
     const bounds = (i: number) => {
+      if (i < 0 || i >= panels.length) return [0, 0];
       const minPx = panels[i].minSize ?? 0;
       const maxPx = panels[i].maxSize ?? Infinity;
       const minS = Math.max(0, minPx / usable);
