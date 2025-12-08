@@ -144,9 +144,7 @@ function Zone(props: ParentProps<ZoneProps>) {
         <Show when={visibleLayouts().length > 1}>
           <Index each={visibleLayouts()}>
             {(panel, visibleIndex) => {
-              const actualIndex = solver
-                .order()
-                .findIndex((id) => id === panel().id);
+              const actualIndex = solver.order().indexOf(panel().id);
               return (
                 <Show when={visibleIndex < visibleLayouts().length - 1}>
                   <Gutter
