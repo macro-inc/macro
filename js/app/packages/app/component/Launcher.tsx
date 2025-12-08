@@ -2,6 +2,7 @@ import type { BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { Hotkey } from '@core/component/Hotkey';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
+import { ENABLE_CREATE_TASK } from '@core/constant/featureFlags';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { pressedKeys } from '@core/hotkey/state';
 import { type HotkeyToken, TOKENS } from '@core/hotkey/tokens';
@@ -109,29 +110,33 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
       return true;
     },
   },
-  {
-    label: 'Task',
-    icon: () => <WideTask />,
-    description: 'Create task',
-    blockName: 'task',
-    hotkeyToken: TOKENS.create.task,
-    altHotkeyToken: TOKENS.create.taskNewSplit,
-    hotkey: 't',
-    keyDownHandler: () => {
-      createBlock({
-        blockName: 'task',
-        loading: true,
-        createFn: () =>
-          createTask({
-            title: '',
-            content: '',
-            projectId: undefined,
-          }),
-        shouldInsert: pressedKeys().has('opt'),
-      });
-      return true;
-    },
-  },
+  ...(ENABLE_CREATE_TASK
+    ? [
+        {
+          label: 'Task',
+          icon: () => <WideTask />,
+          description: 'Create task',
+          blockName: 'task' as BlockName,
+          hotkeyToken: TOKENS.create.task,
+          altHotkeyToken: TOKENS.create.taskNewSplit,
+          hotkey: 't' as const,
+          keyDownHandler: () => {
+            createBlock({
+              blockName: 'task',
+              loading: true,
+              createFn: () =>
+                createTask({
+                  title: '',
+                  content: '',
+                  projectId: undefined,
+                }),
+              shouldInsert: pressedKeys().has('opt'),
+            });
+            return true;
+          },
+        },
+      ]
+    : []),
   {
     label: 'Email',
     icon: () => <WideEmail />,
