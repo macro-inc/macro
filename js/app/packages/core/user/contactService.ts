@@ -1,7 +1,6 @@
 import { ENABLE_CONTACTS } from '@core/constant/featureFlags';
 import type { IUser } from '@core/user';
-import { idToEmail } from '@core/user';
-import { batchFetchNames, defaultNameTransform } from '@core/user/displayName';
+import { idToDisplayName, idToEmail } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import { contactsClient } from '@service-contacts/client';
 import { createSingletonRoot } from '@solid-primitives/rootless';
@@ -21,13 +20,7 @@ async function getContacts() {
   const [, data] = result;
   const { contacts } = data;
 
-  const results = await batchFetchNames(contacts.map((c) => c));
-
-  return results.map((r) => ({
-    id: r.id,
-    email: idToEmail(r.id),
-    name: defaultNameTransform(r),
-  }));
+  return contacts;
 }
 
 const contactsResource = createSingletonRoot(() =>
@@ -40,7 +33,11 @@ export function useContacts() {
   const [resource] = contactsResource();
   return createMemo<IUser[]>(() => {
     const result = resource.latest;
-    return result ?? [];
+    return result.map((c) => ({
+      id: c,
+      email: idToEmail(c),
+      name: idToDisplayName(c),
+    }));
   });
 }
 
