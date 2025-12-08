@@ -388,8 +388,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   const onInputChange = (next: string) => {
     setInputValue(next);
 
+    // Send the keydown event to the listbox so Kobalte's internal system can update the focus state
+    // This makes it so it behaves the same as if you had manually pressed the down arrow to focus the item
     queueMicrotask(() => {
       listboxRef()?.dispatchEvent(
+        // We need to send `bubbles: true` because otherwise Kobalte ignores the event
         new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' })
       );
     });
