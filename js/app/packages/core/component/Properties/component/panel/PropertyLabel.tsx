@@ -8,6 +8,7 @@ import { type Component, createMemo, createSignal, Show } from 'solid-js';
 import { deleteEntityProperty } from '../../api';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
+import { PropertyDataTypeIcon } from '../../utils';
 
 type PropertyLabelProps = {
   property: Property;
@@ -61,11 +62,18 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
   return (
     <>
       <div
-        class="flex items-center min-w-0"
+        class="flex items-center gap-1.5 min-w-0"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <span class="text-sm pr-2 text-ink-muted truncate flex-shrink min-w-0">
+        <PropertyDataTypeIcon
+          property={{
+            data_type: props.property.valueType,
+            specific_entity_type: props.property.specificEntityType,
+          }}
+          class="size-4 text-ink-muted shrink-0"
+        />
+        <span class="text-sm text-ink-muted truncate flex-shrink min-w-0">
           {props.property.displayName}
         </span>
         {/* Always reserve space for delete button to prevent layout shift */}
