@@ -40,7 +40,7 @@ export type DocumentEntity = EntityBase & {
   type: 'document';
   fileType?: string;
   projectId?: string;
-  isTask?: boolean;
+  subType?: string;
 };
 
 export const getEntityProjectId = (e: EntityData): string | false => {
