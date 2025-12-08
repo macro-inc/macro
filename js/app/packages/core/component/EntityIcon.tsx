@@ -26,6 +26,7 @@ import User from '@icon/duotone/user-duotone.svg';
 import Users from '@icon/duotone/users-duotone.svg';
 import Folder from '@icon/fill/folder-simple-fill.svg';
 import FolderUser from '@icon/fill/folder-user-fill.svg';
+import Check from '@icon/regular/check-square-offset.svg';
 import PixelChat from '@macro-icons/pixel/ai.svg';
 import PixelBuilding from '@macro-icons/pixel/building.svg';
 import PixelCanvas from '@macro-icons/pixel/canvas.svg';
@@ -77,7 +78,8 @@ export type EntityWithValidIcon =
   | 'directMessage'
   | 'emailRead'
   | 'archive'
-  | 'html';
+  | 'html'
+  | 'task';
 
 const ARCHIVE_EXTENSIONS = new Set(
   Object.values(FileTypeMap)
@@ -212,6 +214,12 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     background: 'bg-default-bg',
     prettyName: 'Direct Message',
   },
+  task: {
+    icon: Check,
+    foreground: 'text-default',
+    background: 'bg-default-bg',
+    prettyName: 'Task',
+  },
 };
 
 // this will match fall-through cases like code files which match multiple extensions
@@ -259,6 +267,7 @@ export const PIXEL_ICONS: Record<EntityWithValidIcon, Component> = {
   directMessage: PixelUsers,
   user: PixelUser,
   emailRead: PixelEmailRead,
+  task: Check,
 };
 
 export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
@@ -283,6 +292,7 @@ export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   directMessage: WideChat,
   user: WideUser,
   emailRead: WideEmail,
+  task: Check,
 };
 
 export const ICON_SIZES = {
