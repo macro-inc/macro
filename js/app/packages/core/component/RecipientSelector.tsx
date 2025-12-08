@@ -230,6 +230,8 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   );
   const [disabled, setDisabled] = createSignal(false);
 
+  const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
+
   const debouncedHandleChange = debounce(handleChange, 100);
 
   const [isOpen, setIsOpen] = createSignal<boolean>();
@@ -380,7 +382,21 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   const [scrollToItem, setScrollToItem] = createSignal<(key: string) => void>(
     () => {}
   );
+
   const selectedLen = () => props.selectedOptions().length;
+
+  const onInputChange = (next: string) => {
+    setInputValue(next);
+
+    // Send the keydown event to the listbox so Kobalte's internal system can update the focus state
+    // This makes it so it behaves the same as if you had manually pressed the down arrow to focus the item
+    queueMicrotask(() => {
+      listboxRef()?.dispatchEvent(
+        // We need to send `bubbles: true` because otherwise Kobalte ignores the event
+        new KeyboardEvent('keydown', { bubbles: true, key: 'ArrowDown' })
+      );
+    });
+  };
 
   return (
     <Combobox<CombinedRecipientItem>
@@ -399,7 +415,8 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       optionDisabled={getOptionDisabled}
       value={props.selectedOptions() as CombinedRecipientItem[]}
       onChange={debouncedHandleChange}
-      onInputChange={setInputValue}
+      onInputChange={onInputChange}
+      shouldFocusWrap
       placeholder={
         props.selectedOptions()?.length === 0
           ? (props.placeholder ?? placeholderText())
@@ -514,8 +531,10 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       <Combobox.Portal>
         <Combobox.Content class="z-modal-content bg-menu border translate-y-1 border-edge p-1">
           <Combobox.Listbox
+            ref={setListboxRef}
             class="flex flex-col gap-1"
             scrollToItem={scrollToItem()}
+            autoFocus="first"
           >
             {(items) => {
               const arr = Array.from(items());

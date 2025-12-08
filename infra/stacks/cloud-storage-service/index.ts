@@ -346,7 +346,7 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'SYNC_SERVICE_URL',
-        value: `https://sync-service-${stack}.macroverse.workers.dev`,
+        value: `https://sync-service-${stack === 'dev' ? 'dev2' : stack}.macroverse.workers.dev`,
       },
       {
         name: 'MACRO_API_TOKEN_ISSUER',

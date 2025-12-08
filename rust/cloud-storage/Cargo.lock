@@ -2601,6 +2601,7 @@ dependencies = [
  "comms_service_client",
  "connection_gateway",
  "cool_asserts",
+ "document_sub_type",
  "dynamodb_client",
  "email",
  "email_service_client",
@@ -2647,6 +2648,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "sync_service_client",
+ "system_properties",
  "thiserror 2.0.17",
  "tokio",
  "tower 0.5.2",
@@ -2672,6 +2674,17 @@ dependencies = [
  "serde_json",
  "thiserror 2.0.17",
  "tracing",
+]
+
+[[package]]
+name = "document_sub_type"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "sqlx",
+ "strum",
+ "thiserror 2.0.17",
+ "utoipa",
 ]
 
 [[package]]
@@ -4834,6 +4847,7 @@ dependencies = [
  "async-trait",
  "cached",
  "chrono",
+ "document_sub_type",
  "futures",
  "macro_user_id",
  "macro_uuid",
@@ -5333,6 +5347,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "chrono",
+ "document_sub_type",
  "model-error-response",
  "model_file_type",
  "model_user",
@@ -5551,6 +5566,7 @@ name = "models_search"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "document_sub_type",
  "item_filters",
  "models_opensearch",
  "opensearch_client",
@@ -5576,6 +5592,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "document_sub_type",
  "doppleganger",
  "email",
  "macro_user_id",
@@ -7491,6 +7508,7 @@ dependencies = [
  "chrono",
  "comms_service_client",
  "document_storage_service_client",
+ "document_sub_type",
  "email_service_client",
  "futures",
  "http-body-util",
@@ -8093,6 +8111,7 @@ dependencies = [
  "axum-extra",
  "chrono",
  "cool_asserts",
+ "document_sub_type",
  "doppleganger",
  "either",
  "email",
@@ -8580,6 +8599,9 @@ dependencies = [
 name = "system_properties"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
+ "macro_db_migrator",
+ "macro_uuid",
  "models_properties",
  "serde",
  "serde_json",

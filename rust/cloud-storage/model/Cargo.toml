@@ -34,3 +34,4 @@ thiserror.workspace = true
 tracing = { workspace = true }
 utoipa = { workspace = true, features = ["axum_extras", "chrono"] }
 uuid = { workspace = true }
+document_sub_type = { path = "../document_sub_type" }

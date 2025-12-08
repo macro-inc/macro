@@ -27,6 +27,7 @@ pub async fn backfill_attachment(
         access_token,
         link,
         &p.metadata,
+        true,
     )
     .await
     .map_err(|e| {
