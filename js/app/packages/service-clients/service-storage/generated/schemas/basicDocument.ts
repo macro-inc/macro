@@ -11,6 +11,7 @@ import type { BasicDocumentDocumentFamilyId } from './basicDocumentDocumentFamil
 import type { BasicDocumentFileType } from './basicDocumentFileType';
 import type { BasicDocumentProjectId } from './basicDocumentProjectId';
 import type { BasicDocumentSha } from './basicDocumentSha';
+import type { BasicDocumentSubType } from './basicDocumentSubType';
 import type { BasicDocumentType } from './basicDocumentType';
 
 export interface BasicDocument {
@@ -34,9 +35,6 @@ the file type */
   fileType?: BasicDocumentFileType;
   /** The document id */
   id: string;
-  /** Whether or not the document is a task.
-This is only applicable for md documents. */
-  isTask: boolean;
   /** The name of the document */
   name: string;
   /** The owner of the document */
@@ -46,6 +44,7 @@ This is only applicable for md documents. */
   /** If the document is a PDF, this is the SHA of the pdf
 If the document is a DOCX, this will not be present */
   sha?: BasicDocumentSha;
+  subType?: BasicDocumentSubType;
   /** The time the document instance / document BOM was updated */
   updatedAt: number;
   type: BasicDocumentType;
