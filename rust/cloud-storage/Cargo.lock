@@ -6523,6 +6523,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "properties"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "macro_uuid",
+ "models_properties",
+ "serde_json",
+ "sqlx",
+ "system_properties",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "properties_db_client"
 version = "0.1.0"
 dependencies = [
