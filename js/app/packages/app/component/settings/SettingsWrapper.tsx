@@ -25,7 +25,7 @@ export const SettingsWrapper = () => {
     <Show when={isAuthenticated()}>
       <Resize.Panel
         id="settings-panel"
-        minSize={400}
+        minSize={440}
         maxSize={800}
         hidden={() => !isSettingsPanelOpen()}
         persistent={true}
