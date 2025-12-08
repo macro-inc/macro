@@ -5591,6 +5591,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "chrono",
+ "document_sub_type",
  "doppleganger",
  "email",
  "macro_user_id",
@@ -8108,6 +8109,7 @@ dependencies = [
  "axum-extra",
  "chrono",
  "cool_asserts",
+ "document_sub_type",
  "doppleganger",
  "either",
  "email",
