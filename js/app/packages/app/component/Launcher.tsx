@@ -14,6 +14,7 @@ import {
   createChat,
   createCodeFileFromText,
   createMarkdownFile,
+  createTask,
 } from '@core/util/create';
 import { createControlledOpenSignal } from '@core/util/createControlledOpenSignal';
 import { isErr, ok } from '@core/util/maybeResult';
@@ -26,6 +27,7 @@ import WideFileCode from '@macro-icons/wide/file-code.svg';
 import WideFileMd from '@macro-icons/wide/file-md.svg';
 import WideFolder from '@macro-icons/wide/folder.svg';
 import WideStar from '@macro-icons/wide/star.svg';
+import WideTask from '@macro-icons/pixel/task.svg';
 import { useCreateProject } from '@service-storage/projects';
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';
@@ -98,6 +100,29 @@ export const CREATABLE_BLOCKS: CreatableBlock[] = [
         loading: true,
         createFn: () =>
           createMarkdownFile({
+            title: '',
+            content: '',
+            projectId: undefined,
+          }),
+        shouldInsert: pressedKeys().has('opt'),
+      });
+      return true;
+    },
+  },
+  {
+    label: 'Task',
+    icon: () => <WideTask />,
+    description: 'Create task',
+    blockName: 'task',
+    hotkeyToken: TOKENS.create.task,
+    altHotkeyToken: TOKENS.create.taskNewSplit,
+    hotkey: 't',
+    keyDownHandler: () => {
+      createBlock({
+        blockName: 'task',
+        loading: true,
+        createFn: () =>
+          createTask({
             title: '',
             content: '',
             projectId: undefined,
