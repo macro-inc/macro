@@ -18,8 +18,7 @@ export function SmartInsight(props: SmartInsightProps) {
       <div class="flex flex-row justify-between gap-x-2 items-center">
         <div class="flex items-center flex-1">{props.insight.content}</div>
         <div class="flex flex-row">
-          <div class="text-xs items-center gap-x-1 px-1 flex text-ink-extra-muted">
-            Generated
+          <div class="text-xs items-center px-1 flex text-ink-extra-muted">
             <div class="px-1">{prettyDate()}</div>
           </div>
           <Show when={EDITABLE_SMART_INSIGHTS}>

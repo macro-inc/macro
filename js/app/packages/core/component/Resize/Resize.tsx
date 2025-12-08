@@ -168,6 +168,8 @@ function Zone(props: ParentProps<ZoneProps>) {
  *     state from the component lifecycle.
  * @property hidden - Accessor that returns whether the panel should be hidden (temporarily
  *     removed from layout but still registered). When hidden, other panels flow around it.
+ * @property persistent - When true, panel stays registered even when hidden (for singleton panels
+ *     like settings/rightbar). When false or undefined, hidden panels unregister (default behavior).
  */
 type PanelProps = {
   id: PanelId;
@@ -175,6 +177,7 @@ type PanelProps = {
   maxSize?: number;
   collapsed?: () => boolean;
   hidden?: () => boolean;
+  persistent?: boolean;
 };
 
 /**
@@ -233,14 +236,23 @@ function Panel(props: ParentProps<PanelProps>) {
   createEffect(() => {
     const hidden = props.hidden?.();
     if (hidden === undefined) return;
-    if (hidden) {
-      ctx.unregister(props.id);
+
+    if (props.persistent) {
+      if (hidden) {
+        ctx.hide(props.id);
+      } else {
+        ctx.show(props.id);
+      }
     } else {
-      ctx.register({
-        id: props.id,
-        minSize: props.minSize,
-        maxSize: props.maxSize ?? Infinity,
-      });
+      if (hidden) {
+        ctx.unregister(props.id);
+      } else {
+        ctx.register({
+          id: props.id,
+          minSize: props.minSize,
+          maxSize: props.maxSize ?? Infinity,
+        });
+      }
     }
   });
 

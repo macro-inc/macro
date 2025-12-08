@@ -1,3 +1,8 @@
+import {
+  isSettingsPanelOpen,
+  setIsSettingsPanelOpen,
+  useToggleSettingsPanel,
+} from '@core/signal/layout/settings';
 import { createEffect, createSignal } from 'solid-js';
 
 export type SettingsTab =
@@ -5,32 +10,31 @@ export type SettingsTab =
   | 'Subscription'
   | 'Organization'
   | 'Appearance'
-  | 'Notification'
   | 'Mobile'
   | 'AI Memory'
   | 'Inbox';
 
-export const [settingsOpen, setSettingsOpen] = createSignal(false);
+export const settingsOpen = isSettingsPanelOpen;
+export const setSettingsOpen = setIsSettingsPanelOpen;
 export const [activeTabId, setActiveTabId] =
   createSignal<SettingsTab>('Appearance');
 
 export const useSettingsState = () => {
+  const toggleSettingsPanel = useToggleSettingsPanel();
+
   const openSettings = (activeTabId?: SettingsTab) => {
-    setSettingsOpen(true);
+    setIsSettingsPanelOpen(true);
     if (activeTabId) setActiveTabId(activeTabId);
   };
-  const closeSettings = () => setSettingsOpen(false);
-  const toggleSettings = () => {
-    const newState = !settingsOpen();
-    setSettingsOpen(newState);
-  };
+  const closeSettings = () => setIsSettingsPanelOpen(false);
+  const toggleSettings = () => toggleSettingsPanel();
 
   createEffect(() => {
-    if (!settingsOpen()) setActiveTabId('Appearance');
+    if (!isSettingsPanelOpen()) setActiveTabId('Appearance');
   });
 
   return {
-    settingsOpen,
+    settingsOpen: isSettingsPanelOpen,
     openSettings,
     closeSettings,
     activeTabId,

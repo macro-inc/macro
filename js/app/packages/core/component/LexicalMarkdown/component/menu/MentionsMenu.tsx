@@ -15,20 +15,13 @@ import clickOutside from '@core/directive/clickOutside';
 import { trackMention } from '@core/signal/mention';
 import {
   type ChannelWithParticipants,
-  type EmailContact,
   type IUser,
-  isCompanyEmailContact,
   useContacts,
-  useEmailContacts,
-  useOrganizationUsers,
 } from '@core/user';
-import { mergeByKey } from '@core/util/compareUtils';
 import { getDateSuggestions, type ParsedDate } from '@core/util/dateParser';
 import { createFreshSearch } from '@core/util/freshSort';
-import BuildingIcon from '@icon/regular/buildings.svg';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
-import UserIconSolid from '@icon/regular/user.svg';
 import { type EmailEntity, useEmails } from '@macro-entity';
 import type { DocumentMentionMetadata } from '@service-notification/client';
 import { storageServiceClient } from '@service-storage/client';
@@ -56,7 +49,6 @@ import { floatWithElement } from '../../directive/floatWithElement';
 import { floatWithSelection } from '../../directive/floatWithSelection';
 import {
   CLOSE_INLINE_SEARCH_COMMAND,
-  INSERT_CONTACT_MENTION_COMMAND,
   INSERT_DATE_MENTION_COMMAND,
   INSERT_DOCUMENT_MENTION_COMMAND,
   INSERT_USER_MENTION_COMMAND,
@@ -88,7 +80,6 @@ type EntityMap = {
   item: Item;
   user: IUser;
   channel: ChannelWithParticipants;
-  emailContact: EmailContact;
   date: DateItem;
   email: EmailEntity;
 };
@@ -129,17 +120,6 @@ const getUserSearchText = (item: IUser): string => {
   return `${name} | ${email}`;
 };
 
-const getContactName = (item: EmailContact): string => {
-  const { name, type } = item;
-  switch (type) {
-    case 'company':
-      return item.name;
-    case 'person':
-      if (name === item.email) return item.email;
-      return `${name} | ${item.email}`;
-  }
-};
-
 const getCombinedEntityBlockName = (
   item: CombinedEntity<'item' | 'channel' | 'email'>,
   icon?: boolean
@@ -166,8 +146,6 @@ const getItemName = (item: CombinedEntity): string => {
       return getUserName(item.data);
     case 'channel':
       return item.data.name ?? '';
-    case 'emailContact':
-      return getContactName(item.data);
     case 'email':
       return item.data.name ?? 'No Subject';
     case 'date':
@@ -183,8 +161,6 @@ const getItemSearchText = (item: CombinedEntity): string => {
       return getUserSearchText(item.data);
     case 'channel':
       return item.data.name ?? '';
-    case 'emailContact':
-      return getContactName(item.data);
     case 'date':
       return item.data.displayFormat;
     case 'email':
@@ -265,26 +241,6 @@ async function handleUserMention(
     userId: user.id,
     email: user.email,
     mentionUuid: mentionId,
-  });
-}
-
-/**
- * Inserts a contact mention.
- * @param contact
- * @param dependencies
- */
-async function handleContactMention(
-  contact: EmailContact,
-  dependencies: HandlerDependencies
-) {
-  const { editor } = dependencies;
-  editor.dispatchCommand(INSERT_CONTACT_MENTION_COMMAND, {
-    contactId: contact.id,
-    name: contact.name,
-    emailOrDomain: isCompanyEmailContact(contact)
-      ? contact.domain
-      : contact.email,
-    isCompany: isCompanyEmailContact(contact),
   });
 }
 
@@ -430,8 +386,6 @@ function createItemHandler(dependencies: HandlerDependencies) {
     switch (item.kind) {
       case 'user':
         return await handleUserMention(item.data, dependencies);
-      case 'emailContact':
-        return await handleContactMention(item.data, dependencies);
       case 'date':
         return await handleDateMention(item.data, dependencies);
       case 'item':
@@ -569,7 +523,7 @@ export function computeBins<T extends string>(
 }
 
 /** The current bins enum */
-export type MentionBins = 'items' | 'users' | 'contacts' | 'dates' | 'emails';
+export type MentionBins = 'items' | 'users' | 'dates' | 'emails';
 
 /** View all mode type */
 type ViewAllMode = MentionBins | null;
@@ -604,13 +558,6 @@ export function MentionsMenuItem(props: {
     switch (props.item.kind) {
       case 'user':
         return <UserIcon id={props.item.id} size="sm" isDeleted={false} />;
-
-      case 'emailContact':
-        return isCompanyEmailContact(props.item.data) ? (
-          <BuildingIcon class="size-4 text-ink-muted" />
-        ) : (
-          <UserIconSolid class="size-4 text-ink-muted" />
-        );
 
       case 'date':
         return <ClockIcon class="size-4 text-ink-muted" />;
@@ -664,11 +611,6 @@ export function MentionsMenuItem(props: {
       <div class="mr-2">{icon()}</div>
       <span
         class="text-ink text-xs sm:text-sm font-medium grow overflow-hidden text-nowrap"
-        classList={{
-          capitalize:
-            props.item.kind === 'emailContact' &&
-            isCompanyEmailContact(props.item.data),
-        }}
         style={{ 'text-overflow': 'ellipsis' }}
       >
         {name()}
@@ -703,11 +645,6 @@ export function MentionsMenu(props: {
     return historyAccessor().map(entityMapper('item'));
   });
 
-  const emailContactsAccessor = useEmailContacts();
-  const emailContacts = createMemo(() => {
-    return emailContactsAccessor().map(entityMapper('emailContact'));
-  });
-
   let emails: Accessor<Entity<'email'>[]>;
   if (props.emails) {
     emails = createMemo(
@@ -723,21 +660,12 @@ export function MentionsMenu(props: {
     );
   }
 
-  let users: Accessor<Entity<'user'>[]>;
-  if (props.users) {
-    users = createMemo(
-      () =>
-        props.users?.().map(entityMapper('user')).filter(allItemFilter) ?? []
-    );
-  } else {
-    const orgUsers = useOrganizationUsers();
-    const contacts = useContacts();
-    users = createMemo(() =>
-      mergeByKey('email', orgUsers(), contacts())
-        .map(entityMapper('user'))
-        .filter(allItemFilter)
-    );
-  }
+  const contacts = useContacts();
+
+  const users = createMemo(() => {
+    const list = props.users?.() ?? contacts();
+    return list.map(entityMapper('user')).filter(allItemFilter);
+  });
 
   let channels: Accessor<Entity<'channel'>[]>;
   if (props.channels) {
@@ -892,17 +820,6 @@ export function MentionsMenu(props: {
     });
   });
 
-  const contactSearch = createFreshSearch<Entity<'emailContact'>>(
-    { timeWeight: 0.1, brevityWeight: 0.3 },
-    getItemSearchText
-  );
-
-  const filteredContacts = createMemo(() => {
-    return contactSearch(emailContacts(), searchTerm()).map((result) => {
-      return result.item;
-    });
-  });
-
   const emailSearch = createFreshSearch<Entity<'email'>>(
     { timeWeight: 0, brevityWeight: 0.3 },
     getItemSearchText
@@ -926,7 +843,6 @@ export function MentionsMenu(props: {
   const rawBins = createMemo<Record<MentionBins, number>>(() => ({
     users: filteredUsers().length,
     items: filteredItems().length,
-    contacts: filteredContacts().length,
     dates: dateSuggestions().length,
     emails: filteredEmails().length,
   }));
@@ -944,8 +860,6 @@ export function MentionsMenu(props: {
           return filteredUsers();
         case 'items':
           return filteredItems();
-        case 'contacts':
-          return filteredContacts();
         case 'dates':
           return dateSuggestions();
         case 'emails':
@@ -959,7 +873,6 @@ export function MentionsMenu(props: {
     return [
       ...filteredUsers().slice(0, bins().users),
       ...filteredItems().slice(0, bins().items),
-      ...filteredContacts().slice(0, bins().contacts),
       ...dateSuggestions().slice(0, bins().dates),
       ...filteredEmails().slice(0, bins().emails),
     ];
@@ -979,7 +892,7 @@ export function MentionsMenu(props: {
     if (viewAllMode()) return null; // no category selection in view all mode
 
     const index = selectedIndex();
-    const { users, items, contacts, dates, emails } = bins();
+    const { users, items, dates, emails } = bins();
 
     let currentIndex = 0;
 
@@ -995,13 +908,6 @@ export function MentionsMenu(props: {
         return 'items';
       }
       currentIndex += items;
-    }
-
-    if (contacts > 0) {
-      if (index < currentIndex + contacts) {
-        return 'contacts';
-      }
-      currentIndex += contacts;
     }
 
     if (dates > 0) {
@@ -1198,7 +1104,6 @@ export function MentionsMenu(props: {
         const categoryLabel = {
           users: 'People',
           items: 'Documents & Channels',
-          contacts: 'Contacts & Companies',
           dates: 'Dates',
           emails: 'Emails',
         }[currentViewAllMode];
@@ -1261,11 +1166,9 @@ export function MentionsMenu(props: {
     // ------ NORMAL MODE ------------------------------------------------------
     const users = filteredUsers().slice(0, bins().users);
     const docs = filteredItems().slice(0, bins().items);
-    const contactsList = filteredContacts().slice(0, bins().contacts);
     const dates = dateSuggestions().slice(0, bins().dates);
     const emailList = filteredEmails().slice(0, bins().emails);
-    const totalLength = () =>
-      users.length + docs.length + contactsList.length + dates.length;
+    const totalLength = () => users.length + docs.length + dates.length;
 
     const renderOptions = createMemo(() => {
       const options = [];
@@ -1322,34 +1225,6 @@ export function MentionsMenu(props: {
         );
       }
 
-      if (contactsList.length > 0) {
-        options.push(
-          <ItemBin
-            label="Contacts & Companies"
-            binType="contacts"
-            totalCount={filteredContacts().length}
-            showingCount={contactsList.length}
-            onViewAll={handleViewAll}
-            isSelected={selectedCategory() === 'contacts'}
-          >
-            <For each={contactsList}>
-              {(item, i) => (
-                <MentionsMenuItem
-                  item={item}
-                  index={users.length + docs.length + i()}
-                  selected={
-                    users.length + docs.length + i() === selectedIndex()
-                  }
-                  itemAction={itemAction}
-                  setIndex={setSelectedIndex}
-                  setOpen={setMenuOpen}
-                />
-              )}
-            </For>
-          </ItemBin>
-        );
-      }
-
       if (dates.length > 0) {
         options.push(
           <ItemBin
@@ -1364,10 +1239,9 @@ export function MentionsMenu(props: {
               {(item, i) => (
                 <MentionsMenuItem
                   item={item}
-                  index={users.length + docs.length + contactsList.length + i()}
+                  index={users.length + docs.length + i()}
                   selected={
-                    users.length + docs.length + contactsList.length + i() ===
-                    selectedIndex()
+                    users.length + docs.length + i() === selectedIndex()
                   }
                   itemAction={itemAction}
                   setIndex={setSelectedIndex}
@@ -1395,11 +1269,7 @@ export function MentionsMenu(props: {
                   item={item}
                   index={i()}
                   selected={
-                    users.length +
-                      docs.length +
-                      contactsList.length +
-                      dates.length +
-                      i() ===
+                    users.length + docs.length + dates.length + i() ===
                     selectedIndex()
                   }
                   itemAction={itemAction}
