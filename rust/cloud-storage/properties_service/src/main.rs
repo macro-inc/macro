@@ -66,12 +66,20 @@ async fn main() -> anyhow::Result<()> {
         "initialized comms service client"
     );
 
+    // Initialize properties service
+    let properties_repository = properties::PropertiesPgRepo::new(db.clone());
+    let properties_service = Arc::new(properties::PropertiesServiceImpl::new(
+        properties_repository,
+    ));
+    tracing::info!("initialized properties service");
+
     api::setup_and_serve(ApiContext {
         db,
         jwt_args,
         config: Arc::new(config),
         internal_auth_key,
         comms_service_client: Arc::new(comms_service_client),
+        properties_service,
     })
     .await?;
     Ok(())

@@ -7,6 +7,7 @@ use sqlx::PgPool;
 use std::sync::Arc;
 
 use crate::config::Config;
+use properties::PropertiesServiceImpl;
 
 #[derive(Clone, FromRef)]
 pub struct ApiContext {
@@ -16,4 +17,5 @@ pub struct ApiContext {
     pub config: Arc<Config>,
     pub internal_auth_key: LocalOrRemoteSecret<InternalApiSecretKey>,
     pub comms_service_client: Arc<CommsServiceClient>,
+    pub properties_service: Arc<PropertiesServiceImpl<properties::PropertiesPgRepo>>,
 }
