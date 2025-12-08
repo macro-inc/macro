@@ -454,22 +454,36 @@ function createItemHandler(dependencies: HandlerDependencies) {
 /**
  * Styled container for single category.
  */
+
 function ItemBin(
   props: ParentProps<{
     label: string;
     binType: MentionBins;
+    isNextPage?: Accessor<boolean>;
     totalCount?: number;
     showingCount?: number;
     onViewAll?: (binType: MentionBins) => void;
     isSelected?: boolean;
   }>
 ) {
-  const showViewAllButton = () =>
-    props.binType &&
-    props.totalCount &&
-    props.showingCount &&
-    props.totalCount > props.showingCount;
-
+  const showViewAllButton = () => {
+    return (
+      (props.binType &&
+        props.totalCount &&
+        props.showingCount &&
+        props.totalCount > props.showingCount) ||
+      props.isNextPage?.()
+    );
+  };
+  const viewAllText = () => {
+    if (
+      props.totalCount &&
+      props.showingCount &&
+      props.totalCount > props.showingCount
+    )
+      return `View all (${props.totalCount})`;
+    return `View all`;
+  };
   return (
     <>
       <div
@@ -495,7 +509,7 @@ function ItemBin(
               props.onViewAll?.(props.binType);
             }}
           >
-            View all ({props.totalCount})
+            {viewAllText()}
           </button>
         </Show>
       </div>
@@ -1115,6 +1129,23 @@ export function MentionsMenu(props: {
     const items = combinedItems();
     const selectedItem = items[selectedIndex()];
 
+    const handleArrowDown = () => {
+      setSelectedIndex((p) => {
+        if (p >= combinedItems.length) {
+          if (
+            viewAllMode() === 'emails' &&
+            emailUnifiedSearchInfiniteQuery.isFetching
+          ) {
+            return items.length - 1;
+          } else {
+            return (p + 1) % items.length;
+          }
+        } else {
+          return p + 1;
+        }
+      });
+    };
+
     switch (e.key) {
       case ' ':
         switch (escapeSpaceState()) {
@@ -1155,7 +1186,7 @@ export function MentionsMenu(props: {
       case 'ArrowUp':
         e.preventDefault();
         e.stopPropagation();
-        setSelectedIndex((prev) => (prev - 1 + items.length) % items.length);
+        handleArrowDown();
         break;
 
       case 'ArrowLeft':
@@ -1176,9 +1207,11 @@ export function MentionsMenu(props: {
             const currentRawBins = rawBins();
             const abbreviatedCount = currentBins[currentCategory];
             const fullCount = currentRawBins[currentCategory];
-
-            // allow view all if there are more items to show
-            if (fullCount > abbreviatedCount) {
+            if (
+              abbreviatedCount < fullCount ||
+              (emailUnifiedSearchInfiniteQuery.hasNextPage &&
+                currentCategory === 'emails')
+            ) {
               handleViewAll(currentCategory);
             }
           }
@@ -1220,7 +1253,7 @@ export function MentionsMenu(props: {
     });
   });
 
-  const focusOut = (e) => {
+  const focusOut = () => {
     props.editor.dispatchCommand(CLOSE_INLINE_SEARCH_COMMAND, undefined);
     setMenuOpen(false);
   };
@@ -1233,6 +1266,14 @@ export function MentionsMenu(props: {
   });
 
   createEffect(() => {
+    if (
+      selectedIndex() >= combinedItems().length - 5 &&
+      viewAllMode() === 'emails' &&
+      emailUnifiedSearchInfiniteQuery.hasNextPage &&
+      !emailUnifiedSearchInfiniteQuery.isFetching
+    ) {
+      emailUnifiedSearchInfiniteQuery.fetchNextPage();
+    }
     if (selectedIndex() >= combinedItems().length) {
       setSelectedIndex(combinedItems().length - 1);
     }
@@ -1457,6 +1498,7 @@ export function MentionsMenu(props: {
           <ItemBin
             label="Emails"
             binType="emails"
+            isNextPage={() => emailUnifiedSearchInfiniteQuery.hasNextPage}
             totalCount={filteredEmails().length}
             showingCount={emailList.length}
             onViewAll={handleViewAll}
