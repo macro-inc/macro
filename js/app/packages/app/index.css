@@ -117,7 +117,6 @@
   --color-accent: var(--a0);
   --color-accent-bg: oklch(from (var(--a0)) / .15);
   --color-accent-ink: var(--a0);
-  --color-accent-edge: var(--a0);
 
   --color-accent-1 : var(--a1);
   --color-accent-2 : var(--a2);
