@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
+import { toast } from '@core/component/Toast/Toast';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import { createMethodRegistration } from '@core/orchestrator';
@@ -37,7 +38,6 @@ import {
   untrack,
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
-import { toast } from '@core/component/Toast/Toast';
 import { URL_PARAMS } from '../constants';
 import { isScrollingToMessage } from '../signal/scrollState';
 import { useThreadNavigation } from '../signal/threadNavigation';
@@ -362,11 +362,7 @@ export function Email(props: EmailProps) {
     const containerRef = messagesContainerRef();
 
     // Skip if dependencies not ready
-    if (
-      !messageList ||
-      !containerRef ||
-      !untrack(threadData)?.db_id
-    ) {
+    if (!messageList || !containerRef || !untrack(threadData)?.db_id) {
       return;
     }
 
@@ -397,8 +393,7 @@ export function Email(props: EmailProps) {
     if (!data) return;
     // Check if initial loading is complete
     const isInitialLoadComplete =
-      (isContainerFilled() || data.hasMore === false) &&
-      !isFetching();
+      (isContainerFilled() || data.hasMore === false) && !isFetching();
 
     // Skip if not ready
     if (!isInitialLoadComplete) {

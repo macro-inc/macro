@@ -16,7 +16,7 @@ import { queryClient } from '../client';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import { emailKeys } from './keys';
 
-const DEFAULT_STALE_TIME = 5 * 60 * 1000; // 5 minutes
+const THREAD_STALE_TIME = 5 * 60 * 1000;
 
 /**
  * Shared infinite query options for thread fetching.
@@ -43,7 +43,7 @@ function threadQueryOptions(threadId: string) {
       }
       return allPages.reduce((sum, p) => sum + p.messages.length, 0);
     },
-    staleTime: DEFAULT_STALE_TIME,
+    staleTime: THREAD_STALE_TIME,
   };
 }
 
@@ -64,30 +64,18 @@ function flattenThreadPages(
 /**
  * Imperatively fetch a thread (for use outside of components).
  * Returns cached data if fresh, otherwise fetches from server.
+ *
+ * TODO: Most of the time we have the updated_at timestamp of an email before we fetch it.
+ * Would be nice to accept that as a parameter and only fetch if it's stale.
  */
 export async function fetchAndCacheThread(
-  threadId: string,
-  options?: {
-    forceRefresh?: boolean;
-    staleTime?: number;
-  }
+  threadId: string
 ): ReturnType<typeof emailClient.getThread> {
-  const staleTime = options?.staleTime ?? DEFAULT_STALE_TIME;
-
-  if (options?.forceRefresh) {
-    await queryClient.invalidateQueries({
-      queryKey: emailKeys.threadMessages(threadId).queryKey,
-    });
-  }
-
   let data: InfiniteData<Thread, number> | undefined;
 
   const result = await catchToResult(
     async () =>
-      await queryClient.fetchInfiniteQuery({
-        ...threadQueryOptions(threadId),
-        staleTime,
-      })
+      await queryClient.fetchInfiniteQuery(threadQueryOptions(threadId))
   );
 
   if (isErr(result)) {
@@ -130,19 +118,18 @@ export function useMarkThreadAsSeenMutation(
   callbacks?: MutationCallbacks<void, Error, MarkThreadAsSeenParams>
 ) {
   return useMutation(() => ({
-    mutationFn: async (vars: MarkThreadAsSeenParams) => {
-      const result = await emailClient.markThreadAsSeen({
-        thread_id: vars.threadId,
-      });
-      if (isErr(result)) {
-        throw new Error('Failed to mark thread as seen');
-      }
-    },
+    mutationFn: async (params: MarkThreadAsSeenParams) =>
+      void (await throwOnErr(
+        async () =>
+          await emailClient.markThreadAsSeen({
+            thread_id: params.threadId,
+          })
+      )),
     ...withCallbacks<void, Error, MarkThreadAsSeenParams>(
       {
-        onSuccess: (_data, vars) => {
+        onSuccess: (_, params) => {
           queryClient.invalidateQueries({
-            queryKey: emailKeys.threadMessages(vars.threadId).queryKey,
+            queryKey: emailKeys.threadMessages(params.threadId).queryKey,
           });
         },
       },
@@ -169,51 +156,50 @@ export function useArchiveThreadMutation(
   >
 ) {
   return useMutation(() => ({
-    mutationFn: async (vars: ArchiveThreadParams) => {
-      const result = await emailClient.flagArchived({
-        id: vars.threadId,
-        value: vars.archive,
-      });
-      if (isErr(result)) {
-        throw new Error('Failed to update thread archive status');
-      }
-    },
+    mutationFn: async (params: ArchiveThreadParams) =>
+      void throwOnErr(
+        async () =>
+          await emailClient.flagArchived({
+            id: params.threadId,
+            value: params.archive,
+          })
+      ),
     ...withCallbacks<void, Error, ArchiveThreadParams, ArchiveThreadContext>(
       {
-        onMutate: async (vars) => {
+        onMutate: async (params) => {
           await queryClient.cancelQueries({
-            queryKey: emailKeys.threadMessages(vars.threadId).queryKey,
+            queryKey: emailKeys.threadMessages(params.threadId).queryKey,
           });
 
           const previousData = queryClient.getQueryData<
             InfiniteData<Thread, number>
-          >(emailKeys.threadMessages(vars.threadId).queryKey);
+          >(emailKeys.threadMessages(params.threadId).queryKey);
 
           queryClient.setQueryData<InfiniteData<Thread, number>>(
-            emailKeys.threadMessages(vars.threadId).queryKey,
+            emailKeys.threadMessages(params.threadId).queryKey,
             (old) =>
               old && {
                 ...old,
                 pages: old.pages.map((page) => ({
                   ...page,
-                  inbox_visible: !vars.archive,
+                  inbox_visible: !params.archive,
                 })),
               }
           );
 
           return { previousData };
         },
-        onError: (_err, vars, context) => {
+        onError: (_err, params, context) => {
           if (context?.previousData) {
             queryClient.setQueryData(
-              emailKeys.threadMessages(vars.threadId).queryKey,
+              emailKeys.threadMessages(params.threadId).queryKey,
               context.previousData
             );
           }
         },
-        onSettled: (_data, _error, vars) => {
+        onSettled: (_data, _error, params) => {
           queryClient.invalidateQueries({
-            queryKey: emailKeys.threadMessages(vars.threadId).queryKey,
+            queryKey: emailKeys.threadMessages(params.threadId).queryKey,
           });
           queryClient.invalidateQueries({ queryKey: emailKeys.previews._def });
         },
@@ -232,19 +218,16 @@ export function useSendMessageMutation(
   callbacks?: MutationCallbacks<SendMessageResponse, Error, SendMessageParams>
 ) {
   return useMutation(() => ({
-    mutationFn: async (vars: SendMessageParams) => {
-      const result = await emailClient.sendMessage({ message: vars.message });
-      if (isErr(result)) {
-        throw new Error('Failed to send message');
-      }
-      return result[1];
-    },
+    mutationFn: async (vars: SendMessageParams) =>
+      await throwOnErr(
+        async () => await emailClient.sendMessage({ message: vars.message })
+      ),
     ...withCallbacks<SendMessageResponse, Error, SendMessageParams>(
       {
-        onSuccess: (_data, vars) => {
-          if (vars.message.thread_db_id) {
+        onSuccess: (_data, params) => {
+          if (params.message.thread_db_id) {
             queryClient.invalidateQueries({
-              queryKey: emailKeys.threadMessages(vars.message.thread_db_id)
+              queryKey: emailKeys.threadMessages(params.message.thread_db_id)
                 .queryKey,
             });
           }

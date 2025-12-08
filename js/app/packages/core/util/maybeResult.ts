@@ -351,7 +351,10 @@ export async function catchToResult<T>(
     if (error instanceof MaybeResultError) {
       return [error.errors, null];
     }
-    return err('UNKNOWN', error instanceof Error ? error.message : String(error));
+    return err(
+      'UNKNOWN',
+      error instanceof Error ? error.message : String(error)
+    );
   }
 }
 
