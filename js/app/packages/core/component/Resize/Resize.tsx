@@ -101,7 +101,7 @@ function Zone(props: ParentProps<ZoneProps>) {
   });
 
   const visibleLayouts = createMemo(() => {
-    return layouts().filter(layout => !solver.isHidden(layout.id));
+    return layouts().filter((layout) => !solver.isHidden(layout.id));
   });
 
   const offsetOf = (id: PanelId) =>
@@ -144,7 +144,9 @@ function Zone(props: ParentProps<ZoneProps>) {
         <Show when={visibleLayouts().length > 1}>
           <Index each={visibleLayouts()}>
             {(panel, visibleIndex) => {
-              const actualIndex = solver.order().findIndex(id => id === panel().id);
+              const actualIndex = solver
+                .order()
+                .findIndex((id) => id === panel().id);
               return (
                 <Show when={visibleIndex < visibleLayouts().length - 1}>
                   <Gutter
