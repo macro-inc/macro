@@ -1,9 +1,10 @@
 use crate::history::{upsert_item_last_accessed_timestamp, upsert_user_history_timestamp};
 use crate::share_permission::create::create_document_permission;
+use document_sub_type::DocumentSubType;
+use model::document::DocumentMetadata;
 use model::document::FileType;
 use model::document::ID;
 use model::document::VersionIDWithTimeStamps;
-use model::document::{DocumentMetadata, DocumentSubType};
 use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::access_level::AccessLevel;
 use sqlx::Pool;
@@ -127,7 +128,7 @@ pub async fn create_document_txn(
         .id
     };
 
-    if is_task {
+    let sub_type: Option<DocumentSubType> = if is_task {
         if file_type != Some(FileType::Md) {
             return Err(anyhow::anyhow!(
                 "is_task is only applicable for md documents"
@@ -144,7 +145,11 @@ pub async fn create_document_txn(
         )
         .execute(&mut **transaction)
         .await?;
-    }
+
+        Some(DocumentSubType::Task)
+    } else {
+        None
+    };
 
     // Docx documents have their versions associated with a DocumentBom
     // whereas all other file types use DocumentInstance
@@ -230,7 +235,7 @@ pub async fn create_document_txn(
         project_name,
         document_version.created_at,
         document_version.updated_at,
-        is_task,
+        sub_type,
     ))
 }
 

@@ -1,9 +1,10 @@
 use crate::{
     document::document_bom::create_bom_parts, share_permission::create::create_document_permission,
 };
+use document_sub_type::DocumentSubType;
 use model::document::{
-    BomPart, DocumentMetadata, DocumentSubType, FileType, IDWithTimeStamps,
-    VersionIDWithTimeStamps, VersionIDWithTimeStampsNoSha,
+    BomPart, DocumentMetadata, FileType, IDWithTimeStamps, VersionIDWithTimeStamps,
+    VersionIDWithTimeStampsNoSha,
 };
 use models_permissions::share_permission::SharePermissionV2;
 use sqlx::{Pool, Postgres, Transaction};
@@ -142,7 +143,7 @@ pub(in crate::document) async fn copy_docx_document(
         document_bom: Some(saved_bom_parts),
         created_at: document.created_at,
         updated_at: document.updated_at,
-        is_task: false, // docx documents are not tasks
+        sub_type: None,
     })
 }
 
@@ -234,7 +235,7 @@ pub(in crate::document) async fn copy_non_docx_document(
         None
     };
 
-    if original_document.is_task {
+    if original_document.sub_type == Some(DocumentSubType::Task) {
         sqlx::query!(
             r#"
                 INSERT INTO document_sub_type (document_id, sub_type)
@@ -263,7 +264,7 @@ pub(in crate::document) async fn copy_non_docx_document(
         modification_data: original_modification_data,
         created_at: document.created_at,
         updated_at: document.updated_at,
-        is_task: original_document.is_task,
+        sub_type: original_document.sub_type,
     })
 }
 
@@ -292,7 +293,7 @@ mod tests {
                 None,
                 None,
                 None,
-                false,
+                None,
             ),
             "macro|user@user.com",
             "new name",

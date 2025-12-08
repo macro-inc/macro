@@ -1,6 +1,7 @@
 use chrono::serde::ts_seconds_option;
 pub mod list;
 pub mod response;
+use document_sub_type::DocumentSubType;
 use utoipa::ToSchema;
 
 mod file_type;
@@ -85,9 +86,9 @@ pub struct BasicDocument {
     #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 
-    /// Whether or not the document is a task.
-    /// This is only applicable for md documents.
-    pub is_task: bool,
+    /// The sub type of the document if present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sub_type: Option<DocumentSubType>,
 }
 
 #[derive(sqlx::FromRow, serde::Serialize, serde::Deserialize, Eq, PartialEq, Debug, Clone)]
@@ -116,29 +117,6 @@ pub struct BackfillSearchDocumentInformation {
     pub owner: String,
     pub file_type: FileType,
 }
-
-#[derive(
-    serde::Serialize,
-    serde::Deserialize,
-    Eq,
-    PartialEq,
-    Debug,
-    ToSchema,
-    Clone,
-    Copy,
-    PartialOrd,
-    sqlx::Type,
-    strum::EnumString,
-    strum::Display,
-    std::cmp::Ord,
-)]
-#[serde(rename_all = "lowercase")]
-#[strum(serialize_all = "snake_case")]
-#[sqlx(type_name = "\"document_sub_type_value\"", rename_all = "lowercase")]
-pub enum DocumentSubType {
-    Task,
-}
-
 #[derive(
     sqlx::FromRow,
     serde::Serialize,
@@ -203,9 +181,9 @@ pub struct DocumentMetadata {
     #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 
-    /// Whether or not the document is a task.
-    /// This is only applicable for md documents.
-    pub is_task: bool,
+    /// The sub type of the document if present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sub_type: Option<DocumentSubType>,
 }
 
 impl DocumentMetadata {
@@ -243,7 +221,7 @@ impl DocumentMetadata {
             project_name,
             created_at,
             updated_at,
-            is_task: false,
+            sub_type: None,
         }
     }
 
@@ -266,7 +244,7 @@ impl DocumentMetadata {
         project_name: Option<&str>,
         created_at: Option<chrono::DateTime<chrono::Utc>>,
         updated_at: Option<chrono::DateTime<chrono::Utc>>,
-        is_task: bool,
+        sub_type: Option<DocumentSubType>,
     ) -> Self {
         Self {
             document_id: document_id.to_string(),
@@ -284,7 +262,7 @@ impl DocumentMetadata {
             project_name: project_name.map(|s| s.to_string()),
             created_at,
             updated_at,
-            is_task,
+            sub_type,
         }
     }
 
@@ -307,7 +285,7 @@ impl DocumentMetadata {
         project_name: Option<String>,
         created_at: Option<chrono::DateTime<chrono::Utc>>,
         updated_at: Option<chrono::DateTime<chrono::Utc>>,
-        is_task: bool,
+        sub_type: Option<DocumentSubType>,
     ) -> Self {
         Self {
             document_id: document_id.to_string(),
@@ -325,7 +303,7 @@ impl DocumentMetadata {
             project_name,
             created_at,
             updated_at,
-            is_task,
+            sub_type,
         }
     }
 }
@@ -355,9 +333,9 @@ pub struct DocumentPreviewData {
     #[serde(with = "ts_seconds_option")]
     #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
-    /// Whether or not the document is a task.
-    /// This is only applicable for md documents.
-    pub is_task: bool,
+    /// The sub type of the document if present.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub sub_type: Option<DocumentSubType>,
 }
 
 #[derive(

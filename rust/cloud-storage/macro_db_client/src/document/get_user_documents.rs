@@ -107,10 +107,10 @@ pub async fn get_user_documents(
             d."projectId" as "project_id",
             p.name as "project_name",
             di.sha as "sha",
-            (dt.document_id IS NOT NULL) as "is_task"
+            dt.sub_type as "sub_type"
         FROM
             "Document" d
-        LEFT JOIN document_task dt ON dt.document_id = d.id
+        LEFT JOIN document_sub_type dt ON dt.document_id = d.id
         LEFT JOIN LATERAL (
             SELECT
                 b.id,

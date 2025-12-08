@@ -1,6 +1,6 @@
-use sqlx::{Pool, Postgres, Row};
-
+use document_sub_type::DocumentSubType;
 use model::{activity::Activity, chat::Chat, document::BasicDocument};
+use sqlx::{Pool, Postgres, Row};
 
 #[tracing::instrument(skip(db))]
 pub async fn get_recent_activities(
@@ -56,10 +56,10 @@ pub async fn get_recent_activities(
             d."projectId" as "project_id",
             NULL as "is_persistent",
             di.sha as "sha",
-            (dt.document_id IS NOT NULL) as "is_task"
+            dt.sub_type as "sub_type"
         FROM
             "Document" d
-        LEFT JOIN document_task dt ON dt.document_id = d.id
+        LEFT JOIN document_sub_type dt ON dt.document_id = d.id
         LEFT JOIN LATERAL (
             SELECT
                 b.id
@@ -104,7 +104,7 @@ pub async fn get_recent_activities(
             c."projectId" as "project_id",
             c."isPersistent" as "is_persistent",
             NULL as "sha",
-            false as "is_task!"
+            NULL as "sub_type"
         FROM "Chat" c
         WHERE c."userId" = $1 AND c."deletedAt" IS NULL
         ORDER BY updated_at DESC
@@ -128,7 +128,7 @@ pub async fn get_recent_activities(
             let created_at: Option<chrono::DateTime<chrono::Utc>> = r.get("created_at");
             let updated_at: Option<chrono::DateTime<chrono::Utc>> = r.get("updated_at");
             let project_id: Option<String> = r.get("project_id");
-            let is_task: bool = r.get("is_task");
+            let sub_type: Option<DocumentSubType> = r.get("sub_type");
 
             match row_type.as_ref() {
                 "document" => {
@@ -147,7 +147,7 @@ pub async fn get_recent_activities(
                         branched_from_id: r.get("branched_from_id"),
                         branched_from_version_id: r.get("branched_from_version_id"),
                         project_id,
-                        is_task,
+                        sub_type,
                     }))
                 }
                 "chat" => Some(Activity::Chat(Chat {
