@@ -11,6 +11,7 @@ import {
 } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import {
+  type BlockAliasContext,
   Block as BlockComponent,
   type BlockName,
   type NestedState,
@@ -87,6 +88,7 @@ export type CreateBlockOptions = {
   location?: Location;
   nested?: NestedState<any>;
   sourceResolver?: (type: BlockName, id: string, location?: Location) => Source;
+  aliasContext?: BlockAliasContext;
 };
 
 type UnmanagedBlockInstance = Omit<BlockInstance, 'handle'>;
@@ -184,7 +186,12 @@ function createBlockElement({
     });
 
     return (
-      <BlockComponent id={id} name={type} nested={opts?.nested}>
+      <BlockComponent
+        id={id}
+        name={type}
+        nested={opts?.nested}
+        aliasContext={opts?.aliasContext}
+      >
         <BlockLoader
           definition={definition}
           source={src}

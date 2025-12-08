@@ -1,3 +1,4 @@
+import { getBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import type { ViewId } from '@core/types/view';
 import { createCallback } from '@solid-primitives/rootless';
 import { useContext } from 'solid-js';
@@ -10,17 +11,35 @@ export function decodePairs(segments: string[]): SplitContent[] {
     const type = segments[i];
     const id = segments[i + 1];
     if (!type || !id) break;
-    pairs.push(
-      type === 'component'
-        ? { type: 'component', id }
-        : ({ type, id } as SplitContent)
-    );
+
+    if (type === 'component') {
+      pairs.push({ type: 'component', id });
+    } else {
+      const resolvedType = resolveBlockAlias(type);
+      const alias = getBlockAlias(type);
+
+      const content: SplitContent = { type: resolvedType, id };
+
+      // If this is an alias, add the alias context
+      if (alias) {
+        content.aliasContext = {
+          alias,
+          baseType: resolvedType,
+        };
+      }
+
+      pairs.push(content);
+    }
   }
   return pairs.length ? pairs : [{ type: 'component', id: 'unified-list' }];
 }
 
 export function encodePairs(splits: ReadonlyArray<SplitContent>): string[] {
-  return splits.flatMap((s) => [s.type, s.id]);
+  return splits.flatMap((s) => [
+    // Use the alias type if available, otherwise use the base type
+    s.type === 'component' ? s.type : s.aliasContext?.alias || s.type,
+    s.id,
+  ]);
 }
 
 export const isInSplit = createCallback(() => {

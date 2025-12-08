@@ -56,6 +56,7 @@ export async function createMarkdownFile(
     fileType: 'md',
     sha: fakeSha,
     projectId: args?.projectId,
+    isTask: true,
   });
 
   invalidateUserQuota();

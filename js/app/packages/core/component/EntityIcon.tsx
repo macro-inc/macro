@@ -1,7 +1,8 @@
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 import {
   blockAcceptedFileExtensionSet,
   fileTypeToBlockName,
+  isBlockAlias,
 } from '@core/constant/allBlocks';
 import {
   USE_PIXEL_BLOCK_ICONS,
@@ -71,6 +72,7 @@ type IconConfig = {
 
 export type EntityWithValidIcon =
   | BlockName
+  | BlockAlias
   | 'default'
   | 'sharedProject'
   | 'company'
@@ -234,6 +236,8 @@ export function isArchiveType(ext: string): boolean {
 
 function validateEntity(entity: string): EntityWithValidIcon {
   if (entity in ENTITY_ICON_CONFIGS) {
+    return entity as EntityWithValidIcon;
+  } else if (isBlockAlias(entity)) {
     return entity as EntityWithValidIcon;
   } else if (isFileType(entity)) {
     return fileTypeToBlockName(entity, true);

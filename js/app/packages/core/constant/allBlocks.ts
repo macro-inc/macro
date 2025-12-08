@@ -1,5 +1,6 @@
 import {
   type AnyBlockDefinition,
+  type BlockAlias,
   type BlockName,
   BlockRegistry,
   type FileTypeString,
@@ -31,6 +32,12 @@ export const blockAcceptedFileExtensionToMimeType: Record<
 
 const fileTypeToBlockName_: Record<string, BlockName> = {};
 
+// Map from alias names to their base block names
+const aliasToBlockName_: Record<string, BlockName> = {};
+
+// Map from base block names to their aliases
+export const blockNameToAliases: Partial<Record<BlockName, string[]>> = {};
+
 export const blockAcceptedFileExtensionSet = new Set<string>();
 
 // @ts-ignore This type is built below
@@ -46,6 +53,17 @@ export const blockNameToDefaultFilename: Record<BlockName, string> = {};
 for (const [name, block] of Object.entries(blocks)) {
   blockNameToFileExtensionSet[name as BlockName] = new Set();
   blockNameToMimeTypeSet[name as BlockName] = new Set();
+
+  // Process aliases
+  if (block.aliases) {
+    blockNameToAliases[name as BlockName] = block.aliases;
+    for (const alias of block.aliases) {
+      aliasToBlockName_[alias] = name as BlockName;
+    }
+  } else {
+    blockNameToAliases[name as BlockName] = [];
+  }
+
   for (const [fileExtension, mimeType] of Object.entries(block.accepted)) {
     fileTypeToBlockName_[fileExtension] = name as BlockName;
     blockAcceptedFileExtensionSet.add(fileExtension);
@@ -60,9 +78,6 @@ for (const [name, block] of Object.entries(blocks)) {
     blockNameToDefaultFilename[name as BlockName] = block.defaultFilename;
   }
 }
-
-// HACK (seamus): Remove once the correct pattern for tasks/sub-types is established.
-blockNameToDefaultFilename['task'] = 'New Task';
 
 export function blockAcceptsMimeType(blockName: BlockName, mimeType: MimeType) {
   return blockNameToMimeTypeSet[blockName].has(mimeType);
@@ -98,6 +113,27 @@ export const blockAcceptedFileExtensions = Array.from(
 );
 
 /**
+ * Check if a string is a block alias
+ */
+export function isBlockAlias(name: string): name is BlockAlias {
+  return name in aliasToBlockName_;
+}
+
+/**
+ * Get the base block name for an alias, or return the original name if not an alias
+ */
+export function resolveBlockAlias(name: BlockName | BlockAlias): BlockName {
+  return aliasToBlockName_[name] || (name as BlockName);
+}
+
+/**
+ * Get the alias name if the input is an alias, undefined otherwise
+ */
+export function getBlockAlias(name: string): string | undefined {
+  return isBlockAlias(name) ? name : undefined;
+}
+
+/**
  * Get the name of a block from a its own name or a file type. Built using the
  * types registered in block definitions.
  * @example
@@ -124,6 +160,12 @@ export function fileTypeToBlockName(
       return icon ? 'write' : 'pdf';
     }
   }
+
+  // Check if it's an alias first
+  if (isBlockAlias(blockOrFiletype)) {
+    return resolveBlockAlias(blockOrFiletype);
+  }
+
   if (BlockRegistry.includes(blockOrFiletype as any)) {
     return blockOrFiletype as BlockName;
   }

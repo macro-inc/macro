@@ -1027,7 +1027,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     DocumentEntity | WithSearch<DocumentEntity>
   > = async (entity, event) => {
     const { id, fileType } = entity;
-    const blockName = fileTypeToBlockName(fileType);
+    const blockName = entity.isTask ? 'task' : fileTypeToBlockName(fileType);
     const handle = event.altKey
       ? insertSplit({ type: blockName, id })
       : replaceOrInsertSplit({ type: blockName, id });

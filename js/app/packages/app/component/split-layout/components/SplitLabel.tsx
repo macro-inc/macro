@@ -1,4 +1,9 @@
-import { isInBlock, useBlockId, useBlockName } from '@core/block';
+import {
+  isInBlock,
+  useBlockAliasedName,
+  useBlockId,
+  useBlockName,
+} from '@core/block';
 import {
   EntityIcon,
   type EntityIconSelector,
@@ -135,7 +140,7 @@ export function BlockItemSplitLabel(props: {
     throw new Error('<BlockItemSplitLabel> must be used within a Block');
 
   const fileName = useBlockDocumentName(props.fallbackName);
-  const blockName = useBlockName();
+  const blockName = useBlockAliasedName();
   const isOwner = useIsDocumentOwner();
 
   const targetType = () => {
@@ -144,11 +149,6 @@ export function BlockItemSplitLabel(props: {
       const fileType = blockMetadataSignal()?.fileType;
       if (fileType && isArchiveType(fileType)) {
         return 'archive';
-      }
-    }
-    if (blockName === 'md') {
-      if (!blockMetadataSignal()?.isTask) {
-        return 'task';
       }
     }
     return blockName;

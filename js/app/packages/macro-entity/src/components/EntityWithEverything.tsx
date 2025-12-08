@@ -178,6 +178,8 @@ export function EntityWithEverything(
             return getIconConfig('channel');
         }
       case 'document':
+        if (props.entity.fileType === 'md' && props.entity.isTask)
+          return getIconConfig('task');
         return getIconConfig(props.entity.fileType || 'default');
       case 'chat':
         return getIconConfig('chat');
