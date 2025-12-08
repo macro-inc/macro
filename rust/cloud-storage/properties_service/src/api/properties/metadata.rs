@@ -109,6 +109,7 @@ pub async fn get_document_metadata_properties(
             metadata::PROJECT,
             models_properties::DataType::Entity,
             entity_type.clone(),
+            Some(EntityType::Project),
         ));
     }
 
@@ -217,6 +218,13 @@ pub fn create_metadata_property_null(
     property_name: &str,
     data_type: models_properties::DataType,
     entity_type: EntityType,
+    specific_entity_type: Option<EntityType>,
 ) -> EntityPropertyWithDefinition {
-    create_metadata_property_inner(property_name, data_type, None, entity_type, None)
+    create_metadata_property_inner(
+        property_name,
+        data_type,
+        None,
+        entity_type,
+        specific_entity_type,
+    )
 }
