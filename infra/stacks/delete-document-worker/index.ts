@@ -120,7 +120,7 @@ const deleteDocumentWorker = new Worker(`delete-document-worker-${stack}`, {
     {
       name: 'SYNC_SERVICE_URL',
       value: `https://sync-service${
-        stack === 'prod' ? '' : `-${stack}`
+        stack === 'prod' ? '' : `-${stack === 'dev' ? 'dev2' : stack}`
       }.macroverse.workers.dev`,
     },
     {

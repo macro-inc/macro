@@ -320,9 +320,10 @@ pub async fn get_document_id_by_attachment_id(
         r#"
         SELECT document_id
         FROM document_email de
+        INNER JOIN "Document" d on de.document_id = d.id
         INNER JOIN email_attachments ea on de.email_attachment_id = ea.id
         INNER JOIN email_messages em on ea.message_id = em.id
-        WHERE em.link_id = $1 AND email_attachment_id = $2
+        WHERE em.link_id = $1 AND email_attachment_id = $2 AND d."deletedAt" IS NULL
         "#,
         link_id,
         email_attachment_id,

@@ -23,7 +23,7 @@ import {
   ENABLE_PROPERTY_DISPLAY_CONTROL,
   ENABLE_SOUP_FROM_FILTER,
 } from '@core/constant/featureFlags';
-import { emailRefetchInterval, useEmailLinksStatus } from '@core/email-link';
+import { useEmailLinksStatus } from '@core/email-link';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -39,7 +39,6 @@ import { supportedExtensions } from '@lexical-core/utils';
 import {
   createChannelsQuery,
   createDssInfiniteQuery,
-  createEmailsInfiniteQuery,
   createFilterComposer,
   createProjectFilterFn,
   createSort,
@@ -105,7 +104,6 @@ import {
 } from 'solid-js';
 import { createStore, type SetStoreFunction, unwrap } from 'solid-js/store';
 import { EntityWithEverything } from '../../macro-entity/src/components/EntityWithEverything';
-import type { FetchPaginatedEmailsParams } from '../../macro-entity/src/queries/email';
 import {
   resetCommandCategoryIndex,
   searchCategories,
@@ -788,6 +786,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return filters;
   });
 
+  const emailActive = useEmailLinksStatus();
+
   const dssQueryParams = createMemo(
     (): GetItemsSoupParams => ({
       limit: props.defaultDisplayOptions?.limit ?? 100,
@@ -816,8 +816,10 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       },
       email_filters: {
         recipients:
-          entityTypeFilter().includes('email') ||
-          entityTypeFilter().length === 0
+          emailActive() &&
+          view().viewType !== 'project' &&
+          (entityTypeFilter().includes('email') ||
+            entityTypeFilter().length === 0)
             ? []
             : [GARBAGE_UUID],
       },
@@ -834,20 +836,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       sort_method: sortType(),
     })
   );
-  const emailQueryParams = createMemo((): FetchPaginatedEmailsParams => {
-    const sort = sortType();
-    const currentView = selectedView();
-    const emailViewValue =
-      currentView === 'noise' || currentView === 'signal'
-        ? emailView()
-        : 'inbox';
-    return {
-      limit: props.defaultDisplayOptions?.limit ?? 100,
-      // email sort methods does not accept frecency yet
-      sort_method: sort === 'frecency' ? 'viewed_updated' : sort,
-      view: emailViewValue,
-    };
-  });
   const searchUnifiedNameContentQueryParams = createMemo(
     (): PaginatedSearchArgs => ({
       params: {
@@ -884,19 +872,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     return !isSearchActive();
   });
 
-  const emailActive = useEmailLinksStatus();
-
-  const disableEmailQuery = createMemo(() => {
-    // NOTE: at the moment emails are not supported in project blocks
-    // so it doesn't make sense to do an expensive email query
-    if (projectFilter()) return true;
-    if (isSearchActive()) return true;
-    if (!emailActive()) return true;
-    const typeFilter = entityTypeFilter();
-    if (typeFilter.length > 0 && !typeFilter.includes('email')) return true;
-    return false;
-  });
-
   const disableDssInfiniteQuery = createMemo(() => {
     const typeFilter = entityTypeFilter();
     if (typeFilter.length === 0) return false;
@@ -917,10 +892,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const dssInfiniteQuery = createDssInfiniteQuery(dssQueryParams, {
     disabled: disableDssInfiniteQuery,
     requestBody: dssQueryRequestBody,
-  });
-  const emailsInfiniteQuery = createEmailsInfiniteQuery(emailQueryParams, {
-    refetchInterval: () => emailRefetchInterval(),
-    disabled: disableEmailQuery,
   });
   const searchNameContentInfiniteQuery = createUnifiedSearchInfiniteQuery(
     searchUnifiedNameContentQueryParams,
@@ -995,10 +966,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
         {
           query: dssInfiniteQuery,
           operations: { filter: true, search: true },
-        },
-        {
-          query: emailsInfiniteQuery,
-          operations: { filter: true, search: false },
         },
         {
           query: searchNameContentInfiniteQuery,

@@ -20,6 +20,7 @@ pub async fn upload_attachment(
     access_token: &str,
     link: &link::Link,
     p: &AttachmentUploadMetadata,
+    backfill: bool,
 ) -> anyhow::Result<String> {
     // 1. Check rate limits before making a Gmail API call.
     check_gmail_rate_limit(
@@ -41,8 +42,10 @@ pub async fn upload_attachment(
     let (file_name, file_type) = determine_file_metadata(p)?;
 
     // 5. Create the document record in DSS and get a presigned URL for the upload.
-    let dss_response =
-        create_dss_document_record(dss_client, link, p, &hex_hash, &file_name, &file_type).await?;
+    let dss_response = create_dss_document_record(
+        dss_client, link, p, &hex_hash, &file_name, &file_type, backfill,
+    )
+    .await?;
 
     // 6. Upload the attachment data to the presigned URL.
     upload_data_to_presigned_url(&dss_response, attachment_data, &base64_hash).await?;
@@ -115,7 +118,12 @@ async fn create_dss_document_record(
     hex_hash: &str,
     file_name: &str,
     file_type: &str,
+    backfill: bool,
 ) -> anyhow::Result<CreateDocumentResponse> {
+    // if we are backfilling, use the email timestamp. if it's an on-demand upload, use the current
+    // time so the document shows up at the top of soup views.
+    let created_at = backfill.then_some(p.internal_date_ts);
+
     let request = CreateDocumentRequest {
         id: None,
         sha: hex_hash.to_string(),
@@ -127,7 +135,7 @@ async fn create_dss_document_record(
         branched_from_version_id: None,
         job_id: None,
         project_id: None,
-        created_at: Some(p.internal_date_ts),
+        created_at,
         email_attachment_id: Some(p.attachment_db_id),
         is_task: false,
     };

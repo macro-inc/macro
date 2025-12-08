@@ -29,6 +29,7 @@ export class SyncServiceClient {
       let response: Response;
 
       if (this.config.serviceFetcher) {
+        // How can this be correct??? the url would be https://sync-service/document/<docid>/raw ?????
         response = await this.config.serviceFetcher.fetch(`https://sync-service${path}`, {
           method: 'GET',
           headers: {
