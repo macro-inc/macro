@@ -1,6 +1,5 @@
 //! This crate contains the document sub type enum and various logic for it
 
-
 /// The document sub type enum represents all values of document sub types.
 /// These values should match the `document_sub_type_value` table in macrodb.
 #[derive(
