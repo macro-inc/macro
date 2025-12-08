@@ -3,7 +3,7 @@
 use models_properties::EntityType;
 
 /// Service trait for property operations.
-pub trait PropertiesService: Clone + Send + Sync + 'static {
+pub trait PropertiesService: Send + Sync + 'static {
     type Err;
 
     /// Set an entity's status system property to "Completed".

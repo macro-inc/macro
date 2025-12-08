@@ -14,3 +14,10 @@ system_properties = { path = "../system_properties" }
 tracing = { workspace = true }
 uuid = { workspace = true }
 
+[dev-dependencies]
+mockall = { workspace = true }
+macro_db_migrator = { path = "../macro_db_migrator" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[package.metadata.sqlx]
+offline = true

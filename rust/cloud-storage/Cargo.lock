@@ -6527,11 +6527,14 @@ name = "properties"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "macro_db_migrator",
  "macro_uuid",
+ "mockall",
  "models_properties",
  "serde_json",
  "sqlx",
  "system_properties",
+ "tokio",
  "tracing",
  "uuid",
 ]

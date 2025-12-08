@@ -11,7 +11,8 @@ use uuid::Uuid;
 ///
 /// This trait abstracts the database layer, allowing for different implementations
 /// (e.g., PostgreSQL, mock for testing).
-pub trait PropertiesRepo: Clone + Send + Sync + 'static {
+#[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
+pub trait PropertiesRepo: Send + Sync + 'static {
     type Err;
 
     /// Atomically update a property value if the property is attached to the entity.

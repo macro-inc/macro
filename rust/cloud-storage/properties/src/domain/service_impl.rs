@@ -10,7 +10,7 @@ use super::ports::PropertiesRepo;
 use super::service::PropertiesService;
 
 /// Implementation of PropertiesService using a repository.
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct PropertiesServiceImpl<R>
 where
     R: PropertiesRepo,
