@@ -56,7 +56,11 @@ function SplitSpotlightButton() {
   const layout = useContext(SplitLayoutContext);
   if (!context || !layout) return '';
   const show = () => {
-    return layout.manager.splits().length > 1 || isSettingsPanelOpen() || isRightPanelOpen();
+    return (
+      layout.manager.splits().length > 1 ||
+      isSettingsPanelOpen() ||
+      isRightPanelOpen()
+    );
   };
   return (
     <Show when={show()}>

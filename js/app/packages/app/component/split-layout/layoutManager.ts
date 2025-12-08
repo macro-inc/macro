@@ -465,7 +465,11 @@ export function createSplitLayout(
   }
 
   function spotlightSplit(id: SplitId) {
-    if (state.splits.length <= 1 && !isSettingsPanelOpen() && !isRightPanelOpen()) {
+    if (
+      state.splits.length <= 1 &&
+      !isSettingsPanelOpen() &&
+      !isRightPanelOpen()
+    ) {
       return;
     }
     const split = state.splits.find((s) => s.id === id);

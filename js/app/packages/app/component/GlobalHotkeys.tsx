@@ -41,7 +41,7 @@ import {
 export default function GlobalShortcuts() {
   const [bigChatOpen, setBigChatOpen] = useBigChat();
   const toggleRightPanel = useToggleRightPanel();
-  const { settingsOpen, toggleSettings } = useSettingsState();
+  const { toggleSettings } = useSettingsState();
 
   const handleCommandMenu = () => {
     const wasOpen = konsoleOpen();
