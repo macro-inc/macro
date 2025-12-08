@@ -129,3 +129,5 @@ export const ENABLE_JACK_IN = false;
 export const ENABLE_CUSTOM_CURSOR = false;
 // uses javascript to detect selectable text to switch to "text" cursor type (ibeam)
 export const ENABLE_CUSTOM_CURSOR_TEXT_GLYPH_DETECTION = true;
+
+export const ENABLE_CREATE_TASK = DEV_MODE_ENV;

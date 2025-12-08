@@ -122,6 +122,7 @@ pub async fn handler(
         &gmail_token,
         &link,
         &attachment2,
+        false
     )
     .await
     .map_err(GetAttachmentDocumentIdError::UploadError)?;

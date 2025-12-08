@@ -16,6 +16,7 @@ lazy_static = { workspace = true }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 models_pagination = { path = "../models_pagination" }
+models_permissions = { path = "../models_permissions" }
 regex = { workspace = true }
 schemars = { workspace = true }
 scraper = { workspace = true }

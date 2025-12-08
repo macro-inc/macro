@@ -57,7 +57,7 @@ pub async fn get_batch_preview_handler(
                     file_type: preview_data.file_type.clone(),
                     owner: preview_data.owner.clone(),
                     updated_at: preview_data.updated_at,
-                    is_task: preview_data.is_task,
+                    sub_type: preview_data.sub_type,
                 })
             }
             DocumentPreviewV2::DoesNotExist(preview_data) => {

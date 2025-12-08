@@ -1,5 +1,6 @@
 use crate::api::context::ApiContext;
 use axum::{http::StatusCode, response::Response};
+use document_sub_type::DocumentSubType;
 use macro_db_client::history::upsert_user_history;
 use model::document::response::{DocumentResponse, DocumentResponseMetadata};
 use model::{document::FileTypeExt, sync_service::SyncServiceVersionID};
@@ -293,7 +294,7 @@ pub async fn copy_document<'a>(
     }
 
     // Copy task properties if the original document is a task
-    if original_document_metadata.is_task
+    if original_document_metadata.sub_type == Some(DocumentSubType::Task)
         && let Err(e) = ctx
             .system_properties_service
             .copy_task_properties(

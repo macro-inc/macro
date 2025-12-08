@@ -1,11 +1,9 @@
 import type { BlockOrchestrator } from '@core/orchestrator';
-import type { EmailSource } from '@macro-entity';
 import type { NotificationSource } from '@notifications';
 import { createContext, type ParentProps, useContext } from 'solid-js';
 
 export interface GlobalAppState {
   notificationSource: NotificationSource;
-  emailSource: EmailSource;
   blockOrchestrator: BlockOrchestrator;
 }
 
@@ -30,17 +28,12 @@ export function useGlobalNotificationSource(): NotificationSource {
   return tryGetContext().notificationSource;
 }
 
-export function useGlobalEmailSource(): EmailSource {
-  return tryGetContext().emailSource;
-}
-
 export function useGlobalBlockOrchestrator(): BlockOrchestrator {
   return tryGetContext().blockOrchestrator;
 }
 
 export type GlobalAppStateProps = {
   notificationSource: NotificationSource;
-  emailSource: EmailSource;
   blockOrchestrator: BlockOrchestrator;
 };
 
@@ -51,7 +44,6 @@ export function GlobalAppStateProvider(
     <GlobalAppStateContext.Provider
       value={{
         notificationSource: props.notificationSource,
-        emailSource: props.emailSource,
         blockOrchestrator: props.blockOrchestrator,
       }}
     >

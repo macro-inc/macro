@@ -188,6 +188,7 @@ export class ConnectionGateway extends pulumi.ComponentResource {
             service: {
               name: BASE_NAME,
               image: image.image.imageUri,
+              stopTimeout: 10, // 10 seconds to force kill the task
               cpu: 4096,
               memory: 8192,
               environment: containerEnvVars,

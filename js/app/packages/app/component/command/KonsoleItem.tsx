@@ -107,7 +107,7 @@ const DEFAULT_CATEGORIES = [
   { name: 'Documents', visible: true },
   { name: 'Chats', visible: true },
   { name: 'Folders', visible: true },
-  { name: 'Emails', visible: true },
+  { name: 'Emails', visible: false },
   { name: 'Contacts', visible: ENABLE_GMAIL_BASED_CONTACTS },
   { name: 'Companies', visible: ENABLE_GMAIL_BASED_CONTACTS },
 ] as const;

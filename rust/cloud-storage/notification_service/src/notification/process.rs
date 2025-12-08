@@ -190,6 +190,30 @@ pub(crate) async fn process_message(
     let mut notifications_with_user_data =
         populate_user_data(notification, &user_ids, is_important_v0).await;
 
+    // [BAC-149] Send push notifications before sending to connection gateway
+    // Send push notifications
+    let users_sent_push = {
+        #[cfg(feature = "push_notification")]
+        {
+            send::push::process::process_push_notifications(
+                &ctx.db,
+                &ctx.sns_client,
+                &notifications_with_user_data,
+                &user_ids.iter().collect::<HashSet<&String>>(),
+            )
+            .await
+            .context("unable to process push notifications")?
+        }
+        #[cfg(not(feature = "push_notification"))]
+        {
+            tracing::info!("bypassing push notifications");
+            vec![]
+        }
+    };
+    let users_sent_push = users_sent_push.into_iter().collect::<HashSet<String>>();
+
+    tracing::trace!(users_sent_push=?users_sent_push, "users sent push notification");
+
     let users_sent_connection_gateway = send::connection_gateway::send_connection_gateway(
         &ctx.conn_gateway_client,
         &notifications_with_user_data,
@@ -214,42 +238,12 @@ pub(crate) async fn process_message(
 
     tracing::trace!(users_to_push=?users_to_push, "users to push");
 
-    // Send push notifications
-    let users_sent_push = {
-        #[cfg(feature = "push_notification")]
-        {
-            send::push::process::process_push_notifications(
-                &ctx.db,
-                &ctx.sns_client,
-                &notifications_with_user_data,
-                &users_to_push,
-            )
-            .await
-            .context("unable to process push notifications")?
-        }
-        #[cfg(not(feature = "push_notification"))]
-        {
-            tracing::info!("bypassing push notifications");
-            vec![]
-        }
-    };
-
-    let users_to_email = users_to_push
+    let users_to_email = user_ids
         .iter()
-        .filter_map(|user_id| {
-            if !users_sent_connection_gateway.contains(*user_id) {
-                Some(*user_id)
-            } else {
-                None
-            }
-        })
+        .filter(|user_id| !users_sent_connection_gateway.contains(*user_id))
         .collect::<HashSet<&String>>();
+
     tracing::trace!(users_to_email=?users_to_email, "users to email");
-
-    // Transform the Vec into a HashSet
-    let users_sent_push = users_sent_push.into_iter().collect::<HashSet<String>>();
-
-    tracing::trace!(users_sent_push=?users_sent_push, "users sent push notification");
 
     let users_sent_notification = users_sent_connection_gateway
         .union(&users_sent_push)

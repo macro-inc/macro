@@ -1,5 +1,6 @@
 use std::collections::HashSet;
 
+use document_sub_type::DocumentSubType;
 use model::document::{DocumentPreviewData, DocumentPreviewV2, WithDocumentId};
 
 #[tracing::instrument(skip(db))]
@@ -16,9 +17,9 @@ pub async fn batch_get_document_preview_v2(
                 d."fileType" as file_type,
                 d.owner as owner,
                 d."updatedAt"::timestamptz as "updated_at",
-                (dt.document_id IS NOT NULL) as "is_task!"
+                dt.sub_type as "sub_type?: DocumentSubType"
             FROM "Document" d
-            LEFT JOIN document_task dt ON dt.document_id = d.id
+            LEFT JOIN document_sub_type dt ON dt.document_id = d.id
             WHERE
                 d."id" = ANY($1)
         "#,

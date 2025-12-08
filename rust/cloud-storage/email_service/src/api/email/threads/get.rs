@@ -66,7 +66,6 @@ pub struct GetThreadParams {
 pub struct GetThreadResponse {
     /// the thread, with messages inside
     pub thread: thread::APIThread,
-    pub access_level: AccessLevel,
 }
 
 /// Represents pagination parameters with defaults applied
@@ -156,14 +155,11 @@ pub async fn get_thread_handler(
 
     let result: Vec<MessageWithBodyReplyless> = join_all(tasks).await;
 
-    let api_thread = APIThread::from_thread_with_messages(thread, result);
+    let api_thread = APIThread::from_thread_with_messages(thread, result, access_level);
 
     Ok((
         StatusCode::OK,
-        Json(GetThreadResponse {
-            access_level,
-            thread: api_thread,
-        }),
+        Json(GetThreadResponse { thread: api_thread }),
     )
         .into_response())
 }
