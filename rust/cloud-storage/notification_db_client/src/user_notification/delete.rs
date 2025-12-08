@@ -1,5 +1,3 @@
-use sqlx::types::Uuid;
-
 #[tracing::instrument(skip(pool))]
 pub async fn delete_all_users_notification(
     pool: &sqlx::PgPool,
@@ -43,12 +41,8 @@ pub async fn delete_user_notification(
 pub async fn bulk_delete_user_notification(
     pool: &sqlx::PgPool,
     user_id: &str,
-    notification_ids: &Vec<String>,
+    notification_ids: &Vec<uuid::Uuid>,
 ) -> anyhow::Result<()> {
-    let notification_uuids = notification_ids
-        .iter()
-        .map(|id| macro_uuid::string_to_uuid(id))
-        .collect::<Result<Vec<Uuid>, _>>()?;
     sqlx::query!(
         r#"
         UPDATE user_notification
@@ -57,7 +51,7 @@ pub async fn bulk_delete_user_notification(
         AND notification_id = ANY($2)
         "#,
         user_id,
-        &notification_uuids,
+        &notification_ids,
     )
     .execute(pool)
     .await?;
@@ -66,34 +60,4 @@ pub async fn bulk_delete_user_notification(
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use sqlx::{Pool, Postgres};
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_notifications")))]
-    async fn test_delete_user_notification(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        delete_user_notification(
-            &pool,
-            "0193b1ea-a542-7589-893b-2b4a509c1e74",
-            "macro|user@user.com",
-        )
-        .await?;
-
-        Ok(())
-    }
-
-    #[sqlx::test(fixtures(path = "../../fixtures", scripts("user_notifications")))]
-    async fn test_bulk_delete_user_notification(pool: Pool<Postgres>) -> anyhow::Result<()> {
-        bulk_delete_user_notification(
-            &pool,
-            "macro|user@user.com",
-            &vec![
-                "0193b1ea-a542-7589-893b-2b4a509c1e76".to_string(),
-                "0193b1ea-a542-7589-893b-2b4a509c1e75".to_string(),
-            ],
-        )
-        .await?;
-
-        Ok(())
-    }
-}
+mod test;

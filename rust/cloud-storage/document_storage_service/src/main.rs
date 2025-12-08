@@ -24,6 +24,7 @@ use soup::{
 use sqlx::postgres::PgPoolOptions;
 use std::sync::Arc;
 use sync_service_client::SyncServiceClient;
+use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 
 mod api;
 mod config;
@@ -184,6 +185,8 @@ async fn main() -> anyhow::Result<()> {
     let frecency_service = FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone()));
     let email_service =
         EmailServiceImpl::new(EmailPgRepo::new(db.clone()), frecency_service.clone());
+    let system_properties_service =
+        SystemPropertiesServiceImpl::new(PgSystemPropertiesRepository::new(db.clone()));
     let api_context = ApiContext {
         soup_router_state: SoupRouterState::new(
             SoupImpl::new(
@@ -209,6 +212,7 @@ async fn main() -> anyhow::Result<()> {
         comms_service_client: Arc::new(comms_service_client),
         conn_gateway_client: Arc::new(conn_gateway_client),
         sync_service_client: Arc::new(sync_service_client),
+        system_properties_service: Arc::new(system_properties_service),
         config: Arc::new(config),
         jwt_validation_args,
         dss_auth_key,

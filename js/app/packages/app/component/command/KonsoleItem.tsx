@@ -27,12 +27,12 @@ import type { Attachment } from '@service-email/generated/schemas';
 import { useUserId } from '@service-gql/client';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
 import type { Item } from '@service-storage/generated/schemas/item';
+import { syncServiceClient } from '@service-sync/client';
 import {
   CustomEntityIcon,
   EntityIcon,
   type EntityWithValidIcon,
 } from 'core/component/EntityIcon';
-import { syncServiceClient } from 'service-sync/client';
 import {
   type Component,
   createMemo,
@@ -107,7 +107,7 @@ const DEFAULT_CATEGORIES = [
   { name: 'Documents', visible: true },
   { name: 'Chats', visible: true },
   { name: 'Folders', visible: true },
-  { name: 'Emails', visible: true },
+  { name: 'Emails', visible: false },
   { name: 'Contacts', visible: ENABLE_GMAIL_BASED_CONTACTS },
   { name: 'Companies', visible: ENABLE_GMAIL_BASED_CONTACTS },
 ] as const;

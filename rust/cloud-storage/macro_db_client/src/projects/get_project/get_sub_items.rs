@@ -1,3 +1,4 @@
+use document_sub_type::DocumentSubType;
 use model::{chat::Chat, document::BasicDocument, project::Project};
 
 /// Gets all deleted sub-projects of a given project.
@@ -85,10 +86,10 @@ pub async fn get_sub_documents(
                 d."createdAt"::timestamptz as created_at,
                 d."updatedAt"::timestamptz as updated_at,
                 d."projectId" as "project_id?",
-                (dt.document_id IS NOT NULL) as "is_task!"
+                dt.sub_type as "sub_type?: DocumentSubType"
             FROM
                 "Document" d
-            LEFT JOIN document_task dt ON dt.document_id = d.id
+            LEFT JOIN document_sub_type dt ON dt.document_id = d.id
             LEFT JOIN LATERAL (
                 SELECT
                     b.id
@@ -133,7 +134,7 @@ pub async fn get_sub_documents(
             created_at: row.created_at,
             updated_at: row.updated_at,
             deleted_at: None, // Don't care about the deleted_at
-            is_task: row.is_task,
+            sub_type: row.sub_type,
         }
     })
     .fetch_all(transaction.as_mut())

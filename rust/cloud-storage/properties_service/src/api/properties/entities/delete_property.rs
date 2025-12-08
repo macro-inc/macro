@@ -9,17 +9,19 @@ use uuid::Uuid;
 use crate::api::context::ApiContext;
 use model::user::UserContext;
 use properties_db_client::{
-    entity_properties::{delete as entity_properties_delete, get as entity_properties_get},
+    entity_properties::{
+        delete as entity_properties_delete, get::get_entity_type_from_entity_property,
+    },
     error::PropertiesDatabaseError,
 };
 
 #[derive(Debug, Error)]
 pub enum DeleteEntityPropertyErr {
-    #[error("An unknown error has occurred")]
+    #[error("An internal error occurred")]
     InternalError(#[from] anyhow::Error),
-    #[error("Database error: {0}")]
+    #[error("An internal error occurred")]
     DatabaseError(#[from] PropertiesDatabaseError),
-    #[error("Permission error: {0}")]
+    #[error("{0}")]
     Permission(#[from] crate::api::permissions::PermissionError),
     #[error("Entity property not found")]
     NotFound,
@@ -60,37 +62,26 @@ impl IntoResponse for DeleteEntityPropertyErr {
     ),
     tag = "Properties"
 )]
-#[tracing::instrument(skip(context, user_context), fields(entity_property_id = %entity_property_uuid, user_id = %user_context.user_id))]
+#[tracing::instrument(skip(context, user_context), fields(entity_property_id = %entity_property_uuid, user_id = %user_context.user_id), err)]
 pub async fn delete_entity_property(
     Path(entity_property_uuid): Path<Uuid>,
     State(context): State<ApiContext>,
     Extension(user_context): Extension<UserContext>,
 ) -> Result<StatusCode, DeleteEntityPropertyErr> {
-    tracing::info!(
-        entity_property_id = %entity_property_uuid,
-        "removing entity property"
-    );
+    tracing::info!("removing entity property");
 
     // Get entity property metadata to check permissions
-    let entity_ref = entity_properties_get::get_entity_type_from_entity_property(
-        &context.db,
-        entity_property_uuid,
-    )
-    .await
-    .inspect_err(|e| {
-        tracing::error!(
-            error = ?e,
-            entity_property_id = %entity_property_uuid,
-            "failed to get entity property metadata"
-        );
-    })?
-    .ok_or_else(|| {
-        tracing::warn!(
-            entity_property_id = %entity_property_uuid,
-            "entity property not found"
-        );
-        DeleteEntityPropertyErr::NotFound
-    })?;
+    // Note: get_entity_type_from_entity_property excludes system properties,
+    // so system properties will return NotFound here.
+    let entity_ref = get_entity_type_from_entity_property(&context.db, entity_property_uuid)
+        .await
+        .inspect_err(|e| {
+            tracing::error!(
+                error = ?e,
+                "failed to get entity property metadata"
+            );
+        })?
+        .ok_or(DeleteEntityPropertyErr::NotFound)?;
 
     tracing::debug!(
         entity_id = %entity_ref.entity_id,
@@ -110,15 +101,11 @@ pub async fn delete_entity_property(
         .inspect_err(|e| {
             tracing::error!(
                 error = ?e,
-                entity_property_id = %entity_property_uuid,
                 "failed to remove entity property"
             );
         })?;
 
-    tracing::info!(
-        entity_property_id = %entity_property_uuid,
-        "successfully removed entity property"
-    );
+    tracing::info!("successfully removed entity property");
 
     Ok(StatusCode::NO_CONTENT)
 }

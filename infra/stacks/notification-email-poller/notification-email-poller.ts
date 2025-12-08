@@ -111,6 +111,7 @@ export class Worker extends pulumi.ComponentResource {
         container: {
           name: WORKER_NAME,
           image: image.image.imageUri,
+          stopTimeout: 10, // 10 seconds to force kill the task
           cpu: 256, // Specify CPU units
           memory: 512, // Specify memory in MB
           environment: [...containerEnvVars],

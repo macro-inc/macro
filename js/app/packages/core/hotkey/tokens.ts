@@ -141,6 +141,8 @@ export const TOKENS = {
     projectNewSplit: 'create.projectNewSplit',
     code: 'create.code',
     codeNewSplit: 'create.codeNewSplit',
+    task: 'create.task',
+    taskNewSplit: 'create.taskNewSplit',
     close_menu: 'create.close_menu',
   },
 

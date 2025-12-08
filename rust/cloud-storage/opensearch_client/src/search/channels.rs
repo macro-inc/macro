@@ -197,12 +197,16 @@ pub(crate) async fn search_channel_messages(
     client: &opensearch::OpenSearch,
     args: ChannelMessageSearchArgs,
 ) -> Result<Vec<SearchHit>> {
+    let indices = match args.search_on {
+        SearchOn::Content => vec![SearchIndex::Channels.as_ref()],
+        SearchOn::NameContent => vec![SearchIndex::Channels.as_ref(), SearchIndex::Names.as_ref()],
+        SearchOn::Name => vec![SearchIndex::Names.as_ref()],
+    };
+
     let query_body = args.build()?;
 
     let response = client
-        .search(opensearch::SearchParts::Index(&[
-            SearchIndex::Channels.as_ref()
-        ]))
+        .search(opensearch::SearchParts::Index(&indices))
         .body(query_body)
         .send()
         .await

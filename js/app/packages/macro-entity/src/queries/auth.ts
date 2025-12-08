@@ -1,3 +1,5 @@
+import type { MacroApiTokenResponse } from '@service-auth/generated/schemas/macroApiTokenResponse';
+import type { ProfilePictures } from '@service-auth/generated/schemas/profilePictures';
 import {
   queryOptions,
   type SolidQueryOptions,
@@ -5,8 +7,6 @@ import {
 } from '@tanstack/solid-query';
 import { SERVER_HOSTS } from 'core/constant/servers';
 import { platformFetch } from 'core/util/platformFetch';
-import type { MacroApiTokenResponse } from 'service-auth/generated/schemas/macroApiTokenResponse';
-import type { ProfilePictures } from 'service-auth/generated/schemas/profilePictures';
 import { createMemo } from 'solid-js';
 import { queryKeys } from './key';
 

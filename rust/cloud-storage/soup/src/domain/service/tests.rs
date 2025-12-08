@@ -1,6 +1,7 @@
 use crate::domain::ports::MockSoupRepo;
 use chrono::Days;
 use cool_asserts::assert_matches;
+use document_sub_type::DocumentSubType;
 use email::domain::models::{EmailErr, EnrichedEmailThreadPreview, PreviewView};
 use frecency::domain::models::FrecencyPageResponse;
 use frecency::domain::ports::MockFrecencyQueryService;
@@ -87,7 +88,7 @@ fn soup_document_uuid_with_updated(id: Uuid, updated_at: DateTime<Utc>) -> SoupD
         created_at: Default::default(),
         updated_at,
         viewed_at: Default::default(),
-        is_task: false,
+        sub_type: Some(DocumentSubType::Task),
     }
 }
 

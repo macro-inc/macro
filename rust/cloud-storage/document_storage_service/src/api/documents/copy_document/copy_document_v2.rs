@@ -1,5 +1,6 @@
 use crate::api::context::ApiContext;
 use axum::{http::StatusCode, response::Response};
+use document_sub_type::DocumentSubType;
 use macro_db_client::history::upsert_user_history;
 use model::document::response::{DocumentResponse, DocumentResponseMetadata};
 use model::{document::FileTypeExt, sync_service::SyncServiceVersionID};
@@ -11,6 +12,7 @@ use model::{
     response::GenericResponse,
 };
 use models_permissions::share_permission::SharePermissionV2;
+use system_properties::SystemPropertiesService;
 
 #[tracing::instrument(skip(ctx))]
 pub async fn copy_document<'a>(
@@ -288,6 +290,24 @@ pub async fn copy_document<'a>(
             Some(updated_document_metadata.document_id.clone()),
             e.into(),
             "unable to copy document",
+        ));
+    }
+
+    // Copy task properties if the original document is a task
+    if original_document_metadata.sub_type == Some(DocumentSubType::Task)
+        && let Err(e) = ctx
+            .system_properties_service
+            .copy_task_properties(
+                &original_document_metadata.document_id,
+                &updated_document_metadata.document_id,
+            )
+            .await
+    {
+        tracing::error!(error=?e, document_id=?updated_document_metadata.document_id, "failed to copy task properties");
+        return Err((
+            Some(updated_document_metadata.document_id.clone()),
+            e.into(),
+            "failed to copy task properties",
         ));
     }
 

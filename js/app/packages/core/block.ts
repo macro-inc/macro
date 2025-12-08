@@ -57,6 +57,7 @@ export const BlockRegistry = [
   'video',
   'email',
   'contact',
+  'task',
 ] as const;
 
 type BlockNameKeys = keyof typeof BlockRegistry & number;
@@ -124,6 +125,7 @@ export const ValidBlockCombinations: BlockCombinationRules = {
   unknown: allBlockNames,
   video: allBlockNames,
   contact: allBlockNames,
+  task: allBlockNames,
 } as const;
 
 // maps block name to valid parents
@@ -141,6 +143,7 @@ export const ValidNestingCombinations: BlockCombinationRules = {
   unknown: new Set([]),
   video: new Set([]),
   contact: new Set([]),
+  task: new Set([]),
 };
 
 export const LoadErrors = {
