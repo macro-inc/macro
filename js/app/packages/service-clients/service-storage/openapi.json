@@ -4056,8 +4056,7 @@
           "owner",
           "name",
           "createdAt",
-          "updatedAt",
-          "isTask"
+          "updatedAt"
         ],
         "properties": {
           "branchedFromId": {
@@ -4094,10 +4093,6 @@
             "description": "The file type of the document (e.g. pdf, docx)"
           },
           "id": { "type": "string", "description": "The document id" },
-          "isTask": {
-            "type": "boolean",
-            "description": "Whether or not the document is a task.\nThis is only applicable for md documents."
-          },
           "name": {
             "type": "string",
             "description": "The name of the document"
@@ -4113,6 +4108,15 @@
           "sha": {
             "type": ["string", "null"],
             "description": "If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present"
+          },
+          "subType": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/DocumentSubType",
+                "description": "The sub type of the document if present."
+              }
+            ]
           },
           "updatedAt": {
             "type": "integer",
@@ -4669,8 +4673,7 @@
           "owner",
           "documentName",
           "createdAt",
-          "updatedAt",
-          "isTask"
+          "updatedAt"
         ],
         "properties": {
           "branchedFromId": {
@@ -4711,10 +4714,6 @@
             "type": ["string", "null"],
             "description": "The file type of the document (file extension)"
           },
-          "isTask": {
-            "type": "boolean",
-            "description": "Whether or not the document is a task.\nThis is only applicable for md documents."
-          },
           "modificationData": {
             "description": "The modification data for the document instance.\nThis is only used for PDF documents."
           },
@@ -4733,6 +4732,15 @@
           "sha": {
             "type": ["string", "null"],
             "description": "If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present"
+          },
+          "subType": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/DocumentSubType",
+                "description": "The sub type of the document if present."
+              }
+            ]
           },
           "updatedAt": {
             "type": "integer",
@@ -4824,13 +4832,7 @@
       },
       "DocumentPreviewData": {
         "type": "object",
-        "required": [
-          "document_id",
-          "document_name",
-          "owner",
-          "updated_at",
-          "is_task"
-        ],
+        "required": ["document_id", "document_name", "owner", "updated_at"],
         "properties": {
           "document_id": { "type": "string", "description": "The document id" },
           "document_name": {
@@ -4841,13 +4843,18 @@
             "type": ["string", "null"],
             "description": "The file type of the document (e.g. pdf, docx)"
           },
-          "is_task": {
-            "type": "boolean",
-            "description": "Whether or not the document is a task.\nThis is only applicable for md documents."
-          },
           "owner": {
             "type": "string",
             "description": "The id of the owner of the document"
+          },
+          "sub_type": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/DocumentSubType",
+                "description": "The sub type of the document if present."
+              }
+            ]
           },
           "updated_at": {
             "type": "integer",
@@ -4874,8 +4881,7 @@
           "owner",
           "documentName",
           "createdAt",
-          "updatedAt",
-          "isTask"
+          "updatedAt"
         ],
         "properties": {
           "branchedFromId": {
@@ -4916,10 +4922,6 @@
             "type": ["string", "null"],
             "description": "The file type of the document"
           },
-          "isTask": {
-            "type": "boolean",
-            "description": "Whether or not the document is a task.\nThis is only applicable for md documents."
-          },
           "modificationData": {
             "description": "The modification data for the document instance.\nThis is only used for PDF documents."
           },
@@ -4931,6 +4933,15 @@
             "type": ["string", "null"],
             "description": "If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present"
           },
+          "subType": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/DocumentSubType",
+                "description": "The sub type of the document if present."
+              }
+            ]
+          },
           "updatedAt": {
             "type": "integer",
             "format": "int64",
@@ -4941,6 +4952,11 @@
       "DocumentStorageServiceApiVersion": {
         "type": "string",
         "enum": ["v1", "v2"]
+      },
+      "DocumentSubType": {
+        "type": "string",
+        "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
+        "enum": ["task"]
       },
       "EditAnchorRequest": {
         "oneOf": [
@@ -6841,8 +6857,7 @@
           "name",
           "createdAt",
           "updatedAt",
-          "viewedAt",
-          "isTask"
+          "viewedAt"
         ],
         "properties": {
           "branchedFromId": {
@@ -6879,10 +6894,6 @@
             "format": "uuid",
             "description": "The document id"
           },
-          "isTask": {
-            "type": "boolean",
-            "description": "Whether or not the document is a task.\nThis is only applicable for md documents."
-          },
           "name": {
             "type": "string",
             "description": "The name of the document"
@@ -6899,6 +6910,15 @@
           "sha": {
             "type": ["string", "null"],
             "description": "If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present"
+          },
+          "subType": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/DocumentSubType",
+                "description": "The sub type of the document if present."
+              }
+            ]
           },
           "updatedAt": {
             "type": "integer",

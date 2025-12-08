@@ -31,11 +31,11 @@ export const getRecentActivityHandlerResponse = zod.object({
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
   "id": zod.string().describe('The document id'),
-  "isTask": zod.boolean().describe('Whether or not the document is a task.\nThis is only applicable for md documents.'),
   "name": zod.string().describe('The name of the document'),
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 })
@@ -550,12 +550,12 @@ export const getUserDocumentsHandlerResponse = zod.object({
   "documentName": zod.string().describe('The name of the document'),
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (file extension)'),
-  "isTask": zod.boolean().describe('Whether or not the document is a task.\nThis is only applicable for md documents.'),
   "modificationData": zod.any().optional().describe('The modification data for the document instance.\nThis is only used for PDF documents.'),
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "projectName": zod.string().nullish().describe('The name of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated')
 })),
   "next_offset": zod.number().nullish().describe('The next offset to be used if there is one'),
@@ -601,10 +601,10 @@ export const createDocumentHandlerResponse = zod.object({
   "documentName": zod.string().describe('The name of the document'),
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document'),
-  "isTask": zod.boolean().describe('Whether or not the document is a task.\nThis is only applicable for md documents.'),
   "modificationData": zod.any().optional().describe('The modification data for the document instance.\nThis is only used for PDF documents.'),
   "owner": zod.string().describe('The owner of the document'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated')
 }),
   "presignedUrl": zod.string().nullish()
@@ -707,8 +707,8 @@ export const getBatchPreviewHandlerResponse = zod.object({
   "document_id": zod.string().describe('The document id'),
   "document_name": zod.string().describe('The name of the document'),
   "file_type": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
-  "is_task": zod.boolean().describe('Whether or not the document is a task.\nThis is only applicable for md documents.'),
   "owner": zod.string().describe('The id of the owner of the document'),
+  "sub_type": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
   "updated_at": zod.number().describe('The time the document was last updated')
 }).and(zod.object({
   "type": zod.enum(['access'])
@@ -747,12 +747,12 @@ export const getDocumentResponse = zod.object({
   "documentName": zod.string().describe('The name of the document'),
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (file extension)'),
-  "isTask": zod.boolean().describe('Whether or not the document is a task.\nThis is only applicable for md documents.'),
   "modificationData": zod.any().optional().describe('The modification data for the document instance.\nThis is only used for PDF documents.'),
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "projectName": zod.string().nullish().describe('The name of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated')
 }),
   "userAccessLevel": zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom'),
@@ -794,10 +794,10 @@ export const saveDocumentHandlerResponse = zod.object({
   "documentName": zod.string().describe('The name of the document'),
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document'),
-  "isTask": zod.boolean().describe('Whether or not the document is a task.\nThis is only applicable for md documents.'),
   "modificationData": zod.any().optional().describe('The modification data for the document instance.\nThis is only used for PDF documents.'),
   "owner": zod.string().describe('The owner of the document'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated')
 }),
   "presignedUrl": zod.string().nullish().describe('If the document is an editable file, we provide a presigned url to save the updated file to.')
@@ -861,12 +861,12 @@ export const copyDocumentHandlerResponse = zod.object({
   "documentName": zod.string().describe('The name of the document'),
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (file extension)'),
-  "isTask": zod.boolean().describe('Whether or not the document is a task.\nThis is only applicable for md documents.'),
   "modificationData": zod.any().optional().describe('The modification data for the document instance.\nThis is only used for PDF documents.'),
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "projectName": zod.string().nullish().describe('The name of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated')
 }),
   "userAccessLevel": zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom'),
@@ -999,10 +999,10 @@ export const simpleSaveResponse = zod.object({
   "documentName": zod.string().describe('The name of the document'),
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document'),
-  "isTask": zod.boolean().describe('Whether or not the document is a task.\nThis is only applicable for md documents.'),
   "modificationData": zod.any().optional().describe('The modification data for the document instance.\nThis is only used for PDF documents.'),
   "owner": zod.string().describe('The owner of the document'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated')
 }),
   "presignedUrl": zod.string().nullish().describe('If the document is an editable file, we provide a presigned url to save the updated file to.')
@@ -1048,12 +1048,12 @@ export const getDocumentVersionResponse = zod.object({
   "documentName": zod.string().describe('The name of the document'),
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (file extension)'),
-  "isTask": zod.boolean().describe('Whether or not the document is a task.\nThis is only applicable for md documents.'),
   "modificationData": zod.any().optional().describe('The modification data for the document instance.\nThis is only used for PDF documents.'),
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "projectName": zod.string().nullish().describe('The name of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated')
 }),
   "userAccessLevel": zod.enum(['view', 'comment', 'edit', 'owner']).describe('Ordered from least to most access top -> bottom'),
@@ -1076,11 +1076,11 @@ export const getHistoryHandlerResponse = zod.object({
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
   "id": zod.string().describe('The document id'),
-  "isTask": zod.boolean().describe('Whether or not the document is a task.\nThis is only applicable for md documents.'),
   "name": zod.string().describe('The name of the document'),
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 }),zod.object({
@@ -1180,11 +1180,11 @@ export const getItemsSoupResponse = zod.object({
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on the file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
   "id": zod.string().uuid().describe('The document id'),
-  "isTask": zod.boolean().describe('Whether or not the document is a task.\nThis is only applicable for md documents.'),
   "name": zod.string().describe('The name of the document'),
   "ownerId": zod.string().describe('The owner of the document'),
   "projectId": zod.string().uuid().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "viewedAt": zod.number().nullable().describe('The time the document was last viewed')
 }),
@@ -1336,11 +1336,11 @@ export const postItemsSoupResponse = zod.object({
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on the file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
   "id": zod.string().uuid().describe('The document id'),
-  "isTask": zod.boolean().describe('Whether or not the document is a task.\nThis is only applicable for md documents.'),
   "name": zod.string().describe('The name of the document'),
   "ownerId": zod.string().describe('The owner of the document'),
   "projectId": zod.string().uuid().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "viewedAt": zod.number().nullable().describe('The time the document was last viewed')
 }),
@@ -1465,11 +1465,11 @@ export const getPinsHandlerResponse = zod.object({
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
   "id": zod.string().describe('The document id'),
-  "isTask": zod.boolean().describe('Whether or not the document is a task.\nThis is only applicable for md documents.'),
   "name": zod.string().describe('The name of the document'),
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 }),zod.object({
@@ -1503,11 +1503,11 @@ export const getPinsHandlerResponse = zod.object({
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
   "id": zod.string().describe('The document id'),
-  "isTask": zod.boolean().describe('Whether or not the document is a task.\nThis is only applicable for md documents.'),
   "name": zod.string().describe('The name of the document'),
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 }),zod.object({
@@ -1825,11 +1825,11 @@ export const getProjectContentHandlerResponse = zod.object({
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
   "id": zod.string().describe('The document id'),
-  "isTask": zod.boolean().describe('Whether or not the document is a task.\nThis is only applicable for md documents.'),
   "name": zod.string().describe('The name of the document'),
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 }),zod.object({
@@ -1924,11 +1924,11 @@ export const recentlyDeletedResponse = zod.object({
   "documentVersionId": zod.number().describe('The version of the document\nThis could be the document_instance_id or document_bom_id depending on\nthe file type'),
   "fileType": zod.string().nullish().describe('The file type of the document (e.g. pdf, docx)'),
   "id": zod.string().describe('The document id'),
-  "isTask": zod.boolean().describe('Whether or not the document is a task.\nThis is only applicable for md documents.'),
   "name": zod.string().describe('The name of the document'),
   "owner": zod.string().describe('The owner of the document'),
   "projectId": zod.string().nullish().describe('The id of the project that this document belongs to'),
   "sha": zod.string().nullish().describe('If the document is a PDF, this is the SHA of the pdf\nIf the document is a DOCX, this will not be present'),
+  "subType": zod.union([zod.null(),zod.enum(['task']).describe('The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.')]).optional(),
   "updatedAt": zod.number().describe('The time the document instance / document BOM was updated'),
   "type": zod.enum(['document'])
 }),zod.object({

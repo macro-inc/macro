@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { DocumentPreviewDataFileType } from './documentPreviewDataFileType';
+import type { DocumentPreviewDataSubType } from './documentPreviewDataSubType';
 
 export interface DocumentPreviewData {
   /** The document id */
@@ -13,11 +14,9 @@ export interface DocumentPreviewData {
   document_name: string;
   /** The file type of the document (e.g. pdf, docx) */
   file_type?: DocumentPreviewDataFileType;
-  /** Whether or not the document is a task.
-This is only applicable for md documents. */
-  is_task: boolean;
   /** The id of the owner of the document */
   owner: string;
+  sub_type?: DocumentPreviewDataSubType;
   /** The time the document was last updated */
   updated_at: number;
 }

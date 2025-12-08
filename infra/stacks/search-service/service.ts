@@ -171,6 +171,7 @@ export class SearchService extends pulumi.ComponentResource {
             service: {
               name: BASE_NAME,
               image: image.image.imageUri,
+              stopTimeout: 10, // 10 seconds to force kill the task
               cpu: stack === 'prod' ? 512 : 256,
               memory: stack === 'prod' ? 1024 : 512,
               environment: containerEnvVars ?? [],

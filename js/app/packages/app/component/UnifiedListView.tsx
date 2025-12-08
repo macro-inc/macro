@@ -218,7 +218,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     virtualizerHandleSignal: [, setVirtualizerHandle],
     entityListRefSignal: [, setEntityListRef],
     entitiesSignal: [_entities, setEntities],
-    emailViewSignal: [emailView],
+    emailViewSignal: [_emailView],
   } = unifiedListContext;
   const view = createMemo(() => viewsData[selectedView()]);
   const selectedEntity = createMemo(() => view()?.selectedEntity);

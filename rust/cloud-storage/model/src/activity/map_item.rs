@@ -1,3 +1,5 @@
+use document_sub_type::DocumentSubType;
+
 use crate::{chat::Chat, document::BasicDocument};
 
 #[expect(
@@ -17,7 +19,7 @@ pub fn map_document_item(
     branched_from_id: Option<String>,
     branched_from_version_id: Option<i64>,
     project_id: Option<String>,
-    is_task: bool,
+    sub_type: Option<DocumentSubType>,
 ) -> anyhow::Result<BasicDocument> {
     Ok(BasicDocument {
         document_id: id,
@@ -33,7 +35,7 @@ pub fn map_document_item(
         branched_from_id,
         branched_from_version_id,
         project_id,
-        is_task,
+        sub_type,
     })
 }
 

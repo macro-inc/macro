@@ -65,6 +65,7 @@ use crate::{
         },
     },
 };
+use document_sub_type::DocumentSubType;
 use model::document::response::{
     CreateDocumentRequest, CreateDocumentResponse, CreateDocumentResponseData,
     DocumentResponseMetadata,
@@ -295,6 +296,8 @@ use utoipa::OpenApi;
             SoupMessageListVisibility,
             SoupLabelType,
             PostSoupRequest,
+
+            DocumentSubType,
 
 
             // Permissions V2

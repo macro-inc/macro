@@ -12,6 +12,7 @@ import type { DocumentMetadataFileType } from './documentMetadataFileType';
 import type { DocumentMetadataProjectId } from './documentMetadataProjectId';
 import type { DocumentMetadataProjectName } from './documentMetadataProjectName';
 import type { DocumentMetadataSha } from './documentMetadataSha';
+import type { DocumentMetadataSubType } from './documentMetadataSubType';
 
 export interface DocumentMetadata {
   /** The id of the document this document branched from */
@@ -36,9 +37,6 @@ the file type */
   documentVersionId: number;
   /** The file type of the document (file extension) */
   fileType?: DocumentMetadataFileType;
-  /** Whether or not the document is a task.
-This is only applicable for md documents. */
-  isTask: boolean;
   /** The modification data for the document instance.
 This is only used for PDF documents. */
   modificationData?: unknown;
@@ -51,6 +49,7 @@ This is only used for PDF documents. */
   /** If the document is a PDF, this is the SHA of the pdf
 If the document is a DOCX, this will not be present */
   sha?: DocumentMetadataSha;
+  subType?: DocumentMetadataSubType;
   /** The time the document instance / document BOM was updated */
   updatedAt: number;
 }

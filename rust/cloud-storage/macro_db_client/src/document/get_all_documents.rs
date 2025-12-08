@@ -1,6 +1,6 @@
-use sqlx::{Pool, Postgres};
-
+use document_sub_type::DocumentSubType;
 use model::document::DocumentMetadata;
+use sqlx::{Pool, Postgres};
 
 /// Used to get all documents in a paginated format
 #[tracing::instrument(skip(db))]
@@ -43,10 +43,10 @@ pub async fn get_all_documents(
             d."projectId" as "project_id?",
             p.name as "project_name?",
             di.sha as "sha?",
-            (dt.document_id IS NOT NULL) as "is_task!"
+            dt.sub_type as "sub_type?: DocumentSubType"
         FROM
             "Document" d
-        LEFT JOIN document_task dt ON dt.document_id = d.id
+        LEFT JOIN document_sub_type dt ON dt.document_id = d.id
         LEFT JOIN LATERAL (
             SELECT
                 b.id,
