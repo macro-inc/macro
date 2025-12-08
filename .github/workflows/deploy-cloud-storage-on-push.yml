@@ -5,6 +5,7 @@ on:
     branches: [ 'main' ]
     paths:
       - 'rust/cloud-storage/**'
+      - 'infra/**'
       - '.github/workflows/deploy-cloud-storage-on-push.yml'
       - '.github/services-config.json'
 
