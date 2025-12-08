@@ -2,9 +2,9 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { withAnalytics } from '@coparse/analytics';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { EmailDebouncedReadMarker } from '@notifications';
+import { useMarkThreadAsSeenMutation } from '@queries/email/thread';
 import { createEffect, createMemo, onMount, Show } from 'solid-js';
 import { blockDataSignal } from '../signal/emailBlockData';
-import { markThreadAsSeen } from '../util/markThreadAsSeen';
 import { Email } from './Email';
 
 const { track, TrackingEvents } = withAnalytics();
@@ -12,6 +12,7 @@ const { track, TrackingEvents } = withAnalytics();
 export default function BlockEmail() {
   const blockData = blockDataSignal.get;
   const notificationSource = useGlobalNotificationSource();
+  const markSeenMutation = useMarkThreadAsSeenMutation();
 
   const title = createMemo(() => {
     const data = blockData();
@@ -30,10 +31,10 @@ export default function BlockEmail() {
   createEffect(() => {
     const data = blockData();
     if (!data) return;
-    let initialThreadLoad = data.thread;
+    const initialThreadLoad = data.thread;
     if (!initialThreadLoad.db_id) return;
 
-    markThreadAsSeen(initialThreadLoad.db_id);
+    markSeenMutation.mutate({ threadId: initialThreadLoad.db_id });
   });
 
   return (
