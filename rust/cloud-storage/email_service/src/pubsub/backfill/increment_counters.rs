@@ -141,7 +141,7 @@ async fn handle_attachment_upload(
         })?;
 
     if !attachments.is_empty() {
-        tracing::info!(
+        tracing::debug!(
             "Found {} condition 5 attachments to backfill for job {}",
             attachments.len(),
             job_id
