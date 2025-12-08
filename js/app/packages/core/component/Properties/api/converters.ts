@@ -40,6 +40,7 @@ export function entityPropertyFromApi(
     displayName: apiProperty.definition.display_name,
     isMultiSelect: apiProperty.definition.is_multi_select,
     isMetadata: apiProperty.definition.is_metadata,
+    isSystemProperty: apiProperty.definition.is_system,
     options: apiProperty.options ?? undefined,
     owner: apiProperty.definition.owner,
     specificEntityType: apiProperty.definition.specific_entity_type,
