@@ -5,16 +5,10 @@
  * OpenAPI spec version: 0.1.0
  */
 
-/**
- * Scope filter for property queries
- */
-export type PropertyScope = typeof PropertyScope[keyof typeof PropertyScope];
+export type PropertyOwnerOneOfSevenScope = typeof PropertyOwnerOneOfSevenScope[keyof typeof PropertyOwnerOneOfSevenScope];
 
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
-export const PropertyScope = {
-  user: 'user',
-  org: 'org',
+export const PropertyOwnerOneOfSevenScope = {
   system: 'system',
-  all: 'all',
 } as const;
