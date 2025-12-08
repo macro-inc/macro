@@ -38,6 +38,7 @@ models_permissions = { path = "../models_permissions" }
 models_properties = { path = "../models_properties" }
 properties_db_client = { path = "../properties_db_client" }
 secretsmanager_client = { path = "../secretsmanager_client" }
+system_properties = { path = "../system_properties" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
