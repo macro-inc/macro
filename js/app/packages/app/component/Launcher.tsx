@@ -21,7 +21,6 @@ import { createControlledOpenSignal } from '@core/util/createControlledOpenSigna
 import { isErr, ok } from '@core/util/maybeResult';
 import { Dialog } from '@kobalte/core/dialog';
 import PixelArrowRight from '@macro-icons/pixel/arrow-right.svg';
-import WideTask from '@macro-icons/pixel/task.svg';
 import WideChat from '@macro-icons/wide/chat.svg';
 import WideDiagram from '@macro-icons/wide/diagram.svg';
 import WideEmail from '@macro-icons/wide/email.svg';
@@ -29,6 +28,7 @@ import WideFileCode from '@macro-icons/wide/file-code.svg';
 import WideFileMd from '@macro-icons/wide/file-md.svg';
 import WideFolder from '@macro-icons/wide/folder.svg';
 import WideStar from '@macro-icons/wide/star.svg';
+import WideTask from '@macro-icons/wide/task.svg';
 import { useCreateProject } from '@service-storage/projects';
 import { createEffect, createSignal, For, onMount, Show } from 'solid-js';
 import { type FocusableElement, tabbable } from 'tabbable';

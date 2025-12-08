@@ -50,6 +50,7 @@ import WideBook from '@macro-icons/wide/book.svg';
 import WideChannel from '@macro-icons/wide/channel.svg';
 import WideChat from '@macro-icons/wide/chat.svg';
 import WideDiagram from '@macro-icons/wide/diagram.svg';
+import WideDocx from '@macro-icons/wide/docx.svg';
 import WideEmail from '@macro-icons/wide/email.svg';
 import WideFileCode from '@macro-icons/wide/file-code.svg';
 import WideFileImage from '@macro-icons/wide/file-image.svg';
@@ -59,6 +60,7 @@ import WideStar from '@macro-icons/wide/star.svg';
 import WideTask from '@macro-icons/wide/task.svg';
 import WideUnknown from '@macro-icons/wide/unknown.svg';
 import WideUser from '@macro-icons/wide/user.svg';
+import WideVideo from '@macro-icons/wide/video.svg';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Component, JSX } from 'solid-js';
@@ -284,19 +286,19 @@ export const WIDE_ICONS: Record<EntityWithValidIcon, Component> = {
   pdf: WideBook,
   md: WideFileMd,
   image: WideFileImage,
-  write: WideFileMd,
+  write: WideDocx,
   chat: WideStar,
   project: WideFolder,
   sharedProject: WideFolder,
   unknown: WideUnknown,
   archive: WideUnknown,
-  video: WideUnknown,
+  video: WideVideo,
   contact: WideUser,
   default: WideUnknown,
   directMessage: WideChat,
   user: WideUser,
   emailRead: WideEmail,
-  task: Check,
+  task: WideTask,
 };
 
 export const ICON_SIZES = {

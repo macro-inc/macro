@@ -1,4 +1,4 @@
-import { useBlockId } from '@core/block';
+import { useBlockAliasedName, useBlockId } from '@core/block';
 import {
   $getPinnedProperties,
   ADD_PINNED_PROPERTY_COMMAND,
@@ -39,7 +39,11 @@ interface FrontMatterPropertiesProps {
 
 export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
   const blockId = useBlockId();
-  const mdData = mdStore.get; // Access block store at component level
+  const mdData = mdStore.get;
+
+  const blockName = useBlockAliasedName();
+  const entityType: EntityType = blockName === 'task' ? 'TASK' : 'DOCUMENT';
+
   const layoutShift = () => {
     if (mdData.editor) {
       dispatchInternalLayoutShift(mdData.editor);
@@ -48,7 +52,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
 
   const { properties, isLoading, error, refetch } = useEntityProperties(
     blockId,
-    'DOCUMENT' as EntityType,
+    entityType,
     true // includeMetadata
   );
 

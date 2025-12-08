@@ -36,12 +36,31 @@ export type ChatEntity = EntityBase & {
   projectId?: string;
 };
 
-export type DocumentEntity = EntityBase & {
+export type BaseDocumentEntity = EntityBase & {
   type: 'document';
   fileType?: string;
   projectId?: string;
   subType?: string;
 };
+
+export type TaskEntity = EntityBase & {
+  type: 'document';
+  fileType: 'md';
+  subType: 'task';
+  projectId?: string;
+};
+
+export type MarkdownNoteEntity = EntityBase & {
+  type: 'document';
+  fileType: 'md';
+  subType?: undefined | null;
+  projectId?: string;
+};
+
+export type DocumentEntity =
+  | BaseDocumentEntity
+  | TaskEntity
+  | MarkdownNoteEntity;
 
 export const getEntityProjectId = (e: EntityData): string | false => {
   if (e.type === 'project') {
@@ -89,6 +108,22 @@ export const isEntityData = (item: unknown): item is EntityData => {
   if (typeof item.type !== 'string') return false;
 
   return isEntityType(item.type);
+};
+
+export const isTaskEntity = (entity: EntityData): entity is TaskEntity => {
+  return (
+    entity.type === 'document' &&
+    entity.fileType === 'md' &&
+    entity.subType === 'task'
+  );
+};
+
+export const isMarkdownNoteEntity = (
+  entity: EntityData
+): entity is MarkdownNoteEntity => {
+  return (
+    entity.type === 'document' && entity.fileType === 'md' && !entity.subType
+  );
 };
 
 export type EntityType = EntityData['type'];

@@ -52,6 +52,7 @@ export type PreviewDocumentAccess = {
   name: string;
   fileType: FileType;
   channelType?: never;
+  subType?: string;
 } & BasePreviewItem<'document'>;
 
 export type PreviewChannelAccess = {
@@ -252,6 +253,7 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
           fileType: doc.file_type as FileType,
           owner: doc.owner,
           updatedAt: doc.updated_at,
+          subType: doc.sub_type,
         };
       case 'no_access':
       case 'does_not_exist':
