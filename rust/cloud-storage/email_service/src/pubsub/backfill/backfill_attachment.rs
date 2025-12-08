@@ -1,5 +1,5 @@
 use crate::pubsub::context::PubSubContext;
-use crate::util::upload_attachment::upload_attachment;
+use crate::util::upload_attachment::{upload_attachment, UploadAttachmentArgs};
 use models_email::service::backfill::BackfillAttachmentPayload;
 use models_email::service::link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
@@ -26,23 +26,23 @@ pub async fn backfill_attachment(
         return Ok(());
     }
 
-    upload_attachment(
-        &ctx.redis_client,
-        &ctx.gmail_client,
-        &ctx.dss_client,
-        &ctx.system_properties_service,
+    upload_attachment(UploadAttachmentArgs {
+        redis_client: &ctx.redis_client,
+        gmail_client: &ctx.gmail_client,
+        dss_client: &ctx.dss_client,
+        system_properties_service: &ctx.system_properties_service,
         access_token,
         link,
-        &p.metadata,
-        true,
-    )
-    .await
-    .map_err(|e| {
-        ProcessingError::NonRetryable(DetailedError {
-            reason: FailureReason::GmailApiFailed,
-            source: e.context("Failed to fetch attachment data from Gmail"),
-        })
-    })?;
+        attachment_args: &p.metadata,
+        backfill: true,
+    })
+        .await
+        .map_err(|e| {
+            ProcessingError::NonRetryable(DetailedError {
+                reason: FailureReason::GmailApiFailed,
+                source: e.context("Failed to fetch attachment data from Gmail"),
+            })
+        })?;
 
     Ok(())
 }

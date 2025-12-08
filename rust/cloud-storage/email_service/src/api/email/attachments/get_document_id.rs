@@ -7,7 +7,7 @@ use axum::{Extension, Json};
 use model::response::ErrorResponse;
 use models_email::db::address::EmailRecipientType;
 use models_email::email::service::link::Link;
-use models_email::service::attachment::AttachmentUploadMetadata2;
+use models_email::service::attachment::AttachmentUploadArgs;
 use strum_macros::AsRefStr;
 use thiserror::Error;
 use utoipa::ToSchema;
@@ -109,23 +109,23 @@ pub async fn handler(
         .filter_map(|(contact, _)| contact.email_address.clone())
         .collect();
 
-    let attachment2 = AttachmentUploadMetadata2 {
+    let attachment_upload_args = AttachmentUploadArgs {
         attachment_metadata,
         recipient_emails,
     };
 
-    let document_id = upload_attachment(
-        &ctx.redis_client,
-        &ctx.gmail_client,
-        &ctx.dss_client,
-        &ctx.system_properties_service,
-        &gmail_token,
-        &link,
-        &attachment2,
-        false,
-    )
-    .await
-    .map_err(GetAttachmentDocumentIdError::UploadError)?;
+    let document_id = upload_attachment(UploadAttachmentArgs {
+        redis_client: &ctx.redis_client,
+        gmail_client: &ctx.gmail_client,
+        dss_client: &ctx.dss_client,
+        system_properties_service: &ctx.system_properties_service,
+        access_token: &gmail_token,
+        link: &link,
+        attachment_args: &attachment_upload_args,
+        backfill: false,
+    })
+        .await
+        .map_err(GetAttachmentDocumentIdError::UploadError)?;
 
     Ok(Json(GetAttachmentDocumentIDResponse {
         attachment_id,

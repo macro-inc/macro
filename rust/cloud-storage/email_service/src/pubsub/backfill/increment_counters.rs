@@ -3,7 +3,7 @@ use crate::util::backfill::backfill_insights::backfill_email_insights;
 use model::contacts::ConnectionsMessage;
 use model::insight_context::email_insights::BackfillEmailInsightsFilter;
 use models_email::db::address::EmailRecipientType;
-use models_email::service::attachment::{AttachmentUploadMetadata, AttachmentUploadMetadata2};
+use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadMetadata};
 use models_email::service::backfill::{
     BackfillAttachmentPayload, BackfillJobStatus, BackfillMessagePayload, BackfillOperation,
     BackfillPubsubMessage, UpdateMetadataPayload,
@@ -309,13 +309,13 @@ async fn send_attachment_backfill_messages(
             .filter_map(|(contact, _)| contact.email_address.clone())
             .collect();
 
-        let attachment2 = AttachmentUploadMetadata2 {
+        let attachment_upload_args = AttachmentUploadArgs {
             recipient_emails,
             attachment_metadata: attachment,
         };
 
         let new_payload = BackfillAttachmentPayload {
-            metadata: attachment2,
+            metadata: attachment_upload_args,
         };
 
         let ps_message = BackfillPubsubMessage {

@@ -54,7 +54,7 @@ pub struct AttachmentUploadMetadata {
 }
 
 #[derive(Clone, Debug, FromRow, Eq, PartialEq, Serialize, Deserialize)]
-pub struct AttachmentUploadMetadata2 {
+pub struct AttachmentUploadArgs {
     pub attachment_metadata: AttachmentUploadMetadata,
     pub recipient_emails: Vec<String>,
 }

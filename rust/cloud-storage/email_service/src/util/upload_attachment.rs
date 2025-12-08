@@ -9,7 +9,7 @@ use macro_user_id::cowlike::ArcCowStr;
 use macro_user_id::user_id::MacroUserId;
 use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
 use models_email::gmail::operations::GmailApiOperation;
-use models_email::service::attachment::{AttachmentUploadMetadata, AttachmentUploadMetadata2};
+use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadMetadata};
 use models_email::service::link;
 use sha2::{Digest, Sha256};
 use std::sync::Arc;
@@ -18,31 +18,25 @@ use system_properties::{
     SystemPropertiesService, SystemPropertiesServiceImpl,
 };
 
+/// Arguments required for uploading an email attachment.
+pub struct UploadAttachmentArgs<'a> {
+    pub redis_client: &'a RedisClient,
+    pub gmail_client: &'a GmailClient,
+    pub dss_client: &'a DocumentStorageServiceClient,
+    pub system_properties_service: &'a Arc<dyn SystemPropertiesService>,
+    pub access_token: &'a str,
+    pub link: &'a link::Link,
+    pub attachment_args: &'a AttachmentUploadArgs,
+    pub backfill: bool,
+}
+
 /// Upload an email attachment to DSS as a document.
-#[tracing::instrument(
-    skip(
-        redis_client,
-        gmail_client,
-        dss_client,
-        system_properties_service,
-        access_token
-    ),
-    err
-)]
-pub async fn upload_attachment(
-    redis_client: &RedisClient,
-    gmail_client: &GmailClient,
-    dss_client: &DocumentStorageServiceClient,
-    system_properties_service: &Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
-    access_token: &str,
-    link: &link::Link,
-    p: &AttachmentUploadMetadata2,
-    backfill: bool,
-) -> anyhow::Result<String> {
+#[tracing::instrument(skip(args), err)]
+pub async fn upload_attachment(args: UploadAttachmentArgs<'_>) -> anyhow::Result<String> {
     // 1. Check rate limits before making a Gmail API call.
     check_gmail_rate_limit(
-        redis_client,
-        link.id,
+        args.redis_client,
+        args.link.id,
         GmailApiOperation::MessagesAttachmentsGet,
         true,
     )
@@ -50,24 +44,29 @@ pub async fn upload_attachment(
     .context("Rate limit check failed")?;
 
     // 2. Fetch the raw attachment data from Gmail.
-    let attachment_data =
-        fetch_gmail_attachment_data(gmail_client, access_token, &p.attachment_metadata).await?;
+    let attachment_data = fetch_gmail_attachment_data(
+        args.gmail_client,
+        args.access_token,
+        &args.attachment_args.attachment_metadata,
+    )
+    .await?;
 
     // 3. Calculate hashes required for the upload process.
     let (hex_hash, base64_hash) = calculate_hashes(&attachment_data);
 
     // 4. Determine file metadata from the payload.
-    let (file_name, file_type) = determine_file_metadata(&p.attachment_metadata)?;
+    let (file_name, file_type) =
+        determine_file_metadata(&args.attachment_args.attachment_metadata)?;
 
     // 5. Create the document record in DSS and get a presigned URL for the upload.
     let dss_response = create_dss_document_record(
-        dss_client,
-        link,
-        &p.attachment_metadata,
+        args.dss_client,
+        args.link,
+        &args.attachment_args.attachment_metadata,
         &hex_hash,
         &file_name,
         &file_type,
-        backfill,
+        args.backfill,
     )
     .await?;
 
@@ -79,10 +78,16 @@ pub async fn upload_attachment(
         .data
         .document_response
         .document_metadata
-        .document_id;
+        .document_id
+        .clone();
 
     // 8. Set properties for attachment
-    set_email_attachment_properties(system_properties_service, &document_id, p).await?;
+    set_email_attachment_properties(
+        args.system_properties_service,
+        &document_id,
+        args.attachment_args,
+    )
+    .await?;
 
     Ok(document_id)
 }
@@ -213,7 +218,7 @@ async fn upload_data_to_presigned_url(
 async fn set_email_attachment_properties(
     system_properties_service: &Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     document_id: &str,
-    p: &AttachmentUploadMetadata2,
+    p: &AttachmentUploadArgs,
 ) -> anyhow::Result<()> {
     let sender_email = format!("macro|{}", p.attachment_metadata.sender_email);
     let sender = MacroUserId::parse_from_str(&sender_email)
