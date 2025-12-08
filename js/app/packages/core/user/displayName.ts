@@ -50,9 +50,23 @@ export function defaultNameTransform(item: UserNameItem): string {
   return email;
 }
 
+function toValidIdList(ids: string[]) {
+  const result = [];
+
+  for (let id of ids) {
+    if (!id.startsWith('macro|')) {
+      id = `macro|${id}`;
+    }
+
+    result.push(id);
+  }
+
+  return result;
+}
+
 async function fetchDisplayNames(ids: string[]): Promise<UserNameItem[]> {
   const result = await authServiceClient.getUserNamesWithEmail({
-    user_ids: ids,
+    user_ids: toValidIdList(ids),
   });
   if (isErr(result)) {
     console.error('Failed to fetch user display names');
