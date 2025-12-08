@@ -22,6 +22,7 @@ pub enum MetadataError {
 pub async fn get_document_metadata_properties(
     db: &Pool<Postgres>,
     document_id: &str,
+    entity_type: EntityType,
 ) -> Result<Vec<EntityPropertyWithDefinition>, MetadataError> {
     tracing::info!("getting document metadata properties from macrodb");
 
@@ -54,7 +55,7 @@ pub async fn get_document_metadata_properties(
             metadata::DOCUMENT_NAME,
             models_properties::DataType::String,
             document_metadata.name,
-            EntityType::Document,
+            entity_type.clone(),
         ));
     }
 
@@ -68,7 +69,7 @@ pub async fn get_document_metadata_properties(
             metadata::OWNER,
             models_properties::DataType::Entity,
             owner_entity_ref,
-            EntityType::Document,
+            entity_type.clone(),
             Some(EntityType::User),
         ));
     }
@@ -78,7 +79,7 @@ pub async fn get_document_metadata_properties(
         metadata::CREATED_AT,
         models_properties::DataType::Date,
         document_metadata.created_at,
-        EntityType::Document,
+        entity_type.clone(),
     ));
 
     // 4. Last updated time property
@@ -86,7 +87,7 @@ pub async fn get_document_metadata_properties(
         metadata::LAST_UPDATED,
         models_properties::DataType::Date,
         document_metadata.updated_at,
-        EntityType::Document,
+        entity_type.clone(),
     ));
 
     // 5. Project property
@@ -99,7 +100,7 @@ pub async fn get_document_metadata_properties(
             metadata::PROJECT,
             models_properties::DataType::Entity,
             project_entity_ref,
-            EntityType::Document,
+            entity_type.clone(),
             Some(EntityType::Project),
         ));
     } else {
@@ -107,7 +108,7 @@ pub async fn get_document_metadata_properties(
         metadata_properties.push(create_metadata_property_null(
             metadata::PROJECT,
             models_properties::DataType::Entity,
-            EntityType::Document,
+            entity_type.clone(),
         ));
     }
 
