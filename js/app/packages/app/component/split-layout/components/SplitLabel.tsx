@@ -146,6 +146,11 @@ export function BlockItemSplitLabel(props: {
         return 'archive';
       }
     }
+    if (blockName === 'md') {
+      if (!blockMetadataSignal()?.isTask) {
+        return 'task';
+      }
+    }
     return blockName;
   };
 

@@ -99,6 +99,7 @@
   --theme-rss:       oklch(from var(--a0) l c 260deg);
   --theme-pdf:       oklch(from var(--a0) l c  25deg);
   --theme-comment:   oklch(from var(--a0) l c  90deg);
+  --theme-task:      oklch(from var(--a0) l c 330deg);
 
   --gutter-size: 8px;
   --transition: 0.2s;
@@ -210,6 +211,9 @@
   --color-default: var(--color-ink-muted);
   --color-default-bg: color-mix(in srgb, var(--color-default), var(--color-panel) 90%);
 
+  --color-task: var(--theme-task);
+  --color-task-bg: color-mix(in srgb, var(--color-task), var(--color-panel) 90%);
+  
   /* SCUFFED We probably want to let the theme determine 3 or 4 "extra" hue offsets. Rights now these are only being */
   /* used as debug colors and to improve the consistency of markdown block lightness/chroma with themed css */
   --color-accent-30:  oklch(var(--a0l) var(--a0c) calc(var(--a0h) +  30deg));

@@ -61,6 +61,9 @@ for (const [name, block] of Object.entries(blocks)) {
   }
 }
 
+// HACK (seamus): Remove once the correct pattern for tasks/sub-types is established.
+blockNameToDefaultFilename['task'] = 'New Task';
+
 export function blockAcceptsMimeType(blockName: BlockName, mimeType: MimeType) {
   return blockNameToMimeTypeSet[blockName].has(mimeType);
 }
