@@ -142,7 +142,10 @@ export function EmailCompose() {
 
     if (!selectedRecipients().length) {
       setValidationError(
-        new EmailComposeError('no_recipient', 'Please select at least one recipient')
+        new EmailComposeError(
+          'no_recipient',
+          'Please select at least one recipient'
+        )
       );
       return;
     }
