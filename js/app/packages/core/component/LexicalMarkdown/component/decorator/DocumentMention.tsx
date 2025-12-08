@@ -121,7 +121,7 @@ function InlinePreview(props: {
       </Match>
       <Match when={matches(props.item(), isAccessible)}>
         {(accessibleItem) => {
-          const { type, fileType, channelType } = accessibleItem();
+          const { type, fileType, channelType, subType } = accessibleItem();
           return (
             <MentionContainer
               icon={
@@ -129,7 +129,9 @@ function InlinePreview(props: {
                   when={type === 'channel'}
                   fallback={
                     <EntityIcon
-                      targetType={type === 'document' ? fileType : type}
+                      targetType={
+                        type === 'document' ? (subType ?? fileType) : type
+                      }
                       size="fill"
                       theme={
                         props.theme?.['document-mention'] === 'chat-blue'

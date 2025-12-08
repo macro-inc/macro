@@ -127,19 +127,13 @@ export function resolveBlockAlias(name: BlockName | BlockAlias): BlockName {
 }
 
 /**
- * Get the alias name if the input is an alias, undefined otherwise
- */
-export function getBlockAlias(name: string): string | undefined {
-  return isBlockAlias(name) ? name : undefined;
-}
-
-/**
  * Get the name of a block from a its own name or a file type. Built using the
  * types registered in block definitions.
  * @example
  * getBlockName('docx') // 'write'
  * getBlockName('svg') // 'image'
  * getBlockName('chat') // 'chat'
+ * getBlockName('task') // 'md'
  * getBlockName('junk') // undefined
  * @param blockOrFiletype - The block name or file type like 'py', 'md', 'chat',
  *     'png', etc.

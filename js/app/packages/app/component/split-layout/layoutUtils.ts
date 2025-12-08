@@ -1,4 +1,5 @@
-import { getBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
+import type { BlockAlias, BlockName } from '@core/block';
+import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import type { ViewId } from '@core/types/view';
 import { createCallback } from '@solid-primitives/rootless';
 import { useContext } from 'solid-js';
@@ -15,20 +16,21 @@ export function decodePairs(segments: string[]): SplitContent[] {
     if (type === 'component') {
       pairs.push({ type: 'component', id });
     } else {
-      const resolvedType = resolveBlockAlias(type);
-      const alias = getBlockAlias(type);
-
-      const content: SplitContent = { type: resolvedType, id };
-
-      // If this is an alias, add the alias context
-      if (alias) {
-        content.aliasContext = {
-          alias,
-          baseType: resolvedType,
+      const resolvedType = resolveBlockAlias(type as BlockName | BlockAlias);
+      if (isBlockAlias(type)) {
+        const content: SplitContent = {
+          type,
+          id,
+          aliasContext: {
+            alias: type,
+            baseType: resolvedType,
+          },
         };
+        pairs.push(content);
+      } else {
+        const content: SplitContent = { type: resolvedType, id };
+        pairs.push(content);
       }
-
-      pairs.push(content);
     }
   }
   return pairs.length ? pairs : [{ type: 'component', id: 'unified-list' }];

@@ -58,7 +58,6 @@ export const BlockRegistry = [
   'video',
   'email',
   'contact',
-  'task',
 ] as const;
 
 type BlockNameKeys = keyof typeof BlockRegistry & number;
