@@ -4,8 +4,8 @@ import type { ViewId } from '@core/types/view';
 import { Tabs } from '@kobalte/core';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import MagnifyingGlassIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
-import LightningIcon from '@phosphor-icons/core/regular/lightning.svg?component-solid';
-import FunnelIcon from '@phosphor-icons/core/regular/funnel.svg?component-solid';
+import WideSignal from '@macro-icons/wide/signal.svg';
+import WideNoise from '@macro-icons/wide/noise.svg';
 import {
   type Accessor,
   createEffect,
@@ -38,8 +38,8 @@ const TabSeparator = () => (
 );
 
 const VIEW_ICONS: Partial<Record<ViewId, ReturnType<typeof getIconConfig>['icon']>> = {
-  signal: LightningIcon,
-  noise: FunnelIcon,
+  signal: WideSignal,
+  noise: WideNoise,
   people: getIconConfig('directMessage').icon,
   groups: getIconConfig('channel').icon,
   ai_chats: getIconConfig('chat').icon,
@@ -175,6 +175,7 @@ export function SplitTabs(props: {
             const isSignalOrNoise = value === 'signal' || value === 'noise';
             const needsSeparator = (() => {
               const prevTab = i() > 0 ? reorderedList()[i() - 1] : null;
+              if (prevTab?.value === 'all') return true;
               return prevTab && (prevTab.value === 'signal' || prevTab.value === 'noise') && !isSignalOrNoise;
             })();
 
@@ -197,7 +198,7 @@ export function SplitTabs(props: {
               }
             });
 
-            const showLabel = () => (isSignalOrNoise || isActive()) && !isAll;
+            const showLabel = () => isSignalOrNoise || isActive() || isAll;
 
             return (
               <>
@@ -210,20 +211,21 @@ export function SplitTabs(props: {
                   tabIndex={-1}
                   class="group shrink-0 text-sm relative h-full flex items-center font-mono uppercase"
                   classList={{
-                    'min-w-12 max-w-[40cqw] px-2': showLabel(),
-                    'px-2': !showLabel(),
+                    'min-w-12 max-w-[40cqw] px-2': showLabel() && !isAll,
+                    'px-2': !showLabel() || isAll,
                     'z-1 text-accent text-glow': isActive(),
                     'text-ink-disabled hover:text-accent/70 hover-transition-text': !isActive(),
                   }}
                 >
                   <span
-                    class="flex items-center gap-1.5"
+                    class="flex items-center"
                     classList={{
-                      'w-full': showLabel(),
-                      'justify-center': !showLabel(),
+                      'w-full gap-1.5': showLabel() && !isAll,
+                      'justify-start': showLabel() && isAll,
+                      'justify-center gap-1.5': !showLabel(),
                     }}
                   >
-                    <Show when={icon}>
+                    <Show when={icon && !isAll}>
                       <Dynamic
                         component={icon!}
                         class="size-3.5 shrink-0 transition-colors"

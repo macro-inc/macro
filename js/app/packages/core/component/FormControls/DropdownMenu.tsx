@@ -28,6 +28,7 @@ const DropdownMenu: ParentComponent<
     disabled?: boolean;
     triggerLabel: JSXElement | string;
     ref?: (ref: HTMLButtonElement) => void | HTMLButtonElement;
+    border?: boolean;
   } & PopoverRootProps
 > = (props) => {
   const panelRef = useSplitPanel()?.panelRef;
@@ -106,6 +107,7 @@ const DropdownMenu: ParentComponent<
         }}
         as={Button}
         theme={props.theme}
+        border={props.border}
         ref={triggerEl}
       >
         {props.triggerLabel}

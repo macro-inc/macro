@@ -400,7 +400,7 @@ export function Soup() {
             value={selectedView()}
             onChange={setSelectedView}
           >
-            <SplitHeaderLeft>
+            <SplitHeaderLeft order={1}>
               <SplitTabs
                 list={Object.values(viewsData).map((view) => ({
                   value: view.id,
@@ -410,24 +410,6 @@ export function Soup() {
                 contextMenu={({ value, label }) => (
                   <TabContextMenu value={value} label={label} />
                 )}
-                newButton={
-                  <div class="flex items-center px-2 h-full">
-                    <Button
-                      size="Base"
-                      classList={{
-                        '!border-transparent hover:!border-ink/50 px-1 !text-ink !bg-panel font-medium': true,
-                      }}
-                      onClick={() => {
-                        saveViewMutation.mutate({
-                          name: 'New View',
-                          config: VIEWCONFIG_BASE,
-                        });
-                      }}
-                    >
-                      +
-                    </Button>
-                  </div>
-                }
               />
             </SplitHeaderLeft>
             <For each={Object.keys(viewsData)}>

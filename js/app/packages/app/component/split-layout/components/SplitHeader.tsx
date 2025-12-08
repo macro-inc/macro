@@ -142,7 +142,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
       <div class="absolute inset-0 flex justify-start items-center bg-panel border-b border-b-edge-muted">
         <SplitControlButtons />
         <div
-          class="relative w-fit min-w-0 h-full shrink"
+          class="relative flex items-center h-full shrink-0"
           ref={(ref) => {
             ctx.layoutRefs.headerLeft = ref;
           }}
