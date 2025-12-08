@@ -2676,6 +2676,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "document_sub_type"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "sqlx",
+ "strum",
+ "thiserror 2.0.17",
+ "utoipa",
+]
+
+[[package]]
 name = "document_text_extractor"
 version = "0.1.0"
 dependencies = [
@@ -4835,6 +4846,7 @@ dependencies = [
  "async-trait",
  "cached",
  "chrono",
+ "document_sub_type",
  "futures",
  "macro_user_id",
  "macro_uuid",
@@ -5334,6 +5346,7 @@ dependencies = [
  "axum",
  "base64 0.22.1",
  "chrono",
+ "document_sub_type",
  "model-error-response",
  "model_file_type",
  "model_user",
@@ -5552,6 +5565,7 @@ name = "models_search"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "document_sub_type",
  "item_filters",
  "models_opensearch",
  "opensearch_client",
