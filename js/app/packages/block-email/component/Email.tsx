@@ -11,11 +11,8 @@ import {
 import { blockHandleSignal } from '@core/signal/load';
 import {
   type ContactInfo,
-  isPersonEmailContact,
   recipientEntityMapper,
   useContacts,
-  useEmailContacts,
-  useOrganizationUsers,
 } from '@core/user';
 import {
   createEffectOnEntityTypeNotification,
@@ -133,10 +130,7 @@ export function Email(props: EmailProps) {
   // ============================================
   // SHARED RECIPIENT OPTIONS
   // ============================================
-  const organizationUsers = useOrganizationUsers();
   const contacts = useContacts();
-  const emailContacts = useEmailContacts();
-  const personEmailContacts = emailContacts().filter(isPersonEmailContact);
 
   const [augmentedRecipients, setAugmentedRecipients] = createSignal<
     EmailRecipient[]
@@ -164,24 +158,21 @@ export function Email(props: EmailProps) {
   const recipientOptions = createMemo<EmailRecipient[]>(() => {
     const optionsMap = new Map<string, EmailRecipient>();
 
-    organizationUsers()
-      .map(recipientEntityMapper('user'))
-      .forEach((u) => optionsMap.set(u.data.email, u));
     contacts()
       .map(recipientEntityMapper('user'))
       .forEach((u) => optionsMap.set(u.data.email, u));
-    personEmailContacts
-      .map(recipientEntityMapper('contact'))
-      .forEach((c) => optionsMap.set(c.data.email, c));
 
     const t = props.threadData();
+
     if (t) {
       const seen = new Map<string, ContactInfo>();
+
+      const add = (c: ContactInfo) => {
+        const existing = seen.get(c.email);
+        if (!existing || (!existing.name && c.name)) seen.set(c.email, c);
+      };
+
       t.messages.forEach((m) => {
-        const add = (c: ContactInfo) => {
-          const existing = seen.get(c.email);
-          if (!existing || (!existing.name && c.name)) seen.set(c.email, c);
-        };
         m.to.forEach(add);
         m.cc.forEach(add);
         m.bcc.forEach(add);

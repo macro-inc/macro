@@ -876,9 +876,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const disableDssInfiniteQuery = createMemo(() => {
     const typeFilter = entityTypeFilter();
     if (typeFilter.length === 0) return false;
-    const dssTypes = ['document', 'chat', 'project'];
-    const hasDssTypes = typeFilter.some((t) => dssTypes.includes(t));
-    return !hasDssTypes;
+
+    function onlyHas<T>(arr: readonly T[], value: T): boolean {
+      return arr.length === 1 && arr[0] === value;
+    }
+
+    if (onlyHas(typeFilter, 'channel')) return true;
+    return false;
   });
 
   const disableChannelsQuery = createMemo(() => {

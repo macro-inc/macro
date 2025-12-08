@@ -51,7 +51,9 @@ function defaultNameTransform(item: UserNameItem): string {
 }
 
 async function fetchDisplayNames(ids: string[]): Promise<UserNameItem[]> {
-  const result = await authServiceClient.getUserNames({ user_ids: ids });
+  const result = await authServiceClient.getUserNamesWithEmail({
+    user_ids: ids,
+  });
   if (isErr(result)) {
     console.error('Failed to fetch user display names');
     return [];

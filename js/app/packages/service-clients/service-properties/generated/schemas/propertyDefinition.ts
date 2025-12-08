@@ -20,6 +20,8 @@ export interface PropertyDefinition {
 Not stored in database - computed at service layer. */
   is_metadata: boolean;
   is_multi_select: boolean;
+  /** Flag to indicate if this is a system property (stored in DB). */
+  is_system: boolean;
   owner: PropertyOwner;
   specific_entity_type?: PropertyDefinitionSpecificEntityType;
   updated_at: string;

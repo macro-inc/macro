@@ -94,12 +94,15 @@ function Zone(props: ParentProps<ZoneProps>) {
   const layouts = createMemo(() => {
     const solve = solver.solve();
     return solver.order().map((id) => ({
+      id,
       offset: solve.offsets.get(id) ?? 0,
       size: solve.sizes.get(id) ?? 0,
     }));
   });
 
-  const len = () => layouts().length;
+  const visibleLayouts = createMemo(() => {
+    return layouts().filter((layout) => !solver.isHidden(layout.id));
+  });
 
   const offsetOf = (id: PanelId) =>
     createMemo(() => solver.solve().offsets.get(id) ?? 0);
@@ -138,17 +141,20 @@ function Zone(props: ParentProps<ZoneProps>) {
     >
       <ResizeZoneContext.Provider value={ctx}>
         {props.children}
-        <Show when={len() > 1}>
-          <Index each={layouts()}>
-            {(panel, i) => (
-              <Show when={i < len() - 1}>
-                <Gutter
-                  offset={panel().offset + panel().size}
-                  index={i}
-                  nudge={solver.moveHandle}
-                />
-              </Show>
-            )}
+        <Show when={visibleLayouts().length > 1}>
+          <Index each={visibleLayouts()}>
+            {(panel, visibleIndex) => {
+              const actualIndex = solver.order().indexOf(panel().id);
+              return (
+                <Show when={visibleIndex < visibleLayouts().length - 1}>
+                  <Gutter
+                    offset={panel().offset + panel().size}
+                    index={actualIndex}
+                    nudge={solver.moveHandle}
+                  />
+                </Show>
+              );
+            }}
           </Index>
         </Show>
       </ResizeZoneContext.Provider>

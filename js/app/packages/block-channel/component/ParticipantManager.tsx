@@ -13,7 +13,7 @@ import { Tooltip } from '@core/component/Tooltip';
 import {
   idToEmail,
   recipientEntityMapper,
-  useOrganizationUsers,
+  useContacts,
   type WithCustomUserInput,
 } from '@core/user';
 import InvitedIcon from '@icon/regular/paper-plane-tilt.svg';
@@ -31,7 +31,7 @@ import { UserItem } from './UserItem';
 export function ParticipantManager(props: { participantCount: number }) {
   const channel = channelStore.get;
   const channelType = () => channel?.channel?.channel_type ?? 'private';
-  const users = useOrganizationUsers();
+  const users = useContacts();
   const userId = useUserId();
   const [usersToInvite, setUsersToInvite] = createSignal<
     WithCustomUserInput<'user'>[]
