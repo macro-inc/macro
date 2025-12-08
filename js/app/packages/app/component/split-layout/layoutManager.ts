@@ -128,6 +128,25 @@ export type SplitEventWithType =
       type: SplitEvent.ReturnFocus;
     } & SplitEventPayload[SplitEvent.ReturnFocus]);
 
+/**
+ * If a split layout helper passes and aliased block type, make sure to wrap
+ * that with the alias info.
+ * @param content
+ * @returns
+ */
+function attachAliasContext(content: SplitContent): SplitContent {
+  if (content.type !== 'component' && isBlockAlias(content.type)) {
+    return {
+      ...content,
+      aliasContext: {
+        alias: content.type,
+        baseType: resolveBlockAlias(content.type),
+      },
+    };
+  }
+  return content;
+}
+
 export type SplitManager = {
   readonly splits: Accessor<ReadonlyArray<SplitState>>;
   readonly activeSplitId: Accessor<SplitId | undefined>;
@@ -333,18 +352,11 @@ export function createSplitLayout(
   ): SplitState {
     const id = newSplitId();
     const history = createHistory<SplitContent>();
-    const content = { ...initialContent };
+    const content = attachAliasContext(initialContent);
 
     // If enabled, we always want to be able to go back to the default split
     if (!isDefault && ENABLE_DEFAULT_ALWAYS_IN_HISTORY) {
       history.push(DEFAULT_SPLIT_CONTENT);
-    }
-
-    if (content.type !== 'component' && isBlockAlias(content.type)) {
-      content.aliasContext = {
-        alias: content.type,
-        baseType: resolveBlockAlias(content.type),
-      };
     }
 
     history.push(content);
@@ -360,14 +372,15 @@ export function createSplitLayout(
 
   function reattach(split: SplitState, next: SplitContent) {
     const otherSplits = state.splits.filter((s) => s.id !== split.id);
+    const content = attachAliasContext(next);
     if (isDuplicateSplit(otherSplits, next)) return;
 
     const splitIndex = state.splits.findIndex((s) => s.id === split.id);
-    if (splitIndex >= 0 && !sameIdentity(split.content, next)) {
+    if (splitIndex >= 0 && !sameIdentity(split.content, content)) {
       const payload: SplitEventPayload[SplitEvent.ContentChange] = {
         splitId: split.id,
         splitIndex,
-        newContent: next,
+        newContent: content,
         previousContent: split.content,
       };
 
@@ -379,20 +392,20 @@ export function createSplitLayout(
       }
     }
 
-    if (sameIdentity(split.content, next))
+    if (sameIdentity(split.content, content))
       return setState('splits', (s) => {
         const i = s.findIndex((x) => x.id === split.id);
         if (i < 0) return s;
-        const target = { ...s[i], content: next };
+        const target = { ...s[i], content: content };
         return s.with(i, target);
       });
 
-    const newMount = createPinnedMount(orchestrator, next);
+    const newMount = createPinnedMount(orchestrator, content);
 
     setState('splits', (s) => {
       const i = s.findIndex((x) => x.id === split.id);
       if (i < 0) return s;
-      const target = { ...s[i], content: next, mount: newMount };
+      const target = { ...s[i], content, mount: newMount };
       return s.with(i, target);
     });
   }
@@ -441,7 +454,6 @@ export function createSplitLayout(
    * Replace the content of a split with the provided content. If mergeHistory is true, the current history index will be replaced with the new content.
    */
   function replace(id: SplitId, next: SplitContent, mergeHistory?: boolean) {
-    console.log('### REPLACE');
     const i = state.splits.findIndex((s) => s.id === id);
     if (i < 0) return console.error(`Split with id ${id} not found`);
 
@@ -452,14 +464,22 @@ export function createSplitLayout(
       })
     );
 
-    const split = state.splits[i];
-    if (mergeHistory) {
-      split.history.merge(next);
-    } else {
-      split.history.push(next);
+    const content = { ...next };
+    if (content.type !== 'component' && isBlockAlias(content.type)) {
+      content.aliasContext = {
+        alias: content.type,
+        baseType: resolveBlockAlias(content.type),
+      };
     }
 
-    reattach(split, next);
+    const split = state.splits[i];
+    if (mergeHistory) {
+      split.history.merge(content);
+    } else {
+      split.history.push(content);
+    }
+
+    reattach(split, content);
   }
 
   function reset(id: SplitId) {
