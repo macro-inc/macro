@@ -120,6 +120,8 @@ async fn create_dss_document_record(
     file_type: &str,
     backfill: bool,
 ) -> anyhow::Result<CreateDocumentResponse> {
+    // if we are backfilling, use the email timestamp. if it's an on-demand upload, use the current
+    // time so the document shows up at the top of soup views.
     let created_at = backfill.then_some(p.internal_date_ts);
 
     let request = CreateDocumentRequest {
