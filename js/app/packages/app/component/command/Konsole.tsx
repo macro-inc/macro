@@ -23,7 +23,6 @@ import {
   untrack,
 } from 'solid-js';
 import { VList } from 'virtua/solid';
-import FullTextModeToggle from './FullTextModeToggle';
 import { KonsoleFilter } from './KonsoleFilter';
 import {
   COMMAND_ITEM_HEIGHT,
@@ -362,9 +361,6 @@ export function KommandMenuInner(props: {
           placeholder="Search files..."
           class="flex-1 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 font-mono placeholder:text-edge text-accent-270"
           onValueChange={setRawQuery}
-        />
-        <FullTextModeToggle
-          checked={currentKonsoleMode() === 'FULL_TEXT_SEARCH'}
         />
       </div>
       <div
