@@ -109,6 +109,7 @@ utoipa = { workspace = true, features = ["axum_extras"] }
 utoipa-swagger-ui = { workspace = true, features = ["axum"] }
 uuid = { workspace = true }
 zip = { workspace = true }
+document_sub_type = { path = "../document_sub_type" }
 
 [dev-dependencies]
 cool_asserts = "2"
