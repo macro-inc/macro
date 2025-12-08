@@ -2,10 +2,9 @@ import { playSound } from '@app/util/sound';
 import { getIconConfig } from '@core/component/EntityIcon';
 import type { ViewId } from '@core/types/view';
 import { Tabs } from '@kobalte/core';
-import { createElementSize } from '@solid-primitives/resize-observer';
-import MagnifyingGlassIcon from '@phosphor-icons/core/regular/magnifying-glass.svg?component-solid';
-import WideSignal from '@macro-icons/wide/signal.svg';
 import WideNoise from '@macro-icons/wide/noise.svg';
+import WideSignal from '@macro-icons/wide/signal.svg';
+import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
   createEffect,
@@ -14,8 +13,8 @@ import {
   For,
   type JSXElement,
   onMount,
-  Show,
   type Setter,
+  Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { useSplitPanelOrThrow } from '../layoutUtils';
@@ -30,14 +29,9 @@ const _titleCase = (str: string) => {
 
 const SCROLL_THRESHOLD = 10;
 
-const TabSeparator = () => (
-  <div class="relative shrink-0 w-3 h-full flex items-center justify-center pointer-events-none">
-    <div class="relative w-px h-2/3 bg-gradient-to-b from-transparent via-edge-muted/80 to-transparent" />
-    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 size-1 rounded-full bg-edge-muted/60" />
-  </div>
-);
-
-const VIEW_ICONS: Partial<Record<ViewId, ReturnType<typeof getIconConfig>['icon']>> = {
+const VIEW_ICONS: Partial<
+  Record<ViewId, ReturnType<typeof getIconConfig>['icon']>
+> = {
   signal: WideSignal,
   noise: WideNoise,
   people: getIconConfig('directMessage').icon,
@@ -47,7 +41,6 @@ const VIEW_ICONS: Partial<Record<ViewId, ReturnType<typeof getIconConfig>['icon'
   emails: getIconConfig('email').icon,
   files: getIconConfig('write').icon,
   folders: getIconConfig('project').icon,
-  all: MagnifyingGlassIcon,
 };
 
 export function SplitTabs(props: {
@@ -130,13 +123,6 @@ export function SplitTabs(props: {
     previousActive = currentActive;
   });
 
-  // Reorder list to put "all" first
-  const reorderedList = createMemo(() => {
-    const allTab = props.list.find((tab) => tab.value === 'all');
-    const otherTabs = props.list.filter((tab) => tab.value !== 'all');
-    return allTab ? [allTab, ...otherTabs] : props.list;
-  });
-
   return (
     <div class="relative isolate h-full shrink grow-2 @container-normal">
       {/* Left clip boundary indicator */}
@@ -167,17 +153,12 @@ export function SplitTabs(props: {
           }}
         />
 
-        <For each={reorderedList()}>
-          {({ value, label }, i) => {
+        <For each={props.list}>
+          {({ value, label }) => {
             const isActive = createMemo(() => value === props.active());
             const icon = VIEW_ICONS[value];
             const isAll = value === 'all';
             const isSignalOrNoise = value === 'signal' || value === 'noise';
-            const needsSeparator = (() => {
-              const prevTab = i() > 0 ? reorderedList()[i() - 1] : null;
-              if (prevTab?.value === 'all') return true;
-              return prevTab && (prevTab.value === 'signal' || prevTab.value === 'noise') && !isSignalOrNoise;
-            })();
 
             let ref: HTMLDivElement | undefined;
             createEffect(() => {
@@ -201,47 +182,38 @@ export function SplitTabs(props: {
             const showLabel = () => isSignalOrNoise || isActive() || isAll;
 
             return (
-              <>
-                <Show when={needsSeparator}>
-                  <TabSeparator />
-                </Show>
-                <Tabs.Trigger
-                  value={value}
-                  ref={ref}
-                  tabIndex={-1}
-                  class="group shrink-0 text-sm relative h-full flex items-center font-mono uppercase"
-                  classList={{
-                    'min-w-12 max-w-[40cqw] px-2': showLabel() && !isAll,
-                    'px-2': !showLabel() || isAll,
-                    'z-1 text-accent text-glow': isActive(),
-                    'text-ink-disabled hover:text-accent/70 hover-transition-text': !isActive(),
-                  }}
-                >
-                  <span
-                    class="flex items-center"
-                    classList={{
-                      'w-full gap-1.5': showLabel() && !isAll,
-                      'justify-start': showLabel() && isAll,
-                      'justify-center gap-1.5': !showLabel(),
-                    }}
-                  >
-                    <Show when={icon && !isAll}>
-                      <Dynamic
-                        component={icon!}
-                        class="size-3.5 shrink-0 transition-colors"
-                        classList={{
-                          'text-accent': isActive(),
-                          'text-ink-disabled group-hover:text-accent/70': !isActive(),
-                        }}
-                      />
-                    </Show>
-                    <Show when={showLabel()}>
-                      <span class="truncate text-xs font-mono uppercase">{label}</span>
-                    </Show>
-                  </span>
-                  {props.contextMenu?.({ label, value })}
-                </Tabs.Trigger>
-              </>
+              <Tabs.Trigger
+                value={value}
+                ref={ref}
+                tabIndex={-1}
+                class="group shrink-0 text-sm relative h-full flex items-center font-mono uppercase px-2"
+                classList={{
+                  'pl-0 pr-2': isAll,
+                  'z-1 text-accent text-glow': isActive(),
+                  'text-ink-disabled hover:text-accent/70 hover-transition-text':
+                    !isActive(),
+                }}
+              >
+                <span class="flex items-center gap-1 w-full">
+                  <Show when={icon}>
+                    <Dynamic
+                      component={icon}
+                      class="size-5 shrink-0 transition-colors"
+                      classList={{
+                        'text-accent': isActive(),
+                        'text-ink-disabled group-hover:text-accent/70':
+                          !isActive(),
+                      }}
+                    />
+                  </Show>
+                  <Show when={showLabel()}>
+                    <span class="truncate text-xs font-mono uppercase">
+                      {label}
+                    </span>
+                  </Show>
+                </span>
+                {props.contextMenu?.({ label, value })}
+              </Tabs.Trigger>
             );
           }}
         </For>

@@ -178,6 +178,20 @@ export const PROJECT_VIEWCONFIG_BASE: ViewConfigBase = {
 };
 
 const ALL_VIEWCONFIG_DEFAULTS = {
+  all: {
+    view: 'All',
+    sort: {
+      sortBy: 'viewed_at',
+    },
+    hotkeyOptions: {
+      e: (entity: EntityData) => {
+        if (entity.type === 'email') {
+          archiveEmail(entity.id, { isDone: entity.done });
+        }
+        return true;
+      },
+    },
+  },
   signal: {
     view: 'Signal',
     filters: {
@@ -284,20 +298,6 @@ const ALL_VIEWCONFIG_DEFAULTS = {
     view: 'Folders',
     filters: {
       typeFilter: ['project'],
-    },
-  },
-  all: {
-    view: 'All',
-    sort: {
-      sortBy: 'viewed_at',
-    },
-    hotkeyOptions: {
-      e: (entity: EntityData) => {
-        if (entity.type === 'email') {
-          archiveEmail(entity.id, { isDone: entity.done });
-        }
-        return true;
-      },
     },
   },
 } satisfies Record<DefaultView, Omit<DeepPartial<ViewConfigEnhanced>, 'id'>>;
