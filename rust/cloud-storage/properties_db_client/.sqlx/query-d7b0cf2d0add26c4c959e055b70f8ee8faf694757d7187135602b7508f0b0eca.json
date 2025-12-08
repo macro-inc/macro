@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT \n            ep.entity_id,\n            ep.entity_type as \"entity_type: EntityType\"\n        FROM entity_properties ep\n        JOIN property_definitions pd ON ep.property_definition_id = pd.id\n        WHERE ep.id = $1\n          AND pd.is_system = FALSE\n        ",
+  "query": "\n        SELECT \n            ep.entity_id,\n            ep.entity_type as \"entity_type: EntityType\",\n            ep.property_definition_id\n        FROM entity_properties ep\n        WHERE ep.id = $1\n        ",
   "describe": {
     "columns": [
       {
@@ -28,6 +28,11 @@
             }
           }
         }
+      },
+      {
+        "ordinal": 2,
+        "name": "property_definition_id",
+        "type_info": "Uuid"
       }
     ],
     "parameters": {
@@ -37,8 +42,9 @@
     },
     "nullable": [
       false,
+      false,
       false
     ]
   },
-  "hash": "17bcb8a4765cf0bfc406a98a2a8829342f248afbdfddef55ef1f44aa4c9b034e"
+  "hash": "d7b0cf2d0add26c4c959e055b70f8ee8faf694757d7187135602b7508f0b0eca"
 }
