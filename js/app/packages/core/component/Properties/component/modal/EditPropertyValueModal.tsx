@@ -249,7 +249,9 @@ export function EditPropertyValueModal(props: PropertyEditorProps) {
                   selectedOptions={() => editorState().selectedOptions}
                   onToggleOption={toggleOption}
                   onRetry={fetchOptions}
-                  onAddOption={addOption}
+                  onAddOption={
+                    props.property.isSystemProperty ? undefined : addOption
+                  }
                 />
               </Show>
             </div>

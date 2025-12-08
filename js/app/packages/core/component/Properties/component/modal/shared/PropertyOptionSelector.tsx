@@ -187,9 +187,11 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
               value={searchQuery()}
               onInput={(e) => setSearchQuery(e.currentTarget.value)}
               placeholder={
-                props.property.valueType === 'SELECT_NUMBER'
-                  ? 'Search or add new number...'
-                  : 'Search or add new option...'
+                props.onAddOption
+                  ? props.property.valueType === 'SELECT_NUMBER'
+                    ? 'Search or add new number...'
+                    : 'Search or add new option...'
+                  : 'Search options...'
               }
               class={`${PROPERTY_STYLES.input.search} relative z-0`}
             />
@@ -199,13 +201,15 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
             when={props.options.length > 0}
             fallback={
               <div class="space-y-3">
-                <Show when={isValidNewOption() && props.onAddOption}>
+                <Show
+                  when={isValidNewOption() && props.onAddOption}
+                  fallback={
+                    <div class="text-center py-6 text-ink-muted text-sm">
+                      No options available
+                    </div>
+                  }
+                >
                   <AddOptionButton />
-                </Show>
-                <Show when={!isValidNewOption()}>
-                  <div class="text-center py-6 text-ink-muted text-sm">
-                    No options available
-                  </div>
                 </Show>
               </div>
             }
@@ -218,7 +222,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
               <Show
                 when={filteredOptions().length > 0}
                 fallback={
-                  <Show when={!isValidNewOption()}>
+                  <Show when={!isValidNewOption() || !props.onAddOption}>
                     <div class="text-center py-4 text-ink-muted text-sm">
                       No options match your search
                     </div>
