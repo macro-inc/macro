@@ -75,7 +75,9 @@ export const FilterActionSelect: Component<FilterActionSelectProps> = (
           'text-ink-muted': props.selectedAction === null,
         }}
       >
-        {props.selectedAction ? ACTION_SYMBOLS[props.selectedAction] : '...'}
+        {props.selectedAction
+          ? ACTION_SYMBOLS[props.selectedAction]
+          : 'Select...'}
       </button>
       <Show when={isOpen()}>
         <div

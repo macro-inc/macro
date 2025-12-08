@@ -50,8 +50,8 @@ export const FilterValueNumber: Component<FilterValueNumberProps> = (props) => {
       onInput={handleInput}
       onBlur={handleBlur}
       onKeyDown={handleKeyDown}
-      placeholder="0"
-      class="h-6 px-2 min-w-16 w-fit text-[10px] text-ink border border-edge hover:bg-hover focus:ring-1 focus:ring-accent font-mono placeholder:text-ink-muted"
+      placeholder="Enter value..."
+      class="h-6 px-2 min-w-8 w-fit text-[10px] text-ink border border-edge hover:bg-hover focus:ring-1 focus:ring-accent font-mono placeholder:text-ink-muted"
     />
   );
 };

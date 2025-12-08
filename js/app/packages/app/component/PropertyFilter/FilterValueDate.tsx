@@ -31,7 +31,7 @@ export const FilterValueDate: Component<FilterValueDateProps> = (props) => {
   };
 
   const displayValue = () => {
-    if (!props.value) return '...';
+    if (!props.value) return 'Select date...';
     const date = parseLocalDate(props.value);
     return date.toLocaleDateString('en-US', {
       month: 'short',

@@ -56,9 +56,9 @@ export const FilterValueSelect: Component<FilterValueSelectProps> = (props) => {
 
   // Get selected option display
   const selectedDisplay = () => {
-    if (!props.value) return '...';
+    if (!props.value) return 'Select...';
     const option = options().find((o) => o.id === props.value);
-    if (!option) return '...';
+    if (!option) return 'Select...';
     return getOptionDisplayValue(option);
   };
 

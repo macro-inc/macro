@@ -43,7 +43,7 @@ export const FilterValueBoolean: Component<FilterValueBooleanProps> = (
   });
 
   const displayValue = () => {
-    if (props.value === null) return '...';
+    if (props.value === null) return 'Select...';
     return props.value ? 'True' : 'False';
   };
 
