@@ -300,10 +300,10 @@ export function createNavigationEntityListShortcut({
       const handler =
         VIEWCONFIG_DEFAULTS[selectedView() as DefaultView]?.hotkeyOptions?.e;
       const propertiesEntityTypeMap: Record<string, PropertiesEntityType> = {
+        email: 'THREAD',
         document: 'DOCUMENT',
         project: 'PROJECT',
         task: 'TASK',
-        thread: 'THREAD',
       };
 
       const hasSupportedEntity = entities.some(
@@ -344,18 +344,12 @@ export function createNavigationEntityListShortcut({
     },
     {
       testEnabled: (entity) => {
-        const allowed = new Set([
-          'email',
-          'channel',
-          'file',
-          'document',
-          'project',
-          'thread',
-          'chat',
-          'company',
-          'task',
-        ]);
-        if (allowed.has(entity.type)) return true;
+        // notifications
+        if (entity.type === 'email' || entity.type === 'channel') return true;
+
+        // property status complete
+        if (['document', 'project', 'task'].includes(entity.type)) return true;
+
         if (entityHasUnreadNotifications(notificationSource, entity)) {
           return true;
         }
