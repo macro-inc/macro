@@ -9,7 +9,11 @@ use nom::{
     sequence::delimited,
 };
 use serde::Deserialize;
-use std::borrow::Cow;
+use std::{
+    borrow::Cow,
+    fmt::{Formatter, Write},
+    marker::PhantomData,
+};
 
 fn xml_tag(
     start_delimiter: &'static str,
@@ -155,5 +159,79 @@ impl<'de> ParsedXmlText<'de> {
         .finish()
         .map_err(|e| e.cloned())?;
         Ok(ParsedXmlText(out))
+    }
+}
+
+pub struct ReformattedXmlText<T>(pub String, PhantomData<T>);
+
+pub trait XmlFormatter: Sized {
+    fn format_plain_text(s: &str, f: &mut Formatter<'_>) -> std::fmt::Result;
+    fn format_link(link: &ParsedLink<'_>, f: &mut Formatter<'_>) -> std::fmt::Result;
+    fn format_doc(doc: &ParsedDocumentMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result;
+    fn format_user(user: &ParsedUserMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result;
+    fn format_contact(
+        contact: &ParsedContactMention<'_>,
+        f: &mut Formatter<'_>,
+    ) -> std::fmt::Result;
+    fn format_date(date: &ParsedDateMention<'_>, f: &mut Formatter<'_>) -> std::fmt::Result;
+
+    fn format_xml_text(text: ParsedXmlText<'_>) -> ReformattedXmlText<Self> {
+        use std::fmt::Display;
+
+        struct Adapter<F>(F);
+        impl<F: Fn(&mut Formatter<'_>) -> std::fmt::Result> Display for Adapter<F> {
+            fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+                (self.0)(f)
+            }
+        }
+
+        let s = text.0.into_iter().fold(String::new(), |mut acc, cur| {
+            let _ = match cur {
+                TextSegment::Xml(XmlTag::Link(l)) => {
+                    write!(
+                        acc,
+                        "{}",
+                        Adapter(|f: &mut Formatter<'_>| Self::format_link(&l, f))
+                    )
+                }
+                TextSegment::Xml(XmlTag::Document(d)) => {
+                    write!(
+                        acc,
+                        "{}",
+                        Adapter(|f: &mut Formatter<'_>| Self::format_doc(&d, f))
+                    )
+                }
+                TextSegment::Xml(XmlTag::User(u)) => {
+                    write!(
+                        acc,
+                        "{}",
+                        Adapter(|f: &mut Formatter<'_>| Self::format_user(&u, f))
+                    )
+                }
+                TextSegment::Xml(XmlTag::Contact(c)) => {
+                    write!(
+                        acc,
+                        "{}",
+                        Adapter(|f: &mut Formatter<'_>| Self::format_contact(&c, f))
+                    )
+                }
+                TextSegment::Xml(XmlTag::Date(d)) => {
+                    write!(
+                        acc,
+                        "{}",
+                        Adapter(|f: &mut Formatter<'_>| Self::format_date(&d, f))
+                    )
+                }
+                TextSegment::Plain(s) => {
+                    write!(
+                        acc,
+                        "{}",
+                        Adapter(|f: &mut Formatter<'_>| Self::format_plain_text(s, f))
+                    )
+                }
+            };
+            acc
+        });
+        ReformattedXmlText(s, PhantomData)
     }
 }
