@@ -7,6 +7,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { Modals } from '@core/component/Properties/component/modal';
 import { PanelContainer } from '@core/component/Properties/component/panel';
+import { getDefaultPinnedProperties } from '@core/component/Properties/constants';
 import { PropertiesProvider } from '@core/component/Properties/context/PropertiesContext';
 import { useEntityProperties } from '@core/component/Properties/hooks';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
@@ -101,15 +102,17 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
     onCleanup(unregister);
   });
 
-  // Filter properties to show metadata/system properties and pinned ones
+  // Filter properties to show metadata, default pinned, and user-pinned properties
   const filteredPinnedProperties = createMemo(() => {
     const allProps = properties();
     const pinnedIds = pinnedPropertyIds();
+    const defaultPinnedIds = getDefaultPinnedProperties(blockName);
 
     return allProps.filter(
       (prop) =>
-        (prop.isMetadata || pinnedIds.includes(prop.propertyId)) &&
-        !(prop.displayName === 'Document Name')
+        (prop.isMetadata && !(prop.displayName === 'Document Name')) ||
+        defaultPinnedIds.includes(prop.propertyDefinitionId) ||
+        pinnedIds.includes(prop.propertyId)
     );
   });
 
