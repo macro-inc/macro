@@ -31,7 +31,7 @@ export type EntityActionConfig = {
   /**
    * Enabled mode for bulk version of action. If 'every' then all entities must pass
    * for the action to register as enabled. If 'some' then the action can be
-   * enabled if a single entity passes the test. Only meaningful if testEnabled
+   * enabled if a single entity passes the test. Only meaningful if checkEnabled
    * is also provided. Default is 'every'
    */
   enabledMode?: 'some' | 'every';
@@ -109,16 +109,16 @@ export function createEntityActionRegistry(): EntityActionRegistry {
     type: EntityActionType,
     entities: EntityData | EntityData[]
   ): boolean => {
-    const { checkEnabled: testEnabled, enabledMode } = configs.get(type) ?? {};
-    if (!testEnabled) return true;
+    const { checkEnabled, enabledMode } = configs.get(type) ?? {};
+    if (!checkEnabled) return true;
     if (Array.isArray(entities)) {
       if (enabledMode === 'some') {
-        return entities.some(testEnabled);
+        return entities.some(checkEnabled);
       } else {
-        return entities.every(testEnabled);
+        return entities.every(checkEnabled);
       }
     } else if (isEntityData(entities)) {
-      return testEnabled(entities);
+      return checkEnabled(entities);
     }
     return false;
   };
