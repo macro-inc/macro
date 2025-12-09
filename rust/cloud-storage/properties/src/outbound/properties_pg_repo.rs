@@ -38,13 +38,7 @@ impl PropertiesRepo for PropertiesPgRepo {
             None => serde_json::Value::Null,
         };
 
-        tracing::debug!(
-            entity_id = %entity_id,
-            property_definition_id = %property_definition_id,
-            value_json = ?value_json,
-            has_value = !value_json.is_null(),
-            "updating entity property if exists"
-        );
+        tracing::debug!(value_json = ?value_json, "updating entity property if exists");
 
         // Atomic update - only updates if the property is already attached
         let result = sqlx::query!(
@@ -65,17 +59,9 @@ impl PropertiesRepo for PropertiesPgRepo {
         .context("failed to update entity property")?;
 
         if result.rows_affected() > 0 {
-            tracing::info!(
-                entity_id = %entity_id,
-                property_definition_id = %property_definition_id,
-                "successfully updated entity property"
-            );
+            tracing::info!("successfully updated entity property");
         } else {
-            tracing::debug!(
-                entity_id = %entity_id,
-                property_definition_id = %property_definition_id,
-                "entity property not attached, no-op"
-            );
+            tracing::debug!("entity property not attached, no-op");
         }
 
         Ok(())

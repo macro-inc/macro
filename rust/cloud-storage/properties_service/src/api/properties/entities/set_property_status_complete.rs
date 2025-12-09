@@ -83,6 +83,6 @@ pub async fn set_property_status_complete(
         .await
         .map_err(|e| SetPropertyStatusCompleteErr::InternalError(e.to_string()))?;
 
-    tracing::info!(entity_id = %entity_id, "status complete handled");
+    tracing::debug!("status complete handled");
     Ok(StatusCode::NO_CONTENT)
 }
