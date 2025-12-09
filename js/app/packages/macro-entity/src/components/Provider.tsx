@@ -10,6 +10,28 @@ import { queryClient } from '../queries/client';
 import { queryKeys } from '../queries/key';
 import type { EntityData } from '../types/entity';
 
+// NOTE: leaving this in as reference for now.
+// Turning this off due to [M-5344]. This is likely unnecessary.
+// @ts-ignore
+// biome-ignore: not-needed
+function _reconcileEntities(
+  oldData?: EntityData[],
+  newData?: EntityData[]
+): EntityData[] | undefined {
+  if (!oldData || !newData) return newData;
+
+  const unwrappedOldData = unwrap(oldData);
+  return newData.map((entity) => {
+    const oldEntity = unwrappedOldData.find(
+      (oldEntity) => oldEntity.id === entity.id
+    );
+    if (oldEntity && deepEqual(oldEntity, entity)) {
+      return oldEntity;
+    }
+    return entity;
+  });
+}
+
 export function Provider(props: ParentProps) {
   queryClient.setQueryDefaults(queryKeys.all.auth, {
     staleTime: 1000 * 60 * 60, // 1 hour
@@ -20,22 +42,9 @@ export function Provider(props: ParentProps) {
   });
 
   queryClient.setQueryDefaults(queryKeys.all.entity, {
-    reconcile: (oldData?: EntityData[], newData?: EntityData[]) => {
-      if (!oldData || !newData) return newData;
-
-      const unwrappedOldData = unwrap(oldData);
-      return newData.map((entity) => {
-        const oldEntity = unwrappedOldData.find(
-          (oldEntity) => oldEntity.id === entity.id
-        );
-        if (oldEntity && deepEqual(oldEntity, entity)) {
-          return oldEntity;
-        }
-        return entity;
-      });
-    },
     gcTime: 1000 * 60 * 60, // 1 hour
   } as Partial<QueryObserverOptions>);
+
   queryClient.setQueryDefaults(queryKeys.all.channel, {
     staleTime: 1000 * 10, // 10 seconds
   });

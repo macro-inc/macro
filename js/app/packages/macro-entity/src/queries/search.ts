@@ -25,8 +25,6 @@ import type { ContentHitData, SearchData, WithSearch } from '../types/search';
 import type { EntityInfiniteQuery } from './entity';
 import { queryKeys } from './key';
 
-type Entity = WithSearch<EntityData>;
-
 type InnerSearchResult =
   | DocumentSearchResult
   | EmailSearchResult
@@ -148,7 +146,7 @@ const useMapSearchResponseItem = () => {
   return (
     result: UnifiedSearchResponseItem,
     searchQuery: string
-  ): Entity | undefined => {
+  ): WithSearch<EntityData> | undefined => {
     switch (result.type) {
       case 'document': {
         if (!result.metadata || result.metadata.deleted_at) return;
@@ -306,7 +304,7 @@ export function createUnifiedSearchInfiniteQuery(
   options?: {
     disabled?: Accessor<boolean>;
   }
-): EntityInfiniteQuery<Entity> {
+): EntityInfiniteQuery<WithSearch<EntityData>> {
   const params = createMemo(() => args());
   const pageParams = createMemo(() => params().params);
   const request = createMemo(() => params().request);
@@ -341,6 +339,7 @@ export function createUnifiedSearchInfiniteQuery(
       !options?.disabled?.() &&
       (validSearchTerms() || validSearchFilters())
   );
+
   const mapSearchResponseItem = useMapSearchResponseItem();
 
   const query = useInfiniteQuery(() => ({
@@ -369,7 +368,7 @@ export function createUnifiedSearchInfiniteQuery(
       return data.pages.flatMap((page) =>
         page.results
           .map((result) => mapSearchResponseItem(result, searchQuery))
-          .filter((entity): entity is Entity => !!entity)
+          .filter((entity): entity is WithSearch<EntityData> => !!entity)
       );
     },
     enabled: enabled(),

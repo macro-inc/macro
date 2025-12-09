@@ -76,7 +76,8 @@ async fn get_access_level(
         EntityType::Project => "project",
         EntityType::Thread => "thread",
         EntityType::Channel => "channel",
-        EntityType::Company | EntityType::Task | EntityType::User => {
+        EntityType::Task => "document",
+        EntityType::Company | EntityType::User => {
             tracing::warn!("property operations not supported for this entity type");
             return Err(PermissionError::UnsupportedEntityType);
         }

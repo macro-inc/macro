@@ -13,4 +13,4 @@ pub mod service;
 pub mod shared;
 
 // Re-export commonly used shared types for convenience
-pub use shared::{DataType, EntityReference, EntityType, PropertyOwner};
+pub use shared::{DataType, EntityPropertyReference, EntityReference, EntityType, PropertyOwner};

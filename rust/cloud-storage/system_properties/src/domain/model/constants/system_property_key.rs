@@ -1,5 +1,6 @@
 //! System property key enum.
 
+use models_properties::EntityType;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -115,5 +116,35 @@ impl SystemPropertyKey {
     /// Check if a UUID is a system property UUID.
     pub fn is_system_uuid(uuid: Uuid) -> bool {
         Self::from_uuid(uuid).is_some()
+    }
+
+    /// Returns the property definition IDs that are required (cannot be removed) for a given entity type.
+    /// These are fundamental built-in properties that define the entity's core behavior.
+    ///
+    /// Extensible: Add new entity types and their required properties here as needed.
+    pub fn required_property_ids_for_entity(entity_type: EntityType) -> &'static [Uuid] {
+        match entity_type {
+            EntityType::Task => &[
+                Self::ASSIGNEES_UUID,
+                Self::STATUS_UUID,
+                Self::PRIORITY_UUID,
+                Self::DUE_DATE_UUID,
+                Self::PARENT_TASK_UUID,
+                Self::SUBTASKS_UUID,
+                Self::DEPENDS_ON_UUID,
+                Self::EFFORT_UUID,
+                Self::STORY_POINTS_UUID,
+                Self::RELEVANT_DOCUMENTS_UUID,
+            ],
+            // Other entity types don't have required properties yet
+            // Add new cases here as needed:
+            // EntityType::Email => &[...],
+            _ => &[],
+        }
+    }
+
+    /// Check if a property definition cannot be removed from the given entity type.
+    pub fn is_required_for_entity(property_definition_id: Uuid, entity_type: EntityType) -> bool {
+        Self::required_property_ids_for_entity(entity_type).contains(&property_definition_id)
     }
 }

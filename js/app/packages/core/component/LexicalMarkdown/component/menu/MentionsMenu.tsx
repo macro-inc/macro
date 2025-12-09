@@ -22,8 +22,14 @@ import { getDateSuggestions, type ParsedDate } from '@core/util/dateParser';
 import { createFreshSearch } from '@core/util/freshSort';
 import ClockIcon from '@icon/regular/clock.svg';
 import EmailIcon from '@icon/regular/envelope.svg';
-import { type EmailEntity, useEmails } from '@macro-entity';
+import type { EntityData, WithSearch } from '@macro-entity';
+import {
+  createUnifiedSearchInfiniteQuery,
+  type EmailEntity,
+  useEmails,
+} from '@macro-entity';
 import type { DocumentMentionMetadata } from '@service-notification/client';
+import type { PaginatedSearchArgs } from '@service-search/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { useHistory } from '@service-storage/history';
@@ -401,22 +407,36 @@ function createItemHandler(dependencies: HandlerDependencies) {
 /**
  * Styled container for single category.
  */
+
 function ItemBin(
   props: ParentProps<{
     label: string;
     binType: MentionBins;
+    isNextPage?: Accessor<boolean>;
     totalCount?: number;
     showingCount?: number;
     onViewAll?: (binType: MentionBins) => void;
     isSelected?: boolean;
   }>
 ) {
-  const showViewAllButton = () =>
-    props.binType &&
-    props.totalCount &&
-    props.showingCount &&
-    props.totalCount > props.showingCount;
-
+  const showViewAllButton = () => {
+    return (
+      (props.binType &&
+        props.totalCount &&
+        props.showingCount &&
+        props.totalCount > props.showingCount) ||
+      props.isNextPage?.()
+    );
+  };
+  const viewAllText = () => {
+    if (
+      props.totalCount &&
+      props.showingCount &&
+      props.totalCount > props.showingCount
+    )
+      return `View all (${props.totalCount})`;
+    return `View all`;
+  };
   return (
     <>
       <div
@@ -442,7 +462,7 @@ function ItemBin(
               props.onViewAll?.(props.binType);
             }}
           >
-            View all ({props.totalCount})
+            {viewAllText()}
           </button>
         </Show>
       </div>
@@ -640,6 +660,9 @@ export function MentionsMenu(props: {
   onEmailMention?: (item: EmailEntity) => void;
   disableMentionTracking?: boolean;
 }) {
+  const [searchTerm, setSearchTerm] = createSignal<string>(
+    props.menu.searchTerm()
+  );
   const historyAccessor = props.history ?? useHistory();
   const history = createMemo(() => {
     return historyAccessor().map(entityMapper('item'));
@@ -683,6 +706,51 @@ export function MentionsMenu(props: {
       return userChannels().map(entityMapper('channel')).filter(allItemFilter);
     });
   }
+
+  const args = createMemo((): PaginatedSearchArgs => {
+    return {
+      params: {
+        page: 0,
+        // small -> fast!
+        page_size: 10,
+      },
+      request: {
+        match_type: 'partial',
+        search_on: 'name',
+        include: ['emails'],
+        query: searchTerm(),
+      },
+    };
+  });
+
+  const emailUnifiedSearchInfiniteQuery =
+    createUnifiedSearchInfiniteQuery(args);
+
+  const foundEmails = createMemo((): Entity<'email'>[] => {
+    if (emailUnifiedSearchInfiniteQuery.status === 'success') {
+      function isEmail(
+        e: WithSearch<EntityData>
+      ): e is WithSearch<EmailEntity> {
+        return e.type === 'email';
+      }
+
+      function entityDataToMentionEntity<T extends EmailEntity>(
+        e: T
+      ): Entity<'email'> {
+        return {
+          data: e,
+          id: e.id,
+          kind: 'email',
+        };
+      }
+
+      return emailUnifiedSearchInfiniteQuery.data
+        .filter(isEmail)
+        .map(entityDataToMentionEntity);
+    } else {
+      return [];
+    }
+  });
 
   // Get open tabs from split manager
   const openTabs = createMemo(() => {
@@ -771,16 +839,12 @@ export function MentionsMenu(props: {
 
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
 
-  const [searchTerm, setSearchTerm] = createSignal(props.menu.searchTerm());
-
   const debouncedSetSearchTerm = debounce(
     (term: string) => setSearchTerm(term.toLowerCase()),
     60
   );
 
-  createEffect(() => {
-    debouncedSetSearchTerm(props.menu.searchTerm());
-  });
+  createEffect(() => debouncedSetSearchTerm(props.menu.searchTerm()));
 
   const itemSearch = createFreshSearch<CombinedEntity<'item' | 'channel'>>(
     {},
@@ -826,7 +890,22 @@ export function MentionsMenu(props: {
   );
 
   const filteredEmails = createMemo(() => {
-    return emailSearch(emails(), searchTerm()).map((result) => result.item);
+    const mail = emailSearch(emails(), searchTerm()).map(
+      (result) => result.item
+    );
+
+    const otherMail = foundEmails();
+
+    // dedup / preserve order
+    function merge<T extends keyof EntityMap>(
+      local: Entity<T>[],
+      unifiedSearch: Entity<T>[]
+    ): Entity<T>[] {
+      let ids = new Set(local.map((e) => e.id));
+      return [...local, ...unifiedSearch.filter((e) => !ids.has(e.id))];
+    }
+
+    return merge(mail, otherMail);
   });
 
   const dateSuggestions = createMemo(() => {
@@ -952,6 +1031,23 @@ export function MentionsMenu(props: {
     const items = combinedItems();
     const selectedItem = items[selectedIndex()];
 
+    const handleArrowDown = () => {
+      setSelectedIndex((p) => {
+        if (p >= combinedItems.length) {
+          if (
+            viewAllMode() === 'emails' &&
+            emailUnifiedSearchInfiniteQuery.isFetching
+          ) {
+            return items.length - 1;
+          } else {
+            return (p + 1) % items.length;
+          }
+        } else {
+          return p + 1;
+        }
+      });
+    };
+
     switch (e.key) {
       case ' ':
         switch (escapeSpaceState()) {
@@ -992,7 +1088,7 @@ export function MentionsMenu(props: {
       case 'ArrowUp':
         e.preventDefault();
         e.stopPropagation();
-        setSelectedIndex((prev) => (prev - 1 + items.length) % items.length);
+        handleArrowDown();
         break;
 
       case 'ArrowLeft':
@@ -1013,9 +1109,11 @@ export function MentionsMenu(props: {
             const currentRawBins = rawBins();
             const abbreviatedCount = currentBins[currentCategory];
             const fullCount = currentRawBins[currentCategory];
-
-            // allow view all if there are more items to show
-            if (fullCount > abbreviatedCount) {
+            if (
+              abbreviatedCount < fullCount ||
+              (emailUnifiedSearchInfiniteQuery.hasNextPage &&
+                currentCategory === 'emails')
+            ) {
               handleViewAll(currentCategory);
             }
           }
@@ -1061,6 +1159,7 @@ export function MentionsMenu(props: {
     props.editor.dispatchCommand(CLOSE_INLINE_SEARCH_COMMAND, undefined);
     setMenuOpen(false);
   };
+
   onMount(() => {
     document.addEventListener('focusout', focusOut);
     onCleanup(() => {
@@ -1069,6 +1168,14 @@ export function MentionsMenu(props: {
   });
 
   createEffect(() => {
+    if (
+      selectedIndex() >= combinedItems().length - 5 &&
+      viewAllMode() === 'emails' &&
+      emailUnifiedSearchInfiniteQuery.hasNextPage &&
+      !emailUnifiedSearchInfiniteQuery.isFetching
+    ) {
+      emailUnifiedSearchInfiniteQuery.fetchNextPage();
+    }
     if (selectedIndex() >= combinedItems().length) {
       setSelectedIndex(combinedItems().length - 1);
     }
@@ -1168,11 +1275,15 @@ export function MentionsMenu(props: {
     const docs = filteredItems().slice(0, bins().items);
     const dates = dateSuggestions().slice(0, bins().dates);
     const emailList = filteredEmails().slice(0, bins().emails);
-    const totalLength = () => users.length + docs.length + dates.length;
+    const totalLength = () =>
+      users.length +
+      docs.length +
+      contacts.length +
+      dates.length +
+      emailList.length;
 
     const renderOptions = createMemo(() => {
       const options = [];
-
       if (users.length > 0) {
         options.push(
           <ItemBin
@@ -1258,6 +1369,7 @@ export function MentionsMenu(props: {
           <ItemBin
             label="Emails"
             binType="emails"
+            isNextPage={() => emailUnifiedSearchInfiniteQuery.hasNextPage}
             totalCount={filteredEmails().length}
             showingCount={emailList.length}
             onViewAll={handleViewAll}

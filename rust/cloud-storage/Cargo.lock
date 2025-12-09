@@ -6569,6 +6569,7 @@ dependencies = [
  "serde_json",
  "serde_with",
  "sqlx",
+ "system_properties",
  "thiserror 2.0.17",
  "tokio",
  "tower 0.5.2",
