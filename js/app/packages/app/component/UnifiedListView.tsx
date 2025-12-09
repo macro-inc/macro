@@ -45,13 +45,15 @@ import {
   createUnifiedInfiniteList,
   createUnifiedSearchInfiniteQuery,
   type DocumentEntity,
-  Entity,
+  type Entity,
   type EntityClickHandler,
   type EntityData,
   type EntityFilter,
-  type EntityType,
+  type ExpandedEntityType,
   importantFilterFn,
+  isPureDocumentEntity,
   isSearchEntity,
+  isTaskEntity,
   notDoneFilterFn,
   type SortOption,
   sortByCreatedAt,
@@ -676,8 +678,15 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       filterFns.push(createProjectFilterFn(projectFilter_));
     }
 
-    if (entityTypeFilter().length > 0)
-      filterFns.push(({ type }) => entityTypeFilter().includes(type));
+    if (entityTypeFilter().length > 0) {
+      filterFns.push((entity) => {
+        // special case the tasks, entity type will still be document
+        if (isTaskEntity(entity)) {
+          return entityTypeFilter().includes('task');
+        }
+        return entityTypeFilter().includes(entity.type);
+      });
+    }
 
     const fileTypeCompatibilityFilter_ = fileTypeCompatibilityFilter();
     if (fileTypeCompatibilityFilter_)
@@ -698,6 +707,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     for (const type of types) {
       switch (type) {
         case 'document':
+        case 'task':
           includeArray.push('documents');
           break;
         case 'chat':
@@ -804,6 +814,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       document_filters: {
         document_ids:
           entityTypeFilter().includes('document') ||
+          entityTypeFilter().includes('task') ||
           entityTypeFilter().length === 0
             ? []
             : [GARBAGE_UUID],
@@ -981,7 +992,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           },
           {
             query: searchNameContentInfiniteQuery,
-            operations: { filter: false, search: false },
+            operations: { filter: true, search: false },
           },
         ],
         entityMapper,
@@ -1311,6 +1322,11 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                         filter={entityTypeFilter}
                         setFilter={setEntityTypeFilter}
                         type="channel"
+                      />
+                      <EntityTypeToggle
+                        filter={entityTypeFilter}
+                        setFilter={setEntityTypeFilter}
+                        type="task"
                       />
                       <EntityTypeToggle
                         filter={entityTypeFilter}
@@ -1737,12 +1753,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 }
 
 const EntityTypeToggle = (props: {
-  type: EntityType;
+  type: ExpandedEntityType;
   filter: Accessor<typeof VIEWCONFIG_BASE.filters.typeFilter>;
   setFilter: Setter<typeof VIEWCONFIG_BASE.filters.typeFilter>;
   setFileTypeFilter?: Setter<typeof VIEWCONFIG_BASE.filters.documentTypeFilter>;
 }) => {
-  const toggleEntityTypeFilter = (type: EntityType) => {
+  const toggleEntityTypeFilter = (type: ExpandedEntityType) => {
     props.setFilter((prev) =>
       prev.includes(type) ? prev.filter((t) => t !== type) : [...prev, type]
     );
