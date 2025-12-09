@@ -438,7 +438,7 @@ export function EntityWithEverything(
       classList={{
         'bg-hover/30': props.highlighted && !props.checked,
         'bg-accent/5': props.checked,
-        'bracket outline outline-accent/20 outline-offset-[-1px] bg-accent':
+        'bracket outline outline-accent/20 outline-offset-[-1px]':
           props.selected,
       }}
       onMouseOver={(e) => {

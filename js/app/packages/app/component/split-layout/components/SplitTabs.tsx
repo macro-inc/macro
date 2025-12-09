@@ -43,6 +43,13 @@ const VIEW_ICONS: Partial<
   folders: getIconConfig('project').icon,
 };
 
+const TabSeparator = () => (
+  <div class="relative shrink-0 w-3 h-full flex items-center justify-center pointer-events-none">
+    <div class="relative w-px h-2/3 bg-gradient-to-b from-transparent via-edge-muted/80 to-transparent" />
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 size-1 rounded-full bg-edge-muted/60" />
+  </div>
+);
+
 export function SplitTabs(props: {
   // values: readonly View[];
   list: { value: ViewId; label: string }[];
@@ -162,11 +169,14 @@ export function SplitTabs(props: {
 
             let ref: HTMLDivElement | undefined;
             createEffect(() => {
+              console.log('createEffect running');
               panelWidth(); // react on width to not clip active tab.
               if (isActive() && ref) {
-                ref.scrollIntoView({
-                  inline: 'end',
-                });
+                setTimeout(() => {
+                  ref.scrollIntoView({
+                    inline: 'end',
+                  });
+                }, 0);
                 // Update indicator position and clip indicators
                 updateIndicatorPosition(ref);
                 setTimeout(updateClipIndicators, 0);
@@ -182,38 +192,43 @@ export function SplitTabs(props: {
             const showLabel = () => isSignalOrNoise || isActive() || isAll;
 
             return (
-              <Tabs.Trigger
-                value={value}
-                ref={ref}
-                tabIndex={-1}
-                class="group shrink-0 text-sm relative h-full flex items-center font-mono uppercase px-2"
-                classList={{
-                  'pl-0 pr-2': isAll,
-                  'z-1 text-accent text-glow': isActive(),
-                  'text-ink-disabled hover:text-accent/70 hover-transition-text':
-                    !isActive(),
-                }}
-              >
-                <span class="flex items-center gap-1 w-full">
-                  <Show when={icon}>
-                    <Dynamic
-                      component={icon}
-                      class="size-5 shrink-0 transition-colors"
-                      classList={{
-                        'text-accent': isActive(),
-                        'text-ink-disabled group-hover:text-accent/70':
-                          !isActive(),
-                      }}
-                    />
-                  </Show>
-                  <Show when={showLabel()}>
-                    <span class="truncate text-xs font-mono uppercase">
-                      {label}
-                    </span>
-                  </Show>
-                </span>
-                {props.contextMenu?.({ label, value })}
-              </Tabs.Trigger>
+              <>
+                <Show when={value === 'people'}>
+                  <TabSeparator />
+                </Show>
+
+                <Tabs.Trigger
+                  value={value}
+                  ref={ref}
+                  tabIndex={-1}
+                  class="group shrink-0 text-sm relative h-full flex items-center font-mono uppercase px-2"
+                  classList={{
+                    'z-1 text-accent text-glow': isActive(),
+                    'text-ink-disabled hover:text-accent/70 hover-transition-text':
+                      !isActive(),
+                  }}
+                >
+                  <div class="flex items-center gap-2 w-full">
+                    <Show when={icon}>
+                      <Dynamic
+                        component={icon}
+                        class="size-5 shrink-0 transition-colors"
+                        classList={{
+                          'text-accent': isActive(),
+                          'text-ink-disabled group-hover:text-accent/70':
+                            !isActive(),
+                        }}
+                      />
+                    </Show>
+                    <Show when={showLabel()}>
+                      <span class="truncate text-xs font-mono uppercase">
+                        {label}
+                      </span>
+                    </Show>
+                  </div>
+                  {props.contextMenu?.({ label, value })}
+                </Tabs.Trigger>
+              </>
             );
           }}
         </For>

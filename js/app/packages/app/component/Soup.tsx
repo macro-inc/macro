@@ -237,17 +237,23 @@ export function Soup() {
   });
 
   registerHotkey({
-    hotkey: ['cmd+f', 'ctrl+f'],
+    hotkey: ['cmd+f'],
     scopeId: splitHotkeyScope,
     hotkeyToken: TOKENS.soup.switchToSearch,
     description: 'Search',
     keyDownHandler: () => {
-      setSelectedView('all');
+      // Focus the search input in the current tab
       setTimeout(() => {
-        const searchInput = document.getElementById(
-          `search-input-${handle.id}-all`
-        ) as HTMLInputElement;
-        searchInput?.focus();
+        const searchInputs = document.querySelectorAll<HTMLInputElement>(
+          'input[id^="search-input-"]'
+        );
+        // Find the first visible search input
+        for (const input of searchInputs) {
+          if (input.offsetParent !== null) {
+            input.focus();
+            return;
+          }
+        }
       }, 0);
       return true;
     },
@@ -400,7 +406,7 @@ export function Soup() {
             value={selectedView()}
             onChange={setSelectedView}
           >
-            <SplitHeaderLeft order={1}>
+            <SplitHeaderLeft>
               <SplitTabs
                 list={Object.values(viewsData).map((view) => ({
                   value: view.id,

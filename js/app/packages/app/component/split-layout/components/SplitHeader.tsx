@@ -120,7 +120,7 @@ function SplitPreviewToggle() {
 
 function SplitControlButtons() {
   return (
-    <div class="flex flex-row items-center px-2 h-full shrink-0">
+    <div class="flex flex-row items-center pl-2 h-full shrink-0">
       <SplitCloseButton />
       <SplitBackButton />
       <SplitForwardButton />
@@ -142,7 +142,7 @@ export function SplitHeader(props: { ref: Setter<HTMLDivElement | null> }) {
       <div class="absolute inset-0 flex justify-start items-center bg-panel border-b border-b-edge-muted">
         <SplitControlButtons />
         <div
-          class="relative w-fit min-w-0 h-full shrink-0"
+          class="relative w-fit min-w-0 h-full shrink"
           ref={(ref) => {
             ctx.layoutRefs.headerLeft = ref;
           }}
