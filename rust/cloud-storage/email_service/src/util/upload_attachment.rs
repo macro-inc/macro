@@ -84,7 +84,7 @@ pub async fn upload_attachment(
 
     // 8. Set properties for attachment
     set_email_attachment_properties(ctx.system_properties_service, &document_id, attachment_args)
-    .await?;
+        .await?;
 
     Ok(document_id)
 }
