@@ -11,6 +11,7 @@ use axum::{
 use thiserror::Error;
 
 use crate::api::context::ApiContext;
+use crate::api::permissions::{PermissionError, check_entity_edit_permission};
 use model::user::UserContext;
 use models_properties::{EntityReference, EntityType};
 use properties::PropertiesService;
@@ -20,7 +21,7 @@ pub enum SetPropertyStatusCompleteErr {
     #[error("An internal error occurred")]
     InternalError(String),
     #[error("{0}")]
-    Permission(#[from] crate::api::permissions::PermissionError),
+    Permission(#[from] PermissionError),
 }
 
 impl IntoResponse for SetPropertyStatusCompleteErr {
@@ -73,12 +74,7 @@ pub async fn set_property_status_complete(
         entity_id: entity_id.clone(),
         entity_type,
     };
-    crate::api::permissions::check_entity_edit_permission(
-        &context,
-        &user_context.user_id,
-        &entity_ref,
-    )
-    .await?;
+    check_entity_edit_permission(&context, &user_context.user_id, &entity_ref).await?;
 
     // Delegate to service layer for business logic
     context
