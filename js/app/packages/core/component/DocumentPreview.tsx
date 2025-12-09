@@ -566,7 +566,7 @@ export function PopupPreview(props: {
             {/* Accessible preview */}
             <Match when={matches(props.item(), isAccessiblePreviewItem)}>
               {(accessibleItem) => {
-                const { type, fileType } = accessibleItem();
+                const { type, fileType, subType } = accessibleItem();
                 return (
                   <div class="w-full h-full flex-col">
                     {/* Header with icon and actions */}
@@ -576,7 +576,11 @@ export function PopupPreview(props: {
                           when={type === 'channel'}
                           fallback={
                             <EntityIcon
-                              targetType={type === 'document' ? fileType : type}
+                              targetType={
+                                type === 'document'
+                                  ? (subType ?? fileType)
+                                  : type
+                              }
                               size="md"
                             />
                           }

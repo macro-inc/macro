@@ -9,7 +9,7 @@ import {
   PopupPreview,
 } from '@core/component/DocumentPreview';
 import { EntityIcon } from '@core/component/EntityIcon';
-import { verifyBlockName } from '@core/constant/allBlocks';
+import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { canNestBlock } from '@core/orchestrator';
@@ -225,7 +225,7 @@ export function DocumentMention(props: DocumentMentionDecoratorProps) {
   const isEmbeddable = createMemo(() => {
     if (!ENABLE_BLOCK_IN_BLOCK) return false;
     const blockName = verifyBlockName(props.blockName);
-    return canNestBlock(blockName, currentBlockName);
+    return canNestBlock(resolveBlockAlias(blockName), currentBlockName);
   });
 
   const previewType = () =>

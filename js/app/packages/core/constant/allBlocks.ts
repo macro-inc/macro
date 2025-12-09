@@ -7,7 +7,6 @@ import {
   type MimeType,
 } from '@core/block';
 import type { ItemType } from '@service-storage/client';
-import type { BasicDocumentSubType } from '@service-storage/generated/schemas';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
 import { ENABLE_DOCX_TO_PDF } from './featureFlags';
 import { DefaultFilename } from './filename';
