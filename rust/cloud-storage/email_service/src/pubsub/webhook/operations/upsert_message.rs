@@ -3,7 +3,7 @@ use crate::pubsub::util::cg_refresh_email;
 use crate::pubsub::webhook::process;
 use crate::pubsub::webhook::process::check_gmail_rate_limit_webhook;
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
-use crate::util::upload_attachment::{UploadAttachmentArgs, upload_attachment};
+use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
 use email_db_client::threads;
 use email_db_client::threads::get::get_outbound_threads_by_thread_ids;
 use email_utils::dedupe_emails;
@@ -252,21 +252,20 @@ async fn handle_attachment_upload(
             let attachment_upload_args = AttachmentUploadArgs {
                 recipient_emails,
                 attachment_metadata: attachment,
+                backfill: false,
             };
 
-            // keep processing if it fails, best effort
-            if let Err(e) = upload_attachment(UploadAttachmentArgs {
+            let ctx_upload = UploadAttachmentContext {
                 redis_client: &ctx.redis_client,
                 gmail_client: &ctx.gmail_client,
                 dss_client: &ctx.dss_client,
                 system_properties_service: &ctx.system_properties_service,
                 access_token: gmail_access_token,
                 link,
-                attachment_args: &attachment_upload_args,
-                backfill: false,
-            })
-            .await
-            {
+            };
+
+            // keep processing if it fails, best effort
+            if let Err(e) = upload_attachment(ctx_upload, &attachment_upload_args).await {
                 tracing::error!("Failed to upload attachment to Macro: {e}");
             }
         }

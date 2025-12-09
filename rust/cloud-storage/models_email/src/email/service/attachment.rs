@@ -57,4 +57,5 @@ pub struct AttachmentUploadMetadata {
 pub struct AttachmentUploadArgs {
     pub attachment_metadata: AttachmentUploadMetadata,
     pub recipient_emails: Vec<String>,
+    pub backfill: bool,
 }

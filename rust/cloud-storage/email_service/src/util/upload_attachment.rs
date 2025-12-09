@@ -18,8 +18,8 @@ use system_properties::{
     SystemPropertiesService, SystemPropertiesServiceImpl,
 };
 
-/// Arguments required for uploading an email attachment.
-pub struct UploadAttachmentArgs<'a> {
+/// Context required for uploading an email attachment.
+pub struct UploadAttachmentContext<'a> {
     pub redis_client: &'a RedisClient,
     pub gmail_client: &'a GmailClient,
     pub dss_client: &'a DocumentStorageServiceClient,
@@ -27,17 +27,18 @@ pub struct UploadAttachmentArgs<'a> {
         &'a Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     pub access_token: &'a str,
     pub link: &'a link::Link,
-    pub attachment_args: &'a AttachmentUploadArgs,
-    pub backfill: bool,
 }
 
 /// Upload an email attachment to DSS as a document.
-#[tracing::instrument(skip(args), err)]
-pub async fn upload_attachment(args: UploadAttachmentArgs<'_>) -> anyhow::Result<String> {
+#[tracing::instrument(skip(ctx, attachment_args), err)]
+pub async fn upload_attachment(
+    ctx: UploadAttachmentContext<'_>,
+    attachment_args: &AttachmentUploadArgs,
+) -> anyhow::Result<String> {
     // 1. Check rate limits before making a Gmail API call.
     check_gmail_rate_limit(
-        args.redis_client,
-        args.link.id,
+        ctx.redis_client,
+        ctx.link.id,
         GmailApiOperation::MessagesAttachmentsGet,
         true,
     )
@@ -46,9 +47,9 @@ pub async fn upload_attachment(args: UploadAttachmentArgs<'_>) -> anyhow::Result
 
     // 2. Fetch the raw attachment data from Gmail.
     let attachment_data = fetch_gmail_attachment_data(
-        args.gmail_client,
-        args.access_token,
-        &args.attachment_args.attachment_metadata,
+        ctx.gmail_client,
+        ctx.access_token,
+        &attachment_args.attachment_metadata,
     )
     .await?;
 
@@ -57,17 +58,17 @@ pub async fn upload_attachment(args: UploadAttachmentArgs<'_>) -> anyhow::Result
 
     // 4. Determine file metadata from the payload.
     let (file_name, file_type) =
-        determine_file_metadata(&args.attachment_args.attachment_metadata)?;
+        determine_file_metadata(&attachment_args.attachment_metadata)?;
 
     // 5. Create the document record in DSS and get a presigned URL for the upload.
     let dss_response = create_dss_document_record(
-        args.dss_client,
-        args.link,
-        &args.attachment_args.attachment_metadata,
+        ctx.dss_client,
+        ctx.link,
+        &attachment_args.attachment_metadata,
         &hex_hash,
         &file_name,
         &file_type,
-        args.backfill,
+        attachment_args.backfill,
     )
     .await?;
 
@@ -84,9 +85,9 @@ pub async fn upload_attachment(args: UploadAttachmentArgs<'_>) -> anyhow::Result
 
     // 8. Set properties for attachment
     set_email_attachment_properties(
-        args.system_properties_service,
+        ctx.system_properties_service,
         &document_id,
-        args.attachment_args,
+        attachment_args,
     )
     .await?;
 

@@ -312,6 +312,7 @@ async fn send_attachment_backfill_messages(
         let attachment_upload_args = AttachmentUploadArgs {
             recipient_emails,
             attachment_metadata: attachment,
+            backfill: true,
         };
 
         let new_payload = BackfillAttachmentPayload {

@@ -1,5 +1,5 @@
 use crate::api::context::ApiContext;
-use crate::util::upload_attachment::{UploadAttachmentArgs, upload_attachment};
+use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
@@ -112,20 +112,21 @@ pub async fn handler(
     let attachment_upload_args = AttachmentUploadArgs {
         attachment_metadata,
         recipient_emails,
+        backfill: false,
     };
 
-    let document_id = upload_attachment(UploadAttachmentArgs {
+    let ctx_upload = UploadAttachmentContext {
         redis_client: &ctx.redis_client,
         gmail_client: &ctx.gmail_client,
         dss_client: &ctx.dss_client,
         system_properties_service: &ctx.system_properties_service,
         access_token: &gmail_token,
         link: &link,
-        attachment_args: &attachment_upload_args,
-        backfill: false,
-    })
-    .await
-    .map_err(GetAttachmentDocumentIdError::UploadError)?;
+    };
+
+    let document_id = upload_attachment(ctx_upload, &attachment_upload_args)
+        .await
+        .map_err(GetAttachmentDocumentIdError::UploadError)?;
 
     Ok(Json(GetAttachmentDocumentIDResponse {
         attachment_id,
