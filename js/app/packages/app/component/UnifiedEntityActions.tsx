@@ -24,10 +24,10 @@ export type EntityActionConfig = {
   /** Optional icon component */
   icon?: Component;
   /**
-   * Optional test to run over an entity to see if the action can be performed
+   * Optional condition to run over an entity to see if the action can be performed
    * on that entity.
    */
-  testEnabled?: (entity: EntityData) => boolean;
+  checkEnabled?: (entity: EntityData) => boolean;
   /**
    * Enabled mode for bulk version of action. If 'every' then all entities must pass
    * for the action to register as enabled. If 'some' then the action can be
@@ -109,7 +109,7 @@ export function createEntityActionRegistry(): EntityActionRegistry {
     type: EntityActionType,
     entities: EntityData | EntityData[]
   ): boolean => {
-    const { testEnabled, enabledMode } = configs.get(type) ?? {};
+    const { checkEnabled: testEnabled, enabledMode } = configs.get(type) ?? {};
     if (!testEnabled) return true;
     if (Array.isArray(entities)) {
       if (enabledMode === 'some') {
