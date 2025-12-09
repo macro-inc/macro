@@ -5,7 +5,7 @@ import {
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
-import { BlockAliasContext } from '@core/block';
+import type { BlockAliasContext } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { Button } from '@core/component/FormControls/Button';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
