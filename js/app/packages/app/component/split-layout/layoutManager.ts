@@ -466,13 +466,7 @@ export function createSplitLayout(
       })
     );
 
-    const content = { ...next };
-    if (content.type !== 'component' && isBlockAlias(content.type)) {
-      content.aliasContext = {
-        alias: content.type,
-        baseType: resolveBlockAlias(content.type),
-      };
-    }
+    const content = attachAliasContext(next);
 
     const split = state.splits[i];
     if (mergeHistory) {

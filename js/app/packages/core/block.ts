@@ -90,7 +90,7 @@ export const NonDocumentBlockTypes = [
   'project',
   'email',
   'contact',
-] as const as BlockName[];
+] as const as (BlockName | BlockAlias)[];
 
 /**
  * Represents the type of a possible 2-block combination used in split layouts.

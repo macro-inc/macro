@@ -1,4 +1,4 @@
-import { useBlockName } from '@core/block';
+import { useBlockAliasedName } from '@core/block';
 import { type Component, createMemo, For, Show } from 'solid-js';
 import { getBuiltinPropertyIds } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
@@ -11,7 +11,7 @@ interface PropertiesListProps {
 
 export const PropertyGrid: Component<PropertiesListProps> = (props) => {
   const { openPropertyEditor, openDatePicker } = usePropertiesContext();
-  const blockName = useBlockName();
+  const blockName = useBlockAliasedName();
   const builtinPropertyIds = getBuiltinPropertyIds(blockName);
 
   // Single pass through properties array to split into metadata, builtin, and user properties

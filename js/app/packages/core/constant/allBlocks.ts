@@ -139,7 +139,7 @@ export function resolveBlockAlias(name: BlockName | BlockAlias): BlockName {
  * getBlockName('docx') // 'write'
  * getBlockName('svg') // 'image'
  * getBlockName('chat') // 'chat'
- * getBlockName('task') // 'md'
+ * getBlockName('task') // 'task'
  * getBlockName('junk') // undefined
  * @param blockOrFiletype - The block name or file type like 'py', 'md', 'chat',
  *     'png', etc.
@@ -161,7 +161,6 @@ export function fileTypeToBlockName(
     }
   }
 
-  // Check if it's an alias first
   if (isBlockAlias(blockOrFiletype)) {
     return blockOrFiletype;
   }
@@ -171,6 +170,22 @@ export function fileTypeToBlockName(
   }
 
   return fileTypeToBlockName_[blockOrFiletype] ?? 'unknown';
+}
+
+/**
+ * Get the name of a block from a its own name, aliased name,  or a file type.
+ * @example
+ * getBlockName('task') // 'md'
+ * getBlockName('junk') // undefined
+ * @param blockOrFiletype - The block name or file type like 'py', 'md', 'chat',
+ *     'png', etc.
+ * @return Either the name of the block or 'unknown' if there is no
+ *     appropriate block.
+ */
+export function fileTypeToResolvedBlockName(
+  blockOrFiletype?: string | null
+): BlockName {
+  return resolveBlockAlias(fileTypeToBlockName(blockOrFiletype));
 }
 
 /**
@@ -190,7 +205,7 @@ export function blockNameToDefaultFile(block?: BlockName | string) {
 type ItemLike = {
   type: ItemType;
   fileType?: BasicDocumentFileType;
-  subType?: string;
+  subType?: string | null;
   name?: string;
 };
 

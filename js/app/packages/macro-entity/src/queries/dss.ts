@@ -311,7 +311,7 @@ export function createDocumentsInfiniteQuery(
               fileType: item.data.fileType ?? undefined,
               projectId: item.data.projectId ?? undefined,
               subType: item.data.subType ?? undefined,
-              name: resolveDocumentEntityName(item),
+              name: resolveDocumentEntityName(item.data),
             })
           )
       ),

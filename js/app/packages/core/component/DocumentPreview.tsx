@@ -5,6 +5,7 @@ import { useOpenChatForAttachment } from '@block-chat/client';
 import { URL_PARAMS as URL_PARAMS_MD } from '@block-md/constants';
 import { URL_PARAMS as URL_PARAMS_PDF } from '@block-pdf/signal/location';
 import {
+  type BlockAlias,
   type BlockName,
   useMaybeBlockId,
   useMaybeBlockName,
@@ -166,7 +167,7 @@ export const getMentionsIcon = (icon: string | undefined) => {
  * Determines additional context information for mentions based on block type
  */
 export const mentionsAccessories = (
-  blockName: BlockName,
+  blockName: BlockName | BlockAlias,
   params: Record<string, string>
 ): { note?: string; icon?: string } | undefined => {
   if (!params) return undefined;
@@ -298,7 +299,7 @@ export function PopupPreview(props: {
   };
   documentInfo: {
     id: string;
-    type: BlockName;
+    type: BlockName | BlockAlias;
     params: Record<string, string>;
     isOpenable?: boolean;
   };

@@ -1,4 +1,5 @@
 import {
+  type BlockAlias,
   type BlockName,
   useMaybeBlockId,
   useMaybeBlockName,
@@ -109,7 +110,7 @@ function isAccessible(item: PreviewItem): item is AccessiblePreviewItem {
 
 function InlinePreview(props: {
   item: () => PreviewItem;
-  blockName: BlockName;
+  blockName: BlockName | BlockAlias;
   blockParams: Record<string, string>;
   theme?: EditorThemeClasses;
   collapsed?: boolean;

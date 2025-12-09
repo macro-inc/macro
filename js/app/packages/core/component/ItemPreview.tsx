@@ -1,4 +1,3 @@
-import { BlockAlias } from '@core/block';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isAccessiblePreviewItem, useItemPreview } from '@core/signal/preview';
 import { matches } from '@core/util/match';
@@ -207,7 +206,6 @@ export function ItemPreview(props: ItemPreviewProps) {
                 const itemData = accessibleItem();
                 const fileType = itemData.fileType;
                 const subType = itemData.subType;
-                console.log('#####', { subType });
                 const navHandlers =
                   useSplitNavigationHandler<HTMLButtonElement>((e) =>
                     onPreviewClick(

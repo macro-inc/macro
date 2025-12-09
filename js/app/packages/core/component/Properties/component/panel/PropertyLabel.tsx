@@ -1,4 +1,4 @@
-import { useBlockName } from '@core/block';
+import { useBlockAliasedName } from '@core/block';
 import { IconButton } from '@core/component/IconButton';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import PinIcon from '@icon/regular/push-pin.svg';
@@ -25,7 +25,7 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
     onPropertyUnpinned,
     pinnedPropertyIds,
   } = usePropertiesContext();
-  const blockName = useBlockName();
+  const blockName = useBlockAliasedName();
   const isBuiltin = getBuiltinPropertyIds(blockName).includes(
     props.property.propertyDefinitionId
   );

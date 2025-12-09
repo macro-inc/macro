@@ -8,7 +8,7 @@ import { useIsAuthenticated } from '@core/auth';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { Button } from '@core/component/FormControls/Button';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { BlockOrchestrator } from '@core/orchestrator';
@@ -111,7 +111,7 @@ const PreviewPanelContent: Component<{
   const blockInstance = () =>
     props.orchestrator.createBlockInstance(
       props.selectedEntity.type === 'document'
-        ? fileTypeToBlockName(props.selectedEntity.fileType)
+        ? fileTypeToResolvedBlockName(props.selectedEntity.fileType)
         : props.selectedEntity.type,
       props.selectedEntity.id
     );
