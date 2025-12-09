@@ -8,7 +8,6 @@ import {
   type ThreadStoreData,
   threadsStore,
 } from '@block-channel/signal/threads';
-import { usersTypingSignal } from '@block-channel/signal/typing';
 import type { ThreadViewData } from '@block-channel/type/threadView';
 import { loadDraftMessage } from '@block-channel/utils/draftMessages';
 import {
@@ -18,7 +17,6 @@ import {
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { TextButton } from '@core/component/TextButton';
 import { observedSize } from '@core/directive/observedSize';
-import { createActiveTarget } from '@core/signal/activeTarget';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import SunIcon from '@icon/duotone/sun-horizon-duotone.svg';
 import ArrowDownIcon from '@icon/regular/arrow-down.svg';
@@ -26,6 +24,7 @@ import XIcon from '@icon/regular/x.svg';
 import type { Activity as ChannelActivity } from '@service-comms/generated/models/activity';
 import type { Message } from '@service-comms/generated/models/message';
 import { useUserId } from '@service-gql/client';
+import { debounce } from '@solid-primitives/scheduled';
 import { activeElement } from 'app/signal/focus';
 import {
   type Accessor,
@@ -63,18 +62,14 @@ const LONG_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
 const clampIndex = (value: number, minValue: number, maxValue: number) =>
   Math.min(Math.max(value, minValue), maxValue);
 
+type TargetMessageInfo = { messageId: string; threadId?: string };
+
 export type MessageListProps = {
   channelId: string;
   messages: Message[];
   latestActivity?: ChannelActivity;
   containerRef?: HTMLDivElement;
-  targetMessage: Accessor<
-    | {
-        messageId: string;
-        threadId?: string;
-      }
-    | undefined
-  >;
+  targetMessage: Accessor<TargetMessageInfo | undefined>;
   focusedMessageId: Accessor<string | undefined>;
   setFocusedMessageId: Setter<string | undefined>;
   orderedMessages: Accessor<Message[]>;
@@ -97,8 +92,14 @@ function EmptyMessageList() {
 export function MessageList(props: MessageListProps) {
   const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
   const [virtualHandle, setVirtualHandle] = createSignal<VirtualizerHandle>();
-  const [listContainerRef, setListContainerRef] =
-    createSignal<HTMLDivElement>();
+  let listContainerRef!: HTMLDivElement;
+  const [scrollContainerRef, setScrollContainerRef] = createSignal<
+    HTMLDivElement | undefined
+  >();
+  const [targetIndex, setTargetIndex] = createSignal<number | undefined>();
+  const [targetElement, setTargetElement] = createSignal<
+    HTMLDivElement | undefined
+  >();
   const [scrollHintLabel, setScrollHintLabel] = createSignal<string>();
   const [isScrollHintVisible, setIsScrollHintVisible] = createSignal(false);
   const [newIndicatorShown, setNewIndicatorShown] = createSignal<number>();
@@ -137,16 +138,15 @@ export function MessageList(props: MessageListProps) {
   // race conditions.
   const [lastTargetMessageTimestamp, setLastTargetMessageTimestamp] =
     createSignal<number>(Date.now());
-  createEffect(
-    on(props.targetMessage, () => {
-      setLastTargetMessageTimestamp(Date.now());
-    })
-  );
 
-  const activeTargetMessage = createActiveTarget(
-    props.targetMessage,
-    TARGET_MESSAGE_ACTIVE_TIME
-  );
+  // represents active highlighted state on the target message
+  const [targetMessageActive, setTargetMessageActive] =
+    createSignal<boolean>(false);
+  const activeTargetMessageId = createMemo(() => {
+    if (!targetMessageActive()) return;
+    return untrack(props.targetMessage)?.messageId;
+  });
+  const isActiveTargetMessage = createSelector(activeTargetMessageId);
 
   let scrollTimeoutId: ReturnType<typeof setTimeout> | undefined;
   let scrollHintTimeoutId: ReturnType<typeof setTimeout> | undefined;
@@ -195,53 +195,73 @@ export function MessageList(props: MessageListProps) {
    * @param params.onlyBottom - skip all targetMessage bases logic.
    * @returns
    */
-  const scrollToBottomOrTarget = (params?: {
-    forceBottom?: boolean;
-    onlyBottom?: boolean;
-  }) => {
-    const { forceBottom } = params || { forceBottom: false };
-    const timeStamp = Date.now();
-    const delta = timeStamp - untrack(lastTargetMessageTimestamp);
-    const target = props.targetMessage();
+  const scrollToBottomOrTarget = debounce(
+    (params?: { forceBottom?: boolean; onlyBottom?: boolean }) => {
+      const { forceBottom } = params || { forceBottom: false };
+      const timeStamp = Date.now();
+      const delta = timeStamp - lastTargetMessageTimestamp();
+      const target = props.targetMessage();
 
-    if (
-      (!target || delta > TARGET_MESSAGE_ACTIVE_TIME) &&
-      (isNearBottom() || forceBottom)
-    ) {
-      if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
-      virtualHandle()?.scrollToIndex(
-        (props.orderedMessages()?.length ?? 1) - 1,
-        {
-          align: 'end',
-        }
-      );
-      return;
-    }
-    if (params?.onlyBottom) return;
-
-    const { messageId: targetMessageId, threadId } = target || {};
-
-    // If we have a target message, scroll to it and focus it
-    if (targetMessageId) {
-      const index = props
-        .orderedMessages()
-        ?.findIndex((m) => m.id === targetMessageId);
-
-      if (index >= 0) {
-        if (threadId) {
-          setThreadViewStore(threadId, (prev) => ({
-            ...prev,
-            threadExpanded: true,
-          }));
-        }
+      if (
+        (!target || delta > TARGET_MESSAGE_ACTIVE_TIME) &&
+        (isNearBottom() || forceBottom)
+      ) {
         if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
-        virtualHandle()?.scrollToIndex(index, {
-          align: 'center',
+        const lastIndex = props.orderedMessages().length - 1;
+        virtualHandle()?.scrollToIndex(lastIndex, {
+          align: 'end',
         });
+        setTargetIndex(lastIndex);
         return;
       }
-    }
-  };
+      if (params?.onlyBottom) return;
+
+      const { messageId: targetMessageId, threadId } = target || {};
+
+      // If we have a target message, scroll to it and focus it
+      if (targetMessageId) {
+        const index = props
+          .orderedMessages()
+          ?.findIndex((m) => m.id === targetMessageId);
+
+        if (index >= 0) {
+          if (threadId) {
+            setThreadViewStore(threadId, (prev) => ({
+              ...prev,
+              threadExpanded: true,
+            }));
+          }
+          if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
+          virtualHandle()?.scrollToIndex(index, {
+            align: 'center',
+          });
+          setTargetIndex(index);
+          return;
+        }
+      }
+    },
+    5
+  );
+
+  // NOTE: this is a hack to make sure the target message/bottom of the list is correctly scrolled into view
+  // we need to ideally fix how the virtualizer handles image preview loading as its internal scroll position is not correct
+  createEffect(() => {
+    const el = targetElement();
+    if (!el) return;
+
+    setTargetMessageActive(true);
+    setTargetIndex(undefined);
+
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        el.scrollIntoView();
+
+        setTimeout(() => {
+          setTargetMessageActive(false);
+        }, TARGET_MESSAGE_ACTIVE_TIME);
+      });
+    });
+  });
 
   /**
    * Track context for messages as they are rendered in the list
@@ -493,51 +513,41 @@ export function MessageList(props: MessageListProps) {
     })
   );
 
+  // TODO: do we want this?
   // Scroll to the bottom on new typing updates
-  createEffect(
-    on(usersTypingSignal.get, () => {
-      if (isNearBottom()) {
-        virtualHandle()?.scrollToIndex(props.orderedMessages()?.length - 1, {
-          align: 'end',
-        });
-      }
-    })
-  );
+  // createEffect(
+  //   on(usersTypingSignal.get, (typing) => {
+  //     if (isNearBottom()) {
+  //       virtualHandle()?.scrollToIndex(props.orderedMessages()?.length - 1, {
+  //         align: 'end',
+  //       });
+  //     }
+  //   })
+  // );
 
   const [size, setSize] = createSignal<DOMRect>();
   const [initialized, setInitialized] = createSignal(false);
 
-  // Mark the scroll container with data attribute after VList mounts
-  createEffect(() => {
-    const container = listContainerRef();
-    const handle = virtualHandle();
-    if (!container || !handle) return;
-
-    // Use requestAnimationFrame to ensure VList has rendered
-    requestAnimationFrame(() => {
-      // Find the scroll container by looking for the element with overflow-y: scroll
-      const allElements = container.querySelectorAll('*');
-      for (const el of allElements) {
-        const styles = window.getComputedStyle(el);
-        if (styles.overflowY === 'scroll' || styles.overflowY === 'auto') {
-          (el as HTMLElement).setAttribute('data-channel-message-list', '');
-          break;
-        }
-      }
-    });
-  });
-
   // scroll to bottom on size change, if the user is near the bottom
   createEffect(
-    on(virtualHandle, () => {
-      scrollToBottomOrTarget({ forceBottom: true });
+    on(virtualHandle, (handle) => {
+      if (!handle) return;
+
+      const scrollContainer = listContainerRef.querySelector(
+        '[data-channel-message-list]'
+      ) as HTMLDivElement | null;
+      setScrollContainerRef(scrollContainer ?? undefined);
+
+      scrollToBottomOrTarget({
+        forceBottom: true,
+      });
     })
   );
 
-  // scroll to bottom (if near) or target on size change, new messages, or
-  // target change.
   createEffect(
-    on([size, props.orderedMessages, props.targetMessage], () => {
+    on(props.targetMessage, (target) => {
+      if (!target) return;
+      setLastTargetMessageTimestamp(Date.now());
       scrollToBottomOrTarget();
     })
   );
@@ -608,7 +618,7 @@ export function MessageList(props: MessageListProps) {
     >
       <div
         class="flex flex-col h-full relative"
-        ref={setListContainerRef}
+        ref={listContainerRef}
         onWheel={markUserScrolled}
         onTouchMove={markUserScrolled}
         onPointerDown={markUserScrolled}
@@ -622,7 +632,7 @@ export function MessageList(props: MessageListProps) {
             <VList
               ref={setVirtualHandle}
               style={{
-                height: `${size()!.height}px`,
+                height: `${size()?.height ?? 0}px`,
                 'padding-top': '10px',
                 contain: 'none',
                 'overflow-x': 'hidden',
@@ -641,7 +651,9 @@ export function MessageList(props: MessageListProps) {
               }}
             >
               {(row: { id: string; message: Message }, i) => {
-                const isParentless = !row.message.thread_id;
+                const [messageContainerRef, setMessageContainerRef] =
+                  createSignal<HTMLDivElement | undefined>();
+                const isParentless = () => !row.message.thread_id;
                 const isThreadExpanded = createMemo(
                   () =>
                     threadViewStore[row.message.thread_id ?? '']?.threadExpanded
@@ -652,10 +664,15 @@ export function MessageList(props: MessageListProps) {
                     messageListContext[row.id].threadIndex <=
                       COLLAPSED_THREAD_INDEX_CUTOFF
                 );
+                createEffect(() => {
+                  if (i() === targetIndex()) {
+                    setTargetElement(messageContainerRef());
+                  }
+                });
                 return (
                   <Show
                     when={
-                      isParentless ||
+                      isParentless() ||
                       isThreadExpanded() ||
                       isThreadIndexWithinCutoff()
                     }
@@ -685,8 +702,9 @@ export function MessageList(props: MessageListProps) {
                       virtualHandle={virtualHandle()!}
                       container={containerRef()}
                       listContext={messageListContext[row.id]}
-                      targetMessageId={activeTargetMessage()?.messageId}
                       setLastMessageRef={props.setLastMessageRef}
+                      setMessageContainerRef={setMessageContainerRef}
+                      isTarget={isActiveTargetMessage(row.message.id)}
                     />
                   </Show>
                 );
@@ -730,41 +748,7 @@ export function MessageList(props: MessageListProps) {
           />
         </Show>
         <CustomScrollbar
-          scrollContainer={() => {
-            // Track the same readiness conditions as the virtualized list
-            const hasInitialized = initialized();
-            const viewport = size();
-            const hasMessages = props.messages.length > 0;
-            if (!hasInitialized || !viewport || !hasMessages) {
-              return undefined;
-            }
-
-            // Find the actual scroll container (VList creates its own scroll container)
-            const container = listContainerRef();
-            if (!container) return undefined;
-
-            // First try to find by data attribute
-            let scrollContainer = container.querySelector(
-              '[data-channel-message-list]'
-            ) as HTMLElement | null;
-
-            // Fallback: find the element with overflow-y: scroll style
-            if (!scrollContainer) {
-              const allElements = container.querySelectorAll<HTMLElement>('*');
-              for (const el of allElements) {
-                const styles = window.getComputedStyle(el);
-                if (
-                  styles.overflowY === 'scroll' ||
-                  styles.overflowY === 'auto'
-                ) {
-                  scrollContainer = el;
-                  break;
-                }
-              }
-            }
-
-            return scrollContainer || undefined;
-          }}
+          scrollContainer={scrollContainerRef}
           label={scrollHintLabel()}
           showLabel={isScrollHintVisible()}
           enabled={hasUserScrolled()}
