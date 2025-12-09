@@ -5,6 +5,7 @@ import {
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
+import { BlockAliasContext } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { Button } from '@core/component/FormControls/Button';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
@@ -23,6 +24,7 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { Tabs } from '@kobalte/core/tabs';
 import type { EntityData } from '@macro-entity';
 import {
+  isTaskEntity,
   queryKeys,
   useQueryClient as useEntityQueryClient,
 } from '@macro-entity';
@@ -108,13 +110,21 @@ const PreviewPanelContent: Component<{
   orchestrator: BlockOrchestrator;
   splitPanelContext: SplitPanelContextType;
 }> = (props) => {
-  const blockInstance = () =>
-    props.orchestrator.createBlockInstance(
+  const blockInstance = () => {
+    const aliasContext = isTaskEntity(props.selectedEntity)
+      ? ({
+          alias: 'task',
+          baseType: 'md',
+        } as BlockAliasContext)
+      : undefined;
+    return props.orchestrator.createBlockInstance(
       props.selectedEntity.type === 'document'
         ? fileTypeToResolvedBlockName(props.selectedEntity.fileType)
         : props.selectedEntity.type,
-      props.selectedEntity.id
+      props.selectedEntity.id,
+      { aliasContext }
     );
+  };
   const [interactedWith, setInteractedWith] = createSignal(false);
 
   createRenderEffect((prevId: string) => {

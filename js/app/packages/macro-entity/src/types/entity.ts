@@ -50,17 +50,16 @@ export type TaskEntity = EntityBase & {
   projectId?: string;
 };
 
-export type MarkdownNoteEntity = EntityBase & {
+export type MarkdownEntity = EntityBase & {
   type: 'document';
   fileType: 'md';
-  subType?: undefined | null;
+  subType?: null;
   projectId?: string;
 };
 
-export type DocumentEntity =
-  | BaseDocumentEntity
-  | TaskEntity
-  | MarkdownNoteEntity;
+export type DocumentEntity = BaseDocumentEntity | MarkdownEntity;
+
+export type NamedSubType = 'task';
 
 export const getEntityProjectId = (e: EntityData): string | false => {
   if (e.type === 'project') {
@@ -95,6 +94,7 @@ export type EntityData =
   | ChannelEntity
   | ChatEntity
   | DocumentEntity
+  | TaskEntity
   | EmailEntity
   | ProjectEntity;
 
@@ -118,15 +118,17 @@ export const isTaskEntity = (entity: EntityData): entity is TaskEntity => {
   );
 };
 
-export const isMarkdownNoteEntity = (
+export const isMarkdownEntity = (
   entity: EntityData
-): entity is MarkdownNoteEntity => {
+): entity is MarkdownEntity => {
   return (
     entity.type === 'document' && entity.fileType === 'md' && !entity.subType
   );
 };
 
 export type EntityType = EntityData['type'];
+
+export type ExpandedEntityType = EntityType | NamedSubType;
 
 export type EntityOf<K extends EntityType> = Extract<EntityData, { type: K }>;
 

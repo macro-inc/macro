@@ -660,8 +660,11 @@ export function createNavigationEntityListShortcut({
   const openEntity = (entity: EntityData) => {
     const { type, id } = entity;
     if (type === 'document') {
-      const { fileType } = entity;
-      splitHandle.replace({ type: fileTypeToBlockName(fileType), id });
+      const { fileType, subType } = entity;
+      splitHandle.replace({
+        type: fileTypeToBlockName(subType ?? fileType),
+        id,
+      });
     } else {
       splitHandle.replace({ type, id });
     }
