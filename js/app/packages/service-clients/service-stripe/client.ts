@@ -2,7 +2,7 @@ import { ENABLE_BEARER_TOKEN_AUTH } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { registerClient } from '@core/util/mockClient';
 import { getAccessToken } from '@service-auth/client';
-import { LegacyApiRpcClient } from '../codegen/auth_service/auth_service_rpc';
+import { LegacyApiRpcClient } from '../../codegen/auth_service/auth_service_rpc';
 
 // Create a singleton instance of the RPC client
 let rpcClientInstance: LegacyApiRpcClient | null = null;

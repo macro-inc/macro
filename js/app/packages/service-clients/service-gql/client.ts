@@ -7,7 +7,7 @@ import { getAccessToken } from '@service-auth/client';
 import { createSingletonRoot } from '@solid-primitives/rootless';
 import { makePersisted } from '@solid-primitives/storage';
 import { createMemo, createResource, createSignal } from 'solid-js';
-import { LegacyApiRpcClient } from '../codegen/auth_service/auth_service_rpc';
+import { LegacyApiRpcClient } from '../../codegen/auth_service/auth_service_rpc';
 
 // Create a singleton instance of the RPC client
 let rpcClientInstance: LegacyApiRpcClient | null = null;

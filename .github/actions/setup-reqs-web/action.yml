@@ -23,6 +23,10 @@ runs:
       shell: bash
       run: curl https://rustwasm.github.io/wasm-pack/installer/init.sh -sSf | sh
 
+    - name: Install just
+      shell: bash
+      run: cargo install just
+
     - name: Build auth_service_rpc WASM
       shell: bash
       working-directory: rust/cloud-storage/rpc-interface/auth_service
