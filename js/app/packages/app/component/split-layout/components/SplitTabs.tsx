@@ -1,6 +1,9 @@
 import { playSound } from '@app/util/sound';
+import { getIconConfig } from '@core/component/EntityIcon';
 import type { ViewId } from '@core/types/view';
 import { Tabs } from '@kobalte/core';
+import WideNoise from '@macro-icons/wide/noise.svg';
+import WideSignal from '@macro-icons/wide/signal.svg';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
@@ -11,7 +14,9 @@ import {
   type JSXElement,
   onMount,
   type Setter,
+  Show,
 } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { useSplitPanelOrThrow } from '../layoutUtils';
 
 // NOTE: unused since everything should already be correctly cased
@@ -23,6 +28,27 @@ const _titleCase = (str: string) => {
 };
 
 const SCROLL_THRESHOLD = 10;
+
+const VIEW_ICONS: Partial<
+  Record<ViewId, ReturnType<typeof getIconConfig>['icon']>
+> = {
+  signal: WideSignal,
+  noise: WideNoise,
+  people: getIconConfig('directMessage').icon,
+  groups: getIconConfig('channel').icon,
+  ai_chats: getIconConfig('chat').icon,
+  notes: getIconConfig('md').icon,
+  emails: getIconConfig('email').icon,
+  files: getIconConfig('write').icon,
+  folders: getIconConfig('project').icon,
+};
+
+const TabSeparator = () => (
+  <div class="relative shrink-0 w-3 h-full flex items-center justify-center pointer-events-none">
+    <div class="relative w-px h-2/3 bg-gradient-to-b from-transparent via-edge-muted/80 to-transparent" />
+    <div class="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 size-1 rounded-full bg-edge-muted/60" />
+  </div>
+);
 
 export function SplitTabs(props: {
   // values: readonly View[];
@@ -135,16 +161,21 @@ export function SplitTabs(props: {
         />
 
         <For each={props.list}>
-          {({ value, label }, i) => {
+          {({ value, label }) => {
             const isActive = createMemo(() => value === props.active());
+            const icon = VIEW_ICONS[value];
+            const isAll = value === 'all';
+            const isSignalOrNoise = value === 'signal' || value === 'noise';
 
             let ref: HTMLDivElement | undefined;
             createEffect(() => {
               panelWidth(); // react on width to not clip active tab.
               if (isActive() && ref) {
-                ref.scrollIntoView({
-                  inline: 'end',
-                });
+                setTimeout(() => {
+                  ref.scrollIntoView({
+                    inline: 'end',
+                  });
+                }, 0);
                 // Update indicator position and clip indicators
                 updateIndicatorPosition(ref);
                 setTimeout(updateClipIndicators, 0);
@@ -157,29 +188,46 @@ export function SplitTabs(props: {
               }
             });
 
+            const showLabel = () => isSignalOrNoise || isActive() || isAll;
+
             return (
-              <Tabs.Trigger
-                value={value}
-                ref={ref}
-                tabIndex={-1}
-                class="min-w-12 max-w-[40cqw] shrink-0 text-sm relative h-full flex items-center px-2"
-                classList={{
-                  'z-1 text-accent text-glow-sm': isActive(),
-                  'text-ink-disabled hover:text-accent/70 hover-transition-text':
-                    !isActive(),
-                }}
-              >
-                <span class="flex items-baseline gap-1 w-full">
-                  <span class="text-xs font-mono opacity-70 mr-0.5">
-                    {(i() + 1).toString()}
-                  </span>
-                  <span class="truncate">{label}</span>
-                </span>
-                {/* <Show when={isActive()}>
-                  <BrightJoins dots={[true, true, true, true]} />
-                </Show> */}
-                {props.contextMenu?.({ label, value })}
-              </Tabs.Trigger>
+              <>
+                <Show when={value === 'people'}>
+                  <TabSeparator />
+                </Show>
+
+                <Tabs.Trigger
+                  value={value}
+                  ref={ref}
+                  tabIndex={-1}
+                  class="group shrink-0 text-sm relative h-full flex items-center font-mono uppercase px-2"
+                  classList={{
+                    'z-1 text-accent text-glow': isActive(),
+                    'text-ink-disabled hover:text-accent/70 hover-transition-text':
+                      !isActive(),
+                  }}
+                >
+                  <div class="flex items-center gap-2 w-full">
+                    <Show when={icon}>
+                      <Dynamic
+                        component={icon}
+                        class="size-5 shrink-0 transition-colors"
+                        classList={{
+                          'text-accent': isActive(),
+                          'text-ink-disabled group-hover:text-accent/70':
+                            !isActive(),
+                        }}
+                      />
+                    </Show>
+                    <Show when={showLabel()}>
+                      <span class="truncate text-xs font-mono uppercase">
+                        {label}
+                      </span>
+                    </Show>
+                  </div>
+                  {props.contextMenu?.({ label, value })}
+                </Tabs.Trigger>
+              </>
             );
           }}
         </For>

@@ -6,7 +6,6 @@ import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as EMAIL_PARAMS } from '@block-email/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
-import { Button } from '@core/component/FormControls/Button';
 import DropdownMenu from '@core/component/FormControls/DropdownMenu';
 import { SegmentedControl } from '@core/component/FormControls/SegmentControls';
 import { ToggleButton } from '@core/component/FormControls/ToggleButton';
@@ -14,15 +13,11 @@ import { ToggleSwitch } from '@core/component/FormControls/ToggleSwitch';
 import { IconButton } from '@core/component/IconButton';
 import { ContextMenuContent, MenuSeparator } from '@core/component/Menu';
 import { getSuggestedProperties } from '@core/component/Properties/utils';
-import { RecipientSelector } from '@core/component/RecipientSelector';
 import {
   blockAcceptsFileExtension,
   fileTypeToBlockName,
 } from '@core/constant/allBlocks';
-import {
-  ENABLE_PROPERTY_DISPLAY_CONTROL,
-  ENABLE_SOUP_FROM_FILTER,
-} from '@core/constant/featureFlags';
+import { ENABLE_PROPERTY_DISPLAY_CONTROL } from '@core/constant/featureFlags';
 import { useEmailLinksStatus } from '@core/email-link';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -70,6 +65,8 @@ import {
   type UnifiedNotification,
   useNotificationsForEntity,
 } from '@notifications';
+import CircleIcon from '@phosphor-icons/core/regular/circle.svg?component-solid';
+import SlidersHorizontalIcon from '@phosphor-icons/core/regular/sliders-horizontal.svg?component-solid';
 import type { PaginatedSearchArgs } from '@service-search/client';
 import type {
   ChannelFilters,
@@ -121,10 +118,7 @@ import { EntityModal } from './EntityModal/EntityModal';
 import { EntitySelectionToolbarModal } from './EntitySelectionToolbarModal';
 import { PropertyDisplayControl } from './PropertyDisplayControl';
 import { useUpsertSavedViewMutation } from './Soup';
-import {
-  SplitToolbarLeft,
-  SplitToolbarRight,
-} from './split-layout/components/SplitToolbar';
+import { SplitHeaderRight } from './split-layout/components/SplitHeader';
 import { useSplitLayout } from './split-layout/layout';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { EmptyState } from './UnifiedListEmptyState';
@@ -331,7 +325,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     () =>
       view()?.filters?.importantFilter ?? defaultFilterOptions.importantFilter
   );
-  const setImportantFilter = (importantFilter: boolean) => {
+  const _setImportantFilter = (importantFilter: boolean) => {
     setViewDataStore(
       selectedView(),
       'filters',
@@ -1211,184 +1205,28 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   return (
     <>
       <Show when={!props.hideToolbar}>
-        <SearchBar
-          isLoading={isSearchLoading}
-          setIsLoading={setIsSearchLoading}
-        />
-        <SplitToolbarRight order={5}>
+        <SplitHeaderRight order={5}>
           <div class="flex flex-row items-center gap-1 p-1 h-full select-none">
-            <Show when={isViewConfigChanged()}>
-              <Show when={preview()}>
-                <DropdownMenu
-                  size="SM"
-                  theme="secondary"
-                  triggerLabel={<span class="font-extrabold">⋮</span>}
-                >
-                  <div class="flex flex-col gap-2 p-2">
-                    <Button
-                      size="SM"
-                      classList={{
-                        '!border-ink/25 !text-ink !bg-panel hover:!text-ink font-normal': true,
-                      }}
-                      onClick={onClickResetViewConfigChanges}
-                    >
-                      CLEAR
-                    </Button>
-                    <Button
-                      size="SM"
-                      classList={{
-                        '!border-ink/25 !text-ink !bg-panel hover:!text-ink font-normal': true,
-                      }}
-                      onClick={onClickSaveViewConfigChanges}
-                    >
-                      SAVE CHANGES
-                    </Button>
-                  </div>
-                </DropdownMenu>
-              </Show>
-              <Show when={!preview()}>
-                <Button
-                  size="SM"
-                  classList={{
-                    '!border-ink/25 !text-ink !bg-panel hover:!text-ink ml-1.5 font-normal': true,
-                  }}
-                  onClick={onClickResetViewConfigChanges}
-                >
-                  CLEAR
-                </Button>
-                <Button
-                  size="SM"
-                  classList={{
-                    '!border-ink/25 !text-ink !bg-panel hover:!text-ink mx-1.5 font-normal': true,
-                  }}
-                  onClick={onClickSaveViewConfigChanges}
-                >
-                  SAVE CHANGES
-                </Button>
-              </Show>
-            </Show>
+            <SearchBar
+              isLoading={isSearchLoading}
+              setIsLoading={setIsSearchLoading}
+            />
+            <IconButton
+              size="sm"
+              icon={CircleIcon}
+              theme={notificationFilter() === 'unread' ? 'accent' : 'current'}
+              tooltip={{ label: 'Toggle unread filter' }}
+              onClick={() => {
+                setNotificationFilter(
+                  notificationFilter() === 'unread' ? 'all' : 'unread'
+                );
+              }}
+            />
             <DropdownMenu
               size="SM"
-              theme="primary"
-              triggerLabel={<StyledTriggerLabel>Filter</StyledTriggerLabel>}
-            >
-              <div class="min-w-[10vw] max-w-md">
-                <div class="grid divide-y divide-edge">
-                  <section class="gap-1 grid p-2">
-                    <ToggleSwitch
-                      size="SM"
-                      label="Important"
-                      checked={importantFilter()}
-                      onChange={setImportantFilter}
-                    />
-                    <SegmentedControl
-                      size="SM"
-                      label="Show"
-                      list={[
-                        { value: 'all', label: 'All' },
-                        { value: 'unread', label: 'Unread' },
-                        { value: 'notDone', label: 'Not Done' },
-                      ]}
-                      value={notificationFilter()}
-                      onChange={setNotificationFilter}
-                    />
-                  </section>
-                  <section class="gap-1 p-2">
-                    <span class="font-medium text-xs">Type</span>
-                    <div class="flex flex-row flex-wrap items-center gap-1">
-                      <EntityTypeToggle
-                        filter={entityTypeFilter}
-                        setFilter={setEntityTypeFilter}
-                        setFileTypeFilter={setFileTypeFilter}
-                        type="document"
-                      />
-                      <EntityTypeToggle
-                        filter={entityTypeFilter}
-                        setFilter={setEntityTypeFilter}
-                        type="chat"
-                      />
-                      <EntityTypeToggle
-                        filter={entityTypeFilter}
-                        setFilter={setEntityTypeFilter}
-                        type="channel"
-                      />
-                      <EntityTypeToggle
-                        filter={entityTypeFilter}
-                        setFilter={setEntityTypeFilter}
-                        type="email"
-                      />
-                      <EntityTypeToggle
-                        filter={entityTypeFilter}
-                        setFilter={setEntityTypeFilter}
-                        type="project"
-                      />
-                    </div>
-                  </section>
-                  <section class="gap-1 p-2">
-                    <span class="font-medium text-xs">Filetype</span>
-                    <div class="flex flex-row flex-wrap items-center gap-1">
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('md')}
-                        onChange={() => toggleFileTypeFilter('md')}
-                      >
-                        NOTE
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('pdf')}
-                        onChange={() => toggleFileTypeFilter('pdf')}
-                      >
-                        PDF
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('canvas')}
-                        onChange={() => toggleFileTypeFilter('canvas')}
-                      >
-                        CANVAS
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('code')}
-                        onChange={() => toggleFileTypeFilter('code')}
-                      >
-                        CODE
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('image')}
-                        onChange={() => toggleFileTypeFilter('image')}
-                      >
-                        IMAGE
-                      </ToggleButton>
-                      <ToggleButton
-                        size="SM"
-                        pressed={fileTypeFilter().includes('unknown')}
-                        onChange={() => toggleFileTypeFilter('unknown')}
-                      >
-                        Other
-                      </ToggleButton>
-                    </div>
-                  </section>
-                  <Show when={ENABLE_SOUP_FROM_FILTER && showFromFilter()}>
-                    <section class="gap-1 p-2">
-                      <span class="font-medium text-xs">From</span>
-                      <RecipientSelector<'user' | 'contact'>
-                        options={emailRecipientOptions}
-                        selectedOptions={fromFilterUsers}
-                        setSelectedOptions={setFromFilterUsers}
-                        placeholder="Filter by user..."
-                        includeSelf
-                      />
-                    </section>
-                  </Show>
-                </div>
-              </div>
-            </DropdownMenu>
-            <DropdownMenu
-              size="SM"
-              triggerLabel={<StyledTriggerLabel>Display</StyledTriggerLabel>}
+              theme="secondary"
+              hideBorder
+              triggerLabel={<SlidersHorizontalIcon class="w-3.5 h-3.5" />}
             >
               <div class="min-w-[10vw] max-w-md">
                 <div class="grid divide-y divide-edge">
@@ -1432,7 +1270,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               </div>
             </DropdownMenu>
           </div>
-        </SplitToolbarRight>
+        </SplitHeaderRight>
       </Show>
       <ContextMenu
         forceMount={contextAndModalState.contextMenuOpen}
@@ -1860,7 +1698,7 @@ function SearchBar(props: {
 
   onMount(() => {
     const { dispose } = registerHotkey({
-      hotkey: ['/'],
+      hotkey: ['cmd+f'],
       scopeId: splitContext.splitHotkeyScope,
       description: 'Search in current view',
       hotkeyToken: TOKENS.soup.openSearch,
@@ -1881,52 +1719,50 @@ function SearchBar(props: {
   });
 
   return (
-    <SplitToolbarLeft>
-      <div class="flex ml-2 h-full items-center gap-1">
-        <Show
-          when={!props.isLoading() || !searchText()}
-          fallback={
-            <LoadingSpinner class="w-4 h-4 text-ink-muted animate-spin shrink-0" />
+    <div class="flex items-center gap-1 rounded-sm border border-edge-muted bg-input px-2 h-6">
+      <Show
+        when={!props.isLoading() || !searchText()}
+        fallback={
+          <LoadingSpinner class="w-4 h-4 text-ink-muted animate-spin shrink-0" />
+        }
+      >
+        <SearchIcon class="w-4 h-4 text-ink-muted shrink-0" />
+      </Show>
+      <input
+        ref={inputRef}
+        id={`search-input-${splitContext.handle.id}-${selectedView()}`}
+        placeholder={`Search in ${viewName()}`}
+        value={searchText()}
+        onInput={(e) => {
+          setSearchText(e.target.value);
+        }}
+        onKeyDown={(e) => {
+          if (
+            e.key === 'Escape' ||
+            e.key === 'ArrowDown' ||
+            e.key === 'Enter'
+          ) {
+            e.preventDefault();
+            e.currentTarget.blur();
+            focusFirstEntity();
           }
-        >
-          <SearchIcon class="w-4 h-4 text-ink-muted shrink-0" />
-        </Show>
-        <input
-          ref={inputRef}
-          id={`search-input-${splitContext.handle.id}-${selectedView()}`}
-          placeholder={`Search in ${viewName()}`}
-          value={searchText()}
-          onInput={(e) => {
-            setSearchText(e.target.value);
+        }}
+        class="p-1 pr-0 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 flex-1 text-ink text-sm truncate bg-transparent"
+      />
+      <Show when={searchText()}>
+        <IconButton
+          theme="clear"
+          size="sm"
+          tooltip={{ label: 'Clear search' }}
+          icon={XIcon}
+          onClick={() => {
+            setSearchText('');
+            setTimeout(() => {
+              inputRef?.focus();
+            }, 0);
           }}
-          onKeyDown={(e) => {
-            if (
-              e.key === 'Escape' ||
-              e.key === 'ArrowDown' ||
-              e.key === 'Enter'
-            ) {
-              e.preventDefault();
-              e.currentTarget.blur();
-              focusFirstEntity();
-            }
-          }}
-          class="p-1 pr-0 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 flex-1 text-ink text-sm truncate"
         />
-        <Show when={searchText()}>
-          <IconButton
-            theme="clear"
-            size="sm"
-            tooltip={{ label: 'Clear search' }}
-            icon={XIcon}
-            onClick={() => {
-              setSearchText('');
-              setTimeout(() => {
-                inputRef?.focus();
-              }, 0);
-            }}
-          />
-        </Show>
-      </div>
-    </SplitToolbarLeft>
+      </Show>
+    </div>
   );
 }

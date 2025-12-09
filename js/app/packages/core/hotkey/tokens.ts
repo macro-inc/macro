@@ -2,6 +2,7 @@ export const TOKENS = {
   // soup
   soup: {
     openSearch: 'soup.openSearch',
+    switchToSearch: 'soup.switchToSearch',
   },
 
   // unified list

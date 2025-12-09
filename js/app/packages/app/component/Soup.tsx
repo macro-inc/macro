@@ -6,7 +6,6 @@ import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
-import { Button } from '@core/component/FormControls/Button';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
@@ -55,11 +54,7 @@ import type { SplitPanelContextType } from './split-layout/context';
 import { SplitPanelContext } from './split-layout/context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 import { UnifiedListView } from './UnifiedListView';
-import {
-  VIEWCONFIG_BASE,
-  VIEWCONFIG_DEFAULTS_IDS,
-  type ViewConfigBase,
-} from './ViewConfig';
+import { VIEWCONFIG_DEFAULTS_IDS, type ViewConfigBase } from './ViewConfig';
 
 false && fileFolderDrop;
 
@@ -237,6 +232,24 @@ export function Soup() {
   });
 
   registerHotkey({
+    hotkey: ['/'],
+    scopeId: splitHotkeyScope,
+    hotkeyToken: TOKENS.soup.switchToSearch,
+    description: 'Search',
+    keyDownHandler: () => {
+      setSelectedView('all');
+      setTimeout(() => {
+        const searchInput = document.getElementById(
+          `search-input-${handle.id}-all`
+        ) as HTMLInputElement;
+        searchInput?.focus();
+      }, 0);
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
     hotkey: ['p'],
     scopeId: splitHotkeyScope,
     description: 'Toggle Preview',
@@ -392,24 +405,6 @@ export function Soup() {
                 contextMenu={({ value, label }) => (
                   <TabContextMenu value={value} label={label} />
                 )}
-                newButton={
-                  <div class="flex items-center px-2 h-full">
-                    <Button
-                      size="Base"
-                      classList={{
-                        '!border-transparent hover:!border-ink/50 px-1 !text-ink !bg-panel font-medium': true,
-                      }}
-                      onClick={() => {
-                        saveViewMutation.mutate({
-                          name: 'New View',
-                          config: VIEWCONFIG_BASE,
-                        });
-                      }}
-                    >
-                      +
-                    </Button>
-                  </div>
-                }
               />
             </SplitHeaderLeft>
             <For each={Object.keys(viewsData)}>
