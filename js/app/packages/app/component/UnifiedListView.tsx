@@ -814,6 +814,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           entityTypeFilter().includes('chat') || entityTypeFilter().length === 0
             ? []
             : [GARBAGE_UUID],
+        project_ids: view().viewType === 'project' ? [view().id] : [],
       },
       email_filters: {
         recipients:
