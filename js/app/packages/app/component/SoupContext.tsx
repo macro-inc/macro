@@ -451,6 +451,8 @@ export function createNavigationEntityListShortcut({
     {
       testEnabled: (entity) => {
         if (entity.type === 'channel') {
+          if (entity.channelType === 'direct_message') return false;
+
           const currentUserId = userId();
           if (!currentUserId) return false;
 
@@ -476,13 +478,8 @@ export function createNavigationEntityListShortcut({
                 return true;
               }
             }
-          } catch (err) {
-            // ChannelsContext might not be available in all contexts
-            // Fall back to owner check only
-            console.warn(
-              'Could not access ChannelsContext for permission check',
-              err
-            );
+          } catch (_err) {
+            return false;
           }
 
           return false;
