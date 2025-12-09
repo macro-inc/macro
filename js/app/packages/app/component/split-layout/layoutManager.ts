@@ -1,5 +1,6 @@
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockAliasContext, BlockName } from '@core/block';
 import type { ResizeZoneCtx } from '@core/component/Resize/types';
+import { isBlockAlias, resolveBlockAlias } from '@core/constant/allBlocks';
 import type {
   BlockInstanceHandle,
   BlockOrchestrator,
@@ -22,14 +23,31 @@ import { createHistory, type History } from './history';
 const ENABLE_DEFAULT_ALWAYS_IN_HISTORY = true;
 
 export type SplitId = string & { readonly SplitId: unique symbol };
-type SplitKey = `${BlockName | 'component'}:${string}`;
+type SplitKey = `${BlockName | BlockAlias | 'component'}:${string}`;
 
 export type SplitContent =
-  | { type: BlockName; id: string; params?: Record<string, string> }
-  | { type: 'component'; id: string; params?: Record<string, string> };
+  | {
+      type: BlockName | BlockAlias;
+      id: string;
+      params?: Record<string, string>;
+      aliasContext?: BlockAliasContext;
+    }
+  | {
+      type: 'component';
+      id: string;
+      params?: Record<string, string>;
+    };
+
+export type SplitContentType = SplitContent['type'];
 
 function sameContent(a: SplitContent, b: SplitContent): boolean {
   return a.type === b.type && a.id === b.id;
+}
+
+function getAliasOrType(content: SplitContent): string {
+  return content.type === 'component'
+    ? content.type
+    : content.aliasContext?.alias || content.type;
 }
 
 function keyOfSplitContent(s: SplitContent): SplitKey {
@@ -46,6 +64,7 @@ type BlockMount = {
   id: string;
   handle: BlockInstanceHandle;
   element: ElementFn;
+  aliasContext?: BlockAliasContext;
 };
 
 type ComponentMount = {
@@ -110,6 +129,25 @@ export type SplitEventWithType =
       type: SplitEvent.ReturnFocus;
     } & SplitEventPayload[SplitEvent.ReturnFocus]);
 
+/**
+ * If a split layout helper passes and aliased block type, make sure to wrap
+ * that with the alias info.
+ * @param content
+ * @returns
+ */
+function attachAliasContext(content: SplitContent): SplitContent {
+  if (content.type !== 'component' && isBlockAlias(content.type)) {
+    return {
+      ...content,
+      aliasContext: {
+        alias: content.type,
+        baseType: resolveBlockAlias(content.type),
+      },
+    };
+  }
+  return content;
+}
+
 export type SplitManager = {
   readonly splits: Accessor<ReadonlyArray<SplitState>>;
   readonly activeSplitId: Accessor<SplitId | undefined>;
@@ -150,7 +188,7 @@ export type SplitManager = {
   reconcile: (splits: SplitContent[]) => void;
 
   /** Check if a split exists by its split id */
-  hasSplit: (type: BlockName | 'component', id: string) => boolean;
+  hasSplit: (type: SplitContentType, id: string) => boolean;
 
   /** Get a potential split id by its content type and id */
   getSplitByContent: {
@@ -158,7 +196,7 @@ export type SplitManager = {
       type: 'component',
       id: K
     ): SplitHandle<ComponentMetaMap[K]> | undefined;
-    (type: BlockName | 'component', id: string): SplitHandle | undefined;
+    (type: SplitContentType, id: string): SplitHandle | undefined;
   };
 
   /** Get a reactive string that is the display name of the active split. */
@@ -229,7 +267,10 @@ function createPinnedMount(
     };
   }
 
-  const handle = orchestrator.createBlockInstance(content.type, content.id);
+  const blockType = resolveBlockAlias(content.type);
+  const handle = orchestrator.createBlockInstance(blockType, content.id, {
+    aliasContext: content.aliasContext,
+  });
 
   return {
     kind: 'block',
@@ -237,6 +278,7 @@ function createPinnedMount(
     id: content.id,
     handle,
     element: handle.element,
+    aliasContext: content.aliasContext,
   };
 }
 
@@ -247,7 +289,8 @@ function sameIdentity(a: SplitContent, b: SplitContent): boolean {
 
 function sameNonComponentIdentity(a: SplitContent, b: SplitContent): boolean {
   if (a.type === 'component' || b.type === 'component') return false;
-  if (a.type !== b.type) return false;
+  // check on the resolved block so you cannot open `/md/{ID}/task{ID}`
+  if (resolveBlockAlias(a.type) !== resolveBlockAlias(b.type)) return false;
   return a.id === b.id;
 }
 
@@ -311,34 +354,35 @@ export function createSplitLayout(
   ): SplitState {
     const id = newSplitId();
     const history = createHistory<SplitContent>();
+    const content = attachAliasContext(initialContent);
 
     // If enabled, we always want to be able to go back to the default split
     if (!isDefault && ENABLE_DEFAULT_ALWAYS_IN_HISTORY) {
       history.push(DEFAULT_SPLIT_CONTENT);
     }
 
-    history.push(initialContent);
-
-    const mount = createPinnedMount(orchestrator, initialContent);
+    history.push(content);
+    const mount = createPinnedMount(orchestrator, content);
 
     return {
       id,
       history,
-      content: initialContent,
+      content,
       mount,
     };
   }
 
   function reattach(split: SplitState, next: SplitContent) {
     const otherSplits = state.splits.filter((s) => s.id !== split.id);
+    const content = attachAliasContext(next);
     if (isDuplicateSplit(otherSplits, next)) return;
 
     const splitIndex = state.splits.findIndex((s) => s.id === split.id);
-    if (splitIndex >= 0 && !sameIdentity(split.content, next)) {
+    if (splitIndex >= 0 && !sameIdentity(split.content, content)) {
       const payload: SplitEventPayload[SplitEvent.ContentChange] = {
         splitId: split.id,
         splitIndex,
-        newContent: next,
+        newContent: content,
         previousContent: split.content,
       };
 
@@ -350,20 +394,20 @@ export function createSplitLayout(
       }
     }
 
-    if (sameIdentity(split.content, next))
+    if (sameIdentity(split.content, content))
       return setState('splits', (s) => {
         const i = s.findIndex((x) => x.id === split.id);
         if (i < 0) return s;
-        const target = { ...s[i], content: next };
+        const target = { ...s[i], content: content };
         return s.with(i, target);
       });
 
-    const newMount = createPinnedMount(orchestrator, next);
+    const newMount = createPinnedMount(orchestrator, content);
 
     setState('splits', (s) => {
       const i = s.findIndex((x) => x.id === split.id);
       if (i < 0) return s;
-      const target = { ...s[i], content: next, mount: newMount };
+      const target = { ...s[i], content, mount: newMount };
       return s.with(i, target);
     });
   }
@@ -422,14 +466,16 @@ export function createSplitLayout(
       })
     );
 
+    const content = attachAliasContext(next);
+
     const split = state.splits[i];
     if (mergeHistory) {
-      split.history.merge(next);
+      split.history.merge(content);
     } else {
-      split.history.push(next);
+      split.history.push(content);
     }
 
-    reattach(split, next);
+    reattach(split, content);
   }
 
   function reset(id: SplitId) {
@@ -443,13 +489,13 @@ export function createSplitLayout(
 
   const getUrlSegments = () => {
     return state.splits
-      .flatMap((s) => [s.content.type, s.content.id])
+      .flatMap((s) => [getAliasOrType(s.content), s.content.id])
       .map(String);
   };
 
   const getUrl = () => {
     return (
-      state.splits.map((s) => s.content.type).join('/') +
+      state.splits.map((s) => getAliasOrType(s.content)).join('/') +
       '/' +
       state.splits.map((s) => s.content.id).join('/')
     );
@@ -534,8 +580,9 @@ export function createSplitLayout(
 
         removeSplit(currentSplit.id);
       },
-      getUrlSegments: () => [content().type, content().id].map(String),
-      getUrl: () => content().type + '/' + content().id,
+      getUrlSegments: () =>
+        [getAliasOrType(content()), content().id].map(String),
+      getUrl: () => getAliasOrType(content()) + '/' + content().id,
       isFirst: () => state.splits.at(0)?.id === id,
       isLast: () => state.splits.at(-1)?.id === id,
       isActive: () => currentSplit.id === state.activeSplitId,
@@ -634,14 +681,14 @@ export function createSplitLayout(
     }
   }
 
-  function hasSplit(type: BlockName | 'component', id: string): boolean {
+  function hasSplit(type: SplitContentType, id: string): boolean {
     return !!state.splits.find(
       (s) => s.content.type === type && s.content.id === id
     );
   }
 
   function getSplitByContent(
-    type: BlockName | 'component',
+    type: SplitContentType,
     id: string
   ): SplitHandle | undefined {
     const match = state.splits.find(
@@ -662,7 +709,7 @@ export function createSplitLayout(
 
     const originalSplits = [...state.splits];
 
-    const lookup = (type: BlockName, id: string) =>
+    const lookup = (type: BlockName | BlockAlias, id: string) =>
       originalSplits.find(
         (s) => s.content.type === type && s.content.id === id
       );

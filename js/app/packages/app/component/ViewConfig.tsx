@@ -8,10 +8,11 @@ import type { WithCustomUserInput } from '@core/user';
 import type { DeepPartial } from '@core/util/withRequired';
 import {
   type EntityData,
-  type EntityType,
+  type ExpandedEntityType,
   queryKeys,
   type WithNotification,
 } from '@macro-entity';
+
 import {
   markNotificationsForEntityAsDone,
   type NotificationSource,
@@ -60,7 +61,7 @@ export type DocumentTypeFilter =
 export type FilterOptions = {
   notificationFilter: 'all' | 'unread' | 'notDone';
   importantFilter: boolean;
-  typeFilter: EntityType[];
+  typeFilter: ExpandedEntityType[];
   documentTypeFilter: DocumentTypeFilter[];
   projectFilter?: string;
   fromFilter?: WithCustomUserInput<'user' | 'contact'>[];
@@ -240,6 +241,12 @@ const ALL_VIEWCONFIG_DEFAULTS = {
       typeFilter: ['document'],
     },
   },
+  tasks: {
+    view: 'Tasks',
+    filters: {
+      typeFilter: ['task'],
+    },
+  },
   folders: {
     view: 'Folders',
     filters: {
@@ -296,13 +303,14 @@ export const VIEWCONFIG_SORT_ORDER: readonly SortOptions['sortOrder'][] = [
 export const VIEWCONFIG_FILTER_DOCUMENT_TYPE_FILTER: readonly FilterOptions['documentTypeFilter'][number][] =
   ['md', 'code', 'image', 'canvas', 'pdf', 'unknown'] as const;
 export const VIEWCONFIG_FILTER_ENTITY_TYPE: readonly FilterOptions['typeFilter'][number][] =
-  ['channel', 'chat', 'document', 'email', 'project'] as const;
+  ['channel', 'chat', 'document', 'email', 'project', 'task'] as const;
 
 export const VIEW_CLIENT_FILTERS: Record<ViewId, ClientFilter[]> = {
   signal: [signalFilter],
   noise: [noiseFilter],
   people: [],
   files: [],
+  tasks: [],
   folders: [],
   all: [],
 };

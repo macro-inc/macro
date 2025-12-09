@@ -7,6 +7,8 @@ use document_storage_service_client::DocumentStorageServiceClient;
 use futures::StreamExt;
 use macro_notify::MacroNotifyClient;
 use static_file_service_client::StaticFileServiceClient;
+use std::sync::Arc;
+use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 
 /// method that ingests sqs messages and calls the process function for each
 #[expect(clippy::too_many_arguments, reason = "too annoying to fix right now")]
@@ -21,6 +23,7 @@ pub async fn run_worker(
     sfs_client: StaticFileServiceClient,
     connection_gateway_client: ConnectionGatewayClient,
     dss_client: DocumentStorageServiceClient,
+    system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     notifications_enabled: bool,
 ) {
     let ctx = PubSubContext {
@@ -34,6 +37,7 @@ pub async fn run_worker(
         sfs_client,
         connection_gateway_client,
         dss_client,
+        system_properties_service,
         notifications_enabled,
         retry_worker: false,
     };

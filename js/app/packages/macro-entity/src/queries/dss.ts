@@ -4,11 +4,13 @@ import {
   moveToFolder,
   renameItem,
 } from '@core/component/FileList/itemOperations';
+import { itemToSafeName } from '@core/constant/allBlocks';
 import type { ItemType } from '@service-storage/client';
 import type {
   PostItemsSoupParams,
   PostSoupRequest,
   SoupApiSort,
+  SoupDocument,
 } from '@service-storage/generated/schemas';
 import type { GetItemsSoupParams } from '@service-storage/generated/schemas/getItemsSoupParams';
 import type { SoupPage } from '@service-storage/generated/schemas/soupPage';
@@ -33,6 +35,17 @@ import type {
 import { createApiTokenQuery } from './auth';
 import { queryClient } from './client';
 import { type DssQueryKey, dssQueryKeyHashFn, queryKeys } from './key';
+
+const resolveDocumentEntityName = (
+  entity: DocumentEntity | SoupDocument
+): string => {
+  return itemToSafeName({
+    type: 'document',
+    name: entity.name,
+    fileType: entity.fileType,
+    subType: entity.subType ?? undefined,
+  });
+};
 
 const fetchPaginatedDocumentsGet = async ({
   apiToken,
@@ -237,12 +250,13 @@ const selectData: (
 
           return {
             ...item.data,
-            name: item.data.name || 'New Note',
             type: item.tag,
             frecencyScore: item.frecency_score,
             viewedAt: item.data.viewedAt ?? undefined,
             fileType: item.data.fileType ?? undefined,
             projectId: item.data.projectId ?? undefined,
+            subType: item.data.subType ?? undefined,
+            name: resolveDocumentEntityName(item.data),
           };
         }
       )
@@ -292,11 +306,12 @@ export function createDocumentsInfiniteQuery(
             (item): DocumentEntity => ({
               ...item.data,
               type: item.tag,
-              name: item.data.name || 'New Note',
               frecencyScore: item.frecency_score,
               viewedAt: item.data.viewedAt ?? undefined,
               fileType: item.data.fileType ?? undefined,
               projectId: item.data.projectId ?? undefined,
+              subType: item.data.subType ?? undefined,
+              name: resolveDocumentEntityName(item.data),
             })
           )
       ),

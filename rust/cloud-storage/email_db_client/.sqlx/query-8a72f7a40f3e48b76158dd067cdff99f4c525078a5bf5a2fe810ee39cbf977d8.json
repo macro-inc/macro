@@ -1,0 +1,77 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            a.id AS attachment_db_id,\n            m.provider_id as \"email_provider_id!\",\n            a.provider_attachment_id as \"provider_attachment_id!\",\n            a.filename as \"filename!\",\n            a.mime_type as \"mime_type!\",\n            m.internal_date_ts as \"internal_date_ts!\",\n            m.id as message_db_id,\n            m.thread_id as thread_db_id,\n            from_contact.email_address as sender_email,\n            m.subject as subject\n        FROM email_attachments a\n        JOIN email_messages m ON a.message_id = m.id\n        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id\n        JOIN email_threads t ON m.thread_id = t.id\n        WHERE a.id = $1 AND t.link_id = $2\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "attachment_db_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "email_provider_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider_attachment_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "filename!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 4,
+        "name": "mime_type!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 5,
+        "name": "internal_date_ts!",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "message_db_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 7,
+        "name": "thread_db_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
+        "name": "sender_email",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 9,
+        "name": "subject",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      true,
+      true,
+      false,
+      false,
+      false,
+      true
+    ]
+  },
+  "hash": "8a72f7a40f3e48b76158dd067cdff99f4c525078a5bf5a2fe810ee39cbf977d8"
+}

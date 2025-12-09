@@ -1,30 +1,12 @@
-import { useChannelName } from '@core/component/ChannelsProvider';
-import { EntityIcon as CoreEntityIcon } from '@core/component/EntityIcon';
+import { usePropertyEntityDisplay } from '@core/component/Properties/hooks';
 import type { Property } from '@core/component/Properties/types';
 import { PropertyDataTypeIcon } from '@core/component/Properties/utils';
 import { Tooltip } from '@core/component/Tooltip';
-import { UserIcon } from '@core/component/UserIcon';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import { isAccessiblePreviewItem, useItemPreview } from '@core/signal/preview';
-import { idToDisplayName } from '@core/user';
 import { cornerClip } from '@core/util/clipPath';
-import ChannelBuildingIcon from '@icon/duotone/building-office-duotone.svg';
-import GlobeIcon from '@icon/duotone/globe-duotone.svg';
-import ChannelIcon from '@icon/duotone/hash-duotone.svg';
-import UserDuotoneIcon from '@icon/duotone/user-duotone.svg';
-import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
-import { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { For, Show } from 'solid-js';
 import { PropertyPillTooltip } from './PropertyPillTooltip';
-
-/** Entity types that require preview lookup for name/icon resolution */
-const PREVIEWABLE_ENTITY_TYPES: EntityType[] = [
-  EntityType.DOCUMENT,
-  EntityType.PROJECT,
-  EntityType.CHAT,
-  EntityType.CHANNEL,
-];
 
 type EntityPropertyPillProps = {
   property: Property & { valueType: 'ENTITY' };
@@ -57,114 +39,21 @@ type SingleEntityPillProps = {
   entity: EntityReference;
 };
 
-const ICON_CLASSES = 'size-4 text-ink-muted';
-
 const SingleEntityPill = (props: SingleEntityPillProps) => {
-  const entityType = () => props.entity.entity_type;
-  const entityId = () => props.entity.entity_id;
-
-  const needsPreview = () =>
-    PREVIEWABLE_ENTITY_TYPES.includes(entityType() as EntityType);
-
-  const [preview] = useItemPreview({
-    id: needsPreview() ? entityId() : '',
-    type: needsPreview()
-      ? (entityType().toLowerCase() as
-          | 'document'
-          | 'project'
-          | 'chat'
-          | 'channel')
-      : undefined,
-  });
-
-  const channelName = useChannelName(
-    entityType() === 'CHANNEL' ? entityId() : '',
-    'Unknown Channel'
+  const { name, icon } = usePropertyEntityDisplay(
+    () => props.entity.entity_id,
+    () => props.entity.entity_type as EntityType,
+    {
+      fallbackIcon: (
+        <PropertyDataTypeIcon
+          property={{
+            data_type: 'ENTITY',
+            specific_entity_type: props.property.specificEntityType,
+          }}
+        />
+      ),
+    }
   );
-
-  const entityName = () => {
-    switch (entityType()) {
-      case 'USER':
-        return idToDisplayName(entityId()).replace('macro|', '');
-      case 'CHANNEL':
-        return channelName();
-      case 'DOCUMENT':
-      case 'PROJECT':
-      case 'CHAT': {
-        const previewItem = preview();
-        if (!previewItem || previewItem.loading) return 'Loading...';
-        if (!isAccessiblePreviewItem(previewItem)) return 'Unavailable';
-        return previewItem.name || `Unknown ${entityType().toLowerCase()}`;
-      }
-      default:
-        return entityId();
-    }
-  };
-
-  const entityIcon = () => {
-    switch (entityType()) {
-      case 'USER':
-        return <UserIcon id={entityId()} size="xs" />;
-
-      case 'CHANNEL': {
-        const previewItem = preview();
-        if (
-          !previewItem ||
-          previewItem.loading ||
-          !isAccessiblePreviewItem(previewItem)
-        ) {
-          return <ChannelIcon class={ICON_CLASSES} />;
-        }
-
-        const channelType = previewItem.channelType;
-        switch (channelType) {
-          case 'direct_message':
-            return <UserDuotoneIcon class={ICON_CLASSES} />;
-          case 'private':
-            return <ThreeUsersIcon class={ICON_CLASSES} />;
-          case 'organization':
-            return <ChannelBuildingIcon class={ICON_CLASSES} />;
-          case 'public':
-            return <GlobeIcon class={ICON_CLASSES} />;
-          default:
-            return <ChannelIcon class={ICON_CLASSES} />;
-        }
-      }
-
-      case 'DOCUMENT': {
-        const previewItem = preview();
-        if (
-          !previewItem ||
-          previewItem.loading ||
-          !isAccessiblePreviewItem(previewItem)
-        ) {
-          return <CoreEntityIcon targetType="unknown" size="xs" />;
-        }
-
-        const fileType = previewItem.fileType;
-        const blockName = fileType
-          ? fileTypeToBlockName(fileType, true)
-          : 'unknown';
-        return <CoreEntityIcon targetType={blockName} size="xs" />;
-      }
-
-      case 'PROJECT':
-        return <CoreEntityIcon targetType="project" size="xs" />;
-
-      case 'CHAT':
-        return <CoreEntityIcon targetType="chat" size="xs" />;
-
-      default:
-        return (
-          <PropertyDataTypeIcon
-            property={{
-              data_type: 'ENTITY',
-              specific_entity_type: props.property.specificEntityType,
-            }}
-          />
-        );
-    }
-  };
 
   return (
     <Tooltip
@@ -188,9 +77,9 @@ const SingleEntityPill = (props: SingleEntityPillProps) => {
           class="inline-flex items-center gap-1.5 p-1.5 @3xl/soup:px-2 @3xl/soup:py-1 text-xs leading-none text-ink-muted bg-panel box-border"
           style={{ 'clip-path': cornerClip('calc(0.2rem - 0.5px)', 0, 0, 0) }}
         >
-          <Show when={entityIcon()}>{entityIcon()}</Show>
+          <Show when={icon()}>{icon()}</Show>
           <span class="truncate max-w-[120px] hidden @3xl/soup:inline">
-            {entityName()}
+            {name()}
           </span>
         </div>
       </div>
@@ -207,7 +96,7 @@ const SingleEntityTooltipContent = (props: SingleEntityTooltipContentProps) => {
   return (
     <PropertyPillTooltip property={props.property}>
       <div class="flex items-center gap-1.5 flex-wrap">
-        <EntityValuePill entity={props.entity} property={props.property} />
+        <EntityValuePill entity={props.entity} />
       </div>
     </PropertyPillTooltip>
   );
@@ -267,9 +156,7 @@ const EntityTooltipContent = (props: EntityTooltipContentProps) => {
     <PropertyPillTooltip property={props.property}>
       <div class="flex items-center gap-1.5 flex-wrap">
         <For each={props.entities}>
-          {(entity) => (
-            <EntityValuePill entity={entity} property={props.property} />
-          )}
+          {(entity) => <EntityValuePill entity={entity} />}
         </For>
       </div>
     </PropertyPillTooltip>
@@ -278,108 +165,14 @@ const EntityTooltipContent = (props: EntityTooltipContentProps) => {
 
 type EntityValuePillProps = {
   entity: EntityReference;
-  property: Property & { valueType: 'ENTITY' };
 };
 
 const EntityValuePill = (props: EntityValuePillProps) => {
-  const entityType = () => props.entity.entity_type;
-  const entityId = () => props.entity.entity_id;
-
-  const needsPreview = () =>
-    PREVIEWABLE_ENTITY_TYPES.includes(entityType() as EntityType);
-
-  const [preview] = useItemPreview({
-    id: needsPreview() ? entityId() : '',
-    type: needsPreview()
-      ? (entityType().toLowerCase() as
-          | 'document'
-          | 'project'
-          | 'chat'
-          | 'channel')
-      : undefined,
-  });
-
-  const channelName = useChannelName(
-    entityType() === 'CHANNEL' ? entityId() : '',
-    'Unknown Channel'
+  const { name, icon } = usePropertyEntityDisplay(
+    () => props.entity.entity_id,
+    () => props.entity.entity_type as EntityType,
+    { fallbackIcon: null }
   );
-
-  const entityName = () => {
-    switch (entityType()) {
-      case 'USER':
-        return idToDisplayName(entityId()).replace('macro|', '');
-      case 'CHANNEL':
-        return channelName();
-      case 'DOCUMENT':
-      case 'PROJECT':
-      case 'CHAT': {
-        const previewItem = preview();
-        if (!previewItem || previewItem.loading) return 'Loading...';
-        if (!isAccessiblePreviewItem(previewItem)) return 'Unavailable';
-        return previewItem.name || `Unknown ${entityType().toLowerCase()}`;
-      }
-      default:
-        return entityId();
-    }
-  };
-
-  const entityIcon = () => {
-    switch (entityType()) {
-      case 'USER':
-        return <UserIcon id={entityId()} size="xs" />;
-
-      case 'CHANNEL': {
-        const previewItem = preview();
-        if (
-          !previewItem ||
-          previewItem.loading ||
-          !isAccessiblePreviewItem(previewItem)
-        ) {
-          return <ChannelIcon class={ICON_CLASSES} />;
-        }
-
-        const channelType = previewItem.channelType;
-        switch (channelType) {
-          case 'direct_message':
-            return <UserDuotoneIcon class={ICON_CLASSES} />;
-          case 'private':
-            return <ThreeUsersIcon class={ICON_CLASSES} />;
-          case 'organization':
-            return <ChannelBuildingIcon class={ICON_CLASSES} />;
-          case 'public':
-            return <GlobeIcon class={ICON_CLASSES} />;
-          default:
-            return <ChannelIcon class={ICON_CLASSES} />;
-        }
-      }
-
-      case 'DOCUMENT': {
-        const previewItem = preview();
-        if (
-          !previewItem ||
-          previewItem.loading ||
-          !isAccessiblePreviewItem(previewItem)
-        ) {
-          return <CoreEntityIcon targetType="unknown" size="xs" />;
-        }
-
-        const fileType = previewItem.fileType;
-        const blockName = fileType
-          ? fileTypeToBlockName(fileType, true)
-          : 'unknown';
-        return <CoreEntityIcon targetType={blockName} size="xs" />;
-      }
-
-      case 'PROJECT':
-        return <CoreEntityIcon targetType="project" size="xs" />;
-
-      case 'CHAT':
-        return <CoreEntityIcon targetType="chat" size="xs" />;
-
-      default:
-        return null;
-    }
-  };
 
   return (
     <div
@@ -390,8 +183,8 @@ const EntityValuePill = (props: EntityValuePillProps) => {
         class="inline-flex items-center gap-1.5 px-2 py-1 text-xs leading-none text-ink-muted bg-panel box-border"
         style={{ 'clip-path': cornerClip('calc(0.2rem - 0.5px)', 0, 0, 0) }}
       >
-        <Show when={entityIcon()}>{entityIcon()}</Show>
-        <span class="truncate max-w-[150px]">{entityName()}</span>
+        <Show when={icon()}>{icon()}</Show>
+        <span class="truncate max-w-[150px]">{name()}</span>
       </div>
     </div>
   );

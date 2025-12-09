@@ -29,9 +29,14 @@ pub async fn fetch_thread_attachments_for_backfill(
             a.provider_attachment_id as provider_attachment_id,
             a.filename as filename,
             a.mime_type as mime_type,
-            m.internal_date_ts as internal_date_ts
+            m.internal_date_ts as internal_date_ts,
+            m.id as message_db_id,
+            m.thread_id as thread_db_id,
+            from_contact.email_address as sender_email,
+            m.subject as subject
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
+        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
         WHERE m.thread_id = $1
             -- attachment mime type filters injected below
             {}
@@ -74,6 +79,10 @@ pub async fn fetch_thread_attachments_for_backfill(
             filename: row.get("filename"),
             mime_type: row.get("mime_type"),
             internal_date_ts: row.get("internal_date_ts"),
+            message_db_id: row.get("message_db_id"),
+            thread_db_id: row.get("thread_db_id"),
+            sender_email: row.get("sender_email"),
+            subject: row.get("subject"),
         })
         .collect();
 
@@ -145,7 +154,11 @@ pub async fn fetch_job_attachments_for_backfill(
             a.provider_attachment_id as provider_attachment_id,
             a.filename as filename,
             a.mime_type as mime_type,
-            m.internal_date_ts as internal_date_ts
+            m.internal_date_ts as internal_date_ts,
+            m.id as message_db_id,
+            m.thread_id as thread_db_id,
+            from_contact.email_address as sender_email,
+            m.subject as subject
         FROM public.email_attachments a
         JOIN public.email_messages m ON a.message_id = m.id
         JOIN public.email_contacts from_contact ON m.from_contact_id = from_contact.id
@@ -173,6 +186,10 @@ pub async fn fetch_job_attachments_for_backfill(
             filename: row.get("filename"),
             mime_type: row.get("mime_type"),
             internal_date_ts: row.get("internal_date_ts"),
+            message_db_id: row.get("message_db_id"),
+            thread_db_id: row.get("thread_db_id"),
+            sender_email: row.get("sender_email"),
+            subject: row.get("subject"),
         })
         .collect();
 
@@ -206,9 +223,14 @@ pub async fn fetch_insertable_attachments_for_new_email(
             a.provider_attachment_id as provider_attachment_id,
             a.filename as filename,
             a.mime_type as mime_type,
-            m.internal_date_ts as internal_date_ts
+            m.internal_date_ts as internal_date_ts,
+            m.id as message_db_id,
+            m.thread_id as thread_db_id,
+            from_contact.email_address as sender_email,
+            m.subject as subject
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
+        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
         LEFT JOIN document_email de ON de.email_attachment_id = a.id
         WHERE m.provider_id = $1
             -- attachment mime type filters injected below
@@ -256,6 +278,10 @@ pub async fn fetch_insertable_attachments_for_new_email(
             filename: row.get("filename"),
             mime_type: row.get("mime_type"),
             internal_date_ts: row.get("internal_date_ts"),
+            message_db_id: row.get("message_db_id"),
+            thread_db_id: row.get("thread_db_id"),
+            sender_email: row.get("sender_email"),
+            subject: row.get("subject"),
         })
         .collect();
 
@@ -316,9 +342,14 @@ pub async fn fetch_insertable_attachments_for_new_email(
             a.provider_attachment_id as provider_attachment_id,
             a.filename as filename,
             a.mime_type as mime_type,
-            m.internal_date_ts as internal_date_ts
+            m.internal_date_ts as internal_date_ts,
+            m.id as message_db_id,
+            m.thread_id as thread_db_id,
+            from_contact.email_address as sender_email,
+            m.subject as subject
         FROM public.email_attachments a
         JOIN public.email_messages m ON a.message_id = m.id
+        JOIN public.email_contacts from_contact ON m.from_contact_id = from_contact.id
         LEFT JOIN public.document_email de ON de.email_attachment_id = a.id
         WHERE m.provider_id = $1
             AND de.email_attachment_id IS NULL
@@ -349,6 +380,10 @@ pub async fn fetch_insertable_attachments_for_new_email(
             filename: row.get("filename"),
             mime_type: row.get("mime_type"),
             internal_date_ts: row.get("internal_date_ts"),
+            message_db_id: row.get("message_db_id"),
+            thread_db_id: row.get("thread_db_id"),
+            sender_email: row.get("sender_email"),
+            subject: row.get("subject"),
         })
         .collect();
 
@@ -369,9 +404,14 @@ pub async fn fetch_attachment_upload_metadata_by_id(
             a.provider_attachment_id as "provider_attachment_id!",
             a.filename as "filename!",
             a.mime_type as "mime_type!",
-            m.internal_date_ts as "internal_date_ts!"
+            m.internal_date_ts as "internal_date_ts!",
+            m.id as message_db_id,
+            m.thread_id as thread_db_id,
+            from_contact.email_address as sender_email,
+            m.subject as subject
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
+        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
         JOIN email_threads t ON m.thread_id = t.id
         WHERE a.id = $1 AND t.link_id = $2
         "#,

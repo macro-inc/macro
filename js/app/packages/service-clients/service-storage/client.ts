@@ -6,7 +6,7 @@ import {
   type TSegment,
 } from '@block-pdf/type/coParse';
 import { modificationDataReplacer } from '@block-pdf/util/buildModificationData';
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 import { ENABLE_DOCX_TO_PDF } from '@core/constant/featureFlags';
 import { PaywallKey, usePaywallState } from '@core/constant/PaywallState';
 import { SERVER_HOSTS } from '@core/constant/servers';
@@ -175,7 +175,7 @@ const mapPreviewDocumentName = (preview: DocumentPreview): DocumentPreview => {
 };
 
 export function blockNameToItemType(
-  blockName: BlockName
+  blockName: BlockName | BlockAlias
 ): ItemType | undefined {
   switch (blockName) {
     case 'chat':

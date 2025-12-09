@@ -5,10 +5,11 @@ import {
 import { useHandleFileUpload } from '@app/util/handleFileUpload';
 import { playSound } from '@app/util/sound';
 import { useIsAuthenticated } from '@core/auth';
+import type { BlockAliasContext } from '@core/block';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { Button } from '@core/component/FormControls/Button';
 import { ContextMenuContent, MenuItem } from '@core/component/Menu';
-import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { BlockOrchestrator } from '@core/orchestrator';
@@ -23,6 +24,7 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { Tabs } from '@kobalte/core/tabs';
 import type { EntityData } from '@macro-entity';
 import {
+  isTaskEntity,
   queryKeys,
   useQueryClient as useEntityQueryClient,
 } from '@macro-entity';
@@ -108,13 +110,21 @@ const PreviewPanelContent: Component<{
   orchestrator: BlockOrchestrator;
   splitPanelContext: SplitPanelContextType;
 }> = (props) => {
-  const blockInstance = () =>
-    props.orchestrator.createBlockInstance(
+  const blockInstance = () => {
+    const aliasContext = isTaskEntity(props.selectedEntity)
+      ? ({
+          alias: 'task',
+          baseType: 'md',
+        } as BlockAliasContext)
+      : undefined;
+    return props.orchestrator.createBlockInstance(
       props.selectedEntity.type === 'document'
-        ? fileTypeToBlockName(props.selectedEntity.fileType)
+        ? fileTypeToResolvedBlockName(props.selectedEntity.fileType)
         : props.selectedEntity.type,
-      props.selectedEntity.id
+      props.selectedEntity.id,
+      { aliasContext }
     );
+  };
   const [interactedWith, setInteractedWith] = createSignal(false);
 
   createRenderEffect((prevId: string) => {
@@ -270,25 +280,25 @@ export function Soup() {
   createEffectOnEntityTypeNotification(
     notificationSource,
     'channel',
-    (notifications) => {
+    (notification) => {
       entityQueryClient.invalidateQueries({
         queryKey: queryKeys.all.channel,
       });
-      const eventItemIds = new Set(
-        notifications.map(({ eventItemId }) => eventItemId)
-      );
-      eventItemIds.forEach((eventItemId) => {
-        entityQueryClient.invalidateQueries({
-          queryKey: queryKeys.notification({ eventItemId }),
-        });
+      entityQueryClient.invalidateQueries({
+        queryKey: queryKeys.notification({
+          eventItemId: notification.eventItemId,
+        }),
       });
     }
   );
-  createEffectOnEntityTypeNotification(notificationSource, 'email', () =>
+
+  createEffectOnEntityTypeNotification(notificationSource, 'email', () => {
     entityQueryClient.invalidateQueries({
-      queryKey: queryKeys.all.email,
-    })
-  );
+      // HACK: this needs to be improved, since we use a single query, per entity invalidations
+      // become a little more complicated.
+      queryKey: queryKeys.all.entity,
+    });
+  });
 
   const saveViewMutation = useUpsertSavedViewMutation();
 

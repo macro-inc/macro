@@ -17,7 +17,7 @@ import {
 } from '@core/user';
 import {
   createEffectOnEntityTypeNotification,
-  isNotificationWithMetadata,
+  isNewEmail,
 } from '@notifications';
 import {
   useArchiveThreadMutation,
@@ -558,30 +558,19 @@ export function Email(props: EmailProps) {
   });
 
   const notificationSource = useGlobalNotificationSource();
+
   createEffectOnEntityTypeNotification(
     notificationSource,
     'email',
-    (notifications) => {
-      for (const notification of notifications) {
-        if (!isNotificationWithMetadata(notification)) return;
-        const metadata = notification.notificationMetadata;
-        if (
-          !metadata ||
-          typeof metadata !== 'object' ||
-          !('thread_id' in metadata)
-        )
-          return;
-
-        const notificationThreadId = (metadata as { thread_id: string })
-          .thread_id;
-
-        if (notificationThreadId === threadData()?.db_id) {
-          threadQuery.refetch();
-          break;
-        }
+    (notification) => {
+      if (!isNewEmail(notification)) return;
+      const notificationThreadId = notification.notificationMetadata.threadId;
+      if (notificationThreadId === threadData()?.db_id) {
+        threadQuery.refetch();
       }
     }
   );
+
   let markdownDomRef!: HTMLDivElement;
 
   registerScopeSignalHotkey(scopeId, {

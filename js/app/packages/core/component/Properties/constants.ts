@@ -3,7 +3,7 @@
  * For styling constants, see styles/styles.ts (PROPERTY_STYLES)
  */
 
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 
 export const NUMBER_DECIMAL_PLACES = 4; // Matches backend precision
 
@@ -37,7 +37,7 @@ export const SYSTEM_PROPERTY_IDS = {
  * and cannot be removed. Order matches backend (display order).
  */
 export const BUILTIN_PROPERTIES_BY_BLOCK: Partial<
-  Record<BlockName, readonly string[]>
+  Record<BlockName | BlockAlias, readonly string[]>
 > = {
   task: [
     SYSTEM_PROPERTY_IDS.ASSIGNEES,
@@ -54,10 +54,36 @@ export const BUILTIN_PROPERTIES_BY_BLOCK: Partial<
 } as const;
 
 /**
+ * Default pinned properties by block type.
+ * These are automatically pinned when a new entity of this block type is created.
+ */
+export const DEFAULT_PINNED_PROPERTIES_BY_BLOCK: Partial<
+  Record<BlockName | BlockAlias, readonly string[]>
+> = {
+  task: [
+    SYSTEM_PROPERTY_IDS.STATUS,
+    SYSTEM_PROPERTY_IDS.PRIORITY,
+    SYSTEM_PROPERTY_IDS.ASSIGNEES,
+  ],
+} as const;
+
+/**
+ * Get the default pinned property definition IDs for a block type.
+ * Returns empty array if block has no default pinned properties.
+ */
+export function getDefaultPinnedProperties(
+  blockType: BlockName | BlockAlias
+): readonly string[] {
+  return DEFAULT_PINNED_PROPERTIES_BY_BLOCK[blockType] ?? [];
+}
+
+/**
  * Get the builtin property definition IDs for a block type.
  * Returns empty array if block has no builtin properties.
  */
-export function getBuiltinPropertyIds(blockType: BlockName): readonly string[] {
+export function getBuiltinPropertyIds(
+  blockType: BlockName | BlockAlias
+): readonly string[] {
   return BUILTIN_PROPERTIES_BY_BLOCK[blockType] ?? [];
 }
 

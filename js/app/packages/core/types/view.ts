@@ -3,6 +3,7 @@ export const DEFAULT_VIEWS = [
   'noise',
   'people',
   'files',
+  'tasks',
   'folders',
   'all',
 ] as const;

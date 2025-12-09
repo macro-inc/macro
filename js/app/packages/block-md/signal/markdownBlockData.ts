@@ -3,6 +3,7 @@ import type {
   PluginManager,
   SelectionData,
 } from '@core/component/LexicalMarkdown/plugins';
+import { createCallback } from '@solid-primitives/rootless';
 import type { LexicalEditor } from 'lexical';
 import type { Store } from 'solid-js/store';
 import type { MarkdownData } from '../definition';
@@ -32,3 +33,7 @@ export type MdData = {
 };
 
 export const mdStore = createBlockStore<MdData>({});
+
+export const useIsTask = createCallback(() => {
+  return () => blockDataSignal()?.documentMetadata.subType === 'task';
+});

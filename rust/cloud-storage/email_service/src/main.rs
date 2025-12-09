@@ -12,6 +12,7 @@ use secretsmanager_client::{LocalOrRemoteSecret, SecretManager};
 use sqlx::postgres::PgPoolOptions;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
+use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 
 mod api;
 mod config;
@@ -211,6 +212,10 @@ async fn main() -> anyhow::Result<()> {
         config.connection_gateway_url.clone(),
     );
 
+    let system_properties_service = Arc::new(SystemPropertiesServiceImpl::new(
+        PgSystemPropertiesRepository::new(db.clone()),
+    ));
+
     // process user inbox updates from gmail webhook queue, triggered by update pubsub messages from Google
     for worker in webhook_workers {
         let db_webhook = db.clone();
@@ -222,6 +227,7 @@ async fn main() -> anyhow::Result<()> {
         let sfs_client_webhook = sfs_client.clone();
         let connection_gateway_client_webhook = connection_gateway_client.clone();
         let dss_client_webhook = dss_client.clone();
+        let system_properties_service_webhook = system_properties_service.clone();
         tokio::spawn(async move {
             pubsub::webhook::worker::run_worker(
                 db_webhook,
@@ -234,6 +240,7 @@ async fn main() -> anyhow::Result<()> {
                 sfs_client_webhook,
                 connection_gateway_client_webhook,
                 dss_client_webhook,
+                system_properties_service_webhook,
                 config.notifications_enabled,
                 false,
             )
@@ -256,6 +263,7 @@ async fn main() -> anyhow::Result<()> {
         let sfs_client_webhook = sfs_client.clone();
         let connection_gateway_client_webhook = connection_gateway_client.clone();
         let dss_client_webhook = dss_client.clone();
+        let system_properties_service_webhook = system_properties_service.clone();
         tokio::spawn(async move {
             pubsub::webhook::worker::run_worker(
                 db_webhook,
@@ -268,6 +276,7 @@ async fn main() -> anyhow::Result<()> {
                 sfs_client_webhook,
                 connection_gateway_client_webhook,
                 dss_client_webhook,
+                system_properties_service_webhook,
                 config.notifications_enabled,
                 true,
             )
@@ -290,6 +299,7 @@ async fn main() -> anyhow::Result<()> {
         let sfs_client_backfill = sfs_client.clone();
         let connection_gateway_client_backfill = connection_gateway_client.clone();
         let dss_client_backfill = dss_client.clone();
+        let system_properties_service_backfill = system_properties_service.clone();
         tokio::spawn(async move {
             pubsub::backfill::worker::run_worker(
                 db_backfill,
@@ -302,6 +312,7 @@ async fn main() -> anyhow::Result<()> {
                 sfs_client_backfill,
                 connection_gateway_client_backfill,
                 dss_client_backfill,
+                system_properties_service_backfill,
                 config.notifications_enabled,
             )
             .await;
@@ -380,6 +391,7 @@ async fn main() -> anyhow::Result<()> {
         gmail_client: Arc::new(gmail_client),
         s3_client: Arc::new(s3_client),
         dss_client: Arc::new(dss_client),
+        system_properties_service,
         jwt_args,
         internal_auth_key: LocalOrRemoteSecret::Local(internal_auth_key),
         email_service: EmailPreviewState::new(EmailServiceImpl::new(

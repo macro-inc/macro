@@ -12,7 +12,7 @@ import {
 } from '@core/component/Menu';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
-import { verifyBlockName } from '@core/constant/allBlocks';
+import { resolveBlockAlias, verifyBlockName } from '@core/constant/allBlocks';
 import { ENABLE_BLOCK_IN_BLOCK } from '@core/constant/featureFlags';
 import { canNestBlock, createBlockInstance } from '@core/orchestrator';
 import {
@@ -165,7 +165,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
     if (!i) return false;
     if (isLoadingPreviewItem(i)) return false;
     if (!isAccessiblePreviewItem(i)) return false;
-    const blockName = verifyBlockName(props.blockName);
+    const blockName = resolveBlockAlias(verifyBlockName(props.blockName));
     return canNestBlock(blockName, currentBlockName);
   });
 
@@ -203,7 +203,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
     const documentId = i.id;
 
     const preview = createBlockInstance(
-      verifyBlockName(props.blockName),
+      resolveBlockAlias(verifyBlockName(props.blockName)),
       documentId,
       {
         nested: {
@@ -341,7 +341,7 @@ export function DocumentCard(props: DocumentCardDecoratorProps) {
                 <EntityIcon
                   targetType={
                     props.item.type === 'document'
-                      ? props.item.fileType
+                      ? (props.item.subType ?? props.item.fileType)
                       : props.item.type
                   }
                   size="sm"

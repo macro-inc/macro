@@ -1,4 +1,5 @@
 import {
+  type BlockAlias,
   type BlockName,
   useMaybeBlockId,
   useMaybeBlockName,
@@ -129,11 +130,14 @@ const getUserSearchText = (item: IUser): string => {
 const getCombinedEntityBlockName = (
   item: CombinedEntity<'item' | 'channel' | 'email'>,
   icon?: boolean
-): BlockName => {
+): BlockName | BlockAlias => {
   switch (item.kind) {
     case 'item':
       if (item.data.type === 'document')
-        return fileTypeToBlockName(item.data.fileType, icon);
+        return fileTypeToBlockName(
+          item.data.subType || item.data.fileType,
+          icon
+        );
       if (item.data.type === 'chat') return 'chat';
       if (item.data.type === 'project') return 'project';
       return 'unknown';

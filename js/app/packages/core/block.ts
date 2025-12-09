@@ -1,4 +1,5 @@
 import type { BlockCanvasProps } from '@block-canvas/component/Block';
+
 import type { IDocumentStorageServiceFile } from '@filesystem/file';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
@@ -57,7 +58,6 @@ export const BlockRegistry = [
   'video',
   'email',
   'contact',
-  'task',
 ] as const;
 
 type BlockNameKeys = keyof typeof BlockRegistry & number;
@@ -68,6 +68,20 @@ type BlockNameKeys = keyof typeof BlockRegistry & number;
 export type BlockName = (typeof BlockRegistry)[BlockNameKeys];
 
 /**
+ * List of strongly-typed, valid aliases that can be used as pseudo-differentiated
+ * block types.
+ */
+export const BlockAliasRegistry = ['task'] as const;
+
+type BlockAliasKeys = keyof typeof BlockAliasRegistry & number;
+
+/**
+ * Represents a block-alias. Which a a valid, differentiated entity type with
+ * the same behavior as a true block.
+ */
+export type BlockAlias = (typeof BlockAliasRegistry)[BlockAliasKeys];
+
+/**
  * Represents the block types that do not correspond to a document type.
  */
 export const NonDocumentBlockTypes = [
@@ -76,7 +90,7 @@ export const NonDocumentBlockTypes = [
   'project',
   'email',
   'contact',
-] as BlockName[];
+] as const as (BlockName | BlockAlias)[];
 
 /**
  * Represents the type of a possible 2-block combination used in split layouts.
@@ -125,7 +139,6 @@ export const ValidBlockCombinations: BlockCombinationRules = {
   unknown: allBlockNames,
   video: allBlockNames,
   contact: allBlockNames,
-  task: allBlockNames,
 } as const;
 
 // maps block name to valid parents
@@ -143,7 +156,6 @@ export const ValidNestingCombinations: BlockCombinationRules = {
   unknown: new Set([]),
   video: new Set([]),
   contact: new Set([]),
-  task: new Set([]),
 };
 
 export const LoadErrors = {
@@ -325,9 +337,19 @@ export type BlockDefinition<
   syncServiceEnabled?: boolean;
 
   editPermissionEnabled?: boolean;
+
+  /** Alias block names that should route to this block type with optional custom default filenames */
+  aliases?: Array<{ name: BlockAlias; defaultFileName?: string }>;
 };
 
 export type AnyBlockDefinition = BlockDefinition<any, any, any, any>;
+
+export type BlockAliasContext = {
+  /** The original alias used in the URL (e.g., 'task') */
+  alias: BlockAlias;
+  /** The resolved base block type (e.g., 'md') */
+  baseType: BlockName;
+};
 
 type DocumentBlockData = {
   userAccessLevel: AccessLevel;
@@ -389,7 +411,12 @@ export function createBlockRenderEffect(fn: BlockEffect): void {
  * A component that provides the scope and context for blocks, including signals, stores, and effects.
  */
 export const Block = <Name extends BlockName>(
-  props: FlowProps<{ id: string; name: Name; nested?: NestedState<Name> }>
+  props: FlowProps<{
+    id: string;
+    name: Name;
+    nested?: NestedState<Name>;
+    aliasContext?: BlockAliasContext;
+  }>
 ) => {
   const [state] = createSignal<BlockState>({
     entities: new Map(),
@@ -398,6 +425,7 @@ export const Block = <Name extends BlockName>(
     name: props.name,
     nested: props.nested,
     owner: getOwner(),
+    aliasContext: props.aliasContext,
   });
 
   onCleanup(() => {
@@ -455,10 +483,10 @@ export const useBlockOwner = (): Owner | null => {
 };
 
 /**
- * Hook to access the current block's ID.
+ * Hook to access the current block's name.
  * This will throw if used outside a Block component.
  * @throws {Error} When used outside of a Block context
- * @returns The current block ID
+ * @returns The current block name
  */
 export const useBlockName = (): BlockName => {
   const context = useContext(BlockContext);
@@ -466,6 +494,21 @@ export const useBlockName = (): BlockName => {
     throw new Error('hook must be used within a Block component');
   }
   return context.name;
+};
+
+/**
+ * Hook to access the current block's name - will return the alias used to access
+ * the block if it exists.
+ * This will throw if used outside a Block component.
+ * @throws {Error} When used outside of a Block context
+ * @returns The current block name or alias.
+ */
+export const useBlockAliasedName = (): BlockName | BlockAlias => {
+  const context = useContext(BlockContext);
+  if (!context) {
+    throw new Error('hook must be used within a Block component');
+  }
+  return context.aliasContext?.alias ?? context.name;
 };
 
 /**
@@ -947,6 +990,7 @@ type BlockState<Name extends BlockName = BlockName> = {
   name: Name;
   nested?: NestedState<Name>;
   owner: Owner | null;
+  aliasContext?: BlockAliasContext;
 };
 const BlockContext = createContext<BlockState | undefined>(undefined);
 

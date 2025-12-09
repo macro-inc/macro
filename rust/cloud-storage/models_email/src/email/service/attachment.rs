@@ -47,4 +47,15 @@ pub struct AttachmentUploadMetadata {
     pub mime_type: String,
     pub filename: String,
     pub internal_date_ts: DateTime<Utc>,
+    pub message_db_id: Uuid,
+    pub thread_db_id: Uuid,
+    pub sender_email: String,
+    pub subject: Option<String>,
+}
+
+#[derive(Clone, Debug, FromRow, Eq, PartialEq, Serialize, Deserialize)]
+pub struct AttachmentUploadArgs {
+    pub attachment_metadata: AttachmentUploadMetadata,
+    pub recipient_emails: Vec<String>,
+    pub backfill: bool,
 }

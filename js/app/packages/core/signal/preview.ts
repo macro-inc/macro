@@ -6,6 +6,7 @@ import type { ChannelType } from '@service-cognition/generated/schemas/channelTy
 import { commsServiceClient } from '@service-comms/client';
 import { emailClient } from '@service-email/client';
 import { type ItemType, storageServiceClient } from '@service-storage/client';
+import type { DocumentSubType } from '@service-storage/generated/schemas';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { syncServiceClient } from '@service-sync/client';
 import { type Accessor, createEffect, createSignal } from 'solid-js';
@@ -35,6 +36,7 @@ export type PreviewItemAccess = {
   loading: false;
   name: string;
   fileType?: FileType;
+  subType?: DocumentSubType;
   channelType?: never;
 } & BasePreviewItem<Exclude<ItemType, 'project'>>;
 
@@ -43,6 +45,7 @@ export type PreviewProjectAccess = {
   loading: false;
   name: string;
   fileType?: never;
+  subType?: never;
   channelType?: never;
 } & BasePreviewItem<'project'>;
 
@@ -51,6 +54,7 @@ export type PreviewDocumentAccess = {
   loading: false;
   name: string;
   fileType: FileType;
+  subType?: DocumentSubType;
   channelType?: never;
 } & BasePreviewItem<'document'>;
 
@@ -59,6 +63,7 @@ export type PreviewChannelAccess = {
   loading: false;
   name: string;
   fileType?: never;
+  subType?: never;
   channelType?: ChannelType;
 } & BasePreviewItem<Exclude<ItemType, 'project'>>;
 
@@ -252,6 +257,7 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
           fileType: doc.file_type as FileType,
           owner: doc.owner,
           updatedAt: doc.updated_at,
+          subType: doc.sub_type ?? undefined,
         };
       case 'no_access':
       case 'does_not_exist':

@@ -5,6 +5,7 @@ publish = false
 version = "0.1.0"
 
 [dependencies]
+macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid" }
 models_properties = { path = "../models_properties" }
 serde = { workspace = true }
