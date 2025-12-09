@@ -35,6 +35,5 @@ export type MdData = {
 export const mdStore = createBlockStore<MdData>({});
 
 export const useIsTask = createCallback(() => {
-  const [meta] = blockDataSignal;
-  return () => meta()?.isTask;
+  return () => blockDataSignal()?.documentMetadata.subType === 'task';
 });

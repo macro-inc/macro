@@ -3,7 +3,7 @@
  * For styling constants, see styles/styles.ts (PROPERTY_STYLES)
  */
 
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 
 export const NUMBER_DECIMAL_PLACES = 4; // Matches backend precision
 
@@ -37,7 +37,7 @@ export const SYSTEM_PROPERTY_IDS = {
  * and cannot be removed. Order matches backend (display order).
  */
 export const BUILTIN_PROPERTIES_BY_BLOCK: Partial<
-  Record<BlockName, readonly string[]>
+  Record<BlockName | BlockAlias, readonly string[]>
 > = {
   task: [
     SYSTEM_PROPERTY_IDS.ASSIGNEES,
@@ -57,7 +57,9 @@ export const BUILTIN_PROPERTIES_BY_BLOCK: Partial<
  * Get the builtin property definition IDs for a block type.
  * Returns empty array if block has no builtin properties.
  */
-export function getBuiltinPropertyIds(blockType: BlockName): readonly string[] {
+export function getBuiltinPropertyIds(
+  blockType: BlockName | BlockAlias
+): readonly string[] {
   return BUILTIN_PROPERTIES_BY_BLOCK[blockType] ?? [];
 }
 

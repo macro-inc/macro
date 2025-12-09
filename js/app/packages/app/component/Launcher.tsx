@@ -1,4 +1,4 @@
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { Hotkey } from '@core/component/Hotkey';
 import { PcNoiseGrid } from '@core/component/PcNoiseGrid';
@@ -35,7 +35,7 @@ import { type FocusableElement, tabbable } from 'tabbable';
 import { useSplitLayout } from './split-layout/layout';
 
 const createBlock = async (spec: {
-  blockName: BlockName;
+  blockName: BlockName | BlockAlias;
   createFn: () => Promise<string | undefined>;
   loading?: boolean;
   shouldInsert?: boolean;

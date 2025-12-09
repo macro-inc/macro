@@ -90,7 +90,7 @@ export const NonDocumentBlockTypes = [
   'project',
   'email',
   'contact',
-] as BlockName[];
+] as const as BlockName[];
 
 /**
  * Represents the type of a possible 2-block combination used in split layouts.
@@ -139,7 +139,6 @@ export const ValidBlockCombinations: BlockCombinationRules = {
   unknown: allBlockNames,
   video: allBlockNames,
   contact: allBlockNames,
-  task: allBlockNames,
 } as const;
 
 // maps block name to valid parents
@@ -157,7 +156,6 @@ export const ValidNestingCombinations: BlockCombinationRules = {
   unknown: new Set([]),
   video: new Set([]),
   contact: new Set([]),
-  task: new Set([]),
 };
 
 export const LoadErrors = {
@@ -340,8 +338,8 @@ export type BlockDefinition<
 
   editPermissionEnabled?: boolean;
 
-  /** Alias block names that should route to this block type (e.g., ['task'] for md block) */
-  aliases?: string[];
+  /** Alias block names that should route to this block type with optional custom default filenames */
+  aliases?: Array<{ name: BlockAlias; defaultFileName?: string }>;
 };
 
 export type AnyBlockDefinition = BlockDefinition<any, any, any, any>;

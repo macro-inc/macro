@@ -1,7 +1,7 @@
 import { URL_PARAMS as CHANNEL_PARAMS } from '@block-channel/constants';
 import { URL_PARAMS as MD_PARAMS } from '@block-md/constants';
 import { URL_PARAMS as PDF_PARAMS } from '@block-pdf/signal/location';
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 import { BozzyBracket } from '@core/component/BozzyBracket';
 import type { ChannelsContext } from '@core/component/ChannelsProvider';
 import { Hotkey } from '@core/component/Hotkey';
@@ -25,6 +25,7 @@ import Terminal from '@phosphor-icons/core/regular/terminal.svg?component-solid'
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { Attachment } from '@service-email/generated/schemas';
 import { useUserId } from '@service-gql/client';
+import type { BasicDocumentSubType } from '@service-storage/generated/schemas';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { syncServiceClient } from '@service-sync/client';
@@ -257,6 +258,7 @@ type ItemPreview = {
   id: string;
   name: string;
   fileType?: BasicDocumentFileType;
+  subType?: BasicDocumentSubType;
   itemType: Item['type'];
 };
 
@@ -431,10 +433,15 @@ export interface CommandItemProps {
 function getCommandItemBlockName(
   item: CommandItemCard,
   icon?: boolean
-): BlockName | undefined {
+): BlockName | BlockAlias | undefined {
   if (item.type === 'item') {
-    if (item.data.itemType === 'document' && item.data.fileType) {
-      return fileTypeToBlockName(item.data.fileType, icon);
+    if (item.data.itemType === 'document') {
+      if (item.data.subType === 'task') {
+        return 'task';
+      }
+      if (item.data.fileType) {
+        return fileTypeToBlockName(item.data.fileType, icon);
+      }
     }
     return fileTypeToBlockName(item.data.itemType, icon) ?? 'unknown';
   } else if (item.type === 'channel') {

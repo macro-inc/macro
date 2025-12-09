@@ -1,4 +1,4 @@
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 
 // Standard size options
 export const FILE_LIST_SIZE = {
@@ -56,7 +56,10 @@ export const LARGE_BLOCK_ICON = 'md';
 // Enumerate the background styles for selected-state items.
 export const defaultFileColor = 'bg-hover/20 group/item';
 
-export const fileTypeColors: Record<BlockName | 'default', string> = {
+export const fileTypeColors: Record<
+  BlockName | BlockAlias | 'default',
+  string
+> = {
   write: 'bg-write/20 group/item',
   pdf: 'bg-pdf/20 group/item',
   md: 'bg-note/20 group/item',

@@ -7,6 +7,7 @@ import {
   type MimeType,
 } from '@core/block';
 import type { ItemType } from '@service-storage/client';
+import type { BasicDocumentSubType } from '@service-storage/generated/schemas';
 import type { BasicDocumentFileType } from '@service-storage/generated/schemas/basicDocumentFileType';
 import { ENABLE_DOCX_TO_PDF } from './featureFlags';
 import { DefaultFilename } from './filename';
@@ -47,8 +48,9 @@ export const blockNameToFileExtensionSet: Record<
 > = {};
 // @ts-ignore This type is built below
 export const blockNameToMimeTypeSet: Record<BlockName, Set<MimeType>> = {};
-// @ts-ignore This type is built below
-export const blockNameToDefaultFilename: Record<BlockName, string> = {};
+export const blockNameToDefaultFilename: Partial<
+  Record<BlockName | BlockAlias, string>
+> = {};
 
 for (const [name, block] of Object.entries(blocks)) {
   blockNameToFileExtensionSet[name as BlockName] = new Set();
@@ -56,9 +58,14 @@ for (const [name, block] of Object.entries(blocks)) {
 
   // Process aliases
   if (block.aliases) {
-    blockNameToAliases[name as BlockName] = block.aliases;
+    blockNameToAliases[name as BlockName] = block.aliases.map(
+      (alias) => alias.name
+    );
     for (const alias of block.aliases) {
-      aliasToBlockName_[alias] = name as BlockName;
+      aliasToBlockName_[alias.name] = name as BlockName;
+      if (alias.defaultFileName) {
+        blockNameToDefaultFilename[alias.name] = alias.defaultFileName;
+      }
     }
   } else {
     blockNameToAliases[name as BlockName] = [];
@@ -146,7 +153,7 @@ export function fileTypeToBlockName(
   blockOrFiletype?: string | null,
   // For docx: icon should still show as docx icon, not pdf
   icon?: boolean
-): BlockName {
+): BlockName | BlockAlias {
   if (!blockOrFiletype) return 'unknown';
 
   if (ENABLE_DOCX_TO_PDF) {
@@ -157,7 +164,7 @@ export function fileTypeToBlockName(
 
   // Check if it's an alias first
   if (isBlockAlias(blockOrFiletype)) {
-    return resolveBlockAlias(blockOrFiletype);
+    return blockOrFiletype;
   }
 
   if (BlockRegistry.includes(blockOrFiletype as any)) {
@@ -173,7 +180,10 @@ export function fileTypeToBlockName(
 export function blockNameToDefaultFile(block?: BlockName | string) {
   if (!block) return DefaultFilename;
   if (block in blockNameToDefaultFilename) {
-    return blockNameToDefaultFilename[block as BlockName];
+    return (
+      blockNameToDefaultFilename[block as BlockName | BlockAlias] ||
+      DefaultFilename
+    );
   }
   return DefaultFilename;
 }
@@ -181,6 +191,7 @@ export function blockNameToDefaultFile(block?: BlockName | string) {
 type ItemLike = {
   type: ItemType;
   fileType?: BasicDocumentFileType;
+  subType?: string;
   name?: string;
 };
 
@@ -189,14 +200,33 @@ type ItemLike = {
  * @example
  * itemToBlockName({ type: 'document', fileType: 'docx' }) // 'write'
  * itemToBlockName({ type: 'document', fileType: 'py' }) // 'code'
+ * itemToBlockName({ type: 'document', fileType: 'md', subType: 'task' }) // 'task'
  * itemToBlockName({ type: 'chat' }) // 'chat'
  * @return The block name or undefined if there is no appropriate block.
  */
-export function itemToBlockName(item: ItemLike): BlockName | undefined {
+export function itemToBlockName(
+  item: ItemLike
+): BlockName | BlockAlias | undefined {
+  if (item.subType && isBlockAlias(item.subType)) {
+    return item.subType;
+  }
   if (item.fileType) {
     return fileTypeToBlockName(item.fileType);
   }
   return fileTypeToBlockName(item.type);
+}
+
+/**
+ * Get a flattened block name from an item-shaped object. Ignoring any block \
+ * aliases.
+ * @example
+ * itemToBlockName({ type: 'document', fileType: 'md', subType: 'task' }) // 'md'
+ * @return The block name or undefined if there is no appropriate block.
+ */
+export function itemToResolvedBlockName(item: ItemLike) {
+  const maybeAliased = itemToBlockName(item);
+  if (!maybeAliased) return;
+  return resolveBlockAlias(maybeAliased);
 }
 
 /**
@@ -208,22 +238,25 @@ export function itemToBlockName(item: ItemLike): BlockName | undefined {
  * itemToBlockName({ type: 'chat' }) // 'New Chat'
  * @return A safe name for the item to display.
  */
-
 export function itemToSafeName(item: ItemLike): string {
   if (typeof item.name === 'string' && item.name.length > 0) {
     return item.name;
   }
-  return blockNameToDefaultFile(itemToBlockName(item));
+  return blockNameToDefaultFile(itemToBlockName(item) || 'unknown');
 }
 
 /**
  * Return name as a known block name if it matches or 'unknown' if not found.
  * @returns
  */
-export function verifyBlockName(name: string | undefined): BlockName {
+export function verifyBlockName(
+  name: string | undefined
+): BlockName | BlockAlias {
+  if (!name) return 'unknown';
   if (ENABLE_DOCX_TO_PDF && name === 'write') {
     return 'pdf';
   }
+  if (isBlockAlias(name)) return name;
   if (name && name in blocks) return name as BlockName;
   return 'unknown';
 }
