@@ -11,7 +11,7 @@ import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
 import { getScrollParent } from '@core/util/scrollParent';
 import { waitForFrames } from '@core/util/sleep';
-import type { EntityData } from '@macro-entity';
+import { type EntityData, isTaskEntity } from '@macro-entity';
 import { entityHasUnreadNotifications } from '@notifications';
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import { useTutorialCompleted } from '@service-gql/client';
@@ -295,20 +295,27 @@ export function createNavigationEntityListShortcut({
   // ---------------------------------------------------------------------------
   // MARK AS DONE
   // ---------------------------------------------------------------------------
+
+  // Helper to get the correct properties entity type for an entity
+  // Tasks have type 'document' but subType 'task', so we need special handling
+  const getPropertiesEntityType = (
+    entity: EntityData
+  ): PropertiesEntityType | undefined => {
+    if (isTaskEntity(entity)) return 'TASK';
+    if (entity.type === 'email') return 'THREAD';
+    if (entity.type === 'document') return 'DOCUMENT';
+    if (entity.type === 'project') return 'PROJECT';
+    return undefined;
+  };
+
   actionRegistry.register(
     'mark_as_done',
     async (entities) => {
       const handler =
         VIEWCONFIG_DEFAULTS[selectedView() as DefaultView]?.hotkeyOptions?.e;
-      const propertiesEntityTypeMap: Record<string, PropertiesEntityType> = {
-        email: 'THREAD',
-        document: 'DOCUMENT',
-        project: 'PROJECT',
-        task: 'TASK',
-      };
 
       const hasSupportedEntity = entities.some(
-        (entity) => propertiesEntityTypeMap[entity.type]
+        (entity) => getPropertiesEntityType(entity) !== undefined
       );
 
       if (handler || hasSupportedEntity) {
@@ -325,7 +332,7 @@ export function createNavigationEntityListShortcut({
               notificationSource,
             });
           }
-          const entityType = propertiesEntityTypeMap[entity.type];
+          const entityType = getPropertiesEntityType(entity);
           if (entityType && ENABLE_PROPERTIES_METADATA) {
             propertiesServiceClient
               .setPropertyStatusComplete({
@@ -348,8 +355,9 @@ export function createNavigationEntityListShortcut({
         // notifications
         if (entity.type === 'email' || entity.type === 'channel') return true;
 
-        // property status complete
-        if (['document', 'project', 'task'].includes(entity.type)) return true;
+        // property status complete (tasks have type 'document' with subType 'task')
+        if (isTaskEntity(entity)) return true;
+        if (['document', 'project'].includes(entity.type)) return true;
 
         if (entityHasUnreadNotifications(notificationSource, entity)) {
           return true;
