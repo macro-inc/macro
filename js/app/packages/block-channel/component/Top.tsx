@@ -1,3 +1,4 @@
+import PencilSimpleLine from '@icon/regular/pencil-simple-line.svg';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
   SplitHeaderLeft,
@@ -73,18 +74,28 @@ export function Top() {
     channel?.channel?.name ?? 'New Channel'
   );
 
+  const handleRenameChannel = () => {};
+
   return (
     <>
       <SplitHeaderLeft>
-        <StaticSplitLabel
-          label={channelName() ?? 'New Channel'}
-          icon={
-            <TopIcon
-              channelType={channelType()}
-              participants={participants()}
-            />
-          }
-        />
+        <div class="h-full my-auto flex gap-2 justify-center items-center">
+          <StaticSplitLabel
+            label={channelName() ?? 'New Channel'}
+            icon={
+              <TopIcon
+                channelType={channelType()}
+                participants={participants()}
+              />
+            }
+          />
+          <IconButton
+            size="sm"
+            tooltip={{ label: 'Rename channel' }}
+            icon={PencilSimpleLine}
+            onClick={handleRenameChannel}
+          />
+        </div>
       </SplitHeaderLeft>
       <SplitHeaderRight>
         <BlockLiveIndicators />
