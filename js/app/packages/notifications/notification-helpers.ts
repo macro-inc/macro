@@ -194,8 +194,7 @@ export function createEffectOnEntityTypeNotification(
   callback: (n: UnifiedNotification) => void
 ) {
   createEffect(() => {
-    let cleanup: (() => void) | undefined;
-    cleanup = notificationSource.subscribe((notification) => {
+    let cleanup = notificationSource.subscribe((notification) => {
       if (notificationIsOfEntityType(notification, type)) {
         callback(notification);
       }
