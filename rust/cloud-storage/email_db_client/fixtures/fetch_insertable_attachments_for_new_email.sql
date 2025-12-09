@@ -160,7 +160,7 @@ VALUES ('00000000-0000-0000-0000-0000000e0101',
         '00000000-0000-0000-0000-00000000001a',
         'target-msg-101',
         TRUE, -- This makes condition 1 true for the thread
-        NULL,
+        '00000000-0000-0000-0000-0000000c0002',
         '2025-01-02 10:00:00 +00:00',
         true, false, false, false, NOW(), NOW());
 
