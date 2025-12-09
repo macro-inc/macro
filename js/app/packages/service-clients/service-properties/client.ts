@@ -1,5 +1,4 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
-import type { ServiceClient } from '@core/service';
 import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
@@ -14,7 +13,40 @@ import { registerClient } from '@core/util/mockClient';
 import type { SafeFetchInit } from '@core/util/safeFetch';
 import type { z } from 'zod';
 import type * as schemas from './generated/zod';
-import type { PropertiesService } from './service';
+
+type PropertiesEntityType = z.infer<
+  typeof schemas.setEntityPropertyParams.shape.entity_type
+>;
+
+type ListPropertiesArgs = z.infer<typeof schemas.listPropertiesQueryParams>;
+type CreatePropertyDefinitionArgs = {
+  body: z.infer<typeof schemas.createPropertyDefinitionBody>;
+};
+type DeletePropertyDefinitionArgs = z.infer<
+  typeof schemas.deletePropertyDefinitionParams
+>;
+type GetEntityPropertiesArgs = z.infer<
+  typeof schemas.getEntityPropertiesParams
+> & {
+  query: z.infer<typeof schemas.getEntityPropertiesQueryParams>;
+};
+type SetEntityPropertyArgs = z.infer<typeof schemas.setEntityPropertyParams> & {
+  body: z.infer<typeof schemas.setEntityPropertyBody>;
+};
+type DeleteEntityPropertyArgs = z.infer<
+  typeof schemas.deleteEntityPropertyParams
+>;
+type GetPropertyOptionsArgs = z.infer<typeof schemas.getPropertyOptionsParams>;
+type AddPropertyOptionArgs = z.infer<typeof schemas.addPropertyOptionParams> & {
+  body: z.infer<typeof schemas.addPropertyOptionBody>;
+};
+type DeletePropertyOptionArgs = z.infer<
+  typeof schemas.deletePropertyOptionParams
+>;
+type SetPropertyStatusCompleteArgs = {
+  entity_type: PropertiesEntityType;
+  entity_id: string;
+};
 
 const propertiesHost: string = SERVER_HOSTS['properties-service'];
 
@@ -35,8 +67,8 @@ export function propertiesFetch<T extends ObjectLike = never>(
   return fetchWithToken<T>(`${propertiesHost}${url}`, init);
 }
 
-export const propertiesServiceClient: ServiceClient<PropertiesService> = {
-  listProperties: async (args) => {
+export const propertiesServiceClient = {
+  listProperties: async (args: ListPropertiesArgs) => {
     const queryParams = new URLSearchParams();
     queryParams.set('scope', args.scope);
     if (args.include_options !== undefined) {
@@ -50,7 +82,7 @@ export const propertiesServiceClient: ServiceClient<PropertiesService> = {
     });
   },
 
-  createPropertyDefinition: async (args) => {
+  createPropertyDefinition: async (args: CreatePropertyDefinitionArgs) => {
     return await propertiesFetch<{
       created_at: string;
       data_type:
@@ -88,7 +120,7 @@ export const propertiesServiceClient: ServiceClient<PropertiesService> = {
     });
   },
 
-  deletePropertyDefinition: async (args) => {
+  deletePropertyDefinition: async (args: DeletePropertyDefinitionArgs) => {
     const result = await propertiesFetch<{}>(
       `/properties/definitions/${args.definition_id}`,
       {
@@ -99,7 +131,7 @@ export const propertiesServiceClient: ServiceClient<PropertiesService> = {
     return mapOk(result, () => ({ success: true }));
   },
 
-  getEntityProperties: async (args) => {
+  getEntityProperties: async (args: GetEntityPropertiesArgs) => {
     const queryParams = new URLSearchParams();
 
     if (args.query.include_metadata !== undefined) {
@@ -116,7 +148,7 @@ export const propertiesServiceClient: ServiceClient<PropertiesService> = {
     });
   },
 
-  setEntityProperty: async (args) => {
+  setEntityProperty: async (args: SetEntityPropertyArgs) => {
     const url = `/properties/entities/${args.entity_type}/${args.entity_id}/${args.property_id}`;
 
     const result = await propertiesFetch<{}>(url, {
@@ -127,7 +159,7 @@ export const propertiesServiceClient: ServiceClient<PropertiesService> = {
     return mapOk(result, () => ({ success: true }));
   },
 
-  deleteEntityProperty: async (args) => {
+  deleteEntityProperty: async (args: DeleteEntityPropertyArgs) => {
     const result = await propertiesFetch<{}>(
       `/properties/entity_properties/${args.entity_property_id}`,
       {
@@ -138,7 +170,7 @@ export const propertiesServiceClient: ServiceClient<PropertiesService> = {
     return mapOk(result, () => ({ success: true }));
   },
 
-  getPropertyOptions: async (args) => {
+  getPropertyOptions: async (args: GetPropertyOptionsArgs) => {
     return await propertiesFetch<
       z.infer<typeof schemas.getPropertyOptionsResponse>
     >(`/properties/definitions/${args.definition_id}/options`, {
@@ -146,7 +178,7 @@ export const propertiesServiceClient: ServiceClient<PropertiesService> = {
     });
   },
 
-  addPropertyOption: async (args) => {
+  addPropertyOption: async (args: AddPropertyOptionArgs) => {
     return await propertiesFetch<{
       created_at: string;
       display_order: number;
@@ -162,7 +194,7 @@ export const propertiesServiceClient: ServiceClient<PropertiesService> = {
     });
   },
 
-  deletePropertyOption: async (args) => {
+  deletePropertyOption: async (args: DeletePropertyOptionArgs) => {
     const result = await propertiesFetch<{}>(
       `/properties/definitions/${args.definition_id}/options/${args.option_id}`,
       {
@@ -170,6 +202,14 @@ export const propertiesServiceClient: ServiceClient<PropertiesService> = {
       }
     );
 
+    return mapOk(result, () => ({ success: true }));
+  },
+
+  setPropertyStatusComplete: async (args: SetPropertyStatusCompleteArgs) => {
+    const url = `/properties/entities/${args.entity_type}/${args.entity_id}/status/complete`;
+    const result = await propertiesFetch<{}>(url, {
+      method: 'PATCH',
+    });
     return mapOk(result, () => ({ success: true }));
   },
 };
