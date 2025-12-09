@@ -1,17 +1,12 @@
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import type { ApiPaginatedThreadCursor } from '@service-email/generated/schemas/apiPaginatedThreadCursor';
 import type { PreviewsInboxCursorParams } from '@service-email/generated/schemas/previewsInboxCursorParams';
-import {
-  type InfiniteData,
-  partialMatchKey,
-  useInfiniteQuery,
-} from '@tanstack/solid-query';
+import { useInfiniteQuery } from '@tanstack/solid-query';
 import { SERVER_HOSTS } from 'core/constant/servers';
 import { platformFetch } from 'core/util/platformFetch';
 import { type Accessor, createMemo } from 'solid-js';
 import type { EmailEntity } from '../types/entity';
 import { createApiTokenQuery } from './auth';
-import { queryClient } from './client';
 import { queryKeys } from './key';
 
 export type FetchPaginatedEmailsParams = PreviewsInboxCursorParams & {
