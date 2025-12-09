@@ -13,7 +13,6 @@
 pub mod domain;
 pub mod outbound;
 
-// Re-export commonly used types for convenience
 pub use domain::ports::PropertiesRepo;
 pub use domain::service::PropertiesService;
 pub use domain::service_impl::PropertiesServiceImpl;
