@@ -5234,6 +5234,8 @@ name = "mention_utils"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "cool_asserts",
+ "nom 8.0.0",
  "regex",
  "serde",
  "serde_json",
