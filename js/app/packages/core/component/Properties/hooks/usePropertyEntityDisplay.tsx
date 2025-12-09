@@ -104,7 +104,8 @@ export function usePropertyEntityDisplay(
   });
 
   const icon = createMemo(() => {
-    switch (entityType()) {
+    const type = entityType().toUpperCase();
+    switch (type) {
       case 'USER':
         return <UserIcon id={entityId()} size="xs" />;
 
@@ -133,6 +134,9 @@ export function usePropertyEntityDisplay(
         }
       }
 
+      case 'TASK':
+        return <CoreEntityIcon targetType="task" size="xs" />;
+
       case 'DOCUMENT': {
         const previewItem = preview();
         if (
@@ -141,6 +145,11 @@ export function usePropertyEntityDisplay(
           !isAccessiblePreviewItem(previewItem)
         ) {
           return <CoreEntityIcon targetType="unknown" size="xs" />;
+        }
+
+        // Tasks are documents with subType 'task'
+        if (previewItem.subType === 'task') {
+          return <CoreEntityIcon targetType="task" size="xs" />;
         }
 
         const fileType = previewItem.fileType;
@@ -161,9 +170,6 @@ export function usePropertyEntityDisplay(
 
       case 'THREAD':
         return <CoreEntityIcon targetType="email" size="xs" />;
-
-      case 'TASK':
-        return <CoreEntityIcon targetType="task" size="xs" />;
 
       default:
         if (options && 'fallbackIcon' in options) {
