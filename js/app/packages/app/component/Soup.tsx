@@ -294,7 +294,7 @@ export function Soup() {
 
   createEffectOnEntityTypeNotification(notificationSource, 'email', () => {
     entityQueryClient.invalidateQueries({
-      // HACK: this needs to be improved, since we use a single query, per entity invalidations 
+      // HACK: this needs to be improved, since we use a single query, per entity invalidations
       // become a little more complicated.
       queryKey: queryKeys.all.entity,
     });
