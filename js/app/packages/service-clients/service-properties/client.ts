@@ -11,38 +11,51 @@ import {
 } from '@core/util/maybeResult';
 import { registerClient } from '@core/util/mockClient';
 import type { SafeFetchInit } from '@core/util/safeFetch';
-import type { z } from 'zod';
-import type * as schemas from './generated/zod';
+import type { AddPropertyOptionRequest } from './generated/schemas/addPropertyOptionRequest';
+import type { CreatePropertyDefinitionRequest } from './generated/schemas/createPropertyDefinitionRequest';
+import type { EntityPropertiesResponse } from './generated/schemas/entityPropertiesResponse';
+import type { EntityType } from './generated/schemas/entityType';
+import type { GetEntityPropertiesParams } from './generated/schemas/getEntityPropertiesParams';
+import type { ListPropertiesParams } from './generated/schemas/listPropertiesParams';
+import type { PropertyDefinition } from './generated/schemas/propertyDefinition';
+import type { PropertyDefinitionResponse } from './generated/schemas/propertyDefinitionResponse';
+import type { PropertyOption } from './generated/schemas/propertyOption';
+import type { SetEntityPropertyRequest } from './generated/schemas/setEntityPropertyRequest';
 
-type PropertiesEntityType = z.infer<
-  typeof schemas.setEntityPropertyParams.shape.entity_type
->;
+type PropertiesEntityType = EntityType;
 
-type ListPropertiesArgs = z.infer<typeof schemas.listPropertiesQueryParams>;
+type ListPropertiesArgs = ListPropertiesParams;
 type CreatePropertyDefinitionArgs = {
-  body: z.infer<typeof schemas.createPropertyDefinitionBody>;
+  body: CreatePropertyDefinitionRequest;
 };
-type DeletePropertyDefinitionArgs = z.infer<
-  typeof schemas.deletePropertyDefinitionParams
->;
-type GetEntityPropertiesArgs = z.infer<
-  typeof schemas.getEntityPropertiesParams
-> & {
-  query: z.infer<typeof schemas.getEntityPropertiesQueryParams>;
+type DeletePropertyDefinitionArgs = {
+  definition_id: string;
 };
-type SetEntityPropertyArgs = z.infer<typeof schemas.setEntityPropertyParams> & {
-  body: z.infer<typeof schemas.setEntityPropertyBody>;
+type GetEntityPropertiesArgs = {
+  entity_type: EntityType;
+  entity_id: string;
+  query: GetEntityPropertiesParams;
 };
-type DeleteEntityPropertyArgs = z.infer<
-  typeof schemas.deleteEntityPropertyParams
->;
-type GetPropertyOptionsArgs = z.infer<typeof schemas.getPropertyOptionsParams>;
-type AddPropertyOptionArgs = z.infer<typeof schemas.addPropertyOptionParams> & {
-  body: z.infer<typeof schemas.addPropertyOptionBody>;
+type SetEntityPropertyArgs = {
+  entity_type: EntityType;
+  entity_id: string;
+  property_id: string;
+  body: SetEntityPropertyRequest;
 };
-type DeletePropertyOptionArgs = z.infer<
-  typeof schemas.deletePropertyOptionParams
->;
+type DeleteEntityPropertyArgs = {
+  entity_property_id: string;
+};
+type GetPropertyOptionsArgs = {
+  definition_id: string;
+};
+type AddPropertyOptionArgs = {
+  definition_id: string;
+  body: AddPropertyOptionRequest;
+};
+type DeletePropertyOptionArgs = {
+  definition_id: string;
+  option_id: string;
+};
 type SetPropertyStatusCompleteArgs = {
   entity_type: PropertiesEntityType;
   entity_id: string;
@@ -75,49 +88,22 @@ export const propertiesServiceClient = {
       queryParams.set('include_options', String(args.include_options));
     }
 
-    return await propertiesFetch<
-      z.infer<typeof schemas.listPropertiesResponse>
-    >(`/properties/definitions?${queryParams}`, {
-      method: 'GET',
-    });
+    return await propertiesFetch<PropertyDefinitionResponse[]>(
+      `/properties/definitions?${queryParams}`,
+      {
+        method: 'GET',
+      }
+    );
   },
 
   createPropertyDefinition: async (args: CreatePropertyDefinitionArgs) => {
-    return await propertiesFetch<{
-      created_at: string;
-      data_type:
-        | 'boolean'
-        | 'date'
-        | 'number'
-        | 'string'
-        | 'select_number'
-        | 'select_string'
-        | 'entity';
-      display_name: string;
-      id: string;
-      is_metadata: boolean;
-      is_multi_select: boolean;
-      owner:
-        | { scope: 'user'; user_id: string }
-        | { scope: 'organization'; organization_id: number }
-        | {
-            scope: 'user_and_organization';
-            user_id: string;
-            organization_id: number;
-          };
-      specific_entity_type?:
-        | 'channel'
-        | 'chat'
-        | 'document'
-        | 'project'
-        | 'thread'
-        | 'user'
-        | null;
-      updated_at: string;
-    }>(`/properties/definitions`, {
-      method: 'POST',
-      body: JSON.stringify(args.body),
-    });
+    return await propertiesFetch<PropertyDefinition>(
+      `/properties/definitions`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args.body),
+      }
+    );
   },
 
   deletePropertyDefinition: async (args: DeletePropertyDefinitionArgs) => {
@@ -141,9 +127,7 @@ export const propertiesServiceClient = {
     const queryString = queryParams.toString();
     const url = `/properties/entities/${args.entity_type}/${args.entity_id}${queryString ? `?${queryString}` : ''}`;
 
-    return await propertiesFetch<
-      z.infer<typeof schemas.getEntityPropertiesResponse>
-    >(url, {
+    return await propertiesFetch<EntityPropertiesResponse>(url, {
       method: 'GET',
     });
   },
@@ -171,27 +155,22 @@ export const propertiesServiceClient = {
   },
 
   getPropertyOptions: async (args: GetPropertyOptionsArgs) => {
-    return await propertiesFetch<
-      z.infer<typeof schemas.getPropertyOptionsResponse>
-    >(`/properties/definitions/${args.definition_id}/options`, {
-      method: 'GET',
-    });
+    return await propertiesFetch<PropertyOption[]>(
+      `/properties/definitions/${args.definition_id}/options`,
+      {
+        method: 'GET',
+      }
+    );
   },
 
   addPropertyOption: async (args: AddPropertyOptionArgs) => {
-    return await propertiesFetch<{
-      created_at: string;
-      display_order: number;
-      id: string;
-      property_definition_id: string;
-      updated_at: string;
-      value:
-        | { type: 'string'; value: string }
-        | { type: 'number'; value: number };
-    }>(`/properties/definitions/${args.definition_id}/options`, {
-      method: 'POST',
-      body: JSON.stringify(args.body),
-    });
+    return await propertiesFetch<PropertyOption>(
+      `/properties/definitions/${args.definition_id}/options`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args.body),
+      }
+    );
   },
 
   deletePropertyOption: async (args: DeletePropertyOptionArgs) => {
