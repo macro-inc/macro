@@ -178,7 +178,11 @@ export const PropertyDisplayControl: Component<PropertyDisplayControlProps> = (
       const [, data] = result;
       const properties = Array.isArray(data) ? data : [];
 
-      setAvailableProperties(properties);
+      const normalizedProperties = properties.map((item) =>
+        'definition' in item ? item.definition : item
+      );
+
+      setAvailableProperties(normalizedProperties);
       setIsLoading(false);
     } catch (_apiError) {
       setError(ERROR_MESSAGES.PROPERTY_FETCH);
