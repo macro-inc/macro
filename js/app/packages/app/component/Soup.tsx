@@ -270,25 +270,25 @@ export function Soup() {
   createEffectOnEntityTypeNotification(
     notificationSource,
     'channel',
-    (notifications) => {
+    (notification) => {
       entityQueryClient.invalidateQueries({
         queryKey: queryKeys.all.channel,
       });
-      const eventItemIds = new Set(
-        notifications.map(({ eventItemId }) => eventItemId)
-      );
-      eventItemIds.forEach((eventItemId) => {
-        entityQueryClient.invalidateQueries({
-          queryKey: queryKeys.notification({ eventItemId }),
-        });
+      entityQueryClient.invalidateQueries({
+        queryKey: queryKeys.notification({
+          eventItemId: notification.eventItemId,
+        }),
       });
     }
   );
-  createEffectOnEntityTypeNotification(notificationSource, 'email', () =>
+
+  createEffectOnEntityTypeNotification(notificationSource, 'email', () => {
     entityQueryClient.invalidateQueries({
-      queryKey: queryKeys.all.email,
-    })
-  );
+      // HACK: this needs to be improved, since we use a single query, per entity invalidations 
+      // become a little more complicated.
+      queryKey: queryKeys.all.entity,
+    });
+  });
 
   const saveViewMutation = useUpsertSavedViewMutation();
 

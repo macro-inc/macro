@@ -16,7 +16,7 @@ import {
 } from '@core/user';
 import {
   createEffectOnEntityTypeNotification,
-  isNotificationWithMetadata,
+  isNewEmail,
 } from '@notifications';
 import { emailClient } from '@service-email/client';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
@@ -559,20 +559,15 @@ export function Email(props: EmailProps) {
   });
 
   const notificationSource = useGlobalNotificationSource();
+
   createEffectOnEntityTypeNotification(
     notificationSource,
     'email',
-    (notifications) => {
-      for (const notification of notifications) {
-        if (!isNotificationWithMetadata(notification)) return;
-        const metadata = notification.notificationMetadata;
-        if (
-          !metadata ||
-          typeof metadata !== 'object' ||
-          !('thread_id' in metadata)
-        )
-          return;
+    (notification) => {
+      if (!isNewEmail(notification)) return;
+      const notificationThreadId = notification.notificationMetadata.threadId;
 
+<<<<<<< Updated upstream
         const notificationThreadId = (metadata as { thread_id: string })
           .thread_id;
 
@@ -582,9 +577,14 @@ export function Email(props: EmailProps) {
           resource.refresh();
           break;
         }
+=======
+      if (notificationThreadId === threadData()?.db_id) {
+        threadQuery.refetch();
+>>>>>>> Stashed changes
       }
     }
   );
+
   let markdownDomRef!: HTMLDivElement;
 
   registerScopeSignalHotkey(scopeId, {
