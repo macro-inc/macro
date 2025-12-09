@@ -312,21 +312,6 @@ export function Dock() {
               </Show>
 
               <IconButton
-                onClick={() => {
-                  if (isRightPanelCollapsed()) { track(TrackingEvents.RIGHTBAR.OPEN) }
-                  else { track(TrackingEvents.RIGHTBAR.CLOSE) }
-                  toggleRightPanel();
-                }}
-                theme={isRightPanelCollapsed() ? 'clear' : 'accent'}
-                tooltip={{
-                  hotkeyToken: TOKENS.global.toggleRightPanel,
-                  label: 'Toggle AI Panel',
-                }}
-                icon={IconAtom}
-                size="sm"
-              />
-
-              <IconButton
                 tooltip={{
                   hotkeyToken: TOKENS.global.createNewSplit,
                   label: 'Create New Split'
@@ -345,6 +330,21 @@ export function Dock() {
                 }}
                 icon={SplitIcon}
                 theme="clear"
+                size="sm"
+              />
+
+              <IconButton
+                onClick={() => {
+                  if (isRightPanelCollapsed()) { track(TrackingEvents.RIGHTBAR.OPEN) }
+                  else { track(TrackingEvents.RIGHTBAR.CLOSE) }
+                  toggleRightPanel();
+                }}
+                theme={isRightPanelCollapsed() ? 'clear' : 'accent'}
+                tooltip={{
+                  hotkeyToken: TOKENS.global.toggleRightPanel,
+                  label: 'Toggle AI Panel',
+                }}
+                icon={IconAtom}
                 size="sm"
               />
 

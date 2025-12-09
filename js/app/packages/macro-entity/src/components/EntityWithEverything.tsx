@@ -35,7 +35,11 @@ import {
   type ProjectContainedEntity,
 } from '../queries/project';
 import { isSearchEntity } from '../queries/search';
-import type { EntityData, ProjectEntity } from '../types/entity';
+import {
+  type EntityData,
+  isTaskEntity,
+  type ProjectEntity,
+} from '../types/entity';
 import type { Notification, WithNotification } from '../types/notification';
 import type {
   ChannelContentHitData,
@@ -178,7 +182,9 @@ export function EntityWithEverything(
             return getIconConfig('channel');
         }
       case 'document':
-        return getIconConfig(props.entity.fileType || 'default');
+        if (isTaskEntity(props.entity)) return getIconConfig('task');
+        if (props.entity.fileType) return getIconConfig(props.entity.fileType);
+        return getIconConfig('default');
       case 'chat':
         return getIconConfig('chat');
       case 'project':

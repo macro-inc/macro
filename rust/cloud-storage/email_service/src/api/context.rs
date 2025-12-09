@@ -8,6 +8,7 @@ use macro_middleware::auth::internal_access::InternalApiSecretKey;
 use secretsmanager_client::LocalOrRemoteSecret;
 use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
+use system_properties::{PgSystemPropertiesRepository, SystemPropertiesServiceImpl};
 
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
@@ -19,6 +20,7 @@ pub(crate) struct ApiContext {
     pub s3_client: Arc<s3_client::S3>,
     pub sfs_client: Arc<StaticFileServiceClient>,
     pub dss_client: Arc<DocumentStorageServiceClient>,
+    pub system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     pub jwt_args: JwtValidationArgs,
     pub config: Arc<Config>,
     pub internal_auth_key: LocalOrRemoteSecret<InternalApiSecretKey>,

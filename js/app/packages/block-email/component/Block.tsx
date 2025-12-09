@@ -2,10 +2,8 @@ import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { withAnalytics } from '@coparse/analytics';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { EmailDebouncedReadMarker } from '@notifications';
-import { createEffect, createMemo, onMount, Show } from 'solid-js';
+import { createMemo, onMount, Show } from 'solid-js';
 import { blockDataSignal } from '../signal/emailBlockData';
-import { createThreadMessagesResource } from '../signal/threadMessages';
-import { markThreadAsSeen } from '../util/markThreadAsSeen';
 import { Email } from './Email';
 
 const { track, TrackingEvents } = withAnalytics();
@@ -21,54 +19,27 @@ export default function BlockEmail() {
     return data.thread.messages[0].subject!;
   });
 
-  const threadMessagesResource = createMemo(() => {
-    const data = blockData();
-    const threadId = data?.thread?.db_id;
-    return threadId
-      ? createThreadMessagesResource(threadId, data.thread)
-      : null;
-  });
-
-  const threadData = createMemo(() => {
-    const resource = threadMessagesResource();
-    const resourceData = resource?.resource();
-    return resourceData?.thread;
-  });
+  const threadId = createMemo(() => blockData()?.thread?.db_id ?? '');
 
   onMount(() => {
     track(TrackingEvents.BLOCKEMAIL.OPEN);
-  });
-
-  // Mark all messages as read
-  createEffect(() => {
-    const data = blockData();
-    if (!data) return;
-    let initialThreadLoad = data.thread;
-    if (!initialThreadLoad.db_id) return;
-
-    markThreadAsSeen(initialThreadLoad.db_id);
   });
 
   return (
     <DocumentBlockContainer title={title() ?? 'Email'}>
       <div class="size-full bracket-never" tabIndex={-1}>
         <Show when={blockData()}>
-          <Show when={blockData()?.thread?.db_id}>
-            {(threadId) => {
-              return (
+          <Show when={threadId()}>
+            {(id) => (
+              <>
                 <EmailDebouncedReadMarker
                   notificationSource={notificationSource}
-                  threadId={threadId()}
+                  threadId={id()}
                 />
-              );
-            }}
+                <Email title={title} threadId={id} />
+              </>
+            )}
           </Show>
-
-          <Email
-            title={title}
-            threadMessagesResource={threadMessagesResource}
-            threadData={threadData}
-          />
         </Show>
       </div>
     </DocumentBlockContainer>

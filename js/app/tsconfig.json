@@ -198,6 +198,9 @@
       ],
       "@app/*": [
         "./packages/app/*"
+      ],
+      "@queries/*": [
+        "./packages/queries/*"
       ]
     },
     "rootDir": ".",

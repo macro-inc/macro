@@ -1398,11 +1398,13 @@
           "link_id",
           "inbox_visible",
           "is_read",
+          "access_level",
           "created_at",
           "updated_at",
           "messages"
         ],
         "properties": {
+          "access_level": { "$ref": "#/components/schemas/AccessLevel" },
           "created_at": { "type": "string", "format": "date-time" },
           "db_id": { "type": ["string", "null"], "format": "uuid" },
           "inbox_visible": { "type": "boolean" },
@@ -1799,9 +1801,8 @@
       "GetThreadResponse": {
         "type": "object",
         "description": "The response returned from the get thread endpoint",
-        "required": ["thread", "access_level"],
+        "required": ["thread"],
         "properties": {
-          "access_level": { "$ref": "#/components/schemas/AccessLevel" },
           "thread": {
             "$ref": "#/components/schemas/APIThread",
             "description": "the thread, with messages inside"

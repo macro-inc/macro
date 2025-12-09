@@ -82,6 +82,7 @@ models_email = { path = "../models_email" }
 models_opensearch = { path = "../models_opensearch" }
 models_pagination = { path = "../models_pagination", features = ["axum"] }
 models_permissions = { path = "../models_permissions" }
+models_properties = { path = "../models_properties" }
 redis = { workspace = true, features = [
   "cluster-async",
   "tokio-native-tls-comp",
@@ -106,6 +107,7 @@ sqs_client = { path = "../sqs_client", default-features = false, features = [
 sqs_worker = { path = "../sqs_worker" }
 static_file_service_client = { path = "../static_file_service_client" }
 strum_macros = { workspace = true }
+system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }
 tokio = { workspace = true }
 tower = { workspace = true }

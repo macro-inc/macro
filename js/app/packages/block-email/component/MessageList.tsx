@@ -35,16 +35,12 @@ export function MessageList(props: MessageListProps) {
         const threshold = 300;
         const isNearBeginning = e.currentTarget.scrollTop <= threshold;
 
-        const resource = context.threadMessagesResource();
-        if (isNearBeginning && resource && !resource.loading()) {
-          const resourceData = resource.resource();
-          if (resourceData?.hasMore) {
-            resource.loadMore();
-          }
+        if (isNearBeginning && !context.isFetching() && context.hasMore()) {
+          context.fetchNextPage();
         }
       }}
     >
-      <Show when={context.threadMessagesResource()?.loading()}>
+      <Show when={context.isFetching()}>
         <div class="flex items-center justify-center h-16">
           <CircleSpinner />
         </div>

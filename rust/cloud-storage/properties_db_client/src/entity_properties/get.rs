@@ -9,7 +9,7 @@ use models_properties::service::entity_property::EntityProperty;
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_value::PropertyValue;
-use models_properties::{DataType, EntityReference, EntityType};
+use models_properties::{DataType, EntityPropertyReference, EntityReference, EntityType};
 
 type Result<T> = std::result::Result<T, PropertiesDatabaseError>;
 
@@ -228,34 +228,31 @@ async fn attach_property_options(
     Ok(())
 }
 
-/// Gets the entity_id and entity_type for a given entity_property_id.
-/// Used for permission checking before deletion.
-///
-/// Note: This excludes system properties (is_system = TRUE). System properties
-/// cannot be deleted, so this function will return None for them.
+/// Looks up an entity property by its ID.
+/// Returns entity reference (for permissions) and definition ID (for required property check).
 #[tracing::instrument(skip(db))]
-pub async fn get_entity_type_from_entity_property(
+pub async fn lookup_entity_property(
     db: &Pool<Postgres>,
     entity_property_id: Uuid,
-) -> Result<Option<EntityReference>> {
+) -> Result<Option<EntityPropertyReference>> {
     let row = sqlx::query!(
         r#"
         SELECT 
             ep.entity_id,
-            ep.entity_type as "entity_type: EntityType"
+            ep.entity_type as "entity_type: EntityType",
+            ep.property_definition_id
         FROM entity_properties ep
-        JOIN property_definitions pd ON ep.property_definition_id = pd.id
         WHERE ep.id = $1
-          AND pd.is_system = FALSE
         "#,
         entity_property_id
     )
     .fetch_optional(db)
     .await?;
 
-    Ok(row.map(|r| EntityReference {
+    Ok(row.map(|r| EntityPropertyReference {
         entity_id: r.entity_id,
         entity_type: r.entity_type,
+        property_definition_id: r.property_definition_id,
     }))
 }
 
@@ -658,18 +655,24 @@ mod tests {
         migrator = "MACRO_DB_MIGRATIONS",
         fixtures(path = "../../fixtures", scripts("properties"))
     )]
-    async fn test_get_entity_type_from_entity_property(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    async fn test_lookup_entity_property(pool: Pool<Postgres>) -> anyhow::Result<()> {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
         let entity_property_id = "e0111111-1111-1111-1111-111111111111"
             .parse::<Uuid>()
             .unwrap();
-        let entity_ref = get_entity_type_from_entity_property(&pool, entity_property_id).await?;
+        let info = lookup_entity_property(&pool, entity_property_id).await?;
 
-        assert!(entity_ref.is_some());
-        let entity_ref = entity_ref.unwrap();
-        assert_eq!(entity_ref.entity_id, "doc1");
-        assert_eq!(entity_ref.entity_type, EntityType::Document);
+        assert!(info.is_some());
+        let info = info.unwrap();
+        assert_eq!(info.entity_id, "doc1");
+        assert_eq!(info.entity_type, EntityType::Document);
+        assert_eq!(
+            info.property_definition_id,
+            "11111111-1111-1111-1111-111111111111"
+                .parse::<Uuid>()
+                .unwrap()
+        );
 
         Ok(())
     }
@@ -678,17 +681,15 @@ mod tests {
         migrator = "MACRO_DB_MIGRATIONS",
         fixtures(path = "../../fixtures", scripts("properties"))
     )]
-    async fn test_get_entity_type_from_entity_property_not_found(
-        pool: Pool<Postgres>,
-    ) -> anyhow::Result<()> {
+    async fn test_lookup_entity_property_not_found(pool: Pool<Postgres>) -> anyhow::Result<()> {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
         let entity_property_id = "00000000-0000-0000-0000-000000000000"
             .parse::<Uuid>()
             .unwrap();
-        let entity_ref = get_entity_type_from_entity_property(&pool, entity_property_id).await?;
+        let info = lookup_entity_property(&pool, entity_property_id).await?;
 
-        assert!(entity_ref.is_none());
+        assert!(info.is_none());
 
         Ok(())
     }

@@ -1,4 +1,4 @@
-import type { BlockName } from '@core/block';
+import type { BlockAlias, BlockName } from '@core/block';
 import type { FileType } from '@service-cognition/generated/schemas/fileType';
 
 const codeFileExtensions: (keyof typeof FileType)[] = [
@@ -320,7 +320,7 @@ export const SUPPORTED_ATTACHMENT_EXTENSIONS = [
   ...SUPPORTED_DOCUMENT_ATTACHMENT_EXTENSIONS,
 ];
 
-export const SUPPORTED_CHAT_ATTACHMENT_BLOCKS: BlockName[] = [
+export const SUPPORTED_CHAT_ATTACHMENT_BLOCKS: (BlockName | BlockAlias)[] = [
   'image',
   'channel',
   'write',
@@ -329,4 +329,5 @@ export const SUPPORTED_CHAT_ATTACHMENT_BLOCKS: BlockName[] = [
   'code',
   'canvas',
   'email',
+  'task',
 ];

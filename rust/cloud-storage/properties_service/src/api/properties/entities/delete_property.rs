@@ -3,15 +3,15 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Response},
 };
+use models_properties::EntityReference;
+use system_properties::SystemPropertyKey;
 use thiserror::Error;
 use uuid::Uuid;
 
 use crate::api::context::ApiContext;
 use model::user::UserContext;
 use properties_db_client::{
-    entity_properties::{
-        delete as entity_properties_delete, get::get_entity_type_from_entity_property,
-    },
+    entity_properties::{delete as entity_properties_delete, get::lookup_entity_property},
     error::PropertiesDatabaseError,
 };
 
@@ -25,6 +25,8 @@ pub enum DeleteEntityPropertyErr {
     Permission(#[from] crate::api::permissions::PermissionError),
     #[error("Entity property not found")]
     NotFound,
+    #[error("This property is required and cannot be removed from this entity")]
+    RequiredProperty,
 }
 
 impl IntoResponse for DeleteEntityPropertyErr {
@@ -34,6 +36,7 @@ impl IntoResponse for DeleteEntityPropertyErr {
             | DeleteEntityPropertyErr::DatabaseError(_) => StatusCode::INTERNAL_SERVER_ERROR,
             DeleteEntityPropertyErr::Permission(e) => e.status_code(),
             DeleteEntityPropertyErr::NotFound => StatusCode::NOT_FOUND,
+            DeleteEntityPropertyErr::RequiredProperty => StatusCode::FORBIDDEN,
         };
 
         if status_code.is_server_error() {
@@ -57,6 +60,7 @@ impl IntoResponse for DeleteEntityPropertyErr {
     ),
     responses(
         (status = 204, description = "Entity property removed successfully"),
+        (status = 403, description = "Property is required and cannot be removed"),
         (status = 404, description = "Entity property not found"),
         (status = 500, description = "Internal server error")
     ),
@@ -70,10 +74,8 @@ pub async fn delete_entity_property(
 ) -> Result<StatusCode, DeleteEntityPropertyErr> {
     tracing::info!("removing entity property");
 
-    // Get entity property metadata to check permissions
-    // Note: get_entity_type_from_entity_property excludes system properties,
-    // so system properties will return NotFound here.
-    let entity_ref = get_entity_type_from_entity_property(&context.db, entity_property_uuid)
+    // Lookup entity property
+    let property_info = lookup_entity_property(&context.db, entity_property_uuid)
         .await
         .inspect_err(|e| {
             tracing::error!(
@@ -84,10 +86,29 @@ pub async fn delete_entity_property(
         .ok_or(DeleteEntityPropertyErr::NotFound)?;
 
     tracing::debug!(
-        entity_id = %entity_ref.entity_id,
-        entity_type = ?entity_ref.entity_type,
-        "fetched entity property metadata"
+        entity_id = %property_info.entity_id,
+        entity_type = ?property_info.entity_type,
+        property_definition_id = %property_info.property_definition_id,
+        "fetched entity property info"
     );
+
+    // Check if this property is required for the entity type (e.g., Task properties)
+    if SystemPropertyKey::is_required_for_entity(
+        property_info.property_definition_id,
+        property_info.entity_type,
+    ) {
+        tracing::warn!(
+            entity_type = ?property_info.entity_type,
+            property_definition_id = %property_info.property_definition_id,
+            "attempted to remove required property"
+        );
+        return Err(DeleteEntityPropertyErr::RequiredProperty);
+    }
+
+    let entity_ref = EntityReference {
+        entity_id: property_info.entity_id,
+        entity_type: property_info.entity_type,
+    };
 
     crate::api::permissions::check_entity_edit_permission(
         &context,

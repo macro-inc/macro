@@ -14,6 +14,7 @@ import type {
   ApiPaginatedThreadCursor,
   CreateDraftRequest,
   CreateDraftResponse,
+  GetAttachmentDocumentIDResponse,
   GetAttachmentResponse,
   GetThreadResponse,
   ListContactsResponse,
@@ -170,6 +171,18 @@ export const emailClient = {
       await emailFetch<GetAttachmentResponse>(`/email/attachments/${id}`, {
         method: 'GET',
       }),
+      (result) => result
+    );
+  },
+  async getOrCreateAttachmentDocumentId(args: { id: string }) {
+    const { id } = args;
+    return mapOk(
+      await emailFetch<GetAttachmentDocumentIDResponse>(
+        `/email/attachments/${id}/document_id`,
+        {
+          method: 'GET',
+        }
+      ),
       (result) => result
     );
   },

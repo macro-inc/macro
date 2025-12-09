@@ -814,6 +814,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           entityTypeFilter().includes('chat') || entityTypeFilter().length === 0
             ? []
             : [GARBAGE_UUID],
+        project_ids: view().viewType === 'project' ? [view().id] : [],
       },
       email_filters: {
         recipients:
@@ -876,9 +877,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const disableDssInfiniteQuery = createMemo(() => {
     const typeFilter = entityTypeFilter();
     if (typeFilter.length === 0) return false;
-    const dssTypes = ['document', 'chat', 'project'];
-    const hasDssTypes = typeFilter.some((t) => dssTypes.includes(t));
-    return !hasDssTypes;
+
+    function onlyHas<T>(arr: readonly T[], value: T): boolean {
+      return arr.length === 1 && arr[0] === value;
+    }
+
+    if (onlyHas(typeFilter, 'channel')) return true;
+    return false;
   });
 
   const disableChannelsQuery = createMemo(() => {
@@ -1023,7 +1028,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     DocumentEntity | WithSearch<DocumentEntity>
   > = async (entity, event) => {
     const { id, fileType } = entity;
-    const blockName = fileTypeToBlockName(fileType);
+    const blockName =
+      entity.subType === 'task' ? 'task' : fileTypeToBlockName(fileType);
     const handle = event.altKey
       ? insertSplit({ type: blockName, id })
       : replaceOrInsertSplit({ type: blockName, id });

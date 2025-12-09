@@ -84,11 +84,20 @@ export function usePropertySelection(
       const [, data] = result;
       const availableProperties = Array.isArray(data) ? data : [];
 
-      // Transform the nested structure to flat structure
-      const transformedProperties = availableProperties.map((item) => ({
-        ...item.definition,
-        propertyOptions: item.property_options || [],
-      }));
+      // Transform the nested or flat API response to a flat structure
+      const transformedProperties = availableProperties.map((item) => {
+        if ('definition' in item) {
+          return {
+            ...item.definition,
+            propertyOptions: item.property_options || [],
+          };
+        }
+
+        return {
+          ...item,
+          propertyOptions: [],
+        };
+      });
 
       setState((prev) => ({
         ...prev,

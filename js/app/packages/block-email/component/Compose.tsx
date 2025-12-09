@@ -20,9 +20,8 @@ import {
 } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import Caution from '@icon/regular/warning.svg';
+import { useSendMessageMutation } from '@queries/email/thread';
 import { emailClient } from '@service-email/client';
-import type { SendMessageResponse } from '@service-email/generated/schemas';
-import { useMutation } from '@tanstack/solid-query';
 import {
   createMemo,
   createResource,
@@ -38,11 +37,7 @@ type EmailComposeErrors =
   | 'no_recipient'
   | 'no_message'
   | 'no_subject'
-  | 'no_link'
-  | 'generic';
-type EmailComposeVariables = {
-  body: { text: string; html: string; raw: string; attachments?: [] };
-};
+  | 'no_link';
 
 class EmailComposeError {
   constructor(
@@ -125,87 +120,82 @@ export function EmailCompose() {
 
   const { replaceSplit } = useSplitLayout();
 
-  // TODO: We should handle these errors in a form not in the mutation
-  const sendEmailMutation = useMutation<
-    SendMessageResponse,
-    EmailComposeError | Error,
-    EmailComposeVariables
-  >(() => ({
-    async mutationFn(contents) {
-      const _link = link();
+  const [validationError, setValidationError] =
+    createSignal<EmailComposeError | null>(null);
 
-      if (!selectedRecipients().length) {
-        const e = 'Please select at least one recipient';
-        throw new EmailComposeError('no_recipient', e);
-      }
-
-      if (!contents.body.raw.trim()) {
-        const e = 'Please enter a message';
-        throw new EmailComposeError('no_message', e);
-      }
-
-      if (!subject()?.trim()) {
-        const e = 'Please enter a subject';
-        throw new EmailComposeError('no_subject', e);
-      }
-      if (!_link) {
-        const e = 'Unable to find linked email account';
-        throw new EmailComposeError('no_link', e);
-      }
-
-      const result = await emailClient.sendMessage({
-        message: {
-          link_id: _link.id, // For new emails
-          to: convertToContactInfoArray(selectedRecipients()),
-          cc:
-            ccRecipients && ccRecipients.length > 0
-              ? convertToContactInfoArray(ccRecipients())
-              : [],
-          bcc:
-            bccRecipients && bccRecipients.length > 0
-              ? convertToContactInfoArray(bccRecipients())
-              : [],
-          subject: subject(),
-          body_text: contents.body.text,
-          body_html: contents.body.html,
-          body_macro: contents.body.raw,
-          attachments: [],
-        },
-      });
-
-      if (isErr(result)) {
-        const e = 'Failed to send email';
-        throw new EmailComposeError('generic', e);
-      }
-
-      return result[1];
-    },
-    mutationKey: ['compose-email'],
-    onError(error) {
-      if (error instanceof Error || error.type === 'generic') {
-        toast.failure(error instanceof Error ? error.message : error.message);
-      }
-    },
-    onSuccess(data) {
+  const sendMutation = useSendMessageMutation({
+    onSuccess: (data) => {
       toast.success('Email sent');
       if (data.message.thread_db_id) {
         replaceSplit({ type: 'email', id: data.message.thread_db_id }, true);
       }
     },
-  }));
+    onError: () => {
+      toast.failure('Failed to send email');
+    },
+  });
 
   const onSubmit = (data: ComposeInputData) => {
-    sendEmailMutation.mutate(data);
+    setValidationError(null);
+
+    const _link = link();
+
+    if (!selectedRecipients().length) {
+      setValidationError(
+        new EmailComposeError(
+          'no_recipient',
+          'Please select at least one recipient'
+        )
+      );
+      return;
+    }
+
+    if (!data.body.raw.trim()) {
+      setValidationError(
+        new EmailComposeError('no_message', 'Please enter a message')
+      );
+      return;
+    }
+
+    if (!subject()?.trim()) {
+      setValidationError(
+        new EmailComposeError('no_subject', 'Please enter a subject')
+      );
+      return;
+    }
+
+    if (!_link) {
+      setValidationError(
+        new EmailComposeError('no_link', 'Unable to find linked email account')
+      );
+      return;
+    }
+
+    sendMutation.mutate({
+      message: {
+        link_id: _link.id,
+        to: convertToContactInfoArray(selectedRecipients()),
+        cc:
+          ccRecipients().length > 0
+            ? convertToContactInfoArray(ccRecipients())
+            : [],
+        bcc:
+          bccRecipients().length > 0
+            ? convertToContactInfoArray(bccRecipients())
+            : [],
+        subject: subject(),
+        body_text: data.body.text,
+        body_html: data.body.html,
+        body_macro: data.body.raw,
+        attachments: [],
+      },
+    });
   };
 
-  const withMutationError = (type: EmailComposeErrors) => {
-    const error = sendEmailMutation.error;
-
-    if (!error || error instanceof Error) return;
-
-    if (error.type !== type) return;
-
-    return error;
+  const withValidationError = (type: EmailComposeErrors) => {
+    const error = validationError();
+    if (error?.type === type) return error;
+    return undefined;
   };
 
   return (
@@ -330,7 +320,7 @@ export function EmailCompose() {
                         disabled={hasLinkError()}
                       />
                     </div>
-                    <Show when={withMutationError('no_recipient')}>
+                    <Show when={withValidationError('no_recipient')}>
                       {(err) => (
                         <div class="text-failure-ink text-sm mt-1">
                           {err().message}
@@ -397,7 +387,7 @@ export function EmailCompose() {
                       />
                     </div>
 
-                    <Show when={withMutationError('no_subject')}>
+                    <Show when={withValidationError('no_subject')}>
                       {(err) => (
                         <div class="text-failure-ink text-sm mt-1">
                           {err().message}
@@ -416,10 +406,10 @@ export function EmailCompose() {
               >
                 <ComposeEmailInput
                   onSubmit={onSubmit}
-                  isSubmitting={sendEmailMutation.isPending}
+                  isSubmitting={sendMutation.isPending}
                   disabled={hasLinkError()}
                 />
-                <Show when={withMutationError('no_message')}>
+                <Show when={withValidationError('no_message')}>
                   {(err) => (
                     <div class="text-failure-ink text-sm mt-1">
                       {err().message}

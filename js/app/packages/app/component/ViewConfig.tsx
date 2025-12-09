@@ -8,7 +8,7 @@ import type { WithCustomUserInput } from '@core/user';
 import type { DeepPartial } from '@core/util/withRequired';
 import {
   type EntityData,
-  type EntityType,
+  type ExpandedEntityType,
   queryKeys,
   type WithNotification,
 } from '@macro-entity';
@@ -60,7 +60,7 @@ export type DocumentTypeFilter =
 export type FilterOptions = {
   notificationFilter: 'all' | 'unread' | 'notDone';
   importantFilter: boolean;
-  typeFilter: EntityType[];
+  typeFilter: ExpandedEntityType[];
   documentTypeFilter: DocumentTypeFilter[];
   projectFilter?: string;
   fromFilter?: WithCustomUserInput<'user' | 'contact'>[];

@@ -15,5 +15,6 @@ export type PropertyScope = typeof PropertyScope[keyof typeof PropertyScope];
 export const PropertyScope = {
   user: 'user',
   org: 'org',
+  system: 'system',
   all: 'all',
 } as const;

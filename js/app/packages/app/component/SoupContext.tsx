@@ -1,5 +1,7 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
+import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { ENABLE_PROPERTIES_METADATA } from '@core/constant/featureFlags';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -9,10 +11,14 @@ import { filterMap } from '@core/util/list';
 import { isErr } from '@core/util/maybeResult';
 import { getScrollParent } from '@core/util/scrollParent';
 import { waitForFrames } from '@core/util/sleep';
-import type { EntityData } from '@macro-entity';
+import { type EntityData, isTaskEntity } from '@macro-entity';
 import { entityHasUnreadNotifications } from '@notifications';
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import { useTutorialCompleted } from '@service-gql/client';
+import {
+  type PropertiesEntityType,
+  propertiesServiceClient,
+} from '@service-properties/client';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { useQuery } from '@tanstack/solid-query';
@@ -289,12 +295,30 @@ export function createNavigationEntityListShortcut({
   // ---------------------------------------------------------------------------
   // MARK AS DONE
   // ---------------------------------------------------------------------------
+
+  // Helper to get the correct properties entity type for an entity
+  // Tasks have type 'document' but subType 'task', so we need special handling
+  const getPropertiesEntityType = (
+    entity: EntityData
+  ): PropertiesEntityType | undefined => {
+    if (isTaskEntity(entity)) return 'TASK';
+    if (entity.type === 'email') return 'THREAD';
+    if (entity.type === 'document') return 'DOCUMENT';
+    if (entity.type === 'project') return 'PROJECT';
+    return undefined;
+  };
+
   actionRegistry.register(
     'mark_as_done',
     async (entities) => {
       const handler =
         VIEWCONFIG_DEFAULTS[selectedView() as DefaultView]?.hotkeyOptions?.e;
-      if (handler) {
+
+      const hasSupportedEntity = entities.some(
+        (entity) => getPropertiesEntityType(entity) !== undefined
+      );
+
+      if (handler || hasSupportedEntity) {
         if (isEntityLastItem()) {
           navigateThroughList({ axis: 'start', mode: 'step' });
         } else {
@@ -302,10 +326,23 @@ export function createNavigationEntityListShortcut({
         }
 
         for (const entity of entities) {
-          handler(entity, {
-            soupContext: unifiedListContext,
-            notificationSource,
-          });
+          if (handler) {
+            handler(entity, {
+              soupContext: unifiedListContext,
+              notificationSource,
+            });
+          }
+          const entityType = getPropertiesEntityType(entity);
+          if (entityType && ENABLE_PROPERTIES_METADATA) {
+            propertiesServiceClient
+              .setPropertyStatusComplete({
+                entity_type: entityType,
+                entity_id: entity.id,
+              })
+              .catch((err) =>
+                console.error('Failed to set status complete', err)
+              );
+          }
         }
 
         setViewDataStore(selectedView(), 'selectedEntities', []);
@@ -314,10 +351,17 @@ export function createNavigationEntityListShortcut({
       return { success: true };
     },
     {
-      testEnabled: (entity) => {
+      canExecute: (entity) => {
+        // notifications
         if (entity.type === 'email' || entity.type === 'channel') return true;
-        if (entityHasUnreadNotifications(notificationSource, entity))
+
+        // property status complete (tasks have type 'document' with subType 'task')
+        if (isTaskEntity(entity)) return true;
+        if (['document', 'project'].includes(entity.type)) return true;
+
+        if (entityHasUnreadNotifications(notificationSource, entity)) {
           return true;
+        }
         return false;
       },
     }
@@ -380,7 +424,7 @@ export function createNavigationEntityListShortcut({
       return { success: true };
     },
     {
-      testEnabled: (entity) => {
+      canExecute: (entity) => {
         // can't delete these bad boys yet.
         if (entity.type === 'channel' || entity.type === 'email') return false;
         // only delete what you own.
@@ -388,7 +432,7 @@ export function createNavigationEntityListShortcut({
       },
       // TODO (seamus): fix the handler from the modal so that we can delete
       // some of the items. Then switch this to some.
-      enabledMode: 'every',
+      mode: 'every',
     }
   );
 
@@ -448,9 +492,43 @@ export function createNavigationEntityListShortcut({
       return { success: true };
     },
     {
-      testEnabled: (entity) => {
-        // can't rename these bad boys yet.
-        if (entity.type === 'channel' || entity.type === 'email') return false;
+      canExecute: (entity) => {
+        if (entity.type === 'channel') {
+          if (entity.channelType === 'direct_message') return false;
+
+          const currentUserId = userId();
+          if (!currentUserId) return false;
+
+          // Check if user is the owner
+          if (entity.ownerId === currentUserId) {
+            return true;
+          }
+
+          // Check if user is an admin by looking up channel participant data
+          try {
+            const channelsContext = useChannelsContext();
+            const channel = channelsContext
+              .channels()
+              .find((c) => c.id === entity.id);
+            if (channel) {
+              const participant = channel.participants.find(
+                (p) => p.user_id === currentUserId
+              );
+              if (
+                participant &&
+                ['admin', 'owner'].includes(participant.role)
+              ) {
+                return true;
+              }
+            }
+          } catch (_err) {
+            return false;
+          }
+
+          return false;
+        }
+        if (entity.type === 'email') return false;
+
         // only rename what you own.
         return entity.ownerId === userId();
       },
@@ -496,7 +574,7 @@ export function createNavigationEntityListShortcut({
       return { success: true };
     },
     {
-      testEnabled: (entity) => {
+      canExecute: (entity) => {
         if (entity.type === 'channel' || entity.type === 'email') return false;
         return true;
       },
@@ -505,6 +583,7 @@ export function createNavigationEntityListShortcut({
 
   registerHotkey({
     scopeId: splitHotkeyScope,
+
     hotkeyToken: TOKENS.entity.action.copy,
     description: () =>
       viewData().selectedEntities.length > 1 ? 'Copy items' : 'Copy item',
@@ -551,7 +630,7 @@ export function createNavigationEntityListShortcut({
       return { success: true };
     },
     {
-      testEnabled: (entity) => {
+      canExecute: (entity) => {
         if (entity.type === 'channel' || entity.type === 'email') return false;
         return true;
       },
@@ -589,8 +668,11 @@ export function createNavigationEntityListShortcut({
   const openEntity = (entity: EntityData) => {
     const { type, id } = entity;
     if (type === 'document') {
-      const { fileType } = entity;
-      splitHandle.replace({ type: fileTypeToBlockName(fileType), id });
+      const { fileType, subType } = entity;
+      splitHandle.replace({
+        type: fileTypeToBlockName(subType ?? fileType),
+        id,
+      });
     } else {
       splitHandle.replace({ type, id });
     }
@@ -784,7 +866,10 @@ export function createNavigationEntityListShortcut({
 
       const selectedEntity = entities()?.at(index);
       if (selectedEntity) {
-        if (splitHandle.content().type !== 'component') {
+        if (
+          splitHandle.content().type !== 'component' &&
+          splitHandle.content().type !== 'project'
+        ) {
           const { type, id } = selectedEntity;
           if (type === 'document') {
             const { fileType } = selectedEntity;

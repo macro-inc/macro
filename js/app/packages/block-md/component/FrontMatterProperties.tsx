@@ -1,4 +1,4 @@
-import { useBlockId } from '@core/block';
+import { useBlockAliasedName, useBlockId } from '@core/block';
 import {
   $getPinnedProperties,
   ADD_PINNED_PROPERTY_COMMAND,
@@ -7,6 +7,7 @@ import {
 } from '@core/component/LexicalMarkdown/plugins';
 import { Modals } from '@core/component/Properties/component/modal';
 import { PanelContainer } from '@core/component/Properties/component/panel';
+import { getDefaultPinnedProperties } from '@core/component/Properties/constants';
 import { PropertiesProvider } from '@core/component/Properties/context/PropertiesContext';
 import { useEntityProperties } from '@core/component/Properties/hooks';
 import CaretDown from '@icon/bold/caret-down-bold.svg';
@@ -39,7 +40,11 @@ interface FrontMatterPropertiesProps {
 
 export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
   const blockId = useBlockId();
-  const mdData = mdStore.get; // Access block store at component level
+  const mdData = mdStore.get;
+
+  const blockName = useBlockAliasedName();
+  const entityType: EntityType = blockName === 'task' ? 'TASK' : 'DOCUMENT';
+
   const layoutShift = () => {
     if (mdData.editor) {
       dispatchInternalLayoutShift(mdData.editor);
@@ -48,7 +53,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
 
   const { properties, isLoading, error, refetch } = useEntityProperties(
     blockId,
-    'DOCUMENT' as EntityType,
+    entityType,
     true // includeMetadata
   );
 
@@ -97,15 +102,17 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
     onCleanup(unregister);
   });
 
-  // Filter properties to show metadata/system properties and pinned ones
+  // Filter properties to show metadata, default pinned, and user-pinned properties
   const filteredPinnedProperties = createMemo(() => {
     const allProps = properties();
     const pinnedIds = pinnedPropertyIds();
+    const defaultPinnedIds = getDefaultPinnedProperties(blockName);
 
     return allProps.filter(
       (prop) =>
-        (prop.isMetadata || pinnedIds.includes(prop.propertyId)) &&
-        !(prop.displayName === 'Document Name')
+        (prop.isMetadata && !(prop.displayName === 'Document Name')) ||
+        defaultPinnedIds.includes(prop.propertyDefinitionId) ||
+        pinnedIds.includes(prop.propertyId)
     );
   });
 
@@ -140,7 +147,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
     <Show when={!error()} fallback={props.fallback}>
       <div class="mt-6 mb-6" ref={setContainerRef}>
         <PropertiesProvider
-          entityType={'DOCUMENT' as EntityType}
+          entityType={entityType}
           canEdit={props.canEdit}
           documentName={props.documentName}
           properties={filteredPinnedProperties}

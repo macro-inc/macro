@@ -314,6 +314,51 @@ export type ResultType<T extends MaybeResult<any, any>> = T extends MaybeResult<
   : never;
 
 /**
+ * Error class that preserves MaybeResult errors when thrown.
+ * Enables round-trip conversion between MaybeResult and throwable functions.
+ */
+export class MaybeResultError<E extends string = string> extends Error {
+  constructor(public readonly errors: ResultError<E>[]) {
+    super(errors.map((e) => e.message).join(', '));
+    this.name = 'MaybeResultError';
+  }
+}
+
+/**
+ * Wraps a MaybeResult-returning async function to throw on error.
+ * Useful for tanstack-query and other APIs that expect thrown errors.
+ */
+export async function throwOnErr<E extends string, T>(
+  fn: () => Promise<MaybeResult<E, T>>
+): Promise<T> {
+  const result = await fn();
+  if (isErr(result)) {
+    throw new MaybeResultError(result[0]);
+  }
+  return result[1];
+}
+
+/**
+ * Wraps an async throwable function to return MaybeResult instead.
+ * Preserves MaybeResultError errors; wraps other errors as UNKNOWN.
+ */
+export async function catchToResult<T>(
+  throwable: () => Promise<T>
+): Promise<MaybeResult<string, T>> {
+  try {
+    return ok(await throwable());
+  } catch (error) {
+    if (error instanceof MaybeResultError) {
+      return [error.errors, null];
+    }
+    return err(
+      'UNKNOWN',
+      error instanceof Error ? error.message : String(error)
+    );
+  }
+}
+
+/**
  * A hybrid type that acts as both a single ResultError and an array containing that error.
  * Provides backward compatibility by allowing access to error properties directly
  * while maintaining array functionality.

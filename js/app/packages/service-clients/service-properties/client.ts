@@ -1,5 +1,4 @@
 import { SERVER_HOSTS } from '@core/constant/servers';
-import type { ServiceClient } from '@core/service';
 import {
   type FetchWithTokenErrorCode,
   fetchWithToken,
@@ -12,9 +11,55 @@ import {
 } from '@core/util/maybeResult';
 import { registerClient } from '@core/util/mockClient';
 import type { SafeFetchInit } from '@core/util/safeFetch';
-import type { z } from 'zod';
-import type * as schemas from './generated/zod';
-import type { PropertiesService } from './service';
+import type { AddPropertyOptionRequest } from './generated/schemas/addPropertyOptionRequest';
+import type { CreatePropertyDefinitionRequest } from './generated/schemas/createPropertyDefinitionRequest';
+import type { EntityPropertiesResponse } from './generated/schemas/entityPropertiesResponse';
+import type { EntityType } from './generated/schemas/entityType';
+import type { GetEntityPropertiesParams } from './generated/schemas/getEntityPropertiesParams';
+import type { ListPropertiesParams } from './generated/schemas/listPropertiesParams';
+import type { PropertyDefinition } from './generated/schemas/propertyDefinition';
+import type { PropertyDefinitionResponse } from './generated/schemas/propertyDefinitionResponse';
+import type { PropertyOption } from './generated/schemas/propertyOption';
+import type { SetEntityPropertyRequest } from './generated/schemas/setEntityPropertyRequest';
+
+type PropertiesEntityType = EntityType;
+
+type ListPropertiesArgs = ListPropertiesParams;
+type CreatePropertyDefinitionArgs = {
+  body: CreatePropertyDefinitionRequest;
+};
+type DeletePropertyDefinitionArgs = {
+  definition_id: string;
+};
+type GetEntityPropertiesArgs = {
+  entity_type: EntityType;
+  entity_id: string;
+  query: GetEntityPropertiesParams;
+};
+type SetEntityPropertyArgs = {
+  entity_type: EntityType;
+  entity_id: string;
+  property_id: string;
+  body: SetEntityPropertyRequest;
+};
+type DeleteEntityPropertyArgs = {
+  entity_property_id: string;
+};
+type GetPropertyOptionsArgs = {
+  definition_id: string;
+};
+type AddPropertyOptionArgs = {
+  definition_id: string;
+  body: AddPropertyOptionRequest;
+};
+type DeletePropertyOptionArgs = {
+  definition_id: string;
+  option_id: string;
+};
+type SetPropertyStatusCompleteArgs = {
+  entity_type: PropertiesEntityType;
+  entity_id: string;
+};
 
 const propertiesHost: string = SERVER_HOSTS['properties-service'];
 
@@ -35,60 +80,33 @@ export function propertiesFetch<T extends ObjectLike = never>(
   return fetchWithToken<T>(`${propertiesHost}${url}`, init);
 }
 
-export const propertiesServiceClient: ServiceClient<PropertiesService> = {
-  listProperties: async (args) => {
+export const propertiesServiceClient = {
+  listProperties: async (args: ListPropertiesArgs) => {
     const queryParams = new URLSearchParams();
     queryParams.set('scope', args.scope);
     if (args.include_options !== undefined) {
       queryParams.set('include_options', String(args.include_options));
     }
 
-    return await propertiesFetch<
-      z.infer<typeof schemas.listPropertiesResponse>
-    >(`/properties/definitions?${queryParams}`, {
-      method: 'GET',
-    });
+    return await propertiesFetch<PropertyDefinitionResponse[]>(
+      `/properties/definitions?${queryParams}`,
+      {
+        method: 'GET',
+      }
+    );
   },
 
-  createPropertyDefinition: async (args) => {
-    return await propertiesFetch<{
-      created_at: string;
-      data_type:
-        | 'boolean'
-        | 'date'
-        | 'number'
-        | 'string'
-        | 'select_number'
-        | 'select_string'
-        | 'entity';
-      display_name: string;
-      id: string;
-      is_metadata: boolean;
-      is_multi_select: boolean;
-      owner:
-        | { scope: 'user'; user_id: string }
-        | { scope: 'organization'; organization_id: number }
-        | {
-            scope: 'user_and_organization';
-            user_id: string;
-            organization_id: number;
-          };
-      specific_entity_type?:
-        | 'channel'
-        | 'chat'
-        | 'document'
-        | 'project'
-        | 'thread'
-        | 'user'
-        | null;
-      updated_at: string;
-    }>(`/properties/definitions`, {
-      method: 'POST',
-      body: JSON.stringify(args.body),
-    });
+  createPropertyDefinition: async (args: CreatePropertyDefinitionArgs) => {
+    return await propertiesFetch<PropertyDefinition>(
+      `/properties/definitions`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args.body),
+      }
+    );
   },
 
-  deletePropertyDefinition: async (args) => {
+  deletePropertyDefinition: async (args: DeletePropertyDefinitionArgs) => {
     const result = await propertiesFetch<{}>(
       `/properties/definitions/${args.definition_id}`,
       {
@@ -99,7 +117,7 @@ export const propertiesServiceClient: ServiceClient<PropertiesService> = {
     return mapOk(result, () => ({ success: true }));
   },
 
-  getEntityProperties: async (args) => {
+  getEntityProperties: async (args: GetEntityPropertiesArgs) => {
     const queryParams = new URLSearchParams();
 
     if (args.query.include_metadata !== undefined) {
@@ -109,14 +127,12 @@ export const propertiesServiceClient: ServiceClient<PropertiesService> = {
     const queryString = queryParams.toString();
     const url = `/properties/entities/${args.entity_type}/${args.entity_id}${queryString ? `?${queryString}` : ''}`;
 
-    return await propertiesFetch<
-      z.infer<typeof schemas.getEntityPropertiesResponse>
-    >(url, {
+    return await propertiesFetch<EntityPropertiesResponse>(url, {
       method: 'GET',
     });
   },
 
-  setEntityProperty: async (args) => {
+  setEntityProperty: async (args: SetEntityPropertyArgs) => {
     const url = `/properties/entities/${args.entity_type}/${args.entity_id}/${args.property_id}`;
 
     const result = await propertiesFetch<{}>(url, {
@@ -127,7 +143,7 @@ export const propertiesServiceClient: ServiceClient<PropertiesService> = {
     return mapOk(result, () => ({ success: true }));
   },
 
-  deleteEntityProperty: async (args) => {
+  deleteEntityProperty: async (args: DeleteEntityPropertyArgs) => {
     const result = await propertiesFetch<{}>(
       `/properties/entity_properties/${args.entity_property_id}`,
       {
@@ -138,31 +154,26 @@ export const propertiesServiceClient: ServiceClient<PropertiesService> = {
     return mapOk(result, () => ({ success: true }));
   },
 
-  getPropertyOptions: async (args) => {
-    return await propertiesFetch<
-      z.infer<typeof schemas.getPropertyOptionsResponse>
-    >(`/properties/definitions/${args.definition_id}/options`, {
-      method: 'GET',
-    });
+  getPropertyOptions: async (args: GetPropertyOptionsArgs) => {
+    return await propertiesFetch<PropertyOption[]>(
+      `/properties/definitions/${args.definition_id}/options`,
+      {
+        method: 'GET',
+      }
+    );
   },
 
-  addPropertyOption: async (args) => {
-    return await propertiesFetch<{
-      created_at: string;
-      display_order: number;
-      id: string;
-      property_definition_id: string;
-      updated_at: string;
-      value:
-        | { type: 'string'; value: string }
-        | { type: 'number'; value: number };
-    }>(`/properties/definitions/${args.definition_id}/options`, {
-      method: 'POST',
-      body: JSON.stringify(args.body),
-    });
+  addPropertyOption: async (args: AddPropertyOptionArgs) => {
+    return await propertiesFetch<PropertyOption>(
+      `/properties/definitions/${args.definition_id}/options`,
+      {
+        method: 'POST',
+        body: JSON.stringify(args.body),
+      }
+    );
   },
 
-  deletePropertyOption: async (args) => {
+  deletePropertyOption: async (args: DeletePropertyOptionArgs) => {
     const result = await propertiesFetch<{}>(
       `/properties/definitions/${args.definition_id}/options/${args.option_id}`,
       {
@@ -172,6 +183,16 @@ export const propertiesServiceClient: ServiceClient<PropertiesService> = {
 
     return mapOk(result, () => ({ success: true }));
   },
+
+  setPropertyStatusComplete: async (args: SetPropertyStatusCompleteArgs) => {
+    const url = `/properties/entities/${args.entity_type}/${args.entity_id}/status/complete`;
+    const result = await propertiesFetch<{}>(url, {
+      method: 'PATCH',
+    });
+    return mapOk(result, () => ({ success: true }));
+  },
 };
 
 registerClient('properties', propertiesServiceClient);
+
+export type { PropertiesEntityType };

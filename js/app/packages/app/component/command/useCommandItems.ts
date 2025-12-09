@@ -75,8 +75,9 @@ export function useCommandItems() {
           id: item.id,
           name: item.name,
           data: item,
-          fileType: item.type === 'document' ? item.fileType : undefined,
           itemType: item.type,
+          fileType: item.type === 'document' ? item.fileType : undefined,
+          subType: item.type === 'document' ? item.subType : undefined,
         },
         updatedAt: item.updatedAt,
       }));

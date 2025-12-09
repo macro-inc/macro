@@ -84,11 +84,10 @@ async function batchFetchNames(ids: string[]) {
     ids.length > 0 ? fetchDisplayNames(ids) : Promise.resolve([]),
   ]);
 
-  const updates: DisplayNameStore = {};
-
-  [...nameResults].forEach((result) => {
-    updates[result.id] = result;
-  });
+  const updates = nameResults.reduce((acc, result) => {
+    acc[result.id] = result;
+    return acc;
+  }, {} as DisplayNameStore);
 
   setUserDisplayNames((prev) => ({ ...prev, ...updates }));
 }

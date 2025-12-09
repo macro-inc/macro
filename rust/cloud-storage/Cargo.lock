@@ -3031,6 +3031,7 @@ dependencies = [
  "models_opensearch",
  "models_pagination",
  "models_permissions",
+ "models_properties",
  "redis",
  "reqwest",
  "s3_client",
@@ -3046,6 +3047,7 @@ dependencies = [
  "sqs_worker",
  "static_file_service_client",
  "strum_macros",
+ "system_properties",
  "thiserror 2.0.17",
  "tokio",
  "tower 0.5.2",
@@ -6523,6 +6525,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "properties"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "macro_db_migrator",
+ "macro_uuid",
+ "mockall",
+ "models_properties",
+ "serde_json",
+ "sqlx",
+ "system_properties",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "properties_db_client"
 version = "0.1.0"
 dependencies = [
@@ -6563,12 +6582,14 @@ dependencies = [
  "model",
  "models_permissions",
  "models_properties",
+ "properties",
  "properties_db_client",
  "secretsmanager_client",
  "serde",
  "serde_json",
  "serde_with",
  "sqlx",
+ "system_properties",
  "thiserror 2.0.17",
  "tokio",
  "tower 0.5.2",
@@ -8602,6 +8623,7 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "macro_db_migrator",
+ "macro_user_id",
  "macro_uuid",
  "models_properties",
  "serde",

@@ -60,7 +60,10 @@ function PropertySortSearch(props: PropertySortSearchProps) {
 
       const [, data] = result;
       const properties = Array.isArray(data) ? data : [];
-      setAvailableProperties(properties);
+      const normalizedProperties = properties.map((item) =>
+        'definition' in item ? item.definition : item
+      );
+      setAvailableProperties(normalizedProperties);
     } catch (_apiError) {
       // Silently fail
     }
@@ -341,7 +344,10 @@ export function createSort<
             if (isErr(result)) return;
             const [, data] = result;
             const properties = Array.isArray(data) ? data : [];
-            const property = properties.find((p) => p.id === id);
+            const normalizedProperties = properties.map((item) =>
+              'definition' in item ? item.definition : item
+            );
+            const property = normalizedProperties.find((p) => p.id === id);
             if (property) {
               setSelectedProperty(property);
             }

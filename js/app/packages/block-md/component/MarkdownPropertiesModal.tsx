@@ -1,5 +1,6 @@
 import { SplitDrawer } from '@app/component/split-layout/components/SplitDrawer';
 import { useDrawerControl } from '@app/component/split-layout/components/SplitDrawerContext';
+import { useBlockAliasedName } from '@core/block';
 import { IconButton } from '@core/component/IconButton';
 import {
   $getPinnedProperties,
@@ -45,6 +46,9 @@ function MarkdownPropertiesContent(_props: { documentId: string }) {
   const canEdit = useCanEdit();
   const documentName = useBlockDocumentName();
   const mdData = mdStore.get; // Access block store at component level
+
+  const blockName = useBlockAliasedName();
+  const entityType: EntityType = blockName === 'task' ? 'TASK' : 'DOCUMENT';
 
   // Destructure block signal setter before any async operations
   const triggerRefresh = propertiesRefreshSignal.set;
@@ -102,7 +106,7 @@ function MarkdownPropertiesContent(_props: { documentId: string }) {
       <PropertiesView
         blockType="md"
         canEdit={canEdit()}
-        entityType={'DOCUMENT' as EntityType}
+        entityType={entityType}
         documentName={documentName()}
         onPropertyPinned={handlePropertyPinned}
         onPropertyUnpinned={handlePropertyUnpinned}

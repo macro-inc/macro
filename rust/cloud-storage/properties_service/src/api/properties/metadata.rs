@@ -22,6 +22,7 @@ pub enum MetadataError {
 pub async fn get_document_metadata_properties(
     db: &Pool<Postgres>,
     document_id: &str,
+    entity_type: EntityType,
 ) -> Result<Vec<EntityPropertyWithDefinition>, MetadataError> {
     tracing::info!("getting document metadata properties from macrodb");
 
@@ -54,7 +55,7 @@ pub async fn get_document_metadata_properties(
             metadata::DOCUMENT_NAME,
             models_properties::DataType::String,
             document_metadata.name,
-            EntityType::Document,
+            entity_type,
         ));
     }
 
@@ -68,7 +69,8 @@ pub async fn get_document_metadata_properties(
             metadata::OWNER,
             models_properties::DataType::Entity,
             owner_entity_ref,
-            EntityType::Document,
+            entity_type,
+            Some(EntityType::User),
         ));
     }
 
@@ -77,7 +79,7 @@ pub async fn get_document_metadata_properties(
         metadata::CREATED_AT,
         models_properties::DataType::Date,
         document_metadata.created_at,
-        EntityType::Document,
+        entity_type,
     ));
 
     // 4. Last updated time property
@@ -85,7 +87,7 @@ pub async fn get_document_metadata_properties(
         metadata::LAST_UPDATED,
         models_properties::DataType::Date,
         document_metadata.updated_at,
-        EntityType::Document,
+        entity_type,
     ));
 
     // 5. Project property
@@ -98,14 +100,16 @@ pub async fn get_document_metadata_properties(
             metadata::PROJECT,
             models_properties::DataType::Entity,
             project_entity_ref,
-            EntityType::Document,
+            entity_type,
+            Some(EntityType::Project),
         ));
     } else {
         // Add project property with null value
         metadata_properties.push(create_metadata_property_null(
             metadata::PROJECT,
             models_properties::DataType::Entity,
-            EntityType::Document,
+            entity_type,
+            Some(EntityType::Project),
         ));
     }
 
@@ -126,7 +130,13 @@ pub fn create_metadata_property_str(
     entity_type: EntityType,
 ) -> EntityPropertyWithDefinition {
     let property_value = PropertyValue::Str(value);
-    create_metadata_property_inner(display_name, data_type, Some(property_value), entity_type)
+    create_metadata_property_inner(
+        display_name,
+        data_type,
+        Some(property_value),
+        entity_type,
+        None,
+    )
 }
 
 pub fn create_metadata_property_date(
@@ -136,7 +146,13 @@ pub fn create_metadata_property_date(
     entity_type: EntityType,
 ) -> EntityPropertyWithDefinition {
     let property_value = PropertyValue::Date(value);
-    create_metadata_property_inner(display_name, data_type, Some(property_value), entity_type)
+    create_metadata_property_inner(
+        display_name,
+        data_type,
+        Some(property_value),
+        entity_type,
+        None,
+    )
 }
 
 pub fn create_metadata_property_entity_ref(
@@ -144,9 +160,16 @@ pub fn create_metadata_property_entity_ref(
     data_type: models_properties::DataType,
     value: EntityReference,
     entity_type: EntityType,
+    specific_entity_type: Option<EntityType>,
 ) -> EntityPropertyWithDefinition {
     let property_value = PropertyValue::EntityRef(vec![value]);
-    create_metadata_property_inner(display_name, data_type, Some(property_value), entity_type)
+    create_metadata_property_inner(
+        display_name,
+        data_type,
+        Some(property_value),
+        entity_type,
+        specific_entity_type,
+    )
 }
 
 fn create_metadata_property_inner(
@@ -154,6 +177,7 @@ fn create_metadata_property_inner(
     data_type: models_properties::DataType,
     value: Option<PropertyValue>,
     entity_type: EntityType,
+    specific_entity_type: Option<EntityType>,
 ) -> EntityPropertyWithDefinition {
     // Metadata properties are computed on-the-fly and never persisted
     // Use System owner since they don't belong to any user or org
@@ -165,7 +189,7 @@ fn create_metadata_property_inner(
         display_name: display_name.to_string(),
         data_type,
         is_multi_select: false,
-        specific_entity_type: None,
+        specific_entity_type,
         created_at: chrono::Utc::now(),
         updated_at: chrono::Utc::now(),
         is_system: false, // Metadata properties are not DB-stored system properties
@@ -194,6 +218,13 @@ pub fn create_metadata_property_null(
     property_name: &str,
     data_type: models_properties::DataType,
     entity_type: EntityType,
+    specific_entity_type: Option<EntityType>,
 ) -> EntityPropertyWithDefinition {
-    create_metadata_property_inner(property_name, data_type, None, entity_type)
+    create_metadata_property_inner(
+        property_name,
+        data_type,
+        None,
+        entity_type,
+        specific_entity_type,
+    )
 }

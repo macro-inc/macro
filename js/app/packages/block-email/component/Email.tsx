@@ -1,5 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useSplitPanelOrThrow } from '@app/component/split-layout/layoutUtils';
+import { toast } from '@core/component/Toast/Toast';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import { createMethodRegistration } from '@core/orchestrator';
@@ -18,9 +19,11 @@ import {
   createEffectOnEntityTypeNotification,
   isNewEmail,
 } from '@notifications';
-import { emailClient } from '@service-email/client';
+import {
+  useArchiveThreadMutation,
+  useThreadQuery,
+} from '@queries/email/thread';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
-import type { Thread } from '@service-email/generated/schemas/thread';
 import { createCallback } from '@solid-primitives/rootless';
 import { useSearchParams } from '@solidjs/router';
 import {
@@ -35,7 +38,6 @@ import {
 import { createStore } from 'solid-js/store';
 import { URL_PARAMS } from '../constants';
 import { isScrollingToMessage } from '../signal/scrollState';
-import type { createThreadMessagesResource } from '../signal/threadMessages';
 import { registerEmailHotkeys } from '../util/emailHotkeys';
 import { getHeaderValue } from '../util/getHeaderValue';
 import {
@@ -51,10 +53,7 @@ import { TopBar } from './TopBar';
 
 type EmailProps = {
   title: Accessor<string>;
-  threadMessagesResource: Accessor<ReturnType<
-    typeof createThreadMessagesResource
-  > | null>;
-  threadData: Accessor<Thread | undefined>;
+  threadId: Accessor<string>;
 };
 
 export function Email(props: EmailProps) {
@@ -68,6 +67,18 @@ export function Email(props: EmailProps) {
       actionRegistry,
     },
   } = useSplitPanelOrThrow();
+
+  const threadQuery = useThreadQuery(props.threadId);
+  const threadData = () => threadQuery.data?.thread;
+  const hasMore = () => threadQuery.data?.hasMore ?? false;
+  const isFetching = () => threadQuery.isFetching;
+  const fetchNextPage = () => threadQuery.fetchNextPage();
+
+  const { mutate: archiveThreadMutate } = useArchiveThreadMutation({
+    onError: () => {
+      toast.failure('Failed to archive thread');
+    },
+  });
 
   const [searchParams] = useSearchParams();
   const searchParamsMessageId = () => {
@@ -84,8 +95,7 @@ export function Email(props: EmailProps) {
 
   const filteredMessages = createMemo(() => {
     return (
-      props
-        .threadData()
+      threadData()
         ?.messages.filter((message) => !message.is_draft)
         .sort((a, b) => {
           if (a.internal_date_ts && b.internal_date_ts) {
@@ -111,7 +121,7 @@ export function Email(props: EmailProps) {
 
   const initialDraftChildren: Record<string, MessageWithBodyReplyless> =
     (() => {
-      const t = untrack(() => props.threadData());
+      const t = untrack(threadData);
       const map: Record<string, MessageWithBodyReplyless> = {};
       if (!t) return map;
       for (const message of t.messages) {
@@ -162,8 +172,7 @@ export function Email(props: EmailProps) {
       .map(recipientEntityMapper('user'))
       .forEach((u) => optionsMap.set(u.data.email, u));
 
-    const t = props.threadData();
-
+    const t = threadData();
     if (t) {
       const seen = new Map<string, ContactInfo>();
 
@@ -228,14 +237,12 @@ export function Email(props: EmailProps) {
   // ============================================
 
   /**
-   * Waits for a resource to finish loading
+   * Waits for the query to finish fetching
    */
-  const waitForResourceLoad = (
-    resource: ReturnType<typeof createThreadMessagesResource>
-  ): Promise<void> => {
+  const waitForQueryLoad = (): Promise<void> => {
     return new Promise((resolve) => {
       const checkInterval = setInterval(() => {
-        if (!resource.loading()) {
+        if (!threadQuery.isFetching) {
           clearInterval(checkInterval);
           resolve();
         }
@@ -247,11 +254,10 @@ export function Email(props: EmailProps) {
    * Loads messages until the target message is found or no more messages available
    */
   const loadMessagesUntilFound = async (
-    targetMessageId: string,
-    resource: ReturnType<typeof createThreadMessagesResource>
+    targetMessageId: string
   ): Promise<boolean> => {
     while (true) {
-      const data = resource.resource();
+      const data = threadQuery.data;
 
       // Check if message exists in current batch
       const messageExists = data?.thread.messages.some(
@@ -264,8 +270,8 @@ export function Email(props: EmailProps) {
       if (!data?.hasMore) return false;
 
       // Load next batch and wait
-      resource.loadMore();
-      await waitForResourceLoad(resource);
+      threadQuery.fetchNextPage();
+      await waitForQueryLoad();
     }
   };
 
@@ -273,12 +279,10 @@ export function Email(props: EmailProps) {
    * Loads one more batch of messages for better scroll context
    * (useful when target message is at the edge of loaded messages)
    */
-  const loadContextBatch = async (
-    resource: ReturnType<typeof createThreadMessagesResource>
-  ): Promise<void> => {
-    if (resource.resource()?.hasMore && !resource.loading()) {
-      resource.loadMore();
-      await waitForResourceLoad(resource);
+  const loadContextBatch = async (): Promise<void> => {
+    if (hasMore() && !isFetching()) {
+      fetchNextPage();
+      await waitForQueryLoad();
     }
   };
 
@@ -349,22 +353,16 @@ export function Email(props: EmailProps) {
   // This effect ensures we have enough messages to fill the viewport
   // to avoid a sparse UI on initial load
   createEffect(() => {
-    const resource = props.threadMessagesResource();
     const messageList = messagesRef();
     const containerRef = messagesContainerRef();
 
     // Skip if dependencies not ready
-    if (
-      !resource ||
-      !messageList ||
-      !containerRef ||
-      !untrack(() => props.threadData()?.db_id)
-    ) {
+    if (!messageList || !containerRef || !untrack(threadData)?.db_id) {
       return;
     }
 
     // Skip if still loading or already filled
-    if (resource.loading() || untrack(isContainerFilled)) {
+    if (isFetching() || untrack(isContainerFilled)) {
       return;
     }
 
@@ -372,8 +370,8 @@ export function Email(props: EmailProps) {
     const containerHeight = containerRef.getBoundingClientRect().height;
 
     // Load more if container isn't filled
-    if (messageListHeight < containerHeight) {
-      resource.loadMore();
+    if (messageListHeight < containerHeight && hasMore()) {
+      fetchNextPage();
     } else {
       setIsContainerFilled(true);
     }
@@ -386,14 +384,11 @@ export function Email(props: EmailProps) {
   // This effect should only run once.
   createEffect(() => {
     if (hasHandledTarget()) return;
-    const resource = props.threadMessagesResource();
-    if (!resource) return;
+    const data = threadQuery.data;
+    if (!data) return;
     // Check if initial loading is complete
-    const resourceData = resource.resource();
     const isInitialLoadComplete =
-      !!resourceData &&
-      (isContainerFilled() || resourceData.hasMore === false) &&
-      !resource.loading();
+      (isContainerFilled() || data.hasMore === false) && !isFetching();
 
     // Skip if not ready
     if (!isInitialLoadComplete) {
@@ -401,7 +396,7 @@ export function Email(props: EmailProps) {
     }
 
     // Skip if basic requirements not met
-    if (!untrack(() => props.threadData()) || !untrack(() => messagesRef())) {
+    if (!untrack(threadData) || !untrack(() => messagesRef())) {
       return;
     }
 
@@ -436,17 +431,14 @@ export function Email(props: EmailProps) {
     const messages = untrack(() => filteredMessages());
     if (!messages) return;
     const targetIndex = messages.findIndex((m) => m.db_id === messageId);
-    const resource = untrack(() => props.threadMessagesResource());
-
-    if (!resource) return;
 
     // Case 1: Message not in current loaded batch - need to load more
     if (targetIndex < 0) {
       try {
-        const found = await loadMessagesUntilFound(messageId, resource);
+        const found = await loadMessagesUntilFound(messageId);
         if (found) {
           // Load one more batch for scroll context
-          await loadContextBatch(resource);
+          await loadContextBatch();
           // Scroll to the message after DOM updates
           setTimeout(() => performScrollToMessage(messageId, 'smooth'));
         } else {
@@ -460,7 +452,7 @@ export function Email(props: EmailProps) {
     }
     // Case 2: Message is first in current batch - load more for context
     else if (targetIndex === 0) {
-      await loadContextBatch(resource);
+      await loadContextBatch();
       setTimeout(() => performScrollToMessage(messageId, 'smooth'));
     }
     // Case 3: Message is in current batch with sufficient context
@@ -470,18 +462,25 @@ export function Email(props: EmailProps) {
   }
 
   const archiveThread = createCallback(() => {
-    if (!props.threadData()) return false;
+    const thread = threadData();
+    if (!thread?.db_id) return false;
+    archiveThreadMutate({
+      threadId: thread.db_id,
+      archive: thread.inbox_visible,
+    });
+
+    if (!props) return false;
 
     const selectedEntity = entities()?.find(
-      (entity) => entity.id === props.threadData()!.db_id
+      (entity) => entity.id === threadData()!.db_id
     );
 
     if (selectedEntity) {
       actionRegistry.execute('mark_as_done', selectedEntity);
     } else {
-      emailClient.flagArchived({
-        value: props.threadData()!.inbox_visible,
-        id: props.threadData()!.db_id!,
+      archiveThreadMutate({
+        threadId: thread.db_id,
+        archive: thread.inbox_visible,
       });
     }
 
@@ -541,7 +540,7 @@ export function Email(props: EmailProps) {
   const navigateToNextMessage = createCallback(() => navigateMessage('next'));
 
   onMount(() => {
-    registerEmailHotkeys(scopeId(), props.threadData, {
+    registerEmailHotkeys(scopeId(), threadData, {
       archiveThread,
       navigateToPreviousMessage,
       navigateToNextMessage,
@@ -571,10 +570,8 @@ export function Email(props: EmailProps) {
         const notificationThreadId = (metadata as { thread_id: string })
           .thread_id;
 
-        if (notificationThreadId === props.threadData()?.db_id) {
-          const resource = props.threadMessagesResource();
-          if (!resource) return;
-          resource.refresh();
+        if (notificationThreadId === threadData()?.db_id) {
+          threadQuery.refetch();
           break;
         }
 =======
@@ -601,6 +598,8 @@ export function Email(props: EmailProps) {
     hide: true,
   });
 
+  const refetch = () => threadQuery.refetch();
+
   return (
     <EmailProvider
       value={{
@@ -610,11 +609,15 @@ export function Email(props: EmailProps) {
         setMessageDbIdToDraftChildren,
         messagesRef,
         setMessagesRef: setmessagesRef,
-        threadMessagesResource: props.threadMessagesResource,
+        threadId: props.threadId,
         focusedMessageId,
         setFocusedMessageId,
         filteredMessages,
-        threadData: props.threadData,
+        threadData,
+        hasMore,
+        isFetching,
+        fetchNextPage,
+        refetch,
         archiveThread,
         activeTargetMessageId,
       }}

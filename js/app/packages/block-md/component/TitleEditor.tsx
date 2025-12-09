@@ -1,4 +1,4 @@
-import { createBlockSignal } from '@core/block';
+import { createBlockSignal, useBlockAliasedName } from '@core/block';
 import { EmojiMenu } from '@core/component/LexicalMarkdown/component/menu/EmojiMenu';
 import { createLexicalWrapper } from '@core/component/LexicalMarkdown/context/LexicalWrapperContext';
 import {
@@ -14,6 +14,7 @@ import {
   isRectFlushWith,
   trimWhitespace,
 } from '@core/component/LexicalMarkdown/utils';
+import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
 import { mergeRegister } from '@lexical/utils';
@@ -137,6 +138,9 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
 
   const [showFallback, setShowFallback] = createSignal(true);
   const [titlePlaceholder, _setTitlePlaceholder] = TitlePlaceholderSignal;
+
+  const blockName = useBlockAliasedName();
+  const titlePlaceholderFallback = blockNameToDefaultFile(blockName);
 
   const debouncedRename = debounce(() => {
     const name = state();
@@ -290,7 +294,7 @@ export function TitleEditor(props: { autoFocusOnMount?: boolean } = {}) {
       />
       <Show when={showFallback()}>
         <div class="text-4xl font-semibold optical-32 text-ink-placeholder absolute top-0 pointer-events-none">
-          {titlePlaceholder() ?? 'New Note'}
+          {titlePlaceholder() ?? titlePlaceholderFallback}
         </div>
       </Show>
     </div>

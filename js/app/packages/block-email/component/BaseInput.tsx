@@ -15,7 +15,7 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
 import { trackMention } from '@core/signal/mention';
 import { useDisplayName } from '@core/user';
-import { isErr, isOk } from '@core/util/maybeResult';
+import { isErr } from '@core/util/maybeResult';
 import Spinner from '@icon/bold/spinner-gap-bold.svg';
 import ReplyAll from '@icon/regular/arrow-bend-double-up-left.svg';
 import Reply from '@icon/regular/arrow-bend-up-left.svg';
@@ -29,6 +29,7 @@ import Trash from '@icon/regular/trash.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import type { DocumentMentionInfo } from '@lexical-core';
 import { logger } from '@observability';
+import { useSendMessageMutation } from '@queries/email/thread';
 import { emailClient } from '@service-email/client';
 import type {
   AttachmentMacro,
@@ -153,7 +154,6 @@ export function BaseInput(props: {
     createSignal<boolean>(false);
   const [isDragging, setIsDragging] = createSignal<boolean>();
   const [isPendingUpload, setIsPendingUpload] = createSignal<boolean>(false);
-  const [isPendingSend, setIsPendingSend] = createSignal<boolean>(false);
   const [showFormatRibbon, setShowFormatRibbon] = createSignal<boolean>(
     props.newMessage ?? false
   );
@@ -168,6 +168,30 @@ export function BaseInput(props: {
   const [savedDraftId, setSavedDraftId] = createSignal<
     MessageToSendDbId | undefined
   >(props.draft?.db_id ?? undefined);
+
+  let pendingMentions: { documentId: string }[] = [];
+  const [shouldMarkDoneOnSuccess, setShouldMarkDoneOnSuccess] =
+    createSignal(false);
+
+  const sendMutation = useSendMessageMutation({
+    onSuccess: ({ message }) => {
+      toast.success('Email sent');
+      pendingMentions.forEach((mention) => {
+        trackMention(blockId, 'document', mention.documentId);
+      });
+      pendingMentions = [];
+      clearEmailBody(editor());
+      resetState();
+      props.sideEffectOnSend?.(message.db_id ?? null);
+      if (shouldMarkDoneOnSuccess()) {
+        props.onSendAndMarkDone?.();
+        setShouldMarkDoneOnSuccess(false);
+      }
+    },
+    onError: () => {
+      toast.failure('Failed to send email');
+    },
+  });
 
   // Attach side-effect handlers on mount; they replay against current state
   onMount(() => {
@@ -234,7 +258,7 @@ export function BaseInput(props: {
   }
 
   async function executeSaveDraft() {
-    if (isPendingSend()) {
+    if (sendMutation.isPending) {
       return;
     }
     const draftToSave = collectDraft();
@@ -354,17 +378,16 @@ export function BaseInput(props: {
     useHotkeyDOMScope('compose-message');
   let composeContainerRef: HTMLDivElement | undefined;
 
-  const sendEmail = async (): Promise<boolean> => {
-    if (isPendingSend() || isPendingUpload()) return false;
-    setIsPendingSend(true);
+  const sendEmail = async (markDone = false) => {
+    if (sendMutation.isPending || isPendingUpload()) return;
+
     const to = form().recipients.to.map(convertEmailRecipientToContactInfo);
     const cc = form().recipients.cc.map(convertEmailRecipientToContactInfo);
     const bcc = form().recipients.bcc.map(convertEmailRecipientToContactInfo);
 
     if ((to?.length ?? 0) + (cc?.length ?? 0) + (bcc?.length ?? 0) === 0) {
       toast.failure('Email failed to send. No recipients provided');
-      setIsPendingSend(false);
-      return false;
+      return;
     }
 
     const currentThread = ctx.threadData();
@@ -373,15 +396,13 @@ export function BaseInput(props: {
     if (!currentThread && !newMessage) {
       logger.error(new Error("Can't send email, no email thread found"));
       toast.failure('Email failed to send');
-      setIsPendingSend(false);
-      return false;
+      return;
     }
 
     if (newMessage && currentThread) {
       toast.failure('Email failed to send');
       logger.error('New message and thread cannot be provided together');
-      setIsPendingSend(false);
-      return false;
+      return;
     }
 
     let linkId: string | undefined = currentThread?.link_id;
@@ -390,8 +411,7 @@ export function BaseInput(props: {
       if (isErr(maybeFallbackLinks) || maybeFallbackLinks[1].links.length < 1) {
         toast.failure('Email failed to send');
         logger.error('No links found');
-        setIsPendingSend(false);
-        return false;
+        return;
       }
       linkId = maybeFallbackLinks[1].links[0].id;
     }
@@ -401,11 +421,13 @@ export function BaseInput(props: {
       replyingTo: props.replyingTo(),
     });
     if (!prepared) {
-      setIsPendingSend(false);
-      return false;
+      return;
     }
 
-    const response = await emailClient.sendMessage({
+    pendingMentions = prepared.mentions;
+    setShouldMarkDoneOnSuccess(markDone);
+
+    sendMutation.mutate({
       message: {
         bcc,
         body_html: prepared.bodyHtml,
@@ -421,33 +443,6 @@ export function BaseInput(props: {
         link_id: linkId!,
       },
     });
-    if (isOk(response)) {
-      toast.success('Email sent');
-      const [, { message }] = response;
-      prepared.mentions.forEach((mention) => {
-        trackMention(blockId, 'document', mention.documentId);
-      });
-      clearEmailBody(editor());
-      resetState();
-      if (props.sideEffectOnSend) {
-        props.sideEffectOnSend(message.db_id ?? null);
-      }
-      setIsPendingSend(false);
-      return true;
-    } else {
-      toast.failure('Failed to send email');
-      setIsPendingSend(false);
-      return false;
-    }
-  };
-
-  const sendEmailAndMarkDone = async () => {
-    if (isPendingSend() || isPendingUpload()) return;
-    const success = await sendEmail();
-    // Call onSendAndMarkDone after successful send
-    if (success && props.onSendAndMarkDone) {
-      props.onSendAndMarkDone();
-    }
   };
 
   const resetState = () => {
@@ -539,7 +534,7 @@ export function BaseInput(props: {
         scopeId: composeHotkeyScope,
         description: 'Send and mark done',
         keyDownHandler: () => {
-          sendEmailAndMarkDone();
+          sendEmail(true);
           return true;
         },
         runWithInputFocused: true,
@@ -793,7 +788,7 @@ export function BaseInput(props: {
               form().setCapturedEditor(editor);
             }}
             class={`text-sm break-words text-ink ${isDragging() && 'blur'}`}
-            editable={() => !isPendingSend()}
+            editable={() => !sendMutation.isPending}
             initialValue={props.preloadedBody}
             initialHtml={props.preloadedHtml}
             placeholder="Reply — @mention to share or cc people"
@@ -864,9 +859,9 @@ export function BaseInput(props: {
           <div class="flex flex-row items-center">
             <TextButton
               theme="base"
-              disabled={isPendingUpload() || isPendingSend()}
+              disabled={isPendingUpload() || sendMutation.isPending}
               onClick={() => {
-                sendEmailAndMarkDone();
+                sendEmail(true);
               }}
               tooltip={{
                 label: 'Send and mark done',
@@ -874,7 +869,7 @@ export function BaseInput(props: {
               }}
             >
               <Show
-                when={!isPendingUpload() && !isPendingSend()}
+                when={!isPendingUpload() && !sendMutation.isPending}
                 fallback={
                   <Spinner class="w-5 h-5 animate-spin cursor-disabled" />
                 }

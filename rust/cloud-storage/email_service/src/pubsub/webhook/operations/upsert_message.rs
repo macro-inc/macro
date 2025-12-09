@@ -3,7 +3,7 @@ use crate::pubsub::util::cg_refresh_email;
 use crate::pubsub::webhook::process;
 use crate::pubsub::webhook::process::check_gmail_rate_limit_webhook;
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
-use crate::util::upload_attachment::upload_attachment;
+use crate::util::upload_attachment::{UploadAttachmentContext, upload_attachment};
 use email_db_client::threads;
 use email_db_client::threads::get::get_outbound_threads_by_thread_ids;
 use email_utils::dedupe_emails;
@@ -18,12 +18,14 @@ use model::insight_context::email_insights::{
 use model_notifications::{
     NewEmailMetadata, NotificationEntity, NotificationEvent, NotificationQueueMessage,
 };
+use models_email::db::address::EmailRecipientType;
 use models_email::email::service;
 use models_email::email::service::link;
 use models_email::email::service::message::SimpleMessage;
 use models_email::email::service::thread::UserThreadIds;
 use models_email::gmail::operations::GmailApiOperation;
 use models_email::gmail::webhook::{UpsertMessagePayload, WebhookOperation};
+use models_email::service::attachment::AttachmentUploadArgs;
 use models_email::service::message::Message;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use models_opensearch::SearchEntityType;
@@ -217,22 +219,55 @@ async fn handle_attachment_upload(
                 .map(|a| a.attachment_db_id)
                 .collect::<Vec<_>>()
         );
-    }
 
-    for attachment in attachments {
-        // keep processing if it fails, best effort
-        if let Err(e) = upload_attachment(
-            &ctx.redis_client,
-            &ctx.gmail_client,
-            &ctx.dss_client,
-            gmail_access_token,
-            link,
-            &attachment,
-            false,
-        )
-        .await
-        {
-            tracing::error!("Failed to upload attachment to Macro: {e}");
+        let message_ids = attachments
+            .iter()
+            .map(|a| a.message_db_id)
+            .collect::<Vec<_>>();
+
+        let message_recipients =
+            email_db_client::contacts::get::fetch_db_recipients_in_bulk(&ctx.db, &message_ids)
+                .await
+                .map_err(|e| {
+                    ProcessingError::NonRetryable(DetailedError {
+                        reason: FailureReason::DatabaseQueryFailed,
+                        source: e.context(
+                            "Failed to fetch db recipients for thread attachment backfill"
+                                .to_string(),
+                        ),
+                    })
+                })?;
+
+        for attachment in attachments {
+            // get the email addresses of the recipients of the message
+            let recipient_emails: Vec<String> = message_recipients
+                .get(&attachment.message_db_id)
+                .map(|v| v.as_slice())
+                .unwrap_or(&[])
+                .iter()
+                .filter(|(_, recipient_type)| *recipient_type == EmailRecipientType::To)
+                .filter_map(|(contact, _)| contact.email_address.clone())
+                .collect();
+
+            let attachment_upload_args = AttachmentUploadArgs {
+                recipient_emails,
+                attachment_metadata: attachment,
+                backfill: false,
+            };
+
+            let ctx_upload = UploadAttachmentContext {
+                redis_client: &ctx.redis_client,
+                gmail_client: &ctx.gmail_client,
+                dss_client: &ctx.dss_client,
+                system_properties_service: &ctx.system_properties_service,
+                access_token: gmail_access_token,
+                link,
+            };
+
+            // keep processing if it fails, best effort
+            if let Err(e) = upload_attachment(ctx_upload, &attachment_upload_args).await {
+                tracing::error!("Failed to upload attachment to Macro: {e}");
+            }
         }
     }
 

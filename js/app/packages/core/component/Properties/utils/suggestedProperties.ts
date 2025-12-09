@@ -1,4 +1,4 @@
-import type { EntityType } from '@macro-entity';
+import type { ExpandedEntityType } from '@macro-entity';
 import type { PropertyDefinitionFlat } from '../types';
 
 /**
@@ -11,7 +11,7 @@ import type { PropertyDefinitionFlat } from '../types';
  * @returns Array of PropertyDefinitionFlat objects for quick selection
  */
 export function getSuggestedProperties(
-  _entityTypes: EntityType[]
+  _entityTypes: ExpandedEntityType[]
 ): PropertyDefinitionFlat[] {
   return [];
 }

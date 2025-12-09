@@ -1,7 +1,19 @@
+import { useSplitLayout } from '@app/component/split-layout/layout';
 import { Message } from '@core/component/Message';
+import { toast } from '@core/component/Toast/Toast';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { useDisplayName } from '@core/user';
-import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
+import { isErr } from '@core/util/maybeResult';
+import { queryKeys, useQueryClient } from '@macro-entity';
+import { logger } from '@observability';
+import { emailClient } from '@service-email/client';
+import type {
+  Attachment,
+  MessageWithBodyReplyless,
+} from '@service-email/generated/schemas';
 import { useUserId } from '@service-gql/client';
+import { storageServiceClient } from '@service-storage/client';
+import type { FileType } from '@service-storage/generated/schemas/fileType';
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
 import type { SetStoreFunction } from 'solid-js/store';
 import { Portal } from 'solid-js/web';
@@ -88,6 +100,56 @@ export function MessageContainer(props: MessageContainerProps) {
     }
   });
 
+  const { replaceOrInsertSplit } = useSplitLayout();
+  const entityQueryClient = useQueryClient();
+
+  const onClickAttachment = async (
+    attachment: Attachment,
+    fileType?: FileType
+  ) => {
+    const dbId = attachment.db_id;
+    if (!dbId) return;
+    const response = await emailClient.getOrCreateAttachmentDocumentId({
+      id: dbId,
+    });
+    if (isErr(response)) {
+      toast.failure('Failed to get attachment. Please try again.');
+      return logger.error('Failed to get or create attachment document id', {
+        error: new Error(
+          'Failed to get or create attachment document id: ' + response[0]
+        ),
+      });
+    }
+    const { document_id } = response[1];
+
+    const maybeDocumentMetadata =
+      await storageServiceClient.getDocumentMetadata({
+        documentId: document_id,
+      });
+    if (isErr(maybeDocumentMetadata)) {
+      toast.failure('Failed to get attachment. Please try again.');
+      return logger.error(
+        'Failed to get or create attachment document metadata',
+        {
+          error: new Error(
+            'Failed to get or create attachment document metadata: ' +
+              maybeDocumentMetadata[0]
+          ),
+        }
+      );
+    }
+
+    entityQueryClient.invalidateQueries({
+      queryKey: queryKeys.all.dss,
+    });
+
+    const blockName = fileType ? fileTypeToBlockName(fileType) : 'unknown';
+    replaceOrInsertSplit({
+      type: blockName,
+      id: document_id,
+    });
+  };
+
   return (
     <div class="shrink-0 flex justify-center w-full">
       <div class="macro-message-width w-full">
@@ -128,7 +190,12 @@ export function MessageContainer(props: MessageContainerProps) {
               <For each={visibleAttachments()}>
                 {(attachment) => {
                   if (attachment.db_id)
-                    return <EmailAttachmentPill attachment={attachment} />;
+                    return (
+                      <EmailAttachmentPill
+                        attachment={attachment}
+                        onClick={onClickAttachment}
+                      />
+                    );
                 }}
               </For>
             </div>

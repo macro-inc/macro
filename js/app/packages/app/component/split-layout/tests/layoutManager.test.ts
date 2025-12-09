@@ -1,7 +1,7 @@
 import type { BlockOrchestrator } from '@core/orchestrator';
 import { createRoot } from 'solid-js';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
-import { createSplitLayout } from '../layoutManager';
+import { createSplitLayout, type SplitContent } from '../layoutManager';
 
 vi.mock('../componentRegistry.tsx', () => ({
   resolveComponent: vi.fn((id: string, params: Record<string, string>) => ({
@@ -79,6 +79,40 @@ describe('layoutManager', () => {
 
         expect(manager.splits()).toHaveLength(1);
         expect(manager.splits()[0].content.type).toBe('component');
+
+        dispose();
+      });
+    });
+
+    it('should preserve ordering when reconciling back to previous state (browser back)', () => {
+      createRoot((dispose) => {
+        const ORIGINAL_SPLITS = [
+          { type: 'md', id: 'test-md-0' },
+          { type: 'md', id: 'test-md-1' },
+          { type: 'md', id: 'test-md-2' },
+        ] satisfies SplitContent[];
+
+        const NEW_SPLITS = [
+          { type: 'md', id: 'test-md-0' },
+          { type: 'md', id: 'test-md-3' },
+          { type: 'md', id: 'test-md-2' },
+        ] satisfies SplitContent[];
+
+        const manager = createSplitLayout(
+          createMockOrchestrator(),
+          ORIGINAL_SPLITS
+        );
+        expect(manager.splits()).toHaveLength(3);
+        expect(manager.splits().map((s) => s.content)).toEqual(ORIGINAL_SPLITS);
+
+        manager.reconcile(NEW_SPLITS);
+        expect(manager.splits()).toHaveLength(3);
+        expect(manager.splits().map((s) => s.content)).toEqual(NEW_SPLITS);
+
+        manager.reconcile(ORIGINAL_SPLITS);
+
+        expect(manager.splits()).toHaveLength(3);
+        expect(manager.splits().map((s) => s.content)).toEqual(ORIGINAL_SPLITS);
 
         dispose();
       });

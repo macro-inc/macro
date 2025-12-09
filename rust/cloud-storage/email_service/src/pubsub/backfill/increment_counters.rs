@@ -2,7 +2,8 @@ use crate::pubsub::context::PubSubContext;
 use crate::util::backfill::backfill_insights::backfill_email_insights;
 use model::contacts::ConnectionsMessage;
 use model::insight_context::email_insights::BackfillEmailInsightsFilter;
-use models_email::service::attachment::AttachmentUploadMetadata;
+use models_email::db::address::EmailRecipientType;
+use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadMetadata};
 use models_email::service::backfill::{
     BackfillAttachmentPayload, BackfillJobStatus, BackfillMessagePayload, BackfillOperation,
     BackfillPubsubMessage, UpdateMetadataPayload,
@@ -139,13 +140,17 @@ async fn handle_attachment_upload(
             })
         })?;
 
-    tracing::info!(
-        "Found {} condition 5 attachments to backfill for job {}",
-        attachments.len(),
-        job_id
-    );
+    if !attachments.is_empty() {
+        tracing::debug!(
+            "Found {} condition 5 attachments to backfill for job {}",
+            attachments.len(),
+            job_id
+        );
 
-    send_attachment_backfill_messages(ctx, link.id, job_id, attachments).await
+        send_attachment_backfill_messages(ctx, link.id, job_id, attachments).await?;
+    }
+
+    Ok(())
 }
 
 #[tracing::instrument(skip(ctx))]
@@ -249,15 +254,16 @@ async fn handle_thread_completed(
                         .context("Failed to fetch thread attachment backfill metadata".to_string()),
                 })
             })?;
+
         if !attachments.is_empty() {
-            tracing::info!(
+            tracing::debug!(
                 "Found {} attachments to backfill for thread {}",
                 attachments.len(),
                 p.thread_db_id
             );
-        }
 
-        send_attachment_backfill_messages(ctx, link.id, job_id, attachments).await?;
+            send_attachment_backfill_messages(ctx, link.id, job_id, attachments).await?;
+        }
     }
 
     Ok(())
@@ -271,16 +277,46 @@ async fn send_attachment_backfill_messages(
     job_id: Uuid,
     attachments: Vec<AttachmentUploadMetadata>,
 ) -> Result<(), ProcessingError> {
+    if attachments.is_empty() {
+        return Ok(());
+    }
+
+    let message_ids = attachments
+        .iter()
+        .map(|a| a.message_db_id)
+        .collect::<Vec<_>>();
+
+    let message_recipients =
+        email_db_client::contacts::get::fetch_db_recipients_in_bulk(&ctx.db, &message_ids)
+            .await
+            .map_err(|e| {
+                ProcessingError::NonRetryable(DetailedError {
+                    reason: FailureReason::DatabaseQueryFailed,
+                    source: e.context(
+                        "Failed to fetch db recipients for thread attachment backfill".to_string(),
+                    ),
+                })
+            })?;
+
     for attachment in attachments {
+        // get the email addresses of the recipients of the message
+        let recipient_emails: Vec<String> = message_recipients
+            .get(&attachment.message_db_id)
+            .map(|v| v.as_slice())
+            .unwrap_or(&[])
+            .iter()
+            .filter(|(_, recipient_type)| *recipient_type == EmailRecipientType::To)
+            .filter_map(|(contact, _)| contact.email_address.clone())
+            .collect();
+
+        let attachment_upload_args = AttachmentUploadArgs {
+            recipient_emails,
+            attachment_metadata: attachment,
+            backfill: true,
+        };
+
         let new_payload = BackfillAttachmentPayload {
-            metadata: AttachmentUploadMetadata {
-                attachment_db_id: attachment.attachment_db_id,
-                email_provider_id: attachment.email_provider_id,
-                provider_attachment_id: attachment.provider_attachment_id,
-                mime_type: attachment.mime_type,
-                filename: attachment.filename,
-                internal_date_ts: attachment.internal_date_ts,
-            },
+            metadata: attachment_upload_args,
         };
 
         let ps_message = BackfillPubsubMessage {
