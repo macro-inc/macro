@@ -288,7 +288,8 @@ function sameIdentity(a: SplitContent, b: SplitContent): boolean {
 
 function sameNonComponentIdentity(a: SplitContent, b: SplitContent): boolean {
   if (a.type === 'component' || b.type === 'component') return false;
-  if (a.type !== b.type) return false;
+  // check on the resolved block so you cannot open `/md/{ID}/task{ID}`
+  if (resolveBlockAlias(a.type) !== resolveBlockAlias(b.type)) return false;
   return a.id === b.id;
 }
 
@@ -691,7 +692,6 @@ export function createSplitLayout(
     type: SplitContentType,
     id: string
   ): SplitHandle | undefined {
-    console.log('GETTING SPLIT BY CONTENT', type, id, state.splits);
     const match = state.splits.find(
       (s) => s.content.type === type && s.content.id === id
     );
