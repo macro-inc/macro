@@ -23,7 +23,8 @@ pub struct UploadAttachmentArgs<'a> {
     pub redis_client: &'a RedisClient,
     pub gmail_client: &'a GmailClient,
     pub dss_client: &'a DocumentStorageServiceClient,
-    pub system_properties_service: &'a Arc<dyn SystemPropertiesService>,
+    pub system_properties_service:
+        &'a Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     pub access_token: &'a str,
     pub link: &'a link::Link,
     pub attachment_args: &'a AttachmentUploadArgs,

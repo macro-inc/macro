@@ -1,5 +1,5 @@
 use crate::api::context::ApiContext;
-use crate::util::upload_attachment::upload_attachment;
+use crate::util::upload_attachment::{upload_attachment, UploadAttachmentArgs};
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
