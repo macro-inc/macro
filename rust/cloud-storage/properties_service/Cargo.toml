@@ -40,7 +40,6 @@ properties_db_client = { path = "../properties_db_client" }
 properties = { path = "../properties" }
 system_properties = { path = "../system_properties" }
 secretsmanager_client = { path = "../secretsmanager_client" }
-system_properties = { path = "../system_properties" }
 serde = { workspace = true }
 serde_json = { workspace = true }
 serde_with = { workspace = true }
