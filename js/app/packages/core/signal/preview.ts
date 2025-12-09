@@ -1,4 +1,3 @@
-import { BlockAlias } from '@core/block';
 import { itemToSafeName } from '@core/constant/allBlocks';
 import { debounce } from '@core/util/debounce';
 import { isErr } from '@core/util/maybeResult';

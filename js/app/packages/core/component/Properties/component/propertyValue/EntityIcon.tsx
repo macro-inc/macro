@@ -122,10 +122,9 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
         }
 
         const fileType = previewItem.fileType;
-        const blockName = fileTypeToBlockName(
-          previewItem.subType ?? previewItem.fileType ?? null,
-          true
-        );
+        const blockName = fileType
+          ? fileTypeToBlockName(fileType, true)
+          : 'unknown';
         return <CoreEntityIcon targetType={blockName} size="xs" />;
       }
 

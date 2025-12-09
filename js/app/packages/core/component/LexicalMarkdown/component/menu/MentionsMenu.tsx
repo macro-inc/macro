@@ -1,5 +1,5 @@
 import {
-  BlockAlias,
+  type BlockAlias,
   type BlockName,
   useMaybeBlockId,
   useMaybeBlockName,
