@@ -9,8 +9,6 @@ import type { DeepPartial } from '@core/util/withRequired';
 import {
   type EntityData,
   type ExpandedEntityType,
-  isPureDocumentEntity,
-  isTaskEntity,
   queryKeys,
   type WithNotification,
 } from '@macro-entity';
