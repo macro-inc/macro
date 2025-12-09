@@ -52,11 +52,11 @@ export function usePropertyEntityDisplay(
   }
 ): PropertyEntityDisplayResult {
   const needsPreview = () =>
-    PREVIEWABLE_ENTITY_TYPES.includes(entityType() as EntityType);
+    PREVIEWABLE_ENTITY_TYPES.includes(entityType().toUpperCase() as EntityType);
 
   // Map entity type to preview type (TASK uses 'document' for preview lookup)
   const getPreviewType = () => {
-    const type = entityType();
+    const type = entityType().toUpperCase();
     if (type === 'TASK') return 'document';
     return type.toLowerCase() as 'document' | 'project' | 'chat' | 'channel';
   };
@@ -67,7 +67,7 @@ export function usePropertyEntityDisplay(
   });
 
   const channelName = useChannelName(
-    entityType() === 'CHANNEL' ? entityId() : '',
+    entityType().toUpperCase() === 'CHANNEL' ? entityId() : '',
     'Unknown Channel'
   );
 
@@ -78,7 +78,8 @@ export function usePropertyEntityDisplay(
   });
 
   const name = createMemo(() => {
-    switch (entityType()) {
+    const type = entityType().toUpperCase();
+    switch (type) {
       case 'USER': {
         const displayName = idToDisplayName(entityId());
         return displayName.replace('macro|', '');
@@ -92,7 +93,7 @@ export function usePropertyEntityDisplay(
         const previewItem = preview();
         if (!previewItem || previewItem.loading) return 'Loading...';
         if (!isAccessiblePreviewItem(previewItem)) return 'Unavailable';
-        return previewItem.name || `Unknown ${entityType().toLowerCase()}`;
+        return previewItem.name || `Unknown ${type.toLowerCase()}`;
       }
       case 'COMPANY':
         return entityId() ?? 'Company';
@@ -180,14 +181,15 @@ export function usePropertyEntityDisplay(
   });
 
   const blockOrFileType = createMemo(() => {
+    const type = entityType().toUpperCase();
     // For channels and chats, use the entity type directly (lowercase for BlockLink)
     const linkableTypes: EntityType[] = ['CHANNEL', 'CHAT', 'PROJECT'];
-    if (linkableTypes.includes(entityType())) {
-      return entityType().toLowerCase();
+    if (linkableTypes.includes(type as EntityType)) {
+      return type.toLowerCase();
     }
 
     // For documents, get the file type from preview
-    if (entityType() === 'DOCUMENT') {
+    if (type === 'DOCUMENT') {
       const previewItem = preview();
       if (
         !previewItem ||
