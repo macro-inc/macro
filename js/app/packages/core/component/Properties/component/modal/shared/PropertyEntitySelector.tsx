@@ -6,6 +6,7 @@ import type { ChannelWithParticipants, IUser } from '@core/user';
 import { useContacts } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import CheckIcon from '@icon/bold/check-bold.svg';
+import CompanyIcon from '@icon/duotone/building-duotone.svg';
 import ChannelBuildingIcon from '@icon/duotone/building-office-duotone.svg';
 import GlobeIcon from '@icon/duotone/globe-duotone.svg';
 import ChannelIcon from '@icon/duotone/hash-duotone.svg';
@@ -36,10 +37,37 @@ const ENTITY_ITEM_BASE =
 const CHECKBOX_BASE = 'w-4 h-4 border flex items-center justify-center';
 const ICON_CLASSES = 'size-4 text-ink-muted';
 
+function getEntityTypePluralLabel(
+  entityType: EntityType | null | undefined
+): string {
+  if (!entityType) return 'entities';
+  switch (entityType) {
+    case 'USER':
+      return 'users';
+    case 'DOCUMENT':
+      return 'documents';
+    case 'CHANNEL':
+      return 'channels';
+    case 'PROJECT':
+      return 'projects';
+    case 'CHAT':
+      return 'chats';
+    case 'COMPANY':
+      return 'companies';
+    case 'THREAD':
+      return 'threads';
+    case 'TASK':
+      return 'tasks';
+    default:
+      return 'entities';
+  }
+}
+
 type CombinedEntity =
   | { kind: 'item'; id: string; data: Item }
   | { kind: 'user'; id: string; data: IUser }
-  | { kind: 'channel'; id: string; data: ChannelWithParticipants };
+  | { kind: 'channel'; id: string; data: ChannelWithParticipants }
+  | { kind: 'company'; id: string; data: null };
 
 function entityMapper(kind: 'item' | 'user' | 'channel') {
   return (data: Item | IUser | ChannelWithParticipants): CombinedEntity => {
@@ -58,6 +86,8 @@ function getEntityName(entity: CombinedEntity): string {
     }
     case 'channel':
       return entity.data.name ?? '';
+    case 'company':
+      return entity.id;
   }
 }
 
@@ -72,6 +102,8 @@ function getEntitySearchText(entity: CombinedEntity): string {
     }
     case 'channel':
       return entity.data.name ?? '';
+    case 'company':
+      return entity.id;
   }
 }
 
@@ -83,6 +115,8 @@ function getEntityType(entity: CombinedEntity): string {
       return 'CHANNEL';
     case 'item':
       return entity.data.type.toUpperCase();
+    case 'company':
+      return 'COMPANY';
   }
 }
 
@@ -121,6 +155,8 @@ function getEntityIcon(entity: CombinedEntity) {
               : 'unknown';
       return <EntityIcon targetType={blockName} size="xs" />;
     }
+    case 'company':
+      return <CompanyIcon class={ICON_CLASSES} />;
   }
 }
 
@@ -152,6 +188,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
     if (specificEntityType === 'CHANNEL') {
       return channels().map(entityMapper('channel'));
+    }
+
+    if (specificEntityType === 'COMPANY') {
+      // TODO: Implement company data source
+      return [];
     }
 
     const itemTypes: EntityType[] = ['DOCUMENT', 'PROJECT', 'CHAT'];
@@ -326,12 +367,9 @@ export function PropertyEntitySelector(props: EntityInputProps) {
           </div>
         </Show>
 
-        <Show when={sortedEntities().length === 0 && searchTerm()}>
+        <Show when={sortedEntities().length === 0}>
           <div class="text-center py-4 text-ink-muted text-sm">
-            No{' '}
-            {props.property.valueType === 'ENTITY'
-              ? 'entities'
-              : props.property.valueType + 's'}{' '}
+            No {getEntityTypePluralLabel(props.property.specificEntityType)}{' '}
             found
           </div>
         </Show>
