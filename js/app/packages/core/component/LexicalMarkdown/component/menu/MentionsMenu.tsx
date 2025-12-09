@@ -844,10 +844,7 @@ export function MentionsMenu(props: {
     60
   );
 
-  const effect = () => {
-    debouncedSetSearchTerm(props.menu.searchTerm());
-  };
-  createEffect(effect);
+  createEffect(debouncedSetSearchTerm(props.menu.searchTerm()));
 
   const itemSearch = createFreshSearch<CombinedEntity<'item' | 'channel'>>(
     {},
@@ -1278,12 +1275,6 @@ export function MentionsMenu(props: {
     const docs = filteredItems().slice(0, bins().items);
     const dates = dateSuggestions().slice(0, bins().dates);
     const emailList = filteredEmails().slice(0, bins().emails);
-    // const totalLength = () =>
-    //   users.length +
-    //   docs.length +
-    //   contactsList.length +
-    //   dates.length +
-    //   emailList.length;
     const totalLength = () =>
       users.length +
       docs.length +
