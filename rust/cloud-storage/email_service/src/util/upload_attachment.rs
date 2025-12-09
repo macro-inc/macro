@@ -57,8 +57,7 @@ pub async fn upload_attachment(
     let (hex_hash, base64_hash) = calculate_hashes(&attachment_data);
 
     // 4. Determine file metadata from the payload.
-    let (file_name, file_type) =
-        determine_file_metadata(&attachment_args.attachment_metadata)?;
+    let (file_name, file_type) = determine_file_metadata(&attachment_args.attachment_metadata)?;
 
     // 5. Create the document record in DSS and get a presigned URL for the upload.
     let dss_response = create_dss_document_record(
@@ -84,11 +83,7 @@ pub async fn upload_attachment(
         .clone();
 
     // 8. Set properties for attachment
-    set_email_attachment_properties(
-        ctx.system_properties_service,
-        &document_id,
-        attachment_args,
-    )
+    set_email_attachment_properties(ctx.system_properties_service, &document_id, attachment_args)
     .await?;
 
     Ok(document_id)
