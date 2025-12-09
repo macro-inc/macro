@@ -27,14 +27,14 @@ export type EntityActionConfig = {
    * Optional condition to run over an entity to see if the action can be performed
    * on that entity.
    */
-  checkEnabled?: (entity: EntityData) => boolean;
+  canExecute?: (entity: EntityData) => boolean;
   /**
-   * Enabled mode for bulk version of action. If 'every' then all entities must pass
+   * Mode for bulk version of action. If 'every' then all entities must pass
    * for the action to register as enabled. If 'some' then the action can be
-   * enabled if a single entity passes the test. Only meaningful if checkEnabled
+   * enabled if a single entity passes the test. Only meaningful if canExecute
    * is also provided. Default is 'every'
    */
-  enabledMode?: 'some' | 'every';
+  mode?: 'some' | 'every';
 };
 
 export type EntityActionRegistry = {
@@ -109,16 +109,16 @@ export function createEntityActionRegistry(): EntityActionRegistry {
     type: EntityActionType,
     entities: EntityData | EntityData[]
   ): boolean => {
-    const { checkEnabled, enabledMode } = configs.get(type) ?? {};
-    if (!checkEnabled) return true;
+    const { canExecute, mode } = configs.get(type) ?? {};
+    if (!canExecute) return true;
     if (Array.isArray(entities)) {
-      if (enabledMode === 'some') {
-        return entities.some(checkEnabled);
+      if (mode === 'some') {
+        return entities.some(canExecute);
       } else {
-        return entities.every(checkEnabled);
+        return entities.every(canExecute);
       }
     } else if (isEntityData(entities)) {
-      return checkEnabled(entities);
+      return canExecute(entities);
     }
     return false;
   };

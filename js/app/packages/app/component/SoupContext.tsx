@@ -315,7 +315,7 @@ export function createNavigationEntityListShortcut({
       return { success: true };
     },
     {
-      checkEnabled: (entity) => {
+      canExecute: (entity) => {
         if (entity.type === 'email' || entity.type === 'channel') return true;
         if (entityHasUnreadNotifications(notificationSource, entity))
           return true;
@@ -381,7 +381,7 @@ export function createNavigationEntityListShortcut({
       return { success: true };
     },
     {
-      checkEnabled: (entity) => {
+      canExecute: (entity) => {
         // can't delete these bad boys yet.
         if (entity.type === 'channel' || entity.type === 'email') return false;
         // only delete what you own.
@@ -389,7 +389,7 @@ export function createNavigationEntityListShortcut({
       },
       // TODO (seamus): fix the handler from the modal so that we can delete
       // some of the items. Then switch this to some.
-      enabledMode: 'every',
+      mode: 'every',
     }
   );
 
@@ -449,7 +449,7 @@ export function createNavigationEntityListShortcut({
       return { success: true };
     },
     {
-      checkEnabled: (entity) => {
+      canExecute: (entity) => {
         if (entity.type === 'channel') {
           if (entity.channelType === 'direct_message') return false;
 
@@ -531,7 +531,7 @@ export function createNavigationEntityListShortcut({
       return { success: true };
     },
     {
-      checkEnabled: (entity) => {
+      canExecute: (entity) => {
         if (entity.type === 'channel' || entity.type === 'email') return false;
         return true;
       },
@@ -587,7 +587,7 @@ export function createNavigationEntityListShortcut({
       return { success: true };
     },
     {
-      checkEnabled: (entity) => {
+      canExecute: (entity) => {
         if (entity.type === 'channel' || entity.type === 'email') return false;
         return true;
       },
