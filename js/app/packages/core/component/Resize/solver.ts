@@ -10,7 +10,7 @@ import type { LayoutResult, Panel, PanelConfig, PanelId } from './types';
 
 export type ResizeSolver = {
   readonly direction: 'horizontal' | 'vertical';
-  addPanel: (panel: PanelConfig) => void;
+  addPanel: (panel: PanelConfig, index?: number) => void;
   dropPanel: (id: PanelId) => void;
   solve: () => LayoutResult;
   reset: () => void;
@@ -357,6 +357,7 @@ export function createResizeSolver(params: {
     const shares = ids.map((id) => panelData[id]!.share);
 
     const bounds = (i: number) => {
+      if (i < 0 || i >= panels.length) return [0, 0];
       const minPx = panels[i].minSize ?? 0;
       const maxPx = panels[i].maxSize ?? Infinity;
       const minS = Math.max(0, minPx / usable);

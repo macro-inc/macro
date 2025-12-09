@@ -9,12 +9,6 @@ export {
 export { useContacts } from './contactService';
 export { useDisplayName } from './displayName';
 export {
-  type EmailContact,
-  isCompanyEmailContact,
-  isPersonEmailContact,
-  useEmailContacts,
-} from './emailContacts';
-export {
   useOrganization,
   useOrganizationId,
   useOrganizationName,

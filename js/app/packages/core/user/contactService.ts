@@ -7,8 +7,6 @@ import { createSingletonRoot } from '@solid-primitives/rootless';
 import { createMemo, createResource } from 'solid-js';
 
 async function getContacts() {
-  let allContacts: IUser[] = [];
-
   if (!ENABLE_CONTACTS) {
     console.error('Contacts disabled, returning empty list');
     return [];
@@ -22,15 +20,7 @@ async function getContacts() {
   const [, data] = result;
   const { contacts } = data;
 
-  allContacts = contacts.map((id) => {
-    return {
-      id: id,
-      email: idToEmail(id),
-      name: idToDisplayName(id),
-    };
-  });
-
-  return allContacts;
+  return contacts;
 }
 
 const contactsResource = createSingletonRoot(() =>
@@ -43,7 +33,11 @@ export function useContacts() {
   const [resource] = contactsResource();
   return createMemo<IUser[]>(() => {
     const result = resource.latest;
-    return result ?? [];
+    return result.map((c) => ({
+      id: c,
+      email: idToEmail(c),
+      name: idToDisplayName(c),
+    }));
   });
 }
 

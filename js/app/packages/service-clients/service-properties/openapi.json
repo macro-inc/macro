@@ -17,7 +17,7 @@
           {
             "name": "scope",
             "in": "query",
-            "description": "Filter by scope: 'user' for user-scoped only, 'org' for organization-scoped only, 'all' for both scopes",
+            "description": "Filter by scope: 'user', 'org', 'system', or 'all'",
             "required": true,
             "schema": { "$ref": "#/components/schemas/PropertyScope" }
           },
@@ -92,6 +92,7 @@
         "responses": {
           "204": { "description": "Property definition deleted successfully" },
           "400": { "description": "Invalid property ID" },
+          "403": { "description": "Cannot modify system properties" },
           "404": { "description": "Property definition not found" },
           "500": { "description": "Internal server error" }
         }
@@ -160,6 +161,7 @@
             }
           },
           "400": { "description": "Invalid request" },
+          "403": { "description": "Cannot modify system properties" },
           "404": { "description": "Property not found" },
           "500": { "description": "Internal server error" }
         }
@@ -189,6 +191,7 @@
         "responses": {
           "204": { "description": "Property option deleted successfully" },
           "400": { "description": "Invalid option ID" },
+          "403": { "description": "Cannot modify system properties" },
           "404": { "description": "Property option not found" },
           "500": { "description": "Internal server error" }
         }
@@ -624,6 +627,7 @@
           "is_multi_select",
           "created_at",
           "updated_at",
+          "is_system",
           "is_metadata"
         ],
         "properties": {
@@ -636,6 +640,10 @@
             "description": "Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer."
           },
           "is_multi_select": { "type": "boolean" },
+          "is_system": {
+            "type": "boolean",
+            "description": "Flag to indicate if this is a system property (stored in DB)."
+          },
           "owner": { "$ref": "#/components/schemas/PropertyOwner" },
           "specific_entity_type": {
             "oneOf": [
@@ -769,14 +777,20 @@
               "scope": { "type": "string", "enum": ["user_and_organization"] },
               "user_id": { "type": "string" }
             }
+          },
+          {
+            "type": "object",
+            "description": "System-owned property (no user or org owner)",
+            "required": ["scope"],
+            "properties": { "scope": { "type": "string", "enum": ["system"] } }
           }
         ],
-        "description": "Defines who owns a property - user-scoped, org-scoped, or both."
+        "description": "Defines who owns a property - user-scoped, org-scoped, system, or both user and org."
       },
       "PropertyScope": {
         "type": "string",
         "description": "Scope filter for property queries",
-        "enum": ["user", "org", "all"]
+        "enum": ["user", "org", "system", "all"]
       },
       "PropertyValue": {
         "oneOf": [

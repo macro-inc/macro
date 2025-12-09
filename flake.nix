@@ -18,6 +18,8 @@
         pkgs = import nixpkgs {
           system = system;
         };
+        isDarwin = pkgs.stdenv.isDarwin;
+        isLinux = pkgs.stdenv.isLinux;
         packages = with pkgs; [
           parallel
           docker-compose
@@ -55,19 +57,23 @@
         libraries = with pkgs; [
           openssl
           glib
-          glibc.dev
           libclang
+        ] ++ pkgs.lib.optionals isLinux [
+          glibc.dev
           gcc
+        ] ++ pkgs.lib.optionals isDarwin [
+          libiconv
         ];
       in
       {
-        devShell = pkgs.mkShell {
+        devShell = pkgs.mkShell ({
           buildInputs = packages ++ libraries;
-          LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";
           PKG_CONFIG_PATH = "${pkgs.openssl.dev}/lib/pkgconfig";
           LIBCLANG_PATH = "${pkgs.libclang.lib}/lib";
+        } // pkgs.lib.optionalAttrs isLinux {
+          LD_LIBRARY_PATH = "${pkgs.lib.makeLibraryPath libraries}";
           BINDGEN_EXTRA_CLANG_ARGS = "-I${pkgs.glibc.dev}/include -I${pkgs.gcc.cc}/lib/gcc/${pkgs.stdenv.hostPlatform.config}/${pkgs.gcc.version}/include";
-        };
+        });
       }
     );
 }

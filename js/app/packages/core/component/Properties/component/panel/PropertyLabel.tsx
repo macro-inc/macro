@@ -1,3 +1,4 @@
+import { useBlockName } from '@core/block';
 import { IconButton } from '@core/component/IconButton';
 import DeleteIcon from '@icon/bold/x-bold.svg';
 import PinIcon from '@icon/regular/push-pin.svg';
@@ -6,8 +7,10 @@ import XIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { type Component, createMemo, createSignal, Show } from 'solid-js';
 import { deleteEntityProperty } from '../../api';
+import { getBuiltinPropertyIds } from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
+import { PropertyDataTypeIcon } from '../../utils';
 
 type PropertyLabelProps = {
   property: Property;
@@ -22,6 +25,10 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
     onPropertyUnpinned,
     pinnedPropertyIds,
   } = usePropertiesContext();
+  const blockName = useBlockName();
+  const isBuiltin = getBuiltinPropertyIds(blockName).includes(
+    props.property.propertyDefinitionId
+  );
 
   const isPinned = createMemo(
     () => pinnedPropertyIds?.()?.includes(props.property.propertyId) ?? false
@@ -61,11 +68,18 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
   return (
     <>
       <div
-        class="flex items-center min-w-0"
+        class="flex items-center gap-1.5 min-w-0"
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <span class="text-sm pr-2 text-ink-muted truncate flex-shrink min-w-0">
+        <PropertyDataTypeIcon
+          property={{
+            data_type: props.property.valueType,
+            specific_entity_type: props.property.specificEntityType,
+          }}
+          class="size-4 text-ink-muted shrink-0"
+        />
+        <span class="text-sm text-ink-muted truncate flex-shrink min-w-0">
           {props.property.displayName}
         </span>
         {/* Always reserve space for delete button to prevent layout shift */}
@@ -91,20 +105,22 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
             </div>
           </Show>
 
-          <div
-            class={`flex-shrink-0 transition-opacity ${
-              isHovered() ? 'opacity-100' : 'opacity-0'
-            }`}
-          >
-            <IconButton
-              icon={DeleteIcon}
-              theme="clear"
-              size="xs"
-              class="!text-failure hover:!bg-failure/15"
-              tooltip={{ label: 'Remove property' }}
-              onClick={handleDeleteClick}
-            />
-          </div>
+          <Show when={!isBuiltin}>
+            <div
+              class={`flex-shrink-0 transition-opacity ${
+                isHovered() ? 'opacity-100' : 'opacity-0'
+              }`}
+            >
+              <IconButton
+                icon={DeleteIcon}
+                theme="clear"
+                size="xs"
+                class="!text-failure hover:!bg-failure/15"
+                tooltip={{ label: 'Remove property' }}
+                onClick={handleDeleteClick}
+              />
+            </div>
+          </Show>
         </Show>
       </div>
 

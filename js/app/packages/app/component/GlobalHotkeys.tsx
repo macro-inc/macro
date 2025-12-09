@@ -1,5 +1,6 @@
 import { useOpenInstructionsMd } from '@core/component/AI/util/instructions';
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
+import { useSettingsState } from '@core/constant/SettingsState';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import {
@@ -40,6 +41,7 @@ import {
 export default function GlobalShortcuts() {
   const [bigChatOpen, setBigChatOpen] = useBigChat();
   const toggleRightPanel = useToggleRightPanel();
+  const { toggleSettings } = useSettingsState();
 
   const handleCommandMenu = () => {
     const wasOpen = konsoleOpen();
@@ -209,6 +211,18 @@ export default function GlobalShortcuts() {
     description: 'Toggle big chat',
     keyDownHandler: () => {
       setBigChatOpen((v) => !v);
+      return true;
+    },
+    runWithInputFocused: true,
+  });
+
+  registerHotkey({
+    hotkeyToken: TOKENS.global.toggleSettings,
+    hotkey: 'cmd+;',
+    scopeId: 'global',
+    description: 'Toggle settings',
+    keyDownHandler: () => {
+      toggleSettings();
       return true;
     },
     runWithInputFocused: true,

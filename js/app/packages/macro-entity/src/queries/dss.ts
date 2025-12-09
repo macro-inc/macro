@@ -132,7 +132,6 @@ export function createDssInfiniteQuery(
     const queryKey = queryKeys.dss({
       infinite: true,
       ...params(),
-      // Include only document_filters in query key so query refetches only when document filters change
       documentFilters: documentFilters
         ? JSON.stringify(documentFilters)
         : undefined,
@@ -516,7 +515,10 @@ export function createRenameDssEntityMutation() {
 export function createBulkRenameDssEntityMutation() {
   const isUnsupportedEntity = (entity: EntityData) => {
     const type = entity.type;
-    return type === 'channel' || type === 'email';
+    if (entity.type === 'channel') {
+      return entity.channelType === 'direct_message';
+    }
+    return type === 'email';
   };
 
   return useMutation(() => ({

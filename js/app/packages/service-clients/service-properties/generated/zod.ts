@@ -13,7 +13,7 @@ import {
  * @summary List property definitions with flexible filtering
  */
 export const listPropertiesQueryParams = zod.object({
-  "scope": zod.enum(['user', 'org', 'all']).describe('Filter by scope: \'user\' for user-scoped only, \'org\' for organization-scoped only, \'all\' for both scopes'),
+  "scope": zod.enum(['user', 'org', 'system', 'all']).describe('Filter by scope: \'user\', \'org\', \'system\', or \'all\''),
   "include_options": zod.boolean().optional().describe('Whether to include property options in the response')
 })
 
@@ -24,6 +24,7 @@ export const listPropertiesResponseItem = zod.union([zod.object({
   "id": zod.string().uuid(),
   "is_metadata": zod.boolean().describe('Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'),
   "is_multi_select": zod.boolean(),
+  "is_system": zod.boolean().describe('Flag to indicate if this is a system property (stored in DB).'),
   "owner": zod.union([zod.object({
   "scope": zod.enum(['user']),
   "user_id": zod.string()
@@ -34,7 +35,9 @@ export const listPropertiesResponseItem = zod.union([zod.object({
   "organization_id": zod.number(),
   "scope": zod.enum(['user_and_organization']),
   "user_id": zod.string()
-}).describe('Both user and organization-scoped')]).describe('Defines who owns a property - user-scoped, org-scoped, or both.'),
+}).describe('Both user and organization-scoped'),zod.object({
+  "scope": zod.enum(['system'])
+}).describe('System-owned property (no user or org owner)')]).describe('Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'),
   "specific_entity_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
   "updated_at": zod.string().datetime({})
 }).describe('Property definition model (service representation).'),zod.object({
@@ -45,6 +48,7 @@ export const listPropertiesResponseItem = zod.union([zod.object({
   "id": zod.string().uuid(),
   "is_metadata": zod.boolean().describe('Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'),
   "is_multi_select": zod.boolean(),
+  "is_system": zod.boolean().describe('Flag to indicate if this is a system property (stored in DB).'),
   "owner": zod.union([zod.object({
   "scope": zod.enum(['user']),
   "user_id": zod.string()
@@ -55,7 +59,9 @@ export const listPropertiesResponseItem = zod.union([zod.object({
   "organization_id": zod.number(),
   "scope": zod.enum(['user_and_organization']),
   "user_id": zod.string()
-}).describe('Both user and organization-scoped')]).describe('Defines who owns a property - user-scoped, org-scoped, or both.'),
+}).describe('Both user and organization-scoped'),zod.object({
+  "scope": zod.enum(['system'])
+}).describe('System-owned property (no user or org owner)')]).describe('Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'),
   "specific_entity_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
   "updated_at": zod.string().datetime({})
 }).describe('Property definition model (service representation).'),
@@ -90,7 +96,9 @@ export const createPropertyDefinitionBody = zod.union([zod.object({
   "organization_id": zod.number(),
   "scope": zod.enum(['user_and_organization']),
   "user_id": zod.string()
-}).describe('Both user and organization-scoped')]).describe('Defines who owns a property - user-scoped, org-scoped, or both.').and(zod.object({
+}).describe('Both user and organization-scoped'),zod.object({
+  "scope": zod.enum(['system'])
+}).describe('System-owned property (no user or org owner)')]).describe('Defines who owns a property - user-scoped, org-scoped, system, or both user and org.').and(zod.object({
   "data_type": zod.union([zod.object({
   "type": zod.enum(['boolean'])
 }).describe('Boolean true/false values.'),zod.object({
@@ -210,6 +218,7 @@ export const getEntityPropertiesResponse = zod.object({
   "id": zod.string().uuid(),
   "is_metadata": zod.boolean().describe('Flag to indicate if this is a system-generated metadata property.\nNot stored in database - computed at service layer.'),
   "is_multi_select": zod.boolean(),
+  "is_system": zod.boolean().describe('Flag to indicate if this is a system property (stored in DB).'),
   "owner": zod.union([zod.object({
   "scope": zod.enum(['user']),
   "user_id": zod.string()
@@ -220,7 +229,9 @@ export const getEntityPropertiesResponse = zod.object({
   "organization_id": zod.number(),
   "scope": zod.enum(['user_and_organization']),
   "user_id": zod.string()
-}).describe('Both user and organization-scoped')]).describe('Defines who owns a property - user-scoped, org-scoped, or both.'),
+}).describe('Both user and organization-scoped'),zod.object({
+  "scope": zod.enum(['system'])
+}).describe('System-owned property (no user or org owner)')]).describe('Defines who owns a property - user-scoped, org-scoped, system, or both user and org.'),
   "specific_entity_type": zod.union([zod.null(),zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')]).optional(),
   "updated_at": zod.string().datetime({})
 }).describe('Property definition model (service representation).'),

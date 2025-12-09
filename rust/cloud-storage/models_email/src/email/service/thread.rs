@@ -4,6 +4,7 @@ use crate::service::contact::Contact;
 use crate::service::message::MessageWithBodyReplyless;
 use chrono::{DateTime, Utc};
 use models_pagination::{Identify, SimpleSortMethod, SortOn};
+use models_permissions::share_permission::access_level::AccessLevel;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_with::{DeserializeFromStr, SerializeDisplay};
@@ -51,6 +52,7 @@ pub struct APIThread {
     pub link_id: Uuid,
     pub inbox_visible: bool,
     pub is_read: bool,
+    pub access_level: AccessLevel,
     // this field is only set w.r.t incoming messages (see is_inbound), for inbox thread ordering
     pub latest_inbound_message_ts: Option<DateTime<Utc>>,
     // this field is only set w.r.t outgoing messages (see is_outbound), for sent message thread ordering
@@ -66,6 +68,7 @@ impl APIThread {
     pub fn from_thread_with_messages(
         thread: Thread,
         messages: Vec<MessageWithBodyReplyless>,
+        access_level: AccessLevel,
     ) -> Self {
         Self {
             db_id: thread.db_id,
@@ -73,6 +76,7 @@ impl APIThread {
             link_id: thread.link_id,
             inbox_visible: thread.inbox_visible,
             is_read: thread.is_read,
+            access_level,
             latest_inbound_message_ts: thread.latest_inbound_message_ts,
             latest_outbound_message_ts: thread.latest_outbound_message_ts,
             latest_non_spam_message_ts: thread.latest_non_spam_message_ts,

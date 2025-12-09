@@ -51,7 +51,9 @@ function defaultNameTransform(item: UserNameItem): string {
 }
 
 async function fetchDisplayNames(ids: string[]): Promise<UserNameItem[]> {
-  const result = await authServiceClient.getUserNames({ user_ids: ids });
+  const result = await authServiceClient.getUserNamesWithEmail({
+    user_ids: ids,
+  });
   if (isErr(result)) {
     console.error('Failed to fetch user display names');
     return [];
@@ -82,11 +84,10 @@ async function batchFetchNames(ids: string[]) {
     ids.length > 0 ? fetchDisplayNames(ids) : Promise.resolve([]),
   ]);
 
-  const updates: DisplayNameStore = {};
-
-  [...nameResults].forEach((result) => {
-    updates[result.id] = result;
-  });
+  const updates = nameResults.reduce((acc, result) => {
+    acc[result.id] = result;
+    return acc;
+  }, {} as DisplayNameStore);
 
   setUserDisplayNames((prev) => ({ ...prev, ...updates }));
 }

@@ -1,7 +1,7 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { getActiveCommandsFromScope } from '@core/hotkey/getCommands';
 import { activeScope } from '@core/hotkey/state';
-import { useEmailContacts } from '@core/user';
+import { useContacts } from '@core/user';
 import { mapFromListsByKey } from '@core/util/compareUtils';
 import type { Channel } from '@service-comms/generated/models/channel';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
@@ -30,7 +30,7 @@ export function useCommandItems() {
   const history = useHistory();
   const channelsContext = useChannelsContext();
   const channels = () => channelsContext.channels();
-  const contactItems = useEmailContacts();
+  const contactItems = useContacts();
   const activeCommands = getActiveCommandsFromScope(activeScope(), {
     sortByScopeLevel: false,
     hideShadowedCommands: false,
@@ -101,27 +101,14 @@ export function useCommandItems() {
     }));
 
     const contacts = contactItems().map<CommandItemCard>((contact) => {
-      if (contact.type === 'company') {
-        return {
-          type: 'company',
-          data: {
-            id: contact.id,
-            name: contact.name,
-            domain: contact.domain,
-          },
-          updatedAt: contact.lastInteraction,
-        };
-      } else {
-        return {
-          type: 'contact',
-          data: {
-            id: contact.id,
-            name: contact.name,
-            email: contact.email,
-          },
-          updatedAt: contact.lastInteraction,
-        };
-      }
+      return {
+        type: 'contact',
+        data: {
+          id: contact.id,
+          name: contact.name,
+          email: contact.email,
+        },
+      };
     });
 
     return mapFromListsByKey<CommandItemCard>(

@@ -5,6 +5,7 @@ import type {
   BlockInstanceHandle,
   BlockOrchestrator,
 } from '@core/orchestrator';
+import { isRightPanelOpen, isSettingsPanelOpen } from '@core/signal/layout';
 import {
   type Accessor,
   createMemo,
@@ -516,7 +517,11 @@ export function createSplitLayout(
   }
 
   function spotlightSplit(id: SplitId) {
-    if (state.splits.length <= 1) {
+    if (
+      state.splits.length <= 1 &&
+      !isSettingsPanelOpen() &&
+      !isRightPanelOpen()
+    ) {
       return;
     }
     const split = state.splits.find((s) => s.id === id);
@@ -708,8 +713,12 @@ export function createSplitLayout(
 
     if (!changed) return;
 
+    const originalSplits = [...state.splits];
+
     const lookup = (type: BlockName | BlockAlias, id: string) =>
-      state.splits.find((s) => s.content.type === type && s.content.id === id);
+      originalSplits.find(
+        (s) => s.content.type === type && s.content.id === id
+      );
 
     const splitsToRemove = [
       // just remount all the components

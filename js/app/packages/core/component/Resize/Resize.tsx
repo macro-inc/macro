@@ -83,8 +83,11 @@ function Zone(props: ParentProps<ZoneProps>) {
     panels: [],
   });
 
-  function register(config: PanelConfig) {
-    solver.addPanel({ ...config, minSize: config?.minSize ?? minSize() });
+  function register(config: PanelConfig, index?: number) {
+    solver.addPanel(
+      { ...config, minSize: config?.minSize ?? minSize() },
+      index
+    );
   }
 
   function unregister(id: PanelId) {
@@ -94,12 +97,15 @@ function Zone(props: ParentProps<ZoneProps>) {
   const layouts = createMemo(() => {
     const solve = solver.solve();
     return solver.order().map((id) => ({
+      id,
       offset: solve.offsets.get(id) ?? 0,
       size: solve.sizes.get(id) ?? 0,
     }));
   });
 
-  const len = () => layouts().length;
+  const visibleLayouts = createMemo(() => {
+    return layouts().filter((layout) => !solver.isHidden(layout.id));
+  });
 
   const offsetOf = (id: PanelId) =>
     createMemo(() => solver.solve().offsets.get(id) ?? 0);
@@ -138,17 +144,20 @@ function Zone(props: ParentProps<ZoneProps>) {
     >
       <ResizeZoneContext.Provider value={ctx}>
         {props.children}
-        <Show when={len() > 1}>
-          <Index each={layouts()}>
-            {(panel, i) => (
-              <Show when={i < len() - 1}>
-                <Gutter
-                  offset={panel().offset + panel().size}
-                  index={i}
-                  nudge={solver.moveHandle}
-                />
-              </Show>
-            )}
+        <Show when={visibleLayouts().length > 1}>
+          <Index each={visibleLayouts()}>
+            {(panel, visibleIndex) => {
+              const actualIndex = solver.order().indexOf(panel().id);
+              return (
+                <Show when={visibleIndex < visibleLayouts().length - 1}>
+                  <Gutter
+                    offset={panel().offset + panel().size}
+                    index={actualIndex}
+                    nudge={solver.moveHandle}
+                  />
+                </Show>
+              );
+            }}
           </Index>
         </Show>
       </ResizeZoneContext.Provider>
@@ -168,6 +177,8 @@ function Zone(props: ParentProps<ZoneProps>) {
  *     state from the component lifecycle.
  * @property hidden - Accessor that returns whether the panel should be hidden (temporarily
  *     removed from layout but still registered). When hidden, other panels flow around it.
+ * @property persistent - When true, panel stays registered even when hidden (for singleton panels
+ *     like settings/rightbar). When false or undefined, hidden panels unregister (default behavior).
  */
 type PanelProps = {
   id: PanelId;
@@ -175,6 +186,9 @@ type PanelProps = {
   maxSize?: number;
   collapsed?: () => boolean;
   hidden?: () => boolean;
+  /** The index position for this panel in the layout order */
+  index?: number;
+  persistent?: boolean;
 };
 
 /**
@@ -209,11 +223,14 @@ function Panel(props: ParentProps<PanelProps>) {
 
   onMount(() => {
     if (props.collapsed?.() === false) return;
-    ctx.register({
-      id: props.id,
-      minSize: props.minSize,
-      maxSize: props.maxSize ?? Infinity,
-    });
+    ctx.register(
+      {
+        id: props.id,
+        minSize: props.minSize,
+        maxSize: props.maxSize ?? Infinity,
+      },
+      props.index
+    );
   });
 
   createEffect(() => {
@@ -222,25 +239,40 @@ function Panel(props: ParentProps<PanelProps>) {
     if (collapsed) {
       ctx.unregister(props.id);
     } else {
-      ctx.register({
-        id: props.id,
-        minSize: props.minSize,
-        maxSize: props.maxSize ?? Infinity,
-      });
+      ctx.register(
+        {
+          id: props.id,
+          minSize: props.minSize,
+          maxSize: props.maxSize ?? Infinity,
+        },
+        props.index
+      );
     }
   });
 
   createEffect(() => {
     const hidden = props.hidden?.();
     if (hidden === undefined) return;
-    if (hidden) {
-      ctx.unregister(props.id);
+
+    if (props.persistent) {
+      if (hidden) {
+        ctx.hide(props.id);
+      } else {
+        ctx.show(props.id);
+      }
     } else {
-      ctx.register({
-        id: props.id,
-        minSize: props.minSize,
-        maxSize: props.maxSize ?? Infinity,
-      });
+      if (hidden) {
+        ctx.unregister(props.id);
+      } else {
+        ctx.register(
+          {
+            id: props.id,
+            minSize: props.minSize,
+            maxSize: props.maxSize ?? Infinity,
+          },
+          props.index
+        );
+      }
     }
   });
 
