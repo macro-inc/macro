@@ -9,6 +9,7 @@ use nom::{
     sequence::delimited,
 };
 use serde::Deserialize;
+use std::borrow::Cow;
 
 fn xml_tag(
     start_delimiter: &'static str,
@@ -51,9 +52,9 @@ pub trait XmlTaggedParsed<'de>: Deserialize<'de> {
 #[non_exhaustive]
 pub struct ParsedUserMention<'a> {
     #[serde(borrow)]
-    pub user_id: &'a str,
+    pub user_id: BorrowedUserIdStr<'a>,
     #[serde(borrow)]
-    pub email: &'a str,
+    pub email: Cow<'a, str>,
 }
 
 impl<'de> XmlTaggedParsed<'de> for ParsedUserMention<'de> {
@@ -65,7 +66,7 @@ impl<'de> XmlTaggedParsed<'de> for ParsedUserMention<'de> {
 #[non_exhaustive]
 pub struct ParsedContactMention<'a> {
     #[serde(borrow)]
-    pub name: &'a str,
+    pub name: Cow<'a, str>,
 }
 
 impl<'de> XmlTaggedParsed<'de> for ParsedContactMention<'de> {
@@ -77,7 +78,7 @@ impl<'de> XmlTaggedParsed<'de> for ParsedContactMention<'de> {
 #[non_exhaustive]
 pub struct ParsedDateMention<'a> {
     #[serde(borrow)]
-    pub display_format: &'a str,
+    pub display_format: Cow<'a, str>,
 }
 
 impl<'de> XmlTaggedParsed<'de> for ParsedDateMention<'de> {
@@ -89,7 +90,7 @@ impl<'de> XmlTaggedParsed<'de> for ParsedDateMention<'de> {
 #[non_exhaustive]
 pub struct ParsedDocumentMention<'a> {
     #[serde(borrow)]
-    pub document_name: &'a str,
+    pub document_name: Cow<'a, str>,
 }
 
 impl<'de> XmlTaggedParsed<'de> for ParsedDocumentMention<'de> {
@@ -101,9 +102,9 @@ impl<'de> XmlTaggedParsed<'de> for ParsedDocumentMention<'de> {
 #[non_exhaustive]
 pub struct ParsedLink<'a> {
     #[serde(borrow)]
-    pub text: &'a str,
+    pub text: Cow<'a, str>,
     #[serde(borrow)]
-    pub url: &'a str,
+    pub url: Cow<'a, str>,
 }
 
 impl<'de> XmlTaggedParsed<'de> for ParsedLink<'de> {
