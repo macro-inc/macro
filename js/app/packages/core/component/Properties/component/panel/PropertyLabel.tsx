@@ -7,7 +7,10 @@ import XIcon from '@icon/regular/x.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { type Component, createMemo, createSignal, Show } from 'solid-js';
 import { deleteEntityProperty } from '../../api';
-import { getBuiltinPropertyIds } from '../../constants';
+import {
+  getBuiltinPropertyIds,
+  getDefaultPinnedProperties,
+} from '../../constants';
 import { usePropertiesContext } from '../../context/PropertiesContext';
 import type { Property } from '../../types';
 import { PropertyDataTypeIcon } from '../../utils';
@@ -27,6 +30,9 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
   } = usePropertiesContext();
   const blockName = useBlockAliasedName();
   const isBuiltin = getBuiltinPropertyIds(blockName).includes(
+    props.property.propertyDefinitionId
+  );
+  const isDefaultPinned = getDefaultPinnedProperties(blockName).includes(
     props.property.propertyDefinitionId
   );
 
@@ -87,7 +93,9 @@ export const PropertyLabel: Component<PropertyLabelProps> = (props) => {
           when={canEdit && !props.property.isMetadata}
           fallback={<div class="w-3 h-3 flex-shrink-0" />}
         >
-          <Show when={onPropertyPinned && onPropertyUnpinned}>
+          <Show
+            when={onPropertyPinned && onPropertyUnpinned && !isDefaultPinned}
+          >
             <div
               class={`flex-shrink-0 transition-opacity ${
                 isHovered() ? 'opacity-100' : 'opacity-0'
