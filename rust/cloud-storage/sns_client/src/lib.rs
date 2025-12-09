@@ -1,10 +1,109 @@
-use std::collections::HashMap;
+use std::{borrow::Cow, collections::HashMap};
 
-use aws_sdk_sns::operation::publish::PublishOutput;
+use aws_sdk_sns::{operation::publish::PublishOutput, types::MessageAttributeValue};
+use serde::{Serialize, Serializer};
 
 #[derive(Clone, Debug)]
 pub struct SNS {
     inner: aws_sdk_sns::Client,
+}
+
+#[derive(Debug, Serialize)]
+#[serde(bound = "A: Serialize, I: Serialize")]
+pub struct SnsPayload<'a, A, I> {
+    pub default: String,
+    #[serde(rename = "APNS", serialize_with = "stringified_json")]
+    pub apns: &'a I,
+    #[serde(rename = "APNS_SANDBOX", serialize_with = "stringified_json")]
+    pub apns_sandbox: &'a I,
+    #[serde(rename = "GCM", serialize_with = "stringified_json")]
+    pub gcm: &'a A,
+}
+
+fn stringified_json<T, S>(val: &T, ser: S) -> Result<S::Ok, S::Error>
+where
+    S: Serializer,
+    T: Serialize,
+{
+    let s = serde_json::to_string(val).expect("json serialize cant fail");
+    ser.serialize_str(&s)
+}
+
+impl<'a, A, I> SnsPayload<'a, A, I>
+where
+    A: Serialize,
+    I: Serialize,
+{
+    fn into_json(&self) -> Result<String, serde_json::Error> {
+        serde_json::to_string(self)
+    }
+}
+
+pub enum PushType {
+    Background,
+    Alert,
+}
+
+impl PushType {
+    fn as_static_str(&self) -> &'static str {
+        match self {
+            PushType::Background => "background",
+            PushType::Alert => "alert",
+        }
+    }
+}
+
+pub struct NotifCollapseKey<'a>(Cow<'a, str>);
+
+impl<'a> NotifCollapseKey<'a> {
+    pub fn new_str(s: &'a str) -> Self {
+        NotifCollapseKey(Cow::Borrowed(s))
+    }
+}
+
+pub struct MessageAttributes<'a> {
+    pub push_type: PushType,
+    pub apns_bundle_id: &'static str,
+    pub collapse_key: NotifCollapseKey<'a>,
+}
+
+impl<'a> MessageAttributes<'a> {
+    pub fn into_json(self) -> HashMap<String, MessageAttributeValue> {
+        HashMap::from([
+            (
+                "AWS.SNS.MOBILE.APNS.TOPIC".to_string(),
+                MessageAttributeValue::builder()
+                    .data_type("String")
+                    .string_value(self.apns_bundle_id)
+                    .build()
+                    .unwrap(),
+            ),
+            (
+                "AWS.SNS.MOBILE.APNS.PUSH_TYPE".to_string(),
+                MessageAttributeValue::builder()
+                    .data_type("String")
+                    .string_value(self.push_type.as_static_str())
+                    .build()
+                    .unwrap(),
+            ),
+            (
+                "AWS.SNS.MOBILE.APNS.PRIORITY".to_string(),
+                MessageAttributeValue::builder()
+                    .data_type("String")
+                    .string_value("5") // 5 is normal, 10 is high
+                    .build()
+                    .unwrap(),
+            ),
+            (
+                "AWS.SNS.MOBILE.APNS.COLLAPSE_ID".to_string(),
+                MessageAttributeValue::builder()
+                    .data_type("String")
+                    .string_value(self.collapse_key.0.into_owned())
+                    .build()
+                    .unwrap(),
+            ),
+        ])
+    }
 }
 
 impl SNS {
@@ -100,19 +199,23 @@ impl SNS {
     ///
     /// * `Ok(())` if the notification was sent successfully
     /// * `Err` if there was an error sending the notification
-    pub async fn push_notification(
+    pub async fn push_notification<A, I>(
         &self,
         endpoint_arn: &str,
-        message_json: &str,
-        message_attributes: Option<HashMap<String, aws_sdk_sns::types::MessageAttributeValue>>,
-    ) -> anyhow::Result<PublishOutput> {
+        message_json: SnsPayload<'_, A, I>,
+        message_attributes: MessageAttributes<'_>,
+    ) -> anyhow::Result<PublishOutput>
+    where
+        A: Serialize,
+        I: Serialize,
+    {
         let result = self
             .inner
             .publish()
             .target_arn(endpoint_arn)
             .message_structure("json")
-            .message(message_json)
-            .set_message_attributes(message_attributes)
+            .message(message_json.into_json().unwrap())
+            .set_message_attributes(Some(message_attributes.into_json()))
             .send()
             .await?;
 
