@@ -54,6 +54,30 @@ export const BUILTIN_PROPERTIES_BY_BLOCK: Partial<
 } as const;
 
 /**
+ * Default pinned properties by block type.
+ * These are automatically pinned when a new entity of this block type is created.
+ */
+export const DEFAULT_PINNED_PROPERTIES_BY_BLOCK: Partial<
+  Record<BlockName | BlockAlias, readonly string[]>
+> = {
+  task: [
+    SYSTEM_PROPERTY_IDS.STATUS,
+    SYSTEM_PROPERTY_IDS.PRIORITY,
+    SYSTEM_PROPERTY_IDS.ASSIGNEES,
+  ],
+} as const;
+
+/**
+ * Get the default pinned property definition IDs for a block type.
+ * Returns empty array if block has no default pinned properties.
+ */
+export function getDefaultPinnedProperties(
+  blockType: BlockName | BlockAlias
+): readonly string[] {
+  return DEFAULT_PINNED_PROPERTIES_BY_BLOCK[blockType] ?? [];
+}
+
+/**
  * Get the builtin property definition IDs for a block type.
  * Returns empty array if block has no builtin properties.
  */
