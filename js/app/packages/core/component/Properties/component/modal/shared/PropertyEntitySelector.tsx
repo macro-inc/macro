@@ -8,6 +8,7 @@ import { createFreshSearch } from '@core/util/freshSort';
 import CheckIcon from '@icon/bold/check-bold.svg';
 import CompanyIcon from '@icon/duotone/building-duotone.svg';
 import ChannelBuildingIcon from '@icon/duotone/building-office-duotone.svg';
+import ThreadIcon from '@icon/duotone/envelope-duotone.svg';
 import GlobeIcon from '@icon/duotone/globe-duotone.svg';
 import ChannelIcon from '@icon/duotone/hash-duotone.svg';
 import User from '@icon/duotone/user-duotone.svg';
@@ -67,7 +68,8 @@ type CombinedEntity =
   | { kind: 'item'; id: string; data: Item }
   | { kind: 'user'; id: string; data: IUser }
   | { kind: 'channel'; id: string; data: ChannelWithParticipants }
-  | { kind: 'company'; id: string; data: null };
+  | { kind: 'company'; id: string; data: null }
+  | { kind: 'thread'; id: string; data: null };
 
 function entityMapper(kind: 'item' | 'user' | 'channel') {
   return (data: Item | IUser | ChannelWithParticipants): CombinedEntity => {
@@ -88,6 +90,8 @@ function getEntityName(entity: CombinedEntity): string {
       return entity.data.name ?? '';
     case 'company':
       return entity.id;
+    case 'thread':
+      return entity.id;
   }
 }
 
@@ -104,6 +108,8 @@ function getEntitySearchText(entity: CombinedEntity): string {
       return entity.data.name ?? '';
     case 'company':
       return entity.id;
+    case 'thread':
+      return entity.id;
   }
 }
 
@@ -117,6 +123,8 @@ function getEntityType(entity: CombinedEntity): string {
       return entity.data.type.toUpperCase();
     case 'company':
       return 'COMPANY';
+    case 'thread':
+      return 'THREAD';
   }
 }
 
@@ -157,6 +165,8 @@ function getEntityIcon(entity: CombinedEntity) {
     }
     case 'company':
       return <CompanyIcon class={ICON_CLASSES} />;
+    case 'thread':
+      return <ThreadIcon class={ICON_CLASSES} />;
   }
 }
 
@@ -192,6 +202,11 @@ export function PropertyEntitySelector(props: EntityInputProps) {
 
     if (specificEntityType === 'COMPANY') {
       // TODO: Implement company data source
+      return [];
+    }
+
+    if (specificEntityType === 'THREAD') {
+      // TODO: Implement thread data source
       return [];
     }
 
