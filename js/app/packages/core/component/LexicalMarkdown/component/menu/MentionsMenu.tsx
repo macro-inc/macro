@@ -1082,13 +1082,15 @@ export function MentionsMenu(props: {
       case 'ArrowDown':
         e.preventDefault();
         e.stopPropagation();
-        setSelectedIndex((prev) => (prev + 1) % items.length);
+        handleArrowDown();
         break;
 
       case 'ArrowUp':
         e.preventDefault();
         e.stopPropagation();
-        handleArrowDown();
+        setSelectedIndex((prev) =>
+          prev - 1 < 0 ? items.length - 1 : prev - 1
+        );
         break;
 
       case 'ArrowLeft':
