@@ -2,7 +2,7 @@ import { useChannelMarkdownArea } from '@block-channel/component/MarkdownArea';
 import { withAnalytics } from '@coparse/analytics';
 import { TrackingEvents } from '@coparse/analytics/src/types/TrackingEvents';
 import { useIsAuthenticated } from '@core/auth';
-import { useBlockId, useBlockName } from '@core/block';
+import { useBlockAliasedName, useBlockId, useBlockName } from '@core/block';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import type { WithCustomUserInput } from '@core/user';
@@ -106,7 +106,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
   });
 
   const asAttachment = {
-    entity_type: blockNameToItemType(useBlockName()) ?? 'unknown',
+    entity_type: blockNameToItemType(useBlockAliasedName()) ?? 'unknown',
     entity_id: useBlockId(),
   };
 
