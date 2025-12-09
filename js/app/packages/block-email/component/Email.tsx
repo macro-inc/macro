@@ -565,19 +565,8 @@ export function Email(props: EmailProps) {
     (notification) => {
       if (!isNewEmail(notification)) return;
       const notificationThreadId = notification.notificationMetadata.threadId;
-
-<<<<<<< Updated upstream
-        const notificationThreadId = (metadata as { thread_id: string })
-          .thread_id;
-
-        if (notificationThreadId === threadData()?.db_id) {
-          threadQuery.refetch();
-          break;
-        }
-=======
       if (notificationThreadId === threadData()?.db_id) {
         threadQuery.refetch();
->>>>>>> Stashed changes
       }
     }
   );
