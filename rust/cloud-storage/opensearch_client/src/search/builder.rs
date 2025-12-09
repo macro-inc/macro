@@ -196,9 +196,46 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                 let term_must_array: Vec<QueryType<'a>> =
                     self.build_must_term_query(SearchOn::Content)?;
 
-                // For each item in term must array, add to bool must query
-                for must in term_must_array {
-                    bool_query.must(must);
+                if T::ENTITY_INDEX == SearchEntityType::Emails {
+                    // Emails are special and we need to add in participants to the query
+                    let mut email_bool_query = BoolQueryBuilder::new();
+
+                    email_bool_query.minimum_should_match(1);
+
+                    for must in term_must_array {
+                        email_bool_query.should(must);
+                    }
+
+                    let mut participant_queries: Vec<QueryType> = Vec::new();
+                    for term in &self.terms {
+                        let formatted_term = format!("*{}*", term);
+                        participant_queries.push(QueryType::wildcard(
+                            "sender",
+                            formatted_term.clone(),
+                            true,
+                        ));
+                        participant_queries.push(QueryType::wildcard(
+                            "cc",
+                            formatted_term.clone(),
+                            true,
+                        ));
+                        participant_queries.push(QueryType::wildcard(
+                            "bcc",
+                            formatted_term.clone(),
+                            true,
+                        ));
+                        participant_queries.push(QueryType::wildcard(
+                            "recipients",
+                            formatted_term.clone(),
+                            true,
+                        ));
+                    }
+                    bool_query.must(email_bool_query.build().into());
+                } else {
+                    // For each item in term must array, add to bool must query
+                    for must in term_must_array {
+                        bool_query.must(must);
+                    }
                 }
 
                 // Add any ids to the should array if provided
