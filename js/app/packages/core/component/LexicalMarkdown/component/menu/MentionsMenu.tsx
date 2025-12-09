@@ -844,7 +844,7 @@ export function MentionsMenu(props: {
     60
   );
 
-  createEffect(debouncedSetSearchTerm(props.menu.searchTerm()));
+  createEffect(() => debouncedSetSearchTerm(props.menu.searchTerm()));
 
   const itemSearch = createFreshSearch<CombinedEntity<'item' | 'channel'>>(
     {},
