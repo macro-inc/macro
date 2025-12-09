@@ -1,4 +1,5 @@
 import CompanyIcon from '@icon/duotone/building-duotone.svg';
+import ThreadIcon from '@icon/duotone/envelope-duotone.svg';
 import CalculatorIcon from '@icon/regular/calculator.svg';
 import CalendarBlankIcon from '@icon/regular/calendar-blank.svg';
 import ChatIcon from '@icon/regular/chat.svg';
@@ -41,6 +42,8 @@ export const PropertyDataTypeIcon: Component<PropertyDataTypeIconProps> = (
         return <HashIcon class={iconClasses} />;
       case 'COMPANY':
         return <CompanyIcon class={iconClasses} />;
+      case 'THREAD':
+        return <ThreadIcon class={iconClasses} />;
       default:
         return <SimpleTagIcon class={iconClasses} />;
     }
