@@ -144,7 +144,7 @@ export function FrontMatterProperties(props: FrontMatterPropertiesProps) {
     <Show when={!error()} fallback={props.fallback}>
       <div class="mt-6 mb-6" ref={setContainerRef}>
         <PropertiesProvider
-          entityType={'DOCUMENT' as EntityType}
+          entityType={entityType}
           canEdit={props.canEdit}
           documentName={props.documentName}
           properties={filteredPinnedProperties}
