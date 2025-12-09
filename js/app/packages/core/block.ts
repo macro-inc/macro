@@ -505,7 +505,6 @@ export const useBlockName = (): BlockName => {
  */
 export const useBlockAliasedName = (): BlockName | BlockAlias => {
   const context = useContext(BlockContext);
-  console.log('USE BLOCK ALIASED NAME', context);
   if (!context) {
     throw new Error('hook must be used within a Block component');
   }

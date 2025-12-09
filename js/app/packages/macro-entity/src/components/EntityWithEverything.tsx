@@ -182,7 +182,6 @@ export function EntityWithEverything(
             return getIconConfig('channel');
         }
       case 'document':
-        console.log(props.entity);
         if (isTaskEntity(props.entity)) return getIconConfig('task');
         if (props.entity.fileType) return getIconConfig(props.entity.fileType);
         return getIconConfig('default');
