@@ -17,6 +17,7 @@ export const getPropertyDataTypeDropdownOptions = () => [
   { value: 'entity:CHANNEL' as const, label: 'Channel' },
   { value: 'entity:PROJECT' as const, label: 'Project' },
   { value: 'entity:CHAT' as const, label: 'Chat' },
+  // { value: 'entity:COMPANY' as const, label: 'Company' },
   // { value: 'entity:THREAD' as const, label: 'Thread' }, // Not yet supported
   { value: 'entity' as const, label: 'Any Entity' },
 ];
