@@ -13,8 +13,8 @@ import type { EntityData } from '../types/entity';
 // NOTE: leaving this in as reference for now.
 // Turning this off due to [M-5344]. This is likely unnecessary.
 // @ts-ignore
-// biome-ignore
-function reconcileEntities(
+// biome-ignore: not-needed
+function _reconcileEntities(
   oldData?: EntityData[],
   newData?: EntityData[]
 ): EntityData[] | undefined {
