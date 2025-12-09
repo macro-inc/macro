@@ -124,8 +124,8 @@ pub async fn handler(
         attachment_args: &attachment_upload_args,
         backfill: false,
     })
-        .await
-        .map_err(GetAttachmentDocumentIdError::UploadError)?;
+    .await
+    .map_err(GetAttachmentDocumentIdError::UploadError)?;
 
     Ok(Json(GetAttachmentDocumentIDResponse {
         attachment_id,

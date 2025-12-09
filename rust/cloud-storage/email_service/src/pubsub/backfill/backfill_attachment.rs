@@ -1,5 +1,5 @@
 use crate::pubsub::context::PubSubContext;
-use crate::util::upload_attachment::{upload_attachment, UploadAttachmentArgs};
+use crate::util::upload_attachment::{UploadAttachmentArgs, upload_attachment};
 use models_email::service::backfill::BackfillAttachmentPayload;
 use models_email::service::link;
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
@@ -36,13 +36,13 @@ pub async fn backfill_attachment(
         attachment_args: &p.metadata,
         backfill: true,
     })
-        .await
-        .map_err(|e| {
-            ProcessingError::NonRetryable(DetailedError {
-                reason: FailureReason::GmailApiFailed,
-                source: e.context("Failed to fetch attachment data from Gmail"),
-            })
-        })?;
+    .await
+    .map_err(|e| {
+        ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::GmailApiFailed,
+            source: e.context("Failed to fetch attachment data from Gmail"),
+        })
+    })?;
 
     Ok(())
 }

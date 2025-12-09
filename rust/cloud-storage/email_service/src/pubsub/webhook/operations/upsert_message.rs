@@ -3,7 +3,7 @@ use crate::pubsub::util::cg_refresh_email;
 use crate::pubsub::webhook::process;
 use crate::pubsub::webhook::process::check_gmail_rate_limit_webhook;
 use crate::util::process_pre_insert::{process_message_pre_insert, process_threads_pre_insert};
-use crate::util::upload_attachment::{upload_attachment, UploadAttachmentArgs};
+use crate::util::upload_attachment::{UploadAttachmentArgs, upload_attachment};
 use email_db_client::threads;
 use email_db_client::threads::get::get_outbound_threads_by_thread_ids;
 use email_utils::dedupe_emails;
@@ -265,7 +265,7 @@ async fn handle_attachment_upload(
                 attachment_args: &attachment_upload_args,
                 backfill: false,
             })
-                .await
+            .await
             {
                 tracing::error!("Failed to upload attachment to Macro: {e}");
             }
