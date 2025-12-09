@@ -1,5 +1,6 @@
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
+import { ENABLE_PROPERTIES_METADATA } from '@core/constant/featureFlags';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { activeScope, hotkeyScopeTree } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
@@ -13,6 +14,10 @@ import type { EntityData } from '@macro-entity';
 import { entityHasUnreadNotifications } from '@notifications';
 import type { PreviewViewStandardLabel } from '@service-email/generated/schemas';
 import { useTutorialCompleted } from '@service-gql/client';
+import {
+  type PropertiesEntityType,
+  propertiesServiceClient,
+} from '@service-properties/client';
 import { storageServiceClient } from '@service-storage/client';
 import { createLazyMemo } from '@solid-primitives/memo';
 import { useQuery } from '@tanstack/solid-query';
@@ -294,7 +299,18 @@ export function createNavigationEntityListShortcut({
     async (entities) => {
       const handler =
         VIEWCONFIG_DEFAULTS[selectedView() as DefaultView]?.hotkeyOptions?.e;
-      if (handler) {
+      const propertiesEntityTypeMap: Record<string, PropertiesEntityType> = {
+        document: 'DOCUMENT',
+        project: 'PROJECT',
+        task: 'TASK',
+        thread: 'THREAD',
+      };
+
+      const hasSupportedEntity = entities.some(
+        (entity) => propertiesEntityTypeMap[entity.type]
+      );
+
+      if (handler || hasSupportedEntity) {
         if (isEntityLastItem()) {
           navigateThroughList({ axis: 'start', mode: 'step' });
         } else {
@@ -302,10 +318,23 @@ export function createNavigationEntityListShortcut({
         }
 
         for (const entity of entities) {
-          handler(entity, {
-            soupContext: unifiedListContext,
-            notificationSource,
-          });
+          if (handler) {
+            handler(entity, {
+              soupContext: unifiedListContext,
+              notificationSource,
+            });
+          }
+          const entityType = propertiesEntityTypeMap[entity.type];
+          if (entityType && ENABLE_PROPERTIES_METADATA) {
+            propertiesServiceClient
+              .setPropertyStatusComplete({
+                entity_type: entityType,
+                entity_id: entity.id,
+              })
+              .catch((err) =>
+                console.error('Failed to set status complete', err)
+              );
+          }
         }
 
         setViewDataStore(selectedView(), 'selectedEntities', []);
@@ -315,9 +344,21 @@ export function createNavigationEntityListShortcut({
     },
     {
       testEnabled: (entity) => {
-        if (entity.type === 'email' || entity.type === 'channel') return true;
-        if (entityHasUnreadNotifications(notificationSource, entity))
+        const allowed = new Set([
+          'email',
+          'channel',
+          'file',
+          'document',
+          'project',
+          'thread',
+          'chat',
+          'company',
+          'task',
+        ]);
+        if (allowed.has(entity.type)) return true;
+        if (entityHasUnreadNotifications(notificationSource, entity)) {
           return true;
+        }
         return false;
       },
     }

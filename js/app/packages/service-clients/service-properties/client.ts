@@ -215,3 +215,5 @@ export const propertiesServiceClient = {
 };
 
 registerClient('properties', propertiesServiceClient);
+
+export type { PropertiesEntityType };
