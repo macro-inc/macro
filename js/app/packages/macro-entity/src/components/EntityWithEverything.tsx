@@ -328,9 +328,6 @@ export function EntityWithEverything(
     );
 
     const latestMessage = createMemo(() => channelEntity()?.latestMessage);
-    const latestMessageContent = createMemo(() => latestMessage()?.content);
-
-    console.log('##### LATEST', latestMessage());
 
     const userNameFromSender = createMemo(() => {
       const senderId = channelEntity()?.latestMessage?.senderId;
