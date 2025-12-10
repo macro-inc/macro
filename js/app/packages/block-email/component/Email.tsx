@@ -322,11 +322,13 @@ export function Email(props: EmailProps) {
     const messages = untrack(() => filteredMessages());
     if (!messages) return;
     if (container && messages.length > 0) {
-      scrollToLastMessage(container, behavior);
       const lastMessageId = getLastMessageId(messages);
       if (lastMessageId) {
         setFocusedMessageId(lastMessageId);
       }
+      queueMicrotask(() => {
+        scrollToLastMessage(container, behavior);
+      });
     }
   };
 
