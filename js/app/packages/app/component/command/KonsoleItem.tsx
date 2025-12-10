@@ -105,6 +105,7 @@ const DEFAULT_CATEGORIES = [
   { name: 'Channels', visible: true },
   { name: 'DMs', visible: true },
   { name: 'Notes', visible: true },
+  { name: 'Tasks', visible: true },
   { name: 'Documents', visible: true },
   { name: 'Chats', visible: true },
   { name: 'Folders', visible: true },
@@ -504,7 +505,14 @@ export function filterItemByCategory(item: CommandItemCard) {
       return (
         item.type === 'item' &&
         item.data.itemType === 'document' &&
+        item.data.subType !== 'task' &&
         fileTypeToBlockName(item.data.fileType) === 'md'
+      );
+    case 'Tasks':
+      return (
+        item.type === 'item' &&
+        item.data.itemType === 'document' &&
+        item.data.subType === 'task'
       );
     case 'Chats':
       return item.type === 'item' && item.data.itemType === 'chat';

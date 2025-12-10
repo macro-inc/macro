@@ -872,9 +872,9 @@ export function createNavigationEntityListShortcut({
         ) {
           const { type, id } = selectedEntity;
           if (type === 'document') {
-            const { fileType } = selectedEntity;
+            const { fileType, subType } = selectedEntity;
             splitHandle.replace(
-              { type: fileTypeToBlockName(fileType), id },
+              { type: fileTypeToBlockName(subType ?? fileType), id },
               true
             );
           } else {

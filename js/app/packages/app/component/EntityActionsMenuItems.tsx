@@ -88,9 +88,9 @@ export const EntityActionsMenuItems = (props: EntityActionsMenuItemsProps) => {
             return;
           }
           if (props.entity.type === 'document') {
-            const { fileType, id } = props.entity;
+            const { fileType, id, subType } = props.entity;
             splitManager.createNewSplit({
-              type: fileTypeToBlockName(fileType),
+              type: fileTypeToBlockName(subType ?? fileType),
               id,
             });
           } else {

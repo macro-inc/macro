@@ -121,7 +121,9 @@ function ChatAttachment(props: {
     const attachment = props.attachment;
     if (!attachment.metadata) return;
     return attachment.metadata.type === 'document'
-      ? fileTypeToBlockName(attachment.metadata.document_type)
+      ? fileTypeToBlockName(
+          attachment.metadata.sub_type ?? attachment.metadata.document_type
+        )
       : attachment.metadata.type === 'image'
         ? 'image'
         : 'channel';
@@ -180,7 +182,7 @@ function ChatAttachment(props: {
             >
               {(a) => (
                 <div class="flex gap-1 items-center">
-                  <EntityIcon targetType={a().document_type} />
+                  <EntityIcon targetType={a().sub_type ?? a().document_type} />
                   <div>{name()}</div>
                 </div>
               )}

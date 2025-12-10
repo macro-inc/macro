@@ -81,6 +81,7 @@ export const useGetChatAttachmentInfo = () => {
         type: 'document',
         document_type: fileType,
         document_name: item.name,
+        sub_type: item.subType,
       },
     };
   };
