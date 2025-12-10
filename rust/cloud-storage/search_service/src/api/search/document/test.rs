@@ -454,12 +454,14 @@ fn test_sort_stability() {
         opensearch_client::search::model::SearchHit {
             entity_id: "doc_3".to_string(),
             entity_type: SearchEntityType::Documents,
-            goto: Some(opensearch_client::search::model::SearchGotoContent::Documents(
-                opensearch_client::search::model::SearchGotoDocument {
-                    node_id: "node_3".to_string(),
-                    raw_content: Some("third".to_string()),
-                },
-            )),
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Documents(
+                    opensearch_client::search::model::SearchGotoDocument {
+                        node_id: "node_3".to_string(),
+                        raw_content: Some("third".to_string()),
+                    },
+                ),
+            ),
             score: None,
             highlight: Highlight {
                 name: None,
@@ -469,12 +471,14 @@ fn test_sort_stability() {
         opensearch_client::search::model::SearchHit {
             entity_id: "doc_1".to_string(),
             entity_type: SearchEntityType::Documents,
-            goto: Some(opensearch_client::search::model::SearchGotoContent::Documents(
-                opensearch_client::search::model::SearchGotoDocument {
-                    node_id: "node_1".to_string(),
-                    raw_content: Some("first".to_string()),
-                },
-            )),
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Documents(
+                    opensearch_client::search::model::SearchGotoDocument {
+                        node_id: "node_1".to_string(),
+                        raw_content: Some("first".to_string()),
+                    },
+                ),
+            ),
             score: None,
             highlight: Highlight {
                 name: None,
@@ -484,12 +488,14 @@ fn test_sort_stability() {
         opensearch_client::search::model::SearchHit {
             entity_id: "doc_5".to_string(),
             entity_type: SearchEntityType::Documents,
-            goto: Some(opensearch_client::search::model::SearchGotoContent::Documents(
-                opensearch_client::search::model::SearchGotoDocument {
-                    node_id: "node_5".to_string(),
-                    raw_content: Some("fifth".to_string()),
-                },
-            )),
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Documents(
+                    opensearch_client::search::model::SearchGotoDocument {
+                        node_id: "node_5".to_string(),
+                        raw_content: Some("fifth".to_string()),
+                    },
+                ),
+            ),
             score: None,
             highlight: Highlight {
                 name: None,
@@ -499,12 +505,14 @@ fn test_sort_stability() {
         opensearch_client::search::model::SearchHit {
             entity_id: "doc_2".to_string(),
             entity_type: SearchEntityType::Documents,
-            goto: Some(opensearch_client::search::model::SearchGotoContent::Documents(
-                opensearch_client::search::model::SearchGotoDocument {
-                    node_id: "node_2".to_string(),
-                    raw_content: Some("second".to_string()),
-                },
-            )),
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Documents(
+                    opensearch_client::search::model::SearchGotoDocument {
+                        node_id: "node_2".to_string(),
+                        raw_content: Some("second".to_string()),
+                    },
+                ),
+            ),
             score: None,
             highlight: Highlight {
                 name: None,
@@ -514,12 +522,14 @@ fn test_sort_stability() {
         opensearch_client::search::model::SearchHit {
             entity_id: "doc_4".to_string(),
             entity_type: SearchEntityType::Documents,
-            goto: Some(opensearch_client::search::model::SearchGotoContent::Documents(
-                opensearch_client::search::model::SearchGotoDocument {
-                    node_id: "node_4".to_string(),
-                    raw_content: Some("fourth".to_string()),
-                },
-            )),
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Documents(
+                    opensearch_client::search::model::SearchGotoDocument {
+                        node_id: "node_4".to_string(),
+                        raw_content: Some("fourth".to_string()),
+                    },
+                ),
+            ),
             score: None,
             highlight: Highlight {
                 name: None,

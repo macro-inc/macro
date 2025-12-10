@@ -379,15 +379,17 @@ fn test_sort_stability() {
         opensearch_client::search::model::SearchHit {
             entity_id: channel_ids[0].to_string(),
             entity_type: SearchEntityType::Channels,
-            goto: Some(opensearch_client::search::model::SearchGotoContent::Channels(
-                opensearch_client::search::model::SearchGotoChannel {
-                    channel_message_id: "msg3".to_string(),
-                    created_at: 1234567890,
-                    updated_at: 1234567891,
-                    thread_id: Some("thread3".to_string()),
-                    sender_id: "user1".to_string(),
-                },
-            )),
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Channels(
+                    opensearch_client::search::model::SearchGotoChannel {
+                        channel_message_id: "msg3".to_string(),
+                        created_at: 1234567890,
+                        updated_at: 1234567891,
+                        thread_id: Some("thread3".to_string()),
+                        sender_id: "user1".to_string(),
+                    },
+                ),
+            ),
             score: None,
             highlight: Highlight {
                 name: None,
@@ -397,15 +399,17 @@ fn test_sort_stability() {
         opensearch_client::search::model::SearchHit {
             entity_id: channel_ids[1].to_string(),
             entity_type: SearchEntityType::Channels,
-            goto: Some(opensearch_client::search::model::SearchGotoContent::Channels(
-                opensearch_client::search::model::SearchGotoChannel {
-                    channel_message_id: "msg1".to_string(),
-                    created_at: 1234567890,
-                    updated_at: 1234567891,
-                    thread_id: Some("thread1".to_string()),
-                    sender_id: "user1".to_string(),
-                },
-            )),
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Channels(
+                    opensearch_client::search::model::SearchGotoChannel {
+                        channel_message_id: "msg1".to_string(),
+                        created_at: 1234567890,
+                        updated_at: 1234567891,
+                        thread_id: Some("thread1".to_string()),
+                        sender_id: "user1".to_string(),
+                    },
+                ),
+            ),
             score: None,
             highlight: Highlight {
                 name: None,
@@ -415,15 +419,17 @@ fn test_sort_stability() {
         opensearch_client::search::model::SearchHit {
             entity_id: channel_ids[2].to_string(),
             entity_type: SearchEntityType::Channels,
-            goto: Some(opensearch_client::search::model::SearchGotoContent::Channels(
-                opensearch_client::search::model::SearchGotoChannel {
-                    channel_message_id: "msg5".to_string(),
-                    created_at: 1234567890,
-                    updated_at: 1234567891,
-                    thread_id: Some("thread5".to_string()),
-                    sender_id: "user1".to_string(),
-                },
-            )),
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Channels(
+                    opensearch_client::search::model::SearchGotoChannel {
+                        channel_message_id: "msg5".to_string(),
+                        created_at: 1234567890,
+                        updated_at: 1234567891,
+                        thread_id: Some("thread5".to_string()),
+                        sender_id: "user1".to_string(),
+                    },
+                ),
+            ),
             score: None,
             highlight: Highlight {
                 name: None,
@@ -433,15 +439,17 @@ fn test_sort_stability() {
         opensearch_client::search::model::SearchHit {
             entity_id: channel_ids[3].to_string(),
             entity_type: SearchEntityType::Channels,
-            goto: Some(opensearch_client::search::model::SearchGotoContent::Channels(
-                opensearch_client::search::model::SearchGotoChannel {
-                    channel_message_id: "msg2".to_string(),
-                    created_at: 1234567890,
-                    updated_at: 1234567891,
-                    thread_id: Some("thread2".to_string()),
-                    sender_id: "user1".to_string(),
-                },
-            )),
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Channels(
+                    opensearch_client::search::model::SearchGotoChannel {
+                        channel_message_id: "msg2".to_string(),
+                        created_at: 1234567890,
+                        updated_at: 1234567891,
+                        thread_id: Some("thread2".to_string()),
+                        sender_id: "user1".to_string(),
+                    },
+                ),
+            ),
             score: None,
             highlight: Highlight {
                 name: None,
@@ -451,15 +459,17 @@ fn test_sort_stability() {
         opensearch_client::search::model::SearchHit {
             entity_id: channel_ids[4].to_string(),
             entity_type: SearchEntityType::Channels,
-            goto: Some(opensearch_client::search::model::SearchGotoContent::Channels(
-                opensearch_client::search::model::SearchGotoChannel {
-                    channel_message_id: "msg4".to_string(),
-                    created_at: 1234567890,
-                    updated_at: 1234567891,
-                    thread_id: Some("thread4".to_string()),
-                    sender_id: "user1".to_string(),
-                },
-            )),
+            goto: Some(
+                opensearch_client::search::model::SearchGotoContent::Channels(
+                    opensearch_client::search::model::SearchGotoChannel {
+                        channel_message_id: "msg4".to_string(),
+                        created_at: 1234567890,
+                        updated_at: 1234567891,
+                        thread_id: Some("thread4".to_string()),
+                        sender_id: "user1".to_string(),
+                    },
+                ),
+            ),
             score: None,
             highlight: Highlight {
                 name: None,
