@@ -73,18 +73,7 @@ pub async fn thread_document_atts_for_backfill(
 
     let attachments = rows
         .into_iter()
-        .map(|row| AttachmentUploadMetadata {
-            attachment_db_id: row.get("attachment_db_id"),
-            email_provider_id: row.get("email_provider_id"),
-            provider_attachment_id: row.get("provider_attachment_id"),
-            filename: row.get("filename"),
-            mime_type: row.get("mime_type"),
-            internal_date_ts: row.get("internal_date_ts"),
-            message_db_id: row.get("message_db_id"),
-            thread_db_id: row.get("thread_db_id"),
-            sender_email: row.get("sender_email"),
-            subject: row.get("subject"),
-        })
+        .map(map_row_to_attachment_metadata)
         .collect();
 
     Ok(attachments)
@@ -125,18 +114,7 @@ pub async fn thread_media_atts_for_backfill(
 
     let attachments = rows
         .into_iter()
-        .map(|row| AttachmentUploadMetadata {
-            attachment_db_id: row.get("attachment_db_id"),
-            email_provider_id: row.get("email_provider_id"),
-            provider_attachment_id: row.get("provider_attachment_id"),
-            filename: row.get("filename"),
-            mime_type: row.get("mime_type"),
-            internal_date_ts: row.get("internal_date_ts"),
-            message_db_id: row.get("message_db_id"),
-            thread_db_id: row.get("thread_db_id"),
-            sender_email: row.get("sender_email"),
-            subject: row.get("subject"),
-        })
+        .map(map_row_to_attachment_metadata)
         .collect();
 
     Ok(attachments)
@@ -232,18 +210,7 @@ pub async fn fetch_job_attachments_for_backfill(
 
     let attachments = rows
         .into_iter()
-        .map(|row| AttachmentUploadMetadata {
-            attachment_db_id: row.get("attachment_db_id"),
-            email_provider_id: row.get("email_provider_id"),
-            provider_attachment_id: row.get("provider_attachment_id"),
-            filename: row.get("filename"),
-            mime_type: row.get("mime_type"),
-            internal_date_ts: row.get("internal_date_ts"),
-            message_db_id: row.get("message_db_id"),
-            thread_db_id: row.get("thread_db_id"),
-            sender_email: row.get("sender_email"),
-            subject: row.get("subject"),
-        })
+        .map(map_row_to_attachment_metadata)
         .collect();
 
     Ok(attachments)
@@ -324,18 +291,7 @@ pub async fn new_email_document_atts(
 
     let attachments: Vec<AttachmentUploadMetadata> = rows
         .into_iter()
-        .map(|row| AttachmentUploadMetadata {
-            attachment_db_id: row.get("attachment_db_id"),
-            email_provider_id: row.get("email_provider_id"),
-            provider_attachment_id: row.get("provider_attachment_id"),
-            filename: row.get("filename"),
-            mime_type: row.get("mime_type"),
-            internal_date_ts: row.get("internal_date_ts"),
-            message_db_id: row.get("message_db_id"),
-            thread_db_id: row.get("thread_db_id"),
-            sender_email: row.get("sender_email"),
-            subject: row.get("subject"),
-        })
+        .map(map_row_to_attachment_metadata)
         .collect();
 
     // if one or more condition has already been met, return - don't need to check condition 5
@@ -426,18 +382,7 @@ pub async fn new_email_document_atts(
 
     let attachments = rows
         .into_iter()
-        .map(|row| AttachmentUploadMetadata {
-            attachment_db_id: row.get("attachment_db_id"),
-            email_provider_id: row.get("email_provider_id"),
-            provider_attachment_id: row.get("provider_attachment_id"),
-            filename: row.get("filename"),
-            mime_type: row.get("mime_type"),
-            internal_date_ts: row.get("internal_date_ts"),
-            message_db_id: row.get("message_db_id"),
-            thread_db_id: row.get("thread_db_id"),
-            sender_email: row.get("sender_email"),
-            subject: row.get("subject"),
-        })
+        .map(map_row_to_attachment_metadata)
         .collect();
 
     Ok(attachments)
@@ -483,18 +428,7 @@ pub async fn new_email_media_atts(
 
     let attachments: Vec<AttachmentUploadMetadata> = rows
         .into_iter()
-        .map(|row| AttachmentUploadMetadata {
-            attachment_db_id: row.get("attachment_db_id"),
-            email_provider_id: row.get("email_provider_id"),
-            provider_attachment_id: row.get("provider_attachment_id"),
-            filename: row.get("filename"),
-            mime_type: row.get("mime_type"),
-            internal_date_ts: row.get("internal_date_ts"),
-            message_db_id: row.get("message_db_id"),
-            thread_db_id: row.get("thread_db_id"),
-            sender_email: row.get("sender_email"),
-            subject: row.get("subject"),
-        })
+        .map(map_row_to_attachment_metadata)
         .collect();
 
     Ok(attachments)
@@ -532,6 +466,22 @@ pub async fn fetch_attachment_upload_metadata_by_id(
     .await?;
 
     Ok(row)
+}
+
+/// Helper function to map a database row to AttachmentUploadMetadata
+fn map_row_to_attachment_metadata(row: sqlx::postgres::PgRow) -> AttachmentUploadMetadata {
+    AttachmentUploadMetadata {
+        attachment_db_id: row.get("attachment_db_id"),
+        email_provider_id: row.get("email_provider_id"),
+        provider_attachment_id: row.get("provider_attachment_id"),
+        filename: row.get("filename"),
+        mime_type: row.get("mime_type"),
+        internal_date_ts: row.get("internal_date_ts"),
+        message_db_id: row.get("message_db_id"),
+        thread_db_id: row.get("thread_db_id"),
+        sender_email: row.get("sender_email"),
+        subject: row.get("subject"),
+    }
 }
 
 #[cfg(test)]
