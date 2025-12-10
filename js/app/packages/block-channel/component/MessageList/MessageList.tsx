@@ -59,6 +59,9 @@ const LONG_DATE_FORMATTER = new Intl.DateTimeFormat(undefined, {
   year: 'numeric',
 });
 
+// The size of a message with a profile picture and a one line message
+const BASE_ITEM_SIZE = 50;
+
 const clampIndex = (value: number, minValue: number, maxValue: number) =>
   Math.min(Math.max(value, minValue), maxValue);
 
@@ -638,7 +641,7 @@ export function MessageList(props: MessageListProps) {
                 'overflow-y': 'scroll',
               }}
               class="scrollbar-hidden"
-              itemSize={50}
+              itemSize={BASE_ITEM_SIZE}
               data-channel-message-list
               data={rows() ?? []}
               overscan={10}

@@ -322,6 +322,8 @@ export function Email(props: EmailProps) {
     const messages = untrack(() => filteredMessages());
     if (!messages) return;
     if (container && messages.length > 0) {
+      // We need to scroll after focus because the scroll needs to account
+      // for the size of the message with the focused styling applied
       const lastMessageId = getLastMessageId(messages);
       if (lastMessageId) {
         setFocusedMessageId(lastMessageId);
