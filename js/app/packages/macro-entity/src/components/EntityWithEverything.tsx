@@ -649,12 +649,7 @@ export function EntityWithEverything(
 
                   const metadata =
                     tryToTypedNotification(notification)?.notificationMetadata;
-                  if (
-                    !metadata ||
-                    !('messageContent' in metadata) ||
-                    !metadata.messageContent
-                  )
-                    return '';
+                  if (!metadata || !('messageContent' in metadata)) return '';
 
                   return 'message';
                 };
