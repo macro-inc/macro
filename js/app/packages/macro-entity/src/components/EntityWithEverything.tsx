@@ -225,9 +225,9 @@ function NotificationRow(props: {
 
   return (
     <div
-      class="relative flex gap-1 items-center min-w-0 h-8"
+      class="relative flex gap-1 items-center min-w-0 h-8 transition-all"
       classList={{
-        'hover:bg-hover/20 hover:opacity-70': !!props.onClick,
+        'hover:bg-hover/30 hover:opacity-90': !!props.onClick,
         'opacity-70': props.notification.viewedAt !== null,
       }}
       onClick={
@@ -268,7 +268,7 @@ function ContentHitRow(props: {
 }) {
   return (
     <div
-      class="relative flex gap-1 items-center min-w-0 h-8 hover:bg-hover/20"
+      class="relative flex gap-1 items-center min-w-0 h-8 hover:bg-hover/30 hover:opacity-90 transition-all"
       onClick={(e) => {
         e.stopPropagation();
         props.onClick(e, props.data.location);
