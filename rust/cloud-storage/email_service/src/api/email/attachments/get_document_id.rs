@@ -116,9 +116,11 @@ pub async fn handler(
     };
 
     let ctx_upload = UploadAttachmentContext {
+        db: &ctx.db,
         redis_client: &ctx.redis_client,
         gmail_client: &ctx.gmail_client,
         dss_client: &ctx.dss_client,
+        sfs_client: &ctx.sfs_client,
         system_properties_service: &ctx.system_properties_service,
         access_token: &gmail_token,
         link: &link,

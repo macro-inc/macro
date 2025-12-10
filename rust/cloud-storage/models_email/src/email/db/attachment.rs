@@ -30,3 +30,20 @@ pub struct AttachmentMacro {
     pub item_type: String,
     pub created_at: DateTime<Utc>,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AttachmentSfs {
+    pub id: Uuid,
+    pub attachment_id: Option<Uuid>,
+    pub sfs_id: Uuid,
+}
+
+impl From<crate::service::attachment::AttachmentSfs> for AttachmentSfs {
+    fn from(service: crate::service::attachment::AttachmentSfs) -> Self {
+        Self {
+            id: service.id,
+            attachment_id: service.attachment_id,
+            sfs_id: service.sfs_id,
+        }
+    }
+}

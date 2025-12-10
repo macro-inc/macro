@@ -1,3 +1,4 @@
+use crate::db;
 use chrono::{DateTime, Utc};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -36,6 +37,23 @@ pub struct AttachmentMacro {
     #[schemars(with = "String")]
     pub item_id: Uuid,
     pub item_type: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AttachmentSfs {
+    pub id: Uuid,
+    pub attachment_id: Option<Uuid>,
+    pub sfs_id: Uuid,
+}
+
+impl From<db::attachment::AttachmentSfs> for AttachmentSfs {
+    fn from(db: db::attachment::AttachmentSfs) -> Self {
+        Self {
+            id: db.id,
+            attachment_id: db.attachment_id,
+            sfs_id: db.sfs_id,
+        }
+    }
 }
 
 /// The metadata of an attachment we need to upload it to DSS.
