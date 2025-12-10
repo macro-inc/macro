@@ -55,6 +55,7 @@ import { type FocusableElement, tabbable } from 'tabbable';
 import { ChannelInput } from './ChannelInput';
 import { MessageList } from './MessageList/MessageList';
 import { Top } from './Top';
+import { URL_PARAMS } from '@block-channel/constants';
 
 false && fileFolderDrop;
 
@@ -102,8 +103,8 @@ export function Channel(props: { data: Required<ChannelData> }) {
   const blockHandle = blockHandleSignal.get;
 
   const initialTargetMessage = () => {
-    const messageID = searchParams.message_id;
-    const threadID = searchParams.thread_id;
+    const messageID = searchParams[URL_PARAMS.message];
+    const threadID = searchParams[URL_PARAMS.thread];
 
     if (!messageID) return;
 

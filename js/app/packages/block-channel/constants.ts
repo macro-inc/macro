@@ -1,8 +1,8 @@
 import { DEFAULT_ACTIVE_TARGET_TIME } from '@core/signal/activeTarget';
 
 export const URL_PARAMS = {
-  thread: 'thread_id',
-  message: 'message_id',
+  thread: 'channel_thread_id',
+  message: 'channel_message_id',
 };
 
 // The index of the last message in a collapsed thread that will be shown
