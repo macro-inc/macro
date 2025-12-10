@@ -5,6 +5,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use indexmap::IndexMap;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::project::{
     ProjectSearchRequest, ProjectSearchResponse, ProjectSearchResponseItem,
@@ -105,8 +106,8 @@ pub fn construct_search_result(
         macro_db_client::projects::get_project_history::ProjectHistoryInfo,
     >,
 ) -> anyhow::Result<Vec<ProjectSearchResponseItemWithMetadata>> {
-    // construct entity hit map of id -> vec<hits>
-    let entity_id_hit_map: HashMap<String, Vec<ProjectSearchResult>> = search_results
+    // construct entity hit map of id -> vec<hits> using IndexMap to preserve insertion order
+    let entity_id_hit_map: IndexMap<String, Vec<ProjectSearchResult>> = search_results
         .into_iter()
         .map(|hit| {
             let result = ProjectSearchResult {
@@ -116,12 +117,12 @@ pub fn construct_search_result(
 
             (hit.entity_id, result)
         })
-        .fold(HashMap::new(), |mut map, (entity_id, result)| {
+        .fold(IndexMap::new(), |mut map, (entity_id, result)| {
             map.entry(entity_id).or_insert_with(Vec::new).push(result);
             map
         });
 
-    // now construct the search results
+    // now construct the search results in the original search result order
     let result: Vec<ProjectSearchResponseItemWithMetadata> = entity_id_hit_map
         .into_iter()
         .filter_map(|(entity_id, hits)| {

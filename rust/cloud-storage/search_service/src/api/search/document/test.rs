@@ -447,3 +447,125 @@ fn test_document_history_deleted() {
     // Document not in DB should not be returned
     assert_eq!(result_not_found.len(), 0);
 }
+
+#[test]
+fn test_sort_stability() {
+    let input = vec![
+        opensearch_client::search::model::SearchHit {
+            entity_id: "doc_3".to_string(),
+            entity_type: SearchEntityType::Documents,
+            goto: Some(opensearch_client::search::model::SearchGotoContent::Documents(
+                opensearch_client::search::model::SearchGotoDocument {
+                    node_id: "node_3".to_string(),
+                    raw_content: Some("third".to_string()),
+                },
+            )),
+            score: None,
+            highlight: Highlight {
+                name: None,
+                content: vec!["third".to_string()],
+            },
+        },
+        opensearch_client::search::model::SearchHit {
+            entity_id: "doc_1".to_string(),
+            entity_type: SearchEntityType::Documents,
+            goto: Some(opensearch_client::search::model::SearchGotoContent::Documents(
+                opensearch_client::search::model::SearchGotoDocument {
+                    node_id: "node_1".to_string(),
+                    raw_content: Some("first".to_string()),
+                },
+            )),
+            score: None,
+            highlight: Highlight {
+                name: None,
+                content: vec!["first".to_string()],
+            },
+        },
+        opensearch_client::search::model::SearchHit {
+            entity_id: "doc_5".to_string(),
+            entity_type: SearchEntityType::Documents,
+            goto: Some(opensearch_client::search::model::SearchGotoContent::Documents(
+                opensearch_client::search::model::SearchGotoDocument {
+                    node_id: "node_5".to_string(),
+                    raw_content: Some("fifth".to_string()),
+                },
+            )),
+            score: None,
+            highlight: Highlight {
+                name: None,
+                content: vec!["fifth".to_string()],
+            },
+        },
+        opensearch_client::search::model::SearchHit {
+            entity_id: "doc_2".to_string(),
+            entity_type: SearchEntityType::Documents,
+            goto: Some(opensearch_client::search::model::SearchGotoContent::Documents(
+                opensearch_client::search::model::SearchGotoDocument {
+                    node_id: "node_2".to_string(),
+                    raw_content: Some("second".to_string()),
+                },
+            )),
+            score: None,
+            highlight: Highlight {
+                name: None,
+                content: vec!["second".to_string()],
+            },
+        },
+        opensearch_client::search::model::SearchHit {
+            entity_id: "doc_4".to_string(),
+            entity_type: SearchEntityType::Documents,
+            goto: Some(opensearch_client::search::model::SearchGotoContent::Documents(
+                opensearch_client::search::model::SearchGotoDocument {
+                    node_id: "node_4".to_string(),
+                    raw_content: Some("fourth".to_string()),
+                },
+            )),
+            score: None,
+            highlight: Highlight {
+                name: None,
+                content: vec!["fourth".to_string()],
+            },
+        },
+    ];
+
+    let mut document_histories = HashMap::new();
+    let now = chrono::Utc::now();
+    for doc_id in ["doc_1", "doc_2", "doc_3", "doc_4", "doc_5"] {
+        document_histories.insert(
+            doc_id.to_string(),
+            DocumentHistoryInfo {
+                item_id: doc_id.to_string(),
+                created_at: now,
+                updated_at: now,
+                viewed_at: None,
+                project_id: None,
+                file_type: Some("pdf".to_string()),
+                file_name: format!("{}.pdf", doc_id),
+                owner: "user1".to_string(),
+                deleted_at: None,
+                sub_type: None,
+            },
+        );
+    }
+
+    let result1 = construct_search_result(input.clone(), document_histories.clone()).unwrap();
+    let result2 = construct_search_result(input.clone(), document_histories.clone()).unwrap();
+    let result3 = construct_search_result(input.clone(), document_histories.clone()).unwrap();
+
+    assert_eq!(result1.len(), 5);
+    assert_eq!(result2.len(), 5);
+    assert_eq!(result3.len(), 5);
+
+    let ids1: Vec<String> = result1.iter().map(|r| r.extra.id.clone()).collect();
+    let ids2: Vec<String> = result2.iter().map(|r| r.extra.id.clone()).collect();
+    let ids3: Vec<String> = result3.iter().map(|r| r.extra.id.clone()).collect();
+
+    assert_eq!(ids1, ids2, "Results should be stable between runs");
+    assert_eq!(ids2, ids3, "Results should be stable between runs");
+
+    assert_eq!(
+        ids1,
+        vec!["doc_3", "doc_1", "doc_5", "doc_2", "doc_4"],
+        "Results should preserve original search result order"
+    );
+}

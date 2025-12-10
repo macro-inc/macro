@@ -364,3 +364,136 @@ fn test_channel_history_null_viewed_at() {
     assert!(metadata.viewed_at.is_none());
     assert!(metadata.interacted_at.is_none());
 }
+
+#[test]
+fn test_sort_stability() {
+    let channel_ids = [
+        "550e8400-e29b-41d4-a716-446655440003",
+        "550e8400-e29b-41d4-a716-446655440001",
+        "550e8400-e29b-41d4-a716-446655440005",
+        "550e8400-e29b-41d4-a716-446655440002",
+        "550e8400-e29b-41d4-a716-446655440004",
+    ];
+
+    let input = vec![
+        opensearch_client::search::model::SearchHit {
+            entity_id: channel_ids[0].to_string(),
+            entity_type: SearchEntityType::Channels,
+            goto: Some(opensearch_client::search::model::SearchGotoContent::Channels(
+                opensearch_client::search::model::SearchGotoChannel {
+                    channel_message_id: "msg3".to_string(),
+                    created_at: 1234567890,
+                    updated_at: 1234567891,
+                    thread_id: Some("thread3".to_string()),
+                    sender_id: "user1".to_string(),
+                },
+            )),
+            score: None,
+            highlight: Highlight {
+                name: None,
+                content: vec!["third".to_string()],
+            },
+        },
+        opensearch_client::search::model::SearchHit {
+            entity_id: channel_ids[1].to_string(),
+            entity_type: SearchEntityType::Channels,
+            goto: Some(opensearch_client::search::model::SearchGotoContent::Channels(
+                opensearch_client::search::model::SearchGotoChannel {
+                    channel_message_id: "msg1".to_string(),
+                    created_at: 1234567890,
+                    updated_at: 1234567891,
+                    thread_id: Some("thread1".to_string()),
+                    sender_id: "user1".to_string(),
+                },
+            )),
+            score: None,
+            highlight: Highlight {
+                name: None,
+                content: vec!["first".to_string()],
+            },
+        },
+        opensearch_client::search::model::SearchHit {
+            entity_id: channel_ids[2].to_string(),
+            entity_type: SearchEntityType::Channels,
+            goto: Some(opensearch_client::search::model::SearchGotoContent::Channels(
+                opensearch_client::search::model::SearchGotoChannel {
+                    channel_message_id: "msg5".to_string(),
+                    created_at: 1234567890,
+                    updated_at: 1234567891,
+                    thread_id: Some("thread5".to_string()),
+                    sender_id: "user1".to_string(),
+                },
+            )),
+            score: None,
+            highlight: Highlight {
+                name: None,
+                content: vec!["fifth".to_string()],
+            },
+        },
+        opensearch_client::search::model::SearchHit {
+            entity_id: channel_ids[3].to_string(),
+            entity_type: SearchEntityType::Channels,
+            goto: Some(opensearch_client::search::model::SearchGotoContent::Channels(
+                opensearch_client::search::model::SearchGotoChannel {
+                    channel_message_id: "msg2".to_string(),
+                    created_at: 1234567890,
+                    updated_at: 1234567891,
+                    thread_id: Some("thread2".to_string()),
+                    sender_id: "user1".to_string(),
+                },
+            )),
+            score: None,
+            highlight: Highlight {
+                name: None,
+                content: vec!["second".to_string()],
+            },
+        },
+        opensearch_client::search::model::SearchHit {
+            entity_id: channel_ids[4].to_string(),
+            entity_type: SearchEntityType::Channels,
+            goto: Some(opensearch_client::search::model::SearchGotoContent::Channels(
+                opensearch_client::search::model::SearchGotoChannel {
+                    channel_message_id: "msg4".to_string(),
+                    created_at: 1234567890,
+                    updated_at: 1234567891,
+                    thread_id: Some("thread4".to_string()),
+                    sender_id: "user1".to_string(),
+                },
+            )),
+            score: None,
+            highlight: Highlight {
+                name: None,
+                content: vec!["fourth".to_string()],
+            },
+        },
+    ];
+
+    let mut channel_histories = HashMap::new();
+    for channel_id in &channel_ids {
+        channel_histories.insert(
+            Uuid::parse_str(channel_id).unwrap(),
+            create_channel_history(channel_id),
+        );
+    }
+
+    let result1 = construct_search_result(input.clone(), channel_histories.clone()).unwrap();
+    let result2 = construct_search_result(input.clone(), channel_histories.clone()).unwrap();
+    let result3 = construct_search_result(input.clone(), channel_histories.clone()).unwrap();
+
+    assert_eq!(result1.len(), 5);
+    assert_eq!(result2.len(), 5);
+    assert_eq!(result3.len(), 5);
+
+    let ids1: Vec<String> = result1.iter().map(|r| r.extra.id.clone()).collect();
+    let ids2: Vec<String> = result2.iter().map(|r| r.extra.id.clone()).collect();
+    let ids3: Vec<String> = result3.iter().map(|r| r.extra.id.clone()).collect();
+
+    assert_eq!(ids1, ids2, "Results should be stable between runs");
+    assert_eq!(ids2, ids3, "Results should be stable between runs");
+
+    assert_eq!(
+        ids1,
+        channel_ids.to_vec(),
+        "Results should preserve original search result order"
+    );
+}

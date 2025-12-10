@@ -1,4 +1,5 @@
 use crate::api::search::simple::{SearchError, simple_channel::search_channels};
+use indexmap::IndexMap;
 use std::collections::HashMap;
 
 use super::SearchPaginationParams;
@@ -116,8 +117,8 @@ pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::model::SearchHit>,
     channel_histories: HashMap<Uuid, ChannelHistoryInfo>,
 ) -> anyhow::Result<Vec<ChannelSearchResponseItemWithMetadata>> {
-    // construct entity hit map of id -> vec<hits>
-    let entity_id_hit_map: HashMap<sqlx::types::Uuid, Vec<ChannelSearchResult>> = search_results
+    // construct entity hit map of id -> vec<hits> using IndexMap to preserve insertion order
+    let entity_id_hit_map: IndexMap<sqlx::types::Uuid, Vec<ChannelSearchResult>> = search_results
         .into_iter()
         .map(|hit| {
             let result = if let Some(SearchGotoContent::Channels(goto)) = hit.goto {
@@ -144,12 +145,12 @@ pub fn construct_search_result(
             };
             (hit.entity_id.parse().unwrap(), result)
         })
-        .fold(HashMap::new(), |mut map, (entity_id, result)| {
+        .fold(IndexMap::new(), |mut map, (entity_id, result)| {
             map.entry(entity_id).or_insert_with(Vec::new).push(result);
             map
         });
 
-    // now construct the search results
+    // now construct the search results in the original search result order
     let result: Vec<ChannelSearchResponseItemWithMetadata> = entity_id_hit_map
         .into_iter()
         .filter_map(|(entity_id, hits)| {
