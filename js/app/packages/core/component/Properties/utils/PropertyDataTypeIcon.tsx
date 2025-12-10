@@ -9,6 +9,7 @@ import FolderIcon from '@icon/regular/folder.svg';
 import HashIcon from '@icon/regular/hash.svg';
 import LinkIcon from '@icon/regular/link.svg';
 import ListBulletIcon from '@icon/regular/list-bullets.svg';
+import TaskIcon from '@icon/regular/list-checks.svg';
 import PencilIcon from '@icon/regular/pencil.svg';
 import SimpleTagIcon from '@icon/regular/tag-simple.svg';
 import UserCircleIcon from '@icon/regular/user-circle.svg';
@@ -44,6 +45,8 @@ export const PropertyDataTypeIcon: Component<PropertyDataTypeIconProps> = (
         return <CompanyIcon class={iconClasses} />;
       case 'THREAD':
         return <ThreadIcon class={iconClasses} />;
+      case 'TASK':
+        return <TaskIcon class={iconClasses} />;
       default:
         return <SimpleTagIcon class={iconClasses} />;
     }
