@@ -128,6 +128,35 @@ function ThreadBorder() {
   );
 }
 
+function RowWrapper(
+  props: ParentProps<{
+    onClick?: (e: MouseEvent) => void;
+    classList?: Record<string, boolean>;
+    enableHover?: boolean;
+  }>
+) {
+  return (
+    <div
+      class="relative flex gap-1 items-center min-w-0 h-8 transition-all"
+      classList={{
+        'hover:bg-hover/30 hover:opacity-90':
+          props.enableHover ?? !!props.onClick,
+        ...props.classList,
+      }}
+      onClick={(e) => {
+        if (props.onClick) {
+          e.stopPropagation();
+          props.onClick(e);
+        }
+      }}
+      data-blocks-navigation
+    >
+      <ThreadBorder />
+      {props.children}
+    </div>
+  );
+}
+
 function CollapsibleList<T>(props: {
   items: T[];
   visibleCount?: number;
@@ -224,25 +253,23 @@ function NotificationRow(props: {
   };
 
   return (
-    <div
-      class="relative flex gap-1 items-center min-w-0 h-8 transition-all"
-      classList={{
-        'hover:bg-hover/30 hover:opacity-90': !!props.onClick,
-        'opacity-70': props.notification.viewedAt !== null,
-      }}
+    <RowWrapper
       onClick={
         props.onClick
-          ? [
-              props.onClick,
-              {
-                ...props.entity,
-                notification: props.notification,
-              },
-            ]
+          ? (e) =>
+              props.onClick?.(
+                {
+                  ...props.entity,
+                  notification: props.notification,
+                } as any,
+                e as any
+              )
           : undefined
       }
+      classList={{
+        'opacity-70': props.notification.viewedAt !== null,
+      }}
     >
-      <ThreadBorder />
       <div class="flex size-5 shrink-0 items-center justify-center mr-1">
         <NotificationUserIcon id={props.notification.senderId!} />
       </div>
@@ -258,7 +285,7 @@ function NotificationRow(props: {
       <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
         {formattedDate()}
       </div>
-    </div>
+    </RowWrapper>
   );
 }
 
@@ -267,15 +294,7 @@ function ContentHitRow(props: {
   onClick: (e: EntityClickEvent, location?: SearchLocation) => void;
 }) {
   return (
-    <div
-      class="relative flex gap-1 items-center min-w-0 h-8 hover:bg-hover/30 hover:opacity-90 transition-all"
-      onClick={(e) => {
-        e.stopPropagation();
-        props.onClick(e, props.data.location);
-      }}
-      data-blocks-navigation
-    >
-      <ThreadBorder />
+    <RowWrapper onClick={(e) => props.onClick(e, props.data.location)}>
       <Show
         when={props.data.type === 'channel' && props.data}
         fallback={
@@ -287,7 +306,7 @@ function ContentHitRow(props: {
       >
         {(data) => <ChannelMessageContentHit data={data()} />}
       </Show>
-    </div>
+    </RowWrapper>
   );
 }
 
