@@ -639,6 +639,7 @@ export function MessageList(props: MessageListProps) {
                 'overflow-y': 'scroll',
               }}
               class="scrollbar-hidden"
+              itemSize={50}
               data-channel-message-list
               data={rows() ?? []}
               overscan={10}
