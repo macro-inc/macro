@@ -29,8 +29,7 @@ pub async fn get_all_user_notifications(
         un.deleted_at::timestamptz,
         n.metadata as notification_metadata,
         n.notification_event_type as notification_event_type,
-        n.sender_id as sender_id,
-        un.is_important_v0 as is_important_v0
+        n.sender_id as sender_id
     FROM user_notification un
     JOIN notification n ON n.id = un.notification_id
     WHERE un.user_id = $1
@@ -83,8 +82,7 @@ pub async fn get_all_user_notifications_by_event_item_ids(
         un.deleted_at::timestamptz,
         n.metadata as notification_metadata,
         n.notification_event_type as notification_event_type,
-        n.sender_id as sender_id,
-        un.is_important_v0 as is_important_v0
+        n.sender_id as sender_id
     FROM user_notification un
     JOIN notification n ON n.id = un.notification_id
     WHERE un.user_id = $1
