@@ -1,5 +1,6 @@
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import { useNavigatedFromJK } from '@app/component/useNavigatedFromJK';
+import { URL_PARAMS } from '@block-channel/constants';
 import type { ChannelData } from '@block-channel/definition';
 import {
   latestActivitySignal,
@@ -55,7 +56,6 @@ import { type FocusableElement, tabbable } from 'tabbable';
 import { ChannelInput } from './ChannelInput';
 import { MessageList } from './MessageList/MessageList';
 import { Top } from './Top';
-import { URL_PARAMS } from '@block-channel/constants';
 
 false && fileFolderDrop;
 
