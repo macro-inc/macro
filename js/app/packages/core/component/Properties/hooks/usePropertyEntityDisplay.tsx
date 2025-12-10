@@ -188,6 +188,11 @@ export function usePropertyEntityDisplay(
       return type.toLowerCase();
     }
 
+    // Tasks are aliased as 'task' for routing
+    if (type === 'TASK') {
+      return 'task';
+    }
+
     // For documents, get the file type from preview
     if (type === 'DOCUMENT') {
       const previewItem = preview();
@@ -197,6 +202,10 @@ export function usePropertyEntityDisplay(
         !isAccessiblePreviewItem(previewItem)
       ) {
         return null;
+      }
+      // Tasks are documents with subType 'task'
+      if (previewItem.subType === 'task') {
+        return 'task';
       }
       return previewItem.fileType || null;
     }
