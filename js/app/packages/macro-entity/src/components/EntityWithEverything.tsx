@@ -130,7 +130,7 @@ function ThreadBorder() {
 
 function RowWrapper(
   props: ParentProps<{
-    onClick?: (e: MouseEvent) => void;
+    onClick?: (e: EntityClickEvent) => void;
     classList?: Record<string, boolean>;
     enableHover?: boolean;
     showThreadBorder?: boolean;
@@ -206,7 +206,7 @@ function CollapsibleList<T>(props: {
 
 function NotificationRow(props: {
   notification: Notification;
-  onClick?: EntityClickHandler<any>;
+  onClick?: NotificationClickHandler;
   entity: EntityData;
 }) {
   const [userName] = useDisplayName(props.notification.senderId);
@@ -260,14 +260,15 @@ function NotificationRow(props: {
       showThreadBorder
       onClick={
         props.onClick
-          ? (e) =>
+          ? (e) => {
               props.onClick?.(
                 {
                   ...props.entity,
                   notification: props.notification,
-                } as any,
-                e as any
-              )
+                },
+                e
+              );
+            }
           : undefined
       }
       classList={{
@@ -324,6 +325,10 @@ function ContentHitRow(props: {
 //     </Show>
 //   );
 // }
+//
+
+type NotificationClickHandler<T extends EntityData = EntityData> =
+  EntityClickHandler<T & { notification: Notification }>;
 
 interface EntityProps<T extends WithNotification<EntityData>>
   extends ParentProps {
@@ -332,7 +337,7 @@ interface EntityProps<T extends WithNotification<EntityData>>
   timestamp?: number;
   onClick?: EntityClickHandler<T>;
   onClickRowAction?: (entity: T, type: 'done') => void;
-  onClickNotification?: EntityClickHandler<T & { notification: Notification }>;
+  onClickNotification?: NotificationClickHandler<T>;
   onMouseOver?: () => void;
   onMouseLeave?: () => void;
   onFocusIn?: () => void;
