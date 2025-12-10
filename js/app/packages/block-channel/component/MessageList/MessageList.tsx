@@ -527,7 +527,6 @@ export function MessageList(props: MessageListProps) {
   // );
 
   const [size, setSize] = createSignal<DOMRect>();
-  const [initialized, setInitialized] = createSignal(false);
 
   // scroll to bottom on size change, if the user is near the bottom
   createEffect(
@@ -625,7 +624,6 @@ export function MessageList(props: MessageListProps) {
         onPointerDown={markUserScrolled}
         use:observedSize={{
           setSize: setSize,
-          setInitialized: setInitialized,
         }}
       >
         <Switch fallback={<EmptyMessageList />}>
