@@ -13,7 +13,6 @@ import GlobeIcon from '@icon/duotone/globe-duotone.svg';
 import ChannelIcon from '@icon/duotone/hash-duotone.svg';
 import User from '@icon/duotone/user-duotone.svg';
 import ThreeUsersIcon from '@icon/duotone/users-three-duotone.svg';
-import TaskIcon from '@icon/regular/list-checks.svg';
 import SearchIcon from '@icon/regular/magnifying-glass.svg';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { Item } from '@service-storage/generated/schemas/item';
@@ -170,8 +169,6 @@ function getEntityIcon(entity: CombinedEntity) {
       return <CompanyIcon class={ICON_CLASSES} />;
     case 'thread':
       return <ThreadIcon class={ICON_CLASSES} />;
-    case 'task':
-      return <TaskIcon class={ICON_CLASSES} />;
   }
 }
 
