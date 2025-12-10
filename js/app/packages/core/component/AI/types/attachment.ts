@@ -1,5 +1,4 @@
 import type { ChatAttachmentWithName } from '@service-cognition/generated/schemas';
-import type { BasicDocumentSubType } from '@service-storage/generated/schemas';
 import type { Accessor, Setter } from 'solid-js';
 
 export type {
@@ -7,12 +6,7 @@ export type {
   ChatMessageWithAttachments,
 } from '@service-cognition/generated/schemas';
 
-// TODO (seamus) : this is bad, the code-fened
-export type Attachment = ChatAttachmentWithName & {
-  metadata: ChatAttachmentWithName['metadata'] & {
-    sub_type?: BasicDocumentSubType | null;
-  };
-};
+export type Attachment = ChatAttachmentWithName;
 
 export type Attachments = {
   attached: Accessor<Attachment[]>;
