@@ -218,27 +218,28 @@ export function MessageList(props: MessageListProps) {
 
       const { messageId: targetMessageId, threadId } = target || {};
 
-      // If we have a target message, scroll to it and focus it
-      if (targetMessageId) {
-        const index = props
-          .orderedMessages()
-          ?.findIndex((m) => m.id === targetMessageId);
+      if (!targetMessageId) return;
 
-        if (index >= 0) {
-          if (threadId) {
-            setThreadViewStore(threadId, (prev) => ({
-              ...prev,
-              threadExpanded: true,
-            }));
-          }
-          if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
-          virtualHandle()?.scrollToIndex(index, {
-            align: 'center',
-          });
-          setTargetIndex(index);
-          return;
-        }
+      // If we have a target message, scroll to it and focus it
+      const index = props
+        .orderedMessages()
+        ?.findIndex((m) => m.id === targetMessageId);
+
+      if (index === -1) return;
+
+      if (threadId) {
+        setThreadViewStore(threadId, (prev) => ({
+          ...prev,
+          threadExpanded: true,
+        }));
       }
+
+      if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
+
+      virtualHandle()?.scrollToIndex(index, {
+        align: 'center',
+      });
+      setTargetIndex(index);
     },
     5
   );
