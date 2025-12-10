@@ -7,9 +7,9 @@ use comms_db_client::{
 use model::{comms::ChannelParticipant, document_storage_service_internal::DocumentMetadata};
 use model_entity::EntityType;
 use model_notifications::{
-    ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageSendMetadata,
-    ChannelReplyMetadata, CommonChannelMetadata, DocumentMentionMetadata, NotificationEntity,
-    NotificationEvent, NotificationQueueMessage,
+    ChannelInviteMetadata, ChannelMentionMetadata, ChannelMessageDocumentMetadata,
+    ChannelMessageSendMetadata, ChannelReplyMetadata, CommonChannelMetadata,
+    DocumentMentionMetadata, NotificationEvent, NotificationQueueMessage,
 };
 use models_comms::ChannelType;
 use std::{collections::HashSet, iter::once};
@@ -57,14 +57,10 @@ fn create_notification_queue_message(
     important: bool,
 ) -> NotificationQueueMessage {
     NotificationQueueMessage {
-        notification_entity: NotificationEntity {
-            event_item_id: channel_id.to_string(),
-            event_item_type: EntityType::Channel,
-        },
+        notification_entity: EntityType::Channel.with_entity_string(channel_id.to_string()),
         sender_id: Some(sender_id.to_string()),
         recipient_ids: Some(recipients.to_vec()),
         notification_event,
-        is_important_v0: Some(important),
     }
 }
 
@@ -125,12 +121,14 @@ impl ChannelMessageEvent<'_> {
                     self.channel_id,
                     &self.message.sender_id,
                     &recipients_excluding_mentions,
-                    NotificationEvent::ChannelMessageDocument(DocumentMentionMetadata {
-                        document_name: mention.item_name.clone(),
-                        owner: mention.item_owner.clone(),
-                        file_type: mention.file_type.clone(),
-                        metadata: None,
-                    }),
+                    NotificationEvent::ChannelMessageDocument(ChannelMessageDocumentMetadata(
+                        DocumentMentionMetadata {
+                            document_name: mention.item_name.clone(),
+                            owner: mention.item_owner.clone(),
+                            file_type: mention.file_type.clone(),
+                            metadata: None,
+                        },
+                    )),
                     true,
                 ));
             }
@@ -660,32 +658,5 @@ mod tests {
         });
 
         assert!(!has_reply);
-    }
-
-    #[test]
-    fn dm_message_marked_important() {
-        let channel_id = Uuid::new_v4();
-        let participants = vec![
-            participant("sender", channel_id),
-            participant("alice", channel_id),
-        ];
-        let msg = message(channel_id, "sender", None);
-        let metadata = dm_metadata();
-
-        let event = ChannelMessageEvent {
-            channel_id: &channel_id,
-            message: &msg,
-            channel_metadata: &metadata,
-            channel_message_count: 2,
-            user_mentions: &[],
-            document_mentions: &[],
-            participants: &participants,
-            thread_participants: &[],
-        };
-
-        let notifications = event.generate_notifications();
-        assert_single_message_notification_per_recipient(&notifications);
-
-        assert_eq!(notifications[0].is_important_v0, Some(true));
     }
 }

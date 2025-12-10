@@ -14,6 +14,7 @@ use std::{
     fmt::{Formatter, Write},
     marker::PhantomData,
 };
+use thiserror::Error;
 
 fn xml_tag(
     start_delimiter: &'static str,

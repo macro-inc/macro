@@ -1,11 +1,9 @@
-use std::str::FromStr;
-
 use anyhow::Context;
 use model_entity::EntityType;
 use model_notifications::{
-    ItemSharedMetadata, ItemSharedOrganizationMetadata, NotificationEntity, NotificationEvent,
-    NotificationQueueMessage,
+    ItemSharedMetadata, ItemSharedOrganizationMetadata, NotificationEvent, NotificationQueueMessage,
 };
+use std::str::FromStr;
 
 #[derive(Debug)]
 pub struct ItemShareNotifications {
@@ -33,14 +31,10 @@ pub fn create_notifications_from_item_shared(
     let build_message =
         |recipients: &[String], event_type: NotificationEvent| -> NotificationQueueMessage {
             NotificationQueueMessage {
-                notification_entity: NotificationEntity {
-                    event_item_id: item_id.to_string(),
-                    event_item_type: entity_type,
-                },
+                notification_entity: entity_type.with_entity_string(item_id.to_string()),
                 notification_event: event_type,
                 sender_id: Some(user_id.to_string()),
                 recipient_ids: Some(recipients.to_vec()),
-                is_important_v0: Some(false),
             }
         };
 

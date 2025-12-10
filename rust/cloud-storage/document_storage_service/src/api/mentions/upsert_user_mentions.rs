@@ -13,9 +13,8 @@ use model::{
     document::DocumentBasic,
     response::{EmptyResponse, GenericErrorResponse, GenericResponse},
 };
-use model_notifications::{
-    DocumentMentionMetadata, NotificationEntity, NotificationEvent, NotificationQueueMessage,
-};
+use model_entity::EntityType;
+use model_notifications::{DocumentMentionMetadata, NotificationEvent, NotificationQueueMessage};
 use models_permissions::share_permission::access_level::CommentAccessLevel;
 
 #[derive(serde::Deserialize)]
@@ -62,11 +61,10 @@ pub async fn handler(
         };
 
         let notification_queue_message = NotificationQueueMessage {
-            notification_entity: NotificationEntity::new_document(document_id),
+            notification_entity: EntityType::Document.with_entity_string(document_id),
             notification_event: NotificationEvent::DocumentMention(metadata),
             sender_id: Some(user_context.user_id.clone()),
             recipient_ids: Some(req.mentions.clone()),
-            is_important_v0: Some(false),
         };
 
         if let Err(err) = macro_notify_client
