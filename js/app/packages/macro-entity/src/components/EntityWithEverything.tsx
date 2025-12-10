@@ -327,9 +327,10 @@ export function EntityWithEverything(
       props.entity.type === 'channel' ? props.entity : null
     );
 
-    const latestMessageContent = createMemo(
-      () => channelEntity()?.latestMessage?.content
-    );
+    const latestMessage = createMemo(() => channelEntity()?.latestMessage);
+    const latestMessageContent = createMemo(() => latestMessage()?.content);
+
+    console.log('##### LATEST', latestMessage());
 
     const userNameFromSender = createMemo(() => {
       const senderId = channelEntity()?.latestMessage?.senderId;
@@ -342,8 +343,7 @@ export function EntityWithEverything(
       return (
         !props.showUnrollNotifications &&
         props.entity.type === 'channel' &&
-        !isSearchEntity(props.entity) &&
-        !!props.entity.latestMessage?.content
+        !isSearchEntity(props.entity)
       );
     };
 
@@ -374,14 +374,26 @@ export function EntityWithEverything(
                 {userNameFromSender()}
               </span>
             </div>
-            <Show when={latestMessageContent()}>
-              {(lastMessageContent) => (
+            <Show when={latestMessage()}>
+              {(lastMessage) => (
                 <div class="truncate shrink grow opacity-60 flex items-center">
-                  <StaticMarkdown
-                    markdown={lastMessageContent().trim()}
-                    theme={unifiedListMarkdownTheme}
-                    singleLine={true}
-                  />
+                  {/* TODO (seamus): Channels endpoint does not return any information about attachments. Is we have an empty message, assume its attachments.*/}
+                  <Show
+                    when={lastMessage().content.trim()}
+                    fallback={
+                      <span class="italic text-ink-disabled">
+                        Attached items
+                      </span>
+                    }
+                  >
+                    {(content) => (
+                      <StaticMarkdown
+                        markdown={content()}
+                        theme={unifiedListMarkdownTheme}
+                        singleLine={true}
+                      />
+                    )}
+                  </Show>
                 </div>
               )}
             </Show>
@@ -672,12 +684,25 @@ export function EntityWithEverything(
                   )
                     return '';
 
+                  // TODO (seamus): Notifs endpoint does not return any information
+                  // about attachments. Is we have an empty message, assume its attachments.
                   return (
-                    <StaticMarkdown
-                      markdown={metadata.messageContent.trim()}
-                      theme={unifiedListMarkdownTheme}
-                      singleLine={true}
-                    />
+                    <Show
+                      when={metadata.messageContent.trim()}
+                      fallback={
+                        <span class="italic text-ink-disabled">
+                          Attached items
+                        </span>
+                      }
+                    >
+                      {(content) => (
+                        <StaticMarkdown
+                          markdown={content()}
+                          theme={unifiedListMarkdownTheme}
+                          singleLine={true}
+                        />
+                      )}
+                    </Show>
                   );
                 };
 
