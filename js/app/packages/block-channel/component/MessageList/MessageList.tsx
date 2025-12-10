@@ -628,7 +628,7 @@ export function MessageList(props: MessageListProps) {
         }}
       >
         <Switch fallback={<EmptyMessageList />}>
-          <Match when={initialized() && props.messages.length > 0 && size()}>
+          <Match when={props.messages.length > 0}>
             <VList
               ref={setVirtualHandle}
               style={{
