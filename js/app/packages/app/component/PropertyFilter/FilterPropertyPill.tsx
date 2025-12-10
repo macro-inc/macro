@@ -10,6 +10,7 @@ import { FilterActionSelect } from './FilterAction';
 import { FilterPropertySelect } from './FilterProperty';
 import { FilterValueBoolean } from './FilterValueBoolean';
 import { FilterValueDate } from './FilterValueDate';
+import { FilterValueDateMulti } from './FilterValueDateMulti';
 import { FilterValueNumber } from './FilterValueNumber';
 import { FilterValueSelect } from './FilterValueSelect';
 
@@ -28,6 +29,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
   const [values, _setValues] = createSignal<string[]>([]);
   const [booleanValue, setBooleanValue] = createSignal<boolean | null>(null);
   const [dateValue, setDateValue] = createSignal<string | null>(null);
+  const [dateValues, setDateValues] = createSignal<string[]>([]); // Multi-date for equality actions
   const [numberValue, setNumberValue] = createSignal<number | null>(null);
   const [selectValue, setSelectValue] = createSignal<string | null>(null); // option ID for SELECT types
 
@@ -52,8 +54,11 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
     if (property.data_type === 'BOOLEAN') {
       return booleanValue() !== null;
     }
-    if (property.data_type === 'DATE' && isComparisonAction(action())) {
-      return dateValue() !== null;
+    if (property.data_type === 'DATE') {
+      if (isComparisonAction(action())) {
+        return dateValue() !== null;
+      }
+      return dateValues().length > 0; // Equality actions use multi-date
     }
     if (property.data_type === 'NUMBER' && isComparisonAction(action())) {
       return numberValue() !== null;
@@ -77,6 +82,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
       setAction(null);
       setBooleanValue(null);
       setDateValue(null);
+      setDateValues([]);
       setNumberValue(null);
       setSelectValue(null);
       _setValues([]);
@@ -142,6 +148,21 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
     }
   };
 
+  // Handler for multi-date values
+  const handleDateValuesChange = (newValues: string[]) => {
+    setDateValues(newValues);
+
+    // Auto-save when values change
+    const property = selectedProperty();
+    const currentAction = action();
+    if (property && currentAction) {
+      const filter = buildPartialFilter(property, currentAction);
+      if (filter) {
+        props.onSave(filter);
+      }
+    }
+  };
+
   const handleConfirm = () => {
     if (!canConfirm()) return;
     const property = selectedProperty();
@@ -195,7 +216,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
           ...baseFilter,
           dataType: 'DATE',
           action: filterAction as any,
-          values: filterValues,
+          values: dateValues(), // Use dateValues signal for equality actions
         } as PropertyFilter;
       case 'NUMBER':
         if (isComparisonAction) {
@@ -260,12 +281,12 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
         </div>
       }
     >
-      <div class="flex items-center gap-0.5">
+      <div class="flex items-start gap-0.5">
         {/* Property pill */}
         <button
           type="button"
           onClick={handleStartEditProperty}
-          class="h-6 px-2 text-[10px] text-ink border border-edge hover:bg-hover text-left flex items-center gap-1.5 font-mono cursor-pointer"
+          class="h-6 px-2 text-[10px] text-ink border border-edge hover:bg-hover text-left flex items-center gap-1.5 font-mono cursor-pointer shrink-0"
         >
           <PropertyDataTypeIcon
             property={selectedProperty()!}
@@ -277,11 +298,13 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
         </button>
 
         {/* Action dropdown */}
-        <FilterActionSelect
-          property={selectedProperty()!}
-          selectedAction={action()}
-          onSelectAction={handleSelectAction}
-        />
+        <div class="shrink-0">
+          <FilterActionSelect
+            property={selectedProperty()!}
+            selectedAction={action()}
+            onSelectAction={handleSelectAction}
+          />
+        </div>
 
         {/* Value input - only show after action is set */}
         <Show when={action()}>
@@ -310,6 +333,17 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
               <FilterValueDate
                 value={dateValue()}
                 onChange={handleValueChange}
+              />
+            </Match>
+            <Match
+              when={
+                selectedProperty()?.data_type === 'DATE' &&
+                !isComparisonAction(action())
+              }
+            >
+              <FilterValueDateMulti
+                values={dateValues()}
+                onChange={handleDateValuesChange}
               />
             </Match>
             <Match
@@ -350,7 +384,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
             type="button"
             onClick={handleConfirm}
             disabled={!canConfirm()}
-            class="h-6 w-6 flex items-center justify-center text-ink hover:bg-hover border border-edge cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+            class="h-6 w-6 flex items-center justify-center text-ink hover:bg-hover border border-edge cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed shrink-0"
           >
             <CheckIcon class="size-4" />
           </button>
@@ -360,7 +394,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
         <button
           type="button"
           onClick={props.onCancel}
-          class="h-6 w-6 flex items-center justify-center text-ink hover:text-failure-ink hover:bg-hover cursor-pointer"
+          class="h-6 w-6 flex items-center justify-center text-ink hover:text-failure-ink hover:bg-hover cursor-pointer shrink-0"
         >
           <XIcon class="size-3" />
         </button>

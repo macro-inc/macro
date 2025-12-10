@@ -3,5 +3,6 @@ export { FilterPropertySelect } from './FilterProperty';
 export { FilterPropertyPill } from './FilterPropertyPill';
 export { FilterValueBoolean } from './FilterValueBoolean';
 export { FilterValueDate } from './FilterValueDate';
+export { FilterValueDateMulti } from './FilterValueDateMulti';
 export { FilterValueNumber } from './FilterValueNumber';
 export { FilterValueSelect } from './FilterValueSelect';
