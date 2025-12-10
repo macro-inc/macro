@@ -102,10 +102,7 @@ mod tests {
     async fn test_delete_entity(pool: Pool<Postgres>) -> anyhow::Result<()> {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
-        let entity_ref = EntityReference {
-            entity_id: "doc1".to_string(),
-            entity_type: EntityType::Document,
-        };
+        let entity_ref = EntityReference::new("doc1", EntityType::Document);
 
         // Verify entity has properties before deletion
         let properties_before = crate::entity_properties::get::get_entity_properties_values(
@@ -140,10 +137,7 @@ mod tests {
     ) -> anyhow::Result<()> {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
-        let entity_ref = EntityReference {
-            entity_id: "doc1".to_string(),
-            entity_type: EntityType::Document,
-        };
+        let entity_ref = EntityReference::new("doc1", EntityType::Document);
 
         // Get properties for doc2 before deletion
         let doc2_properties_before = crate::entity_properties::get::get_entity_properties_values(
@@ -176,10 +170,7 @@ mod tests {
     async fn test_delete_nonexistent_entity(pool: Pool<Postgres>) -> anyhow::Result<()> {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
-        let entity_ref = EntityReference {
-            entity_id: "nonexistent".to_string(),
-            entity_type: EntityType::Document,
-        };
+        let entity_ref = EntityReference::new("nonexistent", EntityType::Document);
 
         // Deleting non-existent entity should succeed (no error)
         let result = delete_entity(&pool, &entity_ref).await;
@@ -196,14 +187,8 @@ mod tests {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
         // Delete all document entities
-        let doc1_ref = EntityReference {
-            entity_id: "doc1".to_string(),
-            entity_type: EntityType::Document,
-        };
-        let doc2_ref = EntityReference {
-            entity_id: "doc2".to_string(),
-            entity_type: EntityType::Document,
-        };
+        let doc1_ref = EntityReference::new("doc1", EntityType::Document);
+        let doc2_ref = EntityReference::new("doc2", EntityType::Document);
 
         // Verify documents have no properties
         let doc1_before = crate::entity_properties::get::get_entity_properties_values(
