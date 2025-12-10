@@ -1,5 +1,5 @@
 import type { BlockAlias, BlockName } from '@core/block';
-import { verifyBlockName } from '@core/constant/allBlocks';
+import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { isAccessiblePreviewItem, useItemPreview } from '@core/signal/preview';
 import { matches } from '@core/util/match';
 import { truncateString } from '@core/util/string';
@@ -46,7 +46,7 @@ function useItemPreviewData(props: ItemPreviewProps) {
 
   function openItem(blockOrFileType: string, id: string, inNewSplit?: boolean) {
     const targetBlock: BlockName | BlockAlias =
-      verifyBlockName(blockOrFileType);
+      fileTypeToBlockName(blockOrFileType);
 
     if (!targetBlock) {
       return;
