@@ -22,9 +22,9 @@ pub async fn webhook_handler(
     extract::Json(req): extract::Json<GmailWebhookPayload>,
 ) -> Result<Response, Response> {
     // Validate the token in the headers sent from Google
-    // if cfg!(feature = "gmail_webhook_auth") {
-    //     validate_google_token(&ctx, &headers).await?;
-    // }
+    if cfg!(feature = "gmail_webhook_auth") {
+        validate_google_token(&ctx, &headers).await?;
+    }
 
     let email_address = &req.message.data.email_address;
 

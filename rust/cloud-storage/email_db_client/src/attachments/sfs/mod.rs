@@ -1,7 +1,6 @@
 use anyhow::Context;
 use models_email::{db, service};
-use sqlx::types::Uuid;
-use sqlx::{Executor, PgPool, Postgres};
+use sqlx::{Executor, Postgres};
 
 /// Inserts an attachment SFS record into the database
 #[tracing::instrument(skip(executor))]

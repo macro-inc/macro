@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT \n            a.id,\n            a.message_id,\n            a.provider_attachment_id,\n            a.filename,\n            a.mime_type,\n            a.size_bytes,\n            a.content_id,\n            a.created_at,\n            m.thread_id\n        FROM \n            email_attachments a\n        JOIN\n            email_messages m ON a.message_id = m.id\n        WHERE \n            m.thread_id = ANY($1)\n        ORDER BY \n            a.created_at ASC\n        ",
+  "query": "\n        SELECT ea.id, ea.message_id, ea.provider_attachment_id, ea.filename, ea.mime_type, ea.size_bytes, ea.content_id, eas.sfs_id, ea.created_at\n        FROM email_attachments ea\n        LEFT JOIN email_attachments_sfs eas ON ea.id = eas.attachment_id\n        WHERE ea.message_id = $1\n        ORDER BY ea.filename NULLS LAST\n        ",
   "describe": {
     "columns": [
       {
@@ -40,18 +40,18 @@
       },
       {
         "ordinal": 7,
-        "name": "created_at",
-        "type_info": "Timestamptz"
+        "name": "sfs_id",
+        "type_info": "Uuid"
       },
       {
         "ordinal": 8,
-        "name": "thread_id",
-        "type_info": "Uuid"
+        "name": "created_at",
+        "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "UuidArray"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -66,5 +66,5 @@
       false
     ]
   },
-  "hash": "ae59bee78e23ab95aeca755209a2a4692dc496ab829ccce7a7a5ff13a9b8a885"
+  "hash": "3882543383ad2d4b7819015d1f849026c42f10cc167b1ef714f78dc283f04b25"
 }

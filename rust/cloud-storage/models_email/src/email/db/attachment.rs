@@ -15,6 +15,7 @@ pub struct Attachment {
     pub mime_type: Option<String>,
     pub size_bytes: Option<i64>,
     pub content_id: Option<String>,
+    pub sfs_id: Option<Uuid>,
     pub created_at: DateTime<Utc>,
 }
 

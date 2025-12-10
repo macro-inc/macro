@@ -21,6 +21,8 @@ pub struct Attachment {
     pub filename: Option<String>,
     pub mime_type: Option<String>,
     pub size_bytes: Option<i64>,
+    #[schemars(with = "Option<String>")]
+    pub sfs_id: Option<Uuid>,
     pub content_id: Option<String>,
 }
 
