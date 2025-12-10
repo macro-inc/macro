@@ -133,6 +133,7 @@ function RowWrapper(
     onClick?: (e: MouseEvent) => void;
     classList?: Record<string, boolean>;
     enableHover?: boolean;
+    showThreadBorder?: boolean;
   }>
 ) {
   return (
@@ -151,7 +152,9 @@ function RowWrapper(
       }}
       data-blocks-navigation
     >
-      <ThreadBorder />
+      <Show when={props.showThreadBorder}>
+        <ThreadBorder />
+      </Show>
       {props.children}
     </div>
   );
@@ -254,6 +257,7 @@ function NotificationRow(props: {
 
   return (
     <RowWrapper
+      showThreadBorder
       onClick={
         props.onClick
           ? (e) =>
