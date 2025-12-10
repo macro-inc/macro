@@ -46,7 +46,7 @@ export function createSearchDocumentsResource(searchTerm: () => string) {
       searchClient.searchDocuments(
         {
           match_type: 'partial',
-          query: term,
+          terms: [term],
         },
         { signal }
       )
@@ -101,7 +101,7 @@ export function createPaginatedEmailSearchResource(
         {
           request: {
             match_type: 'partial',
-            query: term,
+            terms: [term],
           },
           params: { page: pageNumber, page_size: pageSize },
         },
@@ -156,7 +156,7 @@ export function createSearchChatsResource(searchTerm: () => string) {
     searchClient.searchChats(
       {
         match_type: 'partial',
-        query: term,
+        terms: [term],
       },
       { signal }
     )
@@ -190,7 +190,7 @@ export function createUnifiedSearchResource(
           request: {
             search_on: 'content',
             match_type: 'partial',
-            query: term,
+            terms: [term],
             // in order for an index to be searched on, the key needs to exist in "filters"
             filters: {
               channel: {},
