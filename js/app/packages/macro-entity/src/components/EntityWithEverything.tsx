@@ -119,21 +119,171 @@ function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
   );
 }
 
+function ThreadBorder() {
+  return (
+    <div
+      class="absolute left-[calc(0.5rem+1px)] w-[1px] border-l border-edge-muted -top-0.75"
+      style={{ height: '6px' }}
+    />
+  );
+}
+
+function CollapsibleList<T>(props: {
+  items: T[];
+  visibleCount?: number;
+  children: (item: T) => any;
+  threadBorder?: boolean;
+}) {
+  const [showAll, setShowAll] = createSignal(false);
+  const visibleCount = () => props.visibleCount ?? 3;
+
+  const visibleItems = () => {
+    if (props.items.length <= visibleCount() || showAll()) {
+      return props.items;
+    }
+    return props.items.slice(0, visibleCount());
+  };
+
+  const hasMore = () => props.items.length > visibleCount();
+
+  return (
+    <>
+      <For each={visibleItems()}>{props.children}</For>
+      <Show when={hasMore()}>
+        <div class="relative h-5">
+          <Show when={props.threadBorder}>
+            <ThreadBorder />
+          </Show>
+          <button
+            class="block w-fit px-2 py-0.5 text-[10px] border border-edge uppercase font-mono hover:font-medium"
+            onClick={(e) => {
+              e.stopPropagation();
+              setShowAll((prev) => !prev);
+            }}
+            data-blocks-navigation
+          >
+            <Show when={!showAll()} fallback={<>Collapse</>}>
+              + {props.items.length - visibleCount()} More
+            </Show>
+          </button>
+        </div>
+      </Show>
+    </>
+  );
+}
+
+function NotificationRow(props: {
+  notification: Notification;
+  onClick?: EntityClickHandler<any>;
+  entity: EntityData;
+}) {
+  const [userName] = useDisplayName(props.notification.senderId);
+  const formattedDate = createFormattedDate(props.notification.createdAt);
+
+  const ActionContent = () => {
+    if (
+      props.notification.notificationEventType === 'document_mention' ||
+      props.notification.notificationEventType === 'channel_message_document'
+    ) {
+      return 'shared';
+    }
+
+    const metadata = tryToTypedNotification(
+      props.notification
+    )?.notificationMetadata;
+    if (!metadata || !('messageContent' in metadata)) return '';
+
+    return 'message';
+  };
+
+  const MessageContent = () => {
+    if (
+      props.notification.notificationEventType === 'document_mention' ||
+      props.notification.notificationEventType === 'channel_message_document'
+    ) {
+      return '';
+    }
+
+    const metadata = tryToTypedNotification(
+      props.notification
+    )?.notificationMetadata;
+    if (
+      !metadata ||
+      !('messageContent' in metadata) ||
+      !metadata.messageContent
+    )
+      return '';
+
+    return (
+      <StaticMarkdown
+        markdown={metadata.messageContent.trim()}
+        theme={unifiedListMarkdownTheme}
+        singleLine={true}
+      />
+    );
+  };
+
+  return (
+    <div
+      class="relative flex gap-1 items-center min-w-0 h-8"
+      classList={{
+        'hover:bg-hover/20 hover:opacity-70': !!props.onClick,
+        'opacity-70': props.notification.viewedAt !== null,
+      }}
+      onClick={
+        props.onClick
+          ? [
+              props.onClick,
+              {
+                ...props.entity,
+                notification: props.notification,
+              },
+            ]
+          : undefined
+      }
+    >
+      <ThreadBorder />
+      <div class="flex size-5 shrink-0 items-center justify-center mr-1">
+        <NotificationUserIcon id={props.notification.senderId!} />
+      </div>
+      <div class="flex gap-2 text-sm w-full min-w-0 overflow-hidden items-baseline">
+        <div class="text-sm w-[20cqw] shrink-0 truncate min-w-0">
+          {userName()}{' '}
+          <span class="opacity-70 uppercase font-mono text-[0.625rem] mx-2">
+            {ActionContent()}
+          </span>
+        </div>
+        <MessageContent />
+      </div>
+      <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
+        {formattedDate()}
+      </div>
+    </div>
+  );
+}
+
 function ContentHitRow(props: {
   data: ContentHitData;
   onClick: (e: EntityClickEvent, location?: SearchLocation) => void;
 }) {
   return (
     <div
+      class="relative flex gap-1 items-center min-w-0 h-8 hover:bg-hover/20"
       onClick={(e) => {
         e.stopPropagation();
         props.onClick(e, props.data.location);
       }}
       data-blocks-navigation
     >
+      <ThreadBorder />
       <Show
         when={props.data.type === 'channel' && props.data}
-        fallback={<GenericContentHit data={props.data} />}
+        fallback={
+          <div class="flex gap-2 items-center min-w-0 w-full">
+            <div class="flex size-5 shrink-0 items-center justify-center opacity-0" />
+            <GenericContentHit data={props.data} />
+          </div>
+        }
       >
         {(data) => <ChannelMessageContentHit data={data()} />}
       </Show>
@@ -187,9 +337,6 @@ export function EntityWithEverything(
   const [entityDivRef, setEntityDivRef] = createSignal<HTMLDivElement | null>(
     null
   );
-  const [showRestOfNotifications, setShowRestOfNotifications] =
-    createSignal(false);
-  const [showAllContentHits, setShowAllContentHits] = createSignal(false);
 
   const { keydownDataDuringTask } = trackKeydownDuringTask();
   const userEmail = useEmail();
@@ -221,22 +368,9 @@ export function EntityWithEverything(
   const hasNotifications = () =>
     !!props.entity.notifications && props.entity.notifications().length > 0;
 
-  const threadGap = 6;
-  const ThreadBorder = () => (
-    <div
-      class="absolute left-[calc(0.5rem+1px)] w-[1px] border-l border-edge-muted -top-0.75"
-      style={{ height: `${threadGap}px` }}
-    />
-  );
-
   const notDoneNotifications = () => {
-    let notifications = props.entity.notifications?.();
+    const notifications = props.entity.notifications?.();
     if (!notifications) return [];
-
-    if (!showRestOfNotifications()) {
-      notifications = notifications.slice(0, 3);
-    }
-
     return notifications.filter(({ done }) => !done);
   };
 
@@ -247,16 +381,6 @@ export function EntityWithEverything(
     if (!isSearchEntity(props.entity)) return [];
     return props.entity.search.contentHitData ?? [];
   };
-
-  const visibleContentHits = () => {
-    const hits = contentHitData();
-    if (hits.length <= 3 || showAllContentHits()) {
-      return hits;
-    }
-    return hits.slice(0, 3);
-  };
-
-  const hasMoreContentHits = () => contentHitData().length > 3;
 
   onMount(() => {
     if (props.entity.type === 'document' && props.entity.fileType === 'md') {
@@ -643,33 +767,16 @@ export function EntityWithEverything(
         {/* Content Hits from Search */}
         <Show when={contentHitData().length > 0}>
           <div class="relative row-2 col-2 col-end-4 pb-2">
-            <div class="flex flex-col gap-2">
-              <For each={visibleContentHits()}>
-                {(data) => (
-                  <ContentHitRow
-                    data={data}
-                    onClick={(e, location) => {
-                      props.onClick?.(props.entity, e, location);
-                    }}
-                  />
-                )}
-              </For>
-              <Show when={hasMoreContentHits()}>
-                <button
-                  type="button"
-                  class="block w-fit px-2 py-0.5 text-[10px] border border-edge uppercase font-mono hover:font-medium"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowAllContentHits((prev) => !prev);
+            <CollapsibleList items={contentHitData()} threadBorder>
+              {(data) => (
+                <ContentHitRow
+                  data={data}
+                  onClick={(e, location) => {
+                    props.onClick?.(props.entity, e, location);
                   }}
-                  data-blocks-navigation
-                >
-                  <Show when={!showAllContentHits()} fallback={<>Collapse</>}>
-                    + {contentHitData().length - 3} More
-                  </Show>
-                </button>
-              </Show>
-            </div>
+                />
+              )}
+            </CollapsibleList>
           </div>
         </Show>
         {/* Notifications */}
@@ -680,135 +787,16 @@ export function EntityWithEverything(
             contentHitData().length === 0
           }
         >
-          <div class="relative col-2 col-end-4 200 pb-2 gap-2">
-            <For each={notDoneNotifications()}>
-              {(notification) => {
-                const [userName] = useDisplayName(notification.senderId);
-
-                const formattedDate = createFormattedDate(
-                  notification.createdAt
-                );
-
-                const ActionContent = () => {
-                  if (
-                    notification.notificationEventType === 'document_mention' ||
-                    notification.notificationEventType ===
-                      'channel_message_document'
-                  ) {
-                    return 'shared';
-                  }
-
-                  const metadata =
-                    tryToTypedNotification(notification)?.notificationMetadata;
-                  if (!metadata || !('messageContent' in metadata)) return '';
-
-                  return 'message';
-                };
-
-                const MessageContent = () => {
-                  if (
-                    notification.notificationEventType === 'document_mention' ||
-                    notification.notificationEventType ===
-                      'channel_message_document'
-                  ) {
-                    return '';
-                  }
-
-                  const metadata =
-                    tryToTypedNotification(notification)?.notificationMetadata;
-                  if (
-                    !metadata ||
-                    !('messageContent' in metadata) ||
-                    !metadata.messageContent
-                  )
-                    return '';
-
-                  return (
-                    <StaticMarkdown
-                      markdown={metadata.messageContent.trim()}
-                      theme={unifiedListMarkdownTheme}
-                      singleLine={true}
-                    />
-                  );
-                };
-
-                return (
-                  <div
-                    class="relative flex gap-1 items-center min-w-0 h-8"
-                    classList={{
-                      'hover:bg-hover/20 hover:opacity-70':
-                        !!props.onClickNotification,
-                      'opacity-70': notification.viewedAt !== null,
-                    }}
-                    onClick={
-                      props.onClickNotification
-                        ? [
-                            props.onClickNotification,
-                            {
-                              ...props.entity,
-                              notification,
-                            },
-                          ]
-                        : undefined
-                    }
-                  >
-                    <ThreadBorder />
-                    <div class="flex size-5 shrink-0 items-center justify-center mr-1">
-                      <NotificationUserIcon id={notification.senderId!} />
-                    </div>
-                    <div class="flex gap-2 text-sm w-full min-w-0 overflow-hidden items-baseline">
-                      <div class="text-sm w-[20cqw] shrink-0 truncate min-w-0">
-                        {userName()}{' '}
-                        <span class="opacity-70 uppercase font-mono text-[0.625rem] mx-2">
-                          {ActionContent()}
-                        </span>
-                      </div>
-                      {/*<ImportantBadge
-                        active={
-                          notification.viewedAt === null &&
-                          notification.isImportantV0
-                        }
-                      />*/}
-                      <MessageContent />
-                    </div>
-                    <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
-                      {formattedDate()}
-                    </div>
-                  </div>
-                );
-              }}
-            </For>
-            <Show
-              when={
-                hasNotifications() &&
-                (props.entity.notifications?.().length ?? 0) > 3
-              }
-            >
-              <div class="relative h-5">
-                <ThreadBorder />
-                <button
-                  class="block w-fit px-2 py-0.5 text-[10px] border border-edge uppercase font-mono hover:font-medium"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setShowRestOfNotifications((prev) => !prev);
-                  }}
-                  data-blocks-navigation
-                >
-                  <Show
-                    when={!showRestOfNotifications()}
-                    fallback={<>Collapse</>}
-                  >
-                    + {(props.entity.notifications?.().length ?? 0) - 3} More
-                  </Show>
-                </button>
-              </div>
-            </Show>
-            {/* <div class="relative h-4">
-            <ThreadBorder />
-            <button class="block p-1 py-0 text-[10px] h-4 border border-edge uppercase font-mono">
-              + 6 more
-            </button>
-          </div> */}
+          <div class="relative col-2 col-end-4 pb-2">
+            <CollapsibleList items={notDoneNotifications()} threadBorder>
+              {(notification) => (
+                <NotificationRow
+                  notification={notification}
+                  onClick={props.onClickNotification}
+                  entity={props.entity}
+                />
+              )}
+            </CollapsibleList>
           </div>
         </Show>
       </div>
