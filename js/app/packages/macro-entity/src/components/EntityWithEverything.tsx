@@ -44,6 +44,7 @@ import type { Notification, WithNotification } from '../types/notification';
 import type {
   ChannelContentHitData,
   ContentHitData,
+  SearchLocation,
   WithSearch,
 } from '../types/search';
 import type { EntityClickEvent, EntityClickHandler } from './Entity';
@@ -118,6 +119,28 @@ function ChannelMessageContentHit(props: { data: ChannelContentHitData }) {
   );
 }
 
+function ContentHitRow(props: {
+  data: ContentHitData;
+  onClick: (e: EntityClickEvent, location?: SearchLocation) => void;
+}) {
+  return (
+    <div
+      onClick={(e) => {
+        e.stopPropagation();
+        props.onClick(e, props.data.location);
+      }}
+      data-blocks-navigation
+    >
+      <Show
+        when={props.data.type === 'channel' && props.data}
+        fallback={<GenericContentHit data={props.data} />}
+      >
+        {(data) => <ChannelMessageContentHit data={data()} />}
+      </Show>
+    </div>
+  );
+}
+
 // function ImportantBadge(props: { active?: boolean }) {
 //   return (
 //     <Show when={props.active}>
@@ -166,6 +189,7 @@ export function EntityWithEverything(
   );
   const [showRestOfNotifications, setShowRestOfNotifications] =
     createSignal(false);
+  const [showAllContentHits, setShowAllContentHits] = createSignal(false);
 
   const { keydownDataDuringTask } = trackKeydownDuringTask();
   const userEmail = useEmail();
@@ -223,6 +247,16 @@ export function EntityWithEverything(
     if (!isSearchEntity(props.entity)) return [];
     return props.entity.search.contentHitData ?? [];
   };
+
+  const visibleContentHits = () => {
+    const hits = contentHitData();
+    if (hits.length <= 3 || showAllContentHits()) {
+      return hits;
+    }
+    return hits.slice(0, 3);
+  };
+
+  const hasMoreContentHits = () => contentHitData().length > 3;
 
   onMount(() => {
     if (props.entity.type === 'document' && props.entity.fileType === 'md') {
@@ -608,17 +642,34 @@ export function EntityWithEverything(
         </div>
         {/* Content Hits from Search */}
         <Show when={contentHitData().length > 0}>
-          <div class="relative row-2 grid gap-2 col-2 col-end-4 pb-2">
-            <For each={contentHitData()}>
-              {(data) => (
-                <Show
-                  when={data.type === 'channel' && data}
-                  fallback={<GenericContentHit data={data} />}
+          <div class="relative row-2 col-2 col-end-4 pb-2">
+            <div class="flex flex-col gap-2">
+              <For each={visibleContentHits()}>
+                {(data) => (
+                  <ContentHitRow
+                    data={data}
+                    onClick={(e, location) => {
+                      props.onClick?.(props.entity, e, location);
+                    }}
+                  />
+                )}
+              </For>
+              <Show when={hasMoreContentHits()}>
+                <button
+                  type="button"
+                  class="block w-fit px-2 py-0.5 text-[10px] border border-edge uppercase font-mono hover:font-medium"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    setShowAllContentHits((prev) => !prev);
+                  }}
+                  data-blocks-navigation
                 >
-                  {(data) => <ChannelMessageContentHit data={data()} />}
-                </Show>
-              )}
-            </For>
+                  <Show when={!showAllContentHits()} fallback={<>Collapse</>}>
+                    + {contentHitData().length - 3} More
+                  </Show>
+                </button>
+              </Show>
+            </div>
           </div>
         </Show>
         {/* Notifications */}
@@ -883,7 +934,7 @@ function EntityProject(props: {
         ownerId: data.owner,
         updatedAt: data.updatedAt,
       };
-      click(projectEntity, e, { ignorePreview: true });
+      click(projectEntity, e, undefined, { ignorePreview: true });
     };
 
     projectIconRef.classList.add('hover:text-accent');

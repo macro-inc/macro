@@ -1036,7 +1036,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const documentEntityClickHandler: EntityClickHandler<
     DocumentEntity | WithSearch<DocumentEntity>
-  > = async (entity, event) => {
+  > = async (entity, event, location) => {
     const { id, fileType, subType } = entity;
     const blockName = fileTypeToBlockName(subType ?? fileType);
     const handle = event.altKey
@@ -1045,9 +1045,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     handle?.activate();
 
-    if (!isSearchEntity(entity)) return;
-
-    const location = entity.search.contentHitData?.at(0)?.location;
     if (!location) return;
 
     const blockHandle = await blockOrchestrator.getBlockHandle(id);
@@ -1073,6 +1070,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const entityClickHandler: EntityClickHandler<EntityData> = async (
     entity,
     event,
+    location,
     options
   ) => {
     if (preview() && !options?.ignorePreview) {
@@ -1081,7 +1079,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
 
     if (entity.type === 'document')
-      return documentEntityClickHandler(entity, event);
+      return documentEntityClickHandler(entity, event, location);
 
     const handle = event.altKey
       ? insertSplit({ type: entity.type, id: entity.id })
@@ -1089,9 +1087,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
     handle?.activate();
 
-    if (!isSearchEntity(entity)) return;
-
-    const location = entity.search.contentHitData?.at(0)?.location;
     if (!location) return;
 
     switch (location.type) {
