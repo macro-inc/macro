@@ -1,6 +1,9 @@
 import EntityNavigationIndicator from '@app/component/EntityNavigationIndicator';
 import { IconButton } from '@core/component/IconButton';
-import { ENABLE_PREVIEW } from '@core/constant/featureFlags';
+import {
+  ENABLE_PREVIEW,
+  ENABLE_PROJECT_VIEW_PREVIEW,
+} from '@core/constant/featureFlags';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isRightPanelOpen, isSettingsPanelOpen } from '@core/signal/layout';
 import CollapseIcon from '@icon/regular/arrows-in.svg';
@@ -99,9 +102,10 @@ function SplitPreviewToggle() {
   const context = useContext(SplitPanelContext);
   if (!ENABLE_PREVIEW || !context || !context.previewState) return null;
 
-  // Only show toggle for unified-list component, not for blocks
+  // Only show toggle for unified-list component and project block
   const isUnifiedList = createMemo(() => {
     const content = context.handle.content();
+    if (ENABLE_PROJECT_VIEW_PREVIEW && content.type === 'project') return true;
     return content.type === 'component' && content.id === 'unified-list';
   });
 
