@@ -82,10 +82,11 @@ export function Email(props: EmailProps) {
 
   const [searchParams] = useSearchParams();
   const searchParamsMessageId = () => {
-    if (typeof searchParams.message_id === 'string') {
-      return searchParams.message_id;
-    } else if (Array.isArray(searchParams.message_id)) {
-      return searchParams.message_id[0];
+    const messageID = searchParams[URL_PARAMS.messageId];
+    if (typeof messageID === 'string') {
+      return messageID;
+    } else if (Array.isArray(messageID)) {
+      return messageID[0];
     }
     return undefined;
   };
