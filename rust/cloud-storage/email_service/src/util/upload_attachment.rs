@@ -95,11 +95,7 @@ async fn upload_media_attachment(
             sfs_id,
         },
     )
-    .await
-    .map_err(|e| {
-        tracing::error!("Failed to insert attachment SFS record: {}", e);
-        anyhow::anyhow!("Failed to insert attachment SFS record: {}", e)
-    })?;
+    .await?;
 
     Ok(sfs_response.id)
 }

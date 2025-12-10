@@ -44,7 +44,7 @@ pub async fn backfill_attachment(
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
-                source: e.context("Failed to fetch attachment data from Gmail"),
+                source: e.context("Failed to upload attachment"),
             })
         })?;
 
