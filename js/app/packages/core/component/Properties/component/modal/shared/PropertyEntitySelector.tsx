@@ -56,7 +56,7 @@ function getEntityTypePluralLabel(
     case 'COMPANY':
       return 'companies';
     case 'THREAD':
-      return 'threads';
+      return 'emails';
     case 'TASK':
       return 'tasks';
     default:
