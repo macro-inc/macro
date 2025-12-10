@@ -92,14 +92,14 @@
   --theme-write:     oklch(from var(--a0) l c 260deg);
   --theme-video:     oklch(from var(--a0) l c 277deg);
   --theme-note:      oklch(from var(--a0) l c 293deg);
-  --theme-code:      oklch(from var(--a0) l c 162deg);
+  --theme-code:      oklch(from var(--a0) l c 180deg);
   --theme-chat:      oklch(from var(--a0) l c 220deg);
   --theme-image:     oklch(from var(--a0) l c  95deg);
   --theme-html:      oklch(from var(--a0) l c  47deg);
   --theme-rss:       oklch(from var(--a0) l c 260deg);
   --theme-pdf:       oklch(from var(--a0) l c  25deg);
   --theme-comment:   oklch(from var(--a0) l c  90deg);
-  --theme-task:      oklch(from var(--a0) l c 330deg);
+  --theme-task:      oklch(from var(--a0) l c 150deg);
 
   --gutter-size: 8px;
   --transition: 0.2s;

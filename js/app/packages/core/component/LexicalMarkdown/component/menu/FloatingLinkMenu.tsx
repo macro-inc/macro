@@ -337,7 +337,7 @@ export function FloatingLinkMenu(props: { closePopup?: () => void }) {
       <Switch fallback={<div class="display-none">{props.children}</div>}>
         <Match when={linkInfo()?.linkRef !== undefined}>
           <div
-            class="p-2 fixed bg-menu top-0 left-0 text-sm z-action-menu ring ring-edge rounded-md shadow-lg min-w-80"
+            class="p-2 fixed bg-menu top-0 left-0 text-sm z-action-menu ring ring-edge min-w-100"
             use:floatWithElement={{
               element: () => linkInfo()?.linkRef,
               useBlockBoundary: true,
