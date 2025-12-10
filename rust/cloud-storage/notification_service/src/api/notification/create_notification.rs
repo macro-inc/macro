@@ -7,6 +7,7 @@ use axum::{
     response::{IntoResponse, Response},
 };
 use model::response::ErrorResponse;
+use model_entity::EntityType;
 use model_notifications::{
     Notification, NotificationEvent, NotificationEventType, RawNotification,
 };
@@ -33,7 +34,7 @@ pub async fn handler(
     let id = macro_uuid::generate_uuid_v7();
 
     // Parse event item type from string to EntityType
-    let event_item_type = req.event_item_type.parse().map_err(|e| {
+    let event_item_type: EntityType = req.event_item_type.parse().map_err(|e| {
         tracing::error!(error=?e, "invalid event item type");
         (
             StatusCode::BAD_REQUEST,
@@ -72,10 +73,7 @@ pub async fn handler(
 
     let notification = Notification {
         id,
-        notification_entity: model_notifications::NotificationEntity {
-            event_item_id: req.event_item_id,
-            event_item_type,
-        },
+        notification_entity: event_item_type.with_entity_string(req.event_item_id),
         service_sender: req.service_sender,
         sender_id: Some(user_context.user_id.clone()),
         temporal: Default::default(),
