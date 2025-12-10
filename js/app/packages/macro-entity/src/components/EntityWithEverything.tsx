@@ -134,6 +134,7 @@ function RowWrapper(
     classList?: Record<string, boolean>;
     enableHover?: boolean;
     showThreadBorder?: boolean;
+    blockNavigation?: boolean;
   }>
 ) {
   return (
@@ -146,11 +147,13 @@ function RowWrapper(
       }}
       onClick={(e) => {
         if (props.onClick) {
-          e.stopPropagation();
+          if (props.blockNavigation) {
+            e.stopPropagation();
+          }
           props.onClick(e);
         }
       }}
-      data-blocks-navigation
+      data-blocks-navigation={props.blockNavigation}
     >
       <Show when={props.showThreadBorder}>
         <ThreadBorder />
@@ -299,7 +302,10 @@ function ContentHitRow(props: {
   onClick: (e: EntityClickEvent, location?: SearchLocation) => void;
 }) {
   return (
-    <RowWrapper onClick={(e) => props.onClick(e, props.data.location)}>
+    <RowWrapper
+      blockNavigation
+      onClick={(e) => props.onClick(e, props.data.location)}
+    >
       <Show
         when={props.data.type === 'channel' && props.data}
         fallback={
