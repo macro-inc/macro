@@ -174,7 +174,7 @@ export type UnifiedListViewProps = {
   defaultFilterOptions?: Partial<FilterOptions>;
   defaultSortOptions?: Partial<SortOptions>;
   defaultDisplayOptions?: Partial<DisplayOptions>;
-  hideToolbar?: true;
+  hideToolbar?: boolean;
 };
 
 export function UnifiedListView(props: UnifiedListViewProps) {

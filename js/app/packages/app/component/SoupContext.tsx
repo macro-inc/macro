@@ -89,13 +89,16 @@ export type UnifiedListContext = {
   showHelpDrawer: Accessor<Set<string>>;
   setShowHelpDrawer: Setter<Set<string>>;
   actionRegistry: EntityActionRegistry;
+  isRenderedFromPreview: boolean;
 };
 
 const DEFAULT_VIEW_ID: DefaultView = 'signal';
 
 const DEFAULT_VIEW_IDS_SET = new Set(VIEWCONFIG_DEFAULTS_IDS);
 
-export function createSoupContext(): UnifiedListContext {
+export function createSoupContext(
+  props?: Pick<UnifiedListContext, 'isRenderedFromPreview'>
+): UnifiedListContext {
   const [selectedView, setSelectedView] = createSignal<ViewId>(DEFAULT_VIEW_ID);
   const [viewsDataStore, setViewDataStore_] = useAllViews({
     selectedViewSignal: [selectedView, setSelectedView],
@@ -133,6 +136,7 @@ export function createSoupContext(): UnifiedListContext {
     showHelpDrawer,
     setShowHelpDrawer,
     actionRegistry: createEntityActionRegistry(),
+    isRenderedFromPreview: props?.isRenderedFromPreview ?? false,
   };
 }
 
