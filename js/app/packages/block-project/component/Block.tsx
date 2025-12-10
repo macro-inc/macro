@@ -183,7 +183,6 @@ const Block: Component = () => {
                 selectedEntity={selectedEntity()}
                 orchestrator={orchestrator}
                 splitPanelContext={splitPanelContext}
-                isPreviewingProject={selectedEntity()?.type === 'project'}
               />
             </Show>
           </div>

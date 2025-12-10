@@ -10,6 +10,6 @@ export type DeepPartial<T> =
       ? { [P in keyof T]?: DeepPartial<T[P]> }
       : T;
 
-export type RemoveNullables<T> = {
+export type NonNullableFields<T> = {
   [K in keyof T]: NonNullable<T[K]>;
 };

@@ -2,14 +2,14 @@ import { BlockAliasContext } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { BlockOrchestrator } from '@core/orchestrator';
-import { RemoveNullables } from '@core/util/withRequired';
+import { NonNullableFields } from '@core/util/withRequired';
 import { EntityData, isTaskEntity } from '@macro-entity';
 import {
   Component,
-  createEffect,
   createMemo,
   createRenderEffect,
   createSignal,
+  onMount,
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -27,18 +27,15 @@ type PreviewPanel = {
   selectedEntity: EntityData | undefined;
   orchestrator: BlockOrchestrator;
   splitPanelContext: SplitPanelContextType;
-  /**
-   * Creates new SoupContext to scope context and hotkeys to preview branch
-   */
-  isPreviewingProject: boolean;
 };
 
-const PreviewPanelContent: Component<RemoveNullables<PreviewPanel>> = (
+const PreviewPanelContent: Component<NonNullableFields<PreviewPanel>> = (
   props
 ) => {
-  const [containerRef, setContainerRef] = createSignal<HTMLDivElement>();
+  let containerRef!: HTMLDivElement;
   let scopedSplitPanelContextType: SplitPanelContextType = {} as any;
-  if (props.isPreviewingProject) {
+
+  if (props.selectedEntity.type === 'project') {
     const splitPanelContext = useSplitPanelOrThrow();
     const unifiedListContext = createSoupContext({
       isRenderedFromPreview: true,
@@ -66,10 +63,8 @@ const PreviewPanelContent: Component<RemoveNullables<PreviewPanel>> = (
     scopedSplitPanelContextType.unifiedListContext = unifiedListContext;
     scopedSplitPanelContextType.previewState = [previewState, setPreviewState];
 
-    createEffect(() => {
-      if (containerRef()) {
-        attachHotKeys(containerRef()!);
-      }
+    onMount(() => {
+      attachHotKeys(containerRef);
     });
   }
 
@@ -120,7 +115,7 @@ const PreviewPanelContent: Component<RemoveNullables<PreviewPanel>> = (
       onPointerDown={() => {
         setInteractedWith(true);
       }}
-      ref={setContainerRef}
+      ref={containerRef}
     >
       <SplitPanelContext.Provider
         value={{
@@ -152,7 +147,6 @@ export const PreviewPanel: Component<PreviewPanel> = (props) => {
             selectedEntity={selectedEntity()}
             orchestrator={props.orchestrator}
             splitPanelContext={props.splitPanelContext}
-            isPreviewingProject={props.isPreviewingProject}
           />
         )}
       </Show>
