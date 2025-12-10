@@ -140,7 +140,7 @@ function RowWrapper(
     <div
       class="relative flex gap-1 items-center min-w-0 h-8 transition-all"
       classList={{
-        'hover:bg-hover/30 hover:opacity-90':
+        'hover:bg-hover/50 hover:opacity-85':
           props.enableHover ?? !!props.onClick,
         ...props.classList,
       }}
