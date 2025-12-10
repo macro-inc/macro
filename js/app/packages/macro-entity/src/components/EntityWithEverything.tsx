@@ -374,7 +374,7 @@ export function EntityWithEverything(
             <Show when={latestMessage()}>
               {(lastMessage) => (
                 <div class="truncate shrink grow opacity-60 flex items-center">
-                  {/* TODO (seamus): Channels endpoint does not return any information about attachments. Is we have an empty message, assume its attachments.*/}
+                  {/* TODO (seamus): Channels endpoint does not return any information about attachments. If we have an empty message, assume it's attachments.*/}
                   <Show
                     when={lastMessage().content.trim()}
                     fallback={
@@ -682,7 +682,7 @@ export function EntityWithEverything(
                     return '';
 
                   // TODO (seamus): Notifs endpoint does not return any information
-                  // about attachments. Is we have an empty message, assume its attachments.
+                  // about attachments. If we have an empty message, assume it's attachments.
                   return (
                     <Show
                       when={metadata.messageContent.trim()}
