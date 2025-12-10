@@ -7534,6 +7534,7 @@ dependencies = [
  "email_service_client",
  "futures",
  "http-body-util",
+ "indexmap 2.7.1",
  "item_filters",
  "macro_auth",
  "macro_cors",

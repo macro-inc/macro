@@ -7,6 +7,7 @@ use axum::{
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use indexmap::IndexMap;
 use model::{response::ErrorResponse, user::UserContext};
 use models_search::chat::{
     ChatMessageSearchResult, ChatSearchRequest, ChatSearchResponse, ChatSearchResponseItem,
@@ -98,8 +99,8 @@ pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::model::SearchHit>,
     chat_histories: HashMap<String, macro_db_client::chat::get::ChatHistoryInfo>,
 ) -> anyhow::Result<Vec<ChatSearchResponseItemWithMetadata>> {
-    // construct entity hit map of id -> vec<hits>
-    let entity_id_hit_map: HashMap<String, Vec<ChatMessageSearchResult>> = search_results
+    // construct entity hit map of id -> vec<hits> using IndexMap to preserve insertion order
+    let entity_id_hit_map: IndexMap<String, Vec<ChatMessageSearchResult>> = search_results
         .into_iter()
         .map(|hit| {
             let result = if let Some(SearchGotoContent::Chats(goto)) = hit.goto {
@@ -120,12 +121,12 @@ pub fn construct_search_result(
             };
             (hit.entity_id, result)
         })
-        .fold(HashMap::new(), |mut map, (entity_id, result)| {
+        .fold(IndexMap::new(), |mut map, (entity_id, result)| {
             map.entry(entity_id).or_insert_with(Vec::new).push(result);
             map
         });
 
-    // now construct the search results
+    // now construct the search results in the original search result order
     let result: Vec<ChatSearchResponseItemWithMetadata> = entity_id_hit_map
         .into_iter()
         .filter_map(|(entity_id, hits)| {

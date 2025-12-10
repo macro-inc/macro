@@ -375,3 +375,40 @@ fn test_chat_history_null_viewed_at() {
     );
     assert!(result[0].metadata.as_ref().unwrap().viewed_at.is_none());
 }
+
+#[test]
+fn test_sort_stability() {
+    let input = vec![
+        create_test_response("chat_3", "msg_3", Some(vec!["third".to_string()])),
+        create_test_response("chat_1", "msg_1", Some(vec!["first".to_string()])),
+        create_test_response("chat_5", "msg_5", Some(vec!["fifth".to_string()])),
+        create_test_response("chat_2", "msg_2", Some(vec!["second".to_string()])),
+        create_test_response("chat_4", "msg_4", Some(vec!["fourth".to_string()])),
+    ];
+
+    let mut chat_histories = HashMap::new();
+    for chat_id in ["chat_1", "chat_2", "chat_3", "chat_4", "chat_5"] {
+        chat_histories.insert(chat_id.to_string(), create_chat_history(chat_id));
+    }
+
+    let result1 = construct_search_result(input.clone(), chat_histories.clone()).unwrap();
+    let result2 = construct_search_result(input.clone(), chat_histories.clone()).unwrap();
+    let result3 = construct_search_result(input.clone(), chat_histories.clone()).unwrap();
+
+    assert_eq!(result1.len(), 5);
+    assert_eq!(result2.len(), 5);
+    assert_eq!(result3.len(), 5);
+
+    let ids1: Vec<String> = result1.iter().map(|r| r.extra.id.clone()).collect();
+    let ids2: Vec<String> = result2.iter().map(|r| r.extra.id.clone()).collect();
+    let ids3: Vec<String> = result3.iter().map(|r| r.extra.id.clone()).collect();
+
+    assert_eq!(ids1, ids2, "Results should be stable between runs");
+    assert_eq!(ids2, ids3, "Results should be stable between runs");
+
+    assert_eq!(
+        ids1,
+        vec!["chat_3", "chat_1", "chat_5", "chat_2", "chat_4"],
+        "Results should preserve original search result order"
+    );
+}
