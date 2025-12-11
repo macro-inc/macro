@@ -33,6 +33,7 @@ import {
 } from '../util/prepareEmailBody';
 import { AttachMenu } from './AttachMenu';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+import { useHasPaidAccess } from '@core/auth';
 
 false && fileDrop;
 
@@ -51,6 +52,8 @@ type ComposeEmailInputProps = {
 };
 
 export function ComposeEmailInput(props: ComposeEmailInputProps) {
+  const hasPaidAccess = useHasPaidAccess();
+
   const [editor, setEditor] = createSignal<LexicalEditor>();
 
   const [isDragging, setIsDragging] = createSignal<boolean>();
@@ -62,8 +65,6 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   const [content, setContent] = createSignal('');
 
   const panel = useSplitPanel();
-
-  const [userInfo] = useUserInfo();
 
   const focusSibling = (direction: 'next' | 'prev') => {
     const panelRef = panel?.panelRef();
@@ -121,7 +122,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
     const prepared = prepareEmailBody(
       editor(),
       undefined,
-      MACRO_EMAIL_SIGNATURE
+      !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
     );
     if (!prepared) return;
 
@@ -204,7 +205,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             editable={() => !props.disabled}
             placeholder="Use `@` to reference files"
             watermark={
-              userInfo()?.[1]?.licenseStatus ? (
+              !hasPaidAccess() ? (
                 <button type="button" class="hover:bg-hover" tabindex={-1}>
                   Sent with Macro
                 </button>

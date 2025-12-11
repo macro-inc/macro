@@ -86,6 +86,7 @@ import { AttachMenu } from './AttachMenu';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
 import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+import { useHasPaidAccess } from '@core/auth';
 
 false && fileDrop;
 
@@ -374,6 +375,8 @@ export function BaseInput(props: {
     });
   });
 
+  const hasPaidAccess = useHasPaidAccess();
+
   // Set up hotkey scope for the compose message component
   const [attachComposeHotkeys, composeHotkeyScope] =
     useHotkeyDOMScope('compose-message');
@@ -423,7 +426,7 @@ export function BaseInput(props: {
         replyType: effectiveReplyType(),
         replyingTo: props.replyingTo(),
       },
-      MACRO_EMAIL_SIGNATURE
+      !hasPaidAccess() ? MACRO_EMAIL_SIGNATURE : undefined
     );
     if (!prepared) {
       return;
