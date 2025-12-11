@@ -310,6 +310,11 @@ pub struct ThreadHistoryInfo {
     pub snippet: Option<String>,
     pub user_id: String,
     pub subject: Option<String>,
+    /// The sender of the latest email in the thread.
+    pub sender: String,
+    /// The pretty sender of the latest email in the thread.
+    /// This could be the sender's email if there is no contact name for the sender.
+    pub pretty_sender: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
