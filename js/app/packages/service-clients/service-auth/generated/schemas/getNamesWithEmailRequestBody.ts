@@ -4,6 +4,7 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
-import type { ABGroup } from './aBGroup';
 
-export type GetLegacyUserPermissionsResponseGroup = null | ABGroup;
+export interface GetNamesWithEmailRequestBody {
+  user_ids: string[];
+}

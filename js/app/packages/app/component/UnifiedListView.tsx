@@ -139,6 +139,7 @@ import {
   type SystemSortOption,
   VIEWCONFIG_BASE,
   VIEWCONFIG_DEFAULTS_IDS,
+  VIEWCONFIG_DEFAULTS_IDS_ENUM,
   type ViewConfigBase,
   type ViewData,
 } from './ViewConfig';
@@ -844,6 +845,12 @@ export function UnifiedListView(props: UnifiedListViewProps) {
               : [GARBAGE_UUID],
       },
       limit: props.defaultDisplayOptions?.limit ?? 100,
+      emailView: importantFilter()
+        ? 'important'
+        : view().id === VIEWCONFIG_DEFAULTS_IDS_ENUM.all
+          ? 'all'
+          : undefined,
+
       sort_method: sortType(),
     })
   );

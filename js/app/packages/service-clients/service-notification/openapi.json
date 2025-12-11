@@ -485,6 +485,33 @@
         }
       }
     },
+    "/user_notifications/bulk/undone": {
+      "patch": {
+        "tags": ["user_notification::bulk_mark_user_notification_undone"],
+        "summary": "Marks the user's notifications as undone.",
+        "operationId": "bulk_mark_user_notification_undone",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/NotificationBulkRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/EmptyResponse" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/user_notifications/item/bulk": {
       "post": {
         "tags": [
@@ -889,6 +916,7 @@
           "document",
           "project",
           "email",
+          "email_thread",
           "team"
         ]
       },
@@ -1030,7 +1058,7 @@
         "properties": {
           "notificationIds": {
             "type": "array",
-            "items": { "type": "string" },
+            "items": { "type": "string", "format": "uuid" },
             "description": "The ids of the notifications to handle"
           }
         }
