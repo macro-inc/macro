@@ -1,5 +1,6 @@
 /**
- * @file A plugin to enforce a single line only.
+ * @file A plugin allow editors to keep their previous selection when being
+ * programmatically focused by element.focus() api.
  */
 import { mergeRegister } from '@lexical/utils';
 import type { LexicalEditor } from 'lexical';
