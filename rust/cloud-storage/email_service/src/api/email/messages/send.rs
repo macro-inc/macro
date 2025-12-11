@@ -1,6 +1,5 @@
 use crate::api::context::ApiContext;
 use crate::api::email::validation::{self, ValidationError};
-use crate::util::gmail::send;
 use anyhow::Context;
 use axum::extract::State;
 use axum::http::StatusCode;
@@ -9,6 +8,7 @@ use axum::{Extension, Json};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use email_db_client::messages::insert::insert_message_to_send;
+use email_service::util::gmail::send;
 use model::response::ErrorResponse;
 use model::user::UserContext;
 use models_email::email::service::address::ContactInfo;

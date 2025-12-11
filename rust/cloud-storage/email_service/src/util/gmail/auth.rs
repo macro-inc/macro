@@ -1,9 +1,9 @@
-use crate::util::redis::RedisClient;
 use anyhow::Context;
 use authentication_service_client::AuthServiceClient;
 use axum::Json;
 use axum::http::StatusCode;
 use axum::response::{IntoResponse, Response};
+use crate::util::redis::RedisClient;
 use gmail_client::GmailClient;
 use model::response::ErrorResponse;
 use model::user::UserContext;

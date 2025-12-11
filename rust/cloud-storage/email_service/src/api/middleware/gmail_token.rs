@@ -3,7 +3,7 @@ use axum::{Extension, extract::Request, middleware::Next, response::Response};
 use model::user::UserContext;
 
 use crate::api::context::ApiContext;
-use crate::util::gmail::auth::fetch_gmail_token_usercontext_response;
+use email_service::util::gmail::auth::fetch_gmail_token_usercontext_response;
 
 pub(in crate::api) async fn attach_gmail_token(
     State(ctx): State<ApiContext>,

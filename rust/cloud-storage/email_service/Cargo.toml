@@ -21,6 +21,10 @@ path = "src/bin/backfill_gmail_attachments/backfill_gmail_attachments.rs"
 name = "backfill_search"
 path = "src/bin/backfill_search/backfill_search.rs"
 
+[[bin]]
+name = "pubsub_workers"
+path = "src/bin/pubsub_workers/pubsub_workers.rs"
+
 [features]
 attachment_upload = []
 connection_gateway = []

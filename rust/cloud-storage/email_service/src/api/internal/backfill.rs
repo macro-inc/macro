@@ -1,10 +1,11 @@
-use crate::{api::ApiContext, util::backfill::backfill_insights::backfill_email_insights};
+use crate::api::ApiContext;
 
 use axum::{
     extract::State,
     http::StatusCode,
     response::{IntoResponse, Json, Response},
 };
+use email_service::util::backfill::backfill_insights::backfill_email_insights;
 use model::insight_context::email_insights::BackfillEmailInsightsFilter;
 
 /// Internal endpoint to backfill insights from emails

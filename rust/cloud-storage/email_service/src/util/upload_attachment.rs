@@ -1,9 +1,9 @@
 use crate::pubsub::util::check_gmail_rate_limit;
-use crate::util::redis::RedisClient;
 use anyhow::{Context, anyhow};
 use base64::Engine;
 use base64::engine::general_purpose::STANDARD;
 use document_storage_service_client::DocumentStorageServiceClient;
+use crate::util::redis::RedisClient;
 use gmail_client::GmailClient;
 use macro_user_id::cowlike::ArcCowStr;
 use macro_user_id::user_id::MacroUserId;
@@ -42,8 +42,8 @@ pub async fn upload_attachment(
         GmailApiOperation::MessagesAttachmentsGet,
         true,
     )
-    .await
-    .context("Rate limit check failed")?;
+        .await
+        .context("Rate limit check failed")?;
 
     // 2. Fetch the raw attachment data from Gmail.
     let attachment_data = fetch_gmail_attachment_data(
@@ -51,7 +51,7 @@ pub async fn upload_attachment(
         ctx.access_token,
         &attachment_args.attachment_metadata,
     )
-    .await?;
+        .await?;
 
     // 3. Calculate hashes required for the upload process.
     let (hex_hash, base64_hash) = calculate_hashes(&attachment_data);
@@ -69,7 +69,7 @@ pub async fn upload_attachment(
         &file_type,
         attachment_args.backfill,
     )
-    .await?;
+        .await?;
 
     // 6. Upload the attachment data to the presigned URL.
     upload_data_to_presigned_url(&dss_response, attachment_data, &base64_hash).await?;

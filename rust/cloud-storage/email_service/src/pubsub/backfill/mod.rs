@@ -7,4 +7,4 @@ mod init;
 mod list_threads;
 mod process;
 mod update_metadata;
-pub(crate) mod worker;
+pub mod worker;
