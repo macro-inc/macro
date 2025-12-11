@@ -453,15 +453,11 @@ export function MessageList(props: MessageListProps) {
     return viewThreads[lastTopLevelId];
   });
 
+  // scroll to bottom on change to last message state (including new messages)
   createEffect(
     on([lastMessageReaction, lastMessageThread], () => {
       if (!isNearBottom()) return;
-      if (
-        lastMessageReaction() ||
-        (lastMessageThread() && lastMessageThread()?.length > 0)
-      ) {
-        scrollToBottomOrTarget();
-      }
+      scrollToBottomOrTarget({ onlyBottom: true });
     })
   );
 
