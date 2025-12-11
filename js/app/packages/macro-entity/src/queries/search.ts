@@ -272,6 +272,7 @@ const useMapSearchResponseItem = () => {
           updatedAt: result.metadata?.updated_at,
           channelType: result.channel_type as ChannelType,
           interactedAt: result.metadata?.interacted_at ?? undefined,
+          particpantIds: channelWithLatest?.participants?.map((p) => p.user_id),
           search,
         };
       }
