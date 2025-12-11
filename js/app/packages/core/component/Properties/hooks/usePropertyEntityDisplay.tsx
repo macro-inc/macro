@@ -228,12 +228,16 @@ export function usePropertyEntityDisplay(
     if (!messageId) return undefined;
 
     const type = entityType().toUpperCase();
-    // email_message_id is the URL param for email blocks
-    if (type === 'THREAD') {
-      return { email_message_id: messageId };
+    switch (type) {
+      case 'THREAD':
+        return { email_message_id: messageId };
+      case 'CHANNEL':
+        return { channel_message_id: messageId };
+      case 'CHAT':
+        return { message_id: messageId };
+      default:
+        return undefined;
     }
-    // TODO: Add support for CHANNEL and CHAT message params if needed
-    return undefined;
   });
 
   return {
