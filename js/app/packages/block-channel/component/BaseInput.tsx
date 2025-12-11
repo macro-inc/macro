@@ -545,7 +545,7 @@ export function BaseInput(props: BaseInputProps) {
           >
             <FormatIcon width={20} height={20} />
           </ActionButton>
-          <Show when={props.onEmptyBlur}>
+          <Show when={props.isReplyInput}>
             <ActionButton
               tooltip="Delete reply"
               onClick={(e) => {
