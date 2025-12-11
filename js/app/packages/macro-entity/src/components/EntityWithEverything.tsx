@@ -1,3 +1,4 @@
+import { isSea } from 'node:sea';
 import { EntityIcon } from '@core/component/EntityIcon';
 import type { Property } from '@core/component/Properties/types';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
@@ -499,10 +500,17 @@ export function EntityWithEverything(
         return `${names[0]} .. ${names[names.length - 2]}, ${names[names.length - 1]}`;
       };
 
+      const isSearch = () => isSearchEntity(props.entity);
+
       return (
         <div class="flex gap-1 items-center text-sm min-w-0 w-full truncate overflow-hidden">
           {/* sometimes senderName and senderEmail are the same */}
-          <div class="flex w-[20cqw] gap-2 font-semibold shrink-0">
+          <div
+            class="flex gap-2 font-semibold shrink-0"
+            classList={{
+              'w-[20cqw]': !isSearch(),
+            }}
+          >
             {/* Sender Name */}
             <div class="truncate">
               {displayedNames() ??
@@ -523,7 +531,14 @@ export function EntityWithEverything(
           {/* Subject */}
           {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
           <div class="flex items-center w-full gap-2 flex-1 min-w-0">
-            <div class="font-medium shrink-0 truncate">
+            <div
+              class="shrink-0 truncate"
+              classList={{
+                'font-regular text-ink-disabled': isSearch(),
+                'font-medium': !isSearch(),
+              }}
+            >
+              <Show when={isSearch()}> – </Show>
               <Show when={searchHighlightName()} fallback={props.entity.name}>
                 {(name) => (
                   <StaticMarkdown
