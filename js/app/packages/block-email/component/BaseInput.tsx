@@ -85,6 +85,7 @@ import { getReplyTypeFromDraft } from '../util/replyType';
 import { AttachMenu } from './AttachMenu';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
+import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 
 false && fileDrop;
 
@@ -416,10 +417,14 @@ export function BaseInput(props: {
       linkId = maybeFallbackLinks[1].links[0].id;
     }
 
-    const prepared = prepareEmailBody(editor(), {
-      replyType: effectiveReplyType(),
-      replyingTo: props.replyingTo(),
-    });
+    const prepared = prepareEmailBody(
+      editor(),
+      {
+        replyType: effectiveReplyType(),
+        replyingTo: props.replyingTo(),
+      },
+      MACRO_EMAIL_SIGNATURE
+    );
     if (!prepared) {
       return;
     }
