@@ -1,15 +1,18 @@
 import { useSplitPanel } from '@app/component/split-layout/layoutUtils';
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
+import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+import { useHasPaidAccess } from '@core/auth';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
 import { IconButton } from '@core/component/IconButton';
 import { MarkdownTextarea } from '@core/component/LexicalMarkdown/component/core/MarkdownTextarea';
+import { usePaywallState } from '@core/constant/PaywallState';
 import { fileDrop } from '@core/directive/fileDrop';
 import TextAa from '@icon/regular/text-aa.svg';
 import type { DocumentMentionInfo } from '@lexical-core';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import { useUserId, useUserInfo } from '@service-gql/client';
+import { useUserId } from '@service-gql/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
@@ -32,9 +35,6 @@ import {
   prepareEmailBody,
 } from '../util/prepareEmailBody';
 import { AttachMenu } from './AttachMenu';
-import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
-import { useHasPaidAccess } from '@core/auth';
-import { usePaywallState } from '@core/constant/PaywallState';
 
 false && fileDrop;
 

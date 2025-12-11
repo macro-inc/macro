@@ -1,4 +1,6 @@
 import { FormatRibbon } from '@block-channel/component/FormatRibbon';
+import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
+import { useHasPaidAccess } from '@core/auth';
 import { useBlockId } from '@core/block';
 import { BrightJoins } from '@core/component/BrightJoins';
 import { FileDropOverlay } from '@core/component/FileDropOverlay';
@@ -85,8 +87,6 @@ import { getReplyTypeFromDraft } from '../util/replyType';
 import { AttachMenu } from './AttachMenu';
 import { type EmailRecipient, useEmailContext } from './EmailContext';
 import { getOrInitEmailFormContext } from './EmailFormContext';
-import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
-import { useHasPaidAccess } from '@core/auth';
 
 false && fileDrop;
 

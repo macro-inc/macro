@@ -1,3 +1,7 @@
+import type {
+  WatermarkDecoratorProps,
+  WatermarkNode,
+} from '@lexical-core/nodes/WatermarkNode';
 import type { Klass, LexicalNode } from 'lexical';
 import type {
   ContactMentionDecoratorProps,
@@ -37,10 +41,6 @@ import type {
   UserMentionNode,
 } from './nodes/UserMentionNode';
 import type { VideoDecoratorProps, VideoNode } from './nodes/VideoNode';
-import type {
-  WatermarkDecoratorProps,
-  WatermarkNode,
-} from '@lexical-core/nodes/WatermarkNode';
 
 // Generic component type to be overridden by solid-js on the front end
 // and nothing on the backend.

@@ -20,7 +20,7 @@ import {
   normalizedLanguage,
   SupportedNodeTypes,
   type UserMentionNode,
-  WatermarkNode,
+  type WatermarkNode,
 } from '@lexical-core';
 import {
   $getRoot,
