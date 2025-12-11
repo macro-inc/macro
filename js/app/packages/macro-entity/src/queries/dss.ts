@@ -5,6 +5,7 @@ import {
   renameItem,
 } from '@core/component/FileList/itemOperations';
 import { itemToSafeName } from '@core/constant/allBlocks';
+import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import type { ItemType } from '@service-storage/client';
 import type {
   PostItemsSoupParams,
@@ -461,69 +462,80 @@ export function createBulkDeleteDssItemsMutation() {
   }));
 }
 
-export function createRenameDssEntityMutation() {
+type RenameDssEntityMutationVariables = {
+  entity: { id: string; type: EntityData['type']; name: string };
+  newName: string;
+};
+
+type RenameDssEntityMutationData = {
+  success: boolean;
+};
+
+/**
+ * Mutation to mark a thread as seen.
+ */
+export function createRenameDssEntityMutation(
+  callbacks?: MutationCallbacks<
+    RenameDssEntityMutationData,
+    Error,
+    RenameDssEntityMutationVariables
+  >
+) {
   return useMutation(() => ({
-    mutationFn: async ({
-      entity: { id, type },
-      newName,
-    }: {
-      entity: EntityData & { name: string };
-      newName: string;
-    }) => {
+    mutationFn: async (params: RenameDssEntityMutationVariables) => {
       const success = await renameItem({
-        itemType: type as ItemType,
-        id,
-        newName,
+        id: params.entity.id,
+        itemType: params.entity.type,
+        newName: params.newName,
       });
 
       return { success };
     },
-    onMutate: async ({
-      entity: { id },
-      newName,
-    }: {
-      entity: EntityData & { name: string };
-      newName: string;
-    }) => {
-      queryClient.cancelQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
-      });
-      function updateEntityNameInQueryData(
-        prev: { pages: { items: EntityData[] }[] } | undefined,
-        id: string,
-        newName: string
-      ): { pages: { items: EntityData[] }[] } | undefined {
-        if (!prev) return prev;
-        const pages = prev.pages.map((page) => ({
-          ...page,
-          items: page.items.map((item) =>
-            item.id === id ? { ...item, name: newName } : item
-          ),
-        }));
-        return {
-          ...prev,
-          pages,
-        };
-      }
+    ...withCallbacks<
+      RenameDssEntityMutationData,
+      Error,
+      RenameDssEntityMutationVariables
+    >(
+      {
+        onMutate: async ({ entity: { id }, newName }) => {
+          queryClient.cancelQueries({
+            queryKey: queryKeys.dss({ infinite: true }),
+          });
+          function updateEntityNameInQueryData(
+            prev: { pages: { items: EntityData[] }[] } | undefined,
+            id: string,
+            newName: string
+          ) {
+            if (!prev) return prev;
+            const pages = prev.pages.map((page) => ({
+              ...page,
+              items: page.items.map((item) =>
+                item.id === id ? { ...item, name: newName } : item
+              ),
+            }));
+            return {
+              ...prev,
+              pages,
+            };
+          }
 
-      queryClient.setQueriesData(
-        { queryKey: queryKeys.dss({ infinite: true }) },
-        (prev) =>
-          updateEntityNameInQueryData(
-            prev as { pages: { items: EntityData[] }[] } | undefined,
-            id,
-            newName
-          )
-      );
-    },
-    onSettled: (data, error, { entity: { id } }) => {
-      if (data?.success === false || error)
-        console.error(`Failed to rename dss item ${id}`, data, error);
+          queryClient.setQueriesData(
+            { queryKey: queryKeys.dss({ infinite: true }) },
+            (prev: { pages: { items: EntityData[] }[] } | undefined) =>
+              updateEntityNameInQueryData(prev, id, newName)
+          );
+        },
+        onSettled: (data, error, { entity: { id } }) => {
+          if (data?.success === false || error)
+            console.error(`Failed to rename dss item ${id}`, data, error);
 
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.dss({ infinite: true }),
-      });
-    },
+          queryClient.invalidateQueries({
+            queryKey: queryKeys.dss({ infinite: true }),
+          });
+        },
+      },
+      callbacks
+    ),
   }));
 }
 
