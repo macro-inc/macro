@@ -1,11 +1,11 @@
-import { BlockAliasContext } from '@core/block';
+import type { BlockAliasContext } from '@core/block';
 import { fileTypeToResolvedBlockName } from '@core/constant/allBlocks';
 import { useHotkeyDOMScope } from '@core/hotkey/hotkeys';
-import { BlockOrchestrator } from '@core/orchestrator';
-import { NonNullableFields } from '@core/util/withRequired';
-import { EntityData, isTaskEntity } from '@macro-entity';
+import type { BlockOrchestrator } from '@core/orchestrator';
+import type { NonNullableFields } from '@core/util/withRequired';
+import { type EntityData, isTaskEntity } from '@macro-entity';
 import {
-  Component,
+  type Component,
   createMemo,
   createRenderEffect,
   createSignal,
@@ -19,7 +19,7 @@ import {
 } from './SoupContext';
 import {
   SplitPanelContext,
-  SplitPanelContextType,
+  type SplitPanelContextType,
 } from './split-layout/context';
 import { useSplitPanelOrThrow } from './split-layout/layoutUtils';
 
