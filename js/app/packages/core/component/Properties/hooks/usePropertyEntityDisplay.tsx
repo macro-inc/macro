@@ -194,6 +194,11 @@ export function usePropertyEntityDisplay(
       return 'task';
     }
 
+    // Threads route to email block
+    if (type === 'THREAD') {
+      return 'email';
+    }
+
     // For documents, get the file type from preview
     if (type === 'DOCUMENT') {
       const previewItem = preview();
