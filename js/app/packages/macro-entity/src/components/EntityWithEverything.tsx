@@ -3,7 +3,6 @@ import type { Property } from '@core/component/Properties/types';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { TOKENS } from '@core/hotkey/tokens';
 import { matches } from '@core/util/match';
-import ArrowDownRight from '@icon/regular/arrow-elbow-down-right.svg';
 import CheckIcon from '@icon/regular/check.svg';
 import { tryToTypedNotification } from '@notifications';
 import { useEmail, useUserId } from '@service-gql/client';
