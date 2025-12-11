@@ -3,8 +3,8 @@ import type { Component } from 'solid-js';
 
 export const Watermark: Component<WatermarkDecoratorProps> = (props) => {
   return (
-    <div class="select-none" inert onClick={() => console.log('Press')}>
+    <span class="select-none macro-watermark-node" inert>
       {props.content}
-    </div>
+    </span>
   );
 };
