@@ -138,6 +138,11 @@ export class WatermarkNode extends DecoratorNode<
   // To prevent the node from being removed during editing
   remove(): void {}
 
+  // To manually remove
+  forceRemove(): void {
+    super.remove();
+  }
+
   decorate(_: LexicalEditor, config: EditorConfig) {
     const decorator = getDecorator<WatermarkNode>(WatermarkNode);
     if (decorator) {

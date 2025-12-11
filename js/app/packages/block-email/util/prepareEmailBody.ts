@@ -7,6 +7,7 @@ import {
   $createHtmlRenderNode,
   $createWatermarkNode,
   $isClassedBlockNode,
+  WatermarkNode,
   type ClassedBlockNode,
   type DocumentMentionInfo,
 } from '@lexical-core';
@@ -343,19 +344,27 @@ export function prepareEmailBody(
 } | null {
   if (!editor) return null;
 
+  let watermark: WatermarkNode;
+
   if (withSignature) {
     editor.update(() => {
-      const wantermark = $createWatermarkNode({ content: withSignature });
+      watermark = $createWatermarkNode({ content: withSignature });
 
       const root = $getRoot();
 
-      root.getLastChild()?.insertAfter(wantermark);
+      root.getLastChild()?.insertAfter(watermark);
     });
   }
 
   const generatedHtml = editor.read(() => {
     return $generateHtmlFromNodes(editor);
   });
+
+  if (withSignature) {
+    editor.update(() => {
+      watermark.forceRemove();
+    });
+  }
 
   const parsed = new DOMParser().parseFromString(generatedHtml, 'text/html');
 
