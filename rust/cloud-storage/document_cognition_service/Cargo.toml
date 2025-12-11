@@ -10,7 +10,7 @@ name = "document_cognition_service"
 path = "src/main.rs"
 
 [[bin]]
-name = "backfill_search"
+name = "backfill_dcs_search"
 path = "src/bin/backfill_search.rs"
 
 [features]
