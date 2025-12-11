@@ -199,8 +199,8 @@ export function MessageList(props: MessageListProps) {
    * @returns
    */
   const scrollToBottomOrTarget = debounce(
-    (params?: { forceBottom?: boolean }) => {
-      const { forceBottom } = params || { forceBottom: false };
+    (params: { forceBottom?: boolean } = {}) => {
+      const { forceBottom } = params;
       const timeStamp = Date.now();
       const delta = timeStamp - lastTargetMessageTimestamp();
       const target = props.targetMessage();
