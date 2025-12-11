@@ -32,7 +32,6 @@ import {
   type ItemMention,
   keyboardFocusPlugin,
   mentionsPlugin,
-  registerRootEventListener,
   type SelectionData,
   selectionDataPlugin,
   tabIndentationPlugin,

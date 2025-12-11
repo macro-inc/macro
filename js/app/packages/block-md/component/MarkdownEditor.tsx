@@ -151,7 +151,6 @@ import {
   autoRegister,
   lazyRegister,
   registerInternalLayoutShiftListener,
-  registerRootEventListener,
 } from 'core/component/LexicalMarkdown/plugins/shared/utils';
 import { createMethodRegistration } from 'core/orchestrator';
 import {
@@ -766,6 +765,10 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       blockBottom - mountRef.getBoundingClientRect().bottom - 40;
     setClickTargetHeight(Math.max(targetHeight, EDITOR_PADDING_BOTTOM));
   };
+
+  autoRegister(
+    registerInternalLayoutShiftListener(editor, observeClickTargetHeight)
+  );
 
   onMount(() => {
     setMdStore('selection', lexicalWrapper.selection);
