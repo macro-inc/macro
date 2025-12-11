@@ -196,6 +196,13 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
             class="text-sm break-words text-ink"
             editable={() => !props.disabled}
             placeholder="Use `@` to reference files"
+            watermark={
+              userInfo()?.[1]?.licenseStatus ? (
+                <button type="button" class="hover:bg-hover" tabindex={-1}>
+                  Sent with Macro
+                </button>
+              ) : undefined
+            }
             onChange={setContent}
             onFocusLeaveStart={(e) => {
               e.preventDefault();
