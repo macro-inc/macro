@@ -1,8 +1,8 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { Queue } from '@resources';
-import { config, getMacroApiToken, stack } from '@shared';
-import { get_coparse_api_vpc } from '@vpc';
+import { Queue } from '../../packages/resources';
+import { config, getMacroApiToken, stack } from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
 import { InsightService } from './service';
 
 const project = 'insight-service';

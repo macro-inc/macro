@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { BASE_DOMAIN, stack } from '@shared';
+import { BASE_DOMAIN, stack } from '../../shared';
 import type { ServiceLoadBalancer } from './load_balancer';
 export class ServiceRoute extends pulumi.ComponentResource {
   public readonly domainName: string;
