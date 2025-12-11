@@ -28,6 +28,7 @@
           cargo-lambda
           cargo-deny
           cargo-nextest
+          bacon
           pkg-config
           just
           just-lsp
