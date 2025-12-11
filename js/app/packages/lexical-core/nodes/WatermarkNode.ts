@@ -101,7 +101,6 @@ export class WatermarkNode extends DecoratorNode<
   static importDOM(): DOMConversionMap<HTMLSpanElement> | null {
     return {
       span: (domNode: HTMLSpanElement) => {
-        console.log(domNode);
         if (!domNode.hasAttribute('data-watermark')) {
           return null;
         }
