@@ -87,7 +87,6 @@ function ImageAttachment(props: {
       <ImagePreview
         id={props.attachment.attachmentId}
         variant="small"
-        isCurrentUser={true}
         isDss={isDssImage(props.attachment)}
         onError={(e) => {
           console.error('Failed to load image', e);
