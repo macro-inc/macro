@@ -1898,7 +1898,12 @@ function SearchBar(props: {
             <LoadingSpinner class="w-4 h-4 text-ink-muted animate-spin shrink-0" />
           }
         >
-          <SearchIcon class="w-4 h-4 text-ink-muted shrink-0" />
+          <SearchIcon
+            class="w-4 h-4 text-ink-muted shrink-0"
+            onClick={() => {
+              inputRef?.focus();
+            }}
+          />
         </Show>
         <input
           ref={inputRef}
