@@ -49,8 +49,7 @@ pub async fn add_attachments_to_message(
         &heights as &[Option<i32>]
     )
         .fetch_all(db)
-        .await
-        .context("unable to create attachments")?;
+        .await?;
 
     Ok(created_attachments)
 }
