@@ -58,9 +58,7 @@ export const useGetChatAttachmentInfo = () => {
   const { channels } = useChannelsContext();
   const emails = useEmails();
 
-  const getDocumentAttachment = ({
-    itemId: id,
-  }: ItemMention): Attachment | undefined => {
+  const getDocumentAttachment = (id: string): Attachment | undefined => {
     const item = history().find((item) => item.id === id);
     if (!item) return;
     if (item.type !== 'document') return;
@@ -122,9 +120,8 @@ export const useGetChatAttachmentInfo = () => {
   const mentionToAttachment = (
     mention: ItemMention
   ): Attachment | undefined => {
-    console.log('mention -> attachment', mention);
     if (mention.itemType === 'document') {
-      return getDocumentAttachment(mention);
+      return getDocumentAttachment(mention.itemId);
     } else if (mention.itemType === 'channel') {
       return getChannelAttachment(mention);
     } else if (mention.itemType === 'email') {
