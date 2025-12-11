@@ -245,7 +245,7 @@ function NotificationRow(props: {
     if (
       !metadata ||
       !('messageContent' in metadata) ||
-      !metadata.messageContent
+      metadata.messageContent === undefined
     )
       return '';
 
