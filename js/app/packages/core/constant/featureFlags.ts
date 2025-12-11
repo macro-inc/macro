@@ -132,4 +132,4 @@ export const ENABLE_CUSTOM_CURSOR_TEXT_GLYPH_DETECTION = true;
 
 export const ENABLE_CREATE_TASK = DEV_MODE_ENV;
 
-export const ENABLE_TASKS = false && DEV_MODE_ENV;
+export const ENABLE_TASKS_TABS = DEV_MODE_ENV;

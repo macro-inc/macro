@@ -1,4 +1,4 @@
-import { ENABLE_TASKS } from '../constant/featureFlags';
+import { ENABLE_TASKS_TABS } from '../constant/featureFlags';
 
 export const DEFAULT_VIEWS = [
   'signal',

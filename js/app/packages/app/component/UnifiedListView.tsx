@@ -22,7 +22,7 @@ import {
 import {
   ENABLE_PROPERTY_DISPLAY_CONTROL,
   ENABLE_SOUP_FROM_FILTER,
-  ENABLE_TASKS,
+  ENABLE_TASKS_TABS,
 } from '@core/constant/featureFlags';
 import { useEmailLinksStatus } from '@core/email-link';
 import { registerHotkey } from '@core/hotkey/hotkeys';
@@ -1317,7 +1317,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
                         setFilter={setEntityTypeFilter}
                         type="channel"
                       />
-                      <Show when={ENABLE_TASKS}>
+                      <Show when={ENABLE_TASKS_TABS}>
                         <EntityTypeToggle
                           filter={entityTypeFilter}
                           setFilter={setEntityTypeFilter}

@@ -1,4 +1,4 @@
-import { ENABLE_TASKS } from '@core/constant/featureFlags';
+import { ENABLE_TASKS_TABS } from '@core/constant/featureFlags';
 import {
   DEFAULT_VIEWS,
   type DefaultView,
@@ -272,7 +272,7 @@ const ALL_VIEWCONFIG_DEFAULTS = {
 
 export const VIEWCONFIG_DEFAULTS = Object.fromEntries(
   Object.entries(ALL_VIEWCONFIG_DEFAULTS).filter(([key]) => {
-    if (key === 'tasks') return ENABLE_TASKS;
+    if (key === 'tasks') return ENABLE_TASKS_TABS;
     return DEFAULT_VIEWS.includes(key as DefaultView);
   })
 ) as Record<DefaultView, Omit<ViewConfigEnhanced, 'id'>>;

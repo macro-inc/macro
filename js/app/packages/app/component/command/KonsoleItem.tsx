@@ -11,7 +11,7 @@ import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import {
   ENABLE_GMAIL_BASED_CONTACTS,
-  ENABLE_TASKS,
+  ENABLE_TASKS_TABS,
 } from '@core/constant/featureFlags';
 import { HotkeyTags } from '@core/hotkey/constants';
 import {
@@ -108,7 +108,7 @@ const DEFAULT_CATEGORIES = [
   { name: 'Channels', visible: true },
   { name: 'DMs', visible: true },
   { name: 'Notes', visible: true },
-  ...(ENABLE_TASKS ? [{ name: 'Tasks', visible: true }] : []),
+  { name: 'Tasks', visible: ENABLE_TASKS_TABS },
   { name: 'Documents', visible: true },
   { name: 'Chats', visible: true },
   { name: 'Folders', visible: true },
