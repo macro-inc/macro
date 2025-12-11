@@ -11,6 +11,7 @@ export const blockNamesWithLocations = [
   'canvas',
   'channel',
   'md',
+  'email',
 ] as const;
 export type BlockNameWithLocations = (typeof blockNamesWithLocations)[number];
 

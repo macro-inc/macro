@@ -10,6 +10,7 @@ type EntityValueDisplayProps = ParentProps<{
   property: Property;
   entityId: string;
   entityType: EntityType;
+  specificMessageId?: string | null;
   canEdit?: boolean;
   onRemove?: () => void;
   isSaving?: boolean;
@@ -18,9 +19,12 @@ type EntityValueDisplayProps = ParentProps<{
 export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
   const [isHovered, setIsHovered] = createSignal(false);
 
-  const { name, icon, blockOrFileType } = usePropertyEntityDisplay(
+  const { name, icon, blockOrFileType, linkParams } = usePropertyEntityDisplay(
     () => props.entityId,
-    () => props.entityType
+    () => props.entityType,
+    {
+      specificMessageId: () => props.specificMessageId,
+    }
   );
 
   const content = (
@@ -33,7 +37,11 @@ export const EntityIcon: Component<EntityValueDisplayProps> = (props) => {
   const innerContent = (
     <Show when={blockOrFileType()} fallback={props.children ?? content}>
       {(linkType) => (
-        <BlockLink blockOrFileName={linkType()} id={props.entityId}>
+        <BlockLink
+          blockOrFileName={linkType()}
+          id={props.entityId}
+          params={linkParams()}
+        >
           {props.children ?? content}
         </BlockLink>
       )}
