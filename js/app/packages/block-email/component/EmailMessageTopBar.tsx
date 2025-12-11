@@ -25,7 +25,7 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
   return (
     <div
       class="pr-2 font-mono"
-      onPointerDown={(e) => {
+      onClick={(e) => {
         if (props.message.db_id) {
           props.setFocusedMessageId(props.message.db_id);
         }
@@ -33,9 +33,11 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
           (e.target as Element).localName === 'button' ||
           (e.target as Element).localName === 'svg' ||
           (e.target as Element).localName === 'path' ||
-          (e.target as Element).tagName === 'SPAN'
-        )
+          (e.target as Element).tagName === 'SPAN' ||
+          (e.target as Element).closest('[role="tooltip"]')
+        ) {
           return;
+        }
         if (props.isBodyExpanded() && props.message.db_id) {
           props.setExpandedMessageBodyIds(props.message.db_id, false);
         } else if (props.message.db_id) {
@@ -48,14 +50,14 @@ export function EmailMessageTopBar(props: EmailMessageTopBarProps) {
         {/* Name and Email */}
         <div class="shrink-1 min-w-0 flex flex-row items-center text-sm gap-2">
           {/* Sender Name */}
-          <div class="truncate text-ink-muted">
+          <div class="truncate text-ink-muted select-tex cursor-text">
             {props.message.from?.name ?? props.message.from?.email}
           </div>
           {/* Sender Email */}
           <Show when={props.isBodyExpanded() && props.message.from?.name}>
             <div class="truncate flex-1 min-w-0 text-ink-muted text-xs">
               &lt;
-              <span class="text-accent-ink select-text">
+              <span class="text-accent-ink select-text cursor-text">
                 {props.message.from?.email}
               </span>
               &gt;
