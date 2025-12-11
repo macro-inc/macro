@@ -46,7 +46,7 @@ export class WatermarkNode extends DecoratorNode<
   }
 
   isKeyboardSelectable(): boolean {
-    return true;
+    return false;
   }
 
   static clone(node: WatermarkNode) {
@@ -120,12 +120,6 @@ export class WatermarkNode extends DecoratorNode<
       },
     };
   }
-  getNextSibling<T extends LexicalNode>(): T | null {
-    return null;
-  }
-  getNextSiblings<T extends LexicalNode>(): Array<T> {
-    return [];
-  }
 
   exportDOM() {
     const element = document.createElement('span');
@@ -141,15 +135,8 @@ export class WatermarkNode extends DecoratorNode<
     return this.__content;
   }
 
-  getSearchText(): string {
-    return '';
-  }
-
+  // To prevent the node from being removed during editing
   remove(): void {}
-
-  insertAfter(nodeToInsert: LexicalNode): LexicalNode {
-    return nodeToInsert.insertBefore(this);
-  }
 
   decorate(_: LexicalEditor, config: EditorConfig) {
     const decorator = getDecorator<WatermarkNode>(WatermarkNode);
