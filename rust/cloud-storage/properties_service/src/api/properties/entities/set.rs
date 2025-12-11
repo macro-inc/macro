@@ -229,7 +229,7 @@ fn convert_property_value_to_jsonb(value: &SetPropertyValue) -> Option<PropertyV
             PropertyValue::EntityRef(vec![EntityReference {
                 entity_type: reference.entity_type,
                 entity_id: reference.entity_id.clone(),
-                specific_message_id: reference.specific_message_id.clone(),
+                specific_message_id: reference.specific_message_id,
             }])
         }
 
@@ -244,7 +244,7 @@ fn convert_property_value_to_jsonb(value: &SetPropertyValue) -> Option<PropertyV
                 .map(|ref_| EntityReference {
                     entity_type: ref_.entity_type,
                     entity_id: ref_.entity_id.clone(),
-                    specific_message_id: ref_.specific_message_id.clone(),
+                    specific_message_id: ref_.specific_message_id,
                 })
                 .collect();
 
