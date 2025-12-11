@@ -19,7 +19,6 @@ import {
 } from '@notifications';
 import { emailClient } from '@service-email/client';
 import stringify from 'json-stable-stringify';
-import { P } from 'ts-pattern';
 import { queryClient } from '../../macro-entity/src/queries/client';
 import type { UnifiedListContext } from './SoupContext';
 import { noiseFilter, signalFilter } from './soupFilters';
