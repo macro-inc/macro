@@ -4,9 +4,9 @@ import * as aws from '@pulumi/aws';
 import type * as awsx from '@pulumi/awsx';
 import type { Input, Output } from '@pulumi/pulumi';
 import * as pulumi from '@pulumi/pulumi';
-import { serviceLoadBalancer as createServiceLoadBalancer } from '@resources/load_balancer';
-import { stack } from '@shared';
-import { COPARSE_API_VPC } from '@vpc';
+import { serviceLoadBalancer as createServiceLoadBalancer } from '../../resources';
+import { stack } from '../../shared';
+import { COPARSE_API_VPC } from '../../vpc';
 
 export class ServiceLoadBalancer extends pulumi.ComponentResource {
   public readonly serviceSg: aws.ec2.SecurityGroup;
