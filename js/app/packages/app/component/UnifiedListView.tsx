@@ -51,7 +51,6 @@ import {
   type EntityFilter,
   type ExpandedEntityType,
   importantFilterFn,
-  isSearchEntity,
   isTaskEntity,
   notDoneFilterFn,
   type SortOption,

@@ -252,9 +252,7 @@ function NotificationRow(props: {
     return (
       <Show
         when={metadata.messageContent.trim()}
-        fallback={
-          <span class="italic text-ink-disabled">Attached items</span>
-        }
+        fallback={<span class="italic text-ink-disabled">Attached items</span>}
       >
         {(content) => (
           <StaticMarkdown
