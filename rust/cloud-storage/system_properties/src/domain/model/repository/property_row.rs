@@ -29,7 +29,7 @@ impl PropertyRow {
         property_definition_id: Uuid,
         ref_type: EntityType,
         ref_ids: Vec<String>,
-        specific_message_id: Option<String>,
+        specific_message_id: Option<Uuid>,
     ) -> Self {
         let refs: Vec<serde_json::Value> = ref_ids
             .into_iter()

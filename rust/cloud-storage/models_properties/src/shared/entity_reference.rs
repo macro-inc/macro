@@ -14,7 +14,7 @@ pub struct EntityReference {
     /// For CHANNEL, CHAT, THREAD entity types - optional specific message ID.
     /// This allows referencing a specific message within a thread/channel/chat.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub specific_message_id: Option<String>,
+    pub specific_message_id: Option<Uuid>,
 }
 
 impl EntityReference {
@@ -31,12 +31,12 @@ impl EntityReference {
     pub fn with_message_id(
         entity_id: impl Into<String>,
         entity_type: EntityType,
-        message_id: impl Into<String>,
+        message_id: Uuid,
     ) -> Self {
         Self {
             entity_id: entity_id.into(),
             entity_type,
-            specific_message_id: Some(message_id.into()),
+            specific_message_id: Some(message_id),
         }
     }
 }
