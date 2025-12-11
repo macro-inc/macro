@@ -191,7 +191,7 @@ export function fileTypeToResolvedBlockName(
 /**
  * Get the default display name for an unnamed file of a particular block.
  */
-export function blockNameToDefaultFile(block?: BlockName | string) {
+export function blockNameToDefaultFile(block?: BlockName | string | null) {
   if (!block) return DefaultFilename;
   if (block in blockNameToDefaultFilename) {
     return (
