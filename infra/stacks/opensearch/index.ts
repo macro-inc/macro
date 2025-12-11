@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
-import { config, stack } from '@shared';
-import { get_coparse_api_vpc } from '@vpc';
+import { config, stack } from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
 
 const tags = {
   environment: stack,

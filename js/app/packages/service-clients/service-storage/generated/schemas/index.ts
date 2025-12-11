@@ -324,6 +324,7 @@ export * from './pinRequest';
 export * from './pinnedItem';
 export * from './postItemsSoupParams';
 export * from './postSoupRequest';
+export * from './postSoupRequestAllOf';
 export * from './preSaveDocumentRequest';
 export * from './preSaveDocumentResponse';
 export * from './preSaveDocumentResponseData';

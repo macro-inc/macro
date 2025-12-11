@@ -1,18 +1,18 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
 import * as tls from '@pulumi/tls';
-import { Queue, Redis } from '@resources';
+import { Queue, Redis } from '../../packages/resources';
 import {
   config,
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
   stack,
-} from '@shared';
-import { EmailRefreshHandler } from '@stacks/email-service/refresh_lambda';
-import { cloudfrontPrivateKeySecret } from '@stacks/email-service/s3-cloudfront-distribution';
-import { EmailScheduledHandler } from '@stacks/email-service/scheduled_lambda';
-import { get_coparse_api_vpc } from '@vpc';
+} from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
+import { EmailRefreshHandler } from './refresh_lambda';
+import { cloudfrontPrivateKeySecret } from './s3-cloudfront-distribution';
+import { EmailScheduledHandler } from './scheduled_lambda';
 import { EmailService } from './service';
 
 const tags = {

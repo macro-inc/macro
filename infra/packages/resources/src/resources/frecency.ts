@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { stack } from '@shared';
+import { stack } from '../../../shared';
 
 /**
  * Creates an IAM policy for accessing the frecency DynamoDB table.

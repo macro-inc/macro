@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { createBucketV2 } from '@resources/resources/bucket';
-import { stack } from '@shared';
+import { createBucketV2 } from '../../packages/resources';
+import { stack } from '../../packages/shared';
 
 const isLocal = stack === 'local';
 
