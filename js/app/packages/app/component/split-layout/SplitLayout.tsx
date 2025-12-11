@@ -23,6 +23,7 @@ import {
   createNavigationEntityListShortcut,
   createSoupContext,
 } from '../SoupContext';
+import { PopoverSplitRenderer } from './components/PopoverSplitRenderer';
 import { SplitContainer } from './components/SplitContainer';
 import { SplitLayoutContext, SplitPanelContext } from './context';
 import {
@@ -328,6 +329,14 @@ export function SplitLayoutContainer(props: SplitLayoutContainerProps) {
           )}
         </For>
       </Resize.Zone>
+      <PopoverSplitRenderer
+        popovers={splitManager.popovers}
+        onClosePopover={(id) => {
+          const activePopovers = splitManager.getActivePopovers();
+          const popover = activePopovers.find((p) => p.id === id);
+          popover?.close();
+        }}
+      />
     </SplitLayoutContext.Provider>
   );
 }

@@ -72,12 +72,14 @@ const createComponent = async (spec: {
   shouldInsert?: boolean;
 }) => {
   setCreateMenuOpen(false);
-  const { replaceSplit, insertSplit } = useSplitLayout();
-  if (spec.shouldInsert) {
-    insertSplit({ type: 'component', id: spec.componentId });
-  } else {
-    replaceSplit({ type: 'component', id: spec.componentId });
-  }
+  const { replaceSplit, insertSplit, popoverSplit } = useSplitLayout();
+  popoverSplit({ type: 'component', id: spec.componentId });
+
+  // if (spec.shouldInsert) {
+  //   insertSplit({ type: 'component', id: spec.componentId });
+  // } else {
+  //   replaceSplit({ type: 'component', id: spec.componentId });
+  // }
 };
 
 type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {

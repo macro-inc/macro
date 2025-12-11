@@ -52,10 +52,26 @@ export function useSplitLayout() {
   function insertSplit(content: SplitContent) {
     const splitManager = globalSplitManager();
     if (!splitManager) {
-      console.error('No split manager found');
+      console.error('no split manager found');
       return;
     }
     return splitManager.createNewSplit(content, true);
+  }
+
+  function popoverSplit(content: SplitContent) {
+    const splitManager = globalSplitManager();
+    if (!splitManager) {
+      console.error('no split manager found');
+      return;
+    }
+    return splitManager.createPopoverSplit({
+      content: content,
+      style: {
+        maxWidth: '600px',
+        maxHeight: '600px',
+        position: 'center',
+      },
+    });
   }
 
   function resetSplit() {
@@ -68,9 +84,10 @@ export function useSplitLayout() {
   }
 
   return {
-    replaceOrInsertSplit: replaceOrInsertSplit,
-    replaceSplit: replaceSplit,
-    insertSplit: insertSplit,
-    resetSplit: resetSplit,
+    replaceOrInsertSplit,
+    replaceSplit,
+    insertSplit,
+    resetSplit,
+    popoverSplit,
   };
 }
