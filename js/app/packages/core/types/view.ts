@@ -1,9 +1,11 @@
+import { ENABLE_TASKS } from '../constant/featureFlags';
+
 export const DEFAULT_VIEWS = [
   'signal',
   'noise',
   'people',
   'files',
-  'tasks',
+  ...(ENABLE_TASKS ? (['tasks'] as const) : []),
   'folders',
   'all',
 ] as const;
