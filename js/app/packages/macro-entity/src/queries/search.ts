@@ -201,7 +201,7 @@ const useMapSearchResponseItem = () => {
 
         // TODO: display sender for each message in the content hit list
         const combinedSenders =
-          messageHits.map((m) => m.pretty_sender).join(', ') ||
+          [...new Set(messageHits.map((m) => m.pretty_sender))].join(', ') ||
           threadHits.at(0)?.pretty_sender;
 
         // TODO: we probably want to get the actual latest message info on the full thread
