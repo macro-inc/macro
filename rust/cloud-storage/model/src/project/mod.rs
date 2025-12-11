@@ -27,8 +27,7 @@ pub struct Project {
     #[schema(value_type = i64, nullable=false)]
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 
-    /// The time the project was deleted
-    #[serde(skip_serializing_if = "Option::is_none", with = "ts_seconds_option")]
+    #[serde(with = "ts_seconds_option")]
     #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 }
