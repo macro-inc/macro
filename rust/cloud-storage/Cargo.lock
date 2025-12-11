@@ -5578,6 +5578,7 @@ dependencies = [
  "serde_json",
  "strum",
  "utoipa",
+ "uuid",
 ]
 
 [[package]]
