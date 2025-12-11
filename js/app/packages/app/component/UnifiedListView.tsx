@@ -266,8 +266,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
           return;
         }
 
-        // select first item from entityList until interaction
-        // Skip auto-selection on touch devices - no keyboard navigation
         if (isTouchDevice) return;
         if (!firstEntity) return;
 

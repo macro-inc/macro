@@ -810,9 +810,11 @@ export function EntityWithEverything(
         'bg-accent/5': props.checked,
         'bracket outline outline-accent/20 outline-offset-[-1px]':
           !isTouchDevice && props.selected,
+        'active:bracket active:outline active:outline-accent/20 active:outline-offset-[-1px]':
+          isTouchDevice && !props.checked,
       }}
       onMouseOver={(e) => {
-        if (isTouchDevice) return; // Don't set highlighted state on touch
+        if (isTouchDevice) return;
         if (!didCursorMove(e)) {
           return;
         }
