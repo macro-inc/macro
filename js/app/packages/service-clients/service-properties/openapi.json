@@ -309,6 +309,9 @@
         ],
         "responses": {
           "204": { "description": "Entity property removed successfully" },
+          "403": {
+            "description": "Property is required and cannot be removed"
+          },
           "404": { "description": "Entity property not found" },
           "500": { "description": "Internal server error" }
         }
@@ -502,10 +505,15 @@
       "EntityReference": {
         "type": "object",
         "description": "Entity reference for entity-type property values.",
-        "required": ["entity_type", "entity_id"],
+        "required": ["entity_id", "entity_type"],
         "properties": {
           "entity_id": { "type": "string" },
-          "entity_type": { "$ref": "#/components/schemas/EntityType" }
+          "entity_type": { "$ref": "#/components/schemas/EntityType" },
+          "specific_message_id": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat."
+          }
         }
       },
       "EntityType": {

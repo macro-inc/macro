@@ -81,10 +81,7 @@ pub async fn get_entity_properties(
         "retrieving entity properties"
     );
 
-    let entity_ref = models_properties::EntityReference {
-        entity_id: entity_id.clone(),
-        entity_type,
-    };
+    let entity_ref = models_properties::EntityReference::new(entity_id.clone(), entity_type);
     crate::api::permissions::check_entity_view_permission(
         &context,
         &user_context.user_id,

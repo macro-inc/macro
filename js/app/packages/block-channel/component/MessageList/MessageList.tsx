@@ -450,16 +450,19 @@ export function MessageList(props: MessageListProps) {
     return messageToReaction[lastMessageId];
   });
 
-  // Track updates to the last top-level message's thread count (for scroll behavior)
-  const lastMessageThreadCount = createMemo(() => {
+  const lastMessageThread = createMemo(() => {
     const base = filteredTopLevelMessages() ?? [];
     const lastTopLevelId = base[base.length - 1]?.id;
-    return viewThreads[lastTopLevelId]?.length ?? 0;
+    return viewThreads[lastTopLevelId];
   });
+
+  const lastMessageThreadCount = createMemo(
+    () => lastMessageThread()?.length ?? 0
+  );
 
   // scroll to bottom on change to last message state (including new messages)
   createEffect(
-    on([lastMessageReaction, lastMessageThreadCount], () => {
+    on([lastMessageReaction, lastMessageThread, lastMessageThreadCount], () => {
       if (!isNearBottom()) return;
       scrollToBottomOrTarget({ forceBottom: true });
     })
