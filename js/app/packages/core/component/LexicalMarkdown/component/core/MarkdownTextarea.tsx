@@ -37,6 +37,7 @@ import {
   selectionDataPlugin,
   tabIndentationPlugin,
 } from '../../plugins';
+import { restoreFocusPlugin } from '../../plugins/restore-focus';
 import { createMenuOperations } from '../../shared/inlineMenu';
 import {
   editorIsEmpty,
@@ -124,14 +125,6 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     }
   });
 
-  // better focus in handling. preserves selection on regain focus!
-  autoRegister(
-    registerRootEventListener(editor, 'focusin', (e) => {
-      e.preventDefault();
-      editor.focus();
-    })
-  );
-
   createEffect(() => {
     editor.setEditable(props.editable());
   });
@@ -160,6 +153,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
     .delete()
     .state<string>(setMarkdownState, 'markdown')
     .history(400)
+    .use(restoreFocusPlugin())
     .use(
       props.formatState && props.setFormatState
         ? customSelectionDataPlugin(
