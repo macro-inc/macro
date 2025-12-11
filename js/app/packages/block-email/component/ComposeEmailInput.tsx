@@ -9,7 +9,7 @@ import type { DocumentMentionInfo } from '@lexical-core';
 import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
 import ArrowFatLineUp from '@phosphor-icons/core/fill/arrow-fat-line-up-fill.svg?component-solid';
 import PaperclipIcon from '@phosphor-icons/core/regular/paperclip.svg?component-solid';
-import { useUserId } from '@service-gql/client';
+import { useUserId, useUserInfo } from '@service-gql/client';
 import type { FileType } from '@service-storage/generated/schemas/fileType';
 import type { Item } from '@service-storage/generated/schemas/item';
 import { defaultSelectionData } from 'core/component/LexicalMarkdown/plugins';
@@ -61,6 +61,8 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   const [content, setContent] = createSignal('');
 
   const panel = useSplitPanel();
+
+  const [userInfo] = useUserInfo();
 
   const focusSibling = (direction: 'next' | 'prev') => {
     const panelRef = panel?.panelRef();
