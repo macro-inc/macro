@@ -16,6 +16,7 @@ import {
 } from '@block-channel/utils/listContext';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { TextButton } from '@core/component/TextButton';
+import { toast } from '@core/component/Toast/Toast';
 import { observedSize } from '@core/directive/observedSize';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import SunIcon from '@icon/duotone/sun-horizon-duotone.svg';
@@ -194,20 +195,19 @@ export function MessageList(props: MessageListProps) {
   /**
    * Scroll to the bottom of the document or the target message depending on the
    * current state.
-   * @param params.forceBottom - force the scroll to bottom even if the user is not near the bottom
-   * @param params.onlyBottom - skip all targetMessage bases logic.
+   * @param params.forceBottom - force the scroll to bottom ignoring target message
    * @returns
    */
   const scrollToBottomOrTarget = debounce(
-    (params?: { forceBottom?: boolean; onlyBottom?: boolean }) => {
+    (params?: { forceBottom?: boolean }) => {
       const { forceBottom } = params || { forceBottom: false };
       const timeStamp = Date.now();
       const delta = timeStamp - lastTargetMessageTimestamp();
       const target = props.targetMessage();
 
       if (
-        (!target || delta > TARGET_MESSAGE_ACTIVE_TIME) &&
-        (isNearBottom() || forceBottom)
+        forceBottom ||
+        ((!target || delta > TARGET_MESSAGE_ACTIVE_TIME) && isNearBottom())
       ) {
         if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
         const lastIndex = props.orderedMessages().length - 1;
@@ -217,7 +217,6 @@ export function MessageList(props: MessageListProps) {
         setTargetIndex(lastIndex);
         return;
       }
-      if (params?.onlyBottom) return;
 
       const { messageId: targetMessageId, threadId } = target || {};
 
@@ -228,7 +227,12 @@ export function MessageList(props: MessageListProps) {
         .orderedMessages()
         ?.findIndex((m) => m.id === targetMessageId);
 
-      if (index === -1) return;
+      if (index === -1) {
+        console.warn('Target message not found');
+        toast.failure('Message not found.');
+        scrollToBottomOrTarget({ forceBottom: true });
+        return;
+      }
 
       if (threadId) {
         setThreadViewStore(threadId, (prev) => ({
@@ -460,7 +464,7 @@ export function MessageList(props: MessageListProps) {
         lastMessageReaction() ||
         (lastMessageThread() && lastMessageThread()?.length > 0)
       ) {
-        scrollToBottomOrTarget();
+        scrollToBottomOrTarget({ forceBottom: true });
       }
     })
   );
@@ -741,9 +745,7 @@ export function MessageList(props: MessageListProps) {
             icon={ArrowDownIcon}
             theme="base"
             text="Jump to latest"
-            onMouseDown={() =>
-              scrollToBottomOrTarget({ forceBottom: true, onlyBottom: true })
-            }
+            onMouseDown={() => scrollToBottomOrTarget({ forceBottom: true })}
             secondaryIcon={XIcon}
             onOptionClick={() => setDismissJumpToLatest(true)}
             showSeparator
