@@ -49,6 +49,7 @@ import { FloatingLinkMenu } from '../menu/FloatingLinkMenu';
 import { MentionsMenu, type UserMentionRecord } from '../menu/MentionsMenu';
 import { DecoratorRenderer } from './DecoratorRenderer';
 import { NodeAccessoryRenderer } from './NodeAccessoryRenderer';
+import { watermarkPlugin } from '@core/component/LexicalMarkdown/plugins/watermark/watermarkPlugin';
 
 /**
  * @param editable - A signal that indicates whether the textarea is editable
@@ -176,7 +177,8 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
         onRemoveMention: props.onRemoveMention,
       })
     )
-    .use(emojisPlugin({ menu: emojisMenuOperations }));
+    .use(emojisPlugin({ menu: emojisMenuOperations }))
+    .use(watermarkPlugin({ onClick: () => {}, text: 'hello' }));
 
   const [accessoryStore, setAccessoryStore] = createAccessoryStore();
   plugins.use(

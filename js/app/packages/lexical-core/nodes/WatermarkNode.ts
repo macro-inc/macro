@@ -32,7 +32,6 @@ export class WatermarkNode extends DecoratorNode<
   DecoratorComponent<WatermarkDecoratorProps> | undefined
 > {
   __content: string;
-  isWatermark = true;
 
   static getType() {
     return 'watermark';
@@ -121,6 +120,12 @@ export class WatermarkNode extends DecoratorNode<
       },
     };
   }
+  getNextSibling<T extends LexicalNode>(): T | null {
+    return null;
+  }
+  getNextSiblings<T extends LexicalNode>(): Array<T> {
+    return [];
+  }
 
   exportDOM() {
     const element = document.createElement('span');
@@ -140,6 +145,7 @@ export class WatermarkNode extends DecoratorNode<
   }
 
   remove(): void {}
+
   insertAfter(nodeToInsert: LexicalNode): LexicalNode {
     return nodeToInsert.insertBefore(this);
   }
