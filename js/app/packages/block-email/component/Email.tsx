@@ -142,6 +142,7 @@ export function Email(props: EmailProps) {
     },
     (error) => {
       console.error('Failed to load thread data:', error);
+      toast.failure('Failed to load email thread. Please try again.');
     }
   );
 

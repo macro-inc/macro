@@ -174,13 +174,13 @@ export function BaseInput(props: {
     createSignal(false);
 
   const sendMutation = useSendMessageMutation({
-    onSuccess: ({ message }) => {
+    onSuccess: async ({ message }) => {
       toast.success('Email sent');
       pendingMentions.forEach((mention) => {
         trackMention(blockId, 'document', mention.documentId);
       });
       pendingMentions = [];
-      deleteDraftAndReset();
+      await deleteDraftAndReset();
       props.sideEffectOnSend?.(message.db_id ?? null);
       if (shouldMarkDoneOnSuccess()) {
         props.onMarkDone?.();
