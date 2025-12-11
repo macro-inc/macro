@@ -8,6 +8,49 @@
 use super::*;
 use utoipa::ToSchema;
 #[test]
+fn test_expected_schema() {
+    // very good schema ok yes!
+    #[derive(Serialize, Deserialize, ToSchema)]
+    #[serde(untagged)]
+    #[schema(
+        discriminator(property_name = "type", mapping(
+         ("document" = "#/components/schemas/BasicDocument"),
+         ("chat" = "#/components/schemas/Chat"),
+         ("project" = "#/components/schemas/Project"),
+    )))]
+    enum ItemDerivedSchema {
+        Document(BasicDocument),
+        Chat(Chat),
+        Project(Project),
+    }
+
+    let expected_schema = serde_json::to_string_pretty(&ItemDerivedSchema::schema()).unwrap();
+    let mut expected_schemas = Vec::new();
+    ItemDerivedSchema::schemas(&mut expected_schemas);
+
+    let actual_schema = serde_json::to_string_pretty(&Item::schema()).unwrap();
+    let mut actual_schemas = Vec::new();
+    Item::schemas(&mut actual_schemas);
+
+    expected_schemas.sort_by(|a, b| a.0.cmp(&b.0));
+    actual_schemas.sort_by(|a, b| a.0.cmp(&b.0));
+    let expected_schemas = expected_schemas
+        .iter()
+        .map(|e| serde_json::to_string_pretty(e).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    let actual_schemas = actual_schemas
+        .iter()
+        .map(|e| serde_json::to_string_pretty(e).unwrap())
+        .collect::<Vec<_>>()
+        .join("\n");
+
+    assert_eq!(expected_schemas, actual_schemas, "all");
+    assert_eq!(expected_schema, actual_schema, "single");
+}
+
+#[test]
 fn test_reference() {
     let schema = Item::schema();
 
