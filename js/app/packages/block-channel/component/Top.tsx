@@ -3,7 +3,7 @@ import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
-import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
+import { SplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 import { channelStore } from '@block-channel/signal/channel';
 import { useBlockId } from '@core/block';
@@ -76,15 +76,19 @@ export function Top() {
   return (
     <>
       <SplitHeaderLeft>
-        <StaticSplitLabel
-          label={channelName() ?? 'New Channel'}
-          icon={
+        <div class="h-full my-auto flex gap-2 justify-center items-center">
+          <div class="z-3 relative flex items-center gap-2 max-w-full h-full shrink">
             <TopIcon
               channelType={channelType()}
               participants={participants()}
             />
-          }
-        />
+            <SplitLabel
+              label={channelName() ?? 'New Channel'}
+              id={channel.id}
+              itemType="channel"
+            />
+          </div>
+        </div>
       </SplitHeaderLeft>
       <SplitHeaderRight>
         <BlockLiveIndicators />

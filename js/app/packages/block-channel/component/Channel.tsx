@@ -124,13 +124,15 @@ export function Channel(props: { data: Required<ChannelData> }) {
 
   createMethodRegistration(blockHandle, {
     goToLocationFromParams: async (params: Record<string, any>) => {
-      if (params.thread_id) {
-        setActiveThreadId(params.thread_id);
+      const threadId = params[URL_PARAMS.thread];
+      const messageId = params[URL_PARAMS.message];
+      if (threadId) {
+        setActiveThreadId(threadId);
       }
-      if (params.message_id) {
+      if (messageId) {
         setTargetMessage({
-          messageId: params.message_id,
-          threadId: params.thread_id,
+          messageId,
+          threadId,
         });
       }
     },

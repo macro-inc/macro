@@ -36,7 +36,8 @@ interface MessageContainerProps {
 export function MessageContainer(props: MessageContainerProps) {
   const context = useEmailContext();
   const draftChild = createMemo(() => {
-    const draft = context.messageDbIdToDraftChildren[props.message.db_id ?? ''];
+    if (!props.message.db_id) return undefined;
+    const draft = context.messageDbIdToDraftChildren[props.message.db_id];
     if (!draft) return undefined;
     return draft;
   });
@@ -45,9 +46,8 @@ export function MessageContainer(props: MessageContainerProps) {
   const [threadAppendMountTarget, setThreadAppendMountTarget] = createSignal<
     HTMLElement | undefined
   >();
-  const [showReply, setShowReply] = createSignal<boolean>(
-    !!context.messageDbIdToDraftChildren[props.message.db_id ?? '']
-  );
+  const [showReply, setShowReply] = createSignal<boolean>(false);
+
   const userId = useUserId();
   const [currentUserName] = useDisplayName(userId());
 
@@ -201,7 +201,7 @@ export function MessageContainer(props: MessageContainerProps) {
             </div>
           </Show>
         </Message>
-        <Show when={showReply() && !props.isLastMessage}>
+        <Show when={(showReply() || draftChild()) && !props.isLastMessage}>
           <Message
             focused={false}
             unfocusable

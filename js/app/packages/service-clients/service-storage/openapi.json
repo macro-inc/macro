@@ -4056,7 +4056,8 @@
           "owner",
           "name",
           "createdAt",
-          "updatedAt"
+          "updatedAt",
+          "deletedAt"
         ],
         "properties": {
           "branchedFromId": {
@@ -4191,7 +4192,8 @@
           "userId",
           "createdAt",
           "updatedAt",
-          "isPersistent"
+          "isPersistent",
+          "deletedAt"
         ],
         "properties": {
           "createdAt": {
@@ -6450,7 +6452,16 @@
       "PostSoupRequest": {
         "allOf": [
           { "$ref": "#/components/schemas/EntityFilters" },
-          { "$ref": "#/components/schemas/Params" }
+          { "$ref": "#/components/schemas/Params" },
+          {
+            "type": "object",
+            "properties": {
+              "emailView": {
+                "type": "string",
+                "description": "the view of specific emails to display"
+              }
+            }
+          }
         ]
       },
       "PreSaveDocumentRequest": {
@@ -6502,18 +6513,21 @@
       },
       "Project": {
         "type": "object",
-        "required": ["id", "name", "userId", "createdAt", "updatedAt"],
+        "required": [
+          "id",
+          "name",
+          "userId",
+          "createdAt",
+          "updatedAt",
+          "deletedAt"
+        ],
         "properties": {
           "createdAt": {
             "type": "integer",
             "format": "int64",
             "description": "The time the project was created"
           },
-          "deletedAt": {
-            "type": ["integer", "null"],
-            "format": "int64",
-            "description": "The time the project was deleted"
-          },
+          "deletedAt": { "type": ["integer", "null"], "format": "int64" },
           "id": { "type": "string", "description": "The id of the project" },
           "name": {
             "type": "string",

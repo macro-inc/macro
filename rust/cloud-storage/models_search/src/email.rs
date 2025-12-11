@@ -9,10 +9,14 @@ use utoipa::ToSchema;
 pub struct EmailSearchResult {
     /// The email message id.
     /// This is only present if the search result is on the message content
-    pub message_id: Option<String>,
-    /// The sender
-    /// This is only present if the search result is on the message content
-    pub sender: Option<String>,
+    pub message_id: Option<uuid::Uuid>,
+    /// The sender.
+    /// If the match is on the subject, the sender is the latest sender on the thread.
+    pub sender: String,
+    /// The pretty sender.
+    /// If the match is on the subject, the pretty sender is the latest sender on the thread.
+    /// This could be the sender's email if there is no contact name for the sender.
+    pub pretty_sender: String,
     /// This is only present if the search result is on the message content
     pub recipients: Vec<String>,
     /// This is only present if the search result is on the message content

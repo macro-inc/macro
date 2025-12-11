@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use crate::contacts;
 use crate::labels::get;
 use crate::parse::db_to_service;
@@ -5,9 +7,56 @@ use anyhow::Context;
 use models_email::email::db;
 use models_email::email::service::message::Message;
 use models_email::service::address::ContactInfo;
-use models_email::service::message::MessageToSend;
+use models_email::service::message::{MessageSenderInfo, MessageToSend};
 use sqlx::PgPool;
 use sqlx::types::Uuid;
+
+/// Returns a map of message IDs to sender info for all found messages
+#[tracing::instrument(skip(pool), err)]
+pub async fn get_message_sender_and_pretty_sender(
+    pool: &PgPool,
+    link_id: Uuid,
+    message_ids: &[Uuid],
+) -> anyhow::Result<HashMap<Uuid, MessageSenderInfo>> {
+    // TODO: use NonEmpty
+    if message_ids.is_empty() {
+        return Ok(HashMap::new());
+    }
+
+    let rows = sqlx::query!(
+        r#"
+        SELECT
+            m.id as message_id,
+            c.email_address as "sender!",
+            COALESCE(c.name, c.email_address) as "pretty_sender!"
+        FROM email_messages m
+        LEFT JOIN email_contacts c ON c.id = m.from_contact_id
+        WHERE m.id = ANY($1)
+        AND m.link_id = $2
+        "#,
+        message_ids,
+        link_id
+    )
+    .fetch_all(pool)
+    .await
+    .context("Failed to fetch message senders")?;
+
+    let mut result = HashMap::new();
+    for row in rows {
+        let message_id = row.message_id;
+        let sender = row.sender;
+        let pretty_sender = row.pretty_sender;
+        result.insert(
+            message_id,
+            MessageSenderInfo {
+                sender,
+                pretty_sender,
+            },
+        );
+    }
+
+    Ok(result)
+}
 
 /// Returns a vector of (message_id, thread_id) tuples for all found messages
 pub async fn get_message_thread_ids_by_provider_ids(

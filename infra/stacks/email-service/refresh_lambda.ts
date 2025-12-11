@@ -1,7 +1,7 @@
-import { Lambda } from '@lambda';
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
+import { Lambda } from '../../packages/lambda';
+import { CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '../../packages/shared';
 
 const EMAIL_LAMBDA_BASE_NAME = 'email_refresh_handler';
 const CLOUD_STORAGE_BASE = `../../../rust/cloud-storage`;

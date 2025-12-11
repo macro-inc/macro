@@ -9,14 +9,16 @@ use axum::{
 };
 use indexmap::IndexMap;
 use model::{response::ErrorResponse, user::UserContext};
-use models_email::service::message::{ThreadHistoryInfo, ThreadHistoryRequest};
+use models_email::service::message::{
+    MessageSenderInfo, MessageSendersRequest, ThreadHistoryInfo, ThreadHistoryRequest,
+};
 use models_search::email::{
     EmailSearchRequest, EmailSearchResponse, EmailSearchResponseItem,
     EmailSearchResponseItemWithMetadata, EmailSearchResult,
 };
 use opensearch_client::search::model::SearchGotoContent;
 use sqlx::types::Uuid;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use super::SearchPaginationParams;
 
@@ -60,9 +62,37 @@ pub(in crate::api::search) async fn enrich_emails(
         .await
         .map_err(SearchError::InternalError)?;
 
-    // Construct enriched results
-    let enriched_results = construct_search_result(results, thread_histories.history_map)
+    let message_senders: HashSet<Uuid> = results
+        .iter()
+        .filter_map(|r| {
+            if let Some(goto) = &r.goto {
+                match goto {
+                    // This should only ever be an email goto
+                    SearchGotoContent::Emails(goto) => Some(goto.email_message_id),
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        })
+        .collect();
+
+    let message_senders_map = ctx
+        .email_service_client
+        .get_message_senders(MessageSendersRequest {
+            user_id: user_id.to_string(),
+            message_ids: message_senders.into_iter().collect(),
+        })
+        .await
         .map_err(SearchError::InternalError)?;
+
+    // Construct enriched results
+    let enriched_results = construct_search_result(
+        results,
+        thread_histories.history_map,
+        message_senders_map.sender_map,
+    )
+    .map_err(SearchError::InternalError)?;
 
     Ok(enriched_results)
 }
@@ -117,38 +147,57 @@ pub async fn handler(
 pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::model::SearchHit>,
     thread_histories: HashMap<Uuid, ThreadHistoryInfo>,
+    message_senders: HashMap<Uuid, MessageSenderInfo>,
 ) -> anyhow::Result<Vec<EmailSearchResponseItemWithMetadata>> {
     // construct entity hit map of id -> vec<hits> using IndexMap to preserve insertion order
     let entity_id_hit_map: IndexMap<Uuid, Vec<EmailSearchResult>> = search_results
         .into_iter()
-        .map(|hit| {
+        .filter_map(|hit| {
             let result = if let Some(SearchGotoContent::Emails(goto)) = hit.goto {
-                EmailSearchResult {
+                let sender_info = message_senders.get(&goto.email_message_id);
+                let sender = sender_info
+                    .map(|a| a.sender.clone())
+                    .unwrap_or(goto.sender.clone());
+                let pretty_sender = sender_info
+                    .map(|a| a.pretty_sender.clone())
+                    .unwrap_or(goto.sender.clone());
+                Some(EmailSearchResult {
                     message_id: Some(goto.email_message_id),
                     bcc: goto.bcc,
                     cc: goto.cc,
                     labels: goto.labels,
                     sent_at: goto.sent_at,
-                    sender: Some(goto.sender),
+                    sender,
+                    pretty_sender,
                     recipients: goto.recipients,
                     highlight: hit.highlight.into(),
                     score: hit.score,
-                }
+                })
             } else {
-                // name match
-                EmailSearchResult {
-                    message_id: None,
-                    bcc: vec![],
-                    cc: vec![],
-                    labels: vec![],
-                    sent_at: None,
-                    sender: None,
-                    recipients: vec![],
-                    highlight: hit.highlight.into(),
-                    score: hit.score,
+                let thread_info = thread_histories.get(&hit.entity_id.parse().unwrap());
+                if let Some(thread_info) = thread_info {
+                    let sender = thread_info.sender.clone();
+                    let pretty_sender = thread_info.pretty_sender.clone();
+                    // name match
+                    Some(EmailSearchResult {
+                        message_id: None,
+                        bcc: vec![],
+                        cc: vec![],
+                        labels: vec![],
+                        sent_at: None,
+                        sender,
+                        pretty_sender,
+                        recipients: vec![],
+                        highlight: hit.highlight.into(),
+                        score: hit.score,
+                    })
+                } else {
+                    tracing::warn!("No thread info found for entity id {}", hit.entity_id);
+                    None
                 }
             };
-            (hit.entity_id.parse().unwrap(), result)
+
+            result.map(|a| (hit.entity_id.parse().unwrap(), a))
         })
         .fold(IndexMap::new(), |mut map, (entity_id, result)| {
             map.entry(entity_id).or_insert_with(Vec::new).push(result);

@@ -125,7 +125,7 @@ pub struct SearchGotoChat {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SearchGotoEmail {
     /// The email message id
-    pub email_message_id: String,
+    pub email_message_id: uuid::Uuid,
     /// The bcc of the email
     pub bcc: Vec<String>,
     /// The cc of the email

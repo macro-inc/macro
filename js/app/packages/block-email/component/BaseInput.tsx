@@ -134,7 +134,7 @@ export function BaseInput(props: {
   preloadedHtml?: string;
   preloadedAttachments?: AttachmentMacro[];
   sideEffectOnSend?: (newMessageId: MessageToSendDbId | null) => void;
-  onSendAndMarkDone?: () => void;
+  onMarkDone?: () => void;
   setShowReply?: Setter<boolean>;
   markdownDomRef?: (ref: HTMLDivElement) => void | HTMLDivElement;
 }) {
@@ -174,17 +174,16 @@ export function BaseInput(props: {
     createSignal(false);
 
   const sendMutation = useSendMessageMutation({
-    onSuccess: ({ message }) => {
+    onSuccess: async ({ message }) => {
       toast.success('Email sent');
       pendingMentions.forEach((mention) => {
         trackMention(blockId, 'document', mention.documentId);
       });
       pendingMentions = [];
-      clearEmailBody(editor());
-      resetState();
+      await deleteDraftAndReset();
       props.sideEffectOnSend?.(message.db_id ?? null);
       if (shouldMarkDoneOnSuccess()) {
-        props.onSendAndMarkDone?.();
+        props.onMarkDone?.();
         setShouldMarkDoneOnSuccess(false);
       }
     },
@@ -244,6 +243,10 @@ export function BaseInput(props: {
       );
       return null;
     }
+    // Fail if no body text
+    if (prepared.bodyText.trim() === '') {
+      return null;
+    }
     // We attach the drafts entirely using bodyHTML (because this is how the appended reply parsing works) so we are not including bodyMacro or bodyText
     return {
       bcc: form().recipients.bcc.map(convertEmailRecipientToContactInfo),
@@ -263,11 +266,12 @@ export function BaseInput(props: {
     }
     const draftToSave = collectDraft();
     if (!draftToSave) {
-      // If there's no content, we should delete the draft
-      // TODO this endpoint does not exist.
-      return logger.error(
-        new Error('Unable to collect email draft for saving.')
-      );
+      const draftId = savedDraftId();
+      if (draftId) {
+        await deleteEmailDraft(draftId);
+      }
+      setSavedDraftId(undefined);
+      return;
     }
     const currentThread = ctx.threadData();
     const newMessage = props.newMessage ?? false;
@@ -446,33 +450,27 @@ export function BaseInput(props: {
   };
 
   const resetState = () => {
+    clearEmailBody(editor());
     setBodyMacro('');
     setSavedDraftId(undefined);
     form().reset();
   };
 
-  const handleDeleteDraft = () => {
+  const deleteDraftAndReset = async () => {
     const draftId = savedDraftId();
-    if (!draftId) {
-      return console.error('No draft to delete');
+    if (draftId) {
+      await deleteEmailDraft(draftId);
     }
-    deleteEmailDraft(draftId).then((success) => {
-      if (success) {
-        if (props.replyingTo()?.db_id) {
-          ctx.setMessageDbIdToDraftChildren(
-            produce((state) => {
-              // @ts-expect-error - we know the draft id is valid, but TS doesn't (why?)
-              delete state[props.replyingTo.db_id];
-            })
-          );
-        }
-        clearEmailBody(editor());
-        resetState();
-        props.setShowReply?.(false);
-      } else {
-        toast.failure('Failed to delete draft');
-      }
-    });
+    const replyingToId = props.replyingTo()?.db_id;
+    if (replyingToId) {
+      ctx.setMessageDbIdToDraftChildren(
+        produce((state) => {
+          delete state[replyingToId];
+        })
+      );
+    }
+    resetState();
+    props.setShowReply?.(false);
   };
 
   const handleUserMention = (mention: UserMentionRecord) => {
@@ -851,7 +849,7 @@ export function BaseInput(props: {
               <IconButton
                 theme="base"
                 icon={Trash}
-                onclick={handleDeleteDraft}
+                onclick={deleteDraftAndReset}
                 tooltip={{ label: 'Delete draft' }}
               />
             </Show>

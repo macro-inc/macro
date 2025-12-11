@@ -11,8 +11,7 @@ import type { ProjectType } from './projectType';
 export interface Project {
   /** The time the project was created */
   createdAt: number;
-  /** The time the project was deleted */
-  deletedAt?: ProjectDeletedAt;
+  deletedAt: ProjectDeletedAt;
   /** The id of the project */
   id: string;
   /** The name of the project */

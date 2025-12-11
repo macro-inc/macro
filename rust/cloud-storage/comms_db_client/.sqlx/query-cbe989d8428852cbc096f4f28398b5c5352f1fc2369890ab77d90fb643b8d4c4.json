@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO comms_attachments (id, message_id, channel_id, entity_type, entity_id)\n            VALUES ($1, $2, $3, $4, $5)\n            RETURNING\n                id,\n                message_id,\n                channel_id,\n                entity_type,\n                entity_id,\n                created_at\n            ",
+  "query": "\n        SELECT\n            id,\n            message_id as \"message_id: Uuid\",\n            channel_id as \"channel_id: Uuid\",\n            entity_type,\n            entity_id,\n            width,\n            height,\n            created_at\n        FROM comms_attachments\n        WHERE channel_id = $1\n        ORDER BY created_at ASC\n        ",
   "describe": {
     "columns": [
       {
@@ -10,12 +10,12 @@
       },
       {
         "ordinal": 1,
-        "name": "message_id",
+        "name": "message_id: Uuid",
         "type_info": "Uuid"
       },
       {
         "ordinal": 2,
-        "name": "channel_id",
+        "name": "channel_id: Uuid",
         "type_info": "Uuid"
       },
       {
@@ -30,17 +30,23 @@
       },
       {
         "ordinal": 5,
+        "name": "width",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 6,
+        "name": "height",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 7,
         "name": "created_at",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Uuid",
-        "Uuid",
-        "Varchar",
-        "Varchar"
+        "Uuid"
       ]
     },
     "nullable": [
@@ -49,8 +55,10 @@
       false,
       false,
       false,
+      true,
+      true,
       false
     ]
   },
-  "hash": "32cdd5c07081705c34a75e8eecf359cc3637aa316bd6874304b2086e7ca49642"
+  "hash": "cbe989d8428852cbc096f4f28398b5c5352f1fc2369890ab77d90fb643b8d4c4"
 }

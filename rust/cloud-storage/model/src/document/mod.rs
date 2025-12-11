@@ -82,7 +82,7 @@ pub struct BasicDocument {
     pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
 
     /// The time the document was deleted
-    #[serde(skip_serializing_if = "Option::is_none", with = "ts_seconds_option")]
+    #[serde(with = "ts_seconds_option")]
     #[schema(value_type = i64, nullable=true)]
     pub deleted_at: Option<chrono::DateTime<chrono::Utc>>,
 

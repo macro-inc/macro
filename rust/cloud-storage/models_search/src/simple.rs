@@ -33,7 +33,7 @@ pub struct SearchGotoChat {
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone, ToSchema)]
 pub struct SearchGotoEmail {
     /// The email message id
-    pub email_message_id: String,
+    pub email_message_id: uuid::Uuid,
     pub bcc: Vec<String>,
     pub cc: Vec<String>,
     pub labels: Vec<String>,
