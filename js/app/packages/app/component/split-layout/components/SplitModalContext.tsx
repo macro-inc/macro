@@ -103,6 +103,11 @@ export function SplitModalProvider(props: ParentProps) {
           type: 'project',
           parentId: undefined,
         } as EntityData;
+      case 'channel':
+        return {
+          ...baseEntity,
+          type: 'channel',
+        } as EntityData;
       default:
         return {
           ...baseEntity,
