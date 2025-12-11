@@ -505,11 +505,50 @@ export function EntityWithEverything(
         <div class="flex gap-1 items-center text-sm min-w-0 w-full truncate overflow-hidden @max-sm/split:flex-col @max-sm/split:items-start @max-sm/split:gap-1 @max-sm/split:truncate-none">
           {/* sometimes senderName and senderEmail are the same */}
           <div
-            class="flex gap-2 font-semibold shrink-0 @max-sm/split:w-full @max-sm/split:truncate"
+            class="flex gap-2 items-center font-semibold shrink-0 @max-sm/split:w-full @max-sm/split:truncate"
             classList={{
               'w-[20cqw]': !isSearch(),
             }}
           >
+            {/* Icon inline with sender in narrow mode */}
+            <div class="hidden @max-sm/split:flex size-[1em] shrink-0 items-center justify-center relative group/icon-checkbox">
+              {/* Checkbox for narrow mode - shown on hover or when checked */}
+              <button
+                type="button"
+                class="absolute inset-0 flex items-center justify-center opacity-0 group-hover/icon-checkbox:opacity-100 transition-opacity"
+                classList={{
+                  'opacity-100': props.checked,
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onChecked?.(!props.checked, e.shiftKey);
+                }}
+                data-blocks-navigation
+              >
+                <div
+                  class="size-[0.875em] flex items-center justify-center rounded-xs border border-edge-muted pointer-events-none"
+                  classList={{
+                    'bg-accent border-accent': props.checked,
+                  }}
+                >
+                  <Show when={props.checked}>
+                    <CheckIcon class="w-full h-full text-panel" />
+                  </Show>
+                </div>
+              </button>
+              {/* Icon - hidden on hover in narrow mode when not checked */}
+              <div
+                class="flex items-center justify-center group-hover/icon-checkbox:opacity-0 transition-opacity"
+                classList={{
+                  'opacity-0': props.checked,
+                }}
+              >
+                <Dynamic
+                  component={getIcon().icon}
+                  class={`flex size-full ${getIcon().foreground}`}
+                />
+              </div>
+            </div>
             {/* Sender Name */}
             <div class="truncate @max-sm/split:min-w-0">
               {displayedNames() ??
@@ -530,7 +569,7 @@ export function EntityWithEverything(
           {/* Subject */}
           {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
           <div class="flex items-center w-full gap-2 flex-1 min-w-0 @max-sm/split:flex-col @max-sm/split:items-start @max-sm/split:w-full @max-sm/split:gap-1">
-            <div class="flex items-center w-full gap-2 @max-sm/split:justify-between @max-sm/split:min-w-0">
+            <div class="flex items-center gap-2 flex-1 min-w-0 @max-sm/split:w-full @max-sm/split:justify-between @max-sm/split:min-w-0">
               <div
                 class="shrink-0 truncate @max-sm/split:min-w-0 @max-sm/split:flex-1"
                 classList={{
@@ -538,7 +577,9 @@ export function EntityWithEverything(
                   'font-medium': !isSearch(),
                 }}
               >
-                <Show when={isSearch()}> – </Show>
+                <Show when={isSearch()}>
+                  <span class="@max-sm/split:hidden"> – </span>
+                </Show>
                 <Show when={searchHighlightName()} fallback={props.entity.name}>
                   {(name) => (
                     <StaticMarkdown
@@ -548,6 +589,10 @@ export function EntityWithEverything(
                     />
                   )}
                 </Show>
+              </div>
+              {/* Body snippet - inline in wide mode */}
+              <div class="truncate shrink grow opacity-60 @max-sm/split:hidden">
+                {props.entity.snippet}
               </div>
               {/* Timestamp inline with subject in narrow mode */}
               <Show when={props.timestamp ?? props.entity.updatedAt}>
@@ -561,8 +606,8 @@ export function EntityWithEverything(
                 }}
               </Show>
             </div>
-            {/* Body  */}
-            <div class="truncate shrink grow opacity-60 @max-sm/split:w-full @max-sm/split:truncate @max-sm/split:text-xs">
+            {/* Body snippet - below subject in narrow mode */}
+            <div class="hidden @max-sm/split:block truncate w-full text-xs opacity-60">
               {props.entity.snippet}
             </div>
           </div>
@@ -594,7 +639,56 @@ export function EntityWithEverything(
     return (
       <div class="flex gap-2 items-center min-w-0 w-fit max-w-full overflow-hidden @max-sm/split:flex-col @max-sm/split:items-start @max-sm/split:w-full @max-sm/split:gap-1">
         <span class="flex gap-1 truncate font-medium text-sm shrink-0 items-center @max-sm/split:w-full @max-sm/split:flex-col @max-sm/split:items-start @max-sm/split:gap-1">
-          <div class="flex items-center w-full gap-2 @max-sm/split:justify-between @max-sm/split:min-w-0">
+          <div class="flex items-center gap-2 w-full @max-sm/split:justify-between @max-sm/split:min-w-0">
+            {/* Icon inline with title in narrow mode */}
+            <div class="hidden @max-sm/split:flex size-[1em] shrink-0 items-center justify-center relative group/icon-checkbox-nonemail">
+              {/* Checkbox for narrow mode - shown on hover or when checked */}
+              <button
+                type="button"
+                class="absolute inset-0 flex items-center justify-center opacity-0 group-hover/icon-checkbox-nonemail:opacity-100 transition-opacity"
+                classList={{
+                  'opacity-100': props.checked,
+                }}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  props.onChecked?.(!props.checked, e.shiftKey);
+                }}
+                data-blocks-navigation
+              >
+                <div
+                  class="size-[0.875em] flex items-center justify-center rounded-xs border border-edge-muted pointer-events-none"
+                  classList={{
+                    'bg-accent border-accent': props.checked,
+                  }}
+                >
+                  <Show when={props.checked}>
+                    <CheckIcon class="w-full h-full text-panel" />
+                  </Show>
+                </div>
+              </button>
+              {/* Icon - hidden on hover in narrow mode when not checked */}
+              <div
+                class="flex items-center justify-center group-hover/icon-checkbox-nonemail:opacity-0 transition-opacity"
+                classList={{
+                  'opacity-0': props.checked,
+                }}
+              >
+                <Show
+                  when={
+                    props.entity.type === 'channel' &&
+                    props.entity.channelType === 'direct_message'
+                  }
+                  fallback={
+                    <Dynamic
+                      component={getIcon().icon}
+                      class={`flex size-full ${getIcon().foreground}`}
+                    />
+                  }
+                >
+                  <DirectMessageIcon entity={props.entity} />
+                </Show>
+              </div>
+            </div>
             <span
               class="font-semibold truncate @max-sm/split:min-w-0 @max-sm/split:flex-1"
               classList={{
@@ -788,14 +882,15 @@ export function EntityWithEverything(
         {/* Left Column Indicator(s) */}
         {/* Icon and name - top left on mobile, first item on desktop */}
         <div
-          class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2 @max-sm/split:col-auto @max-sm/split:w-full @max-sm/split:min-h-0"
+          class="min-h-10 min-w-[50px] flex flex-row items-center gap-2 col-2 @max-sm/split:col-auto @max-sm/split:w-full @max-sm/split:min-h-0 @max-sm/split:items-start"
           classList={{
             grow: props.contentPlacement === 'bottom-row',
             'opacity-70': props.fadeIfRead && !props.unreadIndicatorActive,
           }}
         >
           {/* Icon/Checkbox container - in narrow mode, shows icon by default, checkbox on hover */}
-          <div class="flex size-5 shrink-0 items-center justify-center relative group/icon-checkbox">
+          {/* For emails, icon is inline with sender, so hide this container in narrow mode */}
+          <div class="flex size-5 shrink-0 items-center justify-center relative group/icon-checkbox @max-sm/split:hidden">
             {/* Checkbox for narrow mode - shown on hover or when checked, hidden at larger widths */}
             <button
               type="button"
