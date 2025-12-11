@@ -1,4 +1,3 @@
-import { isSea } from 'node:sea';
 import { EntityIcon } from '@core/component/EntityIcon';
 import type { Property } from '@core/component/Properties/types';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
