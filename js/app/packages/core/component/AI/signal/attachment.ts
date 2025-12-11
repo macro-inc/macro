@@ -58,7 +58,9 @@ export const useGetChatAttachmentInfo = () => {
   const { channels } = useChannelsContext();
   const emails = useEmails();
 
-  const getDocumentAttachment = (id: string): Attachment | undefined => {
+  const getDocumentAttachment = ({
+    itemId: id,
+  }: ItemMention): Attachment | undefined => {
     const item = history().find((item) => item.id === id);
     if (!item) return;
     if (item.type !== 'document') return;
@@ -85,7 +87,9 @@ export const useGetChatAttachmentInfo = () => {
     };
   };
 
-  const getChannelAttachment = (id: string): Attachment | undefined => {
+  const getChannelAttachment = ({
+    itemId: id,
+  }: ItemMention): Attachment | undefined => {
     if (!ENABLE_CHAT_CHANNEL_ATTACHMENT) return;
 
     const item = channels().find((item) => item.id === id);
@@ -103,30 +107,28 @@ export const useGetChatAttachmentInfo = () => {
     };
   };
 
-  const getEmailAttachment = (id: string): Attachment | undefined => {
-    const email = emails().find((e) => e.id === id);
-    if (!email) return;
+  const getEmailAttachment = (mention: ItemMention): Attachment | undefined => {
     return {
-      id: `${id}-email-attachment`,
-      attachmentId: id,
+      id: `${mention.itemId}-email-attachment`,
+      attachmentId: mention.itemId,
       attachmentType: 'email',
       metadata: {
         type: 'email',
-        email_subject: email.name ?? 'No Subject',
+        email_subject: mention.documentName ?? 'No Subject',
       },
     };
   };
 
-  const mentionToAttachment = ({
-    itemType,
-    itemId,
-  }: ItemMention): Attachment | undefined => {
-    if (itemType === 'document') {
-      return getDocumentAttachment(itemId);
-    } else if (itemType === 'channel') {
-      return getChannelAttachment(itemId);
-    } else if (itemType === 'email') {
-      return getEmailAttachment(itemId);
+  const mentionToAttachment = (
+    mention: ItemMention
+  ): Attachment | undefined => {
+    console.log('mention -> attachment', mention);
+    if (mention.itemType === 'document') {
+      return getDocumentAttachment(mention);
+    } else if (mention.itemType === 'channel') {
+      return getChannelAttachment(mention);
+    } else if (mention.itemType === 'email') {
+      return getEmailAttachment(mention);
     }
   };
 
