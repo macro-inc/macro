@@ -132,6 +132,7 @@ export class WatermarkNode extends DecoratorNode<
     for (const [k, v] of Object.entries(this.getDataAttrs())) {
       element.setAttribute(k, v.toString());
     }
+    element.className = 'macro-watermark-node';
     element.textContent = this.__content;
     return { element };
   }
