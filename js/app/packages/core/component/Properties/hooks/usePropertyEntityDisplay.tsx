@@ -223,7 +223,7 @@ export function usePropertyEntityDisplay(
     return null;
   });
 
-  const linkParams = createMemo(() => {
+  const linkParams = createMemo((): Record<string, string> | undefined => {
     const messageId = options?.specificMessageId?.();
     if (!messageId) return undefined;
 
