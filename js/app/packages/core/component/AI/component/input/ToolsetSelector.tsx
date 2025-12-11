@@ -7,11 +7,6 @@ type ToolSetName = ToolSet['type'];
 
 const TOOLSETS = [
   {
-    value: 'none' as const,
-    label: 'ASK',
-    tooltip: 'Simple answers to simple questions',
-  },
-  {
     value: 'all' as const,
     label: 'AGENT',
     tooltip: 'Dynamically search Macro for useful context',
@@ -53,7 +48,7 @@ export function ToolsetSelector(props: {
 
   return (
     <div class="flex items-center gap-x-1">
-      <SegmentedControl
+      {/*<SegmentedControl
         size="SM"
         defaultValue={TOOLSET_TO_DISPLAY[toolset().type]}
         onChange={(s) => {
@@ -67,7 +62,7 @@ export function ToolsetSelector(props: {
           label: t.label,
           tooltip: t.tooltip,
         }))}
-      />
+      />*/}
 
       <Show when={toolset().type === 'all'}>
         <div class="flex">
