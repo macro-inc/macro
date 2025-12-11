@@ -5,6 +5,7 @@ import {
   $createClassedBlockNode,
   $createDocumentMentionNode,
   $createHtmlRenderNode,
+  $createWatermarkNode,
   $isClassedBlockNode,
   type ClassedBlockNode,
   type DocumentMentionInfo,
@@ -333,18 +334,27 @@ export function prepareEmailBody(
   appendReply?: {
     replyType: ReplyType | undefined;
     replyingTo: MessageWithBodyReplyless;
-  }
+  },
+  withSignature?: string
 ): {
   bodyHtml: string;
   bodyText: string;
   mentions: DocumentMentionInfo[];
 } | null {
   if (!editor) return null;
-  let generatedHtml = '';
-  let bodyHtml = '';
-  let bodyText = '';
-  editor.read(() => {
-    generatedHtml = $generateHtmlFromNodes(editor);
+
+  if (withSignature) {
+    editor.update(() => {
+      const wantermark = $createWatermarkNode({ content: withSignature });
+
+      const root = $getRoot();
+
+      root.getLastChild()?.insertAfter(wantermark);
+    });
+  }
+
+  const generatedHtml = editor.read(() => {
+    return $generateHtmlFromNodes(editor);
   });
 
   const parsed = new DOMParser().parseFromString(generatedHtml, 'text/html');
@@ -364,8 +374,8 @@ export function prepareEmailBody(
     .replace(/\+/g, '-')
     .replace(/\//g, '_')
     .replace(/={1,}$/, '');
-  bodyHtml = html;
-  bodyText = parsed.body.firstChild?.textContent ?? '';
+  const bodyHtml = html;
+  const bodyText = parsed.body.firstChild?.textContent ?? '';
 
   return { bodyHtml, bodyText, mentions };
 }
