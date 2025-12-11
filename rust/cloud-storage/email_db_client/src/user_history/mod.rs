@@ -50,13 +50,26 @@ pub async fn get_thread_summary_info(
             uh.updated_at as "viewed_at?",
             m.snippet,
             m.subject as "subject?",
-            l.macro_id
+            l.macro_id,
+            latest_msg.sender as sender,
+            latest_msg.pretty_sender as "pretty_sender!"
         FROM email_messages m
         LEFT JOIN email_user_history uh ON uh.thread_id = m.thread_id AND uh.link_id = $1
         LEFT JOIN email_links l ON l.id = m.link_id
+        LEFT JOIN LATERAL (
+            SELECT 
+                c.email_address as sender,
+                COALESCE(c.name, c.email_address) as pretty_sender
+            FROM email_messages m2
+            LEFT JOIN email_contacts c ON c.id = m2.from_contact_id
+            WHERE m2.thread_id = m.thread_id 
+            AND m2.link_id = $1
+            ORDER BY m2.internal_date_ts DESC NULLS LAST
+            LIMIT 1
+        ) latest_msg ON true
         WHERE m.thread_id = ANY($2)
         AND m.link_id = $1
-        GROUP BY m.thread_id, uh.updated_at, m.snippet, m.subject, l.macro_id
+        GROUP BY m.thread_id, uh.updated_at, m.snippet, m.subject, l.macro_id, latest_msg.sender, latest_msg.pretty_sender
         "#,
         link_id,
         thread_ids
@@ -82,6 +95,8 @@ pub async fn get_thread_summary_info(
                     None
                 }
             }),
+            sender: row.sender,
+            pretty_sender: row.pretty_sender,
         };
         result.insert(row.thread_id, summary_info);
     }

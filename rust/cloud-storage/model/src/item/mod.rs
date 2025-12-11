@@ -2,12 +2,15 @@ use super::{chat::Chat, document::BasicDocument};
 use crate::project::Project;
 use models_pagination::Identify;
 use models_permissions::share_permission::access_level::AccessLevel;
-use serde::{Deserialize, Serialize, Serializer};
+use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use strum::EnumString;
-use utoipa::ToSchema;
+use utoipa::openapi::Discriminator;
+use utoipa::{PartialSchema, ToSchema};
 
 pub mod map_item;
+#[cfg(test)]
+mod tests;
 
 #[derive(Debug, Clone, Eq, PartialEq, ToSchema, EnumString, Deserialize, Serialize)]
 #[strum(serialize_all = "snake_case")]
@@ -18,65 +21,59 @@ pub enum CloudStorageItemType {
     Project,
 }
 
-#[derive(Deserialize, Eq, PartialEq, Debug, Clone, ToSchema)]
-#[serde(untagged)]
-#[schema(discriminator(property_name = "type", mapping(
-     ("document" = "#/components/schemas/BasicDocument"),
-     ("chat" = "#/components/schemas/Chat"),
-     ("project" = "#/components/schemas/Project"),
-)))]
+#[derive(Deserialize, Serialize, Eq, PartialEq, Debug, Clone)]
+#[serde(tag = "type", rename_all = "snake_case")]
 pub enum Item {
     Document(BasicDocument),
     Chat(Chat),
     Project(Project),
 }
 
-impl Serialize for Item {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: Serializer,
-    {
-        macro_rules! flatten_variant {
-            ($tag:expr, $tag_ty:ty, $inner_ty:ty, $inner_val:expr) => {{
-                #[derive(Serialize)]
-                struct Inline<'a> {
-                    #[serde(rename = "type")]
-                    tag: &'a $tag_ty,
-                    #[serde(flatten)]
-                    data: &'a $inner_ty,
-                }
-                let tmp = Inline {
-                    tag: $tag,
-                    data: $inner_val,
-                };
-                tmp.serialize(serializer)
-            }};
-        }
+// manually implemented ToSchema
+//      - gen better frontend types by referencing subschemas
+//      - can deserialize / serialize in rust
+impl ToSchema for Item {
+    fn name() -> std::borrow::Cow<'static, str> {
+        std::borrow::Cow::from("Item")
+    }
 
-        match self {
-            Item::Document(doc) => {
-                flatten_variant!(
-                    &CloudStorageItemType::Document,
-                    CloudStorageItemType,
-                    BasicDocument,
-                    doc
-                )
-            }
-            Item::Chat(chat) => flatten_variant!(
-                &CloudStorageItemType::Chat,
-                CloudStorageItemType,
-                Chat,
-                chat
-            ),
-            Item::Project(project) => {
-                flatten_variant!(
-                    &CloudStorageItemType::Project,
-                    CloudStorageItemType,
-                    Project,
-                    project
-                )
-            }
-        }
+    fn schemas(
+        schemas: &mut Vec<(
+            String,
+            utoipa::openapi::RefOr<utoipa::openapi::schema::Schema>,
+        )>,
+    ) {
+        schemas.push((BasicDocument::name().into(), BasicDocument::schema()));
+        schemas.push((Chat::name().into(), Chat::schema()));
+        schemas.push((Project::name().into(), Project::schema()));
+        <BasicDocument as ToSchema>::schemas(schemas);
+        <Chat as ToSchema>::schemas(schemas);
+        <Project as ToSchema>::schemas(schemas);
+    }
+}
+
+impl PartialSchema for Item {
+    fn schema() -> utoipa::openapi::RefOr<utoipa::openapi::schema::Schema> {
+        utoipa::openapi::Schema::OneOf(
+            utoipa::openapi::OneOfBuilder::new()
+                .discriminator(Some(Discriminator {
+                    extensions: None,
+                    property_name: "type".into(),
+                    mapping: [
+                        ("document", "#/components/schemas/BasicDocument"),
+                        ("chat", "#/components/schemas/Chat"),
+                        ("project", "#/components/schemas/Project"),
+                    ]
+                    .into_iter()
+                    .map(|(k, v)| (k.to_string(), v.to_string()))
+                    .collect(),
+                }))
+                .item(utoipa::openapi::Ref::from_schema_name("BasicDocument"))
+                .item(utoipa::openapi::Ref::from_schema_name("Chat"))
+                .item(utoipa::openapi::Ref::from_schema_name("Project"))
+                .build(),
+        )
+        .into()
     }
 }
 
