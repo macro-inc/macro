@@ -2,6 +2,7 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import type { Property } from '@core/component/Properties/types';
 import { LabelAndHotKey, Tooltip } from '@core/component/Tooltip';
 import { TOKENS } from '@core/hotkey/tokens';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { matches } from '@core/util/match';
 import CheckIcon from '@icon/regular/check.svg';
 import { tryToTypedNotification } from '@notifications';
@@ -805,12 +806,13 @@ export function EntityWithEverything(
       data-checked={props.checked}
       class="everything-entity relative group/entity"
       classList={{
-        'bg-hover/30': props.highlighted && !props.checked,
+        'bg-hover/30': !isTouchDevice && props.highlighted && !props.checked,
         'bg-accent/5': props.checked,
         'bracket outline outline-accent/20 outline-offset-[-1px]':
-          props.selected,
+          !isTouchDevice && props.selected,
       }}
       onMouseOver={(e) => {
+        if (isTouchDevice) return; // Don't set highlighted state on touch
         if (!didCursorMove(e)) {
           return;
         }
