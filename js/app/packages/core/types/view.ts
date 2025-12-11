@@ -5,7 +5,7 @@ export const DEFAULT_VIEWS = [
   'noise',
   'people',
   'files',
-  ...(ENABLE_TASKS ? (['tasks'] as const) : []),
+  'tasks',
   'folders',
   'all',
 ] as const;
