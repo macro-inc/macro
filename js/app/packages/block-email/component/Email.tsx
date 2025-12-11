@@ -4,7 +4,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import { createMethodRegistration } from '@core/orchestrator';
-import { createActiveTarget } from '@core/signal/activeTarget';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -217,8 +216,12 @@ export function Email(props: EmailProps) {
   const [focusedMessageId, setFocusedMessageId] = createSignal<string>();
   const [isContainerFilled, setIsContainerFilled] = createSignal(false);
   const [hasHandledTarget, setHasHandledTarget] = createSignal(false);
+  const [targetMessageActive, setTargetMessageActive] = createSignal(false);
 
-  const activeTargetMessageId = createActiveTarget(targetMessageId);
+  const activeTargetMessageId = createMemo(() => {
+    if (!targetMessageActive()) return undefined;
+    return untrack(targetMessageId);
+  });
 
   const blockHandle = blockHandleSignal.get;
   createMethodRegistration(blockHandle, {
@@ -304,6 +307,11 @@ export function Email(props: EmailProps) {
 
     if (success) {
       setFocusedMessageId(messageId);
+      // Flash the message after scroll completes
+      setTargetMessageActive(true);
+      setTimeout(() => {
+        setTargetMessageActive(false);
+      }, 800);
       // Clear scrolling flag after animation
       setTimeout(() => setIsScrollingToMessage(false), 1000);
     } else {
@@ -445,7 +453,7 @@ export function Email(props: EmailProps) {
           // Load one more batch for scroll context
           await loadContextBatch();
           // Scroll to the message after DOM updates
-          setTimeout(() => performScrollToMessage(messageId, 'smooth'));
+          setTimeout(() => performScrollToMessage(messageId, 'instant'));
         } else {
           // Message not found, fallback to last message
           setTimeout(() => scrollToLastMessageAndFocus('instant'));
@@ -458,11 +466,11 @@ export function Email(props: EmailProps) {
     // Case 2: Message is first in current batch - load more for context
     else if (targetIndex === 0) {
       await loadContextBatch();
-      setTimeout(() => performScrollToMessage(messageId, 'smooth'));
+      setTimeout(() => performScrollToMessage(messageId, 'instant'));
     }
     // Case 3: Message is in current batch with sufficient context
     else {
-      setTimeout(() => performScrollToMessage(messageId, 'smooth'));
+      setTimeout(() => performScrollToMessage(messageId, 'instant'));
     }
   }
 
