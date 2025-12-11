@@ -23,7 +23,7 @@ export type ChannelEntity = EntityBase & {
   type: 'channel';
   channelType: 'direct_message' | 'private' | 'organization' | 'public';
   interactedAt?: number;
-  particpantIds?: string[];
+  participantIds?: string[];
   latestMessage?: {
     content: string;
     senderId: string;

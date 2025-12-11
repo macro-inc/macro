@@ -198,19 +198,25 @@ async fn handle_attachment_upload(
     }
 
     // upload attachments to Macro
-    let attachments =
-        email_db_client::attachments::provider::upload::fetch_insertable_attachments_for_new_email(
+    let (document_atts, media_atts) = tokio::try_join!(
+        email_db_client::attachments::provider::upload::new_email_document_atts(
+            &ctx.db,
+            &payload.provider_message_id,
+        ),
+        email_db_client::attachments::provider::upload::new_email_media_atts(
             &ctx.db,
             &payload.provider_message_id,
         )
-        .await
-        .map_err(|e| {
-            ProcessingError::Retryable(DetailedError {
-                reason: FailureReason::DatabaseQueryFailed,
-                source: e.context("Failed to fetch attachments to insert".to_string()),
-            })
-        })?;
+    )
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e.context("Failed to fetch attachments to insert".to_string()),
+        })
+    })?;
 
+    let mut attachments = document_atts;
+    attachments.extend(media_atts);
     if !attachments.is_empty() {
         tracing::info!(
             "Uploading attachments ({:?}) to Macro for new email",
@@ -256,9 +262,11 @@ async fn handle_attachment_upload(
             };
 
             let ctx_upload = UploadAttachmentContext {
+                db: &ctx.db,
                 redis_client: &ctx.redis_client,
                 gmail_client: &ctx.gmail_client,
                 dss_client: &ctx.dss_client,
+                sfs_client: &ctx.sfs_client,
                 system_properties_service: &ctx.system_properties_service,
                 access_token: gmail_access_token,
                 link,

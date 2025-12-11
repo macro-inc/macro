@@ -27,9 +27,11 @@ pub async fn backfill_attachment(
     }
 
     let ctx_upload = UploadAttachmentContext {
+        db: &ctx.db,
         redis_client: &ctx.redis_client,
         gmail_client: &ctx.gmail_client,
         dss_client: &ctx.dss_client,
+        sfs_client: &ctx.sfs_client,
         system_properties_service: &ctx.system_properties_service,
         access_token,
         link,
@@ -42,7 +44,7 @@ pub async fn backfill_attachment(
         .map_err(|e| {
             ProcessingError::NonRetryable(DetailedError {
                 reason: FailureReason::GmailApiFailed,
-                source: e.context("Failed to fetch attachment data from Gmail"),
+                source: e.context("Failed to upload attachment"),
             })
         })?;
 

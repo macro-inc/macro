@@ -296,7 +296,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
 
   return (
     <button
-      class={`create-menu-${props.creatableBlock.label.toLowerCase()} size-32 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200`}
+      class={`create-menu-${props.creatableBlock.label.toLowerCase()} size-28 relative flex flex-col sm:gap-4 gap-2 items-center isolate justify-center bg-panel border border-edge-muted transition-transform ease-click duration-200`}
       classList={{
         '-translate-y-2 text-ink bracket-offset-1': props.focused,
         'text-ink-extra-muted': !props.focused,
@@ -353,7 +353,7 @@ const LauncherMenuItem = (props: LauncherMenuItemProps) => {
       />
 
       <div class="w-full py-1 px-2 absolute bottom-0 flex flex-row justify-between items-center z-1">
-        <div class="text-sm font-bold uppercase font-stretch-condensed">
+        <div class="text-sm font-bold font-stretch-condensed">
           {props.creatableBlock.label}
         </div>
         <div class="size-3">
@@ -526,7 +526,7 @@ const LauncherInner = (props: LauncherInnerProps) => {
   return (
     <div>
       <div
-        class="relative grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-7 gap-3 p-6 isolate bg-menu border border-edge-muted suppress-css-brackets"
+        class="relative grid grid-cols-2 sm:grid-cols-4 xl:grid-cols-8 gap-3 p-6 isolate bg-menu border border-edge-muted suppress-css-brackets"
         ref={ref}
       >
         <div class="absolute pointer-events-none size-full inset-0"></div>

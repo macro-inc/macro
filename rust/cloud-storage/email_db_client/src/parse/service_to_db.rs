@@ -134,6 +134,7 @@ pub fn map_service_attachments_to_db(
             mime_type: service_attachment.mime_type.clone(),
             size_bytes: service_attachment.size_bytes,
             content_id: service_attachment.content_id.clone(),
+            sfs_id: service_attachment.sfs_id,
             created_at: Utc::now(),
         })
         .collect()

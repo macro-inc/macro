@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n        SELECT \n            a.id, a.message_id, a.provider_attachment_id, \n            a.filename, a.mime_type, a.size_bytes, \n            a.content_id, a.created_at, m.provider_id as \"message_provider_id!\"\n        FROM email_attachments a\n        JOIN email_messages m ON a.message_id = m.id\n        WHERE a.id = $1 AND m.link_id = $2\n        ",
+  "query": "\n        SELECT \n            a.id, a.message_id, a.provider_attachment_id, \n            a.filename, a.mime_type, a.size_bytes, \n            a.content_id, eas.sfs_id as \"sfs_id?\", a.created_at, m.provider_id as \"message_provider_id!\"\n        FROM email_attachments a\n        JOIN email_messages m ON a.message_id = m.id\n        LEFT JOIN email_attachments_sfs eas ON a.id = eas.attachment_id\n        WHERE a.id = $1 AND m.link_id = $2\n        ",
   "describe": {
     "columns": [
       {
@@ -40,11 +40,16 @@
       },
       {
         "ordinal": 7,
+        "name": "sfs_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 8,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 8,
+        "ordinal": 9,
         "name": "message_provider_id!",
         "type_info": "Text"
       }
@@ -64,8 +69,9 @@
       true,
       true,
       false,
+      false,
       true
     ]
   },
-  "hash": "18de30211e9a662e583d2b7a3b6d226d4bf62c08423710421188a090306f1b62"
+  "hash": "7a97bb0e12628cc97e6e2555cf246cf0339ffbcece51c12635989df120793dfb"
 }

@@ -1,5 +1,6 @@
 use crate::attachments::provider::upload_filters::{
-    ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_WHITELISTED_DOMAINS,
+    ATTACHMENT_MIME_TYPE_FILTERS, ATTACHMENT_MIME_TYPE_FILTERS_WITH_MEDIA,
+    ATTACHMENT_WHITELISTED_DOMAINS,
 };
 use models_email::service::attachment::AttachmentUploadMetadata;
 use sqlx::types::Uuid;
@@ -17,7 +18,7 @@ use sqlx::{Pool, Postgres, Row};
 /// sent a message to in the past. but those attachments are fetched once backfill is complete, in
 /// a different call.
 #[tracing::instrument(skip(db), err)]
-pub async fn fetch_thread_attachments_for_backfill(
+pub async fn thread_document_atts_for_backfill(
     db: &Pool<Postgres>,
     thread_id: Uuid,
 ) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
@@ -72,18 +73,48 @@ pub async fn fetch_thread_attachments_for_backfill(
 
     let attachments = rows
         .into_iter()
-        .map(|row| AttachmentUploadMetadata {
-            attachment_db_id: row.get("attachment_db_id"),
-            email_provider_id: row.get("email_provider_id"),
-            provider_attachment_id: row.get("provider_attachment_id"),
-            filename: row.get("filename"),
-            mime_type: row.get("mime_type"),
-            internal_date_ts: row.get("internal_date_ts"),
-            message_db_id: row.get("message_db_id"),
-            thread_db_id: row.get("thread_db_id"),
-            sender_email: row.get("sender_email"),
-            subject: row.get("subject"),
-        })
+        .map(map_row_to_attachment_metadata)
+        .collect();
+
+    Ok(attachments)
+}
+
+/// fetch videos and non-inline images from a thread for insertion into sfs. we insert them into
+/// sfs so we can display thumbnails for them in the FE.
+#[tracing::instrument(skip(db), err)]
+pub async fn thread_media_atts_for_backfill(
+    db: &Pool<Postgres>,
+    thread_id: Uuid,
+) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
+    let query = format!(
+        r#"
+        SELECT
+            a.id AS attachment_db_id,
+            m.provider_id as email_provider_id,
+            a.provider_attachment_id as provider_attachment_id,
+            a.filename as filename,
+            a.mime_type as mime_type,
+            m.internal_date_ts as internal_date_ts,
+            m.id as message_db_id,
+            m.thread_id as thread_db_id,
+            from_contact.email_address as sender_email,
+            m.subject as subject
+        FROM email_attachments a
+        JOIN email_messages m ON a.message_id = m.id
+        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
+        WHERE m.thread_id = $1
+            -- attachment mime type filters injected below
+            AND {}
+        ORDER BY a.id
+        "#,
+        ATTACHMENT_MIME_TYPE_FILTERS_WITH_MEDIA
+    );
+
+    let rows = sqlx::query(&query).bind(thread_id).fetch_all(db).await?;
+
+    let attachments = rows
+        .into_iter()
+        .map(map_row_to_attachment_metadata)
         .collect();
 
     Ok(attachments)
@@ -93,7 +124,7 @@ pub async fn fetch_thread_attachments_for_backfill(
 /// is someone the user has previously contacted (excluding the user themselves).
 /// This is called after email backfill completion to identify additional attachments
 /// that should be uploaded based on the user's interaction history. This isn't done at time of thread
-/// completion like fetch_thread_attachments_for_backfill because this can only be known at time
+/// completion like thread_document_atts_for_backfill because this can only be known at time
 /// of job completion, as we don't know everyone the user has sent messages to until all their
 /// messages have been backfilled.
 ///
@@ -179,18 +210,7 @@ pub async fn fetch_job_attachments_for_backfill(
 
     let attachments = rows
         .into_iter()
-        .map(|row| AttachmentUploadMetadata {
-            attachment_db_id: row.get("attachment_db_id"),
-            email_provider_id: row.get("email_provider_id"),
-            provider_attachment_id: row.get("provider_attachment_id"),
-            filename: row.get("filename"),
-            mime_type: row.get("mime_type"),
-            internal_date_ts: row.get("internal_date_ts"),
-            message_db_id: row.get("message_db_id"),
-            thread_db_id: row.get("thread_db_id"),
-            sender_email: row.get("sender_email"),
-            subject: row.get("subject"),
-        })
+        .map(map_row_to_attachment_metadata)
         .collect();
 
     Ok(attachments)
@@ -210,7 +230,7 @@ pub async fn fetch_job_attachments_for_backfill(
 /// and fetch_job_attachments_for_backfill respectively, except they also verify the attachment
 /// doesn't already exist in document_email table.
 #[tracing::instrument(skip(db), err)]
-pub async fn fetch_insertable_attachments_for_new_email(
+pub async fn new_email_document_atts(
     db: &Pool<Postgres>,
     message_provider_id: &str,
 ) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
@@ -271,18 +291,7 @@ pub async fn fetch_insertable_attachments_for_new_email(
 
     let attachments: Vec<AttachmentUploadMetadata> = rows
         .into_iter()
-        .map(|row| AttachmentUploadMetadata {
-            attachment_db_id: row.get("attachment_db_id"),
-            email_provider_id: row.get("email_provider_id"),
-            provider_attachment_id: row.get("provider_attachment_id"),
-            filename: row.get("filename"),
-            mime_type: row.get("mime_type"),
-            internal_date_ts: row.get("internal_date_ts"),
-            message_db_id: row.get("message_db_id"),
-            thread_db_id: row.get("thread_db_id"),
-            sender_email: row.get("sender_email"),
-            subject: row.get("subject"),
-        })
+        .map(map_row_to_attachment_metadata)
         .collect();
 
     // if one or more condition has already been met, return - don't need to check condition 5
@@ -373,18 +382,53 @@ pub async fn fetch_insertable_attachments_for_new_email(
 
     let attachments = rows
         .into_iter()
-        .map(|row| AttachmentUploadMetadata {
-            attachment_db_id: row.get("attachment_db_id"),
-            email_provider_id: row.get("email_provider_id"),
-            provider_attachment_id: row.get("provider_attachment_id"),
-            filename: row.get("filename"),
-            mime_type: row.get("mime_type"),
-            internal_date_ts: row.get("internal_date_ts"),
-            message_db_id: row.get("message_db_id"),
-            thread_db_id: row.get("thread_db_id"),
-            sender_email: row.get("sender_email"),
-            subject: row.get("subject"),
-        })
+        .map(map_row_to_attachment_metadata)
+        .collect();
+
+    Ok(attachments)
+}
+
+/// fetch videos and non-inline images for a new email for insertion into sfs. we insert them into
+/// sfs so we can display thumbnails for them in the FE.
+#[tracing::instrument(skip(db), err)]
+pub async fn new_email_media_atts(
+    db: &Pool<Postgres>,
+    message_provider_id: &str,
+) -> anyhow::Result<Vec<AttachmentUploadMetadata>> {
+    let query1 = format!(
+        r#"
+        SELECT
+            a.id AS attachment_db_id,
+            m.provider_id as email_provider_id,
+            a.provider_attachment_id as provider_attachment_id,
+            a.filename as filename,
+            a.mime_type as mime_type,
+            m.internal_date_ts as internal_date_ts,
+            m.id as message_db_id,
+            m.thread_id as thread_db_id,
+            from_contact.email_address as sender_email,
+            m.subject as subject
+        FROM email_attachments a
+        JOIN email_messages m ON a.message_id = m.id
+        JOIN email_contacts from_contact ON m.from_contact_id = from_contact.id
+        LEFT JOIN email_attachments_sfs eas ON eas.attachment_id = a.id
+        WHERE m.provider_id = $1
+            -- attachment mime type filters injected below
+            AND {}
+        AND eas.attachment_id IS NULL
+        ORDER BY a.id
+        "#,
+        ATTACHMENT_MIME_TYPE_FILTERS_WITH_MEDIA
+    );
+
+    let rows = sqlx::query(&query1)
+        .bind(message_provider_id)
+        .fetch_all(db)
+        .await?;
+
+    let attachments: Vec<AttachmentUploadMetadata> = rows
+        .into_iter()
+        .map(map_row_to_attachment_metadata)
         .collect();
 
     Ok(attachments)
@@ -422,6 +466,22 @@ pub async fn fetch_attachment_upload_metadata_by_id(
     .await?;
 
     Ok(row)
+}
+
+/// Helper function to map a database row to AttachmentUploadMetadata
+fn map_row_to_attachment_metadata(row: sqlx::postgres::PgRow) -> AttachmentUploadMetadata {
+    AttachmentUploadMetadata {
+        attachment_db_id: row.get("attachment_db_id"),
+        email_provider_id: row.get("email_provider_id"),
+        provider_attachment_id: row.get("provider_attachment_id"),
+        filename: row.get("filename"),
+        mime_type: row.get("mime_type"),
+        internal_date_ts: row.get("internal_date_ts"),
+        message_db_id: row.get("message_db_id"),
+        thread_db_id: row.get("thread_db_id"),
+        sender_email: row.get("sender_email"),
+        subject: row.get("subject"),
+    }
 }
 
 #[cfg(test)]

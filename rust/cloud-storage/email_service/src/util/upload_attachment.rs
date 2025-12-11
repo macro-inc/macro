@@ -9,31 +9,37 @@ use macro_user_id::cowlike::ArcCowStr;
 use macro_user_id::user_id::MacroUserId;
 use model::document::response::{CreateDocumentRequest, CreateDocumentResponse};
 use models_email::gmail::operations::GmailApiOperation;
-use models_email::service::attachment::{AttachmentUploadArgs, AttachmentUploadMetadata};
+use models_email::service::attachment::{
+    AttachmentSfs, AttachmentUploadArgs, AttachmentUploadMetadata,
+};
 use models_email::service::link;
 use sha2::{Digest, Sha256};
+use static_file_service_client::StaticFileServiceClient;
 use std::sync::Arc;
 use system_properties::{
     EmailAttachmentInput, EmailAttachmentProperty, PgSystemPropertiesRepository, SourceEntity,
     SystemPropertiesService, SystemPropertiesServiceImpl,
 };
+use uuid::Uuid;
 
 /// Context required for uploading an email attachment.
 pub struct UploadAttachmentContext<'a> {
+    pub db: &'a sqlx::Pool<sqlx::Postgres>,
     pub redis_client: &'a RedisClient,
     pub gmail_client: &'a GmailClient,
     pub dss_client: &'a DocumentStorageServiceClient,
+    pub sfs_client: &'a StaticFileServiceClient,
     pub system_properties_service:
         &'a Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     pub access_token: &'a str,
     pub link: &'a link::Link,
 }
 
-/// Upload an email attachment to DSS as a document.
-#[tracing::instrument(skip(ctx, attachment_args), err)]
+/// Upload an email attachment to DSS as a document or SFS as media.
+#[tracing::instrument(skip(ctx, args), err)]
 pub async fn upload_attachment(
     ctx: UploadAttachmentContext<'_>,
-    attachment_args: &AttachmentUploadArgs,
+    args: &AttachmentUploadArgs,
 ) -> anyhow::Result<String> {
     // 1. Check rate limits before making a Gmail API call.
     check_gmail_rate_limit(
@@ -49,32 +55,80 @@ pub async fn upload_attachment(
     let attachment_data = fetch_gmail_attachment_data(
         ctx.gmail_client,
         ctx.access_token,
-        &attachment_args.attachment_metadata,
+        &args.attachment_metadata,
     )
     .await?;
 
-    // 3. Calculate hashes required for the upload process.
+    let mime_type = args.attachment_metadata.mime_type.clone();
+
+    if mime_type.starts_with("image/") || mime_type.starts_with("video/") {
+        upload_media_attachment(&ctx, args, attachment_data, mime_type).await
+    } else {
+        upload_document_attachment(&ctx, args, attachment_data).await
+    }
+}
+
+/// Uploads an image or video attachment to SFS.
+#[tracing::instrument(skip(ctx, attachment_data), err)]
+async fn upload_media_attachment(
+    ctx: &UploadAttachmentContext<'_>,
+    args: &AttachmentUploadArgs,
+    attachment_data: Vec<u8>,
+    mime_type: String,
+) -> anyhow::Result<String> {
+    // Upload to SFS
+    let sfs_response = ctx
+        .sfs_client
+        .put_file_with_bytes("a", bytes::Bytes::from(attachment_data), mime_type)
+        .await
+        .context("Failed to upload media to SFS")?;
+
+    // Store metadata in email_attachments_sfs table
+    let attachment_sfs_id = macro_uuid::generate_uuid_v7();
+    let sfs_id = Uuid::parse_str(&sfs_response.id).context("Failed to parse SFS ID as UUID")?;
+
+    email_db_client::attachments::sfs::insert_attachment_sfs(
+        ctx.db,
+        &AttachmentSfs {
+            id: attachment_sfs_id,
+            attachment_id: Some(args.attachment_metadata.attachment_db_id),
+            sfs_id,
+        },
+    )
+    .await?;
+
+    Ok(sfs_response.id)
+}
+
+/// Uploads a document attachment to DSS.
+#[tracing::instrument(skip(ctx, attachment_data), err)]
+async fn upload_document_attachment(
+    ctx: &UploadAttachmentContext<'_>,
+    args: &AttachmentUploadArgs,
+    attachment_data: Vec<u8>,
+) -> anyhow::Result<String> {
+    // 1. Calculate hashes required for the upload process.
     let (hex_hash, base64_hash) = calculate_hashes(&attachment_data);
 
-    // 4. Determine file metadata from the payload.
-    let (file_name, file_type) = determine_file_metadata(&attachment_args.attachment_metadata)?;
+    // 2. Determine file metadata from the payload.
+    let (file_name, file_type) = determine_file_metadata(&args.attachment_metadata)?;
 
-    // 5. Create the document record in DSS and get a presigned URL for the upload.
+    // 3. Create the document record in DSS and get a presigned URL for the upload.
     let dss_response = create_dss_document_record(
         ctx.dss_client,
         ctx.link,
-        &attachment_args.attachment_metadata,
+        &args.attachment_metadata,
         &hex_hash,
         &file_name,
         &file_type,
-        attachment_args.backfill,
+        args.backfill,
     )
     .await?;
 
-    // 6. Upload the attachment data to the presigned URL.
+    // 4. Upload the attachment data to the presigned URL.
     upload_data_to_presigned_url(&dss_response, attachment_data, &base64_hash).await?;
 
-    // 7. Return document id to caller
+    // 5. Get document id
     let document_id = dss_response
         .data
         .document_response
@@ -82,9 +136,8 @@ pub async fn upload_attachment(
         .document_id
         .clone();
 
-    // 8. Set properties for attachment
-    set_email_attachment_properties(ctx.system_properties_service, &document_id, attachment_args)
-        .await?;
+    // 6. Set properties for attachment
+    set_email_attachment_properties(ctx.system_properties_service, &document_id, args).await?;
 
     Ok(document_id)
 }

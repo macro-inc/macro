@@ -14,7 +14,7 @@ async fn thread_attachments_for_backfill_condition_1(pool: Pool<Postgres>) -> Re
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS; // Dummy reference for IDE
 
     let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000101")?;
-    let res = fetch_thread_attachments_for_backfill(&pool, thread_id).await?;
+    let res = thread_document_atts_for_backfill(&pool, thread_id).await?;
 
     // Only the application/pdf attachment should be included
     assert_eq!(res.len(), 1);
@@ -36,7 +36,7 @@ async fn thread_attachments_for_backfill_condition_2(pool: Pool<Postgres>) -> Re
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS; // Dummy reference for IDE
 
     let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000102")?;
-    let res = fetch_thread_attachments_for_backfill(&pool, thread_id).await?;
+    let res = thread_document_atts_for_backfill(&pool, thread_id).await?;
 
     assert_eq!(res.len(), 1);
     assert_eq!(res[0].filename, "important_doc.pdf");
@@ -56,7 +56,7 @@ async fn thread_attachments_for_backfill_condition_3(pool: Pool<Postgres>) -> Re
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS; // Dummy reference for IDE
 
     let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000103")?;
-    let res = fetch_thread_attachments_for_backfill(&pool, thread_id).await?;
+    let res = thread_document_atts_for_backfill(&pool, thread_id).await?;
 
     assert_eq!(res.len(), 1);
     assert_eq!(res[0].filename, "same_domain_doc.pdf");
@@ -76,7 +76,7 @@ async fn thread_attachments_for_backfill_no_matching_messages(pool: Pool<Postgre
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS; // Dummy reference for IDE
 
     let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000104")?;
-    let res = fetch_thread_attachments_for_backfill(&pool, thread_id).await?;
+    let res = thread_document_atts_for_backfill(&pool, thread_id).await?;
 
     assert!(res.is_empty());
 
@@ -95,7 +95,7 @@ async fn thread_attachments_for_backfill_condition_4(pool: Pool<Postgres>) -> Re
     const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS; // Dummy reference for IDE
 
     let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000105")?;
-    let res = fetch_thread_attachments_for_backfill(&pool, thread_id).await?;
+    let res = thread_document_atts_for_backfill(&pool, thread_id).await?;
 
     assert_eq!(res.len(), 1);
     assert_eq!(res[0].filename, "docusign_doc.pdf");
@@ -149,7 +149,7 @@ async fn insertable_attachments_condition_1_user_sent_message(pool: Pool<Postgre
 
     // Test condition 1: user sent the message
     let message_provider_id = "target-msg-101";
-    let res = fetch_insertable_attachments_for_new_email(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(&pool, message_provider_id).await?;
 
     // Should return 1 attachment (sent_message_doc.pdf)
     assert_eq!(res.len(), 1);
@@ -172,7 +172,7 @@ async fn insertable_attachments_condition_2_important_label(pool: Pool<Postgres>
 
     // Test condition 2: message has IMPORTANT label
     let message_provider_id = "target-msg-201";
-    let res = fetch_insertable_attachments_for_new_email(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(&pool, message_provider_id).await?;
 
     // Should return 1 attachment (important_doc.pdf)
     assert_eq!(res.len(), 1);
@@ -195,7 +195,7 @@ async fn insertable_attachments_condition_3_same_domain(pool: Pool<Postgres>) ->
 
     // Test condition 3: message from same domain as user
     let message_provider_id = "target-msg-301";
-    let res = fetch_insertable_attachments_for_new_email(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(&pool, message_provider_id).await?;
 
     // Should return 1 attachment (same_domain_doc.pdf)
     assert_eq!(res.len(), 1);
@@ -218,7 +218,7 @@ async fn insertable_attachments_condition_4_whitelisted_domain(pool: Pool<Postgr
 
     // Test condition 4: message from whitelisted domain
     let message_provider_id = "target-msg-801";
-    let res = fetch_insertable_attachments_for_new_email(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(&pool, message_provider_id).await?;
 
     // Should return 1 attachment (whitelisted_domain_doc.pdf)
     assert_eq!(res.len(), 1);
@@ -243,7 +243,7 @@ async fn insertable_attachments_condition_5_previously_contacted(
 
     // Test condition 4: user has previously contacted a thread participant
     let message_provider_id = "target-msg-401";
-    let res = fetch_insertable_attachments_for_new_email(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(&pool, message_provider_id).await?;
 
     // Should return 1 attachment (previously_contacted_doc.pdf)
     // This should be found by the second query (condition 4)
@@ -267,7 +267,7 @@ async fn insertable_attachments_no_conditions_met(pool: Pool<Postgres>) -> Resul
 
     // Test control case: no conditions met
     let message_provider_id = "target-msg-601";
-    let res = fetch_insertable_attachments_for_new_email(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(&pool, message_provider_id).await?;
 
     // Should return 0 attachments
     assert_eq!(res.len(), 0);
@@ -287,7 +287,7 @@ async fn insertable_attachments_excludes_already_uploaded(pool: Pool<Postgres>) 
 
     // Test document_email exclusion
     let message_provider_id = "target-msg-701";
-    let res = fetch_insertable_attachments_for_new_email(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(&pool, message_provider_id).await?;
 
     // Should return 0 attachments (attachment already exists in document_email)
     assert_eq!(res.len(), 0);
@@ -307,7 +307,7 @@ async fn insertable_attachments_filters_mime_types(pool: Pool<Postgres>) -> Resu
 
     // Test that filtered mime types are excluded
     let message_provider_id = "target-msg-101";
-    let res = fetch_insertable_attachments_for_new_email(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(&pool, message_provider_id).await?;
 
     // Should only return PDF, not image or zip
     assert_eq!(res.len(), 1);
@@ -340,7 +340,7 @@ async fn insertable_attachments_thread_exists_logic(pool: Pool<Postgres>) -> Res
 
     // target-msg-202 is in Thread 2, which contains target-msg-201 with IMPORTANT label
     let message_provider_id = "other-msg-202";
-    let res = fetch_insertable_attachments_for_new_email(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(&pool, message_provider_id).await?;
 
     // Should return 0 because other-msg-202 has no attachments
     // But the EXISTS clause should still evaluate to true due to target-msg-201 having IMPORTANT
@@ -366,11 +366,178 @@ async fn insertable_attachments_returns_first_query_when_available(
 
     // Use a message that meets condition 1 (is_sent = true)
     let message_provider_id = "target-msg-101";
-    let res = fetch_insertable_attachments_for_new_email(&pool, message_provider_id).await?;
+    let res = new_email_document_atts(&pool, message_provider_id).await?;
 
     // Should return result from first query
     assert_eq!(res.len(), 1);
     assert_eq!(res[0].filename, "sent_message_doc.pdf");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_thread_media_for_backfill")
+    )
+)]
+async fn thread_media_for_backfill_includes_non_inline_images_and_videos(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000201")?;
+    let res = thread_media_atts_for_backfill(&pool, thread_id).await?;
+
+    // Should return 2 attachments: photo.jpg and video.mp4
+    // Should NOT include document.pdf (filtered out)
+    assert_eq!(res.len(), 2);
+
+    let filenames: Vec<&str> = res.iter().map(|a| a.filename.as_str()).collect();
+    assert!(filenames.contains(&"photo.jpg"));
+    assert!(filenames.contains(&"video.mp4"));
+    assert!(!filenames.contains(&"document.pdf"));
+
+    // Verify mime types
+    for attachment in &res {
+        assert!(
+            attachment.mime_type.starts_with("image/")
+                || attachment.mime_type.starts_with("video/")
+        );
+    }
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_thread_media_for_backfill")
+    )
+)]
+async fn thread_media_for_backfill_filters_inline_images(pool: Pool<Postgres>) -> Result<()> {
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000202")?;
+    let res = thread_media_atts_for_backfill(&pool, thread_id).await?;
+
+    // Should return 0 attachments (inline image is filtered out)
+    assert_eq!(res.len(), 0);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_thread_media_for_backfill")
+    )
+)]
+async fn thread_media_for_backfill_handles_multiple_media_types(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000203")?;
+    let res = thread_media_atts_for_backfill(&pool, thread_id).await?;
+
+    // Should return 3 attachments: PNG, GIF, MOV
+    assert_eq!(res.len(), 3);
+
+    let filenames: Vec<&str> = res.iter().map(|a| a.filename.as_str()).collect();
+    assert!(filenames.contains(&"screenshot.png"));
+    assert!(filenames.contains(&"animation.gif"));
+    assert!(filenames.contains(&"clip.mov"));
+
+    // Verify mime types are correct
+    let mime_types: Vec<&str> = res.iter().map(|a| a.mime_type.as_str()).collect();
+    assert!(mime_types.contains(&"image/png"));
+    assert!(mime_types.contains(&"image/gif"));
+    assert!(mime_types.contains(&"video/quicktime"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("fetch_thread_media_for_backfill")
+    )
+)]
+async fn thread_media_for_backfill_returns_empty_for_thread_without_media(
+    pool: Pool<Postgres>,
+) -> Result<()> {
+    let thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000204")?;
+    let res = thread_media_atts_for_backfill(&pool, thread_id).await?;
+
+    // Should return 0 attachments
+    assert_eq!(res.len(), 0);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("fetch_new_email_media"))
+)]
+async fn new_email_media_includes_non_inline_attachments(pool: Pool<Postgres>) -> Result<()> {
+    let message_provider_id = "new-media-msg-301";
+    let res = new_email_media_atts(&pool, message_provider_id).await?;
+
+    // Should return 2 attachments: new_photo.jpg and new_video.mp4
+    assert_eq!(res.len(), 2);
+
+    let filenames: Vec<&str> = res.iter().map(|a| a.filename.as_str()).collect();
+    assert!(filenames.contains(&"new_photo.jpg"));
+    assert!(filenames.contains(&"new_video.mp4"));
+
+    // Verify mime types
+    let mime_types: Vec<&str> = res.iter().map(|a| a.mime_type.as_str()).collect();
+    assert!(mime_types.contains(&"image/jpeg"));
+    assert!(mime_types.contains(&"video/mp4"));
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("fetch_new_email_media"))
+)]
+async fn new_email_media_excludes_already_uploaded_to_sfs(pool: Pool<Postgres>) -> Result<()> {
+    let message_provider_id = "new-media-msg-302";
+    let res = new_email_media_atts(&pool, message_provider_id).await?;
+
+    // Should return 0 attachments (attachment already exists in email_attachments_sfs)
+    assert_eq!(res.len(), 0);
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("fetch_new_email_media"))
+)]
+async fn new_email_media_filters_inline_images(pool: Pool<Postgres>) -> Result<()> {
+    let message_provider_id = "new-media-msg-303";
+    let res = new_email_media_atts(&pool, message_provider_id).await?;
+
+    // Should return 1 attachment: attachment_image.png
+    // Should NOT include inline_image.png (has content_id)
+    assert_eq!(res.len(), 1);
+    assert_eq!(res[0].filename, "attachment_image.png");
+    assert_eq!(res[0].mime_type, "image/png");
+
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("fetch_new_email_media"))
+)]
+async fn new_email_media_returns_empty_for_nonexistent_message(pool: Pool<Postgres>) -> Result<()> {
+    let message_provider_id = "nonexistent-msg-id";
+    let res = new_email_media_atts(&pool, message_provider_id).await?;
+
+    // Should return 0 attachments
+    assert_eq!(res.len(), 0);
 
     Ok(())
 }

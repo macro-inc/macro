@@ -26,8 +26,8 @@ pub async fn insert_attachments(
     let existing_attachments = sqlx::query_as!(
         db::attachment::Attachment,
         r#"
-        SELECT id, message_id, provider_attachment_id, filename, mime_type, size_bytes, content_id, created_at
-        FROM email_attachments
+        SELECT ea.id, ea.message_id, ea.provider_attachment_id, ea.filename, ea.mime_type, ea.size_bytes, ea.content_id, eas.sfs_id, ea.created_at
+        FROM email_attachments ea LEFT JOIN email_attachments_sfs eas on ea.id = eas.attachment_id
         WHERE message_id = $1
         "#,
         message_id
@@ -162,10 +162,11 @@ pub async fn fetch_db_attachments(
     sqlx::query_as!(
         db::attachment::Attachment,
         r#"
-        SELECT id, message_id, provider_attachment_id, filename, mime_type, size_bytes, content_id, created_at
-        FROM email_attachments
-        WHERE message_id = $1
-        ORDER BY filename NULLS LAST
+        SELECT ea.id, ea.message_id, ea.provider_attachment_id, ea.filename, ea.mime_type, ea.size_bytes, ea.content_id, eas.sfs_id, ea.created_at
+        FROM email_attachments ea
+        LEFT JOIN email_attachments_sfs eas ON ea.id = eas.attachment_id
+        WHERE ea.message_id = $1
+        ORDER BY ea.filename NULLS LAST
         "#,
         message_db_id
     )
@@ -197,15 +198,16 @@ pub async fn fetch_attachment_by_id(
     attachment_id: Uuid,
     link_id: Uuid,
 ) -> anyhow::Result<Option<(service::attachment::Attachment, String)>> {
-    // Modified query to include message.provider_id
+    // Modified query to include message.provider_id and sfs_id
     let result = sqlx::query!(
         r#"
         SELECT 
             a.id, a.message_id, a.provider_attachment_id, 
             a.filename, a.mime_type, a.size_bytes, 
-            a.content_id, a.created_at, m.provider_id as "message_provider_id!"
+            a.content_id, eas.sfs_id as "sfs_id?", a.created_at, m.provider_id as "message_provider_id!"
         FROM email_attachments a
         JOIN email_messages m ON a.message_id = m.id
+        LEFT JOIN email_attachments_sfs eas ON a.id = eas.attachment_id
         WHERE a.id = $1 AND m.link_id = $2
         "#,
         attachment_id,
@@ -231,6 +233,7 @@ pub async fn fetch_attachment_by_id(
                 mime_type: record.mime_type,
                 size_bytes: record.size_bytes,
                 content_id: record.content_id,
+                sfs_id: record.sfs_id,
                 created_at: record.created_at,
             };
 
@@ -263,13 +266,16 @@ pub async fn get_attachments_by_thread_ids(
             a.mime_type,
             a.size_bytes,
             a.content_id,
+            eas.sfs_id as "sfs_id?",
             a.created_at,
             m.thread_id
         FROM 
             email_attachments a
         JOIN
             email_messages m ON a.message_id = m.id
-        WHERE 
+        LEFT JOIN
+            email_attachments_sfs eas ON a.id = eas.attachment_id
+        WHERE
             m.thread_id = ANY($1)
         ORDER BY 
             a.created_at ASC
@@ -293,6 +299,7 @@ pub async fn get_attachments_by_thread_ids(
             mime_type: record.mime_type,
             size_bytes: record.size_bytes,
             content_id: record.content_id,
+            sfs_id: record.sfs_id,
             created_at: record.created_at,
         };
 

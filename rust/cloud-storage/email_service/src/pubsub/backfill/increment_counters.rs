@@ -239,32 +239,7 @@ async fn handle_thread_completed(
             })
         })?;
 
-    // temporarily only for macro emails, for testing
-    if link.macro_id.as_ref().ends_with("@macro.com") && !cfg!(not(feature = "attachment_upload")) {
-        let attachments =
-            email_db_client::attachments::provider::upload::fetch_thread_attachments_for_backfill(
-                &ctx.db,
-                p.thread_db_id,
-            )
-            .await
-            .map_err(|e| {
-                ProcessingError::NonRetryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e
-                        .context("Failed to fetch thread attachment backfill metadata".to_string()),
-                })
-            })?;
-
-        if !attachments.is_empty() {
-            tracing::debug!(
-                "Found {} attachments to backfill for thread {}",
-                attachments.len(),
-                p.thread_db_id
-            );
-
-            send_attachment_backfill_messages(ctx, link.id, job_id, attachments).await?;
-        }
-    }
+    handle_thread_attachment_upload(ctx, link, job_id, p.thread_db_id).await?;
 
     Ok(())
 }
@@ -334,6 +309,51 @@ async fn send_attachment_backfill_messages(
                     source: e.context("Failed to enqueue attachment backfill message".to_string()),
                 })
             })?;
+    }
+
+    Ok(())
+}
+
+#[tracing::instrument(skip(ctx))]
+async fn handle_thread_attachment_upload(
+    ctx: &PubSubContext,
+    link: &Link,
+    job_id: Uuid,
+    thread_db_id: Uuid,
+) -> Result<(), ProcessingError> {
+    // temporarily only for macro emails, for testing
+    if !link.macro_id.as_ref().ends_with("@macro.com") || cfg!(not(feature = "attachment_upload")) {
+        return Ok(());
+    }
+
+    let (attachments, attachments2) = tokio::try_join!(
+        email_db_client::attachments::provider::upload::thread_document_atts_for_backfill(
+            &ctx.db,
+            thread_db_id,
+        ),
+        email_db_client::attachments::provider::upload::thread_media_atts_for_backfill(
+            &ctx.db,
+            thread_db_id,
+        )
+    )
+    .map_err(|e| {
+        ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: e.context("Failed to fetch thread attachment backfill metadata".to_string()),
+        })
+    })?;
+
+    let mut all_attachments = attachments;
+    all_attachments.extend(attachments2);
+
+    if !all_attachments.is_empty() {
+        tracing::debug!(
+            "Found {} attachments to backfill for thread {}",
+            all_attachments.len(),
+            thread_db_id
+        );
+
+        send_attachment_backfill_messages(ctx, link.id, job_id, all_attachments).await?;
     }
 
     Ok(())
