@@ -1,6 +1,12 @@
+import clickOutside from '@core/directive/clickOutside';
+import { Dialog } from '@kobalte/core/dialog';
 import { createMemo, createSignal, For, Show } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { createSoupContext } from '../../SoupContext';
 import { SplitPanelContext } from '../context';
+
+false && clickOutside;
+
 import type {
   PopoverSplitOptions,
   SplitContent,
@@ -8,7 +14,6 @@ import type {
   SplitId,
   SplitMount,
 } from '../layoutManager';
-import { SplitModal } from './SplitModal';
 
 export type PopoverSplitData = {
   id: string;
@@ -119,7 +124,6 @@ function PopoverSplitModal(props: {
         return 'items-center justify-start pl-16';
       case 'right':
         return 'items-center justify-end pr-16';
-      case 'center':
       default:
         return 'items-center justify-center';
     }
@@ -135,31 +139,40 @@ function PopoverSplitModal(props: {
   };
 
   return (
-    <SplitModal
-      open={() => popover.isOpen}
-      setOpen={(open) => {
+    <Dialog
+      open={popover.isOpen}
+      onOpenChange={(open) => {
         if (!open) {
           props.onClose();
         }
       }}
-      mode="split"
-      scrim={true}
+      modal={true}
     >
-      <div
-        class={`flex ${getPositionClass()} w-full h-full pointer-events-none`}
-      >
+      <Portal>
+        <Dialog.Overlay
+          as="div"
+          class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
+          use:clickOutside={() => props.onClose()}
+          on:click={() => props.onClose()}
+        />
         <div
-          ref={setPanelRef}
-          class={`pointer-events-auto bg-menu border border-edge shadow-lg ${
-            popover.options.style?.className ?? ''
-          }`}
-          style={getContentStyle()}
+          class={`fixed inset-0 z-modal flex ${getPositionClass()} pointer-events-none`}
         >
-          <SplitPanelContext.Provider value={stubPanelContext}>
-            <Show when={popover.mount}>{popover.mount.element()}</Show>
-          </SplitPanelContext.Provider>
+          <Dialog.Content>
+            <div
+              ref={setPanelRef}
+              class={`pointer-events-auto bg-menu border border-edge shadow-lg ${
+                popover.options.style?.className ?? ''
+              }`}
+              style={getContentStyle()}
+            >
+              <SplitPanelContext.Provider value={stubPanelContext}>
+                <Show when={popover.mount}>{popover.mount.element()}</Show>
+              </SplitPanelContext.Provider>
+            </div>
+          </Dialog.Content>
         </div>
-      </div>
-    </SplitModal>
+      </Portal>
+    </Dialog>
   );
 }

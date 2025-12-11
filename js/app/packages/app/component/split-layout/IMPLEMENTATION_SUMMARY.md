@@ -31,7 +31,8 @@ I've successfully implemented the temporary popover split feature for the layout
 ### 4. React Components
 
 **PopoverSplitRenderer (`components/PopoverSplitRenderer.tsx`):**
-- Renders all active popovers using existing `SplitModal`
+- Renders all active popovers using Kobalte Dialog component
+- Provides stub `SplitPanelContext` so components work normally
 - Handles positioning, styling, and z-index stacking
 - Integrates with split layout focus and cleanup systems
 
@@ -70,8 +71,8 @@ I've successfully implemented the temporary popover split feature for the layout
 - ✅ Bulk operations (close all)
 
 ### ✅ Integration
-- ✅ Uses existing `SplitModal` component
-- ✅ Leverages `ScopedPortal` for proper scoping
+- ✅ Uses Kobalte Dialog component directly
+- ✅ Provides `SplitPanelContext` stub for component compatibility
 - ✅ Reuses `createPinnedMount` for consistency
 - ✅ No breaking changes to existing API
 
@@ -139,7 +140,8 @@ manager.closeAllPopovers();
 Popovers are managed separately from main splits since they're temporary and don't participate in URL routing or history.
 
 ### 2. Reuse Existing Infrastructure
-- Uses `SplitModal` for consistent modal behavior
+- Uses Kobalte Dialog for modal behavior
+- Provides `SplitPanelContext` stub for component compatibility
 - Uses `createPinnedMount` for consistent mounting logic
 - Leverages component registry and block orchestrator
 

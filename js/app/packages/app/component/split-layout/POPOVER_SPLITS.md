@@ -4,7 +4,7 @@ This document describes the new popover split feature, which allows you to rende
 
 ## Overview
 
-Popover splits provide a way to display content in a modal dialog without creating a permanent split. They are perfect for:
+Popover splits provide a way to display content in a modal dialog without creating a permanent split. They automatically provide a `SplitPanelContext` so that blocks and components work exactly as they would in regular splits. They are perfect for:
 
 - Quick actions (compose, search, etc.)
 - Temporary content viewing
