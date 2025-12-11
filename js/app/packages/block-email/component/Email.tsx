@@ -130,7 +130,8 @@ export function Email(props: EmailProps) {
       if (!t) return;
       const map: Record<string, MessageWithBodyReplyless> = {};
       for (const message of t.messages) {
-        if (!message.is_draft || message.body_text?.trim().length === 0) continue;
+        if (!message.is_draft || message.body_text?.trim().length === 0)
+          continue;
         const replyingToId = message.replying_to_id;
         if (replyingToId) {
           map[replyingToId] = message;
