@@ -579,18 +579,9 @@ mod tests {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
         let entity_refs = vec![
-            EntityReference {
-                entity_id: "doc1".to_string(),
-                entity_type: EntityType::Document,
-            },
-            EntityReference {
-                entity_id: "doc2".to_string(),
-                entity_type: EntityType::Document,
-            },
-            EntityReference {
-                entity_id: "proj1".to_string(),
-                entity_type: EntityType::Project,
-            },
+            EntityReference::new("doc1", EntityType::Document),
+            EntityReference::new("doc2", EntityType::Document),
+            EntityReference::new("proj1", EntityType::Project),
         ];
         let properties_map = get_bulk_entity_properties_values(&pool, &entity_refs).await?;
 
@@ -612,14 +603,8 @@ mod tests {
         const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
 
         let entity_refs = vec![
-            EntityReference {
-                entity_id: "doc1".to_string(),
-                entity_type: EntityType::Document,
-            },
-            EntityReference {
-                entity_id: "nonexistent".to_string(),
-                entity_type: EntityType::Document,
-            },
+            EntityReference::new("doc1", EntityType::Document),
+            EntityReference::new("nonexistent", EntityType::Document),
         ];
         let properties_map = get_bulk_entity_properties_values(&pool, &entity_refs).await?;
 

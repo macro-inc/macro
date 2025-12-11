@@ -276,7 +276,8 @@ export const getEntityPropertiesResponse = zod.object({
   "type": zod.enum(['EntityReference']),
   "value": zod.array(zod.object({
   "entity_id": zod.string(),
-  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
 }).describe('Entity reference for entity-type property values.')).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)')
 }).describe('Entity reference(s) - always an array (check is_multi_select to determine if single or multi)\nSingle-select: {\"type\": \"EntityReference\", \"value\": [{...}]} (length 0 or 1)\nMulti-select: {\"type\": \"EntityReference\", \"value\": [{...}, {...}, ...]} (length 0+)'),zod.object({
   "type": zod.enum(['Link']),
@@ -317,13 +318,15 @@ export const setEntityPropertyBody = zod.object({
 }).describe('Multiple select options by ID (for multi-select properties)'),zod.object({
   "reference": zod.object({
   "entity_id": zod.string(),
-  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
 }).describe('Entity reference for entity-type property values.'),
   "type": zod.enum(['entity_reference'])
 }).describe('Entity reference'),zod.object({
   "references": zod.array(zod.object({
   "entity_id": zod.string(),
-  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.')
+  "entity_type": zod.enum(['CHANNEL', 'CHAT', 'COMPANY', 'DOCUMENT', 'PROJECT', 'TASK', 'THREAD', 'USER']).describe('Type of entity that can be referenced by entity properties.'),
+  "specific_message_id": zod.string().uuid().nullish().describe('For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat.')
 }).describe('Entity reference for entity-type property values.')),
   "type": zod.enum(['multi_entity_reference'])
 }).describe('Multiple entity references (for multi-select entity properties)'),zod.object({
