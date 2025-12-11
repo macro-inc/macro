@@ -32,6 +32,7 @@ import {
   prepareEmailBody,
 } from '../util/prepareEmailBody';
 import { AttachMenu } from './AttachMenu';
+import { MACRO_EMAIL_SIGNATURE } from '@block-email/constants';
 
 false && fileDrop;
 
@@ -117,7 +118,11 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
   let composeContainerRef: HTMLDivElement | undefined;
 
   async function handleSend() {
-    const prepared = prepareEmailBody(editor());
+    const prepared = prepareEmailBody(
+      editor(),
+      undefined,
+      MACRO_EMAIL_SIGNATURE
+    );
     if (!prepared) return;
 
     const bodyMacro = content();
