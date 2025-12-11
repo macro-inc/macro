@@ -21,11 +21,8 @@ pub async fn add_attachments_to_message(
         .collect();
 
     let entity_types: Vec<String> = attachments.iter().map(|a| a.entity_type.clone()).collect();
-
     let entity_ids: Vec<String> = attachments.iter().map(|a| a.entity_id.clone()).collect();
-
     let widths: Vec<Option<i32>> = attachments.iter().map(|a| a.width).collect();
-
     let heights: Vec<Option<i32>> = attachments.iter().map(|a| a.height).collect();
 
     let created_attachments = sqlx::query_as!(
