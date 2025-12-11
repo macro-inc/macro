@@ -44,6 +44,7 @@ import { Entity } from './Entity';
  * - Uses service entity as base
  * - Falls back to local nameHighlight if service doesn't have one
  * - Falls back to local contentHighlights if service doesn't have any
+ * - Preserves 'local' source if either entity is local (for stable ordering)
  */
 const mergeSearchEntities = <T extends EntityData>(
   first: WithSearch<T>,
@@ -51,11 +52,14 @@ const mergeSearchEntities = <T extends EntityData>(
 ): WithSearch<T> => {
   const serviceEntity = first.search.source === 'service' ? first : second;
   const localEntity = first.search.source === 'local' ? first : second;
+  const hasLocal =
+    first.search.source === 'local' || second.search.source === 'local';
 
   return {
     ...serviceEntity,
     search: {
       ...serviceEntity.search,
+      source: hasLocal ? 'local' : 'service',
       nameHighlight:
         serviceEntity.search.nameHighlight || localEntity.search.nameHighlight,
       contentHitData: serviceEntity.search.contentHitData?.length

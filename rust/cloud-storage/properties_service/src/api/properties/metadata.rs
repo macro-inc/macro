@@ -61,10 +61,7 @@ pub async fn get_document_metadata_properties(
 
     // 2. Owner property
     if !document_metadata.owner.is_empty() {
-        let owner_entity_ref = EntityReference {
-            entity_id: document_metadata.owner,
-            entity_type: EntityType::User,
-        };
+        let owner_entity_ref = EntityReference::new(document_metadata.owner, EntityType::User);
         metadata_properties.push(create_metadata_property_entity_ref(
             metadata::OWNER,
             models_properties::DataType::Entity,
@@ -92,10 +89,7 @@ pub async fn get_document_metadata_properties(
 
     // 5. Project property
     if let Some(project_id) = document_metadata.project_id {
-        let project_entity_ref = EntityReference {
-            entity_id: project_id,
-            entity_type: EntityType::Project,
-        };
+        let project_entity_ref = EntityReference::new(project_id, EntityType::Project);
         metadata_properties.push(create_metadata_property_entity_ref(
             metadata::PROJECT,
             models_properties::DataType::Entity,

@@ -308,7 +308,7 @@ async fn set_email_attachment_properties(
                 source: Some(SourceEntity {
                     entity_type: models_properties::EntityType::Thread,
                     entity_id: p.attachment_metadata.thread_db_id.to_string(),
-                    specific_message_id: Some(p.attachment_metadata.message_db_id.to_string()),
+                    specific_message_id: Some(p.attachment_metadata.message_db_id),
                 }),
                 // TODO: companies support
                 companies: None,

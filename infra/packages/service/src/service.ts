@@ -5,9 +5,9 @@ import {
   DATADOG_API_KEY,
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
-} from '@resources/datadog';
-import { stack } from '@shared';
-import { COPARSE_API_VPC } from '@vpc';
+} from '../../resources';
+import { stack } from '../../shared';
+import { COPARSE_API_VPC } from '../../vpc';
 import { cloudStorageClusterArn } from './cluster';
 import type { ServiceLoadBalancer } from './load_balancer';
 

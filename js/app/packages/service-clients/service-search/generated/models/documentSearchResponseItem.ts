@@ -6,6 +6,7 @@
  */
 import type { DocumentSearchResult } from './documentSearchResult';
 import type { DocumentSearchResponseItemFileType } from './documentSearchResponseItemFileType';
+import type { DocumentSearchResponseItemSubType } from './documentSearchResponseItemSubType';
 
 /**
  * A single response item, part of the DocumentSearchResponse object
@@ -26,4 +27,5 @@ for consistency in our data model. */
   id: string;
   name: string;
   owner_id: string;
+  sub_type?: DocumentSearchResponseItemSubType;
 }

@@ -16,6 +16,7 @@ import {
 } from '@block-channel/utils/listContext';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { TextButton } from '@core/component/TextButton';
+import { toast } from '@core/component/Toast/Toast';
 import { observedSize } from '@core/directive/observedSize';
 import type { InputAttachment } from '@core/store/cacheChannelInput';
 import SunIcon from '@icon/duotone/sun-horizon-duotone.svg';
@@ -194,20 +195,19 @@ export function MessageList(props: MessageListProps) {
   /**
    * Scroll to the bottom of the document or the target message depending on the
    * current state.
-   * @param params.forceBottom - force the scroll to bottom even if the user is not near the bottom
-   * @param params.onlyBottom - skip all targetMessage bases logic.
+   * @param params.forceBottom - force the scroll to bottom ignoring target message
    * @returns
    */
   const scrollToBottomOrTarget = debounce(
-    (params?: { forceBottom?: boolean; onlyBottom?: boolean }) => {
-      const { forceBottom } = params || { forceBottom: false };
+    (params: { forceBottom?: boolean } = {}) => {
+      const { forceBottom } = params;
       const timeStamp = Date.now();
       const delta = timeStamp - lastTargetMessageTimestamp();
       const target = props.targetMessage();
 
       if (
-        (!target || delta > TARGET_MESSAGE_ACTIVE_TIME) &&
-        (isNearBottom() || forceBottom)
+        forceBottom ||
+        ((!target || delta > TARGET_MESSAGE_ACTIVE_TIME) && isNearBottom())
       ) {
         if (scrollTimeoutId) clearTimeout(scrollTimeoutId);
         const lastIndex = props.orderedMessages().length - 1;
@@ -217,7 +217,6 @@ export function MessageList(props: MessageListProps) {
         setTargetIndex(lastIndex);
         return;
       }
-      if (params?.onlyBottom) return;
 
       const { messageId: targetMessageId, threadId } = target || {};
 
@@ -228,7 +227,12 @@ export function MessageList(props: MessageListProps) {
         .orderedMessages()
         ?.findIndex((m) => m.id === targetMessageId);
 
-      if (index === -1) return;
+      if (index === -1) {
+        console.warn('Target message not found');
+        toast.failure('Message not found.');
+        scrollToBottomOrTarget({ forceBottom: true });
+        return;
+      }
 
       if (threadId) {
         setThreadViewStore(threadId, (prev) => ({
@@ -446,22 +450,21 @@ export function MessageList(props: MessageListProps) {
     return messageToReaction[lastMessageId];
   });
 
-  // Track updates to the last top-level message's thread (for scroll behavior)
   const lastMessageThread = createMemo(() => {
     const base = filteredTopLevelMessages() ?? [];
     const lastTopLevelId = base[base.length - 1]?.id;
     return viewThreads[lastTopLevelId];
   });
 
+  const lastMessageThreadCount = createMemo(
+    () => lastMessageThread()?.length ?? 0
+  );
+
+  // scroll to bottom on change to last message state (including new messages)
   createEffect(
-    on([lastMessageReaction, lastMessageThread], () => {
+    on([lastMessageReaction, lastMessageThread, lastMessageThreadCount], () => {
       if (!isNearBottom()) return;
-      if (
-        lastMessageReaction() ||
-        (lastMessageThread() && lastMessageThread()?.length > 0)
-      ) {
-        scrollToBottomOrTarget();
-      }
+      scrollToBottomOrTarget({ forceBottom: true });
     })
   );
 
@@ -472,6 +475,7 @@ export function MessageList(props: MessageListProps) {
   const [newMessageIndex, setNewMessageIndex] = createSignal<number>();
 
   // Record new unviewed messages
+  // TODO: show new reply state for threads with new messages
   createEffect(
     on(filteredTopLevelMessages, (newFilteredMessages, oldFilteredMessages) => {
       const handle = virtualHandle();
@@ -741,9 +745,7 @@ export function MessageList(props: MessageListProps) {
             icon={ArrowDownIcon}
             theme="base"
             text="Jump to latest"
-            onMouseDown={() =>
-              scrollToBottomOrTarget({ forceBottom: true, onlyBottom: true })
-            }
+            onMouseDown={() => scrollToBottomOrTarget({ forceBottom: true })}
             secondaryIcon={XIcon}
             onOptionClick={() => setDismissJumpToLatest(true)}
             showSeparator

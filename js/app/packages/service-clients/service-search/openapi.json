@@ -1317,7 +1317,16 @@
             "description": "Standardized fields that all item types will share.\nThese field names are being aligned across all item types\nfor consistency in our data model."
           },
           "name": { "type": "string" },
-          "owner_id": { "type": "string" }
+          "owner_id": { "type": "string" },
+          "sub_type": {
+            "oneOf": [
+              { "type": "null" },
+              {
+                "$ref": "#/components/schemas/DocumentSubType",
+                "description": "The sub type of the document if present."
+              }
+            ]
+          }
         }
       },
       "DocumentSearchResponseItemWithMetadata": {
@@ -1363,6 +1372,11 @@
             "description": "The score of the result"
           }
         }
+      },
+      "DocumentSubType": {
+        "type": "string",
+        "description": "The document sub type enum represents all values of document sub types.\nThese values should match the `document_sub_type_value` table in macrodb.",
+        "enum": ["task"]
       },
       "EmailFilters": {
         "type": "object",
@@ -1506,7 +1520,15 @@
       "EmailSearchResult": {
         "type": "object",
         "description": "A email message match for a given thread id",
-        "required": ["recipients", "cc", "bcc", "labels", "highlight"],
+        "required": [
+          "sender",
+          "pretty_sender",
+          "recipients",
+          "cc",
+          "bcc",
+          "labels",
+          "highlight"
+        ],
         "properties": {
           "bcc": {
             "type": "array",
@@ -1529,7 +1551,12 @@
           },
           "message_id": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "The email message id.\nThis is only present if the search result is on the message content"
+          },
+          "pretty_sender": {
+            "type": "string",
+            "description": "The pretty sender.\nIf the match is on the subject, the pretty sender is the latest sender on the thread.\nThis could be the sender's email if there is no contact name for the sender."
           },
           "recipients": {
             "type": "array",
@@ -1542,8 +1569,8 @@
             "description": "The score of the result"
           },
           "sender": {
-            "type": ["string", "null"],
-            "description": "The sender\nThis is only present if the search result is on the message content"
+            "type": "string",
+            "description": "The sender.\nIf the match is on the subject, the sender is the latest sender on the thread."
           },
           "sent_at": {
             "type": ["integer", "null"],

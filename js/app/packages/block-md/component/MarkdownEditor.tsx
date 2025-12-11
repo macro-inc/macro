@@ -84,6 +84,7 @@ import {
   mediaPlugin,
 } from '@core/component/LexicalMarkdown/plugins/media';
 import { createAccessoryStore } from '@core/component/LexicalMarkdown/plugins/node-accessory';
+import { restoreFocusPlugin } from '@core/component/LexicalMarkdown/plugins/restore-focus';
 import { createMenuOperations } from '@core/component/LexicalMarkdown/shared/inlineMenu';
 import {
   $insertWrappedAfter,
@@ -150,7 +151,6 @@ import {
   autoRegister,
   lazyRegister,
   registerInternalLayoutShiftListener,
-  registerRootEventListener,
 } from 'core/component/LexicalMarkdown/plugins/shared/utils';
 import { createMethodRegistration } from 'core/orchestrator';
 import {
@@ -159,7 +159,6 @@ import {
   $isElementNode,
   type EditorState,
 } from 'lexical';
-
 import {
   type Accessor,
   createEffect,
@@ -704,6 +703,7 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       })
     )
     .use(textPastePlugin())
+    .use(restoreFocusPlugin())
     .use(markdownPastePlugin())
     .use(normalizeEnterPlugin())
     .use(
@@ -766,6 +766,10 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     setClickTargetHeight(Math.max(targetHeight, EDITOR_PADDING_BOTTOM));
   };
 
+  autoRegister(
+    registerInternalLayoutShiftListener(editor, observeClickTargetHeight)
+  );
+
   onMount(() => {
     setMdStore('selection', lexicalWrapper.selection);
     editor.setRootElement(mountRef);
@@ -785,27 +789,6 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
       editorRefObserver.disconnect();
     });
   });
-
-  // HACK: We need to distinguish click-based focus events from programmatic
-  // ones (el.focus()). We want to maintain the previous selection (editor.focus)
-  // only if we are regaining focus programmatically. If click, let browser handle
-  // focus and let lexical catch up.
-  let clickFocusFlag = false;
-  autoRegister(
-    registerRootEventListener(editor, 'pointerdown', () => {
-      clickFocusFlag = true;
-      setTimeout(() => {
-        clickFocusFlag = false; // negate the flag after tasks
-      });
-    }),
-    registerRootEventListener(editor, 'focusin', (e) => {
-      if (clickFocusFlag) return;
-      e.preventDefault();
-      editor.focus(undefined, { defaultSelection: 'rootStart' });
-    }),
-    // adjust click target height on layout shift
-    registerInternalLayoutShiftListener(editor, observeClickTargetHeight)
-  );
 
   const additionalCleanups: Array<() => void> = [];
 

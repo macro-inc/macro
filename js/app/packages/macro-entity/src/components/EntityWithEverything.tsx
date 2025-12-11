@@ -28,7 +28,6 @@ import {
   Suspense,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
-import { createProfilePictureQuery } from '../queries/auth';
 import {
   createProjectQuery,
   isProjectContainedEntity,
@@ -166,7 +165,7 @@ function CollapsibleListRow(
 function CollapsibleList<T>(props: {
   items: T[];
   visibleCount?: number;
-  children: (item: T) => any;
+  children: (item: T, index?: number, count?: number) => any;
   threadBorder?: boolean;
 }) {
   const [showAll, setShowAll] = createSignal(false);
@@ -179,13 +178,16 @@ function CollapsibleList<T>(props: {
     return props.items.slice(0, visibleCount());
   };
 
+  const count = () => props.items.length;
   const hasMore = () => props.items.length > visibleCount();
 
   return (
     <>
-      <For each={visibleItems()}>{props.children}</For>
+      <For each={visibleItems()}>
+        {(child, index) => props.children(child, index(), count())}
+      </For>
       <Show when={hasMore()}>
-        <div class="relative h-5">
+        <div class="h-5">
           <Show when={props.threadBorder}>
             <ThreadBorder />
           </Show>
@@ -286,12 +288,12 @@ function NotificationRow(props: {
       }}
     >
       <div class="flex size-5 shrink-0 items-center justify-center mr-1">
-        <NotificationUserIcon id={props.notification.senderId!} />
+        <UserIcon id={props.notification.senderId!} size="xs" />
       </div>
-      <div class="flex gap-2 text-sm w-full min-w-0 overflow-hidden items-baseline">
+      <div class="flex gap-1 text-sm w-full min-w-0 overflow-hidden items-baseline">
         <div class="text-sm w-[20cqw] shrink-0 truncate min-w-0">
           {userName()}{' '}
-          <span class="opacity-70 uppercase font-mono text-[0.625rem] mx-2">
+          <span class="opacity-70 uppercase font-mono text-[0.625rem] ml-2">
             {ActionContent()}
           </span>
         </div>
@@ -307,17 +309,36 @@ function NotificationRow(props: {
 function ContentHitRow(props: {
   data: ContentHitData;
   onClick: (e: EntityClickEvent, location?: SearchLocation) => void;
+  index?: number;
+  count?: number;
 }) {
+  const match = (): [number, number] | undefined => {
+    if (props.index !== undefined && props.count !== undefined)
+      return [props.index, props.count];
+  };
+
   return (
     <CollapsibleListRow
       blockNavigation
       onClick={(e) => props.onClick(e, props.data.location)}
+      showThreadBorder={props.data.type === 'channel'}
     >
       <Show
         when={props.data.type === 'channel' && props.data}
         fallback={
           <div class="flex gap-2 items-center min-w-0 w-full">
-            <div class="flex size-5 shrink-0 items-center justify-center opacity-0" />
+            <div class="flex size-5 shrink-0 items-center justify-center">
+              <div class="h-4/5 border-l border-b w-2 border-edge-muted -translate-y-2 translate-x-[calc(0.25em-1px)]"></div>
+            </div>
+            <Show when={match()}>
+              {(match) => {
+                return (
+                  <span class="font-mono text-xs text-ink-disabled/50">
+                    {match()[0] + 1}/{match()[1]}
+                  </span>
+                );
+              }}
+            </Show>
             <GenericContentHit data={props.data} />
           </div>
         }
@@ -501,7 +522,7 @@ export function EntityWithEverything(
           </div>
           {/* Subject */}
           {/*<ImportantBadge active={props.importantIndicatorActive} />*/}
-          <div class="flex items-center w-full gap-4 flex-1 min-w-0">
+          <div class="flex items-center w-full gap-2 flex-1 min-w-0">
             <div class="font-medium shrink-0 truncate">
               <Show when={searchHighlightName()} fallback={props.entity.name}>
                 {(name) => (
@@ -818,12 +839,14 @@ export function EntityWithEverything(
         <Show when={contentHitData().length > 0}>
           <div class="relative row-2 col-2 col-end-4 pb-2">
             <CollapsibleList items={contentHitData()} threadBorder>
-              {(data) => (
+              {(data, index, count) => (
                 <ContentHitRow
                   data={data}
                   onClick={(e, location) => {
                     props.onClick?.(props.entity, e, location);
                   }}
+                  index={index}
+                  count={count}
                 />
               )}
             </CollapsibleList>
@@ -858,7 +881,9 @@ function DirectMessageIcon(props: { entity: EntityData }) {
   const userId = useUserId();
   const participantId = () =>
     props.entity.type === 'channel'
-      ? (props.entity.particpantIds ?? []).filter((id) => id !== userId()).at(0)
+      ? (props.entity.participantIds ?? [])
+          .filter((id) => id !== userId())
+          .at(0)
       : undefined;
 
   const Fallback = () => <EntityIcon targetType="directMessage" />;
@@ -869,31 +894,6 @@ function DirectMessageIcon(props: { entity: EntityData }) {
         {(id) => <UserIcon id={id()} isDeleted={false} size="xs" />}
       </Show>
     </div>
-  );
-}
-
-function NotificationUserIcon(props: { id: string; name?: string }) {
-  const fallbackName = () => props.name || props.id.replace('macro|', '');
-  const Fallback = () => (
-    <span class="flex size-4 items-center justify-center rounded-full bg-ink-extra-muted">
-      <span class="font-medium text-[7px] text-white">
-        {fallbackName().charAt(0).toUpperCase()}
-      </span>
-    </span>
-  );
-
-  if (!props.id.startsWith('macro|')) return <Fallback />;
-
-  const profilePicQuery = createProfilePictureQuery(props.id);
-  const Loading = () => (
-    <div class="flex size-4 animate-pulse rounded-full bg-ink-extra-muted" />
-  );
-  return (
-    <Suspense fallback={<Loading />}>
-      <Show when={profilePicQuery.data?.url} fallback={<Fallback />}>
-        {(url) => <img src={url()} class="inline-block size-4 rounded-full" />}
-      </Show>
-    </Suspense>
   );
 }
 

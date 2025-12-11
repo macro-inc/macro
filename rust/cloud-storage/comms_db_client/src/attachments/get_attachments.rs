@@ -14,6 +14,8 @@ pub async fn get_attachments(db: &Pool<Postgres>, channel_id: &Uuid) -> Result<V
             channel_id as "channel_id: Uuid",
             entity_type,
             entity_id,
+            width,
+            height,
             created_at
         FROM comms_attachments
         WHERE channel_id = $1
@@ -42,6 +44,8 @@ pub async fn get_attachments_by_message_id(
             channel_id as "channel_id: Uuid",
             entity_type,
             entity_id,
+            width,
+            height,
             created_at
         FROM comms_attachments
         WHERE message_id = $1"#,

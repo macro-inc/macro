@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
-import { stack } from '@shared';
+import { stack } from '../../packages/shared';
 
 const tags = {
   environment: stack,

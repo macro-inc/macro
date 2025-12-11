@@ -5,7 +5,7 @@ import {
   ComponentResource,
   type ComponentResourceOptions,
 } from '@pulumi/pulumi';
-import { stack } from '@shared';
+import { stack } from '../../../shared';
 
 const DATADOG_API_KEY_SECRET_KEY = 'datadog-api-key';
 
