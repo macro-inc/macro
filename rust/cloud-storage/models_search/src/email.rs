@@ -41,7 +41,7 @@ pub struct EmailSearchResponseItem {
     /// Standardized fields that all item types will share.
     /// These field names are being aligned across all item types
     /// for consistency in our data model.
-    pub id: String,
+    pub id: uuid::Uuid,
     /// Subject of the email thread
     pub name: Option<String>,
     pub owner_id: String,
@@ -51,7 +51,7 @@ pub struct EmailSearchResponseItem {
     pub subject: Option<String>,
 
     /// The id of the email thread
-    pub thread_id: String,
+    pub thread_id: uuid::Uuid,
     /// The id of the owner of the email thread
     pub user_id: String,
     /// The search results for the document
@@ -76,7 +76,7 @@ pub struct EmailSearchResponseItemWithMetadata {
 #[derive(Debug, Serialize, Deserialize, ToSchema)]
 pub struct EmailSearchMetadata {
     /// The id of the email thread
-    pub thread_id: String,
+    pub thread_id: uuid::Uuid,
     /// The id of the owner of the email thread
     pub user_id: String,
 }

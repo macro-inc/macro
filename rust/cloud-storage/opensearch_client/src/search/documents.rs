@@ -79,7 +79,7 @@ impl DocumentQueryBuilder {
 
 #[derive(Debug, serde::Serialize, serde::Deserialize)]
 pub(crate) struct DocumentIndex {
-    pub entity_id: String,
+    pub entity_id: uuid::Uuid,
     pub document_name: String,
     pub node_id: String,
     pub raw_content: Option<String>,
