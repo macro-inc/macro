@@ -128,7 +128,7 @@ function ThreadBorder() {
   );
 }
 
-function RowWrapper(
+function CollapsibleListRow(
   props: ParentProps<{
     onClick?: (e: EntityClickEvent) => void;
     classList?: Record<string, boolean>;
@@ -259,7 +259,7 @@ function NotificationRow(props: {
   };
 
   return (
-    <RowWrapper
+    <CollapsibleListRow
       showThreadBorder
       onClick={
         props.onClick
@@ -293,7 +293,7 @@ function NotificationRow(props: {
       <div class="shrink-0 font-mono text-xs uppercase text-ink-extra-muted ml-2">
         {formattedDate()}
       </div>
-    </RowWrapper>
+    </CollapsibleListRow>
   );
 }
 
@@ -302,7 +302,7 @@ function ContentHitRow(props: {
   onClick: (e: EntityClickEvent, location?: SearchLocation) => void;
 }) {
   return (
-    <RowWrapper
+    <CollapsibleListRow
       blockNavigation
       onClick={(e) => props.onClick(e, props.data.location)}
     >
@@ -317,7 +317,7 @@ function ContentHitRow(props: {
       >
         {(data) => <ChannelMessageContentHit data={data()} />}
       </Show>
-    </RowWrapper>
+    </CollapsibleListRow>
   );
 }
 
