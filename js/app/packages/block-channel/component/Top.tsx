@@ -1,13 +1,9 @@
-import PencilSimpleLine from '@icon/regular/pencil-simple-line.svg';
-
-import CheckIcon from '@icon/regular/check.svg';
-import CloseIcon from '@icon/regular/x.svg';
 import { useGlobalNotificationSource } from '@app/component/GlobalAppState';
 import {
   SplitHeaderLeft,
   SplitHeaderRight,
 } from '@app/component/split-layout/components/SplitHeader';
-import { StaticSplitLabel } from '@app/component/split-layout/components/SplitLabel';
+import { SplitLabel } from '@app/component/split-layout/components/SplitLabel';
 import { SplitToolbarRight } from '@app/component/split-layout/components/SplitToolbar';
 import { channelStore } from '@block-channel/signal/channel';
 import { useBlockId } from '@core/block';
@@ -23,7 +19,7 @@ import LinkIcon from '@icon/regular/link.svg';
 import type { ChannelParticipant } from '@service-comms/generated/models/channelParticipant';
 import type { ChannelType } from '@service-comms/generated/models/channelType';
 import { useUserId } from '@service-gql/client';
-import { createSignal, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { AttachmentsModal } from './AttachmentsModal';
 import { ParticipantManager } from './ParticipantManager';
 
@@ -77,43 +73,21 @@ export function Top() {
     channel?.channel?.name ?? 'New Channel'
   );
 
-  const [renaming, setRenaming] = createSignal(false);
-
-  const handleToggleRenameChannel = () => {
-    setRenaming((p) => !p);
-  };
-
   return (
     <>
       <SplitHeaderLeft>
         <div class="h-full my-auto flex gap-2 justify-center items-center">
-          <Show when={!renaming()} fallback={<RenameChannelInput />}>
-            <StaticSplitLabel
+          <div class="z-3 relative flex items-center gap-2 max-w-full h-full shrink">
+            <TopIcon
+              channelType={channelType()}
+              participants={participants()}
+            />
+            <SplitLabel
               label={channelName() ?? 'New Channel'}
-              icon={
-                <TopIcon
-                  channelType={channelType()}
-                  participants={participants()}
-                />
-              }
+              id={channel.id}
+              itemType="channel"
             />
-          </Show>
-          <IconButton
-            theme="current"
-            size="sm"
-            tooltip={{ label: renaming() ? 'Cancel' : 'Rename channel' }}
-            icon={renaming() ? CloseIcon : PencilSimpleLine}
-            onClick={handleToggleRenameChannel}
-          />
-          <Show when={renaming()}>
-            <IconButton
-              theme="accent"
-              size="sm"
-              tooltip={{ label: 'Save' }}
-              icon={CheckIcon}
-              onClick={handleToggleRenameChannel}
-            />
-          </Show>
+          </div>
         </div>
       </SplitHeaderLeft>
       <SplitHeaderRight>
@@ -144,20 +118,3 @@ export function Top() {
     </>
   );
 }
-
-const RenameChannelInput = () => {
-  const channel = channelStore.get;
-  return (
-    <div class="flex items-center gap-2">
-      <TopIcon
-        channelType={channel.channel?.channel_type ?? 'private'}
-        participants={channel.participants}
-      />
-
-      <input
-        class="appearance-none outline-none py-0.5 text-sm text-ink border-b border-b-edge focus:border-b-accent"
-        placeholder={channel.channel?.name ?? 'New Channel'}
-      />
-    </div>
-  );
-};

@@ -52,7 +52,7 @@ export function StaticSplitLabel(props: {
   );
 }
 
-function SplitLabel(props: {
+export function SplitLabel(props: {
   label: string;
   onNameChanged?: (newName: string) => void;
   lockRename?: boolean;
