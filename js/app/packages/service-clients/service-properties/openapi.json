@@ -511,6 +511,7 @@
           "entity_type": { "$ref": "#/components/schemas/EntityType" },
           "specific_message_id": {
             "type": ["string", "null"],
+            "format": "uuid",
             "description": "For CHANNEL, CHAT, THREAD entity types - optional specific message ID.\nThis allows referencing a specific message within a thread/channel/chat."
           }
         }
