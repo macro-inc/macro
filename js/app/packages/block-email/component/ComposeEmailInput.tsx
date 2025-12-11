@@ -220,7 +220,7 @@ export function ComposeEmailInput(props: ComposeEmailInputProps) {
                     paywall.showPaywall();
                   }}
                 >
-                  Sent with Macro
+                  {MACRO_EMAIL_SIGNATURE}
                 </button>
               ) : undefined
             }
