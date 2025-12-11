@@ -328,6 +328,26 @@ pub struct ThreadHistoryResponse {
     pub history_map: HashMap<Uuid, ThreadHistoryInfo>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MessageSenderInfo {
+    /// The sender of the message.
+    pub sender: String,
+    /// The pretty sender of the message.
+    /// This could be the sender's email if there is no contact name for the sender.
+    pub pretty_sender: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MessageSendersRequest {
+    pub user_id: String,
+    pub message_ids: Vec<Uuid>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct MessageSendersResponse {
+    pub sender_map: HashMap<Uuid, MessageSenderInfo>,
+}
+
 pub trait HasContactInfo {
     fn get_from(&self) -> Option<&ContactInfo>;
     fn get_to(&self) -> &[ContactInfo];
