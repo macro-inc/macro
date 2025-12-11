@@ -6,14 +6,14 @@ import {
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
-} from '@resources';
-import { EcrImage } from '@service';
+} from '../../packages/resources';
+import { EcrImage } from '../../packages/service';
 import {
   awsRegion,
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   stack,
-} from '@shared';
+} from '../../packages/shared';
 
 const BASE_NAME = 'organization-service';
 const BASE_PATH = '../../../rust/cloud-storage';

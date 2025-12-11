@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { config, getMacroApiToken } from '@shared';
-import { get_coparse_api_vpc } from '@vpc';
+import { config, getMacroApiToken } from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
 import {
   SERVICE_NAME,
   SERVICE_URL,
