@@ -394,17 +394,17 @@ export function $isEmpty() {
     if (!$isParagraphNode(child)) return false;
     if (child.getIndent() !== 0) return false;
 
-    const selfChildrne = child.getChildren();
+    const selfChildren = child.getChildren();
 
-    if (selfChildrne.length > 0) {
-      const firstChild = selfChildrne[0];
+    if (selfChildren.length > 0) {
+      const firstChild = selfChildren[0];
       if ($isWatermarkNode(firstChild)) continue;
       if (!$isParagraphNode(firstChild)) {
         return false;
       }
     }
 
-    if (child.getTextContent().trim() !== '') return false;
+    if (child.getTextContent() !== '') return false;
   }
   return true;
 }
