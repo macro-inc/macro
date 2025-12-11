@@ -14,12 +14,14 @@ fn create_email_history(thread_id: &str) -> models_email::service::message::Thre
         snippet: None,
         user_id: "user1".to_string(),
         subject: Some("subject".to_string()),
+        sender: "sender@example.com".to_string(),
+        pretty_sender: "Pretty Sender".to_string(),
     }
 }
 
 #[test]
 fn test_construct_search_result_empty_input() {
-    let result = construct_search_result(vec![], HashMap::new());
+    let result = construct_search_result(vec![], HashMap::new(), HashMap::new());
     assert!(result.is_ok());
     assert_eq!(result.unwrap().len(), 0);
 }
@@ -32,7 +34,7 @@ fn test_construct_search_result_single_thread() {
         entity_type: SearchEntityType::Emails,
         goto: Some(opensearch_client::search::model::SearchGotoContent::Emails(
             opensearch_client::search::model::SearchGotoEmail {
-                email_message_id: "msg1".to_string(),
+                email_message_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
                 sender: "sender@example.com".to_string(),
                 recipients: vec!["recipient@example.com".to_string()],
                 cc: vec![],
@@ -54,7 +56,7 @@ fn test_construct_search_result_single_thread() {
         create_email_history(thread_uuid),
     );
 
-    let result = construct_search_result(search_results, thread_histories).unwrap();
+    let result = construct_search_result(search_results, thread_histories, HashMap::new()).unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].extra.thread_id, thread_uuid);
@@ -64,8 +66,9 @@ fn test_construct_search_result_single_thread() {
         result[0].extra.email_message_search_results[0]
             .message_id
             .as_ref()
-            .unwrap(),
-        "msg1"
+            .unwrap()
+            .to_string(),
+        "11111111-1111-1111-1111-111111111111"
     );
     assert_eq!(result[0].extra.subject, Some("subject".to_string()));
 }
@@ -86,7 +89,7 @@ fn test_sort_stability() {
             entity_type: SearchEntityType::Emails,
             goto: Some(opensearch_client::search::model::SearchGotoContent::Emails(
                 opensearch_client::search::model::SearchGotoEmail {
-                    email_message_id: "msg3".to_string(),
+                    email_message_id: "33333333-3333-3333-3333-333333333333".parse().unwrap(),
                     sender: "sender3@example.com".to_string(),
                     recipients: vec!["recipient3@example.com".to_string()],
                     cc: vec![],
@@ -106,7 +109,7 @@ fn test_sort_stability() {
             entity_type: SearchEntityType::Emails,
             goto: Some(opensearch_client::search::model::SearchGotoContent::Emails(
                 opensearch_client::search::model::SearchGotoEmail {
-                    email_message_id: "msg1".to_string(),
+                    email_message_id: "11111111-1111-1111-1111-111111111111".parse().unwrap(),
                     sender: "sender1@example.com".to_string(),
                     recipients: vec!["recipient1@example.com".to_string()],
                     cc: vec![],
@@ -126,7 +129,7 @@ fn test_sort_stability() {
             entity_type: SearchEntityType::Emails,
             goto: Some(opensearch_client::search::model::SearchGotoContent::Emails(
                 opensearch_client::search::model::SearchGotoEmail {
-                    email_message_id: "msg5".to_string(),
+                    email_message_id: "55555555-5555-5555-5555-555555555555".parse().unwrap(),
                     sender: "sender5@example.com".to_string(),
                     recipients: vec!["recipient5@example.com".to_string()],
                     cc: vec![],
@@ -146,7 +149,7 @@ fn test_sort_stability() {
             entity_type: SearchEntityType::Emails,
             goto: Some(opensearch_client::search::model::SearchGotoContent::Emails(
                 opensearch_client::search::model::SearchGotoEmail {
-                    email_message_id: "msg2".to_string(),
+                    email_message_id: "22222222-2222-2222-2222-222222222222".parse().unwrap(),
                     sender: "sender2@example.com".to_string(),
                     recipients: vec!["recipient2@example.com".to_string()],
                     cc: vec![],
@@ -166,7 +169,7 @@ fn test_sort_stability() {
             entity_type: SearchEntityType::Emails,
             goto: Some(opensearch_client::search::model::SearchGotoContent::Emails(
                 opensearch_client::search::model::SearchGotoEmail {
-                    email_message_id: "msg4".to_string(),
+                    email_message_id: "44444444-4444-4444-4444-444444444444".parse().unwrap(),
                     sender: "sender4@example.com".to_string(),
                     recipients: vec!["recipient4@example.com".to_string()],
                     cc: vec![],
@@ -191,9 +194,12 @@ fn test_sort_stability() {
         );
     }
 
-    let result1 = construct_search_result(input.clone(), thread_histories.clone()).unwrap();
-    let result2 = construct_search_result(input.clone(), thread_histories.clone()).unwrap();
-    let result3 = construct_search_result(input.clone(), thread_histories.clone()).unwrap();
+    let result1 =
+        construct_search_result(input.clone(), thread_histories.clone(), HashMap::new()).unwrap();
+    let result2 =
+        construct_search_result(input.clone(), thread_histories.clone(), HashMap::new()).unwrap();
+    let result3 =
+        construct_search_result(input.clone(), thread_histories.clone(), HashMap::new()).unwrap();
 
     assert_eq!(result1.len(), 5);
     assert_eq!(result2.len(), 5);
