@@ -191,8 +191,13 @@ const useMapSearchResponseItem = () => {
 
         const name = result.name ?? blockNameToDefaultFile('email');
 
-        // Email thread subject match
-        // TODO: make sure this looks/feels right in the unified list
+        const senderName =
+          emailResult?.sender ||
+          result.email_message_search_results.at(1)?.sender ||
+          idToDisplayName(result.user_id);
+
+        // NOTE: this shouldn't happen unless it's a name only match that doesn't produce a name highlight for some reason
+        // including this as a fallback for now
         if (!emailResult) {
           return {
             type: 'email',
@@ -205,7 +210,7 @@ const useMapSearchResponseItem = () => {
             isRead: false,
             isImportant: false,
             done: false,
-            senderName: idToDisplayName(result.user_id),
+            senderName,
             search,
           };
         }
@@ -221,7 +226,7 @@ const useMapSearchResponseItem = () => {
           isRead: !emailResult.labels.includes('UNREAD'),
           isImportant: emailResult.labels.includes('IMPORTANT'),
           done: !emailResult.labels.includes('INBOX'),
-          senderName: emailResult.sender!,
+          senderName,
           search,
         };
       }
