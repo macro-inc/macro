@@ -858,7 +858,9 @@ function DirectMessageIcon(props: { entity: EntityData }) {
   const userId = useUserId();
   const participantId = () =>
     props.entity.type === 'channel'
-      ? (props.entity.particpantIds ?? []).filter((id) => id !== userId()).at(0)
+      ? (props.entity.participantIds ?? [])
+          .filter((id) => id !== userId())
+          .at(0)
       : undefined;
 
   const Fallback = () => <EntityIcon targetType="directMessage" />;
