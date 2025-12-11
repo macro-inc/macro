@@ -37,9 +37,14 @@ export function usePropertySelection(
     const query = searchQuery ? searchQuery().toLowerCase().trim() : '';
     const existingIds = existingPropertyIdsSet();
 
-    // First filter out existing properties (reactive to existingPropertyIds changes)
+    // First filter out existing properties and hidden entity types
     const availableProperties = currentState.availableProperties.filter(
-      (property) => property && property.id && !existingIds.has(property.id)
+      (property) =>
+        property &&
+        property.id &&
+        !existingIds.has(property.id) &&
+        // Hide COMPANY entity properties (not yet implemented)
+        property.specific_entity_type !== 'COMPANY'
     );
 
     // Then apply search filter
