@@ -463,12 +463,20 @@ export function createBulkDeleteDssItemsMutation() {
 }
 
 type RenameDssEntityMutationVariables = {
-  entity: { id: string; type: EntityData['type']; name: string };
+  entity: EntityData & { name: string };
   newName: string;
 };
 
 type RenameDssEntityMutationData = {
   success: boolean;
+};
+
+const isEntityRenameSupported = (entity: EntityData) => {
+  const type = entity.type;
+  if (entity.type === 'channel') {
+    return entity.channelType !== 'direct_message';
+  }
+  return type !== 'email';
 };
 
 /**
@@ -483,6 +491,10 @@ export function createRenameDssEntityMutation(
 ) {
   return useMutation(() => ({
     mutationFn: async (params: RenameDssEntityMutationVariables) => {
+      if (!isEntityRenameSupported(params.entity)) {
+        throw new Error('Unsupported entity type provided');
+      }
+
       const success = await renameItem({
         id: params.entity.id,
         itemType: params.entity.type,
@@ -540,14 +552,6 @@ export function createRenameDssEntityMutation(
 }
 
 export function createBulkRenameDssEntityMutation() {
-  const isUnsupportedEntity = (entity: EntityData) => {
-    const type = entity.type;
-    if (entity.type === 'channel') {
-      return entity.channelType === 'direct_message';
-    }
-    return type === 'email';
-  };
-
   return useMutation(() => ({
     mutationFn: async ({
       entities,
@@ -556,7 +560,7 @@ export function createBulkRenameDssEntityMutation() {
       entities: (EntityData & { name: string })[];
       name: (oldName: string) => string | string;
     }) => {
-      if (entities.some(isUnsupportedEntity)) {
+      if (entities.every(isEntityRenameSupported)) {
         throw new Error(`Unsupported entity type provided`);
       }
       return await Promise.all(
