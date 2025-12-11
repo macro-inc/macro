@@ -446,16 +446,16 @@ export function MessageList(props: MessageListProps) {
     return messageToReaction[lastMessageId];
   });
 
-  // Track updates to the last top-level message's thread (for scroll behavior)
-  const lastMessageThread = createMemo(() => {
+  // Track updates to the last top-level message's thread count (for scroll behavior)
+  const lastMessageThreadCount = createMemo(() => {
     const base = filteredTopLevelMessages() ?? [];
     const lastTopLevelId = base[base.length - 1]?.id;
-    return viewThreads[lastTopLevelId];
+    return viewThreads[lastTopLevelId]?.length ?? 0;
   });
 
   // scroll to bottom on change to last message state (including new messages)
   createEffect(
-    on([lastMessageReaction, lastMessageThread], () => {
+    on([lastMessageReaction, lastMessageThreadCount], () => {
       if (!isNearBottom()) return;
       scrollToBottomOrTarget({ onlyBottom: true });
     })
@@ -468,6 +468,7 @@ export function MessageList(props: MessageListProps) {
   const [newMessageIndex, setNewMessageIndex] = createSignal<number>();
 
   // Record new unviewed messages
+  // TODO: show new reply state for threads with new messages
   createEffect(
     on(filteredTopLevelMessages, (newFilteredMessages, oldFilteredMessages) => {
       const handle = virtualHandle();
