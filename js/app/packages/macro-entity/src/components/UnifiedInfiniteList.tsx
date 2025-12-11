@@ -52,7 +52,8 @@ const mergeSearchEntities = <T extends EntityData>(
 ): WithSearch<T> => {
   const serviceEntity = first.search.source === 'service' ? first : second;
   const localEntity = first.search.source === 'local' ? first : second;
-  const hasLocal = first.search.source === 'local' || second.search.source === 'local';
+  const hasLocal =
+    first.search.source === 'local' || second.search.source === 'local';
 
   return {
     ...serviceEntity,
