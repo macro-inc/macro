@@ -5,4 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export type ProjectDeletedAt = number | null;
+export type PostSoupRequestAllOf = {
+  /** the view of specific emails to display */
+  emailView?: string;
+};
