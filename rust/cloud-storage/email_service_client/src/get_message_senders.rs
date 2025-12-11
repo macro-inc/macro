@@ -11,20 +11,10 @@ impl EmailServiceClient {
             .post(format!("{}/internal/messages/senders", self.url))
             .json(&request)
             .send()
-            .await?;
+            .await?
+            .error_for_status()?;
 
-        match res.status() {
-            reqwest::StatusCode::OK => {
-                let result = res.json::<MessageSendersResponse>().await?;
-                Ok(result)
-            }
-            status_code => {
-                let body: String = res.text().await?;
-                anyhow::bail!(format!(
-                    "unexpected response from email service status code {}: {}",
-                    status_code, body
-                ))
-            }
-        }
+        let result = res.json::<MessageSendersResponse>().await?;
+        Ok(result)
     }
 }
