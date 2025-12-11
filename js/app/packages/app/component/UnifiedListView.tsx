@@ -893,6 +893,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     }
 
     if (onlyHas(typeFilter, 'channel')) return true;
+    if (isSearchActive() && onlyHas(typeFilter, 'email')) return true;
     return false;
   });
 
