@@ -52,7 +52,7 @@ async fn main() -> anyhow::Result<()> {
             .to_string(),
     };
 
-    // limiting to max of 400 connections (25% of macrodb total) in prod. (10 service + 30 backfill) * 10 pod max
+    // limiting to max of 200 connections (12.5% of macrodb total) in prod.
     let (min_connections, max_connections): (u32, u32) = match config.environment {
         Environment::Production => (3, 20),
         Environment::Develop => (1, 10),

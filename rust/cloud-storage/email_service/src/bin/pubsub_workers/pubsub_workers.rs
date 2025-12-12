@@ -44,14 +44,14 @@ async fn main() -> anyhow::Result<()> {
     };
 
     let (min_connections, max_connections): (u32, u32) = match config.environment {
-        Environment::Production => (3, 30),
+        Environment::Production => (3, 15),
         Environment::Develop => (1, 10),
         Environment::Local => (1, 10),
     };
 
     let (min_connections_backfill, max_connections_backfill): (u32, u32) = match config.environment
     {
-        Environment::Production => (3, 30),
+        Environment::Production => (3, 25),
         Environment::Develop => (1, 30),
         Environment::Local => (1, 50),
     };
