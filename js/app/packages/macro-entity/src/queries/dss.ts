@@ -103,9 +103,9 @@ const fetchPaginatedDocumentsPost = async ({
 
 export function createDssInfiniteQuery(
   initialParams?: Accessor<PostItemsSoupParams>,
+  getRequestBody?: Accessor<PostSoupRequest>,
   options?: {
     disabled?: Accessor<boolean>;
-    requestBody?: Accessor<PostSoupRequest>;
   }
 ) {
   const params = () => {
@@ -113,10 +113,9 @@ export function createDssInfiniteQuery(
     let limit = 100;
     let sort_method;
     let emailView;
-    const requestBody = options?.requestBody;
 
-    if (requestBody) {
-      const body = requestBody();
+    if (getRequestBody) {
+      const body = getRequestBody();
       if (body?.limit) {
         limit = body.limit;
       }
@@ -140,7 +139,7 @@ export function createDssInfiniteQuery(
   const instructionsIdQuery = useInstructionsMdIdQuery();
 
   return useInfiniteQuery(() => {
-    const requestBody = options?.requestBody?.();
+    const requestBody = getRequestBody?.();
     // Include all filters in query key so query refetches when any filter changes
     const documentFilters = requestBody?.document_filters;
     const projectFilters = requestBody?.project_filters;
@@ -170,7 +169,7 @@ export function createDssInfiniteQuery(
       queryFn: ({ pageParam }) => {
         return fetchPaginatedDocumentsPost({
           apiToken: authQuery.data,
-          requestBody: requestBody,
+          requestBody,
           params: { cursor: pageParam.cursor },
         });
       },

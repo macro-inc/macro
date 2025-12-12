@@ -972,10 +972,13 @@ export function UnifiedListView(props: UnifiedListViewProps) {
     const channelsQuery = createChannelsQuery({
       disabled: disableChannelsQuery,
     });
-    const dssInfiniteQuery = createDssInfiniteQuery(dssQueryParams, {
-      disabled: disableDssInfiniteQuery,
-      requestBody: dssQueryRequestBody,
-    });
+    const dssInfiniteQuery = createDssInfiniteQuery(
+      dssQueryParams,
+      dssQueryRequestBody,
+      {
+        disabled: disableDssInfiniteQuery,
+      }
+    );
     const searchNameContentInfiniteQuery = createUnifiedSearchInfiniteQuery(
       searchUnifiedNameContentQueryParams,
       { disabled: disableSearchService }
