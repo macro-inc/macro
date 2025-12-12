@@ -239,7 +239,7 @@ const queueArns = [
 ];
 
 const emailServiceSecretsPolicy = new aws.iam.Policy(
-  'email-service-secrets-policy',
+  'email-service-secrets-policy-2',
   {
     policy: {
       Version: '2012-10-17',
@@ -256,7 +256,7 @@ const emailServiceSecretsPolicy = new aws.iam.Policy(
 );
 
 const emailServiceSqsPolicy = new aws.iam.Policy(
-  'email-service-sqs-policy',
+  'email-service-sqs-policy-2',
   {
     policy: pulumi.output({
       Version: '2012-10-17',
@@ -273,14 +273,14 @@ const emailServiceSqsPolicy = new aws.iam.Policy(
 );
 
 const emailServiceFrecencyPolicy = createFrecencyTablePolicy(
-  'email-service-frecency-policy'
+  'email-service-frecency-policy-2'
 );
 
 // Create IAM role for email service
 const emailServiceRole = new aws.iam.Role(
-  'email-service-role',
+  'email-service-role-2',
   {
-    name: `email-service-role-${stack}`,
+    name: `email-service-role-2-${stack}`,
     assumeRolePolicy: {
       Version: '2012-10-17',
       Statement: [
