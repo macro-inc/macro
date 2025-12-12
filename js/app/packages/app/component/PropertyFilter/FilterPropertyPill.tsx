@@ -4,13 +4,18 @@ import CheckIcon from '@phosphor-icons/core/assets/regular/check.svg';
 import XIcon from '@phosphor-icons/core/assets/regular/x.svg';
 import type { Component } from 'solid-js';
 import { createSignal, Match, Show, Switch } from 'solid-js';
-import type { FilterAction, PropertyFilter } from '../PropertyFilterTypes';
+import type {
+  EntityFilterValue,
+  FilterAction,
+  PropertyFilter,
+} from '../PropertyFilterTypes';
 import { ComparisonAction } from '../PropertyFilterTypes';
 import { FilterActionSelect } from './FilterAction';
 import { FilterPropertySelect } from './FilterProperty';
 import { FilterValueBoolean } from './FilterValueBoolean';
 import { FilterValueDate } from './FilterValueDate';
 import { FilterValueDateMulti } from './FilterValueDateMulti';
+import { FilterValueEntity } from './FilterValueEntity';
 import { FilterValueNumber } from './FilterValueNumber';
 import { FilterValueNumberMulti } from './FilterValueNumberMulti';
 import { FilterValueSelect } from './FilterValueSelect';
@@ -36,6 +41,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
   const [numberValues, setNumberValues] = createSignal<number[]>([]); // Multi-number for equality actions
   const [selectValue, setSelectValue] = createSignal<string | null>(null); // option ID for SELECT types
   const [selectValues, setSelectValues] = createSignal<string[]>([]); // Multi-select for equality actions
+  const [entityValues, setEntityValues] = createSignal<EntityFilterValue[]>([]); // Entity values for ENTITY type
 
   // Track if user is editing property (to show search instead of pill)
   const [previousProperty, setPreviousProperty] =
@@ -79,6 +85,9 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
       }
       return selectValues().length > 0; // Equality actions use multi-select
     }
+    if (property.data_type === 'ENTITY') {
+      return entityValues().length > 0;
+    }
     return values().length > 0;
   };
 
@@ -96,6 +105,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
       setNumberValues([]);
       setSelectValue(null);
       setSelectValues([]);
+      setEntityValues([]);
       _setValues([]);
     }
     setSelectedProperty(property);
@@ -204,6 +214,21 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
     }
   };
 
+  // Handler for entity values
+  const handleEntityValuesChange = (newValues: EntityFilterValue[]) => {
+    setEntityValues(newValues);
+
+    // Auto-save when values change
+    const property = selectedProperty();
+    const currentAction = action();
+    if (property && currentAction) {
+      const filter = buildPartialFilter(property, currentAction);
+      if (filter) {
+        props.onSave(filter);
+      }
+    }
+  };
+
   const handleConfirm = () => {
     if (!canConfirm()) return;
     const property = selectedProperty();
@@ -295,7 +320,7 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
           ...baseFilter,
           dataType: 'ENTITY',
           action: filterAction as any,
-          values: [],
+          values: entityValues(),
         } as PropertyFilter;
       default:
         return null;
@@ -443,6 +468,13 @@ export const FilterPropertyPill: Component<FilterPillProps> = (props) => {
                 }
                 values={selectValues()}
                 onChange={handleSelectValuesChange}
+              />
+            </Match>
+            <Match when={selectedProperty()?.data_type === 'ENTITY'}>
+              <FilterValueEntity
+                specificEntityType={selectedProperty()!.specific_entity_type!}
+                values={entityValues()}
+                onChange={handleEntityValuesChange}
               />
             </Match>
           </Switch>

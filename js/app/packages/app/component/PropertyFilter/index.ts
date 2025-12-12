@@ -4,6 +4,7 @@ export { FilterPropertyPill } from './FilterPropertyPill';
 export { FilterValueBoolean } from './FilterValueBoolean';
 export { FilterValueDate } from './FilterValueDate';
 export { FilterValueDateMulti } from './FilterValueDateMulti';
+export { FilterValueEntity } from './FilterValueEntity';
 export { FilterValueNumber } from './FilterValueNumber';
 export { FilterValueNumberMulti } from './FilterValueNumberMulti';
 export { FilterValueSelect } from './FilterValueSelect';
