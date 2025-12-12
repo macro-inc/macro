@@ -2,7 +2,6 @@ use crate::api::context::DcsScribe;
 use crate::core::constants::CHANNEL_TRANSCRIPT_MAX_MESSAGES;
 use ai::types::{Attachment, PromptAttachment};
 use ai_tools::read::EmailMessage;
-use anyhow::Context;
 use model::{
     chat::{AttachmentType, ChatAttachmentWithName},
     document::FileTypeExt,
@@ -31,8 +30,7 @@ pub async fn fetchium(
                     .document
                     .fetch_project(attachment.attachment_id.clone(), jwt.to_owned())
                     .content()
-                    .await
-                    .context("failed to fetch project")?
+                    .await?
                     .to_string();
                 Ok(Attachment::Text(PromptAttachment {
                     id: attachment.attachment_id.clone(),
@@ -46,8 +44,7 @@ pub async fn fetchium(
                     .static_file
                     .fetch(attachment.attachment_id.clone())
                     .file_content()
-                    .await
-                    .context("failed to fetch image content")?
+                    .await?
                     .content
                     .base64_compressed_webp()?;
 
@@ -62,8 +59,7 @@ pub async fn fetchium(
                         None,
                         Some(CHANNEL_TRANSCRIPT_MAX_MESSAGES),
                     )
-                    .await
-                    .context("failed to fetch channel transcript")?;
+                    .await?;
 
                 Ok(Attachment::Text(PromptAttachment {
                     content: transcript,
@@ -77,8 +73,7 @@ pub async fn fetchium(
                     .document
                     .fetch(attachment.attachment_id.clone())
                     .document_content()
-                    .await
-                    .context("failed to fetch document content")?;
+                    .await?;
                 if document.file_type().is_image() {
                     Ok(Attachment::ImageUrl(
                         document.content.base64_compressed_webp()?,
@@ -101,8 +96,7 @@ pub async fn fetchium(
                         EMAIL_THREAD_MESSAGE_LIMIT,
                         None,
                     )
-                    .await
-                    .context("failed to fetch email message")?;
+                    .await?;
 
                 let subject = thread
                     .first()
@@ -121,8 +115,7 @@ pub async fn fetchium(
                     messages: thread,
                 };
 
-                let content = serde_json::to_string_pretty(&formatted_content)
-                    .context("error stringifying json")?;
+                let content = serde_json::to_string_pretty(&formatted_content)?;
 
                 Ok(Attachment::Text(PromptAttachment {
                     id: attachment.attachment_id,
