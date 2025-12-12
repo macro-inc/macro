@@ -1299,7 +1299,7 @@ export function createNavigationEntityListShortcut({
   });
   registerEntityHotkey({
     hotkey: ['cmd+enter'],
-    scopeId: entityHotkeyScope,
+    scopeId: splitHotkeyScope,
     description: 'Focus Preview',
     keyDownHandler: () => {
       const [preview] = previewState;
