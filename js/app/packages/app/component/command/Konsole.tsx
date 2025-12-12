@@ -51,6 +51,8 @@ import {
 import { useCommandItems } from './useCommandItems';
 import { usePaginatedSearchItems } from './useSearchItems';
 import { ClippedPanel } from '@core/component/ClippedPanel';
+import CloseIcon from '@icon/regular/x.svg';
+import { IconButton } from '@core/component/IconButton';
 
 // equivalent to h-96
 const MAX_CONTAINER_HEIGHT = 96 * 4;
@@ -321,16 +323,24 @@ export function KommandMenuInner(props: {
         setCurrentValue(value);
       }}
     >
-      <div class="flex items-center gap-2 bg-menu px-2 h-[40px] border-b border-edge-muted">
-        <span class="pl-1">❯</span>
+      <div class="flex items-center gap-2 bg-panel px-2 h-[40px] border-b border-edge-muted">
+        <IconButton
+          onClick={() => toggleKonsoleVisibility()}
+          tooltip={{ label: 'Close'}}
+          icon={CloseIcon}
+          theme="current"
+          iconSize={16}
+          size="sm"
+        />
+        ❯
         <CommandK.Input
-          value={rawQuery()}
-          placeholder="Search files..."
-          class="flex-1 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 font-mono placeholder:text-edge text-accent-270"
+          class="flex-1 border-0 outline-none! focus:outline-none ring-0! focus:ring-0 font-mono"
           onValueChange={setRawQuery}
+          placeholder="Search..."
+          value={rawQuery()}
         />
       </div>
-      <div class="bg-menu">
+      <div class="bg-panel">
         <KonsoleFilter />
         <CommandK.List class="scrollbar-hidden">
           <CommandK.Empty>
@@ -347,7 +357,7 @@ export function KommandMenuInner(props: {
               <VList
                 data={filteredItems()}
                 style={{ height: containerHeight() }}
-                class="scrollbar-hidden pb-2 bg-dialog"
+                class="scrollbar-hidden pb-2 bg-panel"
               >
                 {(item, index) => (
                   <CommandKItemWrapper index={index()} item={item} />
