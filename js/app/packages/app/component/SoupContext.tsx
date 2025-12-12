@@ -1509,7 +1509,7 @@ export function scrollToKeepGap({
   }
 }
 
-const hotkeyScopeMap = new Map<string, ExecuteKeyDownHandlerCallback>();
+const globalKeyboardEventMap = new Map<string, KeyboardEvent | undefined>();
 
 type ExecuteKeyDownHandlerCallback = (props: {
   keyboardEvent?: KeyboardEvent;
@@ -1519,9 +1519,6 @@ type ExecuteKeyDownHandlerCallback = (props: {
  *
  * Registers entity hotkeys to global scope and split panel scope. When global hotkey is fired, runs hotkey command from active split panel scope.
  *
- * Since registerHotkey overrides handlers, so previous registered conditions/handlers are lost. global `hotkeyScopeMap` stores  scoped canExecuteKeyDownHandler, once registerHotkey supports 'add'ing hotkey handlers instead of overriding this global mapper should be removed.
- *
- * @returns
  */
 function registerEntityHotkey(
   opts: Omit<Parameters<typeof registerHotkey>[0], 'condition'> & {
@@ -1537,28 +1534,29 @@ function registerEntityHotkey(
   };
 } {
   const id = opts.scopeId + JSON.stringify(opts.hotkey);
-
-  if (opts.canExecuteKeyDownHandler) {
-    hotkeyScopeMap.set(id, opts.canExecuteKeyDownHandler!);
-    onCleanup(() => {
-      hotkeyScopeMap.delete(id);
-    });
-  }
+  onCleanup(() => {
+    globalKeyboardEventMap.delete(id);
+  });
 
   // scoped hotkey
   const registerHotkeyReturn = registerHotkey({
     ...opts,
     keyDownHandler: (e) => {
-      const canExecuteKeyDownHandler = (data: { event?: KeyboardEvent }) => {
-        const scopeCallback = hotkeyScopeMap.get(id);
-        if (!scopeCallback) return true;
+      const canExecuteKeyDownHandler = () => {
+        const keyboardEventFromGlobal = globalKeyboardEventMap.get(id);
+        globalKeyboardEventMap.delete(id);
+        if (!opts.canExecuteKeyDownHandler) return true;
 
-        return scopeCallback({
-          keyboardEvent: data.event,
+        return opts.canExecuteKeyDownHandler({
+          keyboardEvent: e ?? keyboardEventFromGlobal,
         });
       };
 
-      return canExecuteKeyDownHandler({ event: e }) && opts.keyDownHandler(e);
+      if (canExecuteKeyDownHandler()) {
+        return opts.keyDownHandler(e);
+      }
+
+      return false;
     },
     condition: undefined,
   });
@@ -1569,9 +1567,11 @@ function registerEntityHotkey(
     hotkeyToken: undefined,
     tags: undefined,
     condition: undefined,
-    keyDownHandler: (e) => {
-      if (e) {
-        const target = e.target as HTMLElement;
+    keyDownHandler: (event) => {
+      globalKeyboardEventMap.set(id, event);
+
+      if (event) {
+        const target = event.target as HTMLElement;
         if (
           target.closest(
             `
@@ -1607,7 +1607,7 @@ function registerEntityHotkey(
       if (!command) return false;
 
       runCommand(command);
-      return true;
+      return false;
     },
   });
 
