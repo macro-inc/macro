@@ -133,7 +133,7 @@ const notificationApnsPlatform = new aws.sns.PlatformApplication(
   'notification-apns-platform',
   {
     name: `notification-apns-platform-${stack}`,
-    platform: 'APNS',
+    platform: stack === 'prod' ? 'APNS' : 'APNS_SANDBOX', // use sandbox for dev
     applePlatformTeamId: APPLE_TEAM_ID,
     applePlatformBundleId: APPLE_BUNDLE_ID,
     platformPrincipal: APNS_KEY_ID,
@@ -220,33 +220,28 @@ const notificationService = new NotificationService('notification-service', {
     },
     {
       name: 'DOCUMENT_STORAGE_SERVICE_URL',
-      value: `https://cloud-storage${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      value: `https://cloud-storage${stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
     },
     {
       name: 'DOCUMENT_COGNITION_SERVICE_URL',
-      value: `https://document-cognition${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      value: `https://document-cognition${stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
     },
     {
       name: 'COMMS_SERVICE_URL',
-      value: `https://comms-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      value: `https://comms-service${stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
     },
     {
       name: 'CONNECTION_GATEWAY_URL',
-      value: `https://connection-gateway${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      value: `https://connection-gateway${stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
     },
     {
       name: 'ORGANIZATION_SERVICE_URL',
-      value: `https://organization-service${
-        stack === 'prod' ? '' : `-${stack}`
-      }.macro.com`,
+      value: `https://organization-service${stack === 'prod' ? '' : `-${stack}`
+        }.macro.com`,
     },
     {
       name: 'SNS_APNS_PLATFORM_ARN',
