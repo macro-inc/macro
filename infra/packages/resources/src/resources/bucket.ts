@@ -1,7 +1,7 @@
 import * as aws from '@pulumi/aws';
 import type { Bucket } from '@pulumi/aws/s3';
 import type * as pulumi from '@pulumi/pulumi';
-import { stack } from '@shared';
+import { stack } from '../../../shared';
 import { ALLOWED_ORIGINS } from './cors';
 
 /**

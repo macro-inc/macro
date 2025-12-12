@@ -1,9 +1,9 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
+import { config, stack } from '../../packages/shared';
+import { get_coparse_api_vpc } from '../../packages/vpc';
 import { Database } from './database';
 import { FusionAuthService } from './fusionauth-service';
-import { config, stack } from './resources/shared';
-import { get_coparse_api_vpc } from './resources/vpc';
 
 const tags = {
   environment: stack,

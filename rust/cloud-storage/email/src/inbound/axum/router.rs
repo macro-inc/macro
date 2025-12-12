@@ -14,7 +14,9 @@ use crate::{
     domain::{models::GetEmailsRequest, ports::EmailService},
     inbound::{
         ApiPaginatedThreadCursor, EmailLinkExtractor,
-        axum::axum_impls::{GetPreviewsCursorError, GetPreviewsCursorParams, PreviewViewExtractor},
+        axum::axum_impls::{
+            GetPreviewsCursorError, GetPreviewsCursorParams, PreviewViewPathExtractor,
+        },
     },
 };
 
@@ -74,7 +76,7 @@ async fn cursor_handler<T: EmailService>(
     State(service): State<EmailPreviewState<T>>,
     Cached(macro_user): Cached<MacroUserExtractor>,
     Cached(EmailLinkExtractor(link, _)): Cached<EmailLinkExtractor<T>>,
-    PreviewViewExtractor(preview_view): PreviewViewExtractor,
+    PreviewViewPathExtractor(preview_view): PreviewViewPathExtractor,
     extract::Query(params): extract::Query<GetPreviewsCursorParams>,
     cursor: CursorExtractor<Uuid, SimpleSortMethod, ()>,
 ) -> Result<Json<ApiPaginatedThreadCursor>, GetPreviewsCursorError> {

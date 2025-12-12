@@ -8,14 +8,14 @@ import {
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
-} from '@resources';
-import { EcrImage } from '@service';
+} from '../../packages/resources';
+import { EcrImage } from '../../packages/service';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
   SERVICE_DOMAIN_NAME,
   stack,
-} from '@shared';
+} from '../../packages/shared';
 
 const BASE_NAME = 'cloud-storage-service';
 const BASE_PATH = '../../../rust/cloud-storage';

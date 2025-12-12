@@ -16,6 +16,11 @@ pub const ATTACHMENT_MIME_TYPE_FILTERS: &str = r#"
     )
 "#;
 
+/// Attachment mime type filters including videos and non-inline images
+pub const ATTACHMENT_MIME_TYPE_FILTERS_WITH_MEDIA: &str = r#"
+    ((a.mime_type LIKE 'image/%' AND a.content_id IS NULL) OR a.mime_type LIKE 'video/%')
+"#;
+
 /// always insert attachments sent from these domains.
 pub const ATTACHMENT_WHITELISTED_DOMAINS: &str = r#"
                         OR (

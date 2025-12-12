@@ -4,7 +4,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { TOKENS } from '@core/hotkey/tokens';
 import { registerScopeSignalHotkey } from '@core/hotkey/utils';
 import { createMethodRegistration } from '@core/orchestrator';
-import { createActiveTarget } from '@core/signal/activeTarget';
 import {
   blockElementSignal,
   blockHotkeyScopeSignal,
@@ -15,6 +14,7 @@ import {
   recipientEntityMapper,
   useContacts,
 } from '@core/user';
+import { whenSettled } from '@core/util/whenSettled';
 import {
   createEffectOnEntityTypeNotification,
   isNewEmail,
@@ -39,7 +39,6 @@ import { createStore } from 'solid-js/store';
 import { URL_PARAMS } from '../constants';
 import { isScrollingToMessage } from '../signal/scrollState';
 import { registerEmailHotkeys } from '../util/emailHotkeys';
-import { getHeaderValue } from '../util/getHeaderValue';
 import {
   getLastMessageId,
   scrollToLastMessage,
@@ -120,23 +119,32 @@ export function Email(props: EmailProps) {
   // Map Parent Messages to Draft Children
   // ============================================
 
-  const initialDraftChildren: Record<string, MessageWithBodyReplyless> =
-    (() => {
-      const t = untrack(threadData);
-      const map: Record<string, MessageWithBodyReplyless> = {};
-      if (!t) return map;
-      for (const message of t.messages) {
-        if (!(message.is_draft && message.body_text?.trim() !== '')) continue;
-        const headers = message.headers_json as unknown;
-        const parentMessageDbId = getHeaderValue(headers, 'Macro-In-Reply-To');
-        if (!parentMessageDbId) continue;
-        map[parentMessageDbId] = message;
-      }
-      return map;
-    })();
-
   const [messageDbIdToDraftChildren, setMessageDbIdToDraftChildren] =
-    createStore<Record<string, MessageWithBodyReplyless>>(initialDraftChildren);
+    createStore<Record<string, MessageWithBodyReplyless>>({});
+  const [draftsSettled, setDraftsSettled] = createSignal(false);
+
+  whenSettled(
+    threadQuery,
+    (data) => {
+      const t = data.thread;
+      if (!t) return;
+      const map: Record<string, MessageWithBodyReplyless> = {};
+      for (const message of t.messages) {
+        if (!message.is_draft || message.body_text?.trim().length === 0)
+          continue;
+        const replyingToId = message.replying_to_id;
+        if (replyingToId) {
+          map[replyingToId] = message;
+        }
+      }
+      setMessageDbIdToDraftChildren(map);
+      setDraftsSettled(true);
+    },
+    (error) => {
+      console.error('Failed to load thread data:', error);
+      toast.failure('Failed to load email thread. Please try again.');
+    }
+  );
 
   // ============================================
   // SHARED RECIPIENT OPTIONS
@@ -217,8 +225,12 @@ export function Email(props: EmailProps) {
   const [focusedMessageId, setFocusedMessageId] = createSignal<string>();
   const [isContainerFilled, setIsContainerFilled] = createSignal(false);
   const [hasHandledTarget, setHasHandledTarget] = createSignal(false);
+  const [targetMessageActive, setTargetMessageActive] = createSignal(false);
 
-  const activeTargetMessageId = createActiveTarget(targetMessageId);
+  const activeTargetMessageId = createMemo(() => {
+    if (!targetMessageActive()) return undefined;
+    return untrack(targetMessageId);
+  });
 
   const blockHandle = blockHandleSignal.get;
   createMethodRegistration(blockHandle, {
@@ -304,6 +316,11 @@ export function Email(props: EmailProps) {
 
     if (success) {
       setFocusedMessageId(messageId);
+      // Flash the message after scroll completes
+      setTargetMessageActive(true);
+      setTimeout(() => {
+        setTargetMessageActive(false);
+      }, 800);
       // Clear scrolling flag after animation
       setTimeout(() => setIsScrollingToMessage(false), 1000);
     } else {
@@ -445,7 +462,7 @@ export function Email(props: EmailProps) {
           // Load one more batch for scroll context
           await loadContextBatch();
           // Scroll to the message after DOM updates
-          setTimeout(() => performScrollToMessage(messageId, 'smooth'));
+          setTimeout(() => performScrollToMessage(messageId, 'instant'));
         } else {
           // Message not found, fallback to last message
           setTimeout(() => scrollToLastMessageAndFocus('instant'));
@@ -458,11 +475,11 @@ export function Email(props: EmailProps) {
     // Case 2: Message is first in current batch - load more for context
     else if (targetIndex === 0) {
       await loadContextBatch();
-      setTimeout(() => performScrollToMessage(messageId, 'smooth'));
+      setTimeout(() => performScrollToMessage(messageId, 'instant'));
     }
     // Case 3: Message is in current batch with sufficient context
     else {
-      setTimeout(() => performScrollToMessage(messageId, 'smooth'));
+      setTimeout(() => performScrollToMessage(messageId, 'instant'));
     }
   }
 
@@ -614,6 +631,7 @@ export function Email(props: EmailProps) {
         refetch,
         archiveThread,
         activeTargetMessageId,
+        draftsSettled,
       }}
     >
       <EmailFormContextProvider>
@@ -626,7 +644,7 @@ export function Email(props: EmailProps) {
             <MessageList initialLoadComplete={hasHandledTarget()} />
           </div>
           {/* <div class="z-4 absolute left-[44px] bottom-[92px] w-[21px] rounded-bl-xl min-h-[84px] border-l border-b border-edge" /> */}
-          <Show when={filteredMessages()?.at(-1)}>
+          <Show when={draftsSettled() && filteredMessages()?.at(-1)}>
             {(lastMessage) => (
               <div class="shrink-0 w-full px-4 pb-2">
                 <div class="w-full flex flex-row justify-center bg-panel macro-message-width mx-auto">

@@ -5,6 +5,7 @@ pub(crate) mod constants;
 
 mod external;
 pub mod get_message_by_id;
+pub mod get_message_senders;
 pub mod get_messages_by_thread_id;
 pub mod get_thread_histories;
 pub mod get_thread_owner;

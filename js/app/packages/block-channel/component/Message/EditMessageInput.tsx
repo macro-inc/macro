@@ -1,8 +1,11 @@
 import { TextButton } from '@core/component/TextButton';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
+import FormatIcon from '@icon/regular/text-aa.svg';
 import Check from '@phosphor-icons/core/regular/check.svg?component-solid';
 import XIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
-import { onCleanup, onMount, type Setter } from 'solid-js';
+import { createSignal, onCleanup, onMount, type Setter, Show } from 'solid-js';
+import { ActionButton } from '../ActionButton';
+import { FormatRibbon } from '../FormatRibbon';
 import { useChannelMarkdownArea } from '../MarkdownArea';
 
 export function EditMessageInput(props: {
@@ -11,10 +14,14 @@ export function EditMessageInput(props: {
   content: string;
 }) {
   const originalContent = props.content;
+  const [showFormatRibbon, setShowFormatRibbon] = createSignal(false);
 
   const {
     focus: focusMarkdownArea,
     state: markdownState,
+    formatState: markdownFormatState,
+    setInlineFormat,
+    setNodeFormat,
     MarkdownArea,
   } = useChannelMarkdownArea();
 
@@ -38,6 +45,13 @@ export function EditMessageInput(props: {
 
   return (
     <div class="relative -left-3 text-sm w-full bg-input overflow-hidden border border-edge-muted focus-within:border-accent flex flex-col gap-1 items-center mt-4 ">
+      <Show when={showFormatRibbon()}>
+        <FormatRibbon
+          state={markdownFormatState}
+          inlineFormat={setInlineFormat}
+          nodeFormat={setNodeFormat}
+        />
+      </Show>
       <div class="w-full px-3">
         <MarkdownArea
           initialValue={originalContent}
@@ -56,28 +70,40 @@ export function EditMessageInput(props: {
           }}
         />
       </div>
-      <div class="w-full flex flex-row gap-1 items-center justify-end p-2">
-        <TextButton
-          icon={XIcon}
-          text="Cancel"
-          theme="clear"
-          onClick={() => props.setEditing(false)}
-        />
-        <TextButton
-          icon={Check}
-          text="Save"
-          theme="accent"
-          onClick={() => {
-            const currentContent = markdownState();
-            if (
-              currentContent !== originalContent &&
-              currentContent.length > 0
-            ) {
-              props.save(currentContent);
-            }
-            props.setEditing(false);
+      <div class="w-full flex flex-row gap-1 items-center justify-between p-2">
+        <ActionButton
+          tooltip="Format"
+          onClick={(e) => {
+            e.preventDefault();
+            setShowFormatRibbon((prev) => !prev);
           }}
-        />
+          clicked={showFormatRibbon()}
+        >
+          <FormatIcon width={20} height={20} />
+        </ActionButton>
+        <div class="flex flex-row gap-1 items-center">
+          <TextButton
+            icon={XIcon}
+            text="Cancel"
+            theme="clear"
+            onClick={() => props.setEditing(false)}
+          />
+          <TextButton
+            icon={Check}
+            text="Save"
+            theme="accent"
+            onClick={() => {
+              const currentContent = markdownState();
+              if (
+                currentContent !== originalContent &&
+                currentContent.length > 0
+              ) {
+                props.save(currentContent);
+              }
+              props.setEditing(false);
+            }}
+          />
+        </div>
       </div>
     </div>
   );

@@ -6,6 +6,7 @@ use crate::api::ApiContext;
 mod backfill;
 mod delete_user;
 mod get_message_by_id;
+mod get_message_senders;
 mod get_messages_by_thread_id;
 mod get_search_message_by_id;
 mod get_search_messages_by_thread_id;
@@ -24,6 +25,7 @@ pub fn router() -> Router<ApiContext> {
             "/messages/batch",
             post(get_message_by_id::get_message_by_id_batch_handler),
         )
+        .route("/messages/senders", post(get_message_senders::handler))
         .route("/threads/histories", post(get_thread_histories::handler))
         .route(
             "/threads/:id/messages",

@@ -4,8 +4,13 @@
  * comms_service
  * OpenAPI spec version: 0.1.0
  */
+import type { NewAttachmentHeight } from './newAttachmentHeight';
+import type { NewAttachmentWidth } from './newAttachmentWidth';
 
 export interface NewAttachment {
   entity_id: string;
   entity_type: string;
+  /** dimensions of image/video */
+  height?: NewAttachmentHeight;
+  width?: NewAttachmentWidth;
 }
