@@ -8,6 +8,14 @@ impl SearchQueryConfig for TestSearchConfig {
     const USER_ID_KEY: &'static str = "test_user_id";
     const TITLE_KEY: &'static str = "test_title";
     const ENTITY_INDEX: SearchEntityType = SearchEntityType::Documents;
+
+    fn append_owner_highlights<'a>(
+        highlight: opensearch_query_builder::Highlight<'a>,
+    ) -> opensearch_query_builder::Highlight<'a> {
+        let highlight = highlight.field("test_user_id", create_highlight_field("plain", 1));
+
+        highlight
+    }
 }
 
 #[test]
@@ -33,7 +41,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
             "field": "entity_id"
         },
         "sort": TestSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
-        "highlight": TestSearchConfig::default_highlight().to_json(),
+        "highlight": TestSearchConfig::append_owner_highlights(TestSearchConfig::default_highlight()).to_json(),
         "query": {
             "bool": {}
         }
@@ -84,6 +92,12 @@ fn test_build_search_request() -> anyhow::Result<()> {
                     "post_tags": ["</macro_em>"],
                 },
                 "test_title": {
+                    "type": "plain",
+                    "number_of_fragments": 1,
+                    "pre_tags": ["<macro_em>"],
+                    "post_tags": ["</macro_em>"],
+                },
+                "test_user_id": {
                     "type": "plain",
                     "number_of_fragments": 1,
                     "pre_tags": ["<macro_em>"],
@@ -157,6 +171,12 @@ fn test_build_search_request() -> anyhow::Result<()> {
                     "number_of_fragments": 1,
                     "pre_tags": ["<macro_em>"],
                     "post_tags": ["</macro_em>"],
+                },
+                "test_user_id": {
+                    "type": "plain",
+                    "number_of_fragments": 1,
+                    "pre_tags": ["<macro_em>"],
+                    "post_tags": ["</macro_em>"],
                 }
             }
         },
@@ -198,8 +218,9 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                         {
                             "wildcard": {
                                 "test_user_id": {
-                                    "value": "*test*",
+                                    "value": "macro|test*",
                                     "case_insensitive": true,
+                                    "boost": 5000.0
                                 }
                             }
                         },
@@ -252,8 +273,9 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                         {
                             "wildcard": {
                                 "test_user_id": {
-                                    "value": "*test*",
+                                    "value": "macro|test*",
                                     "case_insensitive": true,
+                                    "boost": 5000.0
                                 }
                             }
                         },
@@ -309,7 +331,8 @@ fn test_build_bool_query() -> anyhow::Result<()> {
                       "wildcard": {
                         "test_user_id": {
                           "case_insensitive": true,
-                          "value": "*test*"
+                          "value": "macro|test*",
+                          "boost": 5000.0
                         }
                       }
                     },

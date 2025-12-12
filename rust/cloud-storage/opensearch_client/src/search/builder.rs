@@ -46,6 +46,18 @@ macro_rules! delegate_methods {
     };
 }
 
+/// Creates a highlight field
+pub(crate) fn create_highlight_field<'a>(
+    highlight_type: &'a str,
+    number_of_fragments: u32,
+) -> HighlightField<'a> {
+    HighlightField::new()
+        .highlight_type(highlight_type)
+        .pre_tags(vec![MacroEm::Open.to_string()])
+        .post_tags(vec![MacroEm::Close.to_string()])
+        .number_of_fragments(number_of_fragments)
+}
+
 pub trait SearchQueryConfig {
     /// Key for item id
     const ID_KEY: &'static str = "entity_id";
@@ -77,6 +89,12 @@ pub trait SearchQueryConfig {
                 .post_tags(vec![MacroEm::Close.to_string()])
                 .number_of_fragments(500),
         )
+    }
+
+    /// Override this method if you want to add custom owner highlight fields
+    /// By default, this will add a user_id highlight field
+    fn append_owner_highlights<'a>(highlight: Highlight<'a>) -> Highlight<'a> {
+        highlight.field("user_id", create_highlight_field("plain", 1))
     }
 }
 
@@ -200,49 +218,76 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
 
                 inner_bool_query.minimum_should_match(1);
 
-                // Create a vec of owner queries for each term
-                // We want to search over the content **and** the owner here
-                let mut owner_queries: Vec<QueryType> = Vec::new();
+                // For email search, we want to search over the participants
+                // For all other indices we want to search over the owner
+                match T::ENTITY_INDEX {
+                    SearchEntityType::Emails => {
+                        let mut participant_queries: Vec<QueryType> = Vec::new();
+                        for term in &self.terms {
+                            let formatted_term = format!("{}*", term);
+                            participant_queries.push(
+                                WildcardQuery::new(
+                                    "sender",
+                                    formatted_term.clone(),
+                                    true,
+                                    Some(5000.0),
+                                )
+                                .into(),
+                            );
+                            participant_queries.push(
+                                WildcardQuery::new(
+                                    "cc",
+                                    formatted_term.clone(),
+                                    true,
+                                    Some(5000.0),
+                                )
+                                .into(),
+                            );
+                            participant_queries.push(
+                                WildcardQuery::new(
+                                    "bcc",
+                                    formatted_term.clone(),
+                                    true,
+                                    Some(5000.0),
+                                )
+                                .into(),
+                            );
+                            participant_queries.push(
+                                WildcardQuery::new(
+                                    "recipients",
+                                    formatted_term.clone(),
+                                    true,
+                                    Some(5000.0),
+                                )
+                                .into(),
+                            );
+                        }
 
-                for term in &self.terms {
-                    let formatted_term = format!("*{}*", term);
-                    owner_queries.push(QueryType::wildcard(T::USER_ID_KEY, formatted_term, true));
-                }
-
-                // Add the owner queries to the bool query
-                for owner_query in owner_queries {
-                    inner_bool_query.should(owner_query);
-                }
-
-                // If the search is on email, we need to add in participants to the query as well
-                if T::ENTITY_INDEX == SearchEntityType::Emails {
-                    let mut participant_queries: Vec<QueryType> = Vec::new();
-                    for term in &self.terms {
-                        let formatted_term = format!("*{}*", term);
-                        participant_queries.push(QueryType::wildcard(
-                            "sender",
-                            formatted_term.clone(),
-                            true,
-                        ));
-                        participant_queries.push(QueryType::wildcard(
-                            "cc",
-                            formatted_term.clone(),
-                            true,
-                        ));
-                        participant_queries.push(QueryType::wildcard(
-                            "bcc",
-                            formatted_term.clone(),
-                            true,
-                        ));
-                        participant_queries.push(QueryType::wildcard(
-                            "recipients",
-                            formatted_term.clone(),
-                            true,
-                        ));
+                        for participant_query in participant_queries {
+                            inner_bool_query.should(participant_query);
+                        }
                     }
+                    _ => {
+                        // Create a vec of owner queries for each term
+                        // We want to search over the content **and** the owner here
+                        let mut owner_queries: Vec<QueryType> = Vec::new();
+                        for term in &self.terms {
+                            let formatted_term = format!("macro|{}*", term);
+                            owner_queries.push(
+                                WildcardQuery::new(
+                                    T::USER_ID_KEY,
+                                    formatted_term,
+                                    true,
+                                    Some(5000.0),
+                                )
+                                .into(),
+                            );
+                        }
 
-                    for participant_query in participant_queries {
-                        inner_bool_query.should(participant_query);
+                        // Add the owner queries to the bool query
+                        for owner_query in owner_queries {
+                            inner_bool_query.should(owner_query);
+                        }
                     }
                 }
 
@@ -381,7 +426,7 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
             search_request.collapse(Collapse::new(T::ID_KEY));
         }
 
-        let highlight = match self.search_on {
+        let mut highlight = match self.search_on {
             SearchOn::Content => T::default_highlight(),
             SearchOn::Name => Highlight::new().require_field_match(true).field(
                 T::TITLE_KEY,
@@ -410,6 +455,8 @@ impl<T: SearchQueryConfig> SearchQueryBuilder<T> {
                         .number_of_fragments(1),
                 ),
         };
+
+        highlight = T::append_owner_highlights(highlight);
 
         search_request.highlight(highlight);
         search_request.set_sorts(T::default_sort_types().into());

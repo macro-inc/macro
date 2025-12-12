@@ -462,6 +462,42 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
             "post_tags": ["</macro_em>"],
             "pre_tags": ["<macro_em>"],
             "type": "plain"
+          },
+          "user_id": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "owner_id": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "sender": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "recipients": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "cc": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "bcc": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
           }
         },
         "require_field_match": true
@@ -482,7 +518,8 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                           "wildcard": {
                             "owner_id": {
                               "case_insensitive": true,
-                              "value": "*test*"
+                              "value": "macro|test*",
+                              "boost": 5000.0
                             }
                           }
                         },
@@ -524,17 +561,10 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                       "should": [
                         {
                           "wildcard": {
-                            "user_id": {
-                              "case_insensitive": true,
-                              "value": "*test*"
-                            }
-                          }
-                        },
-                        {
-                          "wildcard": {
                             "sender": {
                               "case_insensitive": true,
-                              "value": "*test*"
+                              "value": "test*",
+                              "boost": 5000.0
                             }
                           }
                         },
@@ -542,7 +572,8 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                           "wildcard": {
                             "cc": {
                               "case_insensitive": true,
-                              "value": "*test*"
+                              "value": "test*",
+                              "boost": 5000.0
                             }
                           }
                         },
@@ -550,7 +581,8 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                           "wildcard": {
                             "bcc": {
                               "case_insensitive": true,
-                              "value": "*test*"
+                              "value": "test*",
+                              "boost": 5000.0
                             }
                           }
                         },
@@ -558,7 +590,8 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                           "wildcard": {
                             "recipients": {
                               "case_insensitive": true,
-                              "value": "*test*"
+                              "value": "test*",
+                              "boost": 5000.0
                             }
                           }
                         },
@@ -699,7 +732,8 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                           "wildcard": {
                             "sender_id": {
                               "case_insensitive": true,
-                              "value": "*test*"
+                              "value": "macro|test*",
+                              "boost": 5000.0
                             }
                           }
                         },
@@ -753,7 +787,8 @@ fn test_build_unified_search_request_content() -> anyhow::Result<()> {
                           "wildcard": {
                             "user_id": {
                               "case_insensitive": true,
-                              "value": "*test*"
+                              "value": "macro|test*",
+                              "boost": 5000.0
                             }
                           }
                         },
@@ -1126,8 +1161,70 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
 
     let result = build_unified_search_request(&unified_search_args)?;
 
-    let expected = serde_json::json!(
-            {
+    let expected = serde_json::json!({
+      "collapse": {
+        "field": "entity_id"
+      },
+      "from": 20,
+      "highlight": {
+        "fields": {
+          "bcc": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "cc": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "content": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "name": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "owner_id": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "project_name": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "recipients": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "sender": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "user_id": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          }
+        },
+        "require_field_match": false
+      },
       "query": {
         "bool": {
           "minimum_should_match": 1,
@@ -1147,8 +1244,9 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                               {
                                 "wildcard": {
                                   "owner_id": {
+                                    "boost": 5000.0,
                                     "case_insensitive": true,
-                                    "value": "*test*"
+                                    "value": "macro|test*"
                                   }
                                 }
                               },
@@ -1169,10 +1267,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                       "should": [
                         {
                           "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
-                            ]
+                            "entity_id": ["id1", "id2"]
                           }
                         },
                         {
@@ -1206,10 +1301,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                       "should": [
                         {
                           "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
-                            ]
+                            "entity_id": ["id1", "id2"]
                           }
                         },
                         {
@@ -1237,41 +1329,37 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                             "should": [
                               {
                                 "wildcard": {
-                                  "user_id": {
-                                    "case_insensitive": true,
-                                    "value": "*test*"
-                                  }
-                                }
-                              },
-                              {
-                                "wildcard": {
                                   "sender": {
+                                    "boost": 5000.0,
                                     "case_insensitive": true,
-                                    "value": "*test*"
+                                    "value": "test*"
                                   }
                                 }
                               },
                               {
                                 "wildcard": {
                                   "cc": {
+                                    "boost": 5000.0,
                                     "case_insensitive": true,
-                                    "value": "*test*"
+                                    "value": "test*"
                                   }
                                 }
                               },
                               {
                                 "wildcard": {
                                   "bcc": {
+                                    "boost": 5000.0,
                                     "case_insensitive": true,
-                                    "value": "*test*"
+                                    "value": "test*"
                                   }
                                 }
                               },
                               {
                                 "wildcard": {
                                   "recipients": {
+                                    "boost": 5000.0,
                                     "case_insensitive": true,
-                                    "value": "*test*"
+                                    "value": "test*"
                                   }
                                 }
                               },
@@ -1290,10 +1378,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                         },
                         {
                           "terms": {
-                            "link_id": [
-                              "id1",
-                              "id2"
-                            ]
+                            "link_id": ["id1", "id2"]
                           }
                         },
                         {
@@ -1392,10 +1477,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                       "should": [
                         {
                           "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
-                            ]
+                            "entity_id": ["id1", "id2"]
                           }
                         },
                         {
@@ -1429,10 +1511,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                       "should": [
                         {
                           "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
-                            ]
+                            "entity_id": ["id1", "id2"]
                           }
                         },
                         {
@@ -1461,8 +1540,9 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                               {
                                 "wildcard": {
                                   "sender_id": {
+                                    "boost": 5000.0,
                                     "case_insensitive": true,
-                                    "value": "*test*"
+                                    "value": "macro|test*"
                                   }
                                 }
                               },
@@ -1481,36 +1561,24 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                         },
                         {
                           "terms": {
-                            "thread_id": [
-                              "id1",
-                              "id2"
-                            ]
+                            "thread_id": ["id1", "id2"]
                           }
                         },
                         {
                           "terms": {
-                            "mentions": [
-                              "id1",
-                              "id2"
-                            ]
+                            "mentions": ["id1", "id2"]
                           }
                         },
                         {
                           "terms": {
-                            "sender_id": [
-                              "id1",
-                              "id2"
-                            ]
+                            "sender_id": ["id1", "id2"]
                           }
                         }
                       ],
                       "should": [
                         {
                           "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
-                            ]
+                            "entity_id": ["id1", "id2"]
                           }
                         }
                       ]
@@ -1539,10 +1607,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                       "should": [
                         {
                           "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
-                            ]
+                            "entity_id": ["id1", "id2"]
                           }
                         }
                       ]
@@ -1566,8 +1631,9 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                               {
                                 "wildcard": {
                                   "user_id": {
+                                    "boost": 5000.0,
                                     "case_insensitive": true,
-                                    "value": "*test*"
+                                    "value": "macro|test*"
                                   }
                                 }
                               },
@@ -1611,10 +1677,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                       "should": [
                         {
                           "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
-                            ]
+                            "entity_id": ["id1", "id2"]
                           }
                         },
                         {
@@ -1648,10 +1711,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                       "should": [
                         {
                           "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
-                            ]
+                            "entity_id": ["id1", "id2"]
                           }
                         },
                         {
@@ -1680,8 +1740,9 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                               {
                                 "wildcard": {
                                   "user_id": {
+                                    "boost": 5000.0,
                                     "case_insensitive": true,
-                                    "value": "*test*"
+                                    "value": "macro|test*"
                                   }
                                 }
                               },
@@ -1702,10 +1763,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                       "should": [
                         {
                           "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
-                            ]
+                            "entity_id": ["id1", "id2"]
                           }
                         },
                         {
@@ -1734,10 +1792,7 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
                       "should": [
                         {
                           "terms": {
-                            "entity_id": [
-                              "id1",
-                              "id2"
-                            ]
+                            "entity_id": ["id1", "id2"]
                           }
                         },
                         {
@@ -1754,7 +1809,6 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
           ]
         }
       },
-      "from": 20,
       "size": 20,
       "sort": [
         {
@@ -1763,47 +1817,8 @@ fn test_build_unified_search_request_name_content() -> anyhow::Result<()> {
         {
           "entity_id": "desc"
         }
-      ],
-      "highlight": {
-        "require_field_match": false,
-        "fields": {
-          "content": {
-            "type": "plain",
-            "number_of_fragments": 1,
-            "pre_tags": [
-              "<macro_em>"
-            ],
-            "post_tags": [
-              "</macro_em>"
-            ]
-          },
-          "name": {
-            "type": "plain",
-            "number_of_fragments": 1,
-            "pre_tags": [
-              "<macro_em>"
-            ],
-            "post_tags": [
-              "</macro_em>"
-            ]
-          },
-          "project_name": {
-            "type": "plain",
-            "number_of_fragments": 1,
-            "pre_tags": [
-              "<macro_em>"
-            ],
-            "post_tags": [
-              "</macro_em>"
-            ]
-          }
-        }
-      },
-      "collapse": {
-        "field": "entity_id"
-      }
-    }
-    );
+      ]
+    });
 
     assert_eq!(result.to_json(), expected);
 
@@ -1848,7 +1863,8 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
                           "wildcard": {
                             "owner_id": {
                               "case_insensitive": true,
-                              "value": "*test*"
+                              "value": "macro|test*",
+                              "boost": 5000.0
                             }
                           }
                         },
@@ -1908,6 +1924,42 @@ fn test_build_unified_search_request_single_index() -> anyhow::Result<()> {
             "post_tags": [
               "</macro_em>"
             ]
+          },
+          "user_id": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "owner_id": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "sender": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "recipients": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "cc": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
+          },
+          "bcc": {
+            "number_of_fragments": 1,
+            "post_tags": ["</macro_em>"],
+            "pre_tags": ["<macro_em>"],
+            "type": "plain"
           }
         }
       },

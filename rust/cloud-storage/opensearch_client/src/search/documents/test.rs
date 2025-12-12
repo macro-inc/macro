@@ -21,7 +21,7 @@ fn test_build_search_request() -> anyhow::Result<()> {
             "field": "entity_id"
         },
         "sort": DocumentSearchConfig::default_sort_types().iter().map(|s| s.to_json()).collect::<Vec<_>>(),
-        "highlight": DocumentSearchConfig::default_highlight().to_json(),
+        "highlight": DocumentSearchConfig::append_owner_highlights(DocumentSearchConfig::default_highlight()).to_json(),
         "query": {
             "bool": {
                 "must": [
@@ -32,8 +32,9 @@ fn test_build_search_request() -> anyhow::Result<()> {
                                 {
                                     "wildcard": {
                                         "owner_id": {
-                                            "value": "*test*",
-                                            "case_insensitive": true,
+                                        "value": "macro|test*",
+                                        "case_insensitive": true,
+                                        "boost": 5000.0
                                         }
                                     }
                                 },
