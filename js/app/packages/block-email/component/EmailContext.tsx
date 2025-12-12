@@ -33,6 +33,7 @@ export type EmailContextValue = {
   refetch: () => void;
   archiveThread: Accessor<boolean>;
   activeTargetMessageId: Accessor<string | undefined>;
+  draftsSettled: Accessor<boolean>;
 };
 
 const EmailContext = createContext<EmailContextValue>();

@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './aBGroup';
 export * from './appleLoginRequest';
 export * from './createAccountMergeRequest';
 export * from './createInProgressLinkResponse';
@@ -17,6 +18,7 @@ export * from './genericSuccessResponse';
 export * from './getLegacyUserPermissionsResponse';
 export * from './getLegacyUserPermissionsResponseGroup';
 export * from './getLegacyUserPermissionsResponseName';
+export * from './getNamesWithEmailRequestBody';
 export * from './getProfilePicturesRequestBody';
 export * from './getUserInfo';
 export * from './getUserInfoOrganizationId';

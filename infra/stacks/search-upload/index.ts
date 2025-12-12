@@ -1,5 +1,5 @@
 import * as pulumi from '@pulumi/pulumi';
-import { getSearchEventQueue, stack } from '@shared';
+import { getSearchEventQueue, stack } from '../../packages/shared';
 import { SearchUploadHandler } from './search-upload-lambda';
 
 const tags = {

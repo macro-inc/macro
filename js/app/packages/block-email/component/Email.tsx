@@ -14,6 +14,7 @@ import {
   recipientEntityMapper,
   useContacts,
 } from '@core/user';
+import { whenSettled } from '@core/util/whenSettled';
 import {
   createEffectOnEntityTypeNotification,
   isNewEmail,
@@ -38,7 +39,6 @@ import { createStore } from 'solid-js/store';
 import { URL_PARAMS } from '../constants';
 import { isScrollingToMessage } from '../signal/scrollState';
 import { registerEmailHotkeys } from '../util/emailHotkeys';
-import { getHeaderValue } from '../util/getHeaderValue';
 import {
   getLastMessageId,
   scrollToLastMessage,
@@ -119,23 +119,32 @@ export function Email(props: EmailProps) {
   // Map Parent Messages to Draft Children
   // ============================================
 
-  const initialDraftChildren: Record<string, MessageWithBodyReplyless> =
-    (() => {
-      const t = untrack(threadData);
-      const map: Record<string, MessageWithBodyReplyless> = {};
-      if (!t) return map;
-      for (const message of t.messages) {
-        if (!(message.is_draft && message.body_text?.trim() !== '')) continue;
-        const headers = message.headers_json as unknown;
-        const parentMessageDbId = getHeaderValue(headers, 'Macro-In-Reply-To');
-        if (!parentMessageDbId) continue;
-        map[parentMessageDbId] = message;
-      }
-      return map;
-    })();
-
   const [messageDbIdToDraftChildren, setMessageDbIdToDraftChildren] =
-    createStore<Record<string, MessageWithBodyReplyless>>(initialDraftChildren);
+    createStore<Record<string, MessageWithBodyReplyless>>({});
+  const [draftsSettled, setDraftsSettled] = createSignal(false);
+
+  whenSettled(
+    threadQuery,
+    (data) => {
+      const t = data.thread;
+      if (!t) return;
+      const map: Record<string, MessageWithBodyReplyless> = {};
+      for (const message of t.messages) {
+        if (!message.is_draft || message.body_text?.trim().length === 0)
+          continue;
+        const replyingToId = message.replying_to_id;
+        if (replyingToId) {
+          map[replyingToId] = message;
+        }
+      }
+      setMessageDbIdToDraftChildren(map);
+      setDraftsSettled(true);
+    },
+    (error) => {
+      console.error('Failed to load thread data:', error);
+      toast.failure('Failed to load email thread. Please try again.');
+    }
+  );
 
   // ============================================
   // SHARED RECIPIENT OPTIONS
@@ -622,6 +631,7 @@ export function Email(props: EmailProps) {
         refetch,
         archiveThread,
         activeTargetMessageId,
+        draftsSettled,
       }}
     >
       <EmailFormContextProvider>
@@ -634,7 +644,7 @@ export function Email(props: EmailProps) {
             <MessageList initialLoadComplete={hasHandledTarget()} />
           </div>
           {/* <div class="z-4 absolute left-[44px] bottom-[92px] w-[21px] rounded-bl-xl min-h-[84px] border-l border-b border-edge" /> */}
-          <Show when={filteredMessages()?.at(-1)}>
+          <Show when={draftsSettled() && filteredMessages()?.at(-1)}>
             {(lastMessage) => (
               <div class="shrink-0 w-full px-4 pb-2">
                 <div class="w-full flex flex-row justify-center bg-panel macro-message-width mx-auto">

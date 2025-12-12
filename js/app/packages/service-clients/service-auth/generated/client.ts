@@ -15,6 +15,7 @@ import type {
   GenerateEmailLinkRequest,
   GenericSuccessResponse,
   GetLegacyUserPermissionsResponse,
+  GetNamesWithEmailRequestBody,
   GetProfilePicturesRequestBody,
   GetUserInfo,
   GetUserLinkExistsParams,
@@ -2162,6 +2163,66 @@ export const getUserNames = async (postGetNamesRequestBody: PostGetNamesRequestB
   
   const data: getUserNamesResponse['data'] = body ? JSON.parse(body) : {}
   return { data, status: res.status, headers: res.headers } as getUserNamesResponse
+}
+
+
+
+/**
+ * @summary Gets names for passed user profile ids, falling back to the requesting user's email contact names
+ */
+export type getUserNamesWithEmailResponse200 = {
+  data: UserNames
+  status: 200
+}
+
+export type getUserNamesWithEmailResponse400 = {
+  data: string
+  status: 400
+}
+
+export type getUserNamesWithEmailResponse401 = {
+  data: string
+  status: 401
+}
+
+export type getUserNamesWithEmailResponse500 = {
+  data: ErrorResponse
+  status: 500
+}
+    
+export type getUserNamesWithEmailResponseSuccess = (getUserNamesWithEmailResponse200) & {
+  headers: Headers;
+};
+export type getUserNamesWithEmailResponseError = (getUserNamesWithEmailResponse400 | getUserNamesWithEmailResponse401 | getUserNamesWithEmailResponse500) & {
+  headers: Headers;
+};
+
+export type getUserNamesWithEmailResponse = (getUserNamesWithEmailResponseSuccess | getUserNamesWithEmailResponseError)
+
+export const getGetUserNamesWithEmailUrl = () => {
+
+
+  
+
+  return `/user/get_names_with_email`
+}
+
+export const getUserNamesWithEmail = async (getNamesWithEmailRequestBody: GetNamesWithEmailRequestBody, options?: RequestInit): Promise<getUserNamesWithEmailResponse> => {
+  
+  const res = await fetch(getGetUserNamesWithEmailUrl(),
+  {      
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      getNamesWithEmailRequestBody,)
+  }
+)
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+  
+  const data: getUserNamesWithEmailResponse['data'] = body ? JSON.parse(body) : {}
+  return { data, status: res.status, headers: res.headers } as getUserNamesWithEmailResponse
 }
 
 

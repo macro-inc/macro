@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as pulumi from '@pulumi/pulumi';
-import { stack } from '@shared';
+import { stack } from '../../shared';
 
 const JWT_SECRET_KEY = `fusionauth-jwt-secret-${stack}`;
 export const ISSUER =

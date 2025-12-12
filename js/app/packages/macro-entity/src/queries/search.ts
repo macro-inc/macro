@@ -1,7 +1,6 @@
 import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { ENABLE_SEARCH_SERVICE } from '@core/constant/featureFlags';
-import { idToDisplayName } from '@core/user';
 import { isErr } from '@core/util/maybeResult';
 import {
   extractSearchSnippet,
@@ -183,7 +182,16 @@ const useMapSearchResponseItem = () => {
         };
       }
       case 'email': {
-        const emailResult = result.email_message_search_results.at(0);
+        const messageHits = result.email_message_search_results.filter(
+          (m) => m.message_id
+        );
+        // NOTE: guaranteed to be empty or singleton array
+        const threadHits = result.email_message_search_results.filter(
+          (m) => !m.message_id
+        );
+
+        const singleMessage = messageHits.length === 1;
+
         const search = getSearchData({
           results: result.email_message_search_results,
           type: 'email',
@@ -191,42 +199,34 @@ const useMapSearchResponseItem = () => {
 
         const name = result.name ?? blockNameToDefaultFile('email');
 
-        const senderName =
-          emailResult?.sender ||
-          result.email_message_search_results.at(1)?.sender ||
-          idToDisplayName(result.user_id);
+        // TODO: display sender for each message in the content hit list
+        const combinedSenders =
+          [...new Set(messageHits.map((m) => m.pretty_sender))].join(', ') ||
+          threadHits.at(0)?.pretty_sender;
 
-        // NOTE: this shouldn't happen unless it's a name only match that doesn't produce a name highlight for some reason
-        // including this as a fallback for now
-        if (!emailResult) {
-          return {
-            type: 'email',
-            id: result.thread_id,
-            name,
-            ownerId: result.owner_id,
-            createdAt: result.created_at,
-            updatedAt: result.updated_at,
-            viewedAt: result.viewed_at ?? undefined,
-            isRead: false,
-            isImportant: false,
-            done: false,
-            senderName,
-            search,
-          };
-        }
+        // TODO: we probably want to get the actual latest message info on the full thread
+        const latestMessageSentAt = Math.max(
+          ...messageHits.map((m) => m.sent_at).filter((m) => m != null)
+        );
 
         return {
           type: 'email',
           id: result.thread_id,
           name,
           ownerId: result.owner_id,
-          createdAt: emailResult.sent_at ?? result.updated_at,
-          updatedAt: emailResult.sent_at ?? result.updated_at,
+          createdAt: latestMessageSentAt ?? result.created_at,
+          updatedAt: latestMessageSentAt ?? result.updated_at,
           viewedAt: result.viewed_at ?? undefined,
-          isRead: !emailResult.labels.includes('UNREAD'),
-          isImportant: emailResult.labels.includes('IMPORTANT'),
-          done: !emailResult.labels.includes('INBOX'),
-          senderName,
+          isRead: singleMessage
+            ? !messageHits[0].labels.includes('UNREAD')
+            : false,
+          isImportant: singleMessage
+            ? messageHits[0].labels.includes('IMPORTANT')
+            : false,
+          done: singleMessage
+            ? !messageHits[0].labels.includes('INBOX')
+            : false,
+          senderName: combinedSenders,
           search,
         };
       }

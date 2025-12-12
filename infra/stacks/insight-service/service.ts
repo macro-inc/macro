@@ -6,9 +6,9 @@ import {
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
-} from '@resources';
-import { EcrImage } from '@service';
-import { BASE_DOMAIN, stack } from '@shared';
+} from '../../packages/resources';
+import { EcrImage } from '../../packages/service';
+import { BASE_DOMAIN, stack } from '../../packages/shared';
 
 const BASE_NAME = 'insight-service';
 const BASE_PATH = '../../../rust/cloud-storage';

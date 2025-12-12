@@ -8,11 +8,15 @@ import {
   datadogAgentContainer,
   fargateLogRouterSidecarContainer,
   serviceLoadBalancer,
-} from '@resources';
-import { EcrImage } from '@service';
-import { BASE_DOMAIN, CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
-import { EmailAttachmentsBucket } from '@stacks/email-service/attachments-bucket';
-import { getCloudfrontDistribution } from '@stacks/email-service/s3-cloudfront-distribution';
+} from '../../packages/resources';
+import { EcrImage } from '../../packages/service';
+import {
+  BASE_DOMAIN,
+  CLOUD_TRAIL_SNS_TOPIC_ARN,
+  stack,
+} from '../../packages/shared';
+import { EmailAttachmentsBucket } from './attachments-bucket';
+import { getCloudfrontDistribution } from './s3-cloudfront-distribution';
 
 const BASE_NAME = 'email-service';
 const BASE_PATH = '../../../rust/cloud-storage';

@@ -1,6 +1,6 @@
 import * as aws from '@pulumi/aws';
 import type * as pulumi from '@pulumi/pulumi';
-import { stack } from '@shared';
+import { stack } from '../../shared';
 
 const MACRO_API_TOKEN_PUBLIC_KEY = `macro-api-token-public-key-${stack}`;
 
