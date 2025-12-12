@@ -15,9 +15,10 @@ import {
 import { createApiTokenQuery } from './auth';
 import { queryKeys } from './key';
 
-export type ProjectContainedEntity =
-  | WithRequired<Extract<EntityData, DocumentEntity | ChatEntity>, 'projectId'>
-  | WithRequired<Extract<EntityData, ProjectEntity>, 'parentId'>;
+export type ProjectContainedEntity = WithRequired<
+  Extract<EntityData, DocumentEntity | ChatEntity | ProjectEntity>,
+  'projectId'
+>;
 
 export const isProjectContainedEntity = (
   entity: EntityData
@@ -113,7 +114,7 @@ export function createProjectQuery<T extends ProjectContainedEntity>(
   const authQuery = createApiTokenQuery();
 
   const projectQuery = useQuery(() => {
-    const projectId = getEntityProjectId(entity) as string;
+    const projectId = entity.projectId;
     return {
       queryKey: queryKeys.project({
         projectId,
