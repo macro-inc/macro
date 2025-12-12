@@ -13,7 +13,9 @@ import { EcrImage } from '../../packages/service';
 import {
   BASE_DOMAIN,
   CLOUD_TRAIL_SNS_TOPIC_ARN,
-  SERVICE_DOMAIN_NAME,
+  getDomainName,
+  getServiceUrl,
+  ServiceUrl,
   stack,
 } from '../../packages/shared';
 
@@ -331,7 +333,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
     new aws.route53.Record(
       `${BASE_NAME}-domain-record`,
       {
-        name: SERVICE_DOMAIN_NAME,
+        name: getDomainName(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL),
         type: 'A',
         zoneId: zone.zoneId,
         aliases: [
@@ -345,7 +347,7 @@ export class CloudStorageService extends pulumi.ComponentResource {
       { parent: this }
     );
 
-    this.domain = `https://${SERVICE_DOMAIN_NAME}`;
+    this.domain = getServiceUrl(ServiceUrl.DOCUMENT_STORAGE_SERVICE_URL);
   }
 
   initializeSecurityGroups({

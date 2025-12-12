@@ -6,6 +6,8 @@ import {
   getMacroApiToken,
   getMacroNotify,
   getSearchEventQueue,
+  getServiceUrl,
+  ServiceUrl,
   stack,
 } from '../../packages/shared';
 import { get_coparse_api_vpc } from '../../packages/vpc';
@@ -241,11 +243,9 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'RUST_LOG',
-        value: `document_storage_service=${
-          stack === 'prod' ? 'debug' : 'trace'
-        },tower_http=info,macro_share_permissions=${
-          stack === 'prod' ? 'error' : 'trace'
-        },macro_project_utils=info,macro_notify=info`,
+        value: `document_storage_service=${stack === 'prod' ? 'debug' : 'trace'
+          },tower_http=info,macro_share_permissions=${stack === 'prod' ? 'error' : 'trace'
+          },macro_project_utils=info,macro_notify=info`,
       },
       {
         name: 'DOCUMENT_STORAGE_BUCKET',
@@ -306,15 +306,11 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'COMMS_SERVICE_URL',
-        value: `https://comms-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        value: getServiceUrl(ServiceUrl.COMMS_SERVICE_URL),
       },
       {
         name: 'EMAIL_SERVICE_URL',
-        value: `https://email-service${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        value: getServiceUrl(ServiceUrl.EMAIL_SERVICE_URL),
       },
       {
         name: 'DOCUMENT_PERMISSION_JWT_SECRET_KEY',
@@ -326,18 +322,14 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'CONNECTION_GATEWAY_URL',
-        value: `https://connection-gateway${
-          stack === 'prod' ? '' : `-${stack}`
-        }.macro.com`,
+        value: getServiceUrl(ServiceUrl.CONNECTION_GATEWAY_URL),
       },
       {
         name: 'BULK_UPLOAD_REQUESTS_TABLE',
-        // TODO: this should be interpolated from the bulk upload resource
         value: `bulk-upload-${stack}`,
       },
       {
         name: 'UPLOAD_STAGING_BUCKET',
-        // TODO: this should be interpolated from the bulk upload resource
         value: `bulk-upload-staging-${stack}`,
       },
       {
@@ -346,7 +338,7 @@ const cloudStorageService = new CloudStorageService(
       },
       {
         name: 'SYNC_SERVICE_URL',
-        value: `https://sync-service-${stack === 'dev' ? 'dev3' : 'prod2'}.macroverse.workers.dev`,
+        value: getServiceUrl(ServiceUrl.SYNC_SERVICE_URL),
       },
       {
         name: 'MACRO_API_TOKEN_ISSUER',
