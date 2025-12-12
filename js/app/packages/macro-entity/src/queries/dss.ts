@@ -102,14 +102,14 @@ const fetchPaginatedDocumentsPost = async ({
 };
 
 export function createDssInfiniteQuery(
-  _params?: Accessor<PostItemsSoupParams>,
+  initialParams?: Accessor<PostItemsSoupParams>,
   options?: {
     disabled?: Accessor<boolean>;
     requestBody?: Accessor<PostSoupRequest>;
   }
 ) {
   const params = () => {
-    const argParams = _params?.();
+    const argParams = initialParams?.();
     let limit = 100;
     let sort_method;
     let emailView;
