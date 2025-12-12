@@ -388,15 +388,9 @@ export function createNavigationEntityListShortcut({
 
       return true;
     },
-    scopeData: [actionRegistry, isViewingList] as const,
-    canExecuteKeyDownHandler: ({
-      scopeData: [actionRegistry, isViewingList],
-    }) => {
-      return (
-        isViewingList() &&
-        actionRegistry.isActionEnabled('mark_as_done', plainSelectedEntities())
-      );
-    },
+    canExecuteKeyDownHandler: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled('mark_as_done', plainSelectedEntities()),
     displayPriority: 10,
     tags: [HotkeyTags.SelectionModification],
   });
@@ -462,15 +456,10 @@ export function createNavigationEntityListShortcut({
       );
       return true;
     },
-    scopeData: [actionRegistry, isViewingList] as const,
-    canExecuteKeyDownHandler: ({
-      scopeData: [actionRegistry, isViewingList],
-    }) => {
-      return (
-        isViewingList() &&
-        actionRegistry.isActionEnabled('delete', plainSelectedEntities())
-      );
-    },
+    canExecuteKeyDownHandler: () =>
+      isViewingList() &&
+      actionRegistry.isActionEnabled('delete', plainSelectedEntities()),
+
     tags: [HotkeyTags.SelectionModification],
     displayPriority: 10,
   });
@@ -1151,10 +1140,7 @@ export function createNavigationEntityListShortcut({
       const navigationInput: NavigationInput = { axis: 'end', mode: 'step' };
       return handleNavigationSelection(navigationInput);
     },
-    scopeData: [isViewingList],
-    canExecuteKeyDownHandler: ({ scopeData: [isViewingList] }) => {
-      return isViewingList();
-    },
+    canExecuteKeyDownHandler: () => isViewingList(),
     hide: true,
   });
 
@@ -1180,10 +1166,7 @@ export function createNavigationEntityListShortcut({
       const navigationInput: NavigationInput = { axis: 'start', mode: 'step' };
       return handleNavigationSelection(navigationInput);
     },
-    scopeData: [isViewingList],
-    canExecuteKeyDownHandler: ({ scopeData: [isViewingList] }) => {
-      return isViewingList();
-    },
+    canExecuteKeyDownHandler: () => isViewingList(),
     hide: true,
   });
   registerEntityHotkey({
@@ -1300,11 +1283,7 @@ export function createNavigationEntityListShortcut({
       openEntity(entity);
       return true;
     },
-    scopeData: [isViewingList],
-    canExecuteKeyDownHandler: ({
-      keyboardEvent,
-      scopeData: [isViewingList],
-    }) => {
+    canExecuteKeyDownHandler: ({ keyboardEvent }) => {
       if (!isViewingList()) return false;
 
       if (keyboardEvent) {
@@ -1366,10 +1345,7 @@ export function createNavigationEntityListShortcut({
       openEntity(entity);
       return true;
     },
-    scopeData: [isViewingList],
-    canExecuteKeyDownHandler: ({ scopeData: [isViewingList] }) => {
-      return isViewingList();
-    },
+    canExecuteKeyDownHandler: () => isViewingList(),
     displayPriority: 4,
   });
   registerEntityHotkey({
@@ -1382,26 +1358,20 @@ export function createNavigationEntityListShortcut({
       toggleEntity(entity.entity);
       return true;
     },
-    scopeData: [isViewingList],
-    canExecuteKeyDownHandler: ({ scopeData: [isViewingList] }) => {
-      return isViewingList();
-    },
+    canExecuteKeyDownHandler: () => isViewingList(),
     displayPriority: 10,
   });
   registerEntityHotkey({
     hotkey: ['escape'],
     scopeId: splitHotkeyScope,
     description: 'Clear multi selection',
-    scopeData: [isViewingList, viewData] as const,
     keyDownHandler: () => {
       const length = viewData().selectedEntities.length;
       setViewDataStore(selectedView(), 'selectedEntities', []);
       return length > 1;
     },
-    canExecuteKeyDownHandler: ({ scopeData }) => {
-      const [isViewingList, viewData] = scopeData!;
-      return isViewingList() && viewData().selectedEntities.length > 0;
-    },
+    canExecuteKeyDownHandler: () =>
+      isViewingList() && viewData().selectedEntities.length > 0,
   });
 }
 
@@ -1539,26 +1509,23 @@ export function scrollToKeepGap({
   }
 }
 
-const scopeDataMap = new Map<string, any>();
+const hotkeyScopeMap = new Map<string, ExecuteKeyDownHandlerCallback>();
 
-type ExecuteKeyDownHandlerCallback<T> = (props: {
+type ExecuteKeyDownHandlerCallback = (props: {
   keyboardEvent?: KeyboardEvent;
-  isFiredFromGlobalKeyDown: boolean;
-  scopeData: T;
 }) => boolean;
 
 /**
  *
  * Registers entity hotkeys to global scope and split panel scope. When global hotkey is fired, runs hotkey command from active split panel scope.
  *
- * @scopeData - exists since registerHotkey overrides handlers, so previous registered conditions/handlers are lost. Once registerHotkey supports 'add'ing hotkey handlers instead of overriding this property should be removed
+ * Since registerHotkey overrides handlers, so previous registered conditions/handlers are lost. global `hotkeyScopeMap` stores  scoped canExecuteKeyDownHandler, once registerHotkey supports 'add'ing hotkey handlers instead of overriding this global mapper should be removed.
  *
  * @returns
  */
-function registerEntityHotkey<T>(
+function registerEntityHotkey(
   opts: Omit<Parameters<typeof registerHotkey>[0], 'condition'> & {
-    scopeData?: T;
-    canExecuteKeyDownHandler?: ExecuteKeyDownHandlerCallback<T>;
+    canExecuteKeyDownHandler?: ExecuteKeyDownHandlerCallback;
     globalCommandScope?: string;
   }
 ): {
@@ -1571,36 +1538,27 @@ function registerEntityHotkey<T>(
 } {
   const id = opts.scopeId + JSON.stringify(opts.hotkey);
 
-  if (opts.scopeData) {
-    scopeDataMap.set(id, opts.scopeData);
+  if (opts.canExecuteKeyDownHandler) {
+    hotkeyScopeMap.set(id, opts.canExecuteKeyDownHandler!);
     onCleanup(() => {
-      scopeDataMap.delete(id);
+      hotkeyScopeMap.delete(id);
     });
   }
-
-  const canExecuteKeyDownHandler = (
-    data: { event?: KeyboardEvent; isFiredFromGlobalKeyDown?: boolean },
-    cb?: ExecuteKeyDownHandlerCallback<T>
-  ) => {
-    if (!cb) return true;
-
-    const scopeData = scopeDataMap.get(id);
-
-    return cb({
-      keyboardEvent: data.event,
-      isFiredFromGlobalKeyDown: !!data.isFiredFromGlobalKeyDown,
-      scopeData,
-    });
-  };
 
   // scoped hotkey
   const registerHotkeyReturn = registerHotkey({
     ...opts,
     keyDownHandler: (e) => {
-      return (
-        canExecuteKeyDownHandler({ event: e }, opts.canExecuteKeyDownHandler) &&
-        opts.keyDownHandler(e)
-      );
+      const canExecuteKeyDownHandler = (data: { event?: KeyboardEvent }) => {
+        const scopeCallback = hotkeyScopeMap.get(id);
+        if (!scopeCallback) return true;
+
+        return scopeCallback({
+          keyboardEvent: data.event,
+        });
+      };
+
+      return canExecuteKeyDownHandler({ event: e }) && opts.keyDownHandler(e);
     },
     condition: undefined,
   });
@@ -1612,14 +1570,6 @@ function registerEntityHotkey<T>(
     tags: undefined,
     condition: undefined,
     keyDownHandler: (e) => {
-      if (opts.canExecuteKeyDownHandler) {
-        if (
-          !canExecuteKeyDownHandler({ event: e }, opts.canExecuteKeyDownHandler)
-        ) {
-          return false;
-        }
-      }
-
       if (e) {
         const target = e.target as HTMLElement;
         if (
