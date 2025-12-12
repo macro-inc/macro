@@ -221,7 +221,7 @@ export function MessageContainer(props: MessageContainerProps) {
           <Show when={imageAttachmentsWithSfs().length > 0}>
             <Switch>
               <Match when={imageAttachmentsWithSfs().length === 1}>
-                <div class="max-w-[400px] w-fit mt-0.5">
+                <div class="max-w-[400px] w-fit mt-2">
                   <ImagePreview
                     id={imageAttachmentsWithSfs()[0].sfs_id!}
                     variant="dynamic"
@@ -229,7 +229,7 @@ export function MessageContainer(props: MessageContainerProps) {
                 </div>
               </Match>
               <Match when={imageAttachmentsWithSfs().length > 1}>
-                <div class="flex flex-wrap gap-2 mt-0.5">
+                <div class="flex flex-wrap gap-2 mt-2">
                   <ImageGalleryPreview
                     ids={imageAttachmentsWithSfs().map((a) => a.sfs_id!)}
                     variant="dynamic"
@@ -253,17 +253,14 @@ export function MessageContainer(props: MessageContainerProps) {
 
           {/* Other attachments (non-media or without sfs_id) */}
           <Show when={otherAttachments().length > 0}>
-            <div class="flex flex-row overflow-x-scroll my-1">
+            <div class="flex flex-row overflow-x-scroll mt-2 gap-2">
               <For each={otherAttachments()}>
-                {(attachment) => {
-                  if (attachment.db_id)
-                    return (
-                      <EmailAttachmentPill
-                        attachment={attachment}
-                        onClick={onClickAttachment}
-                      />
-                    );
-                }}
+                {(attachment) => (
+                  <EmailAttachmentPill
+                    attachment={attachment}
+                    onClick={onClickAttachment}
+                  />
+                )}
               </For>
             </div>
           </Show>

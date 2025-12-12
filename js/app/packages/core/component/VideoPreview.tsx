@@ -7,7 +7,7 @@ export type VideoPreviewProps = {
 
 const THEMES = {
   small: 'min-h-[80px] size-15',
-  dynamic: 'flex min-h-20 max-w-[480px] max-h-[480px]',
+  dynamic: 'flex min-h-20 max-w-[480px] max-h-[480px] not-first:mt-2',
 };
 
 export function VideoPreview(props: VideoPreviewProps) {

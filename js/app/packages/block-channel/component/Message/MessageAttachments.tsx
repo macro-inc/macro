@@ -27,7 +27,7 @@ export function MessageAttachments(props: MessageAttachmentsProps) {
       </Show>
       {/* Image attachments */}
       <Show when={props.imageAttachments()?.length > 0 && !props.isDeleted()}>
-        <div class="flex">
+        <div class="flex not-first:mt-2">
           <DynamicImageList
             ids={props.imageAttachments()?.map((a) => a.entity_id)}
             attachmentIds={props.imageAttachments()?.map((a) => a.id)}
@@ -42,7 +42,7 @@ export function MessageAttachments(props: MessageAttachmentsProps) {
       <Show
         when={props.documentAttachments()?.length > 0 && !props.isDeleted()}
       >
-        <div class={`flex flex-row mt-0.5 gap-2 flex-wrap max-w-full`}>
+        <div class={`flex flex-row mt-2 gap-2 flex-wrap max-w-full`}>
           <For each={props.documentAttachments()}>
             {(attachment) => (
               <ItemPreview
