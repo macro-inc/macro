@@ -831,11 +831,13 @@ export function MarkdownEditor(props: { autoFocusOnMount?: boolean } = {}) {
     editor.setEditable(canEdit() ?? false);
   });
 
-  createEffect(() => {
-    const titleEditor = md.titleEditor;
-    if (!titleEditor) return;
-    plugins.use(keyNavigationPlugin(titleEditor, isInlineMenuOpen));
-  });
+  plugins.useReactive(
+    () => md.titleEditor,
+    () => {
+      if (md.titleEditor)
+        return keyNavigationPlugin(md.titleEditor, isInlineMenuOpen);
+    }
+  );
 
   const [editorHasNoContent, setEditorHasNoContent] = createSignal(false);
 
