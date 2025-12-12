@@ -1,7 +1,6 @@
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
-import type * as tls from '@pulumi/tls';
 import {
   DATADOG_API_KEY,
   datadogAgentContainer,
@@ -10,8 +9,6 @@ import {
 } from '@resources';
 import { EcrImage } from '@service';
 import { BASE_DOMAIN, CLOUD_TRAIL_SNS_TOPIC_ARN, stack } from '@shared';
-import { EmailAttachmentsBucket } from '@stacks/email-service/attachments-bucket';
-import { getCloudfrontDistribution } from '@stacks/email-service/s3-cloudfront-distribution';
 
 const BASE_NAME = 'email-service';
 const BASE_PATH = '../../../rust/cloud-storage';
@@ -35,7 +32,6 @@ type Args = {
   containerEnvVars: { name: string; value: pulumi.Output<string> | string }[];
   healthCheckPath: string;
   tags: { [key: string]: string };
-  cfKeyPair: tls.PrivateKey;
 };
 
 export class EmailService extends pulumi.ComponentResource {
@@ -64,7 +60,6 @@ export class EmailService extends pulumi.ComponentResource {
       containerEnvVars,
       clusterName,
       tags,
-      cfKeyPair,
     }: Args,
     opts?: pulumi.ComponentResourceOptions
   ) {
@@ -100,46 +95,6 @@ export class EmailService extends pulumi.ComponentResource {
     });
     this.serviceAlbSg = sg.serviceAlbSg;
     this.serviceSg = sg.serviceSg;
-
-    let emailAttachmentBucket: EmailAttachmentsBucket;
-    if (stack !== 'local') {
-      emailAttachmentBucket = new EmailAttachmentsBucket(
-        `email-attachments-bucket-${stack}`,
-        {
-          emailServiceRoleArn: this.role.arn,
-        }
-      );
-    } else {
-      emailAttachmentBucket = new EmailAttachmentsBucket(
-        `email-attachments-bucket-${stack}`,
-        {}
-      );
-    }
-
-    const cloudfrontDistribution = getCloudfrontDistribution({
-      bucket: emailAttachmentBucket.bucket,
-      keyPair: cfKeyPair,
-    });
-
-    emailAttachmentBucket.attachCloudfrontPolicy({
-      cloudfrontDistributionArn: cloudfrontDistribution.distribution.arn,
-      emailServiceRoleArn: this.role.arn,
-    });
-
-    containerEnvVars.push(
-      {
-        name: 'ATTACHMENT_BUCKET',
-        value: emailAttachmentBucket.bucket.id,
-      },
-      {
-        name: 'CLOUDFRONT_DISTRIBUTION_URL',
-        value: pulumi.interpolate`${cloudfrontDistribution.domain}`,
-      },
-      {
-        name: 'CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
-        value: pulumi.interpolate`${cloudfrontDistribution.publicKey.id}`,
-      }
-    );
 
     // lb
     const { targetGroup, lb, listener } = serviceLoadBalancer(this, {

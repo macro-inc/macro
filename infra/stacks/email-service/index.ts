@@ -10,10 +10,11 @@ import {
   stack,
 } from '@shared';
 import { EmailRefreshHandler } from '@stacks/email-service/refresh_lambda';
-import { cloudfrontPrivateKeySecret } from '@stacks/email-service/s3-cloudfront-distribution';
+import {cloudfrontPrivateKeySecret, getCloudfrontDistribution} from '@stacks/email-service/s3-cloudfront-distribution';
 import { EmailScheduledHandler } from '@stacks/email-service/scheduled_lambda';
 import { get_coparse_api_vpc } from '@vpc';
 import { EmailService } from './service';
+import {EmailAttachmentsBucket} from "@stacks/email-service/attachments-bucket";
 
 const tags = {
   environment: stack,
@@ -301,6 +302,30 @@ const emailServiceRole = new aws.iam.Role(
   }
 );
 
+let emailAttachmentBucket: EmailAttachmentsBucket;
+if (stack !== 'local') {
+  emailAttachmentBucket = new EmailAttachmentsBucket(
+    `email-attachments-bucket-${stack}`,
+    {
+      emailServiceRoleArn: emailServiceRole.arn,
+    }
+  );
+} else {
+  emailAttachmentBucket = new EmailAttachmentsBucket(
+    `email-attachments-bucket-${stack}`,
+    {}
+  );
+}
+
+const cloudfrontDistribution = getCloudfrontDistribution({
+  bucket: emailAttachmentBucket.bucket,
+  keyPair: cfKeyPair,
+});
+
+emailAttachmentBucket.attachCloudfrontPolicy({
+  cloudfrontDistributionArn: cloudfrontDistribution.distribution.arn,
+  emailServiceRoleArn: emailServiceRole.arn,
+});
 
 const emailService = new EmailService('email-service', {
   vpc: coparse_api_vpc,
@@ -312,7 +337,6 @@ const emailService = new EmailService('email-service', {
   isPrivate: false,
   healthCheckPath: '/health',
   platform: { family: 'linux', architecture: 'amd64' },
-  cfKeyPair: cfKeyPair,
   containerEnvVars: [
     {
       name: 'RUST_LOG',
@@ -466,6 +490,18 @@ const emailService = new EmailService('email-service', {
       name: 'CONTACTS_QUEUE',
       value: pulumi.interpolate`${contactsQueueName}`,
     },
+    {
+      name: 'ATTACHMENT_BUCKET',
+      value: emailAttachmentBucket.bucket.id,
+    },
+    {
+      name: 'CLOUDFRONT_DISTRIBUTION_URL',
+      value: pulumi.interpolate`${cloudfrontDistribution.domain}`,
+    },
+    {
+      name: 'CLOUDFRONT_SIGNER_PUBLIC_KEY_ID',
+      value: pulumi.interpolate`${cloudfrontDistribution.publicKey.id}`,
+    }
   ],
 });
 
