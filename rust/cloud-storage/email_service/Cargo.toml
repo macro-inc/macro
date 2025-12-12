@@ -113,7 +113,7 @@ static_file_service_client = { path = "../static_file_service_client" }
 strum_macros = { workspace = true }
 system_properties = { path = "../system_properties" }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["signal"] }
 tower = { workspace = true }
 tower-http = { workspace = true }
 tracing = { workspace = true }

@@ -365,5 +365,23 @@ async fn main() -> anyhow::Result<()> {
         );
     }
 
+    tracing::info!("All workers started successfully");
+
+    // Wait for shutdown signal (SIGTERM from ECS or SIGINT from Ctrl+C)
+    tokio::select! {
+        _ = tokio::signal::ctrl_c() => {
+            tracing::info!("Received SIGINT (Ctrl+C)");
+        }
+        _ = async {
+            let mut term = tokio::signal::unix::signal(tokio::signal::unix::SignalKind::terminate())
+                .expect("failed to install SIGTERM handler");
+            term.recv().await
+        } => {
+            tracing::info!("Received SIGTERM");
+        }
+    }
+
+    tracing::info!("Shutdown signal received, exiting gracefully...");
+
     Ok(())
 }
