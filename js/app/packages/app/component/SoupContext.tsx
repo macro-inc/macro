@@ -1509,7 +1509,7 @@ export function scrollToKeepGap({
   }
 }
 
-const globalKeyboardEventMap = new Map<string, KeyboardEvent | undefined>();
+let globalKeyboardEvent!: KeyboardEvent | undefined;
 
 type ExecuteKeyDownHandlerCallback = (props: {
   keyboardEvent?: KeyboardEvent;
@@ -1535,7 +1535,7 @@ function registerEntityHotkey(
 } {
   const id = opts.scopeId + JSON.stringify(opts.hotkey);
   onCleanup(() => {
-    globalKeyboardEventMap.delete(id);
+    globalKeyboardEvent = undefined;
   });
 
   // scoped hotkey
@@ -1543,12 +1543,9 @@ function registerEntityHotkey(
     ...opts,
     keyDownHandler: (e) => {
       const canExecuteKeyDownHandler = () => {
-        const keyboardEventFromGlobal = globalKeyboardEventMap.get(id);
-        globalKeyboardEventMap.delete(id);
         if (!opts.canExecuteKeyDownHandler) return true;
-
         return opts.canExecuteKeyDownHandler({
-          keyboardEvent: e ?? keyboardEventFromGlobal,
+          keyboardEvent: e ?? globalKeyboardEvent,
         });
       };
 
@@ -1568,7 +1565,10 @@ function registerEntityHotkey(
     tags: undefined,
     condition: undefined,
     keyDownHandler: (event) => {
-      globalKeyboardEventMap.set(id, event);
+      globalKeyboardEvent = event;
+      queueMicrotask(() => {
+        globalKeyboardEvent = undefined;
+      });
 
       if (event) {
         const target = event.target as HTMLElement;
