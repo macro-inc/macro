@@ -830,6 +830,7 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       email_filters: {
         recipients:
           emailActive() &&
+          !isSearchActive() &&
           view().viewType !== 'project' &&
           (entityTypeFilter().includes('email') ||
             entityTypeFilter().length === 0)
