@@ -16,7 +16,7 @@ pub const ATTACHMENT_MIME_TYPE_FILTERS: &str = r#"
     )
 "#;
 
-/// Attachment mime type filters including videos and non-inline images
+/// Attachment mime type filters including videos and inline images
 pub const ATTACHMENT_MIME_TYPE_FILTERS_WITH_MEDIA: &str = r#"
     (a.mime_type LIKE 'image/%' OR a.mime_type LIKE 'video/%')
 "#;
