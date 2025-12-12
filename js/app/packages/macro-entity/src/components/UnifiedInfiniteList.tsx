@@ -311,7 +311,7 @@ export function createUnifiedInfiniteList<T extends EntityData>({
     const searching = isSearchActive?.();
 
     if (searching) {
-      // NOTE: the default sort will be channels, then local fuzzy name, then serach service
+      // NOTE: the default sort will be channels, then local fuzzy name, then search service
       // avoiding doing an extra sort as a speed optimization
       return entities.toSorted(sortEntitiesForSearch);
     }
