@@ -799,6 +799,19 @@ export function UnifiedListView(props: UnifiedListViewProps) {
 
   const emailActive = useEmailLinksStatus();
 
+  const validSearchTerms = createMemo(() => {
+    return debouncedSearchForService().length >= 3;
+  });
+  const validSearchFilters = createMemo(() => {
+    const senders = unifiedSearchFilters()?.email?.senders;
+    if (senders && senders.length > 0) return true;
+    return false;
+  });
+
+  const isSearchActive = createMemo(() => {
+    return validSearchTerms() || validSearchFilters();
+  });
+
   const dssQueryParams = createMemo(
     (): GetItemsSoupParams => ({
       limit: props.defaultDisplayOptions?.limit ?? 100,
@@ -874,19 +887,6 @@ export function UnifiedListView(props: UnifiedListViewProps) {
       },
     })
   );
-
-  const validSearchTerms = createMemo(() => {
-    return debouncedSearchForService().length >= 3;
-  });
-  const validSearchFilters = createMemo(() => {
-    const senders = unifiedSearchFilters()?.email?.senders;
-    if (senders && senders.length > 0) return true;
-    return false;
-  });
-
-  const isSearchActive = createMemo(() => {
-    return validSearchTerms() || validSearchFilters();
-  });
 
   const disableSearchService = createMemo(() => {
     return !isSearchActive();
