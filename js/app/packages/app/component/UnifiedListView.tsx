@@ -802,14 +802,8 @@ export function UnifiedListView(props: UnifiedListViewProps) {
   const validSearchTerms = createMemo(() => {
     return debouncedSearchForService().length >= 3;
   });
-  const validSearchFilters = createMemo(() => {
-    const senders = unifiedSearchFilters()?.email?.senders;
-    if (senders && senders.length > 0) return true;
-    return false;
-  });
-
   const isSearchActive = createMemo(() => {
-    return validSearchTerms() || validSearchFilters();
+    return validSearchTerms();
   });
 
   const dssQueryParams = createMemo(
