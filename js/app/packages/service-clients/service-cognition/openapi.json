@@ -1036,6 +1036,14 @@
           },
           {
             "type": "object",
+            "required": ["project_name", "type"],
+            "properties": {
+              "project_name": { "type": "string" },
+              "type": { "type": "string", "enum": ["project"] }
+            }
+          },
+          {
+            "type": "object",
             "required": ["image_extension", "image_name", "type"],
             "properties": {
               "image_extension": {
@@ -1068,7 +1076,7 @@
       },
       "AttachmentType": {
         "type": "string",
-        "enum": ["document", "image", "channel", "email"]
+        "enum": ["document", "image", "channel", "email", "project"]
       },
       "ChannelSharePermission": {
         "type": "object",
@@ -1147,7 +1155,10 @@
             "type": ["string", "null"],
             "description": "The id of the chat if the attachment is a chat"
           },
-          "id": { "type": "string", "description": "Id of the attachment" },
+          "id": {
+            "type": "string",
+            "description": "db attachment id - unused"
+          },
           "message_id": {
             "type": ["string", "null"],
             "description": "The id of the message if the attachment is a message"
