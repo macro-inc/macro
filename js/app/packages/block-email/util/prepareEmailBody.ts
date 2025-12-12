@@ -7,9 +7,9 @@ import {
   $createHtmlRenderNode,
   $createWatermarkNode,
   $isClassedBlockNode,
-  WatermarkNode,
   type ClassedBlockNode,
   type DocumentMentionInfo,
+  type WatermarkNode,
 } from '@lexical-core';
 import type { MessageWithBodyReplyless } from '@service-email/generated/schemas';
 import {

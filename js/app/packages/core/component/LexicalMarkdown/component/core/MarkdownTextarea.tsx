@@ -13,7 +13,7 @@ import {
   type Accessor,
   createEffect,
   createSignal,
-  JSX,
+  type JSX,
   onCleanup,
   onMount,
   Show,
