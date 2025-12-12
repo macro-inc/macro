@@ -3,7 +3,7 @@ import { useChannelsContext } from '@core/component/ChannelsProvider';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { UserIcon } from '@core/component/UserIcon';
 import { fileTypeToBlockName } from '@core/constant/allBlocks';
-import type { ChannelWithParticipants, IUser } from '@core/user';
+import type { IUser } from '@core/user';
 import { idToEmail, tryMacroId, useContacts, useDisplayName } from '@core/user';
 import { createFreshSearch } from '@core/util/freshSort';
 import CompanyIcon from '@icon/duotone/building-duotone.svg';
@@ -21,7 +21,6 @@ import {
 } from '@macro-entity';
 import { useUserId } from '@service-gql/client';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
-import type { Item } from '@service-storage/generated/schemas/item';
 import { useHistory } from '@service-storage/history';
 import { debounce } from '@solid-primitives/scheduled';
 import {
@@ -37,6 +36,15 @@ import {
 import { usePropertiesContext } from '../../../context/PropertiesContext';
 import type { Property } from '../../../types';
 import { useSearchInputFocus } from '../../../utils';
+import {
+  type CombinedEntity,
+  ENTITY_SEARCH_CONFIG,
+  entityMapper,
+  getEntityName,
+  getEntitySearchText,
+  getEntityType,
+  threadMapper,
+} from './entityUtils';
 import { OptionCheckBox } from './OptionCheckBox';
 
 type EntityInputProps = {
@@ -75,80 +83,6 @@ function getEntityTypePluralLabel(
       return 'tasks';
     default:
       return 'entities';
-  }
-}
-
-type CombinedEntity =
-  | { kind: 'item'; id: string; data: Item }
-  | { kind: 'user'; id: string; data: IUser }
-  | { kind: 'channel'; id: string; data: ChannelWithParticipants }
-  | { kind: 'company'; id: string; data: null }
-  | { kind: 'thread'; id: string; data: EmailEntity };
-
-function entityMapper(kind: 'item' | 'user' | 'channel') {
-  return (data: Item | IUser | ChannelWithParticipants): CombinedEntity => {
-    return { kind, data, id: (data as { id: string }).id } as CombinedEntity;
-  };
-}
-
-function threadMapper(email: EmailEntity): CombinedEntity {
-  return { kind: 'thread', id: email.id, data: email };
-}
-
-function getEntityName(entity: CombinedEntity): string {
-  switch (entity.kind) {
-    case 'item':
-      return entity.data.name;
-    case 'user': {
-      const { name, email } = entity.data;
-      if (name === email) return email;
-      return `${name} | ${email}`;
-    }
-    case 'channel':
-      return entity.data.name ?? '';
-    case 'company':
-      return entity.id;
-    case 'thread':
-      return entity.data.name ?? 'No Subject';
-  }
-}
-
-function getEntitySearchText(entity: CombinedEntity): string {
-  switch (entity.kind) {
-    case 'item':
-      return entity.data.name;
-    case 'user': {
-      const { name, email } = entity.data;
-      if (name === email) return `${email} | ${email}`;
-      return `${name} | ${email}`;
-    }
-    case 'channel':
-      return entity.data.name ?? '';
-    case 'company':
-      return entity.id;
-    case 'thread':
-      return entity.data.name ?? '';
-  }
-}
-
-function getEntityType(entity: CombinedEntity): string {
-  switch (entity.kind) {
-    case 'user':
-      return 'USER';
-    case 'channel':
-      return 'CHANNEL';
-    case 'item':
-      if (
-        entity.data.type === 'document' &&
-        entity.data.subType?.type === 'task'
-      ) {
-        return 'TASK';
-      }
-      return entity.data.type.toUpperCase();
-    case 'company':
-      return 'COMPANY';
-    case 'thread':
-      return 'THREAD';
   }
 }
 
@@ -345,7 +279,7 @@ export function PropertyEntitySelector(props: EntityInputProps) {
   });
 
   const entitySearch = createFreshSearch<CombinedEntity>(
-    { timeWeight: 0.1, brevityWeight: 0.3 },
+    ENTITY_SEARCH_CONFIG,
     getEntitySearchText
   );
 
