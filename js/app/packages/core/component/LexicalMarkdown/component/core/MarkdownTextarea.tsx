@@ -281,7 +281,7 @@ export function MarkdownTextarea(props: MarkdownTextareaProps) {
           </div>
         </Show>
         <Show when={typeof props.watermark !== 'undefined'}>
-          <div class="text-ink/50" data-watermark>
+          <div class="text-ink/50 mt-[1lh]" data-watermark>
             {props.watermark}
           </div>
         </Show>
