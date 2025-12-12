@@ -1,3 +1,4 @@
+import { IconButton } from '@core/component/IconButton';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import DotsThree from '@icon/regular/dots-three.svg';
 import type { EditorType } from '@lexical-core';
@@ -51,7 +52,6 @@ import { FloatingLinkMenu } from '../menu/FloatingLinkMenu';
 import { MentionsMenu, type UserMentionRecord } from '../menu/MentionsMenu';
 import { DecoratorRenderer } from './DecoratorRenderer';
 import { NodeAccessoryRenderer } from './NodeAccessoryRenderer';
-import { IconButton } from '@core/component/IconButton';
 
 /**
  * @param editable - A signal that indicates whether the textarea is editable
