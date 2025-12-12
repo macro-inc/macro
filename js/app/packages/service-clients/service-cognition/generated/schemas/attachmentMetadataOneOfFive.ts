@@ -4,11 +4,13 @@
  * Document Cognition Service
  * OpenAPI spec version: 1.0.0
  */
-import type { ChannelType } from './channelType';
+import type { FileType } from './fileType';
 import type { AttachmentMetadataOneOfFiveType } from './attachmentMetadataOneOfFiveType';
 
 export type AttachmentMetadataOneOfFive = {
-  channel_name: string;
-  channel_type: ChannelType;
+  /** jpg | png | etc */
+  image_extension: FileType;
+  /** image name */
+  image_name: string;
   type: AttachmentMetadataOneOfFiveType;
 };
