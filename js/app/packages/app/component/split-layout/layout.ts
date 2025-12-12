@@ -70,6 +70,7 @@ export function useSplitLayout() {
         maxWidth: '600px',
         maxHeight: '600px',
         position: 'center',
+        className: 'w-xl',
       },
     });
   }

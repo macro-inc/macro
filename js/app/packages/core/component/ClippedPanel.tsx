@@ -1,5 +1,5 @@
 import { cornerClip } from '@core/util/clipPath';
-import type { JSXElement } from 'solid-js';
+import type { JSXElement, Ref } from 'solid-js';
 import { beveledCorners } from '../../block-theme/signals/themeSignals';
 
 interface PanelProps {
@@ -9,6 +9,7 @@ interface PanelProps {
   tl?: boolean;
   bl?: boolean;
   br?: boolean;
+  ref?: Ref<HTMLDivElement>;
 }
 
 export function ClippedPanel(props: PanelProps) {
@@ -55,6 +56,7 @@ export function ClippedPanel(props: PanelProps) {
             : '0',
         }}
         class="h-full w-full box-border overflow-hidden bg-panel"
+        ref={props.ref}
       >
         {props.children}
       </div>

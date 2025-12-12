@@ -70,16 +70,19 @@ const createBlock = async (spec: {
 const createComponent = async (spec: {
   componentId: string;
   shouldInsert?: boolean;
+  asPopover?: boolean;
 }) => {
   setCreateMenuOpen(false);
   const { replaceSplit, insertSplit, popoverSplit } = useSplitLayout();
-  popoverSplit({ type: 'component', id: spec.componentId });
-
-  // if (spec.shouldInsert) {
-  //   insertSplit({ type: 'component', id: spec.componentId });
-  // } else {
-  //   replaceSplit({ type: 'component', id: spec.componentId });
-  // }
+  if (spec.asPopover) {
+    popoverSplit({ type: 'component', id: spec.componentId });
+    return;
+  }
+  if (spec.shouldInsert) {
+    insertSplit({ type: 'component', id: spec.componentId });
+  } else {
+    replaceSplit({ type: 'component', id: spec.componentId });
+  }
 };
 
 type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {

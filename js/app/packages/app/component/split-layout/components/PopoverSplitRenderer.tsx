@@ -7,6 +7,9 @@ import { SplitPanelContext } from '../context';
 
 false && clickOutside;
 
+import { ClippedPanel } from '@core/component/ClippedPanel';
+import { ScopedPortal } from '@core/component/ScopedPortal';
+import { isPropValid } from 'storybook/internal/theming';
 import type {
   PopoverSplitOptions,
   SplitContent,
@@ -111,6 +114,7 @@ function PopoverSplitModal(props: {
       typeof setPreviewState,
     ],
     layoutRefs: {},
+    isPopover: true,
   };
 
   const getPositionClass = () => {
@@ -129,15 +133,6 @@ function PopoverSplitModal(props: {
     }
   };
 
-  const getContentStyle = () => {
-    const style = popover.options.style;
-    return {
-      'max-width': style?.maxWidth ?? '600px',
-      'max-height': style?.maxHeight ?? '80vh',
-      'z-index': props.zIndex.toString(),
-    };
-  };
-
   return (
     <Dialog
       open={popover.isOpen}
@@ -148,31 +143,26 @@ function PopoverSplitModal(props: {
       }}
       modal={true}
     >
-      <Portal>
+      <ScopedPortal scope="global">
         <Dialog.Overlay
-          as="div"
           class="fixed inset-0 z-modal bg-modal-overlay pattern-diagonal-4 pattern-edge-muted"
-          use:clickOutside={() => props.onClose()}
           on:click={() => props.onClose()}
         />
         <div
           class={`fixed inset-0 z-modal flex ${getPositionClass()} pointer-events-none`}
         >
-          <Dialog.Content>
-            <div
-              ref={setPanelRef}
-              class={`pointer-events-auto bg-menu border border-edge shadow-lg ${
-                popover.options.style?.className ?? ''
-              }`}
-              style={getContentStyle()}
-            >
+          <Dialog.Content
+            class="w-2xl h-xl"
+            use:clickOutside={() => props.onClose()}
+          >
+            <ClippedPanel tl ref={setPanelRef} active>
               <SplitPanelContext.Provider value={stubPanelContext}>
                 <Show when={popover.mount}>{popover.mount.element()}</Show>
               </SplitPanelContext.Provider>
-            </div>
+            </ClippedPanel>
           </Dialog.Content>
         </div>
-      </Portal>
+      </ScopedPortal>
     </Dialog>
   );
 }
